@@ -8,7 +8,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     storeMusic: {
         paths: [
-            "Weline_StoreMusic::js/store-music.js?v=20261008-73openonly"
+            "Weline_StoreMusic::js/store-music.js?v=20261010-devtools-idempotent"
         ],
         globalVar: "WelineStoreMusic",
         load: "defer",

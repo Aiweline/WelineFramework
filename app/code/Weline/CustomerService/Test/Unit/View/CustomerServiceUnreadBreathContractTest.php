@@ -33,8 +33,11 @@ final class CustomerServiceUnreadBreathContractTest extends TestCase
         $this->assertStringContainsString('unreadCount', $js);
         $this->assertStringContainsString('startBackgroundUnreadWatch', $js);
         $this->assertStringContainsString('pollIncomingMessages', $js);
+        $this->assertStringContainsString('MESSAGE_POLL_INTERVAL_MS = 15000', $js);
+        $this->assertStringContainsString('message-poll-15s-20261010', $js);
         $this->assertStringContainsString('stopStatusPolling', $js);
         $this->assertStringContainsString('收起后仍轮询消息', $js);
+        $this->assertStringNotContainsString('}, 3000);', $js);
         $this->assertStringContainsString('getUnreadDebugState', $js);
 
         $css = (string)file_get_contents(

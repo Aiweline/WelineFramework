@@ -137,7 +137,7 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('preferCache (F5 sticky resume)', $js);
         self::assertStringContainsString('flash「点击开启音乐」', $js);
         self::assertStringContainsString('navType === \'reload\'', $js);
-        self::assertStringContainsString('20261008-73openonly', $js);
+        self::assertStringContainsString('20261010-devtools-idempotent', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
         self::assertStringContainsString('armStickyPlayRetry', $js);
         self::assertStringContainsString('AbortError', $js);
@@ -273,7 +273,7 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('SPECTRUM_BAR_COUNT', $js);
         self::assertStringContainsString('ensureSpectrumBars', $js);
         self::assertStringContainsString('document.body.appendChild(this.waveCanvas)', $js);
-        self::assertStringContainsString('20261008-73openonly', $js);
+        self::assertStringContainsString('20261010-devtools-idempotent', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
 
         $css = (string)\file_get_contents($this->moduleFile('view/statics/css/store-music.css'));

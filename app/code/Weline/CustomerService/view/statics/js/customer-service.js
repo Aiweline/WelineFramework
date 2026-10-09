@@ -3,7 +3,10 @@
  */
 
 /* captcha-degrade-ux-20260909 */
+/* message-poll-15s-20261010：店面消息轮询 15s，避免 query-bin 风暴拖垮 DevTools Elements */
 const CustomerServiceWidget = (function() {
+    /** 前台消息轮询间隔（收起盯未读 + 开窗拉新消息共用） */
+    var MESSAGE_POLL_INTERVAL_MS = 15000;
     /**
      * 閸ヤ粙妾崠鏍电窗娴兼ê鍘涙担璺ㄦ暏妞ょ敻娼板▔銊ュ弳閻?__閿涘苯鎯侀崚娆撴缁狙傝礋閸楃姳缍呯粭锔芥禌閹?
      * @param {string} text
@@ -786,25 +789,34 @@ const CustomerServiceWidget = (function() {
         const sendButton = document.querySelector('.cs-send-button, [data-cs-send-message]');
         if (banner) {
             if (locked) {
-                banner.hidden = false;
-                if (text) {
-                    text.textContent = state.guestSend.message
-                        || __('请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。');
+                if (banner.hidden) {
+                    banner.hidden = false;
                 }
-            } else {
+                if (text) {
+                    const nextGateText = state.guestSend.message
+                        || __('请等待客服回复后再发送。验证邮箱后可跳过等待、连续发送消息。');
+                    if (text.textContent !== nextGateText) {
+                        text.textContent = nextGateText;
+                    }
+                }
+            } else if (!banner.hidden) {
                 banner.hidden = true;
             }
         }
         if (input && !state.isSending) {
-            input.disabled = locked;
-            input.setAttribute('aria-disabled', locked ? 'true' : 'false');
-            if (locked) {
-                input.placeholder = __('等待客服回复…');
-            } else {
-                input.placeholder = __('输入消息...');
+            if (input.disabled !== locked) {
+                input.disabled = locked;
+            }
+            const ariaDisabled = locked ? 'true' : 'false';
+            if (input.getAttribute('aria-disabled') !== ariaDisabled) {
+                input.setAttribute('aria-disabled', ariaDisabled);
+            }
+            const nextPlaceholder = locked ? __('等待客服回复…') : __('输入消息...');
+            if (input.placeholder !== nextPlaceholder) {
+                input.placeholder = nextPlaceholder;
             }
         }
-        if (sendButton && !state.isSending) {
+        if (sendButton && !state.isSending && sendButton.disabled !== locked) {
             sendButton.disabled = locked;
         }
         document.querySelectorAll('.cs-composer-tool').forEach(function (btn) {
@@ -2327,8 +2339,8 @@ const CustomerServiceWidget = (function() {
         
         state.pollInterval = setInterval(function () {
             pollIncomingMessages();
-        }, 3000);
-        // 立即跑一轮，避免收起后最多等 3s 才看到未读
+        }, MESSAGE_POLL_INTERVAL_MS);
+        // 立即跑一轮，避免收起后最多等一个完整间隔才看到未读
         pollIncomingMessages();
     }
 
@@ -2447,7 +2459,10 @@ const CustomerServiceWidget = (function() {
     function applyUnreadFromMessages(rows, options) {
         const opts = options || {};
         const list = Array.isArray(rows) ? rows : [];
-        let maxId = Math.max(0, normalizePositiveInt(state.lastMessageId));
+        const prevUnread = Math.max(0, Number(state.unreadCount) || 0);
+        const prevLastMessageId = normalizePositiveInt(state.lastMessageId);
+        const prevLastRead = normalizePositiveInt(state.lastReadMessageId);
+        let maxId = Math.max(0, prevLastMessageId);
         list.forEach(function (msg) {
             const messageId = messageRowId(msg);
             if (messageId > maxId) {
@@ -2460,11 +2475,15 @@ const CustomerServiceWidget = (function() {
         // 开窗即表示用户正在看：水位抬到最新，未读清零
         if (state.isOpen) {
             if (maxId > 0) {
-                state.lastReadMessageId = Math.max(normalizePositiveInt(state.lastReadMessageId), maxId);
+                state.lastReadMessageId = Math.max(prevLastRead, maxId);
             }
             state.unreadCount = 0;
-            saveState();
-            updateUnreadBadge();
+            if (prevUnread !== 0
+                || prevLastMessageId !== state.lastMessageId
+                || prevLastRead !== normalizePositiveInt(state.lastReadMessageId)) {
+                saveState();
+                updateUnreadBadge();
+            }
             return;
         }
 
@@ -2475,16 +2494,22 @@ const CustomerServiceWidget = (function() {
                 state.lastReadMessageId = maxId;
             }
             state.unreadCount = 0;
-            saveState();
-            updateUnreadBadge();
+            if (prevUnread !== 0
+                || prevLastMessageId !== state.lastMessageId
+                || prevLastRead !== normalizePositiveInt(state.lastReadMessageId)) {
+                saveState();
+                updateUnreadBadge();
+            }
             return;
         }
 
         // 水位已覆盖当前页最大 id：强制清零（防止脏 unreadCount 残留）
         if (maxId > 0 && lastRead >= maxId) {
             state.unreadCount = 0;
-            saveState();
-            updateUnreadBadge();
+            if (prevUnread !== 0 || prevLastMessageId !== state.lastMessageId) {
+                saveState();
+                updateUnreadBadge();
+            }
             return;
         }
 
@@ -2504,12 +2529,13 @@ const CustomerServiceWidget = (function() {
             }
         });
 
-        const prev = Math.max(0, Number(state.unreadCount) || 0);
         state.unreadCount = unread;
-        saveState();
-        updateUnreadBadge();
+        if (prevUnread !== unread || prevLastMessageId !== state.lastMessageId) {
+            saveState();
+            updateUnreadBadge();
+        }
 
-        if (!opts.quiet && unread > prev && latestAgent) {
+        if (!opts.quiet && unread > prevUnread && latestAgent) {
             maybeDesktopNotify(latestAgent);
         }
     }
@@ -2721,32 +2747,48 @@ const CustomerServiceWidget = (function() {
         const showUnread = count > 0 && !state.isOpen;
 
         if (badge) {
-            badge.classList.toggle('is-visible', showUnread);
+            if (badge.classList.contains('is-visible') !== showUnread) {
+                badge.classList.toggle('is-visible', showUnread);
+            }
             if (showUnread) {
-                badge.textContent = String(count > 99 ? '99+' : count);
-                badge.style.display = 'flex';
-                badge.setAttribute('aria-hidden', 'false');
+                const nextBadge = String(count > 99 ? '99+' : count);
+                if (badge.textContent !== nextBadge) {
+                    badge.textContent = nextBadge;
+                }
+                if (badge.style.display !== 'flex') {
+                    badge.style.display = 'flex';
+                }
+                if (badge.getAttribute('aria-hidden') !== 'false') {
+                    badge.setAttribute('aria-hidden', 'false');
+                }
             } else {
-                badge.textContent = '';
-                badge.style.display = 'none';
-                badge.setAttribute('aria-hidden', 'true');
+                if (badge.textContent !== '') {
+                    badge.textContent = '';
+                }
+                if (badge.style.display !== 'none') {
+                    badge.style.display = 'none';
+                }
+                if (badge.getAttribute('aria-hidden') !== 'true') {
+                    badge.setAttribute('aria-hidden', 'true');
+                }
             }
         }
 
-        if (presenceDot) {
-            if (showUnread) {
-                presenceDot.hidden = false;
-            } else {
-                presenceDot.hidden = true;
-            }
+        if (presenceDot && presenceDot.hidden === showUnread) {
+            presenceDot.hidden = !showUnread;
         }
 
         if (chatButton) {
-            chatButton.classList.toggle('has-unread', showUnread);
-            chatButton.setAttribute('data-unread-count', showUnread ? String(count) : '0');
+            if (chatButton.classList.contains('has-unread') !== showUnread) {
+                chatButton.classList.toggle('has-unread', showUnread);
+            }
+            const nextUnread = showUnread ? String(count) : '0';
+            if (chatButton.getAttribute('data-unread-count') !== nextUnread) {
+                chatButton.setAttribute('data-unread-count', nextUnread);
+            }
         }
 
-        if (widget) {
+        if (widget && widget.classList.contains('has-unread') !== showUnread) {
             widget.classList.toggle('has-unread', showUnread);
         }
 

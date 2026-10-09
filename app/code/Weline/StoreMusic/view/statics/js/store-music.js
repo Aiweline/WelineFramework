@@ -2923,15 +2923,27 @@
             var btn = buttons[i];
             var trackIndex = Number(btn.getAttribute('data-store-music-track'));
             var active = trackIndex === this.trackIndex;
-            btn.classList.toggle('is-active', active);
-            btn.setAttribute('aria-selected', active ? 'true' : 'false');
+            // Idempotent writes only: setAttribute/textContent always notify
+            // MutationObservers even when the value is unchanged, which can blank
+            // Chrome DevTools Elements while the playlist stays open.
+            if (btn.classList.contains('is-active') !== active) {
+                btn.classList.toggle('is-active', active);
+            }
+            var selected = active ? 'true' : 'false';
+            if (btn.getAttribute('aria-selected') !== selected) {
+                btn.setAttribute('aria-selected', selected);
+            }
             var mark = btn.querySelector('[data-store-music-track-mark]');
             if (mark) {
+                var nextMark;
                 if (active) {
-                    mark.textContent = '✓';
+                    nextMark = '✓';
                 } else {
                     var n = (Number.isFinite(trackIndex) ? trackIndex : i) + 1;
-                    mark.textContent = n < 10 ? '0' + n : String(n);
+                    nextMark = n < 10 ? '0' + n : String(n);
+                }
+                if (mark.textContent !== nextMark) {
+                    mark.textContent = nextMark;
                 }
             }
         }
@@ -3291,23 +3303,28 @@
         if (playing) {
             var playingLabel = textOf(this.root, '[data-store-music-i18n-playing]', '播放中');
             if (this.mascot) {
-                this.mascot.setAttribute('title', playingLabel + ' · ' + title);
+                var nextTitle = playingLabel + ' · ' + title;
+                if (this.mascot.getAttribute('title') !== nextTitle) {
+                    this.mascot.setAttribute('title', nextTitle);
+                }
             }
         }
-        if (this.titleEl) {
+        if (this.titleEl && this.titleEl.textContent !== title) {
             this.titleEl.textContent = title;
         }
         if (this.introEl) {
             var intro = track && track.intro ? track.intro : '';
-            if (intro) {
+            var nextIntro = intro
+                ? intro
+                : textOf(this.root, '[data-store-music-i18n-idle]', '开匣雅乐');
+            if (this.introEl.hidden) {
                 this.introEl.hidden = false;
-                this.introEl.textContent = intro;
-            } else {
-                this.introEl.hidden = false;
-                this.introEl.textContent = textOf(this.root, '[data-store-music-i18n-idle]', '开匣雅乐');
             }
-            this.setIntroExpanded(false);
-            this.refreshIntroExpandState();
+            if (this.introEl.textContent !== nextIntro) {
+                this.introEl.textContent = nextIntro;
+                this.setIntroExpanded(false);
+                this.refreshIntroExpandState();
+            }
         }
         this.syncPlaylistActive();
     };
@@ -5379,7 +5396,7 @@
         }
     };
 
-    var SCRIPT_GEN = '20261008-73openonly';
+    var SCRIPT_GEN = '20261010-devtools-idempotent';
 
     function boot(root) {
         if (!root) {

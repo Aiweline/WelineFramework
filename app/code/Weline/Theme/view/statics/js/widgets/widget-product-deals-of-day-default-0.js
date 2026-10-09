@@ -13,29 +13,56 @@ window.WelineWidgetAssets.register('theme-product-deals-of-day-default-0', funct
         return;
     }
 
+    let tickId = 0;
+
+    function setUnitText(el, value) {
+        if (!el) {
+            return;
+        }
+        const next = String(value).padStart(2, '0');
+        if (el.textContent !== next) {
+            el.textContent = next;
+        }
+    }
+
+    function stopCountdownTick() {
+        if (tickId) {
+            clearInterval(tickId);
+            tickId = 0;
+        }
+    }
+
     function updateCountdown() {
         const now = Date.now();
         const diff = endDate - now;
 
         if (diff <= 0) {
-            countdown.hidden = true;
+            // Expired: hide once and stop the 1Hz timer. Re-assigning
+            // `hidden=true` every second still notifies MutationObservers and
+            // can blank Chrome DevTools Elements on large storefront DOMs.
+            if (!countdown.hidden) {
+                countdown.hidden = true;
+            }
+            stopCountdownTick();
             return;
         }
-        
+
+        if (countdown.hidden) {
+            countdown.hidden = false;
+        }
+
         const hours = Math.floor(diff / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        
-        const hoursEl = countdown.querySelector('[data-unit="hours"]');
-        const minutesEl = countdown.querySelector('[data-unit="minutes"]');
-        const secondsEl = countdown.querySelector('[data-unit="seconds"]');
-        
-        if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
-        if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
-        if (secondsEl) secondsEl.textContent = String(seconds).padStart(2, '0');
+
+        setUnitText(countdown.querySelector('[data-unit="hours"]'), hours);
+        setUnitText(countdown.querySelector('[data-unit="minutes"]'), minutes);
+        setUnitText(countdown.querySelector('[data-unit="seconds"]'), seconds);
     }
-    
+
     updateCountdown();
-    setInterval(updateCountdown, 1000);
+    if (!countdown.hidden) {
+        tickId = setInterval(updateCountdown, 1000);
+    }
 })();
 });
