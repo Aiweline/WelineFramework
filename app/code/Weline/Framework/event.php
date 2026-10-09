@@ -128,6 +128,20 @@ return [
             'module' => ['type' => 'string|null', 'required' => false, 'description' => '默认模块名'],
         ],
     ],
+    'Weline_Framework_Phrase::cli_language_options' => [
+        'name' => __('CLI 短语语言选项'),
+        'description' => __('收集 CLI 可选 Phrase 语种。Framework 先填入模块 CSV / generated/language 语种；观察者（如 I18n）可追加已安装语种与显示名；Framework 负责去重排序。'),
+        'doc' => 'phrase/CLI短语语言选项.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'languages' => [
+                'type' => 'array',
+                'required' => true,
+                'description' => 'list<{code:string,label?:string,source?:string}>',
+            ],
+        ],
+    ],
     'Weline_Framework_Phrase::dictionary_translate' => [
         'name' => __('Phrase 词典批量翻译'),
         'description' => __('维护冷路径：批量 AI/机器翻译并 publish 到 generated/language。Framework 只 dispatch；I18n Observer 写 DB 与 locale 文件。'),

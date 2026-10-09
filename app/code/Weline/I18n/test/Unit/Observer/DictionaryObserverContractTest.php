@@ -12,6 +12,8 @@ final class DictionaryObserverContractTest extends TestCase
     {
         $xml = (string)file_get_contents(dirname(__DIR__, 3) . '/etc/event.xml');
         self::assertStringContainsString('Weline_Framework_Phrase::dictionary_compile', $xml);
+        self::assertStringContainsString('Weline_Framework_Phrase::cli_language_options', $xml);
+        self::assertStringContainsString('CliLanguageOptions', $xml);
         self::assertStringContainsString('DictionaryCompileObserver', $xml);
         self::assertStringContainsString('DictionaryCompileAfterObserver', $xml);
         self::assertStringContainsString('DictionaryRegisterObserver', $xml);

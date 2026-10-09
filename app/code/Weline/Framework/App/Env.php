@@ -139,6 +139,7 @@ class Env extends DataObject
 
     public const default_CONFIG = [
         'seo' => true,
+        'cli_language' => self::default_LANGUAGE_CODE,
         'system' => [
             'env' => 'local',
             'deploy' => 'dev',

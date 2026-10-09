@@ -35,6 +35,9 @@
     <event name="Weline_Framework_MarketplaceMeta::collect_translations">
         <observer name="Weline_I18n::marketplace_meta_collect_translations_shim" instance="Weline\I18n\Observer\CollectTranslationsShimObserver" disabled="false" shared="true" sort="10"/>
     </event>
+    <event name="Weline_Framework_Phrase::cli_language_options">
+        <observer name="Weline_I18n::cli_language_options" instance="Weline\I18n\Observer\CliLanguageOptions" disabled="false" shared="true" sort="10"/>
+    </event>
     <event name="Weline_Framework_Phrase::dictionary_compile">
         <observer name="Weline_I18n::dictionary_compile" instance="Weline\I18n\Observer\DictionaryCompileObserver" disabled="false" shared="true" sort="10"/>
     </event>

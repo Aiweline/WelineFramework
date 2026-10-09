@@ -162,9 +162,14 @@ class State extends DataObject
 
     /**
      * 当前区域的默认语言。后台不读网站默认语言。
+     * CLI（非 WLS Worker）使用独立 cli_language，不回落到网站语种列表首项。
      */
     public static function resolveAreaDefaultLanguage(): string
     {
+        if (\Weline\Framework\Phrase\CliLanguage::isCliContext()) {
+            return \Weline\Framework\Phrase\CliLanguage::resolveConfigured();
+        }
+
         if (self::currentAreaIsBackend()) {
             return self::resolveBackendEffectiveDefaultLanguage();
         }

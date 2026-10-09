@@ -249,6 +249,8 @@ URL解析后，你可以在这里做一些后续操作。,URL解析后，你可�
 "Phrase 词典编译完成","Phrase 词典编译完成"
 "Phrase 词典登记","Phrase 词典登记"
 "维护冷路径：业务模块登记词条到扩展词典（如 I18n DB）。Framework 只 dispatch，无 Observer 时为 no-op。","维护冷路径：业务模块登记词条到扩展词典（如 I18n DB）。Framework 只 dispatch，无 Observer 时为 no-op。"
+"CLI 短语语言选项","CLI 短语语言选项"
+"收集 CLI 可选 Phrase 语种。Framework 先填入模块 CSV / generated/language 语种；观察者（如 I18n）可追加已安装语种与显示名；Framework 负责去重排序。","收集 CLI 可选 Phrase 语种。Framework 先填入模块 CSV / generated/language 语种；观察者（如 I18n）可追加已安装语种与显示名；Framework 负责去重排序。"
 "Phrase 词典批量翻译","Phrase 词典批量翻译"
 "维护冷路径：批量 AI/机器翻译并 publish 到 generated/language。Framework 只 dispatch；I18n Observer 写 DB 与 locale 文件。","维护冷路径：批量 AI/机器翻译并 publish 到 generated/language。Framework 只 dispatch；I18n Observer 写 DB 与 locale 文件。"
 "SchemaDiff 提交前","SchemaDiff 提交前"
@@ -600,6 +602,9 @@ WelineFramework,WelineFramework
 未登录或登录已过期,未登录或登录已过期
 无法创建部署版本目录：%{1},无法创建部署版本目录：%{1}
 无法写入部署版本文件,无法写入部署版本文件
+"无效的 CLI 语言代码：%{1}","无效的 CLI 语言代码：%{1}"
+语言不在可选列表中：%{1},语言不在可选列表中：%{1}
+"写入 cli_language 失败，请检查 app/etc/env.php 权限","写入 cli_language 失败，请检查 app/etc/env.php 权限"
 "警告：无法创建翻译文件 %{file}","警告：无法创建翻译文件 %{file}"
 "警告：无法写入翻译文件 %{file}","警告：无法写入翻译文件 %{file}"
 "警告：无法写入语言文件 %{file}","警告：无法写入语言文件 %{file}"
@@ -608,6 +613,20 @@ WelineFramework,WelineFramework
 词典收集进行中%{1}，拒绝重复拉起。请等待当前任务结束后再执行。,词典收集进行中%{1}，拒绝重复拉起。请等待当前任务结束后再执行。
 全部模块,全部模块
 当前生产环境：确认切换实时翻译模式么？Y/n,当前生产环境：确认切换实时翻译模式么？Y/n
+"当前 CLI 语言：%{1}","当前 CLI 语言：%{1}"
+"没有可选的 CLI 语言","没有可选的 CLI 语言"
+可选语言（输入编号或语言代码）：,可选语言（输入编号或语言代码）：
+请选择：,请选择：
+已取消,已取消
+无效编号：%{1},无效编号：%{1}
+"CLI 语言已设置为：%{1}","CLI 语言已设置为：%{1}"
+"设置 CLI 短语语言（写入 env.php cli_language）","设置 CLI 短语语言（写入 env.php cli_language）"
+显示帮助信息,显示帮助信息
+"仅显示当前 CLI 语言","仅显示当前 CLI 语言"
+"语言代码，如 zh_Hans_CN / en_US","语言代码，如 zh_Hans_CN / en_US"
+查看当前,查看当前
+设为中文,设为中文
+交互选择,交互选择
 1、正在执行卸载脚本...,1、正在执行卸载脚本...
 模块卸载脚本不存在，已跳过卸载脚本！,模块卸载脚本不存在，已跳过卸载脚本！
 卸载,卸载
@@ -1205,7 +1224,6 @@ operation：%{id},operation：%{id}
 "只读检测声明式 Model 指纹与已存 Schema checkpoint 是否漂移（无 DDL）","只读检测声明式 Model 指纹与已存 Schema checkpoint 是否漂移（无 DDL）"
 仅检查指定模块,仅检查指定模块
 "JSON 输出","JSON 输出"
-显示帮助信息,显示帮助信息
 全量检查,全量检查
 "指定模块 JSON","指定模块 JSON"
 "后台优化任务完成，耗时 %{1} 秒","后台优化任务完成，耗时 %{1} 秒"
@@ -2784,3 +2802,6 @@ PHPUnit报告服务器已在后台启动,PHPUnit报告服务器已在后台启�
 "已保存：UI 测试关闭","已保存：UI 测试关闭"
 查看全部网站异步事件,查看全部网站异步事件
 重放异步事件死信,重放异步事件死信
+"新进程命令将使用该语种，例如：php bin/w server:status","新进程命令将使用该语种，例如：php bin/w server:status"
+"非交互终端请指定语言代码，例如：php bin/w cli:language zh_Hans_CN","非交互终端请指定语言代码，例如：php bin/w cli:language zh_Hans_CN"
+"查看当前：php bin/w cli:language --show","查看当前：php bin/w cli:language --show"

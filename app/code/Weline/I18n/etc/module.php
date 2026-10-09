@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_I18n',
-    "version" => '1.0.100',
+    "version" => '1.0.101',
     "requires" => [
         'Weline_Framework' => '*',
         'Weline_SystemConfig' => '*',
