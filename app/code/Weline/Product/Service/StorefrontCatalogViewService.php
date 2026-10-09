@@ -81,8 +81,11 @@ final class StorefrontCatalogViewService
     public function publishedListingCandidates(int $limit = 1000, bool $includeListingDetails = false): array
     {
         $limit = max(1, min(self::MAX_CATALOG_PRODUCTS, $limit));
+        $rows = $this->applyPostCacheOfferFilters(
+            $this->rememberPublishedOffers($includeListingDetails, false),
+        );
 
-        return array_slice($this->rememberPublishedOffers($includeListingDetails, false), 0, $limit);
+        return array_slice($rows, 0, $limit);
     }
 
     /**
@@ -141,7 +144,9 @@ final class StorefrontCatalogViewService
         if (Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
             $rows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
             if (is_array($rows)) {
-                $sliced = $this->materializeCampaignUrls(array_slice($rows, 0, $limit));
+                /** @var list<array<string, mixed>> $rows */
+                $filtered = $this->applyPostCacheOfferFilters($rows);
+                $sliced = $this->materializeCampaignUrls(array_slice($filtered, 0, $limit));
 
                 return array_map(
                     fn(array $row): array => $this->toCardSurfaceRow($row),
@@ -187,7 +192,11 @@ final class StorefrontCatalogViewService
             ),
         );
 
-        return $this->materializeCampaignUrls(array_slice($rows, 0, $limit));
+        return $this->materializeCampaignUrls(array_slice(
+            $this->applyPostCacheOfferFilters($rows),
+            0,
+            $limit,
+        ));
     }
 
     /**
@@ -251,12 +260,12 @@ final class StorefrontCatalogViewService
                 ),
             );
 
-            $rows = $this->applyLocationSellOfferFilter($rows);
+            $rows = $this->applyPostCacheOfferFilters($rows);
 
             return $this->materializeCampaignUrls(\array_slice($rows, 0, $limit));
         }
 
-        $rows = $this->applyLocationSellOfferFilter($this->rememberPublishedOffers($includeListingDetails));
+        $rows = $this->applyPostCacheOfferFilters($this->rememberPublishedOffers($includeListingDetails));
 
         return \array_slice($rows, 0, $limit);
     }
@@ -627,7 +636,7 @@ final class StorefrontCatalogViewService
             'product.live_offers_batch', $requestKey,
             fn(): array => $this->buildPublishedOffers($websiteId, $scope, $ids),
         );
-        return $this->materializeCampaignUrls($rows);
+        return $this->materializeCampaignUrls($this->applyPostCacheOfferFilters($rows));
     }
 
     /**
@@ -689,7 +698,7 @@ final class StorefrontCatalogViewService
             $hydrated[] = $projected;
         }
 
-        return $this->materializeCampaignUrls($hydrated);
+        return $this->materializeCampaignUrls($this->applyPostCacheOfferFilters($hydrated));
     }
 
     /**
@@ -1873,6 +1882,66 @@ final class StorefrontCatalogViewService
         }
 
         return $fallbacks;
+    }
+
+    /**
+     * Unified post-cache offer filters (location sell + catalog visibility SPI).
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function applyPostCacheOfferFilters(array $rows): array
+    {
+        return $this->applyCatalogVisibilityOfferFilter(
+            $this->applyLocationSellOfferFilter($rows),
+        );
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function applyCatalogVisibilityOfferFilter(array $rows): array
+    {
+        if ($rows === []
+            || !interface_exists(\Weline\Product\Api\StorefrontCatalogVisibilityFilterInterface::class)
+        ) {
+            return $rows;
+        }
+        try {
+            /** @var \Weline\Product\Api\StorefrontCatalogVisibilityFilterInterface $filter */
+            $filter = ObjectManager::getInstance(
+                \Weline\Product\Api\StorefrontCatalogVisibilityFilterInterface::class
+            );
+            if (!$filter instanceof \Weline\Product\Api\StorefrontCatalogVisibilityFilterInterface) {
+                return $rows;
+            }
+            $websiteId = max(0, RequestContext::getWelineWebsiteId());
+            $storeId = max(0, RequestContext::getWelineStoreId());
+            $channelId = max(0, RequestContext::getWelineChannelId());
+            $offerIds = [];
+            foreach ($rows as $row) {
+                $oid = (int)($row['offer_id'] ?? 0);
+                if ($oid > 0) {
+                    $offerIds[] = $oid;
+                }
+            }
+            $allowed = array_fill_keys(
+                $filter->filterSellableOfferIds($offerIds, $websiteId, $storeId, $channelId),
+                true,
+            );
+            $out = [];
+            foreach ($rows as $row) {
+                $oid = (int)($row['offer_id'] ?? 0);
+                if ($oid > 0 && isset($allowed[$oid])) {
+                    $out[] = $row;
+                }
+            }
+
+            return $out;
+        } catch (\Throwable) {
+            return $rows;
+        }
     }
 
     /**

@@ -39,7 +39,16 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
             $websiteId = max(0, $websiteId);
         }
 
-        $logicalKey = 'w' . $websiteId . ':l' . $limit . ':e' . $entityUuid;
+        // Channel/store must be in the key: b2b display_type scopes hide retail PDP links.
+        $storeId = 0;
+        $channelId = 0;
+        try {
+            $storeId = max(0, RequestContext::getWelineStoreId());
+            $channelId = max(0, RequestContext::getWelineChannelId());
+        } catch (\Throwable) {
+            // keep 0
+        }
+        $logicalKey = 'w' . $websiteId . ':s' . $storeId . ':c' . $channelId . ':l' . $limit . ':e' . $entityUuid;
         $hotCache = $this->hotCache();
 
         try {
@@ -115,6 +124,7 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
             }
         }
         $productIdByUuid = $this->resolveStorefrontProductIds(\array_values($entityUuids), $websiteId);
+        $sellableProductIds = $this->filterSellableProductIds(\array_values($productIdByUuid));
 
         $items = [];
         $seenImages = [];
@@ -152,6 +162,10 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
 
             // 店面 PDP 用 product_id（或 slug），不是 identity registry_id（entity_id）
             $productId = max(0, (int)($productIdByUuid[$rowEntityUuid] ?? 0));
+            // b2b（及其它 catalog visibility）范围：不可售商品不进买家秀墙，避免露出零售 PDP。
+            if ($productId > 0 && !isset($sellableProductIds[$productId])) {
+                continue;
+            }
             $link = $productId > 0
                 ? '/product/' . $productId . '#product-reviews'
                 : '';
@@ -173,6 +187,36 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
         }
 
         return $items;
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return array<int, true>
+     */
+    private function filterSellableProductIds(array $productIds): array
+    {
+        $productIds = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        if ($productIds === []) {
+            return [];
+        }
+        if (!\class_exists(\Weline\Product\Service\StorefrontCatalogProductVisibility::class)) {
+            return \array_fill_keys($productIds, true);
+        }
+        try {
+            /** @var \Weline\Product\Service\StorefrontCatalogProductVisibility $gate */
+            $gate = ObjectManager::getInstance(
+                \Weline\Product\Service\StorefrontCatalogProductVisibility::class
+            );
+            $allowed = $gate->filterSellableProductIds($productIds);
+
+            return \array_fill_keys($allowed, true);
+        } catch (\Throwable) {
+            // Fail closed: do not advertise retail PDP links when the gate cannot run.
+            return [];
+        }
     }
 
     /**

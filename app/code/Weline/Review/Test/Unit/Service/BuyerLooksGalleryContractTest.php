@@ -23,6 +23,9 @@ final class BuyerLooksGalleryContractTest extends TestCase
         self::assertStringContainsString('#product-reviews', $source);
         self::assertStringContainsString('forReviews', $source);
         self::assertStringContainsString('resolveStorefrontProductIds', $source);
+        self::assertStringContainsString('filterSellableProductIds', $source);
+        self::assertStringContainsString('StorefrontCatalogProductVisibility', $source);
+        self::assertStringContainsString(':s\' . $storeId . \':c\' . $channelId', $source);
         self::assertStringContainsString('StorefrontScopeHotCache', $source);
         self::assertStringContainsString('findByGlobalUuid', $source);
         // Cross-site PDP fallback to website 0 must stay removed.
