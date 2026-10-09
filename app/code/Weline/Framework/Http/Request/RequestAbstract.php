@@ -735,22 +735,31 @@ abstract class RequestAbstract extends RequestFilter
         }
 
         // WELINE_WEBSITE_URL 由 Url::parser() → processUrlParse() 写入 $_SERVER
-        // 它包含 scheme://host[:port][/sub_path] —— 站柜公开源优先。
+        // 它包含 scheme://host[:port][/sub_path] —— 借 scheme/端口清洁，但文档源 Host
+        // 必须以当前请求 Host 为准。项目壳 Host 打开 Host-only 站时若整段改写为站柜 Host，
+        // <base> 跨域 → 相对 /static 落到兄弟域 → CSP 'self' 拦 stylesheet/script。
         // Nginx→Worker 明文 H1 时 REQUEST_SCHEME=http、HTTP_HOST 可能被填上 WLS_PORT(:9555)；
-        // 若仍用请求口叠进 website_url，<base href>/@url 会烤成 http://host:9555/，
-        // HTTPS 店面混合内容拦掉 theme-head，.w-frame 等 foundation 全部失效。
+        // 若仍用请求口叠进同 Host 的 website_url，会烤成 http://host:9555/ 混合内容。
         $websiteUrl = \w_env('website_url', '');
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             if (\is_array($parsed) && !empty($parsed['host'])) {
-                $hostPart = (string)$parsed['host'];
-                $pathPart = $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''));
+                $requestHostName = \str_contains($host, ':')
+                    ? (string)\explode(':', $host, 2)[0]
+                    : (string)$host;
+                $websiteHost = (string)$parsed['host'];
+                $hostsAligned = \strcasecmp($requestHostName, $websiteHost) === 0;
+                // 跨 Host：保留文档源 Host；挂载 sub_path 只属于站柜 Host，不得叠到项目壳。
+                $hostPart = $hostsAligned ? $websiteHost : $requestHostName;
+                $pathPart = $hostsAligned
+                    ? $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''))
+                    : '';
                 $websiteScheme = \strtolower((string)($parsed['scheme'] ?? ''));
                 if ($websiteScheme !== 'http' && $websiteScheme !== 'https') {
                     $websiteScheme = $currentScheme;
                 }
-                $websitePortExplicit = isset($parsed['port']);
-                $resolvedPort = $websitePortExplicit ? (string)(int)$parsed['port'] : '';
+                $websitePortExplicit = $hostsAligned && isset($parsed['port']);
+                $resolvedPort = ($hostsAligned && isset($parsed['port'])) ? (string)(int)$parsed['port'] : '';
                 if ($resolvedPort === '') {
                     $resolvedPort = $websiteScheme === 'https' ? '443' : '80';
                 }

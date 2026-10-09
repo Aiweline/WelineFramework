@@ -25,9 +25,9 @@ use Weline\Framework\View\Data\HtmlInterface;
 trait TraitTemplate
 {
     // 路径映射和物理编译目录必须同时迁移格式，避免映射仍指向旧编译产物。
-    // v7：物理目录用明文 scope（站/语/币/origin/theme），去掉 ctx_/__bytes_ 内容寻址；
+    // v8：在 v7 明文 scope 上增加「站点地址」维度（文档公开源 Host）；同站多绑定地址各自分区烘焙绝对 URL。
     // hooks 变更靠编译文件头 compile_id 原地失效覆盖，不再新开目录堆产物。
-    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v7-plain-scope-inplace';
+    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v8-site-address-origin';
 
     /**
      * @DESC          # 读取页头代码

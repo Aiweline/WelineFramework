@@ -1220,19 +1220,24 @@ class WlsRequest extends Request
             $currentPort = $currentScheme === 'https' ? '443' : '80';
         }
 
-        // Url::parser → WELINE_WEBSITE_URL；优先站柜公开源的 scheme/host/port。
+        // Url::parser → WELINE_WEBSITE_URL：借 scheme/端口清洁；文档源 Host 必须对齐请求 Host。
+        // 跨 Host（项目壳打开 Host-only 站）不得把 <base>/@url 改写到兄弟域，否则 CSP 'self' 拦 /static。
         $websiteUrl = (string) \w_env('website_url', '');
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             if (\is_array($parsed) && !empty($parsed['host'])) {
-                $wHost = (string)$parsed['host'];
-                $wPath = $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''));
+                $websiteHost = (string)$parsed['host'];
+                $hostsAligned = \strcasecmp($hostName, $websiteHost) === 0;
+                $wHost = $hostsAligned ? $websiteHost : $hostName;
+                $wPath = $hostsAligned
+                    ? $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''))
+                    : '';
                 $websiteScheme = \strtolower((string)($parsed['scheme'] ?? ''));
                 if ($websiteScheme !== 'http' && $websiteScheme !== 'https') {
                     $websiteScheme = $currentScheme;
                 }
-                $websitePortExplicit = isset($parsed['port']);
-                $resolvedPort = $websitePortExplicit ? (string)(int)$parsed['port'] : '';
+                $websitePortExplicit = $hostsAligned && isset($parsed['port']);
+                $resolvedPort = ($hostsAligned && isset($parsed['port'])) ? (string)(int)$parsed['port'] : '';
                 if ($resolvedPort === '') {
                     $resolvedPort = $websiteScheme === 'https' ? '443' : '80';
                 }

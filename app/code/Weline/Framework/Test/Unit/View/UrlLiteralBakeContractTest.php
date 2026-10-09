@@ -16,7 +16,7 @@ final class UrlLiteralBakeContractTest extends TestCase
 {
     public function testCompilerGenerationBumpsForUrlLiteralBake(): void
     {
-        self::assertSame('20261008-url-literal-bake-v1', Taglib::COMPILER_GENERATION);
+        self::assertSame('20261009-url-literal-bake-site-address-v6', Taglib::COMPILER_GENERATION);
         $source = (string)file_get_contents(dirname(__DIR__, 3) . '/View/Taglib.php');
         self::assertStringContainsString('function tryBakeUrlFamily', $source);
         self::assertStringContainsString('adjustBakedStaticInlineReplacement', $source);
@@ -40,6 +40,17 @@ final class UrlLiteralBakeContractTest extends TestCase
             ['path' => 'product/list'],
         );
         self::assertSame('/~site/grocery/product/list', $bakedXml);
+    }
+
+    public function testDocumentRootPathBakesSiteAddressOrigin(): void
+    {
+        $template = $this->createMock(Template::class);
+        $template->method('getUrl')->willReturn('https://pf14955e2.test.weline.com/');
+
+        self::assertSame(
+            'https://pf14955e2.test.weline.com/',
+            $this->tryBake($template, 'getUrl', '@url{}', ["@url{'/'}", "'/'", ''], [])
+        );
     }
 
     public function testDynamicPathKeepsNullSoStubRemains(): void

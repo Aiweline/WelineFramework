@@ -18,7 +18,7 @@ final class FormFiberCaptureContractTest extends TestCase
             \dirname(__DIR__, 3) . '/View/Taglib.php'
         );
 
-        self::assertSame('20261008-url-literal-bake-v1', Taglib::COMPILER_GENERATION);
+        self::assertSame('20261009-url-literal-bake-site-address-v6', Taglib::COMPILER_GENERATION);
         self::assertStringContainsString('FiberOutputBuffer::beginCapture()', $source);
         self::assertStringContainsString('FiberOutputBuffer::endCapture()', $source);
         self::assertStringContainsString('Taglib__form_body', $source);

@@ -51,7 +51,7 @@ class Taglib
      * Bumped when compiled Taglib output shape changes (e.g. form body capture).
      * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
      */
-    public const COMPILER_GENERATION = '20261009-url-literal-bake-public-origin-v3';
+    public const COMPILER_GENERATION = '20261009-url-literal-bake-site-address-v6';
 
     // PHP 标签常量，避免在回调函数中重复定义
     private const PHP_OPEN_TAG = '<' . '?';

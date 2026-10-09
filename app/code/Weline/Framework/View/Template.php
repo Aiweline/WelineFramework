@@ -692,9 +692,12 @@ class Template extends DataObject implements RequestLocalInterface
      * can freeze the wrong lang before route localization, and processViewFileCache
      * would then hand a Hindi-baked <lang> compile to an en_US request.
      *
+     * site_address = 文档公开源（当前打开的站点地址）。同站多绑定 Host 时各自一维，
+     * 编译期 @url 烘焙的绝对地址必须落在该维，禁止用单一站柜登记 url 盖全部分区。
+     *
      * @return array{
      *   compile_scope_schema:string,area:string,website_id:string,website_code:string,
-     *   lang:string,currency:string,website_url:string,theme:string,hooks_registry:string
+     *   lang:string,currency:string,website_url:string,site_address:string,theme:string,hooks_registry:string
      * }
      */
     private function templateCompileScopeDimensions(): array
@@ -711,12 +714,75 @@ class Template extends DataObject implements RequestLocalInterface
             'website_code' => $dimension('website_code', 'default', '/^[a-z0-9][a-z0-9_.-]{0,63}$/i'),
             'lang' => $dimension('user.lang', 'default', '/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/'),
             'currency' => $dimension('user.currency', 'CNY', '/^[A-Z]{3}$/'),
+            // 站柜登记源（挂载 path / 匹配身份）；绝对 URL 烘焙以 site_address 为准。
             'website_url' => \function_exists('w_env') ? (string)\w_env('website_url', '') : '',
+            'site_address' => $this->resolveCompileSiteAddress(),
             'theme' => $this->resolveThemeCacheKeyForFetchFile($this->view_dir),
             // Nested w:widget compile bakes <w:hook> output. Digest stays in compile_id
             // (in-place overwrite), not in a new ctx_/__bytes_ directory.
             'hooks_registry' => self::hooksRegistryCompileDigest(),
         ];
+    }
+
+    /**
+     * 编译用「站点地址」= 文档公开源。
+     * 优先 Request::getBaseHost()（已与请求 Host 对齐、剥 Worker 口）；
+     * 其次直接拼请求 Host；最后回退 w_env(website_url)（CLI / 无请求）。
+     */
+    private function resolveCompileSiteAddress(): string
+    {
+        try {
+            if (isset($this->request) && \is_object($this->request) && \method_exists($this->request, 'getBaseHost')) {
+                $origin = \rtrim(\trim((string)$this->request->getBaseHost()), '/');
+                $host = \parse_url($origin, \PHP_URL_HOST);
+                if ($origin !== '' && \is_string($host) && $host !== '') {
+                    return $origin;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (isset($this->request) && \is_object($this->request)) {
+                $scheme = 'http';
+                if (\method_exists($this->request, 'isSecure') && $this->request->isSecure()) {
+                    $scheme = 'https';
+                } elseif (\method_exists($this->request, 'getSsl')) {
+                    $scheme = (string)$this->request->getSsl() === 'https' ? 'https' : 'http';
+                } elseif (\function_exists('w_env')) {
+                    $scheme = \strtolower((string)\w_env('server.request_scheme', 'http')) === 'https' ? 'https' : 'http';
+                }
+                $httpHost = '';
+                if (\method_exists($this->request, 'getServer')) {
+                    $httpHost = \trim((string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: ''));
+                }
+                if ($httpHost === '' && \function_exists('w_env')) {
+                    $httpHost = \trim((string)\w_env('server.http_host', \w_env('server.server_name', '')));
+                }
+                if ($httpHost !== '') {
+                    $origin = $scheme . '://' . $httpHost;
+                    // 剥私有 Worker 口，与 getBaseHost 公开源契约一致。
+                    $parts = \parse_url($origin);
+                    if (\is_array($parts) && !empty($parts['host'])) {
+                        $port = isset($parts['port']) ? (int)$parts['port'] : 0;
+                        $wlsPortRaw = \function_exists('w_env') ? \w_env('server.wls_port', \getenv('WLS_PORT') ?: '') : (\getenv('WLS_PORT') ?: '');
+                        $wlsPort = (\is_int($wlsPortRaw) || (\is_string($wlsPortRaw) && $wlsPortRaw !== '' && \ctype_digit((string)$wlsPortRaw)))
+                            ? (int)$wlsPortRaw
+                            : 0;
+                        if ($port >= 9000 && $port <= 9999 || ($wlsPort > 0 && $port === $wlsPort)) {
+                            $origin = $scheme . '://' . (string)$parts['host'];
+                        }
+
+                        return \rtrim($origin, '/');
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $fallback = \function_exists('w_env') ? \trim((string)\w_env('website_url', '')) : '';
+
+        return \rtrim($fallback, '/');
     }
 
     /** Short identity shared by convertFetchFileName maps and compile directories. */
@@ -772,13 +838,14 @@ class Template extends DataObject implements RequestLocalInterface
             $scope['lang'],
             $scope['currency'],
         ];
+        // 站点地址必须排在 theme 之前：长 theme path 截断时不得吃掉 _o_{host}。
+        $originLeaf = $this->compileOriginPathLeaf((string)($scope['site_address'] ?: $scope['website_url']));
+        if ($originLeaf !== '') {
+            $labelParts[] = 'o_' . $originLeaf;
+        }
         $theme = $this->sanitizeCompileContextSegment((string)$scope['theme']);
         if ($theme !== '' && $theme !== 'default' && $theme !== 'area_frontend') {
             $labelParts[] = 't_' . $theme;
-        }
-        $originLeaf = $this->compileOriginPathLeaf((string)$scope['website_url']);
-        if ($originLeaf !== '') {
-            $labelParts[] = 'o_' . $originLeaf;
         }
         $label = \implode('_', \array_map(fn(string $value): string => $this->sanitizeCompileContextSegment($value), $labelParts));
         if (\strlen($label) > 160) {
@@ -1678,7 +1745,7 @@ class Template extends DataObject implements RequestLocalInterface
     private function bodyEndStaticHookCacheContext(): ?string
     {
         try {
-            $requestPath = \strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
+            $requestPath = $this->requestPathForCacheGate();
             if ($this->isAccountAuthRequestPath($requestPath)) {
                 return null;
             }
@@ -3393,7 +3460,8 @@ class Template extends DataObject implements RequestLocalInterface
         }
 
         try {
-            $requestPath = \strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
+            // Path gate via getUri() (legacy PathInfo accessor is absent on Request).
+            $requestPath = $this->requestPathForCacheGate();
             $enabled = (string)$this->request->getGet('visual_editor', '') === '1'
                 || (string)$this->request->getGet('preview', '') === '1'
                 || (string)$this->request->getGet('debug_hooks', '') === '1'
@@ -3404,6 +3472,30 @@ class Template extends DataObject implements RequestLocalInterface
 
         RequestContext::set($cacheKey, $enabled);
         return $enabled;
+    }
+
+    /** Path-only request URI for cache/editor gates (Request has no getPathInfo). */
+    private function requestPathForCacheGate(): string
+    {
+        $uri = '';
+        try {
+            $uri = \trim((string)$this->request->getUri());
+        } catch (\Throwable) {
+            $uri = '';
+        }
+        if ($uri === '' && \function_exists('w_env_request_uri')) {
+            try {
+                $uri = \trim((string)\w_env_request_uri());
+            } catch (\Throwable) {
+                $uri = '';
+            }
+        }
+        if ($uri === '') {
+            return '';
+        }
+        $path = \parse_url($uri, PHP_URL_PATH);
+
+        return \strtolower((string)(\is_string($path) && $path !== '' ? $path : $uri));
     }
 
     private function staticHookOutputCacheTtl(): int

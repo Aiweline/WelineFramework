@@ -11,6 +11,7 @@ use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Request;
 use Weline\Framework\View\Template;
 
 final class TemplateCompileOriginScopeTest extends TestCase
@@ -93,6 +94,22 @@ final class TemplateCompileOriginScopeTest extends TestCase
             $hiMap = $compileMapKey->invoke($template);
             self::assertNotSame($enMap, $hiMap, 'Compile path maps must shard by live w_env lang so baked <lang> cannot cross locales.');
             WelineEnv::set('user.lang', 'en_US', 'compile origin fixture');
+
+            // v8：站点地址维 = 文档公开源；站柜登记 url 与请求 Host 不一致时按文档源分区。
+            $dimsMethod = new ReflectionMethod(Template::class, 'templateCompileScopeDimensions');
+            $request = $this->getMockBuilder(Request::class)
+                ->disableOriginalConstructor()
+                ->onlyMethods(['getBaseHost'])
+                ->getMock();
+            $request->method('getBaseHost')->willReturn('https://pf14955e2.test.weline.com');
+            (new ReflectionProperty(Template::class, 'request'))->setValue($template, $request);
+            WelineEnv::set('website_url', 'https://p05113ef3.test.weline.com', 'compile site-address fixture');
+            $dims = $dimsMethod->invoke($template);
+            self::assertSame('https://pf14955e2.test.weline.com', $dims['site_address']);
+            self::assertSame('https://p05113ef3.test.weline.com', $dims['website_url']);
+            $addressDir = $method->invoke($template, $directory);
+            self::assertStringContainsString('_o_pf14955e2_test_weline_com', $addressDir);
+            self::assertStringNotContainsString('_o_p05113ef3_test_weline_com', $addressDir);
         } finally {
             $_GET = $previousGet;
             Context::leave();

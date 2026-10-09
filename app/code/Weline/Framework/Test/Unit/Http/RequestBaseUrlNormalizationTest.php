@@ -181,4 +181,50 @@ final class RequestBaseUrlNormalizationTest extends TestCase
 
         self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
     }
+
+    public function testBaseHostKeepsDocumentHostWhenWebsiteUrlIsSiblingHostOnly(): void
+    {
+        // 项目壳 Host 打开 Host-only 站：website_url 为兄弟域时，<base> 必须留在文档源 Host，
+        // 否则相对 /static 跨域被 CSP style-src/script-src 'self' 拦截。
+        $server = [
+            'REQUEST_URI' => '/',
+            'REQUEST_METHOD' => 'GET',
+            'REQUEST_SCHEME' => 'http',
+            'HTTPS' => '',
+            'HTTP_HOST' => 'p05113ef3.test.weline.com:9555',
+            'SERVER_NAME' => 'p05113ef3.test.weline.com',
+            'SERVER_PORT' => '9555',
+            'WLS_PORT' => '9555',
+            'WELINE_WEBSITE_URL' => 'https://pf14955e2.test.weline.com',
+        ];
+        $_SERVER = $server;
+        WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
+
+        $request = new class extends RequestAbstract {
+        };
+
+        self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
+    }
+
+    public function testBaseHostKeepsHostOnlyDocumentWhenRegistryUrlIsProjectShell(): void
+    {
+        $server = [
+            'REQUEST_URI' => '/',
+            'REQUEST_METHOD' => 'GET',
+            'REQUEST_SCHEME' => 'http',
+            'HTTPS' => '',
+            'HTTP_HOST' => 'pf14955e2.test.weline.com:9555',
+            'SERVER_NAME' => 'pf14955e2.test.weline.com',
+            'SERVER_PORT' => '9555',
+            'WLS_PORT' => '9555',
+            'WELINE_WEBSITE_URL' => 'https://p05113ef3.test.weline.com',
+        ];
+        $_SERVER = $server;
+        WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
+
+        $request = new class extends RequestAbstract {
+        };
+
+        self::assertSame('https://pf14955e2.test.weline.com', $request->getBaseHost());
+    }
 }
