@@ -782,6 +782,14 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'visual')),
         false,
     ),
+    'hard_constraints include requirement_use_case_closed_loop_acceptance' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_use_case_closed_loop_acceptance'
+            && str_contains((string) ($rule['summary'] ?? ''), 'covers_use_cases')
+            && str_contains((string) ($rule['summary'] ?? ''), '需求用例闭环验收未完成')),
+        false,
+    ),
     'hard_constraints include requirement_fe_be_scope_analysis' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -1482,6 +1490,20 @@ $checks = [
         'requirement_acceptance_always_satisfied',
         is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
         true,
+    ),
+    'mandatory_before_closeout includes requirement_use_cases_closed_loop_passed' => in_array(
+        'requirement_use_cases_closed_loop_passed',
+        is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
+        true,
+    ),
+    'mandatory_before_code includes use_cases_mapped_to_acceptance' => in_array(
+        'use_cases_mapped_to_acceptance',
+        is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
+        true,
+    ),
+    'mcp instructions mention requirement_use_case_closed_loop_acceptance' => str_contains(
+        ToolService::instructions(),
+        'requirement_use_case_closed_loop_acceptance',
     ),
     'mcp instructions mention host Plan Mode' => str_contains(ToolService::instructions(), 'host_plan_mode_for_planning')
         && str_contains(ToolService::instructions(), 'requirement_acceptance_always'),
