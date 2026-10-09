@@ -42,6 +42,22 @@
     color: var(--_paper-text);
     color-scheme: light;
 }
+/*
+ * Paper ink remap must not paint Theme UI .w-button labels black on primary fill.
+ * Keep on-primary / outline primary (matches foundation .w-button contract).
+ */
+.wc-theme_widget_checkout_delivery_context .delivery-panel .w-button {
+    color: var(--weline-theme-on-primary);
+}
+.wc-theme_widget_checkout_delivery_context .delivery-panel .w-button[data-variant="outline"] {
+    color: var(--weline-theme-primary);
+    background: transparent;
+}
+.wc-theme_widget_checkout_delivery_context .delivery-panel .w-button[data-variant="outline"][data-tone="neutral"] {
+    color: var(--weline-theme-text);
+    border-color: var(--weline-theme-border-strong);
+    background: transparent;
+}
 .wc-theme_widget_checkout_delivery_context .delivery-panel-head {
     display: flex;
     align-items: center;

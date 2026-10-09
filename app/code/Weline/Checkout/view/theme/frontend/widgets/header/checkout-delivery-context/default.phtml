@@ -74,7 +74,7 @@ $displayText = trim((string)($context['display_text'] ?? '')) ?: $placeholderCou
     <div class="delivery-panel w-surface-body" data-surface="body" hidden data-panel>
         <div class="delivery-panel-head">
             <strong><?= $esc(WidgetI18n::label('配送地址')) ?></strong>
-            <button type="button" class="w-button" data-action="close" data-size="xs" data-variant="outline"><?= $esc(WidgetI18n::label('关闭')) ?></button>
+            <button type="button" class="w-button" data-action="close" data-size="xs" data-tone="neutral" data-variant="outline"><?= $esc(WidgetI18n::label('关闭')) ?></button>
         </div>
 
         <div class="w-field country-picker">
@@ -96,7 +96,7 @@ $displayText = trim((string)($context['display_text'] ?? '')) ?: $placeholderCou
         </div>
 
         <?php if ($autoDetect): ?>
-            <button type="button" class="w-button" data-action="auto-detect" data-variant="outline" data-size="sm"><?= $esc(WidgetI18n::label('自动定位')) ?></button>
+            <button type="button" class="w-button" data-action="auto-detect" data-size="sm"><?= $esc(WidgetI18n::label('自动定位')) ?></button>
         <?php endif; ?>
         <p class="message" data-message hidden></p>
     </div>

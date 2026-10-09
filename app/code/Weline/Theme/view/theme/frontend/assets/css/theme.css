@@ -2954,7 +2954,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .w-scope-switcher__panel :is(p, li, small, span, a, div),
 [data-surface="inverse"] .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 [data-surface="inverse"] dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
-[data-surface="inverse"] .delivery-panel :is(p, li, small, span, strong, label, button),
+[data-surface="inverse"] .delivery-panel :is(p, li, small, span, strong, label, button:not(.w-button):not(.btn)),
 .w-surface-inverse .header-search-form :is(p, li, small, span),
 .w-surface-inverse .w-search-form :is(p, li, small, span),
 .w-surface-inverse .search-suggestions :is(p, li, small, span),
@@ -2964,8 +2964,25 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse .w-scope-switcher__panel :is(p, li, small, span, a, div),
 .w-surface-inverse .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 .w-surface-inverse dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
-.w-surface-inverse .delivery-panel :is(p, li, small, span, strong, label, button) {
+.w-surface-inverse .delivery-panel :is(p, li, small, span, strong, label, button:not(.w-button):not(.btn)) {
     color: inherit;
+}
+
+/* Theme UI buttons keep own on-primary / outline ink under paper remap. */
+[data-surface="inverse"] .delivery-panel .w-button,
+.w-surface-inverse .delivery-panel .w-button {
+    color: var(--weline-theme-on-primary);
+}
+[data-surface="inverse"] .delivery-panel .w-button[data-variant="outline"],
+.w-surface-inverse .delivery-panel .w-button[data-variant="outline"] {
+    color: var(--weline-theme-primary);
+    background: transparent;
+}
+[data-surface="inverse"] .delivery-panel .w-button[data-variant="outline"][data-tone="neutral"],
+.w-surface-inverse .delivery-panel .w-button[data-variant="outline"][data-tone="neutral"] {
+    color: var(--weline-theme-text);
+    border-color: var(--weline-theme-border-strong);
+    background: transparent;
 }
 
 /*

@@ -180,7 +180,16 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
             $themeCss
         );
         self::assertStringContainsString(
-            '[data-surface="inverse"] .delivery-panel :is(p, li, small, span, strong, label, button)',
+            '[data-surface="inverse"] .delivery-panel :is(p, li, small, span, strong, label, button:not(.w-button):not(.btn))',
+            $themeCss
+        );
+        // Solid / outline Theme UI buttons must not inherit paper-black ink.
+        self::assertStringContainsString(
+            '[data-surface="inverse"] .delivery-panel .w-button',
+            $themeCss
+        );
+        self::assertStringContainsString(
+            '.delivery-panel .w-button[data-variant="outline"]',
             $themeCss
         );
         self::assertStringContainsString(
