@@ -694,6 +694,9 @@ final class ThemeLayoutEntityBakeCoordinator
             $completed = $result['completed'];
             $rollbackPlan = $result['rollback_plan'];
             $migrated = count($candidates);
+            // Pipeline solidify must refresh chrome_payload (homepage + mini-cart footer-extras)
+            // so storefront fillEmptyNestedChromeSlots can heal empty coupon/留言 shells.
+            $this->persistChromePayload($identity);
         });
 
         return [

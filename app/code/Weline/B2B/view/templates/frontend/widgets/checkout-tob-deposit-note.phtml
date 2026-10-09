@@ -64,7 +64,16 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
      data-i18n-reason-na="<?= $esc($t('暂无法估算本期定金，无法用批发信用抵扣')) ?>"
      data-i18n-reason-login="<?= $esc($t('请先登录后再使用批发信用')) ?>"
      data-i18n-reason-zero="<?= $esc($t('额度不够：本单可抵扣额度为 0')) ?>"
-     data-i18n-reason-quote-failed="<?= $esc($t('暂时无法获取批发信用报价，请刷新后重试')) ?>">
+     data-i18n-reason-quote-failed="<?= $esc($t('暂时无法获取批发信用报价，请刷新后重试')) ?>"
+     data-i18n-fx-same="<?= $esc($t('基准货币（钱包）%{1} 可用 %{2}；结账币同为 %{3}；本单最多可抵 %{4} %{3}')) ?>"
+     data-i18n-fx-diff-rate="<?= $esc($t('基准货币（钱包）%{1} 可用 %{2}；汇率 %{3}；折合结账币 %{4} %{5}；本单最多可抵 %{6} %{4}（按汇率换算，禁止无汇率 1:1 直扣）')) ?>"
+     data-i18n-fx-diff="<?= $esc($t('基准货币（钱包）%{1} 可用 %{2}；折合结账币 %{3} %{4}；本单最多可抵 %{5} %{3}（按汇率换算，禁止无汇率 1:1 直扣）')) ?>"
+     data-i18n-fx-min-cash="<?= $esc($t('。定金至少保留现金 %{1} %{2}')) ?>"
+     data-i18n-cash-goods-applied="<?= $esc($t('本期定金 %{1}（商品小计 %{2} × 30%）；抵扣后现金 %{3}%{4}；尾款另付')) ?>"
+     data-i18n-cash-goods="<?= $esc($t('本期定金 %{1}（商品小计 %{2} × 30%；尾款结账时再付）%{3}')) ?>"
+     data-i18n-cash-applied="<?= $esc($t('本期定金 %{1}；抵扣后现金 %{2}%{3}；尾款另付')) ?>"
+     data-i18n-cash-plain="<?= $esc($t('本期定金 %{1}（批发首期 30%；尾款结账时再付）%{2}')) ?>"
+     data-i18n-min-cash-note="<?= $esc($t('；现金至少保留定金的 %{1}%')) ?>">
     <label class="w-b2b-checkout-credit__label" data-mini-cart-tab-label-source>
         <?= $esc($title) ?>
     </label>
@@ -131,11 +140,18 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
                           hidden></span>
                 </div>
             </div>
-            <p class="w-text" data-tone="muted" data-b2b-credit-hint data-testid="b2b-credit-hint" hidden></p>
+            <p class="w-text" data-b2b-credit-hint data-testid="b2b-credit-hint" hidden></p>
+            <p class="w-text w-b2b-checkout-credit__applied"
+               role="status"
+               aria-live="polite"
+               data-b2b-credit-applied
+               data-testid="b2b-credit-applied"
+               data-i18n-applied="<?= $esc($t('已计入下方小计')) ?>"
+               hidden></p>
             <p class="w-text w-b2b-checkout-credit__cash" data-b2b-credit-cash data-testid="b2b-credit-cash" hidden></p>
             <div class="w-b2b-checkout-credit__links">
-                <a class="w-text" data-tone="muted" href="/cart" data-b2b-credit-switch-cart data-testid="b2b-credit-switch-cart" hidden><?= $esc($t('去购物车切换批发车')) ?></a>
-                <a class="w-text" data-tone="muted" href="/faq/b2b-wholesale" data-b2b-credit-faq data-testid="b2b-credit-faq"><?= $esc($t('了解批发信用规则')) ?></a>
+                <a class="w-text" href="/cart" data-b2b-credit-switch-cart data-testid="b2b-credit-switch-cart" hidden><?= $esc($t('去购物车切换批发车')) ?></a>
+                <a class="w-text" href="/faq/b2b-wholesale" data-b2b-credit-faq data-testid="b2b-credit-faq"><?= $esc($t('了解批发信用规则')) ?></a>
             </div>
             <template data-b2b-credit-tooltip-body></template>
         </div>

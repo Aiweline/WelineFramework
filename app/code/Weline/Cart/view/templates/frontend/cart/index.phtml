@@ -31,6 +31,7 @@ $copy = [
     // Chinese source for non-zh/en locales (module CSV is zh+en only).
     'tocCart' => (string)__('零售车'),
     'tobCart' => (string)__('批发车'),
+    'depositPayable' => (string)__('本次应付定金'),
 ];
 ?>
 <link rel="stylesheet"
@@ -223,11 +224,187 @@ $copy = [
         return root.querySelector('[data-cart-discount-breakdown], [data-money-summary-row="goods"]');
     }
 
-    function paintCartMoneySummary(dto) {
+    /**
+     * Tob credit merge must not trust SSR default data-cart-type="toc".
+     * Credit UI can be live (toggle / apply / selling-mode) while the cart
+     * chrome attribute still lags — that left 小计 at full goods total.
+     */
+    function isTobCreditSurface(detail) {
+        const attr = String(root.getAttribute('data-cart-type') || '').toLowerCase();
+        if (attr === 'tob') {
+            return true;
+        }
+        if (preferredCartType() === 'tob') {
+            return true;
+        }
+        if (root.querySelector('[data-b2b-credit-toggle]:checked')) {
+            return true;
+        }
+        const detailApply = detail && Number(detail.apply_minor) > 0;
+        if (detailApply) {
+            return true;
+        }
+        // Mini-cart persist handoff before checkout-tob finishes binding.
+        if (readPersistedCreditApplyMinor() > 0) {
+            return true;
+        }
+        try {
+            const tobApi = window.WelineB2BCheckoutTob;
+            if (tobApi && typeof tobApi.readApplyMinor === 'function'
+                && Number(tobApi.readApplyMinor()) > 0) {
+                return true;
+            }
+            if (tobApi && typeof tobApi.readMode === 'function'
+                && String(tobApi.readMode() || '').toLowerCase() === 'tob') {
+                return true;
+            }
+        } catch (eTob) {}
+        return false;
+    }
+
+    function readPersistedCreditApplyMinor() {
+        try {
+            const raw = window.sessionStorage.getItem('weline.b2b.credit.apply.v1');
+            if (!raw) {
+                return 0;
+            }
+            const parsed = JSON.parse(raw);
+            if (!parsed || !parsed.enabled) {
+                return 0;
+            }
+            return Math.max(0, Number(parsed.apply_minor) || 0);
+        } catch (ePersist) {
+            return 0;
+        }
+    }
+
+    function mergeTobCreditIntoCartMoneyDto(dto, detail) {
+        const base = Object.assign({}, dto || {});
+        if (!isTobCreditSurface(detail)) {
+            return base;
+        }
+        // Keep chrome attr aligned once credit is in play (SSR default is toc).
+        if (String(root.getAttribute('data-cart-type') || '').toLowerCase() !== 'tob') {
+            applyCartTypeChrome('tob');
+        }
+        const tobApi = window.WelineB2BCheckoutTob;
+        const displayCurrency = String(base.currency || '').trim().toUpperCase() || 'CNY';
+        const detailCurrency = detail && detail.currency
+            ? String(detail.currency || '').trim().toUpperCase()
+            : '';
+        let creditCurrency = tobApi && typeof tobApi.readCreditCurrency === 'function'
+            ? String(tobApi.readCreditCurrency() || '').trim().toUpperCase()
+            : '';
+        // Event/persist handoff may carry the correct display currency before quote resettles.
+        if (detailCurrency && (!creditCurrency || creditCurrency !== displayCurrency)) {
+            creditCurrency = detailCurrency;
+        }
+        let applyMinor = 0;
+        if (tobApi && typeof tobApi.readApplyMinor === 'function') {
+            applyMinor = Math.max(0, Number(tobApi.readApplyMinor()) || 0);
+        }
+        if (applyMinor <= 0 && detail && Number(detail.apply_minor) > 0) {
+            applyMinor = Math.max(0, Number(detail.apply_minor) || 0);
+        }
+        if (applyMinor <= 0) {
+            applyMinor = readPersistedCreditApplyMinor();
+        }
+        if (applyMinor <= 0) {
+            base.deposit_minor = 0;
+            base.credit_minor = 0;
+            return base;
+        }
+        const goodsMajor = (Number(base.goods_subtotal_minor) || 0) / 100;
+        // Same-currency handoff from credit-changed: skip FX gate (event minors already in display currency).
+        const eventSameCurrency = detailCurrency && detailCurrency === displayCurrency
+            && Number(detail.apply_minor) > 0;
+        if (tobApi && !eventSameCurrency && creditCurrency && creditCurrency !== displayCurrency) {
+            try {
+                if (typeof tobApi.ensureCreditQuote === 'function') {
+                    tobApi.ensureCreditQuote(root, {
+                        cart_type: 'tob',
+                        currency: displayCurrency,
+                        subtotal: goodsMajor,
+                        force: true,
+                    });
+                }
+            } catch (eRequote) {}
+            if (typeof tobApi.convertCreditMinorToDisplay === 'function') {
+                const convertedApply = tobApi.convertCreditMinorToDisplay(applyMinor, displayCurrency);
+                if (convertedApply === null || convertedApply === undefined) {
+                    base.deposit_minor = 0;
+                    base.credit_minor = 0;
+                    return base;
+                }
+                applyMinor = Math.max(0, Number(convertedApply) || 0);
+            } else {
+                base.deposit_minor = 0;
+                base.credit_minor = 0;
+                return base;
+            }
+        }
+        let depositMinor = 0;
+        if (tobApi && typeof tobApi.estimateDepositMinor === 'function') {
+            depositMinor = Math.max(0, Number(tobApi.estimateDepositMinor({
+                cart_type: 'tob',
+                subtotal: goodsMajor,
+                currency: displayCurrency,
+            })) || 0);
+        } else if (goodsMajor > 0) {
+            // Persist-only path before checkout-tob binds: 30% wholesale deposit.
+            depositMinor = Math.round(goodsMajor * 0.3 * 100);
+        }
+        let cashMinor = null;
+        if (eventSameCurrency && detail && detail.cash_minor != null) {
+            cashMinor = Math.max(0, Number(detail.cash_minor) || 0);
+            if (detail.deposit_minor != null) {
+                depositMinor = Math.max(0, Number(detail.deposit_minor) || 0);
+            }
+        } else if (tobApi && (!creditCurrency || creditCurrency === displayCurrency)
+            && typeof tobApi.cashDepositMinor === 'function') {
+            const cash = tobApi.cashDepositMinor();
+            if (cash !== null && cash !== undefined) {
+                cashMinor = Math.max(0, Number(cash) || 0);
+            }
+        }
+        if (cashMinor !== null) {
+            if (!(eventSameCurrency && depositMinor > 0)) {
+                depositMinor = cashMinor + applyMinor;
+            }
+        } else if (depositMinor > 0) {
+            cashMinor = Math.max(0, depositMinor - applyMinor);
+        } else {
+            cashMinor = 0;
+            depositMinor = applyMinor;
+        }
+        base.deposit_minor = depositMinor;
+        base.credit_minor = applyMinor;
+        base.payable_minor = cashMinor;
+        base.payable_label = text(copy.depositPayable || '本次应付定金');
+        return base;
+    }
+
+    function paintCartMoneySummary(dto, detail) {
         const api = window.WelineStorefrontMoneySummary;
-        const host = moneySummaryRoot();
+        const slot = root.querySelector('.weline-cart-shell__money-summary, [data-testid="cart-money-summary"]');
+        let host = moneySummaryRoot();
+        if (api && typeof api.ensure === 'function' && slot) {
+            host = api.ensure(slot, { mode: 'cart' }) || host;
+        }
         if (api && typeof api.paint === 'function' && host) {
-            api.paint(host, Object.assign({ mode: 'cart', shipping_pending: true }, dto || {}));
+            const baseDto = Object.assign({ mode: 'cart', shipping_pending: true }, dto || {});
+            root.__welineLastCartMoneyDtoBase = Object.assign({}, baseDto);
+            try {
+                const tobApi = window.WelineB2BCheckoutTob;
+                if (tobApi && typeof tobApi.ensureCreditQuote === 'function' && isTobCreditSurface(detail)) {
+                    tobApi.ensureCreditQuote(root, {
+                        cart_type: 'tob',
+                        currency: baseDto.currency,
+                        subtotal: (Number(baseDto.goods_subtotal_minor) || 0) / 100,
+                    });
+                }
+            } catch (eEnsure) {}
+            api.paint(host, mergeTobCreditIntoCartMoneyDto(baseDto, detail));
             return true;
         }
         return false;
@@ -1503,6 +1680,18 @@ $copy = [
     if (retryButton) {
         retryButton.addEventListener('click', loadCart);
     }
+
+    window.addEventListener('weline:b2b-credit-changed', function (event) {
+        const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+        const base = root.__welineLastCartMoneyDtoBase;
+        if (base && typeof base === 'object') {
+            paintCartMoneySummary(base, detail);
+            return;
+        }
+        if (root.__welineLastCartSummary) {
+            render(root.__welineLastCartSummary);
+        }
+    });
 
     window.addEventListener('weline:cart-updated', function (event) {
         const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};

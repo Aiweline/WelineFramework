@@ -506,11 +506,29 @@
         return ((Number(amountMinor) || 0) / 100).toFixed(2);
     }
 
+    /** Fill %{1}…%{n} templates from credit root data-i18n-* (locale-baked by WidgetI18n). */
+    function fillCreditI18n(tpl, parts) {
+        var out = String(tpl || '');
+        var list = Array.isArray(parts) ? parts : [];
+        for (var i = 0; i < list.length; i += 1) {
+            out = out.split('%{' + (i + 1) + '}').join(String(list[i]));
+        }
+        return out;
+    }
+
+    function creditI18nAttr(creditRoot, name, fallback) {
+        if (!creditRoot) {
+            return fallback;
+        }
+        var v = creditRoot.getAttribute(name);
+        return v && String(v).trim() !== '' ? String(v) : fallback;
+    }
+
     /**
-     * Explicit FX copy: base currency + available (+ checkout equivalent) + max apply.
-     * Optionally append min-cash reserve once — never duplicate into hint_short UI.
+     * Explicit FX copy: base wallet currency + rate + checkout equivalent + max apply.
+     * Must never imply 1:1 cross-currency deduction. Copy from data-i18n (not hardcoded zh).
      */
-    function buildCreditFxSummary(quote) {
+    function buildCreditFxSummary(quote, creditRoot) {
         if (!quote || !quote.enabled) {
             return '';
         }
@@ -526,17 +544,42 @@
         var baseAmt = formatMajorPlain(availableBase);
         var checkoutAmt = formatMajorPlain(availableCheckout);
         var maxAmt = formatMajorPlain(maxApply);
+        var fx = quote.fx && typeof quote.fx === 'object' ? quote.fx : null;
+        var rateLabel = fx && fx.label ? String(fx.label).trim() : '';
         var text;
         if (base === checkout) {
-            text = '基准货币 ' + base + ' 可用 ' + baseAmt
-                + '；本单最多可抵 ' + maxAmt + ' ' + checkout;
+            text = fillCreditI18n(
+                creditI18nAttr(
+                    creditRoot,
+                    'data-i18n-fx-same',
+                    '基准货币（钱包）%{1} 可用 %{2}；结账币同为 %{3}；本单最多可抵 %{4} %{3}'
+                ),
+                [base, baseAmt, checkout, maxAmt]
+            );
+        } else if (rateLabel) {
+            text = fillCreditI18n(
+                creditI18nAttr(
+                    creditRoot,
+                    'data-i18n-fx-diff-rate',
+                    '基准货币（钱包）%{1} 可用 %{2}；汇率 %{3}；折合结账币 %{4} %{5}；本单最多可抵 %{6} %{4}（按汇率换算，禁止无汇率 1:1 直扣）'
+                ),
+                [base, baseAmt, rateLabel, checkout, checkoutAmt, maxAmt]
+            );
         } else {
-            text = '基准货币 ' + base + ' 可用 ' + baseAmt
-                + '，折合 ' + checkout + ' ' + checkoutAmt
-                + '；本单最多可抵 ' + maxAmt + ' ' + checkout;
+            text = fillCreditI18n(
+                creditI18nAttr(
+                    creditRoot,
+                    'data-i18n-fx-diff',
+                    '基准货币（钱包）%{1} 可用 %{2}；折合结账币 %{3} %{4}；本单最多可抵 %{5} %{3}（按汇率换算，禁止无汇率 1:1 直扣）'
+                ),
+                [base, baseAmt, checkout, checkoutAmt, maxAmt]
+            );
         }
         if (minCash > 0) {
-            text += '。定金至少保留现金 ' + formatMajorPlain(minCash) + ' ' + checkout;
+            text += fillCreditI18n(
+                creditI18nAttr(creditRoot, 'data-i18n-fx-min-cash', '。定金至少保留现金 %{1} %{2}'),
+                [formatMajorPlain(minCash), checkout]
+            );
         }
         return text;
     }
@@ -589,7 +632,12 @@
         pendingQuoteOpts: null,
         // Last deposit we actually sent to credit.quote — do NOT compare against
         // server-echoed deposit_amount_minor (mismatch would storm refetch).
-        lastRequestedDepositMinor: null
+        lastRequestedDepositMinor: null,
+        // Server PHP-session saved apply (coupon-class). Prefer over sessionStorage.
+        _serverSavedApply: null,
+        // Only true after a definitive restore attempt (or no saved choice).
+        // Must NOT flip true while maxApply/deposit are still 0 — that races quote.
+        _restoredPersist: false
     };
 
     var DEPOSIT_RATIO_BPS = 3000;
@@ -779,30 +827,59 @@
 
     /**
      * Resolve checkout/display currency for credit.quote.
-     * Never silently default to CNY when the cart/page already has another currency —
-     * that causes base-wallet numbers to be applied 1:1 against foreign deposits.
+     * Prefer live storefront display currency over stale creditState / pending opts —
+     * sticky wrong CNY makes USD goods deposits look like CNY and deduct 1:1.
      */
     function resolveCheckoutCurrency(opts) {
         opts = opts || {};
-        var candidates = [
-            opts.currency,
-            creditState.pendingQuoteOpts && creditState.pendingQuoteOpts.currency,
-            creditState.currency,
-            global.checkoutState && global.checkoutState.currency,
-        ];
+        var candidates = [];
+        if (opts.currency) {
+            candidates.push(opts.currency);
+        }
         try {
-            var root = document.querySelector('[data-weline-checkout], [data-checkout], .weline-checkout');
-            if (root) {
-                candidates.push(root.getAttribute('data-currency'));
-                candidates.push(root.getAttribute('data-checkout-currency'));
+            if (global.WelineCart && typeof global.WelineCart.currentDisplayCurrency === 'function') {
+                candidates.push(global.WelineCart.currentDisplayCurrency());
             }
-            var curNode = document.querySelector('[data-checkout-currency], [data-currency], [data-pixel-currency]');
+        } catch (eCart) {}
+        try {
+            var mini = document.querySelector(
+                '[data-w-mini-cart="1"].is-drawer-open, [data-w-mini-cart="1"] .mini-cart-drawer.is-open, [data-w-mini-cart="1"]'
+            );
+            if (mini) {
+                if (mini.__welineLastMoneyDtoBase && mini.__welineLastMoneyDtoBase.currency) {
+                    candidates.push(mini.__welineLastMoneyDtoBase.currency);
+                }
+                if (mini.__welineLastSummary && mini.__welineLastSummary.currency) {
+                    candidates.push(mini.__welineLastSummary.currency);
+                }
+                candidates.push(mini.getAttribute('data-currency'));
+                candidates.push(mini.getAttribute('data-cart-currency'));
+            }
+            var cartRoot = document.querySelector('[data-weline-cart]');
+            if (cartRoot) {
+                candidates.push(cartRoot.getAttribute('data-currency'));
+                if (cartRoot.__welineLastCartMoneyDtoBase && cartRoot.__welineLastCartMoneyDtoBase.currency) {
+                    candidates.push(cartRoot.__welineLastCartMoneyDtoBase.currency);
+                }
+            }
+            var checkoutRoot = document.querySelector('[data-weline-checkout], [data-checkout], .weline-checkout');
+            if (checkoutRoot) {
+                candidates.push(checkoutRoot.getAttribute('data-currency'));
+                candidates.push(checkoutRoot.getAttribute('data-checkout-currency'));
+            }
+            var curNode = document.querySelector('[data-checkout-currency], [data-pixel-currency]');
             if (curNode) {
                 candidates.push(curNode.getAttribute('data-checkout-currency'));
-                candidates.push(curNode.getAttribute('data-currency'));
                 candidates.push(curNode.getAttribute('data-pixel-currency'));
             }
-        } catch (e) {}
+        } catch (eDom) {}
+        candidates.push(global.checkoutState && global.checkoutState.currency);
+        try {
+            var site = global.site || {};
+            candidates.push(site.currency || site.currentCurrency || site.display_currency);
+        } catch (eSite) {}
+        // Stale quote currency last — never let it override live display.
+        candidates.push(creditState.currency);
         for (var i = 0; i < candidates.length; i += 1) {
             var code = String(candidates[i] || '').trim().toUpperCase();
             if (/^[A-Z]{3}$/.test(code)) {
@@ -815,10 +892,60 @@
     function rememberQuoteOpts(opts) {
         opts = opts || {};
         creditState.pendingQuoteOpts = Object.assign({}, creditState.pendingQuoteOpts || {}, opts);
-        if (!creditState.pendingQuoteOpts.currency) {
+        if (opts.currency) {
+            creditState.pendingQuoteOpts.currency = String(opts.currency || '').trim().toUpperCase();
+        } else {
+            // Always re-resolve live display currency — forbid sticky wrong pending currency.
             creditState.pendingQuoteOpts.currency = resolveCheckoutCurrency(creditState.pendingQuoteOpts);
         }
         return creditState.pendingQuoteOpts;
+    }
+
+    function readCreditCurrency() {
+        var quote = creditState.quote;
+        var fromQuote = quote && quote.checkout_currency
+            ? String(quote.checkout_currency || '').trim().toUpperCase()
+            : '';
+        if (/^[A-Z]{3}$/.test(fromQuote)) {
+            return fromQuote;
+        }
+        return String(creditState.currency || '').trim().toUpperCase();
+    }
+
+    /**
+     * Convert checkout-currency minor → display-currency minor using quote.fx.
+     * Returns null when FX cannot be proven — caller must NOT paint 1:1.
+     */
+    function convertCreditMinorToDisplay(checkoutMinor, displayCurrency) {
+        var amount = Math.max(0, Math.round(Number(checkoutMinor) || 0));
+        var from = readCreditCurrency();
+        var to = String(displayCurrency || '').trim().toUpperCase();
+        if (!/^[A-Z]{3}$/.test(to)) {
+            return null;
+        }
+        if (!from || from === to) {
+            return amount;
+        }
+        var quote = creditState.quote;
+        var fx = quote && quote.fx && typeof quote.fx === 'object' ? quote.fx : null;
+        if (!fx) {
+            return null;
+        }
+        var fxFrom = String(fx.from || '').trim().toUpperCase();
+        var fxTo = String(fx.to || '').trim().toUpperCase();
+        var rate = Number(fx.rate);
+        if (!(rate > 0)) {
+            return null;
+        }
+        // Direct: checkout → display matches fx direction.
+        if (fxFrom === from && fxTo === to) {
+            return Math.max(0, Math.round(amount * rate));
+        }
+        // Inverse: fx is display → checkout (common: base USD → checkout CNY while display USD).
+        if (fxFrom === to && fxTo === from) {
+            return Math.max(0, Math.round(amount / rate));
+        }
+        return null;
     }
 
     /**
@@ -908,7 +1035,8 @@
             var res = await api['credit.quote']({
                 deposit_amount_minor: deposit,
                 currency: currency,
-                website_id: websiteId
+                website_id: websiteId,
+                cart_type: 'tob'
             }, { silent: true });
             if (seq !== creditState.quoteSeq) {
                 return creditState.quote;
@@ -919,6 +1047,7 @@
             } else if (res && res.data && res.data.b2b_credit && typeof res.data.b2b_credit === 'object') {
                 quote = res.data.b2b_credit;
             }
+            ingestServerSavedApply(res);
             creditState.quote = quote || {
                 enabled: false,
                 reason: 'quote_failed',
@@ -1082,11 +1211,160 @@
         }
     }
 
-    function notifyCreditChanged(root) {
+    var CREDIT_PERSIST_KEY = 'weline.b2b.credit.apply.v1';
+
+    function writeLocalCreditPersist(payload) {
+        try {
+            global.sessionStorage.setItem(CREDIT_PERSIST_KEY, JSON.stringify(payload));
+        } catch (ePersist) {}
+    }
+
+    function readLocalCreditPersist() {
+        try {
+            var raw = global.sessionStorage.getItem(CREDIT_PERSIST_KEY);
+            if (!raw) {
+                return null;
+            }
+            var parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (eRead) {
+            return null;
+        }
+    }
+
+    /**
+     * Prefer PHP-session saved_apply (survives full refresh); fall back to sessionStorage
+     * for same-tab mini-cart → cart → checkout handoff before the first quote returns.
+     */
+    function readPersistedCreditChoice() {
+        var server = creditState._serverSavedApply;
+        if (server && typeof server === 'object' && server.enabled && Number(server.apply_minor) > 0) {
+            return server;
+        }
+        return readLocalCreditPersist();
+    }
+
+    function ingestServerSavedApply(res) {
+        var saved = null;
+        if (res && res.saved_apply && typeof res.saved_apply === 'object') {
+            saved = res.saved_apply;
+        } else if (res && res.data && res.data.saved_apply && typeof res.data.saved_apply === 'object') {
+            saved = res.data.saved_apply;
+        }
+        if (!saved) {
+            return;
+        }
+        creditState._serverSavedApply = saved;
+        if (saved.enabled && Number(saved.apply_minor) > 0) {
+            writeLocalCreditPersist({
+                enabled: true,
+                apply_minor: Math.max(0, Number(saved.apply_minor) || 0),
+                currency: String(saved.currency || creditState.currency || '').toUpperCase(),
+                cart_type: String(saved.cart_type || 'tob').toLowerCase() || 'tob',
+            });
+            // New server truth may arrive after an earlier empty restore race — allow retry.
+            if (!creditState.applyMinor || Number(creditState.applyMinor) <= 0) {
+                creditState._restoredPersist = false;
+            }
+        }
+    }
+
+    function persistCreditChoiceToServer(payload) {
+        if (!global.Weline || !global.Weline.Api || typeof global.Weline.Api.resource !== 'function') {
+            return;
+        }
+        try {
+            var p = global.Weline.Api.resource('b2b').then(function (api) {
+                if (!api || typeof api['credit.apply'] !== 'function') {
+                    return null;
+                }
+                return api['credit.apply']({
+                    enabled: !!payload.enabled,
+                    apply_minor: Math.max(0, Number(payload.apply_minor) || 0),
+                    currency: String(payload.currency || '').toUpperCase(),
+                    cart_type: String(payload.cart_type || 'tob').toLowerCase() || 'tob',
+                }, { silent: true });
+            }).then(function (res) {
+                if (res && (res.ok === true || res.success === true) && res.saved_apply) {
+                    creditState._serverSavedApply = res.saved_apply;
+                }
+            });
+            if (p && typeof p.catch === 'function') {
+                p.catch(function () {});
+            }
+        } catch (eServer) {}
+    }
+
+    function persistCreditChoice(opts) {
+        opts = opts && typeof opts === 'object' ? opts : {};
+        var apply = Math.max(0, Number(creditState.applyMinor) || 0);
+        // SSR toc / quote-loading must not wipe mini-cart→cart→checkout handoff.
+        // Only clear when the shopper explicitly disables credit (or forceClear).
+        if (apply <= 0 && opts.forceClear !== true) {
+            var existing = readPersistedCreditChoice();
+            if (existing && existing.enabled && Number(existing.apply_minor) > 0) {
+                return;
+            }
+        }
+        var payload = {
+            enabled: apply > 0,
+            apply_minor: apply,
+            currency: String(creditState.currency || '').toUpperCase(),
+            cart_type: 'tob',
+        };
+        writeLocalCreditPersist(payload);
+        if (payload.enabled) {
+            creditState._serverSavedApply = payload;
+        } else if (opts.forceClear === true) {
+            creditState._serverSavedApply = {
+                enabled: false,
+                apply_minor: 0,
+                currency: payload.currency,
+                cart_type: 'tob',
+            };
+        }
+        // Coupon-class durability: also write PHP storefront session (survives refresh).
+        persistCreditChoiceToServer(payload);
+    }
+
+    function syncCreditAppliedStatus(panel) {
+        if (!panel) {
+            return;
+        }
+        var appliedEl = panel.querySelector('[data-b2b-credit-applied]');
+        var toggle = panel.querySelector('[data-b2b-credit-toggle]');
+        var applyMinor = Math.max(0, Number(creditState.applyMinor) || 0);
+        var enabled = !!(toggle && toggle.checked && !toggle.disabled);
+        if (!appliedEl) {
+            return;
+        }
+        if (enabled && applyMinor > 0) {
+            var label = String(appliedEl.getAttribute('data-i18n-applied') || '已计入下方小计').trim();
+            appliedEl.textContent = label;
+            appliedEl.hidden = false;
+            appliedEl.removeAttribute('hidden');
+        } else {
+            appliedEl.textContent = '';
+            appliedEl.hidden = true;
+            appliedEl.setAttribute('hidden', '');
+        }
+    }
+
+    function notifyCreditChanged(root, opts) {
+        opts = opts && typeof opts === 'object' ? opts : {};
         var detail = {
             apply_minor: readApplyMinor(),
             cash_minor: cashDepositMinor(),
+            deposit_minor: (function () {
+                var cash = cashDepositMinor();
+                var apply = readApplyMinor();
+                if (cash === null || cash === undefined) {
+                    return null;
+                }
+                return Math.max(0, Number(cash) || 0) + Math.max(0, Number(apply) || 0);
+            })(),
             cart_type: readMode(),
+            currency: String(creditState.currency || '').toUpperCase(),
             root: root || null,
         };
         var sig = [
@@ -1094,10 +1372,16 @@
             detail.cash_minor === null || detail.cash_minor === undefined ? '' : String(detail.cash_minor),
             String(detail.cart_type || '')
         ].join('|');
-        if (creditState._notifySig === sig) {
+        if (creditState._notifySig === sig && opts.forceClear !== true) {
             return;
         }
         creditState._notifySig = sig;
+        if (opts.persist !== false) {
+            persistCreditChoice({ forceClear: opts.forceClear === true });
+        }
+        if (opts.dispatch === false) {
+            return;
+        }
         try {
             window.dispatchEvent(new CustomEvent('weline:b2b-credit-changed', {
                 detail: detail,
@@ -1168,7 +1452,9 @@
             }
             setCreditFxEl(fxEl, '');
             creditState.applyMinor = 0;
-            notifyCreditChanged(root);
+            syncCreditAppliedStatus(panel);
+            // toc chrome must not persist/dispatch wipe — protects session credit handoff.
+            notifyCreditChanged(root, { persist: false, dispatch: false });
             return;
         }
         // tob：确保槽位可见（页签按钮由 syncCreditExtrasTabVisibility 恢复）。
@@ -1227,12 +1513,14 @@
             creditState.cashMinor = quote && quote.deposit_amount_minor != null
                 ? Number(quote.deposit_amount_minor)
                 : null;
-            notifyCreditChanged(root);
+            syncCreditAppliedStatus(panel);
+            // Quote missing/disabled: do not wipe session credit or peer money summaries.
+            notifyCreditChanged(root, { persist: false, dispatch: false });
             return;
         }
         panel.hidden = false;
         showCreditReason(reasonEl, '');
-        var fxText = buildCreditFxSummary(quote);
+        var fxText = buildCreditFxSummary(quote, creditRoot);
         setCreditFxEl(fxEl, fxText);
         if (hint) {
             // FX 行已含基准币/可用/上限（及最低现金）；勿再整段回写 hint_short，避免重复。
@@ -1264,6 +1552,41 @@
         }
         if (toggle) {
             toggle.disabled = false;
+            // 首次可用报价：PHP 会话 / sessionStorage 曾确认过抵扣则自动勾选并回填。
+            // 不依赖 !toggle.checked：勾选但空输入时仍须回填额度。
+            // 关键：maxApply/deposit 仍为 0 时禁止标记 _restoredPersist（刷新后报价未到会丢抵扣）。
+            if (!creditState._restoredPersist) {
+                var saved = readPersistedCreditChoice();
+                if (saved && saved.enabled && Number(saved.apply_minor) > 0) {
+                    var capReady = maxApply > 0 || deposit > 0;
+                    if (capReady) {
+                        toggle.checked = true;
+                        var savedApply = Math.max(
+                            0,
+                            Math.min(Number(saved.apply_minor) || 0, maxApply > 0 ? maxApply : deposit, deposit > 0 ? deposit : maxApply)
+                        );
+                        if (savedApply > 0 && input) {
+                            var inputEmpty = String(input.value || '').trim() === '';
+                            var inputMinor = 0;
+                            try {
+                                var parsedSaved = parseCreditInputMajor(input.value);
+                                inputMinor = (!parsedSaved.empty && isFinite(parsedSaved.major))
+                                    ? Math.round(parsedSaved.major * 100)
+                                    : 0;
+                            } catch (eParsed) {
+                                inputMinor = 0;
+                            }
+                            if (inputEmpty || inputMinor <= 0) {
+                                input.value = (savedApply / 100).toFixed(2);
+                            }
+                        }
+                        creditState._restoredPersist = true;
+                    }
+                    // else: wait for quote with usable cap — do not mark restored
+                } else {
+                    creditState._restoredPersist = true;
+                }
+            }
         }
         if (input) {
             input.disabled = !(toggle && toggle.checked);
@@ -1322,29 +1645,49 @@
                 minCashPct = 0;
             }
             var minCashNote = (minCashPct > 0 && minCashPct < 100)
-                ? ('；现金至少保留定金的 ' + minCashPct + '%')
+                ? fillCreditI18n(
+                    creditI18nAttr(creditRoot, 'data-i18n-min-cash-note', '；现金至少保留定金的 %{1}%'),
+                    [String(minCashPct)]
+                )
                 : '';
             if (goodsLabel) {
                 if (creditState.applyMinor > 0) {
-                    cashEl.textContent = '本期定金 ' + depositLabel
-                        + '（商品小计 ' + goodsLabel + ' × 30%）'
-                        + '；抵扣后现金 ' + cashLabel
-                        + minCashNote
-                        + '；尾款另付';
+                    cashEl.textContent = fillCreditI18n(
+                        creditI18nAttr(
+                            creditRoot,
+                            'data-i18n-cash-goods-applied',
+                            '本期定金 %{1}（商品小计 %{2} × 30%）；抵扣后现金 %{3}%{4}；尾款另付'
+                        ),
+                        [depositLabel, goodsLabel, cashLabel, minCashNote]
+                    );
                 } else {
-                    cashEl.textContent = '本期定金 ' + depositLabel
-                        + '（商品小计 ' + goodsLabel + ' × 30%；尾款结账时再付）'
-                        + minCashNote;
+                    cashEl.textContent = fillCreditI18n(
+                        creditI18nAttr(
+                            creditRoot,
+                            'data-i18n-cash-goods',
+                            '本期定金 %{1}（商品小计 %{2} × 30%；尾款结账时再付）%{3}'
+                        ),
+                        [depositLabel, goodsLabel, minCashNote]
+                    );
                 }
             } else if (creditState.applyMinor > 0) {
-                cashEl.textContent = '本期定金 ' + depositLabel
-                    + '；抵扣后现金 ' + cashLabel
-                    + minCashNote
-                    + '；尾款另付';
+                cashEl.textContent = fillCreditI18n(
+                    creditI18nAttr(
+                        creditRoot,
+                        'data-i18n-cash-applied',
+                        '本期定金 %{1}；抵扣后现金 %{2}%{3}；尾款另付'
+                    ),
+                    [depositLabel, cashLabel, minCashNote]
+                );
             } else {
-                cashEl.textContent = '本期定金 ' + depositLabel
-                    + '（批发首期 30%；尾款结账时再付）'
-                    + minCashNote;
+                cashEl.textContent = fillCreditI18n(
+                    creditI18nAttr(
+                        creditRoot,
+                        'data-i18n-cash-plain',
+                        '本期定金 %{1}（批发首期 30%；尾款结账时再付）%{2}'
+                    ),
+                    [depositLabel, minCashNote]
+                );
             }
         }
         // Zero cash: soft-disable payment radios (still allow submit via fake_card).
@@ -1355,7 +1698,11 @@
                 el.removeAttribute('data-b2b-zero-cash');
             }
         });
-        notifyCreditChanged(root);
+        syncCreditAppliedStatus(panel);
+        // Shopper unchecked → clear session handoff; otherwise keep/refresh positive persist.
+        notifyCreditChanged(root, {
+            forceClear: !(toggle && toggle.checked),
+        });
     }
 
     function syncFromFrozen(frozen) {
@@ -1420,6 +1767,7 @@
         var input = panel.querySelector('[data-b2b-credit-input]');
         if (toggle) {
             toggle.addEventListener('change', function () {
+                // 勾选即自动引用上限额度，并刷新下方小计（无需单独确认按钮）。
                 syncCreditUi(root, { formatInput: true });
             });
         }
@@ -1433,6 +1781,12 @@
             });
             input.addEventListener('blur', function () {
                 syncCreditUi(root, { formatInput: true });
+            });
+            input.addEventListener('keydown', function (event) {
+                if (event && (event.key === 'Enter' || event.keyCode === 13)) {
+                    event.preventDefault();
+                    syncCreditUi(root, { formatInput: true });
+                }
             });
         }
     }
@@ -1849,10 +2203,16 @@
             refreshCreditQuote: refreshCreditQuote,
             ensureCreditQuote: ensureCreditQuote,
             rememberQuoteOpts: rememberQuoteOpts,
+            resolveCheckoutCurrency: resolveCheckoutCurrency,
+            readCreditCurrency: readCreditCurrency,
+            convertCreditMinorToDisplay: convertCreditMinorToDisplay,
+            buildCreditFxSummary: buildCreditFxSummary,
             estimateDepositMinor: estimateDepositMinor,
             readGoodsSubtotalMajor: readGoodsSubtotalMajor,
             readApplyMinor: readApplyMinor,
-            cashDepositMinor: cashDepositMinor
+            cashDepositMinor: cashDepositMinor,
+            readPersistedCreditChoice: readPersistedCreditChoice,
+            persistCreditChoice: persistCreditChoice
         };
     }
 

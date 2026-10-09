@@ -40,9 +40,9 @@ final class MiniCartBadgeCornerContractTest extends TestCase
         }
         $block = $m[1];
         self::assertMatchesRegularExpression(
-            '/color:\s*var\(--color-on-primary,\s*#ffffff\)/i',
+            '/color:\s*var\(--color-on-primary\)/i',
             $block,
-            'badge ink must be on-primary/white, not paper chrome-text-primary',
+            'badge ink must be on-primary (Token-only; no hex fallback), not paper chrome-text-primary',
         );
         self::assertDoesNotMatchRegularExpression(
             '/color:\s*var\(--weline-chrome-text-primary/i',

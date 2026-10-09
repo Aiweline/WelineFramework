@@ -384,7 +384,89 @@
   }
 
   /**
+   * Insert a missing paint row before payable (upgrade incomplete ensure shells).
+   */
+  function insertRowBeforePayable(root, html) {
+    if (!root) {
+      return;
+    }
+    var payable = qs(root, '[data-money-summary-row="payable"]');
+    if (payable && typeof payable.insertAdjacentHTML === 'function') {
+      payable.insertAdjacentHTML('beforebegin', html);
+      return;
+    }
+    if (typeof root.insertAdjacentHTML === 'function') {
+      root.insertAdjacentHTML('beforeend', html);
+    }
+  }
+
+  /**
+   * Ensure deposit/credit/cod/incentive rows exist (parity with default.phtml).
+   * Older ensure() shells omitted these; paint then silently skipped B2B lines.
+   */
+  function ensurePaintRows(root, mode) {
+    if (!root) {
+      return;
+    }
+    var m = text(mode || root.getAttribute('data-money-summary-mode') || '').toLowerCase();
+    if ((m === 'cart' || m === 'mini-cart')
+      && !qs(root, '[data-money-summary-discount-lines]')) {
+      var goods = qs(root, '[data-money-summary-row="goods"]');
+      if (goods && typeof goods.insertAdjacentHTML === 'function') {
+        goods.insertAdjacentHTML(
+          'afterend',
+          '<div class="w-storefront-money-summary__discount-lines"'
+          + ' data-money-summary-discount-lines data-cart-discount-lines'
+          + ' data-mini-cart-discount-lines data-mini-cart-discount-breakdown></div>'
+        );
+      }
+    }
+    if (!qs(root, '[data-money-summary-row="deposit"]')) {
+      insertRowBeforePayable(
+        root,
+        '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--deposit"'
+        + ' role="listitem" data-money-summary-row="deposit" data-checkout-deposit-row hidden>'
+        + '<span>批发定金</span>'
+        + '<strong data-money-summary-deposit data-deposit-amount="">0.00</strong>'
+        + '</div>'
+      );
+    }
+    if (!qs(root, '[data-money-summary-row="credit"]')) {
+      insertRowBeforePayable(
+        root,
+        '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--credit"'
+        + ' role="listitem" data-money-summary-row="credit" data-checkout-credit-row hidden>'
+        + '<span>批发信用抵扣</span>'
+        + '<strong data-money-summary-credit data-credit-amount="">0.00</strong>'
+        + '</div>'
+      );
+    }
+    if (!qs(root, '[data-money-summary-row="cod"]')) {
+      insertRowBeforePayable(
+        root,
+        '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--cod"'
+        + ' role="listitem" data-money-summary-row="cod" data-checkout-cod-fee-row hidden>'
+        + '<span>货到付款手续费</span>'
+        + '<strong data-money-summary-cod data-cod-fee-amount="">0.00</strong>'
+        + '</div>'
+      );
+    }
+    if (!qs(root, '[data-money-summary-row="incentive"]')) {
+      insertRowBeforePayable(
+        root,
+        '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--incentive"'
+        + ' role="listitem" data-money-summary-row="incentive"'
+        + ' data-checkout-payment-incentive-row data-testid="checkout-payment-incentive-row" hidden>'
+        + '<span>支付方式优惠</span>'
+        + '<strong data-money-summary-incentive data-payment-incentive-amount="">0.00</strong>'
+        + '</div>'
+      );
+    }
+  }
+
+  /**
    * Ensure a money-summary root exists under host (for JS-built dialogs).
+   * Row order must match default.phtml so paint can show deposit/credit.
    */
   function ensure(host, options) {
     if (!host) {
@@ -395,6 +477,7 @@
       if (options && options.mode) {
         existing.setAttribute('data-money-summary-mode', text(options.mode));
       }
+      ensurePaintRows(existing, options && options.mode);
       return existing;
     }
     var mode = text(options && options.mode || 'helppay').toLowerCase() || 'helppay';
@@ -404,22 +487,40 @@
     wrap.setAttribute('data-money-summary-mode', mode);
     wrap.setAttribute('data-testid', 'storefront-money-summary');
     wrap.setAttribute('role', 'list');
+    if (mode === 'cart' || mode === 'mini-cart') {
+      wrap.setAttribute('data-shipping-pending', '1');
+    }
     if (options && options.discounts_disabled) {
       wrap.setAttribute('data-discounts-disabled', '1');
     }
     var payableLabel = mode === 'cart' || mode === 'mini-cart' ? '小计' : '应付';
+    var discountLines = (mode === 'cart' || mode === 'mini-cart')
+      ? ('<div class="w-storefront-money-summary__discount-lines"'
+        + ' data-money-summary-discount-lines data-cart-discount-lines'
+        + ' data-mini-cart-discount-lines data-mini-cart-discount-breakdown></div>')
+      : '';
+    var shippingHidden = (mode === 'cart' || mode === 'mini-cart') ? ' hidden' : '';
     wrap.innerHTML =
-      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--goods" role="listitem" data-money-summary-row="goods">' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--goods" role="listitem" data-money-summary-row="goods" data-cart-discount-breakdown>' +
       '<span data-money-summary-goods-label>商品小计</span>' +
-      '<strong data-money-summary-goods data-subtotal="" data-helppay-goods-amount data-testid="helppay-payment-goods-amount">—</strong>' +
+      '<strong data-money-summary-goods data-subtotal="" data-cart-goods-subtotal data-helppay-goods-amount data-testid="helppay-payment-goods-amount">—</strong>' +
       '</div>' +
-      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--shipping" role="listitem" data-money-summary-row="shipping">' +
+      discountLines +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--shipping" role="listitem" data-money-summary-row="shipping"' + shippingHidden + '>' +
       '<span data-money-summary-shipping-label data-helppay-ship-label data-label-base="运费">运费</span>' +
       '<strong data-money-summary-shipping data-shipping-amount="" data-helppay-ship-amount data-testid="helppay-payment-ship-amount">—</strong>' +
       '</div>' +
       '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--discount" role="listitem" data-money-summary-row="discount" data-checkout-discount-row hidden>' +
       '<span data-money-summary-discount-label data-checkout-discount-label>优惠</span>' +
       '<strong data-money-summary-discount data-discount-amount="">0.00</strong>' +
+      '</div>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--deposit" role="listitem" data-money-summary-row="deposit" data-checkout-deposit-row hidden>' +
+      '<span>批发定金</span>' +
+      '<strong data-money-summary-deposit data-deposit-amount="">0.00</strong>' +
+      '</div>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--credit" role="listitem" data-money-summary-row="credit" data-checkout-credit-row hidden>' +
+      '<span>批发信用抵扣</span>' +
+      '<strong data-money-summary-credit data-credit-amount="">0.00</strong>' +
       '</div>' +
       '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--sales-tax" role="listitem" data-money-summary-row="sales_tax" data-money-summary-row-legacy="tax" data-checkout-tax-row data-cart-tax-row data-mini-cart-tax-row hidden>' +
       '<span data-money-summary-sales-tax-label data-money-summary-tax-label data-cart-tax-label data-mini-cart-tax-label>销售税</span>' +
@@ -433,9 +534,17 @@
       '<span data-money-summary-import-tax-label>进口税费</span>' +
       '<strong data-money-summary-import-tax>0.00</strong>' +
       '</div>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--cod" role="listitem" data-money-summary-row="cod" data-checkout-cod-fee-row hidden>' +
+      '<span>货到付款手续费</span>' +
+      '<strong data-money-summary-cod data-cod-fee-amount="">0.00</strong>' +
+      '</div>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--incentive" role="listitem" data-money-summary-row="incentive" data-checkout-payment-incentive-row data-testid="checkout-payment-incentive-row" hidden>' +
+      '<span>支付方式优惠</span>' +
+      '<strong data-money-summary-incentive data-payment-incentive-amount="">0.00</strong>' +
+      '</div>' +
       '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable" role="listitem" data-money-summary-row="payable">' +
       '<span data-money-summary-payable-label data-grand-total-label data-cart-subtotal-label>' + payableLabel + '</span>' +
-      '<strong class="w-storefront-money-summary__grand" data-money-summary-payable data-grand-total="" data-helppay-total-amount data-helppay-payable-amount data-testid="helppay-payment-total">—</strong>' +
+      '<strong class="w-storefront-money-summary__grand" data-money-summary-payable data-grand-total="" data-cart-grand-total data-cart-total-amount data-helppay-total-amount data-helppay-payable-amount data-testid="helppay-payment-total">—</strong>' +
       '</div>' +
       '<p class="w-storefront-money-summary__note" data-money-summary-note data-cart-summary-note data-mini-cart-note data-note-default="税费与运费将在结算时计算" data-note-shipping="运费将在结算时计算" hidden></p>';
     host.appendChild(wrap);

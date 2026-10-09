@@ -113,6 +113,11 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertStringContainsString('function persistChromePayload', $source);
         self::assertStringContainsString('$this->persistChromePayload($identity)', $source);
         self::assertStringNotContainsString('persistChromePayloadIfEmpty', $source);
+        // theme:upgrade pipeline solidifyPendingIdentity must persist chrome (not only editor publish()).
+        self::assertMatchesRegularExpression(
+            '/function solidifyPendingIdentity\b[\s\S]*?\$this->persistChromePayload\(\$identity\);/s',
+            $source,
+        );
         self::assertMatchesRegularExpression(
             '/function bakeChromeFromNodes.*?scopeVersions->setChromePayload\(\$version,/s',
             $source,

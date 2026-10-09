@@ -188,6 +188,28 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
     }
 
     /**
+     * storefrontMoneySummary 为 eager；若 miniCartExtras/Icon 仍 defer，抽屉会先露出金额行，
+     * 优惠券/订单留言部件自身 visibility:hidden，看起来像「留言丢了」。
+     */
+    public function testMiniCartExtrasAndIconModulesAreEager(): void
+    {
+        $path = dirname(__DIR__, 2) . '/view/statics/frontend/weline.modules.js';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+
+        self::assertMatchesRegularExpression(
+            '/miniCartExtras\s*:\s*\{[^}]*load\s*:\s*"eager"/s',
+            $source,
+            'miniCartExtras must load:eager so Tab shell is ready with money summary',
+        );
+        self::assertMatchesRegularExpression(
+            '/miniCartIcon\s*:\s*\{[^}]*load\s*:\s*"eager"/s',
+            $source,
+            'miniCartIcon must load:eager alongside extras',
+        );
+    }
+
+    /**
      * 迷你购物车是 aria-modal 抽屉，打开时必须盖过店面常驻浮层（进店音乐 / 社交快捷条 / 筛选 FAB）。
      * 抽屉位于 .weline-header{position:sticky;z-index:100} 的层叠上下文内，只改抽屉自身 z-index
      * 无法越过 body 级浮层，所以必须由 :has(.header-cart.is-drawer-open) 抬高 header 的上下文。
@@ -272,6 +294,17 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
             $css,
             'Mobile media must not force width:100% on closed drawer base selector',
         );
+        // Open-state mobile full-bleed must use literal 768px (var() in @media never matches).
+        self::assertMatchesRegularExpression(
+            '/@media\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*is-drawer-open[^}]*width:\s*100%\s*!important/s',
+            $css,
+            'Open drawer on phone must full-bleed via literal max-width:768px media',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(\s*max-width:\s*var\(--breakpoint-md\)/s',
+            $css,
+            'Forbidden: CSS custom properties inside @media (invalid; mobile full-bleed never applies)',
+        );
     }
 
     public function testMiniCartIconUsesAmazonDrawerSurface(): void
@@ -294,9 +327,9 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('--amz-drawer-price:', $css);
         self::assertStringContainsString('--amz-drawer-cta-bg:', $css);
         // Collapsed footer still keeps a Theme body floor; expanded qty-hit gate is Cart-owned.
-        self::assertStringContainsString('min-height: min(40vh, 12rem)', $css);
+        self::assertStringContainsString('min-height: min(40vh, var(--token-size-12rem))', $css);
         self::assertMatchesRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(\\s*100%\\s*-\\s*100px/s',
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(\\s*100%\\s*-\\s*var\\(--token-size-100px\\)/s',
             $css
         );
         self::assertMatchesRegularExpression(
@@ -305,6 +338,20 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         );
         self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
         self::assertStringNotContainsString('max-height: min(40vh', $css);
+        // Swatch width/height use --token-size-22px; a negative leaf makes width invalid → intrinsic blowout.
+        $literals = (string)file_get_contents(
+            dirname(__DIR__, 2) . '/view/theme/frontend/variables/_auto-literals.css'
+        );
+        self::assertMatchesRegularExpression(
+            '/--token-size-22px:\s*22px\s*;/',
+            $literals,
+            'auto-literals --token-size-22px must be positive for mini-cart option swatches',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/--token-size-22px:\s*-22px\s*;/',
+            $literals,
+            'Negative --token-size-22px breaks width/height (CSS ignores negative lengths)',
+        );
     }
 
     public function testMiniCartFooterSheetCollapsesToTotalAndCheckout(): void
@@ -317,11 +364,25 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-mini-cart-footer-toggle', $source);
         self::assertStringContainsString('data-mini-cart-footer-details', $source);
         self::assertStringContainsString('data-cart-total-amount', $source);
+        self::assertStringContainsString('data-mini-cart-footer-compact-label', $source);
+        self::assertStringContainsString('data-mini-cart-footer-compact-was', $source);
+        self::assertStringContainsString('data-mini-cart-footer-compact-amount', $source);
         self::assertStringContainsString('data-i18n-footer-collapse', $source);
         self::assertStringContainsString('data-i18n-footer-expand', $source);
+        self::assertStringContainsString('data-i18n-deposit-payable', $source);
+        self::assertStringContainsString('weline:b2b-credit-changed', $js);
+        self::assertStringContainsString('mergeTobCreditIntoMoneyDto', $js);
+        self::assertStringContainsString('convertCreditMinorToDisplay', $js);
+        self::assertStringContainsString('readCreditCurrency', $js);
+        self::assertStringContainsString('never paint credit minors 1:1', $js);
+        self::assertStringContainsString('refreshMiniCartMoneyFromCredit', $js);
+        self::assertStringContainsString('syncFooterCompactFromMoneyDto', $js);
+        self::assertStringContainsString('Do NOT overwrite [data-cart-total-amount] with retail visibleFormatted', $js);
+        self::assertStringContainsString('footer-compact-was', $css);
+        self::assertStringContainsString('text-decoration: line-through', $css);
         self::assertStringContainsString('is-footer-collapsed', $css);
         self::assertMatchesRegularExpression(
-            '/max-height:\\s*calc\\(\\s*100%\\s*-\\s*100px/s',
+            '/max-height:\\s*calc\\(\\s*100%\\s*-\\s*var\\(--token-size-100px\\)/s',
             $css
         );
         self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
@@ -330,13 +391,17 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('drawerContentIsFresh', $js);
         self::assertStringContainsString('skipItems', $js);
         self::assertStringContainsString('drawerCssReady', $js);
-        self::assertStringContainsString('minicart-sheet-grow-v19', $js);
+        self::assertStringContainsString('minicart-paper-ink-v24', $js);
         self::assertMatchesRegularExpression(
             '/\\.header-cart \\.mini-cart-drawer__body\\s*\\{[^}]*flex:\\s*1\\s+1\\s+auto/s',
             $css
         );
         self::assertMatchesRegularExpression(
             '/\\.header-cart \\.mini-cart-drawer__footer-details\\s*\\{[^}]*flex:\\s*0\\s+1\\s+auto/s',
+            $css
+        );
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__footer-details\\s*\\{[^}]*min-height:\\s*min\\(\\s*var\\(--token-size-12rem\\)\\s*,\\s*28vh\\s*\\)/s',
             $css
         );
         self::assertStringContainsString('ensureCartQtyHitCss', $js);
@@ -366,7 +431,13 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         $css = (string)file_get_contents(dirname(__DIR__, 2) . '/view/statics/css/widgets/mini-cart-drawer.css');
 
         // Raised cream drawer must not inherit header-belt on-dark --color-text.
+        // Theme _colors aliases chrome-body-text → color-text-primary (inverse remaps);
+        // drawer must pin foundation literals before consuming chrome-body-text.
+        self::assertStringContainsString('--weline-chrome-body-text: #0f1111', $css);
+        self::assertStringContainsString('--weline-chrome-body-text-secondary: #565959', $css);
         self::assertStringContainsString('--_paper-text: var(--amz-drawer-text)', $css);
+        self::assertStringContainsString('--amz-drawer-text: var(--weline-chrome-body-text)', $css);
+        self::assertStringNotContainsString('--amz-drawer-text: var(--color-text-primary)', $css);
         self::assertStringContainsString('--color-text: var(--_paper-text)', $css);
         self::assertStringContainsString('--weline-theme-color-text: var(--_paper-text)', $css);
         self::assertStringContainsString('--_inverse-text: var(--_paper-text)', $css);
@@ -433,7 +504,8 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringNotContainsString('@static(Weline_Theme::css/widgets/mini-cart-drawer.css)', $source);
         self::assertStringNotContainsString('miniCartIcon', $source);
         self::assertStringContainsString('storefrontImageFallback', $source);
-        self::assertStringContainsString('storefrontFloatLayer', $source);
+        self::assertStringContainsString('data-weline-load-when="idle"', $source);
+        self::assertStringNotContainsString('storefrontFloatLayer', $source);
         self::assertStringNotContainsString('w-storefront-float-layer', $source);
         self::assertStringNotContainsString('float-slot-start', $source);
         self::assertStringNotContainsString('float-slot-end', $source);

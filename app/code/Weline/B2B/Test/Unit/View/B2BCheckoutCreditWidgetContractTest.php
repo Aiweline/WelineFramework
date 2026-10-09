@@ -73,6 +73,10 @@ final class B2BCheckoutCreditWidgetContractTest extends TestCase
         self::assertStringContainsString('w-b2b-checkout-credit__amount', $template);
         self::assertStringContainsString('data-b2b-credit-currency', $template);
         self::assertStringContainsString('data-testid="b2b-credit-currency"', $template);
+        self::assertStringNotContainsString('data-b2b-credit-apply', $template);
+        self::assertStringNotContainsString('确认抵扣', $template);
+        self::assertStringContainsString('data-b2b-credit-applied', $template);
+        self::assertStringContainsString('已计入下方小计', $template);
         self::assertStringContainsString('data-b2b-credit-fx', $template);
         self::assertStringContainsString('data-testid="b2b-credit-fx"', $template);
         self::assertStringContainsString('type="text"', $template);

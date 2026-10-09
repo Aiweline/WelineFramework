@@ -1142,6 +1142,185 @@
         return attr(root, 'data-i18n-discount-automatic', '自动优惠');
     }
 
+    function isTobCreditSurface(root, dto) {
+        var attr = normalizeCartType(root && root.getAttribute('data-cart-type'));
+        if (attr === 'tob') {
+            return true;
+        }
+        if (normalizeCartType(dto && dto.cart_type) === 'tob') {
+            return true;
+        }
+        if (normalizeCartType(preferredCartType()) === 'tob') {
+            return true;
+        }
+        if (root && root.querySelector('[data-b2b-credit-toggle]:checked')) {
+            return true;
+        }
+        try {
+            var tobApi = window.WelineB2BCheckoutTob;
+            if (tobApi && typeof tobApi.readApplyMinor === 'function'
+                && Number(tobApi.readApplyMinor()) > 0) {
+                return true;
+            }
+            if (tobApi && typeof tobApi.readMode === 'function'
+                && String(tobApi.readMode() || '').toLowerCase() === 'tob') {
+                return true;
+            }
+        } catch (eTob) {}
+        return false;
+    }
+
+    function mergeTobCreditIntoMoneyDto(root, dto) {
+        var base = Object.assign({}, dto || {});
+        if (!isTobCreditSurface(root, base)) {
+            return base;
+        }
+        if (root && normalizeCartType(root.getAttribute('data-cart-type')) !== 'tob') {
+            try {
+                root.setAttribute('data-cart-type', 'tob');
+            } catch (eAttr) {}
+        }
+        var tobApi = window.WelineB2BCheckoutTob;
+        if (!tobApi || typeof tobApi.readApplyMinor !== 'function') {
+            return base;
+        }
+        var displayCurrency = String(base.currency || '').trim().toUpperCase() || 'CNY';
+        var creditCurrency = typeof tobApi.readCreditCurrency === 'function'
+            ? String(tobApi.readCreditCurrency() || '').trim().toUpperCase()
+            : '';
+        var applyMinor = Math.max(0, Number(tobApi.readApplyMinor()) || 0);
+        if (applyMinor <= 0) {
+            try {
+                if (typeof tobApi.readPersistedCreditChoice === 'function') {
+                    var saved = tobApi.readPersistedCreditChoice();
+                    if (saved && saved.enabled) {
+                        applyMinor = Math.max(0, Number(saved.apply_minor) || 0);
+                    }
+                }
+            } catch (ePersist) {}
+        }
+        if (applyMinor <= 0) {
+            base.deposit_minor = 0;
+            base.credit_minor = 0;
+            return base;
+        }
+        var goodsMajor = (Number(base.goods_subtotal_minor) || 0) / 100;
+        // Cross-currency: never paint credit minors 1:1 under display $. Re-quote + FX or fail-closed.
+        if (creditCurrency && creditCurrency !== displayCurrency) {
+            try {
+                if (typeof tobApi.ensureCreditQuote === 'function') {
+                    tobApi.ensureCreditQuote(root, {
+                        cart_type: 'tob',
+                        currency: displayCurrency,
+                        subtotal: goodsMajor,
+                        force: true,
+                    });
+                }
+            } catch (eRequote) {}
+            if (typeof tobApi.convertCreditMinorToDisplay === 'function') {
+                var convertedApply = tobApi.convertCreditMinorToDisplay(applyMinor, displayCurrency);
+                if (convertedApply === null || convertedApply === undefined) {
+                    base.deposit_minor = 0;
+                    base.credit_minor = 0;
+                    return base;
+                }
+                applyMinor = Math.max(0, Number(convertedApply) || 0);
+            } else {
+                base.deposit_minor = 0;
+                base.credit_minor = 0;
+                return base;
+            }
+        }
+        var depositMinor = 0;
+        if (typeof tobApi.estimateDepositMinor === 'function') {
+            depositMinor = Math.max(0, Number(tobApi.estimateDepositMinor({
+                cart_type: 'tob',
+                subtotal: goodsMajor,
+                currency: displayCurrency,
+            })) || 0);
+        }
+        var cashMinor = null;
+        // Only trust cashDepositMinor when quote currency already matches display.
+        if ((!creditCurrency || creditCurrency === displayCurrency)
+            && typeof tobApi.cashDepositMinor === 'function') {
+            var cash = tobApi.cashDepositMinor();
+            if (cash !== null && cash !== undefined) {
+                cashMinor = Math.max(0, Number(cash) || 0);
+            }
+        }
+        if (cashMinor !== null) {
+            depositMinor = cashMinor + applyMinor;
+        } else if (depositMinor > 0) {
+            cashMinor = Math.max(0, depositMinor - applyMinor);
+        } else {
+            cashMinor = 0;
+            depositMinor = applyMinor;
+        }
+        base.deposit_minor = depositMinor;
+        base.credit_minor = applyMinor;
+        base.payable_minor = cashMinor;
+        base.payable_label = attr(root, 'data-i18n-deposit-payable', '本次应付定金');
+        return base;
+    }
+
+    /**
+     * Collapsed footer compact must mirror expanded money-summary payable.
+     * When credit/coupon savings apply, show strikethrough "was" (deposit or goods).
+     */
+    function syncFooterCompactFromMoneyDto(root, dto) {
+        if (!root) {
+            return;
+        }
+        var money = dto && typeof dto === 'object' ? dto : {};
+        var currency = String(money.currency || root.getAttribute('data-cart-currency') || 'CNY');
+        var payableMinor = Math.max(0, Number(money.payable_minor) || 0);
+        var depositMinor = Math.max(0, Number(money.deposit_minor) || 0);
+        var creditMinor = Math.max(0, Number(money.credit_minor) || 0);
+        var discountMinor = Math.max(0, Number(money.discount_minor) || 0);
+        var incentiveMinor = Math.max(0, Number(money.payment_incentive_minor) || 0);
+        var goodsMinor = Math.max(0, Number(money.goods_subtotal_minor) || 0);
+        var taxMinor = Math.max(
+            0,
+            Number(money.sales_tax_minor != null ? money.sales_tax_minor : money.tax_minor) || 0
+        );
+        var empty = payableMinor <= 0
+            && goodsMinor <= 0
+            && depositMinor <= 0
+            && creditMinor <= 0
+            && discountMinor <= 0;
+
+        var labelEl = root.querySelector('[data-mini-cart-footer-compact-label]');
+        var wasEl = root.querySelector('[data-mini-cart-footer-compact-was]');
+        var amountEl = root.querySelector('[data-mini-cart-footer-compact-amount]');
+        var payableLabel = String(money.payable_label || '').trim();
+        var defaultLabel = attr(root, 'data-i18n-subtotal', '小计');
+        if (labelEl) {
+            labelEl.textContent = payableLabel || defaultLabel;
+        }
+
+        var nowText = empty ? '' : formatMoney(payableMinor / 100, currency);
+        text(amountEl, nowText);
+
+        var wasMinor = 0;
+        if (creditMinor > 0 && depositMinor > payableMinor) {
+            wasMinor = depositMinor;
+        } else if ((discountMinor > 0 || incentiveMinor > 0) && goodsMinor > payableMinor) {
+            wasMinor = goodsMinor + taxMinor;
+        }
+
+        if (wasEl) {
+            if (!empty && wasMinor > payableMinor) {
+                wasEl.hidden = false;
+                wasEl.removeAttribute('hidden');
+                text(wasEl, formatMoney(wasMinor / 100, currency));
+            } else {
+                wasEl.hidden = true;
+                wasEl.setAttribute('hidden', '');
+                text(wasEl, '');
+            }
+        }
+    }
+
     function paintMiniCartMoneySummary(root, dto) {
         var api = window.WelineStorefrontMoneySummary;
         if (!api || typeof api.paint !== 'function') {
@@ -1158,8 +1337,44 @@
         if (!host) {
             return false;
         }
-        api.paint(host, Object.assign({ mode: 'mini-cart', shipping_pending: true }, dto || {}));
+        var baseDto = Object.assign({ mode: 'mini-cart', shipping_pending: true }, dto || {});
+        root.__welineLastMoneyDtoBase = Object.assign({}, baseDto);
+        // Align credit.quote to the money-summary display currency before paint.
+        try {
+            var tobApi = window.WelineB2BCheckoutTob;
+            var paintCartType = normalizeCartType(
+                (root && root.getAttribute('data-cart-type'))
+                || baseDto.cart_type
+                || preferredCartType()
+            );
+            if (tobApi && typeof tobApi.ensureCreditQuote === 'function' && isTobCreditSurface(root, baseDto)) {
+                tobApi.ensureCreditQuote(root, {
+                    cart_type: 'tob',
+                    currency: baseDto.currency,
+                    subtotal: (Number(baseDto.goods_subtotal_minor) || 0) / 100,
+                });
+            }
+        } catch (eEnsure) {}
+        var merged = mergeTobCreditIntoMoneyDto(root, baseDto);
+        api.paint(host, merged);
+        // Collapsed bar must use the same payable as the expanded summary (incl. Tob credit).
+        syncFooterCompactFromMoneyDto(root, merged);
         return true;
+    }
+
+    function refreshMiniCartMoneyFromCredit(root) {
+        if (!root || !isDrawerOpen(root)) {
+            return;
+        }
+        var base = root.__welineLastMoneyDtoBase;
+        var summary = root.__welineLastSummary;
+        if (base && typeof base === 'object') {
+            paintMiniCartMoneySummary(root, base);
+            return;
+        }
+        if (summary && typeof summary === 'object') {
+            applySummary(root, summary, { skipItems: true });
+        }
     }
 
     function renderDiscountBreakdown(root, summary, currency) {
@@ -1375,22 +1590,33 @@
         }
         text(root.querySelector('[data-cart-subtotal-text]'), visibleFormatted);
         text(root.querySelector('[data-cart-item-count]'), String(count));
+        var moneyDto = {
+            currency: currency,
+            goods_subtotal_minor: Math.round(Number(subtotal || 0) * 100),
+            discount_minor: Math.round(Number(discountMajor || 0) * 100),
+            sales_tax_minor: Math.round(Number(taxMajor || 0) * 100),
+            tax_minor: Math.round(Number(taxMajor || 0) * 100),
+            payable_minor: Math.round(Number(payable || 0) * 100),
+            note: taxMajor > 0
+                ? attr(root, 'data-i18n-note-shipping', '运费将在结算时计算')
+                : attr(root, 'data-i18n-note', '税费与运费将在结算时计算'),
+            sales_tax_label: attr(root, 'data-i18n-sales-tax', attr(root, 'data-i18n-tax', '销售税')),
+            tax_label: attr(root, 'data-i18n-sales-tax', attr(root, 'data-i18n-tax', '销售税')),
+        };
         if (!emptyCart) {
-            paintMiniCartMoneySummary(root, {
+            // paintMiniCartMoneySummary syncs compact from Tob-merged payable.
+            // Do NOT overwrite [data-cart-total-amount] with retail visibleFormatted afterward.
+            if (!paintMiniCartMoneySummary(root, moneyDto)) {
+                syncFooterCompactFromMoneyDto(root, mergeTobCreditIntoMoneyDto(root, moneyDto));
+            }
+        } else {
+            syncFooterCompactFromMoneyDto(root, {
                 currency: currency,
-                goods_subtotal_minor: Math.round(Number(subtotal || 0) * 100),
-                discount_minor: Math.round(Number(discountMajor || 0) * 100),
-                sales_tax_minor: Math.round(Number(taxMajor || 0) * 100),
-                tax_minor: Math.round(Number(taxMajor || 0) * 100),
-                payable_minor: Math.round(Number(payable || 0) * 100),
-                note: taxMajor > 0
-                    ? attr(root, 'data-i18n-note-shipping', '运费将在结算时计算')
-                    : attr(root, 'data-i18n-note', '税费与运费将在结算时计算'),
-                sales_tax_label: attr(root, 'data-i18n-sales-tax', attr(root, 'data-i18n-tax', '销售税')),
-                tax_label: attr(root, 'data-i18n-sales-tax', attr(root, 'data-i18n-tax', '销售税')),
+                goods_subtotal_minor: 0,
+                discount_minor: 0,
+                payable_minor: 0,
             });
         }
-        text(root.querySelector('[data-cart-total-amount]'), visibleFormatted);
         // Always refresh goods node text — do not wait for discount lines to appear.
         text(root.querySelector('[data-cart-goods-subtotal]'), visibleGoodsFormatted);
         renderDiscountBreakdown(root, emptyCart ? { subtotal: 0 } : summary, currency);
@@ -2339,7 +2565,7 @@
             return;
         }
         drawerCssReady = true;
-        var cssStamp = '20261007-minicart-sheet-grow-v19';
+        var cssStamp = '20261010-minicart-paper-ink-v24';
         var assetVersion = '';
         try {
             var cfgNode = document.getElementById('weline-frontend-runtime-config');
@@ -2489,6 +2715,13 @@
         window.addEventListener('weline:cart-updated', function (event) {
             var summary = event && event.detail && typeof event.detail === 'object' ? event.detail : null;
             scheduleCartRefreshFromEvent(summary);
+        });
+
+        // 批发信用勾选/确认抵扣后，立即刷新迷你车金额行（定金/信用抵扣/本次应付定金）。
+        window.addEventListener('weline:b2b-credit-changed', function () {
+            document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
+                refreshMiniCartMoneyFromCredit(root);
+            });
         });
 
         window.addEventListener('weline:cart-type-changed', function (event) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\B2B\Extends\Module\Weline_Framework\Query;
 
+use Weline\B2B\Service\B2BCheckoutCreditApplySession;
 use Weline\B2B\Service\B2BCheckoutCreditQuote;
 use Weline\B2B\Service\B2BConflictException;
 use Weline\B2B\Service\B2BHangPaymentService;
@@ -38,6 +39,7 @@ class B2BQueryProvider implements QueryProviderInterface
             'hang.paymentContext' => $this->hangPaymentContext($params),
             'hang.startPayment' => $this->hangStartPayment($params),
             'credit.quote' => $this->creditQuote($params),
+            'credit.apply' => $this->creditApply($params),
             'orderChat.open' => $this->orderChatOpen($params),
             'orderChat.messages' => $this->orderChatMessages($params),
             'orderChat.send' => $this->orderChatSend($params),
@@ -296,12 +298,15 @@ class B2BQueryProvider implements QueryProviderInterface
         $deposit = max(0, (int)($params['deposit_amount_minor'] ?? 0));
         $currency = strtoupper(trim((string)($params['currency'] ?? 'CNY'))) ?: 'CNY';
         $websiteId = max(0, (int)($params['website_id'] ?? 0));
+        $cartType = strtolower(trim((string)($params['cart_type'] ?? $params['selling_mode'] ?? 'tob'))) ?: 'tob';
+        $savedApply = $this->creditApplySession()->get($cartType);
         $customerId = $this->currentCustomerId();
         if ($customerId === null || $customerId <= 0) {
             return [
                 'success' => true,
                 'ok' => true,
                 'b2b_credit' => B2BCheckoutCreditQuote::unavailableStub('not_logged_in', $deposit),
+                'saved_apply' => $savedApply,
             ];
         }
         try {
@@ -312,6 +317,7 @@ class B2BQueryProvider implements QueryProviderInterface
                     'success' => true,
                     'ok' => true,
                     'b2b_credit' => B2BCheckoutCreditQuote::unavailableStub('quote_failed', $deposit),
+                    'saved_apply' => $savedApply,
                 ];
             }
 
@@ -319,14 +325,50 @@ class B2BQueryProvider implements QueryProviderInterface
                 'success' => true,
                 'ok' => true,
                 'b2b_credit' => $svc->quote((string)$customerId, $websiteId, $currency, $deposit),
+                'saved_apply' => $savedApply,
             ];
         } catch (\Throwable) {
             return [
                 'success' => true,
                 'ok' => true,
                 'b2b_credit' => B2BCheckoutCreditQuote::unavailableStub('quote_failed', $deposit),
+                'saved_apply' => $savedApply,
             ];
         }
+    }
+
+    /**
+     * Persist tob wholesale-credit apply on the storefront session (coupon-class durability).
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function creditApply(array $params): array
+    {
+        try {
+            return $this->creditApplySession()->save($params);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'ok' => false,
+                'error' => 'b2b_credit_apply_persist_failed',
+                'message' => $e->getMessage(),
+                'saved_apply' => [
+                    'enabled' => false,
+                    'apply_minor' => 0,
+                    'currency' => '',
+                    'cart_type' => 'tob',
+                ],
+            ];
+        }
+    }
+
+    private function creditApplySession(): B2BCheckoutCreditApplySession
+    {
+        /** @var B2BCheckoutCreditApplySession $svc */
+        $svc = ObjectManager::getInstance(B2BCheckoutCreditApplySession::class);
+
+        return $svc;
     }
 
     /**
@@ -839,9 +881,26 @@ class B2BQueryProvider implements QueryProviderInterface
                         'deposit_amount_minor' => ['type' => 'int', 'required' => true, 'min' => 0],
                         'currency' => ['type' => 'string', 'required' => false, 'max_length' => 8],
                         'website_id' => ['type' => 'int', 'required' => false, 'min' => 0],
+                        'cart_type' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Preview tob wholesale credit quote before freezeQuote',
+                ],
+                [
+                    'name' => 'credit.apply',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        'apply_minor' => ['type' => 'int', 'required' => false, 'min' => 0],
+                        'enabled' => ['type' => 'bool', 'required' => false],
+                        'currency' => ['type' => 'string', 'required' => false, 'max_length' => 8],
+                        'cart_type' => ['type' => 'string', 'required' => false, 'max_length' => 16],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Persist tob wholesale-credit apply on storefront session (survives refresh)',
                 ],
             ],
         ];

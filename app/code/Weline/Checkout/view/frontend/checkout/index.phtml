@@ -3288,6 +3288,14 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             if (typeof tobApi.readApplyMinor === 'function') {
                 creditApplyMajor = Math.max(0, Number(tobApi.readApplyMinor()) || 0) / 100;
             }
+            if (creditApplyMajor <= 0 && typeof tobApi.readPersistedCreditChoice === 'function') {
+                try {
+                    const saved = tobApi.readPersistedCreditChoice();
+                    if (saved && saved.enabled) {
+                        creditApplyMajor = Math.max(0, Number(saved.apply_minor) || 0) / 100;
+                    }
+                } catch (ePersistApply) {}
+            }
             if (typeof tobApi.estimateDepositMinor === 'function') {
                 depositMajor = Math.max(0, Number(tobApi.estimateDepositMinor({
                     cart_type: 'tob',
@@ -3759,15 +3767,30 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 root.setAttribute('data-cart-type-handoff', fromQuery);
                 return fromQuery;
             }
-            const fromRoot = String((root && root.getAttribute('data-cart-type')) || '').toLowerCase();
-            if (fromRoot === 'tob' || fromRoot === 'toc') {
-                return fromRoot;
-            }
+            // Live credit / selling-mode beats SSR default data-cart-type="toc".
+            try {
+                const tobApi = window.WelineB2BCheckoutTob;
+                if (tobApi && typeof tobApi.readApplyMinor === 'function'
+                    && Number(tobApi.readApplyMinor()) > 0) {
+                    return 'tob';
+                }
+                if (root && root.querySelector('[data-b2b-credit-toggle]:checked')) {
+                    return 'tob';
+                }
+                if (tobApi && typeof tobApi.readMode === 'function'
+                    && String(tobApi.readMode() || '').toLowerCase() === 'tob') {
+                    return 'tob';
+                }
+            } catch (eCreditType) {}
             if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
                 const preferred = String(window.WelineB2BSellingMode.preferredMode() || '').toLowerCase();
                 if (preferred === 'tob' || preferred === 'toc') {
                     return preferred;
                 }
+            }
+            const fromRoot = String((root && root.getAttribute('data-cart-type')) || '').toLowerCase();
+            if (fromRoot === 'tob' || fromRoot === 'toc') {
+                return fromRoot;
             }
             const names = [];
             const site = window.site || {};
@@ -4006,6 +4029,8 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 payment_idempotency_key: newIdempotencyKey('checkout_payment_retry_'),
                 payment_method: methodCp,
                 country_code: resumeState.country_code,
+                payment_mode: 'continue_pay',
+                continue_pay: true,
             });
             if (!resultCp || resultCp.success === false) {
                 throw new Error(text(resultCp && resultCp.message) || copy.load_failed);

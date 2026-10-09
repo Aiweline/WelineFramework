@@ -81,6 +81,10 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
 
         self::assertStringContainsString('WelineStorefrontMoneySummary', $js);
         self::assertStringContainsString('function paint', $js);
+        self::assertStringContainsString('function ensure', $js);
+        self::assertStringContainsString('ensurePaintRows', $js);
+        self::assertStringContainsString('data-money-summary-row="deposit"', $js);
+        self::assertStringContainsString('data-money-summary-row="credit"', $js);
         self::assertStringContainsString('discounts_disabled', $js);
         self::assertStringContainsString('shipping_service_label', $js);
         self::assertStringContainsString('tax_amount_minor', $js);
@@ -125,7 +129,7 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
             $css
         );
         self::assertStringContainsString(
-            'color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111))',
+            'color: var(--amz-drawer-text, var(--weline-theme-text))',
             $css
         );
         self::assertStringContainsString(
@@ -133,7 +137,12 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
             $css
         );
         self::assertStringContainsString(
-            'color: var(--amz-drawer-price, var(--color-primary, #b12704))',
+            'color: var(--amz-drawer-price, var(--color-primary))',
+            $css
+        );
+        // Soft rule above first totals row — separates Tob/note chrome from 小计.
+        self::assertMatchesRegularExpression(
+            '/\.w-storefront-money-summary\s*\{[^}]*border-top:\s*var\(--border-width-thin,\s*1px\)\s+solid/s',
             $css
         );
     }

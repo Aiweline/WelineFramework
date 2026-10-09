@@ -307,7 +307,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('b2b-checkout-credit', $miniCartContent);
         self::assertStringNotContainsString('data-mini-cart-type-seg', $miniCartContent);
         self::assertStringNotContainsString('data-mini-cart-type-option="tob"', $miniCartContent);
-        self::assertStringNotContainsString('批发车', $miniCartContent);
+        // i18n 文案「批发车」可出现在 data-i18n-tob-cart；禁止的是分车控件 markup。
+        self::assertStringContainsString('data-i18n-tob-cart', $miniCartContent);
+        self::assertStringContainsString('data-i18n-deposit-payable', $miniCartContent);
         self::assertStringNotContainsString('header-cart__cart-type', $miniCartContent);
         self::assertStringNotContainsString('mini-cart-drawer__cart-type', $miniCartContent);
 
@@ -323,8 +325,21 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringNotContainsString('data-b2b-mini-cart-type-option', $miniCartJsContent);
         self::assertStringContainsString('MiniCart.refresh', $miniCartJsContent);
         self::assertStringNotContainsString('switchMiniCartType', $miniCartJsContent);
-        self::assertStringNotContainsString('批发车', $miniCartJsContent);
+        // Theme JS 仅作 i18n fallback；分车控件仍由 B2B 注入。
+        self::assertStringContainsString("data-i18n-tob-cart", $miniCartJsContent);
+        self::assertStringContainsString('weline:b2b-credit-changed', $miniCartJsContent);
+        self::assertStringContainsString('mergeTobCreditIntoMoneyDto', $miniCartJsContent);
+        self::assertStringContainsString('isTobCreditSurface', $miniCartJsContent);
         self::assertStringContainsString('cartQueryParams({ item_id: itemId })', $miniCartJsContent);
+
+        $cartPage = self::bp('app/code/Weline/Cart/view/templates/frontend/cart/index.phtml');
+        self::assertFileExists($cartPage);
+        $cartPageContent = (string) file_get_contents($cartPage);
+        self::assertStringContainsString('isTobCreditSurface', $cartPageContent);
+        self::assertStringContainsString('mergeTobCreditIntoCartMoneyDto', $cartPageContent);
+        self::assertStringContainsString('readPersistedCreditApplyMinor', $cartPageContent);
+        self::assertStringContainsString('weline:b2b-credit-changed', $cartPageContent);
+        self::assertStringContainsString("api.ensure(slot, { mode: 'cart' })", $cartPageContent);
 
         $b2bMiniCartBoot = self::bp('app/code/Weline/B2B/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml');
         self::assertFileExists($b2bMiniCartBoot);
@@ -378,6 +393,10 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('禁止走 tertiary muted', $cssContent);
         self::assertStringContainsString('.w-b2b-checkout-credit__fx', $cssContent);
         self::assertStringContainsString('--weline-theme-text', $cssContent);
+        self::assertStringContainsString('-webkit-text-fill-color', $cssContent);
+        // 禁止残留确认按钮样式；`__applied` 状态行仍保留（勿用 `__apply` 子串误伤）。
+        self::assertDoesNotMatchRegularExpression('/\\.w-b2b-checkout-credit__apply(?!ed)\\b/', $cssContent);
+        self::assertStringContainsString('.w-b2b-checkout-credit__applied', $cssContent);
         self::assertStringContainsString('.w-dialog.w-product-purchase-panel', $cssContent);
         self::assertStringContainsString('min-height: 0', $cssContent);
         self::assertStringContainsString('product-native-detail--quick-add', $cssContent);
@@ -489,6 +508,16 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('lastRequestedDepositMinor', $checkoutTob);
         self::assertStringContainsString('resolveCheckoutCurrency', $checkoutTob);
         self::assertStringContainsString('currencyChanged', $checkoutTob);
+        self::assertStringContainsString('currentDisplayCurrency', $checkoutTob);
+        self::assertStringContainsString('convertCreditMinorToDisplay', $checkoutTob);
+        self::assertStringContainsString('readCreditCurrency', $checkoutTob);
+        self::assertStringContainsString('fillCreditI18n', $checkoutTob);
+        self::assertStringContainsString('基准货币（钱包）%{1}', $checkoutTob);
+        $depositNote = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-tob-deposit-note.phtml');
+        self::assertStringContainsString('data-i18n-fx-same', $depositNote);
+        self::assertStringContainsString('data-i18n-cash-goods', $depositNote);
+        self::assertStringContainsString('禁止无汇率 1:1 直扣', $checkoutTob);
+        self::assertStringContainsString('Always re-resolve live display currency', $checkoutTob);
         self::assertStringContainsString('data-b2b-credit-currency', $checkoutTob);
         self::assertStringContainsString('buildCreditFxSummary', $checkoutTob);
         self::assertStringContainsString('data-b2b-credit-fx', $checkoutTob);
@@ -500,6 +529,12 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('refreshCreditQuote', $checkoutTob);
         self::assertStringContainsString('ensureCreditQuote', $checkoutTob);
         self::assertStringContainsString("credit.quote", $checkoutTob);
+        self::assertStringContainsString("credit.apply", $checkoutTob);
+        self::assertStringContainsString('saved_apply', $checkoutTob);
+        self::assertStringContainsString('ingestServerSavedApply', $checkoutTob);
+        self::assertStringContainsString('persistCreditChoiceToServer', $checkoutTob);
+        self::assertStringContainsString('capReady', $checkoutTob);
+        self::assertStringContainsString('wait for quote with usable cap', $checkoutTob);
         // 购物车/迷你车：按商品小计估算本期应付（=挂单定金基数）；优先 data-cart-goods-subtotal-major，避免隐藏过期小计。
         self::assertStringContainsString('data-cart-goods-subtotal', $checkoutTob);
         self::assertStringContainsString('data-cart-goods-subtotal-major', $checkoutTob);
@@ -531,9 +566,19 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('readApplyMinor', $checkoutTob);
         self::assertStringContainsString('cashDepositMinor', $checkoutTob);
         self::assertStringContainsString('weline:b2b-credit-changed', $checkoutTob);
+        self::assertStringNotContainsString('data-b2b-credit-apply', $checkoutTob);
+        self::assertStringContainsString('weline.b2b.credit.apply.v1', $checkoutTob);
+        self::assertStringContainsString('syncCreditAppliedStatus', $checkoutTob);
         self::assertStringContainsString('notifyCreditChanged', $checkoutTob);
         self::assertStringContainsString('creditState._notifySig', $checkoutTob);
         self::assertStringContainsString('data-b2b-credit', $checkoutTob);
+        self::assertStringContainsString('不依赖 !toggle.checked', $checkoutTob);
+        self::assertStringContainsString('readPersistedCreditChoice: readPersistedCreditChoice', $checkoutTob);
+        self::assertStringContainsString('forceClear', $checkoutTob);
+        self::assertStringContainsString('persist: false, dispatch: false', $checkoutTob);
+        self::assertStringContainsString('must not wipe mini-cart', $checkoutTob);
+        self::assertStringContainsString('Live credit / selling-mode beats SSR default', $checkoutPageContent);
+        self::assertStringContainsString('Persist-only path before checkout-tob binds', $cartPageContent);
 
         $b2bQuery = self::bp('app/code/Weline/B2B/extends/module/Weline_Framework/Query/B2BQueryProvider.php');
         self::assertFileExists($b2bQuery);
@@ -541,8 +586,12 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString("'hang.startPayment'", $b2bQueryContent);
         self::assertStringContainsString("'hang.paymentContext'", $b2bQueryContent);
         self::assertStringContainsString("'credit.quote'", $b2bQueryContent);
+        self::assertStringContainsString("'credit.apply'", $b2bQueryContent);
         self::assertStringContainsString('function creditQuote', $b2bQueryContent);
+        self::assertStringContainsString('function creditApply', $b2bQueryContent);
         self::assertStringContainsString('B2BCheckoutCreditQuote', $b2bQueryContent);
+        self::assertStringContainsString('B2BCheckoutCreditApplySession', $b2bQueryContent);
+        self::assertStringContainsString('saved_apply', $b2bQueryContent);
         self::assertStringContainsString('Weline\\Customer\\Api\\Auth\\CustomerAccountFacadeInterface', $b2bQueryContent);
         self::assertStringContainsString('Weline\\Framework\\Runtime\\RuntimeProviderResolver', $b2bQueryContent);
         self::assertStringContainsString('createFrontendSession', $b2bQueryContent);

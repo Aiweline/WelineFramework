@@ -882,7 +882,10 @@
 .weline-checkout .w-b2b-checkout-credit__amount-label,
 .w-b2b-checkout-credit__amount-label {
     margin: 0;
-    color: var(--weline-theme-text-muted, var(--color-text-muted, inherit));
+    /* 额度标签须可读：禁止 tertiary/#a6a6a6 级浅灰 */
+    color: var(--amz-drawer-text, var(--weline-theme-text, var(--color-text-primary, #0f1111)));
+    -webkit-text-fill-color: var(--amz-drawer-text, var(--weline-theme-text, var(--color-text-primary, #0f1111)));
+    opacity: 1;
 }
 
 .weline-checkout .w-b2b-checkout-credit__amount-row,
@@ -917,19 +920,38 @@
     color: var(--weline-theme-text, var(--color-text-primary, #0f1111));
 }
 
+/* 信用说明/额度/定金：纸面白底上必须主色墨水；同时覆盖 .w-text[data-tone=muted] 与抽屉 remapped muted */
 .weline-checkout .w-b2b-checkout-credit__fx,
 .w-b2b-checkout-credit__fx,
 .weline-checkout .w-b2b-checkout-credit__blurb,
 .w-b2b-checkout-credit__blurb,
 .weline-checkout .w-b2b-checkout-credit__cash,
-.w-b2b-checkout-credit__cash {
+.w-b2b-checkout-credit__cash,
+.header-cart .w-b2b-checkout-credit__fx,
+.header-cart .w-b2b-checkout-credit__blurb,
+.header-cart .w-b2b-checkout-credit__cash,
+.header-cart .w-b2b-checkout-credit__amount-label,
+.header-cart .w-b2b-checkout-credit__currency,
+.weline-cart-shell .w-b2b-checkout-credit__fx,
+.weline-cart-shell .w-b2b-checkout-credit__blurb,
+.weline-cart-shell .w-b2b-checkout-credit__cash {
     margin: 0 0 var(--weline-theme-space-2, var(--weline-space-2, 0.5rem));
-    color: var(--weline-theme-text, var(--color-text-primary, #0f1111));
+    color: var(--amz-drawer-text, var(--weline-theme-text, var(--color-text-primary, #0f1111))) !important;
+    -webkit-text-fill-color: var(--amz-drawer-text, var(--weline-theme-text, var(--color-text-primary, #0f1111))) !important;
+    opacity: 1 !important;
 }
 
 .weline-checkout .w-b2b-checkout-credit__cash,
-.w-b2b-checkout-credit__cash {
+.w-b2b-checkout-credit__cash,
+.header-cart .w-b2b-checkout-credit__cash {
     margin-bottom: 0;
+}
+
+.weline-checkout .w-b2b-checkout-credit__applied,
+.w-b2b-checkout-credit__applied {
+    margin: 0;
+    color: var(--weline-theme-success, var(--color-success, #167a4d));
+    font-weight: var(--weline-font-weight-medium, 500);
 }
 
 .weline-checkout .w-b2b-checkout-credit__links,
