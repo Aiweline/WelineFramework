@@ -17,10 +17,18 @@
      * Paper ink on raised panel (WO-UI-CONTRAST-INVERSE).
      * Parent header [data-surface=inverse] remaps --color-text / body-text to
      * on-dark; without local rebind, title/address rows paint cream-on-cream.
-     * Same ink pair as account-dropdown / mini-cart-drawer.
+     * Same nail as mini-cart-drawer / header-search: pin foundation literals HERE
+     * first. Never seed --amz-drawer-text from var(--color-text-primary) — under
+     * inverse that token is already cream, and this selector (2 classes) beats
+     * theme.css [data-surface=inverse] .delivery-panel (attr+class), so a broken
+     * seed wins and erases Theme's #0f1111 raised rebind.
      */
-    --amz-drawer-text: var(--color-text-primary);
-    --amz-drawer-muted: var(--color-text-gray);
+    --weline-chrome-body-text: #0f1111;
+    --weline-chrome-body-text-secondary: #565959;
+    --weline-chrome-body-text-muted: #666666;
+    --weline-chrome-body-text-heading: #0f1111;
+    --amz-drawer-text: var(--weline-chrome-body-text);
+    --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text);
     --_paper-muted: var(--amz-drawer-muted);
     --_inverse-text: var(--_paper-text);

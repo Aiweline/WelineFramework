@@ -9,6 +9,10 @@ use PHPUnit\Framework\TestCase;
 /**
  * Delivery panel nests under header [data-surface=inverse]; must rebind paper
  * ink locally (WO-UI-CONTRAST-INVERSE) or title/address rows paint cream-on-cream.
+ *
+ * Regression: Token-ization once rewrote --amz-drawer-text to
+ * var(--color-text-primary); under inverse that is already on-dark cream, and
+ * this widget selector out-specifies theme.css raised rebind → white-on-white.
  */
 final class CheckoutDeliveryPanelPaperInkContractTest extends TestCase
 {
@@ -20,10 +24,15 @@ final class CheckoutDeliveryPanelPaperInkContractTest extends TestCase
 
         self::assertStringContainsString('.wc-theme_widget_checkout_delivery_context .delivery-panel', $css);
         self::assertStringContainsString('WO-UI-CONTRAST-INVERSE', $css);
+        self::assertStringContainsString('--weline-chrome-body-text: #0f1111', $css);
+        self::assertStringContainsString('--weline-chrome-body-text-secondary: #565959', $css);
+        self::assertStringContainsString('--amz-drawer-text: var(--weline-chrome-body-text)', $css);
         self::assertStringContainsString('--_paper-text: var(--amz-drawer-text)', $css);
         self::assertStringContainsString('--color-text: var(--_paper-text)', $css);
         self::assertStringContainsString('--weline-theme-body-text: var(--_paper-text)', $css);
         self::assertStringContainsString('--w-surface-fg: var(--_paper-text)', $css);
         self::assertStringContainsString('color: var(--_paper-text)', $css);
+        self::assertStringNotContainsString('--amz-drawer-text: var(--color-text-primary)', $css);
+        self::assertStringNotContainsString('--amz-drawer-muted: var(--color-text-gray)', $css);
     }
 }
