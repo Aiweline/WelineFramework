@@ -1422,11 +1422,15 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 .cart-count {
     position: absolute;
-    inset-block-start: calc(var(--spacing-2, 0.5rem) * -1);
-    inset-inline-end: calc(var(--spacing-2, 0.5rem) * -1);
+    /* Physical negative hang-off (see header-chrome-amazon cart-count). */
+    top: calc(var(--spacing-2, 0.5rem) * -1);
+    right: calc(var(--spacing-2, 0.5rem) * -1);
+    left: auto;
+    bottom: auto;
     z-index: 1;
     background-color: var(--color-primary);
-    color: var(--color-on-primary, var(--color-text-primary));
+    /* Light ink on primary fill; never fall back to color-text-primary (dark). */
+    color: var(--color-on-primary, #ffffff);
     font-size: var(--font-size-xs, 0.75rem);
     font-weight: 700;
     line-height: 1;
@@ -3515,12 +3519,12 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     [data-cart-count-badge] {
         display: inline-flex !important;
         background-color: var(--color-primary);
-        color: var(--color-on-primary, var(--color-text-primary));
-        /* Avoid --token-size-4px/-6px (auto-literals may be negative or duplicated). */
-        inset-block-start: calc(var(--spacing-2, 0.5rem) * -1);
-        inset-inline-end: calc(var(--spacing-2, 0.5rem) * -1);
-        top: auto;
-        right: auto;
+        color: var(--color-on-primary, #ffffff);
+        /* Same as desktop: physical hang-off; no top/right:auto with logical inset. */
+        top: calc(var(--spacing-2, 0.5rem) * -1);
+        right: calc(var(--spacing-2, 0.5rem) * -1);
+        left: auto;
+        bottom: auto;
     }
 
     .mini-cart-dropdown {

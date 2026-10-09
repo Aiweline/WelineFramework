@@ -1275,10 +1275,13 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 .weline-header .header-cart .cart-count,
 .weline-header .header-cart [data-cart-count-badge] {
     position: absolute;
-    inset-block-start: calc(var(--spacing-2, 0.5rem) * -1);
-    inset-inline-end: calc(var(--spacing-2, 0.5rem) * -1);
-    top: auto;
-    right: auto;
+    /* Physical negative hang-off (Amazon). Do NOT pair logical inset-* with
+       top/right:auto in the same rule — physical longhands reset mapped
+       logical insets and the badge falls back to flex static-center. */
+    top: calc(var(--spacing-2, 0.5rem) * -1);
+    right: calc(var(--spacing-2, 0.5rem) * -1);
+    left: auto;
+    bottom: auto;
     z-index: 1;
     display: inline-flex;
     align-items: center;
@@ -1291,9 +1294,17 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     font-weight: 700;
     line-height: 1;
     background-color: var(--weline-chrome-primary, var(--color-primary));
-    color: var(--weline-chrome-text-primary, #111111);
+    /* Same ink as search-submit on primary fill — never --weline-chrome-text-primary
+       (that token is paper dark ink and reads black on 朱砂 badge). */
+    color: var(--color-on-primary, #ffffff);
     border: var(--border-width-thin, 1px) solid var(--weline-chrome-bg-dark, var(--color-bg-dark-secondary));
     pointer-events: none;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.weline-header .header-cart:hover .cart-count,
+.weline-header .header-cart:hover [data-cart-count-badge] {
+    transform: scale(1.2);
 }
 
 .weline-header .header-cart {

@@ -50,14 +50,18 @@
 .wc-theme_widget_mini_cart_icon .cart-count {
     /* Do NOT use --token-size-Npx here: auto-literals may be negative / missing (e.g. 4px=-4px, 2px undefined). */
     position: absolute;
-    /* Hang outside the icon box (Amazon-style); keep most of the cart glyph visible. */
-    inset-block-start: calc(var(--weline-space-2, 0.5rem) * -1);
-    inset-inline-end: calc(var(--weline-space-2, 0.5rem) * -1);
+    /* Hang outside the icon box (Amazon-style). Physical top/right only —
+       never pair logical inset-* with top/right:auto (resets → flex-centered cover). */
+    top: calc(var(--weline-space-2, 0.5rem) * -1);
+    right: calc(var(--weline-space-2, 0.5rem) * -1);
+    left: auto;
+    bottom: auto;
     z-index: 1;
     min-width: var(--spacing-4_5, 1.125rem);
     height: var(--spacing-4_5, 1.125rem);
     background: var(--weline-chrome-primary, var(--weline-theme-primary));
-    color: var(--weline-chrome-text-primary, var(--color-on-primary, #111111));
+    /* Light ink on primary fill (align search-submit); not chrome-text-primary/paper ink. */
+    color: var(--color-on-primary, #ffffff);
     font-size: var(--weline-font-size-xs);
     font-weight: 700;
     line-height: 1;
@@ -67,6 +71,11 @@
     justify-content: center;
     padding: 0 var(--weline-space-1, 0.25rem);
     pointer-events: none;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.wc-theme_widget_mini_cart_icon .cart-link:hover .cart-count {
+    transform: scale(1.2);
 }
 
 .wc-theme_widget_mini_cart_icon .cart-info {
