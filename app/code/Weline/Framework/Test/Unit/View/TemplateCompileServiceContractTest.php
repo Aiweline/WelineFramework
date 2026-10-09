@@ -20,6 +20,8 @@ final class TemplateCompileServiceContractTest extends TestCase
         self::assertStringContainsString('compilePinnedSourcesInProcess', $source);
         self::assertStringContainsString('compilePinnedSourcesWithProcessPool', $source);
         self::assertStringContainsString('WELINE_TEMPLATE_COMPILE_CONCURRENCY', $source);
+        self::assertStringContainsString('HostProcessPoolPolicy', $source);
+        self::assertStringContainsString('resolveConcurrencyDecision', $source);
         self::assertStringContainsString('WELINE_TEMPLATE_COMPILE_NESTED', $source);
         self::assertStringContainsString('compile-locale-job.php', $source);
         self::assertStringContainsString('isInsideWlsWorker', $source);
@@ -49,6 +51,9 @@ final class TemplateCompileServiceContractTest extends TestCase
         self::assertSame(1, $svc->resolveConcurrency(1));
         self::assertSame(10, $svc->resolveConcurrency(10));
         self::assertSame(32, $svc->resolveConcurrency(100));
+        $decision = $svc->resolveConcurrencyDecision(4);
+        self::assertSame(4, $decision['concurrency']);
+        self::assertSame('override', $decision['source']);
     }
 
     public function testWorkerScriptExistsBesideViewModule(): void

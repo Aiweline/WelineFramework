@@ -16,6 +16,10 @@ final class ThemeLayoutEntitySolidifyCompilePipelineContractTest extends TestCas
         self::assertIsString($src);
         self::assertStringContainsString('WELINE_THEME_SOLIDIFY_CONCURRENCY', $src);
         self::assertStringContainsString('WELINE_THEME_COMPILE_CONCURRENCY', $src);
+        self::assertStringContainsString('HostProcessPoolPolicy', $src);
+        self::assertStringContainsString('resolveConcurrencyDecision', $src);
+        self::assertStringContainsString('formatPoolDecisionNote', $src);
+        self::assertStringContainsString('solidify_source=%s compile_source=%s', $src);
         self::assertStringContainsString('solidify-identity-job.php', $src);
         self::assertStringContainsString('compile-identity-job.php', $src);
         self::assertStringContainsString('WELINE_TEMPLATE_COMPILE_NESTED', $src);
@@ -47,7 +51,7 @@ final class ThemeLayoutEntitySolidifyCompilePipelineContractTest extends TestCas
         self::assertStringNotContainsString('$total * 2', $src);
     }
 
-    public function testConcurrencyClamp(): void
+    public function testConcurrencyClampCeilingConstants(): void
     {
         $ref = new \ReflectionClass(ThemeLayoutEntitySolidifyCompilePipeline::class);
         self::assertSame(10, $ref->getConstant('DEFAULT_CONCURRENCY'));

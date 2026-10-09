@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\View;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Deploy\HostProcessPoolPolicy;
 use Weline\Framework\Runtime\RequestContext;
 
 /**
@@ -20,6 +21,7 @@ final class TemplateCompileService
     public const ENV_CONCURRENCY = 'WELINE_TEMPLATE_COMPILE_CONCURRENCY';
     /** When set (pipeline compile worker), force in-process locale compile — no nested process pool. */
     public const ENV_NESTED = 'WELINE_TEMPLATE_COMPILE_NESTED';
+    /** Soft ceiling when ENV unset/auto — actual size from HostProcessPoolPolicy. */
     public const DEFAULT_CONCURRENCY = 10;
     public const MAX_CONCURRENCY = 32;
 
@@ -183,17 +185,25 @@ final class TemplateCompileService
 
     public function resolveConcurrency(mixed $override = null): int
     {
+        return $this->resolveConcurrencyDecision($override)['concurrency'];
+    }
+
+    /**
+     * @return array{concurrency:int, source:string, cpus:int, mem_avail_mb:int|null}
+     */
+    public function resolveConcurrencyDecision(mixed $override = null): array
+    {
+        $normalized = null;
         if ($override !== null && $override !== '') {
-            $n = (int)$override;
-        } else {
-            $env = getenv(self::ENV_CONCURRENCY);
-            $n = ($env === false || $env === '') ? self::DEFAULT_CONCURRENCY : (int)$env;
-        }
-        if ($n < 1) {
-            return 1;
+            $normalized = (int)$override;
         }
 
-        return min(self::MAX_CONCURRENCY, $n);
+        return (new HostProcessPoolPolicy())->resolve(
+            $normalized,
+            HostProcessPoolPolicy::envRaw(self::ENV_CONCURRENCY),
+            self::DEFAULT_CONCURRENCY,
+            self::MAX_CONCURRENCY,
+        );
     }
 
     /**

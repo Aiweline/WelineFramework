@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Deploy\DeployStagingSession;
+use Weline\Framework\Deploy\HostProcessPoolPolicy;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
@@ -19,6 +20,7 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
 {
     public const ENV_SOLIDIFY_CONCURRENCY = 'WELINE_THEME_SOLIDIFY_CONCURRENCY';
     public const ENV_COMPILE_CONCURRENCY = 'WELINE_THEME_COMPILE_CONCURRENCY';
+    /** Soft ceiling when ENV unset/auto — actual size from HostProcessPoolPolicy. */
     public const DEFAULT_CONCURRENCY = 10;
     public const MAX_CONCURRENCY = 32;
 
@@ -32,12 +34,28 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
 
     public function resolveSolidifyConcurrency(?int $override = null): int
     {
-        return $this->clampConcurrency($override, self::ENV_SOLIDIFY_CONCURRENCY);
+        return $this->resolveConcurrencyDecision($override, self::ENV_SOLIDIFY_CONCURRENCY)['concurrency'];
     }
 
     public function resolveCompileConcurrency(?int $override = null): int
     {
-        return $this->clampConcurrency($override, self::ENV_COMPILE_CONCURRENCY);
+        return $this->resolveConcurrencyDecision($override, self::ENV_COMPILE_CONCURRENCY)['concurrency'];
+    }
+
+    /**
+     * @return array{concurrency:int, source:string, cpus:int, mem_avail_mb:int|null}
+     */
+    public function resolveSolidifyConcurrencyDecision(?int $override = null): array
+    {
+        return $this->resolveConcurrencyDecision($override, self::ENV_SOLIDIFY_CONCURRENCY);
+    }
+
+    /**
+     * @return array{concurrency:int, source:string, cpus:int, mem_avail_mb:int|null}
+     */
+    public function resolveCompileConcurrencyDecision(?int $override = null): array
+    {
+        return $this->resolveConcurrencyDecision($override, self::ENV_COMPILE_CONCURRENCY);
     }
 
     /**
@@ -51,13 +69,36 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
             return ['migrated' => 0, 'compiled' => 0];
         }
 
-        $solidifyN = $this->resolveSolidifyConcurrency(isset($options['solidify_concurrency']) ? (int)$options['solidify_concurrency'] : null);
-        $compileN = $this->resolveCompileConcurrency(isset($options['compile_concurrency']) ? (int)$options['compile_concurrency'] : null);
+        $solidifyDecision = $this->resolveSolidifyConcurrencyDecision(
+            isset($options['solidify_concurrency']) ? (int)$options['solidify_concurrency'] : null,
+        );
+        $compileDecision = $this->resolveCompileConcurrencyDecision(
+            isset($options['compile_concurrency']) ? (int)$options['compile_concurrency'] : null,
+        );
+        $solidifyN = max(1, (int)$solidifyDecision['concurrency']);
+        $compileN = max(1, (int)$compileDecision['concurrency']);
         if ($this->isInsideWlsWorker() || ($solidifyN <= 1 && $compileN <= 1)) {
+            if (!$this->isInsideWlsWorker() && count($workItems) > 1) {
+                $this->printing->note($this->formatPoolDecisionNote(
+                    $solidifyN,
+                    $compileN,
+                    count($workItems),
+                    $solidifyDecision,
+                    $compileDecision,
+                ));
+            }
+
             return $this->runSerial($workItems, $progress);
         }
 
-        return $this->runProcessPipeline($workItems, $progress, max(1, $solidifyN), max(1, $compileN));
+        return $this->runProcessPipeline(
+            $workItems,
+            $progress,
+            $solidifyN,
+            $compileN,
+            $solidifyDecision,
+            $compileDecision,
+        );
     }
 
     /**
@@ -112,11 +153,17 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
      * @param list<array{identity:ThemeVersionIdentity,pending:list<array<string,mixed>>,changes:array}> $workItems
      * @return array{migrated:int,compiled:int}
      */
+    /**
+     * @param array{concurrency:int, source:string, cpus:int, mem_avail_mb:int|null} $solidifyDecision
+     * @param array{concurrency:int, source:string, cpus:int, mem_avail_mb:int|null} $compileDecision
+     */
     private function runProcessPipeline(
         array $workItems,
         ?callable $progress,
         int $solidifyN,
         int $compileN,
+        array $solidifyDecision,
+        array $compileDecision,
     ): array {
         $solidifyScript = dirname(__DIR__, 2) . '/bin/solidify-identity-job.php';
         $compileScript = dirname(__DIR__, 2) . '/bin/compile-identity-job.php';
@@ -124,12 +171,12 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
             throw new \RuntimeException('theme_layout_pipeline_worker_script_missing');
         }
 
-        $this->printing->note(sprintf(
-            '%s solidify_pool=%d compile_pool=%d identities=%d',
-            (string)__('主题布局固化编译流水线'),
+        $this->printing->note($this->formatPoolDecisionNote(
             $solidifyN,
             $compileN,
             count($workItems),
+            $solidifyDecision,
+            $compileDecision,
         ));
 
         $jobRoot = rtrim(sys_get_temp_dir(), '/\\') . '/weline-theme-pipeline-' . bin2hex(random_bytes(8));
@@ -791,19 +838,43 @@ final class ThemeLayoutEntitySolidifyCompilePipeline
         }
     }
 
-    private function clampConcurrency(?int $override, string $envName): int
+    /**
+     * @return array{concurrency:int, source:string, cpus:int, mem_avail_mb:int|null}
+     */
+    private function resolveConcurrencyDecision(?int $override, string $envName): array
     {
-        if ($override !== null) {
-            $n = $override;
-        } else {
-            $env = getenv($envName);
-            $n = ($env === false || $env === '') ? self::DEFAULT_CONCURRENCY : (int)$env;
-        }
-        if ($n < 1) {
-            return 1;
-        }
+        return (new HostProcessPoolPolicy())->resolve(
+            $override,
+            HostProcessPoolPolicy::envRaw($envName),
+            self::DEFAULT_CONCURRENCY,
+            self::MAX_CONCURRENCY,
+        );
+    }
 
-        return min(self::MAX_CONCURRENCY, $n);
+    /**
+     * @param array{concurrency:int, source:string, cpus:int, mem_avail_mb:int|null} $solidifyDecision
+     * @param array{concurrency:int, source:string, cpus:int, mem_avail_mb:int|null} $compileDecision
+     */
+    private function formatPoolDecisionNote(
+        int $solidifyN,
+        int $compileN,
+        int $identities,
+        array $solidifyDecision,
+        array $compileDecision,
+    ): string {
+        $mem = $solidifyDecision['mem_avail_mb'] ?? $compileDecision['mem_avail_mb'];
+
+        return sprintf(
+            '%s solidify_pool=%d compile_pool=%d identities=%d solidify_source=%s compile_source=%s cpus=%d mem_avail_mb=%s',
+            (string)__('主题布局固化编译流水线'),
+            $solidifyN,
+            $compileN,
+            $identities,
+            (string)$solidifyDecision['source'],
+            (string)$compileDecision['source'],
+            (int)$solidifyDecision['cpus'],
+            $mem === null ? 'n/a' : (string)(int)$mem,
+        );
     }
 
     private function isInsideWlsWorker(): bool

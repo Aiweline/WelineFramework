@@ -17,6 +17,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Deploy\DeployFpcInvalidation;
 use Weline\Framework\Deploy\DeployStagingSession;
 use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
+use Weline\Framework\Deploy\HostProcessPoolPolicy;
 use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -32,6 +33,7 @@ class Upgrade extends CommandAbstract
 
     /** Module-level static copy process pool (d:m:se prod / deploy:upgrade). */
     public const ENV_STATIC_CONCURRENCY = 'WELINE_DEPLOY_STATIC_CONCURRENCY';
+    /** Soft ceiling when ENV unset/auto — actual size from HostProcessPoolPolicy. */
     public const DEFAULT_STATIC_CONCURRENCY = 10;
     public const MAX_STATIC_CONCURRENCY = 32;
 
@@ -162,17 +164,20 @@ class Upgrade extends CommandAbstract
 
     public function resolveStaticConcurrency(?int $override = null): int
     {
-        if ($override !== null) {
-            $n = $override;
-        } else {
-            $env = getenv(self::ENV_STATIC_CONCURRENCY);
-            $n = ($env === false || $env === '') ? self::DEFAULT_STATIC_CONCURRENCY : (int)$env;
-        }
-        if ($n < 1) {
-            return 1;
-        }
+        return $this->resolveStaticConcurrencyDecision($override)['concurrency'];
+    }
 
-        return min(self::MAX_STATIC_CONCURRENCY, $n);
+    /**
+     * @return array{concurrency:int, source:string, cpus:int, mem_avail_mb:int|null}
+     */
+    public function resolveStaticConcurrencyDecision(?int $override = null): array
+    {
+        return (new HostProcessPoolPolicy())->resolve(
+            $override,
+            HostProcessPoolPolicy::envRaw(self::ENV_STATIC_CONCURRENCY),
+            self::DEFAULT_STATIC_CONCURRENCY,
+            self::MAX_STATIC_CONCURRENCY,
+        );
     }
 
     /**
@@ -183,9 +188,21 @@ class Upgrade extends CommandAbstract
         if ($jobs === []) {
             return;
         }
-        $concurrency = $this->resolveStaticConcurrency();
+        $decision = $this->resolveStaticConcurrencyDecision();
+        $concurrency = (int)$decision['concurrency'];
         $wls = trim((string)(getenv('WLS_WORKER_ID') ?: ($_ENV['WLS_WORKER_ID'] ?? '')));
         if ($concurrency <= 1 || count($jobs) <= 1 || $wls !== '') {
+            if ($wls === '' && count($jobs) > 1) {
+                $this->printer->note(sprintf(
+                    '%s pool=%d modules=%d source=%s cpus=%d mem_avail_mb=%s',
+                    (string)__('静态资源部署进程池'),
+                    $concurrency,
+                    count($jobs),
+                    (string)$decision['source'],
+                    (int)$decision['cpus'],
+                    $decision['mem_avail_mb'] === null ? 'n/a' : (string)(int)$decision['mem_avail_mb'],
+                ));
+            }
             foreach ($jobs as $job) {
                 $result = $this->publishOneModuleJob($job);
                 if (!empty($result['tree_changed'])) {
@@ -200,10 +217,13 @@ class Upgrade extends CommandAbstract
         }
 
         $this->printer->note(sprintf(
-            '%s pool=%d modules=%d',
+            '%s pool=%d modules=%d source=%s cpus=%d mem_avail_mb=%s',
             (string)__('静态资源部署进程池'),
             $concurrency,
             count($jobs),
+            (string)$decision['source'],
+            (int)$decision['cpus'],
+            $decision['mem_avail_mb'] === null ? 'n/a' : (string)(int)$decision['mem_avail_mb'],
         ));
         // __DIR__ = …/Framework/Console/Console/Deploy → Framework root = dirname×3
         $script = dirname(__DIR__, 3) . '/Deploy/bin/publish-module-static-job.php';
