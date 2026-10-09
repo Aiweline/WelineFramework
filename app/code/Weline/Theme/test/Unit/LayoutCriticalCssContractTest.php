@@ -75,6 +75,7 @@ final class LayoutCriticalCssContractTest extends TestCase
         $src = (string) file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
         self::assertStringContainsString('ensureStorefrontHeadCssReadyGate', $src);
         self::assertStringContainsString('templates/partials/head/css-ready.phtml', $src);
+        self::assertStringContainsString('data-weline-theme-head-pack="after-css"', $src);
         $ready = (string) file_get_contents(BP . 'app/code/Weline/Theme/view/templates/partials/head/css-ready.phtml');
         self::assertStringContainsString('weline-css-ready.js', $ready);
     }

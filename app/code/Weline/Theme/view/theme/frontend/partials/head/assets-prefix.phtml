@@ -3,6 +3,8 @@
  * Route-invariant head prefix (prepaint + disk override prep).
  * wave9-9s: nested under storefrontHeadAssetsPolicy — never page-scoped by seo_fp.
  *
+ * work_mode=default_theme — head emission; JS packs via ThemeHeadChromeJsPack.
+ *
  * @meta.name {default="Storefront head assets prefix",name="店面 head 资源前缀"}
  * @meta.cache.mode {default="chrome",name="缓存模式"}
  * @meta.cache.auth {default="guest",name="鉴权维度"}
@@ -17,7 +19,19 @@ try {
     $diskOverrideHtml = '';
 }
 $this->assign('__head_disk_override_html', $diskOverrideHtml);
+$earlyJsHtml = null;
+try {
+    $earlyJsHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\ThemeHeadChromeJsPack::class
+    )->tryScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_EARLY);
+} catch (\Throwable $e) {
+    $earlyJsHtml = null;
+}
 ?>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
 <theme:layout-critical area="frontend"/>
+<?php if ($earlyJsHtml !== null): ?>
+<?= $earlyJsHtml ?>
+<?php else: ?>
 <script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)"></script>
+<?php endif; ?>

@@ -225,10 +225,12 @@ final class ThemeColorModeContractTest extends TestCase
     public function testHeadsLoadOnlyExplicitUiTwoAssetsAndNoInlineRuntime(): void
     {
         $backend = $this->read('app/code/Weline/Theme/view/theme/backend/partials/head/default.phtml');
+        self::assertStringContainsString('ThemeHeadChromeCssPack', $backend);
         self::assertStringContainsString('Weline_Theme::ui/weline-foundation.css', $backend);
         self::assertStringContainsString('Weline_Theme::ui/weline-backend.css', $backend);
         self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $backend);
         self::assertStringContainsString('ThemeDiskHeadService', $backend);
+        // Fragment leaves remain as theme_css_merge=off fallback; pack path uses ThemeHeadChromeCssPack.
         self::assertSame(1, substr_count($backend, 'colors/_light.css'));
         self::assertSame(1, substr_count($backend, 'colors/_default.css'));
         self::assertSame(1, substr_count($backend, 'colors/_dark.css'));
@@ -238,12 +240,19 @@ final class ThemeColorModeContractTest extends TestCase
             'Backend palette must load before foundation CSS.',
         );
 
-        foreach (['default.phtml', 'minimal.phtml'] as $head) {
+        foreach (['default.phtml', 'minimal.phtml', 'assets-suffix.phtml'] as $head) {
             $frontend = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/head/' . $head);
-            self::assertStringContainsString('Weline_Theme::ui/weline-theme-prepaint.js', $frontend);
+            if ($head !== 'assets-suffix.phtml') {
+                self::assertStringContainsString('Weline_Theme::ui/weline-theme-prepaint.js', $frontend);
+            }
+            self::assertStringContainsString('ThemeHeadChromeCssPack', $frontend);
             self::assertStringContainsString('Weline_Theme::ui/weline-foundation.css', $frontend);
             self::assertStringContainsString('Weline_Theme::ui/weline-frontend.css', $frontend);
-            self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $frontend);
+            if ($head !== 'assets-suffix.phtml') {
+                self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $frontend);
+            } else {
+                self::assertStringContainsString('weline-ui.js', $frontend);
+            }
             self::assertSame(1, substr_count($frontend, 'colors/_light.css'));
             self::assertSame(1, substr_count($frontend, 'colors/_default.css'));
             self::assertSame(1, substr_count($frontend, 'colors/_ink.css'));
@@ -266,6 +275,22 @@ final class ThemeColorModeContractTest extends TestCase
             self::assertDoesNotMatchRegularExpression('/<script(?:\s[^>]*)?>\s*\(function/s', $frontend);
             self::assertStringNotContainsString('assets/js/theme.js', $frontend);
             self::assertStringContainsString('Weline_Theme::theme/frontend/assets/css/theme.css', $frontend);
+            // Architecture + style layer stay outside token/UI packs.
+            self::assertStringContainsString('storefront-shopper-toast-amazon.css', $frontend);
+            $packUiPos = strpos($frontend, 'PACK_UI');
+            $themeCssPos = strpos($frontend, 'assets/css/theme.css');
+            self::assertNotFalse($packUiPos);
+            self::assertNotFalse($themeCssPos);
+            self::assertLessThan(
+                $packUiPos,
+                $themeCssPos,
+                'UI pack wiring must precede the independent theme.css link.',
+            );
+            self::assertLessThan(
+                strpos($frontend, 'weline-foundation.css'),
+                $themeCssPos,
+                'theme.css must load after foundation/UI stack.',
+            );
         }
     }
 

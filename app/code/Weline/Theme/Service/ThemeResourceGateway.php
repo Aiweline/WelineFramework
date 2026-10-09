@@ -32,6 +32,33 @@ final class ThemeResourceGateway
         return ['path' => rtrim(BP, '/\\') . '/pub/static/' . $relative, 'url' => $this->buildStaticUrl($relative, false)];
     }
 
+    /**
+     * Head chrome CSS/JS packs (token / UI / classic scripts). Same public namespace as widget-assets.
+     *
+     * @return array{path:string,url:string}|null
+     */
+    public function buildHeadChromeArtifact(string $hash, string $area = 'frontend', string $extension = 'css'): ?array
+    {
+        if (!preg_match('/^[a-f0-9]{64}$/', $hash) || !in_array($extension, ['css', 'js'], true)) {
+            return null;
+        }
+        $area = $this->themeContext->normalizeArea($area);
+        $theme = $this->resolveTheme($area, null);
+        if (!$theme || !$theme->getId()) {
+            return null;
+        }
+        $namespace = $this->themeStaticNamespaceService->resolvePublicThemePath($theme);
+        if ($namespace === '') {
+            return null;
+        }
+        $relative = trim($namespace, '/') . '/Weline/Theme/theme-head/' . $hash . '.' . $extension;
+
+        return [
+            'path' => rtrim(BP, '/\\') . '/pub/static/' . $relative,
+            'url' => $this->buildStaticUrl($relative, false),
+        ];
+    }
+
     public function publishForRequestPath(string $requestPath, ?WelineTheme $theme = null): ?string
     {
         $requestPath = $this->normalizeRequestPath($requestPath);

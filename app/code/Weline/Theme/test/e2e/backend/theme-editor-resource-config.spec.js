@@ -136,8 +136,8 @@ test.describe('theme basic information resource configuration', () => {
         await expect(embed).not.toHaveClass(/is-error/);
         const embedScope = await embed.getAttribute('data-storage-scope');
         expect(embedScope).toBeTruthy();
-        await expect(embed.locator('[data-config-key]')).toHaveCount(6);
-        for (const key of ['css_minify', 'js_minify', 'css_merge', 'js_merge']) {
+        await expect(embed.locator('[data-config-key]')).toHaveCount(8);
+        for (const key of ['css_minify', 'js_minify', 'css_merge', 'js_merge', 'theme_css_merge', 'theme_js_merge']) {
             const field = embed.locator(`[data-config-key="resource_files/${key}"]`);
             await expect(field).toBeVisible();
             await expect(field).toHaveAttribute('data-field-type', 'select');

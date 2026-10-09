@@ -15,17 +15,21 @@ final class ThemeResourceFilesConfigTest extends TestCase
         $parser = new \ReflectionMethod(SystemConfigTemplateService::class, 'parseConfigTags');
         $parsed = $parser->invoke(new SystemConfigTemplateService(), (string)file_get_contents($path));
         $fields = array_column($parsed['fields'], null, 'key');
-        self::assertCount(6, $fields);
+        self::assertCount(8, $fields);
         $backend = str_replace('/frontend/', '/backend/', $path);
         $backendParsed = $parser->invoke(new SystemConfigTemplateService(), (string)file_get_contents($backend));
         self::assertSame($parsed, $backendParsed, 'Both areas must share identical field contracts.');
-        foreach (['css_minify', 'js_minify', 'css_merge', 'js_merge'] as $name) {
+        foreach (['css_minify', 'js_minify', 'css_merge', 'js_merge', 'theme_css_merge', 'theme_js_merge'] as $name) {
             $field = $fields['resource_files/' . $name];
             self::assertSame('select', $field['type']);
             self::assertSame('auto', $field['default']);
             self::assertSame(['auto', 'on', 'off'], array_map(static fn ($item) => explode(':', $item)[0], explode(',', $field['options'])));
             self::assertSame('global,website,store,channel', $field['scope']);
         }
+        self::assertStringContainsString('主题碎片', (string)$fields['resource_files/theme_css_merge']['label']);
+        self::assertStringContainsString('主题碎片', (string)$fields['resource_files/theme_js_merge']['label']);
+        self::assertStringContainsString('部件', (string)$fields['resource_files/css_merge']['label']);
+        self::assertStringContainsString('部件', (string)$fields['resource_files/js_merge']['label']);
         foreach (['css_merge_start', 'js_merge_start'] as $name) {
             $field = $fields['resource_files/' . $name];
             self::assertSame('number', $field['type']);

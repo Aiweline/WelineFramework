@@ -26,6 +26,8 @@ final class ThemeResourceConfigTest extends TestCase
             self::assertFalse($result['js_minify'], 'Explicit off overrides ' . $environment);
             self::assertSame($expected, $result['css_merge']);
             self::assertSame($expected, $result['js_merge']);
+            self::assertSame($expected, $result['theme_css_merge']);
+            self::assertSame($expected, $result['theme_js_merge']);
             self::assertSame(6, $result['css_merge_start_widget']);
             self::assertSame(6, $result['js_merge_start_widget']);
         }
@@ -36,13 +38,14 @@ final class ThemeResourceConfigTest extends TestCase
         $identity = RequestContext::scopeIdentity() ?? ScopeIdentity::global();
         $config = $this->getMockBuilder(SystemConfig::class)->disableOriginalConstructor()
             ->onlyMethods(['resolveTypedConfig'])->getMock();
-        $config->expects(self::exactly(6))->method('resolveTypedConfig')->willReturnCallback(
+        $config->expects(self::exactly(8))->method('resolveTypedConfig')->willReturnCallback(
             function ($key, $module, $area, $scope, $locale, $default) use ($identity): ConfigScopeValue {
                 self::assertSame('Weline_Theme', $module);
                 self::assertSame('frontend', $area);
                 self::assertEquals($identity, $scope);
                 self::assertSame('default', $locale);
                 $values = ['resource_files/css_minify' => 'on', 'resource_files/js_minify' => 'off',
+                    'resource_files/theme_css_merge' => 'on', 'resource_files/theme_js_merge' => 'off',
                     'resource_files/js_merge_start' => 9];
                 return new ConfigScopeValue($values[$key] ?? $default, ConfigScopeSource::fromDefault(), $scope, $locale, []);
             }
@@ -50,6 +53,7 @@ final class ThemeResourceConfigTest extends TestCase
         self::assertSame([
             'css_minify' => true, 'js_minify' => false,
             'css_merge' => defined('PROD') && PROD, 'js_merge' => defined('PROD') && PROD,
+            'theme_css_merge' => true, 'theme_js_merge' => false,
             'css_merge_start_widget' => 6, 'js_merge_start_widget' => 9,
         ], (new ThemeResourceConfig($config))->resolve());
     }

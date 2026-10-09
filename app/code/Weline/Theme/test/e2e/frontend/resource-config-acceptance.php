@@ -19,7 +19,8 @@ $config = ObjectManager::getInstance(SystemConfig::class);
 $identity = ScopeIdentity::website(0, 'default');
 $scope = ObjectManager::getInstance(SystemConfigScopeResolver::class)->toStorageScope($identity);
 $keys = array_map(static fn(string $key): string => 'resource_files/' . $key,
-    ['css_minify', 'js_minify', 'css_merge', 'js_merge', 'css_merge_start', 'js_merge_start']);
+    ['css_minify', 'js_minify', 'css_merge', 'js_merge', 'css_merge_start', 'js_merge_start',
+        'theme_css_merge', 'theme_js_merge']);
 $read = static function () use ($config, $scope, $keys): array {
     $rows = [];
     foreach ($keys as $key) { $rows[$key] = $config->getScopedConfigRow($key, 'Weline_Theme', 'frontend', $scope, 'default'); }

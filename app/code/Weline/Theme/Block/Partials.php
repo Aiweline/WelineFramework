@@ -425,7 +425,9 @@ class Partials extends Block
         if (!$hasPending) {
             return $html;
         }
-        if (\str_contains($html, 'weline-css-ready.js')) {
+        // Raw leaf or ThemeHeadChromeJsPack PACK_AFTER_CSS both unlock the FOUC gate.
+        if (\str_contains($html, 'weline-css-ready.js')
+            || \str_contains($html, 'data-weline-theme-head-pack="after-css"')) {
             return $html;
         }
         try {

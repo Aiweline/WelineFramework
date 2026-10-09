@@ -16,13 +16,24 @@ final class ThemeResourceConfig
     {
     }
 
-    /** @return array{css_minify:bool,js_minify:bool,css_merge:bool,js_merge:bool,css_merge_start_widget:int,js_merge_start_widget:int} */
+    /**
+     * @return array{
+     *   css_minify:bool,
+     *   js_minify:bool,
+     *   css_merge:bool,
+     *   js_merge:bool,
+     *   theme_css_merge:bool,
+     *   theme_js_merge:bool,
+     *   css_merge_start_widget:int,
+     *   js_merge_start_widget:int
+     * }
+     */
     public function resolve(?WelineTheme $theme = null, string $area = 'frontend'): array
     {
         $identity = RequestContext::scopeIdentity() ?? ScopeIdentity::global();
         $production = defined('PROD') && PROD;
         $result = [];
-        foreach (['css_minify', 'js_minify', 'css_merge', 'js_merge'] as $key) {
+        foreach (['css_minify', 'js_minify', 'css_merge', 'js_merge', 'theme_css_merge', 'theme_js_merge'] as $key) {
             $mode = $this->config->resolveTypedConfig(
                 'resource_files/' . $key, 'Weline_Theme', $area, $identity, 'default', 'auto'
             )->value;

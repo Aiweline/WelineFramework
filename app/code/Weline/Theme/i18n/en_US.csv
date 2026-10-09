@@ -881,10 +881,25 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-面包屑,"bread crumbs"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
 法律与政策,"Law and Policy"
@@ -920,36 +935,25 @@ FAQ/常见问题,FAQ
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
-指南,Guide
-问答,Q&A
-7×24,24/7
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-内容标题,"Section title"
-查看更多,"View more"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
-剩余,Remaining
-天,Day(s)
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-件商品,"items of goods"
 上一张,"Previous picture"
 下一张,Next
 第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
+搜索筛选,"Search and filter"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
+面包屑,"bread crumbs"
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,"Go back"
+推荐产品,"Recommended product"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -996,13 +1000,9 @@ NEW,NEW
 上一页,"Previous page"
 下一页,"Next page"
 末页,"Last page"
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,"Go back"
-推荐产品,"Recommended product"
+指南,Guide
+问答,Q&A
+7×24,24/7
 服务暂时不可用,"Service temporarily unavailable"
 我们正在处理问题，请稍后再试。,"We are working on the issue; please try again later."
 您可以返回首页继续浏览，或稍后刷新本页。,"You can return home to keep browsing, or refresh this page later."
@@ -1122,6 +1122,7 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
@@ -2287,7 +2288,6 @@ Next,Next
 选择作用范围,"Select scope."
 搜索作用范围,"Search scope."
 未找到匹配作用范围,"No matching scope found."
-搜索筛选,"Search and filter"
 "画布与默认预览跟当前后台 Host：本站本机域上开编辑器则用当前域；项目 Host 上开则用 /~site/{站点}。真实预览靠 Token，跨 Host 一般不掉后台登录；正式/外部域名可选，线上可能看不到本机草稿。","Canvas and default preview follow the current admin Host: use the current domain when the editor is already on this site's local domain; use /~site/{site} on the project Host. Live preview relies on the Token, so a cross-Host open usually does not drop admin login; formal/external domains are optional and may not show local drafts."
 "默认预览：走项目壳 /~site/{站点}，保证能正确预览当前要发布的版本。编辑器画布也固定用此通道，不依赖外部域名。","Default preview uses project shell /~site/{site} so you always see the version about to publish. The editor canvas uses the same channel and does not depend on external domains."
 本机独立域名可选；编辑与默认预览请优先「本机项目壳（/~site）」。,"Optional local bound domain; prefer the local project shell (/~site) for editing and default preview."
@@ -4504,8 +4504,19 @@ Chiffon,Chiffon
 "JS 压缩","JS minification"
 "CSS 合并","CSS merging"
 "JS 合并","JS merging"
+"部件 CSS 合并","Widget CSS merging"
+"部件 JS 合并","Widget JS merging"
+"主题碎片 CSS 合并","Theme fragment CSS merging"
+"主题碎片 JS 合并","Theme fragment JS merging"
 "CSS 合并起始部件序号","First widget for CSS merging"
 "JS 合并起始部件序号","First widget for JS merging"
+"合并布局 bake 的部件 source CSS（/widget-assets/）。自动：开发关、生产开。从下方部件序号起合并。","Merge layout-baked widget source CSS (/widget-assets/). Auto: off in development, on in production. Starts at the widget index below."
+"合并布局 bake 的部件 source JS（/widget-assets/）。自动：开发关、生产开。从下方部件序号起合并。","Merge layout-baked widget source JS (/widget-assets/). Auto: off in development, on in production. Starts at the widget index below."
+"合并 head Token/UI 碎片（colors/variables/foundation 等→theme-head）。不含 theme.css 与风格层 toast。自动：开发关、生产开。","Merge head token/UI fragments (colors/variables/foundation → theme-head). Excludes theme.css and style-layer toast. Auto: off in development, on in production."
+"合并 head 经典脚本槽（如 prepaint、css-ready→theme-head）。type=module 的 weline-ui.js 永不合并。自动：开发关、生产开。","Merge classic head script slots (prepaint, css-ready → theme-head). Never merges type=module weline-ui.js. Auto: off in development, on in production."
+自动：开发环境关闭，生产环境开启。开启或关闭可覆盖环境默认行为。部件合包与主题碎片合包共用。,"Auto: off in development, on in production. Explicit on/off overrides the environment default. Shared by widget packs and theme fragment packs."
+"按页面实际渲染顺序计数，包含嵌套部件。默认从第 6 个开始，前 5 个保持独立；仅部件 CSS 合并开启时生效。","Count widgets in document order, including nested ones. Default starts at 6 (first five stay separate). Applies only when widget CSS merging is on."
+"按页面实际渲染顺序计数，包含嵌套部件。默认从第 6 个开始，前 5 个保持独立；仅部件 JS 合并开启时生效。","Count widgets in document order, including nested ones. Default starts at 6 (first five stay separate). Applies only when widget JS merging is on."
 自动,Automatic
 开启,On
 自动：开发环境关闭，生产环境开启。开启或关闭可覆盖环境默认行为。,"Automatic: off in development and on in production. Select On or Off to override the environment default."
