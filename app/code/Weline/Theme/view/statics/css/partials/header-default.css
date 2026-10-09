@@ -126,12 +126,12 @@ textarea::-webkit-scrollbar-thumb:hover,
     height: calc(var(--header-logo-height) * 0.8); /* compact状态下使用配置高度的80% */
 }
 
+/* 主栏：背景全宽（与 notice / main-nav 同构），内容走 .header-belt-row-1 版心 */
 .header-container {
-    width: min(100%, var(--weline-layout-content-max-width));
-    max-width: 100%;
-    /* 版心宽度：与全站 .w-container 同一 Token 链（variables/_spacing.css） */
-    margin-inline: auto;
-    padding: 0 var(--weline-layout-content-padding-inline);
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+    padding: 0;
     overflow: visible;
     position: relative;
     box-sizing: border-box;
@@ -325,15 +325,19 @@ textarea::-webkit-scrollbar-thumb:hover,
     }
 }
 
-/* 中等宽度：同排放不下时，搜索整行落到 Logo/操作区下面 */
-@media (min-width: 769px) and (max-width: 1100px) {
+/* ≤1100（含移动端）：搜索整行落到 Logo/操作区下面，避免再窄时挤回同行 */
+@media (max-width: 1100px) {
     .header-belt-row-1 .header-search-wrapper {
         flex: 0 0 100%;
         max-width: none;
+        min-width: 0;
+        width: 100%;
         margin: 0;
         order: 4;
     }
+}
 
+@media (min-width: 769px) and (max-width: 1100px) {
     .header-belt-row-1 .header-belt-left {
         order: 1;
     }
@@ -344,12 +348,16 @@ textarea::-webkit-scrollbar-thumb:hover,
     }
 }
 
-/* 第一行：Logo + Actions（参考亚马逊 navbar-top-row，移动端使用） */
+/* 第一行：Logo + Actions；版心宽（背景在外层 .header-container / .header-belt 满宽） */
 .header-belt-row-1 {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    width: 100%;
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline);
+    box-sizing: border-box;
     gap: var(--spacing-md);
     flex-shrink: 0;
 }
