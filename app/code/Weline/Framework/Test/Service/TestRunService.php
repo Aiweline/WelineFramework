@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Test\Service;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Test\Model\TestRun;
 use Weline\Framework\Test\Queue\E2eTestRunTask;
@@ -26,8 +25,6 @@ final class TestRunService
      */
     public function startRun(string $type, string $module, bool $uiEnabled = false, array $files = []): array
     {
-        $this->assertDevDeploy();
-
         $type = strtolower(trim($type));
         if (!in_array($type, [TestRun::TYPE_E2E, TestRun::TYPE_UNIT, TestRun::TYPE_INTEGRATION], true)) {
             throw new \InvalidArgumentException((string)__('不支持的测试类型：%{1}', [$type]));
@@ -268,15 +265,6 @@ final class TestRunService
         }
 
         return $taskId;
-    }
-
-    private function assertDevDeploy(): void
-    {
-        if (Env::system('deploy') !== 'dev') {
-            throw new \RuntimeException(
-                (string)__('非开发环境禁止运行测试。请先执行 php bin/w deploy:mode:set dev。')
-            );
-        }
     }
 
     /**

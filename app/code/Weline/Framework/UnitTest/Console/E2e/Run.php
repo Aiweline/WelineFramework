@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\UnitTest\Console\E2e;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
@@ -16,11 +15,6 @@ class Run extends CommandAbstract
 
     public function execute(array $args = [], array $data = []): int
     {
-        if (Env::system('deploy') !== 'dev') {
-            $this->printer->setup(__('非开发环境禁止运行！如你确认是dev环境，请运行 php bin/w deploy:model:set dev 后重试。'));
-            return 1;
-        }
-
         $e2eDir = BP . 'tests' . DS . 'e2e';
         if (!is_dir($e2eDir)) {
             $this->printer->error(__('未找到 E2E 目录：%{1}', [$e2eDir]));

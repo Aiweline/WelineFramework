@@ -15,7 +15,6 @@ namespace Weline\Framework\UnitTest\Console\PhpUnit;
 
 use Weline\Framework\Console\CommandInterface;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;
 use Weline\Framework\Output\Cli\Printing;
@@ -39,12 +38,6 @@ class Stop implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        # 提示是否运行：生产环境禁止运行
-        if (Env::system('deploy') !== 'dev') {
-            $this->printing->setup(__('非开发环境禁止运行！如你确认是dev环境，请运行php bin/w deploy:model:set dev 转换环境后运行！'));
-            exit(1);
-        }
-        
         $this->stopPhpUnitServer();
     }
 

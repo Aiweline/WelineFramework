@@ -132,12 +132,6 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = []): int
     {
-        # 提示是否运行：生产环境禁止运行
-        if (Env::system('deploy') !== 'dev') {
-            $this->printing->setup(__('非开发环境禁止运行！如你确认是dev环境，请运行php bin/w deploy:model:set dev 转换环境后运行！'));
-            return 1;
-        }
-        
         # 检查是否使用 Pest（--pest 参数）
         $usePest = isset($args['pest']) || isset($args['--pest']);
         
