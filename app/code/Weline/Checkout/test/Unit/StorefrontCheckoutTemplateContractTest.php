@@ -265,6 +265,11 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('setShellHidden(', $template);
         self::assertStringContainsString('isContinuePayMode()', $template);
         self::assertStringContainsString('function checkoutCartType()', $template);
+        self::assertStringContainsString('Authoritative shell from server hydrate', $template);
+        self::assertStringNotContainsString('Number(tobApi.readApplyMinor()) > 0', $template);
+        self::assertStringNotContainsString('[data-b2b-credit-toggle]:checked', $template);
+        self::assertStringContainsString('commerce_deposit_allowed: tob', $template);
+        self::assertStringNotContainsString('readPersistedCreditChoice()', $template);
         self::assertStringContainsString('cart_type: checkoutCartType()', $template);
         self::assertStringContainsString('applyCartTypeHandoffFromUrl', $template);
         self::assertStringContainsString('readCartTypeFromQuery', $template);

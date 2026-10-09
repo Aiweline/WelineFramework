@@ -298,8 +298,17 @@ class B2BQueryProvider implements QueryProviderInterface
         $deposit = max(0, (int)($params['deposit_amount_minor'] ?? 0));
         $currency = strtoupper(trim((string)($params['currency'] ?? 'CNY'))) ?: 'CNY';
         $websiteId = max(0, (int)($params['website_id'] ?? 0));
-        $cartType = strtolower(trim((string)($params['cart_type'] ?? $params['selling_mode'] ?? 'tob'))) ?: 'tob';
+        // Missing cart_type must not default to tob — retail paths get an unavailable stub.
+        $cartType = strtolower(trim((string)($params['cart_type'] ?? $params['selling_mode'] ?? ''))) ?: 'toc';
         $savedApply = $this->creditApplySession()->get($cartType);
+        if ($cartType !== 'tob') {
+            return [
+                'success' => true,
+                'ok' => true,
+                'b2b_credit' => B2BCheckoutCreditQuote::unavailableStub('cart_type_not_tob', $deposit),
+                'saved_apply' => $savedApply,
+            ];
+        }
         $customerId = $this->currentCustomerId();
         if ($customerId === null || $customerId <= 0) {
             return [

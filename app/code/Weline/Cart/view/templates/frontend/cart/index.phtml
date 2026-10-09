@@ -35,7 +35,7 @@ $copy = [
 ];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20261007-sibling-ssr-i18n1">
+      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20261010-money-summary-row-flex1">
 
 <section class="weline-cart-shell weline-cart-shell--amazon"
          data-cart-content="1"
@@ -108,12 +108,14 @@ $copy = [
                         class="weline-cart-shell__note-slot"
                         weline-code="cart.cart.note_slot">
                 </w:slot>
+                <?php /* toc default: keep slot out of extras tab candidates until tob JS reveals */ ?>
                 <w:slot id="cart-summary-credit"
                         name="<?= __('购物车批发信用') ?>"
                         accept="cart-summary-credit,b2b-checkout-credit,b2b-deposit-note,b2b"
                         multiple="false"
                         position="content"
                         class="weline-cart-shell__credit-slot"
+                        hidden
                         weline-code="cart.cart.credit_slot">
                 </w:slot>
             </div>
@@ -225,68 +227,31 @@ $copy = [
     }
 
     /**
-     * Tob credit merge must not trust SSR default data-cart-type="toc".
-     * Credit UI can be live (toggle / apply / selling-mode) while the cart
-     * chrome attribute still lags — that left 小计 at full goods total.
+     * Tob credit / deposit chrome only when the cart shell is tob.
+     * Credit persist, toggle, or selling-mode cookie must not elevate toc → tob.
      */
     function isTobCreditSurface(detail) {
         const attr = String(root.getAttribute('data-cart-type') || '').toLowerCase();
         if (attr === 'tob') {
             return true;
         }
-        if (preferredCartType() === 'tob') {
+        if (detail && String(detail.cart_type || '').toLowerCase() === 'tob') {
             return true;
         }
-        if (root.querySelector('[data-b2b-credit-toggle]:checked')) {
-            return true;
-        }
-        const detailApply = detail && Number(detail.apply_minor) > 0;
-        if (detailApply) {
-            return true;
-        }
-        // Mini-cart persist handoff before checkout-tob finishes binding.
-        if (readPersistedCreditApplyMinor() > 0) {
-            return true;
-        }
-        try {
-            const tobApi = window.WelineB2BCheckoutTob;
-            if (tobApi && typeof tobApi.readApplyMinor === 'function'
-                && Number(tobApi.readApplyMinor()) > 0) {
-                return true;
-            }
-            if (tobApi && typeof tobApi.readMode === 'function'
-                && String(tobApi.readMode() || '').toLowerCase() === 'tob') {
-                return true;
-            }
-        } catch (eTob) {}
         return false;
-    }
-
-    function readPersistedCreditApplyMinor() {
-        try {
-            const raw = window.sessionStorage.getItem('weline.b2b.credit.apply.v1');
-            if (!raw) {
-                return 0;
-            }
-            const parsed = JSON.parse(raw);
-            if (!parsed || !parsed.enabled) {
-                return 0;
-            }
-            return Math.max(0, Number(parsed.apply_minor) || 0);
-        } catch (ePersist) {
-            return 0;
-        }
     }
 
     function mergeTobCreditIntoCartMoneyDto(dto, detail) {
         const base = Object.assign({}, dto || {});
         if (!isTobCreditSurface(detail)) {
+            base.deposit_minor = 0;
+            base.credit_minor = 0;
+            base.cart_type = String(base.cart_type || root.getAttribute('data-cart-type') || 'toc').toLowerCase() || 'toc';
+            base.commerce_deposit_allowed = false;
             return base;
         }
-        // Keep chrome attr aligned once credit is in play (SSR default is toc).
-        if (String(root.getAttribute('data-cart-type') || '').toLowerCase() !== 'tob') {
-            applyCartTypeChrome('tob');
-        }
+        base.cart_type = 'tob';
+        base.commerce_deposit_allowed = true;
         const tobApi = window.WelineB2BCheckoutTob;
         const displayCurrency = String(base.currency || '').trim().toUpperCase() || 'CNY';
         const detailCurrency = detail && detail.currency
@@ -295,7 +260,7 @@ $copy = [
         let creditCurrency = tobApi && typeof tobApi.readCreditCurrency === 'function'
             ? String(tobApi.readCreditCurrency() || '').trim().toUpperCase()
             : '';
-        // Event/persist handoff may carry the correct display currency before quote resettles.
+        // Event handoff may carry the correct display currency before quote resettles.
         if (detailCurrency && (!creditCurrency || creditCurrency !== displayCurrency)) {
             creditCurrency = detailCurrency;
         }
@@ -305,9 +270,6 @@ $copy = [
         }
         if (applyMinor <= 0 && detail && Number(detail.apply_minor) > 0) {
             applyMinor = Math.max(0, Number(detail.apply_minor) || 0);
-        }
-        if (applyMinor <= 0) {
-            applyMinor = readPersistedCreditApplyMinor();
         }
         if (applyMinor <= 0) {
             base.deposit_minor = 0;
@@ -957,12 +919,27 @@ $copy = [
     }
 
     function money(amount, currency) {
+        // Same symbol-first formatter as storefront-money-summary / mini-cart —
+        // never paint ISO "USD 1.00" when "$" (or another glyph) exists.
+        const api = window.WelineStorefrontMoneySummary;
+        if (api && typeof api.formatMoney === 'function') {
+            return api.formatMoney(amount, currency, 'symbol');
+        }
         const numericAmount = Number(amount || 0);
         const formattedAmount = new Intl.NumberFormat(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         }).format(Number.isFinite(numericAmount) ? numericAmount : 0);
-        return (text(currency).trim() || 'CNY') + ' ' + formattedAmount;
+        const code = (text(currency).trim() || 'CNY').toUpperCase();
+        const glyphs = {
+            CNY: '¥', RMB: '¥', USD: '$', EUR: '€', GBP: '£', JPY: '¥',
+            AUD: 'A$', CAD: 'C$', HKD: 'HK$', SGD: 'S$', NZD: 'NZ$',
+        };
+        const symbol = glyphs[code] || '';
+        if (!symbol || symbol.toUpperCase() === code) {
+            return code + ' ' + formattedAmount;
+        }
+        return symbol + formattedAmount;
     }
 
     function subtotalItemsLabel(count) {

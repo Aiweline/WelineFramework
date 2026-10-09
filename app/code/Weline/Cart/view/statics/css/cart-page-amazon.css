@@ -672,6 +672,72 @@
     white-space: nowrap;
 }
 
+/*
+ * Money-summary rows share the same label|amount split as discount-line.
+ * Widget CSS may bake into a print-deferred pack; keep sync flex here so
+ * 商品小计 / 优惠 / 小计 never jam left while 优惠券 lines look correct.
+ */
+.weline-cart-shell--amazon .w-storefront-money-summary {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--cart-border, #d5d9d9);
+    list-style: none;
+}
+
+.weline-cart-shell--amazon .w-storefront-money-summary__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--cart-text, #0f1111);
+}
+
+.weline-cart-shell--amazon .w-storefront-money-summary__row[hidden] {
+    display: none !important;
+}
+
+.weline-cart-shell--amazon .w-storefront-money-summary__row span:first-child {
+    color: var(--cart-muted, #565959);
+    min-width: 0;
+}
+
+.weline-cart-shell--amazon .w-storefront-money-summary__row strong {
+    font-weight: 600;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.weline-cart-shell--amazon .w-storefront-money-summary__row--payable {
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid var(--cart-border, #d5d9d9);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.weline-cart-shell--amazon .w-storefront-money-summary__row--payable span:first-child {
+    color: var(--cart-text, #0f1111);
+    font-weight: 700;
+}
+
+.weline-cart-shell--amazon .w-storefront-money-summary__row--payable .w-storefront-money-summary__grand,
+.weline-cart-shell--amazon .w-storefront-money-summary__row--payable strong {
+    color: var(--cart-price);
+}
+
+.weline-cart-shell--amazon .w-storefront-money-summary__note {
+    margin: 4px 0 0;
+    color: var(--cart-muted, #565959);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 .weline-cart-shell--amazon .weline-cart-shell__discount-line--stack {
     padding-left: 8px;
 }

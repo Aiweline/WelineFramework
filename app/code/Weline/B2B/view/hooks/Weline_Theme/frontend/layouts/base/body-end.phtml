@@ -21,9 +21,19 @@ if ($isBackend) {
 $websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
 $sellingMode = 'toc';
 ?>
+<?php
+/*
+ * hidden boot must use load-when=idle (or equivalent non-visible gate).
+ * Default data-weline-load-when=visible → IntersectionObserver never fires on
+ * display:none, so selling-mode / checkout-tob never boot → cart type switcher
+ * missing and toc still paints 批发信用 tabs. Same class of bug as Theme
+ * storefrontFloatLayer body-end (see Theme 开发日志).
+ */
+?>
 <div hidden
      data-b2b-mini-cart-type="1"
      data-weline-load="b2bSellingMode,b2bCheckoutTob"
+     data-weline-load-when="idle"
      data-customer-logged-in="0"
      data-has-membership="0"
      data-customer-id="0"
@@ -40,4 +50,4 @@ $sellingMode = 'toc';
      data-i18n-coupon-tob-unavailable="<?= htmlspecialchars((string)__('批发不可用'), ENT_QUOTES, 'UTF-8') ?>"
      data-testid="b2b-mini-cart-type-boot"
      aria-hidden="true"></div>
-<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20261007-switch-retail2">
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20261010-toc-credit-hide1">

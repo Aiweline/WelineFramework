@@ -260,13 +260,22 @@ final class PaymentMethodIncentiveQuoteService implements PaymentMethodIncentive
 
     private function formatMoneyDisplay(int $amountMinor, string $currencyCode): string
     {
-        $currencyCode = strtoupper($currencyCode);
-        if ($currencyCode === 'JPY') {
-            return $currencyCode . ' ' . max(0, $amountMinor);
+        $currencyCode = strtoupper(trim($currencyCode)) ?: 'CNY';
+        $major = $currencyCode === 'JPY'
+            ? (float) max(0, $amountMinor)
+            : max(0, $amountMinor) / 100;
+        if (\class_exists(\Weline\Currency\Helper\CurrencySymbol::class)) {
+            return \Weline\Currency\Helper\CurrencySymbol::formatAmount(
+                $major,
+                $currencyCode,
+                $currencyCode === 'JPY' ? 0 : 2
+            );
         }
-        $major = number_format(max(0, $amountMinor) / 100, 2, '.', '');
+        $formatted = $currencyCode === 'JPY'
+            ? (string) max(0, $amountMinor)
+            : number_format($major, 2, '.', '');
 
-        return $currencyCode . ' ' . $major;
+        return $currencyCode . ' ' . $formatted;
     }
 
     private function toBool(mixed $value): bool

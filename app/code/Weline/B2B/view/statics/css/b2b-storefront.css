@@ -1220,6 +1220,18 @@
     margin: 0 0 var(--weline-space-3, 0.75rem);
 }
 
+/* toc fail-closed: never paint wholesale credit chrome before/without tob elevate */
+[data-weline-cart][data-cart-type="toc"] .weline-cart-shell__credit-slot,
+[data-weline-cart][data-cart-type="toc"] [data-b2b-checkout-credit],
+[data-weline-checkout][data-cart-type="toc"] .weline-checkout__credit-slot,
+[data-weline-checkout][data-cart-type="toc"] [data-b2b-checkout-credit],
+.weline-checkout[data-cart-type="toc"] .weline-checkout__credit-slot,
+.weline-checkout[data-cart-type="toc"] [data-b2b-checkout-credit],
+.header-cart[data-cart-type="toc"] [data-b2b-checkout-credit],
+.header-cart:not([data-cart-type="tob"]):not(.is-cart-type-tob) [data-b2b-checkout-credit] {
+    display: none !important;
+}
+
 /* tob 结账：保留优惠券页签（与迷你车同构），仅隐藏优惠金额行 */
 .weline-checkout[data-cart-type="tob"] [data-checkout-discount-row] {
     display: none !important;

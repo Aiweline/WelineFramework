@@ -80,10 +80,15 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         );
 
         self::assertStringContainsString('WelineStorefrontMoneySummary', $js);
+        self::assertStringContainsString('function resolveSymbol', $js);
+        self::assertStringContainsString("USD: '$'", $js);
+        self::assertStringContainsString("code + ' ' + formatted", $js);
         self::assertStringContainsString('function paint', $js);
         self::assertStringContainsString('function ensure', $js);
         self::assertStringContainsString('ensurePaintRows', $js);
         self::assertStringContainsString('data-money-summary-row="deposit"', $js);
+        self::assertStringContainsString('commerce_deposit_allowed', $js);
+        self::assertStringContainsString('depositAllowed', $js);
         self::assertStringContainsString('data-money-summary-row="credit"', $js);
         self::assertStringContainsString('discounts_disabled', $js);
         self::assertStringContainsString('shipping_service_label', $js);

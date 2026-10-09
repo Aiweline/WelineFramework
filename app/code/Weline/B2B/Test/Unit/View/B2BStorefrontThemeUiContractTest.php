@@ -107,7 +107,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
 
         $modules = self::bp('app/code/Weline/B2B/view/statics/frontend/weline.modules.js');
         $modulesContent = (string)file_get_contents($modules);
-        self::assertStringContainsString('selling-mode.js?v=20261007-switch-retail2', $modulesContent);
+        self::assertStringContainsString('selling-mode.js?v=20261010-boot-idle1', $modulesContent);
+        self::assertStringContainsString('checkout-tob.js?v=20261010-tob-retail-gate2', $modulesContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-toc', $jsContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-bound', $jsContent);
         self::assertStringContainsString('function switchToRetailCart', $jsContent);
@@ -330,6 +331,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('weline:b2b-credit-changed', $miniCartJsContent);
         self::assertStringContainsString('mergeTobCreditIntoMoneyDto', $miniCartJsContent);
         self::assertStringContainsString('isTobCreditSurface', $miniCartJsContent);
+        self::assertStringContainsString('commerce_deposit_allowed', $miniCartJsContent);
+        self::assertStringNotContainsString("normalizeCartType(preferredCartType()) === 'tob'", $miniCartJsContent);
         self::assertStringContainsString('cartQueryParams({ item_id: itemId })', $miniCartJsContent);
 
         $cartPage = self::bp('app/code/Weline/Cart/view/templates/frontend/cart/index.phtml');
@@ -337,7 +340,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $cartPageContent = (string) file_get_contents($cartPage);
         self::assertStringContainsString('isTobCreditSurface', $cartPageContent);
         self::assertStringContainsString('mergeTobCreditIntoCartMoneyDto', $cartPageContent);
-        self::assertStringContainsString('readPersistedCreditApplyMinor', $cartPageContent);
+        self::assertStringContainsString('commerce_deposit_allowed', $cartPageContent);
+        self::assertStringNotContainsString('readPersistedCreditApplyMinor', $cartPageContent);
+        self::assertStringNotContainsString('preferredCartType() === \'tob\'', $cartPageContent);
         self::assertStringContainsString('weline:b2b-credit-changed', $cartPageContent);
         self::assertStringContainsString("api.ensure(slot, { mode: 'cart' })", $cartPageContent);
 
@@ -346,11 +351,23 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $b2bBoot = (string)file_get_contents($b2bMiniCartBoot);
         self::assertStringContainsString('data-b2b-mini-cart-type="1"', $b2bBoot);
         self::assertStringContainsString('b2bSellingMode', $b2bBoot);
+        // hidden boot must not use default visible IO (never intersects display:none).
+        self::assertStringContainsString('data-weline-load-when="idle"', $b2bBoot);
         self::assertStringContainsString('data-has-membership', $b2bBoot);
         self::assertStringNotContainsString('createFrontendSession', $b2bBoot);
         self::assertStringContainsString('data-customer-logged-in="0"', $b2bBoot);
         self::assertStringContainsString('data-i18n-coupon-tob-unavailable', $b2bBoot);
         self::assertStringContainsString('批发不可用', $b2bBoot);
+
+        $creditWidget = self::bp('app/code/Weline/B2B/view/templates/frontend/widgets/checkout-tob-deposit-note.phtml');
+        self::assertFileExists($creditWidget);
+        $creditWidgetSrc = (string)file_get_contents($creditWidget);
+        // SSR fail-closed: credit must not enter MiniCartExtras tabs on toc before JS.
+        // Avoid [^>]* patterns — short-echo closers inside attrs break that class of regex.
+        self::assertStringContainsString('data-b2b-checkout-credit', $creditWidgetSrc);
+        self::assertStringContainsString('data-cart-type="toc"', $creditWidgetSrc);
+        self::assertMatchesRegularExpression('/data-cart-type="toc"\s+hidden\b/s', $creditWidgetSrc);
+        self::assertStringNotContainsString('data-cart-type="tob"', $creditWidgetSrc);
 
         $jsContent = (string)file_get_contents($js);
         self::assertStringContainsString('enhanceMiniCarts', $jsContent);
@@ -531,6 +548,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString("credit.quote", $checkoutTob);
         self::assertStringContainsString("credit.apply", $checkoutTob);
         self::assertStringContainsString('saved_apply', $checkoutTob);
+        self::assertStringContainsString('hydrateCreditControls', $checkoutTob);
+        self::assertStringContainsString('function hydrateCreditControls', $checkoutTob);
         self::assertStringContainsString('ingestServerSavedApply', $checkoutTob);
         self::assertStringContainsString('persistCreditChoiceToServer', $checkoutTob);
         self::assertStringContainsString('capReady', $checkoutTob);
@@ -577,7 +596,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('forceClear', $checkoutTob);
         self::assertStringContainsString('persist: false, dispatch: false', $checkoutTob);
         self::assertStringContainsString('must not wipe mini-cart', $checkoutTob);
-        self::assertStringContainsString('Live credit / selling-mode beats SSR default', $checkoutPageContent);
+        self::assertStringContainsString('Authoritative shell from server hydrate', $checkoutPageContent);
+        self::assertStringNotContainsString('Live credit / selling-mode beats SSR default', $checkoutPageContent);
         self::assertStringContainsString('Persist-only path before checkout-tob binds', $cartPageContent);
 
         $b2bQuery = self::bp('app/code/Weline/B2B/extends/module/Weline_Framework/Query/B2BQueryProvider.php');
@@ -586,6 +606,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString("'hang.startPayment'", $b2bQueryContent);
         self::assertStringContainsString("'hang.paymentContext'", $b2bQueryContent);
         self::assertStringContainsString("'credit.quote'", $b2bQueryContent);
+        self::assertStringContainsString('cart_type_not_tob', $b2bQueryContent);
+        self::assertStringNotContainsString("?? 'tob'", $b2bQueryContent);
         self::assertStringContainsString("'credit.apply'", $b2bQueryContent);
         self::assertStringContainsString('function creditQuote', $b2bQueryContent);
         self::assertStringContainsString('function creditApply', $b2bQueryContent);

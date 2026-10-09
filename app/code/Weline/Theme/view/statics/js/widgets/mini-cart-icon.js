@@ -561,6 +561,11 @@
     }
 
     function formatMoney(amount, currency) {
+        // Same symbol-first path as cart + storefront-money-summary.
+        var api = window.WelineStorefrontMoneySummary;
+        if (api && typeof api.formatMoney === 'function') {
+            return api.formatMoney(amount, currency, 'symbol');
+        }
         var symbol = '¥';
         currency = String(currency || 'CNY').toUpperCase();
         if (currency === 'USD') symbol = '$';
@@ -1150,36 +1155,22 @@
         if (normalizeCartType(dto && dto.cart_type) === 'tob') {
             return true;
         }
-        if (normalizeCartType(preferredCartType()) === 'tob') {
-            return true;
-        }
-        if (root && root.querySelector('[data-b2b-credit-toggle]:checked')) {
-            return true;
-        }
-        try {
-            var tobApi = window.WelineB2BCheckoutTob;
-            if (tobApi && typeof tobApi.readApplyMinor === 'function'
-                && Number(tobApi.readApplyMinor()) > 0) {
-                return true;
-            }
-            if (tobApi && typeof tobApi.readMode === 'function'
-                && String(tobApi.readMode() || '').toLowerCase() === 'tob') {
-                return true;
-            }
-        } catch (eTob) {}
         return false;
     }
 
     function mergeTobCreditIntoMoneyDto(root, dto) {
         var base = Object.assign({}, dto || {});
         if (!isTobCreditSurface(root, base)) {
+            base.deposit_minor = 0;
+            base.credit_minor = 0;
+            base.cart_type = normalizeCartType(base.cart_type)
+                || normalizeCartType(root && root.getAttribute('data-cart-type'))
+                || 'toc';
+            base.commerce_deposit_allowed = false;
             return base;
         }
-        if (root && normalizeCartType(root.getAttribute('data-cart-type')) !== 'tob') {
-            try {
-                root.setAttribute('data-cart-type', 'tob');
-            } catch (eAttr) {}
-        }
+        base.cart_type = 'tob';
+        base.commerce_deposit_allowed = true;
         var tobApi = window.WelineB2BCheckoutTob;
         if (!tobApi || typeof tobApi.readApplyMinor !== 'function') {
             return base;
@@ -1188,17 +1179,8 @@
         var creditCurrency = typeof tobApi.readCreditCurrency === 'function'
             ? String(tobApi.readCreditCurrency() || '').trim().toUpperCase()
             : '';
+        // Live apply only — persist feeds hydrate of controls, never paints summary alone.
         var applyMinor = Math.max(0, Number(tobApi.readApplyMinor()) || 0);
-        if (applyMinor <= 0) {
-            try {
-                if (typeof tobApi.readPersistedCreditChoice === 'function') {
-                    var saved = tobApi.readPersistedCreditChoice();
-                    if (saved && saved.enabled) {
-                        applyMinor = Math.max(0, Number(saved.apply_minor) || 0);
-                    }
-                }
-            } catch (ePersist) {}
-        }
         if (applyMinor <= 0) {
             base.deposit_minor = 0;
             base.credit_minor = 0;

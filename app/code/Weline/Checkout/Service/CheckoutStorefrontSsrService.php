@@ -267,7 +267,15 @@ final class CheckoutStorefrontSsrService
 
     private function money(string $currency, float $amount): string
     {
-        return $currency . ' ' . number_format($amount, 2, '.', '');
+        if (\class_exists(\Weline\Currency\Helper\CurrencySymbol::class)) {
+            return \Weline\Currency\Helper\CurrencySymbol::formatAmount($amount, $currency);
+        }
+        $code = \strtoupper(\trim($currency)) ?: 'CNY';
+        $glyphs = ['CNY' => '¥', 'RMB' => '¥', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
+        $symbol = $glyphs[$code] ?? $code;
+        $formatted = \number_format($amount, 2, '.', ',');
+
+        return $symbol === $code ? ($code . ' ' . $formatted) : ($symbol . $formatted);
     }
 
     /**

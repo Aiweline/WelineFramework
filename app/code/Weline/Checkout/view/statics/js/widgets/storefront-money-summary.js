@@ -5,6 +5,7 @@
 (function (global) {
   'use strict';
 
+  // Keep in sync with Weline\\Currency\\Helper\\CurrencySymbol::GLYPHS (symbol-first).
   var SYMBOLS = {
     CNY: '¥',
     RMB: '¥',
@@ -12,6 +13,31 @@
     EUR: '€',
     GBP: '£',
     JPY: '¥',
+    AUD: 'A$',
+    CAD: 'C$',
+    HKD: 'HK$',
+    SGD: 'S$',
+    NZD: 'NZ$',
+    KRW: '₩',
+    INR: '₹',
+    THB: '฿',
+    RUB: '₽',
+    BRL: 'R$',
+    MXN: 'MX$',
+    PHP: '₱',
+    VND: '₫',
+    TRY: '₺',
+    ILS: '₪',
+    PLN: 'zł',
+    SEK: 'kr',
+    NOK: 'kr',
+    DKK: 'kr',
+    CHF: 'Fr',
+    ZAR: 'R',
+    AED: 'د.إ',
+    SAR: '﷼',
+    MYR: 'RM',
+    IDR: 'Rp',
   };
 
   function text(value) {
@@ -30,6 +56,23 @@
     return toMinor(minor) / 100;
   }
 
+  function resolveSymbol(code) {
+    var key = text(code || 'CNY').toUpperCase().trim() || 'CNY';
+    if (SYMBOLS[key]) {
+      return SYMBOLS[key];
+    }
+    var clientMap = global.WelineCurrencySymbolMap
+      || (global.WelineCurrency && global.WelineCurrency.symbolMap)
+      || null;
+    if (clientMap && typeof clientMap === 'object') {
+      var fromMap = text(clientMap[key]).trim();
+      if (fromMap && fromMap.toUpperCase() !== key) {
+        return fromMap;
+      }
+    }
+    return '';
+  }
+
   function formatMoney(major, currency, style) {
     var amount = Number(major);
     if (!isFinite(amount)) {
@@ -43,7 +86,11 @@
     if (style === 'code') {
       return code + ' ' + formatted;
     }
-    var symbol = SYMBOLS[code] || code;
+    // Symbol-first: only fall back to ISO code when no glyph exists.
+    var symbol = resolveSymbol(code);
+    if (!symbol || symbol.toUpperCase() === code) {
+      return code + ' ' + formatted;
+    }
     return symbol + formatted;
   }
 
@@ -172,8 +219,13 @@
     var goodsMinor = toMinor(dto.goods_subtotal_minor);
     var shippingMinor = toMinor(dto.shipping_minor);
     var discountMinor = toMinor(dto.discount_minor);
-    var depositMinor = toMinor(dto.deposit_minor);
-    var creditMinor = toMinor(dto.credit_minor);
+    // Deposit / wholesale credit rows require an explicit tob shell — amount alone must not elevate toc.
+    var depositAllowed = dto.commerce_deposit_allowed === true
+      || String(dto.cart_type || '').toLowerCase() === 'tob'
+      || String(root.getAttribute('data-cart-type') || '').toLowerCase() === 'tob'
+      || String(root.getAttribute('data-money-summary-cart-type') || '').toLowerCase() === 'tob';
+    var depositMinor = depositAllowed ? toMinor(dto.deposit_minor) : 0;
+    var creditMinor = depositAllowed ? toMinor(dto.credit_minor) : 0;
     var taxParts = resolveTaxParts(dto);
     var salesTaxMinor = taxParts.sales_tax_minor;
     var customsDutyMinor = taxParts.customs_duty_minor;

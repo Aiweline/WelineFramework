@@ -47,7 +47,8 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringNotContainsString('onerror="alert', $html);
         self::assertStringContainsString('&lt;script&gt;', $html);
         self::assertStringNotContainsString('<script>alert', $html);
-        self::assertStringContainsString('CNY 21.00', $html);
+        self::assertStringContainsString('¥21.00', $html);
+        self::assertStringNotContainsString('CNY 21.00', $html);
         self::assertStringContainsString('x2', $html);
         self::assertStringContainsString('weline-checkout__item-sku', $html);
         self::assertStringContainsString('SKU: SKU&lt;script&gt;', $html);
@@ -93,8 +94,9 @@ final class CheckoutHtmlRendererTest extends TestCase
             (int)strpos($html, 'weline-checkout__item-title'),
             (int)strpos($html, 'weline-checkout__item-price')
         );
-        self::assertStringContainsString('CNY 80.10', $html);
-        self::assertStringContainsString('CNY 89.00', $html);
+        self::assertStringContainsString('¥80.10', $html);
+        self::assertStringContainsString('¥89.00', $html);
+        self::assertStringNotContainsString('CNY 80.10', $html);
         self::assertStringContainsString('Today&#039;s Picks', $html);
         self::assertStringContainsString('href="https://url.test/promotion/deals"', $html);
     }
@@ -123,6 +125,21 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('weline-checkout__empty', $html);
     }
 
+    public function testRenderItemsPrefersCurrencyGlyphOverIsoCode(): void
+    {
+        $r = $this->renderer();
+        $html = $r->renderItems([
+            [
+                'name' => 'Hanfu',
+                'qty' => 2,
+                'row_total' => 432.10,
+            ],
+        ], 'USD');
+        self::assertStringContainsString('$432.10', $html);
+        self::assertStringNotContainsString('USD 432.10', $html);
+        self::assertStringNotContainsString('USD432.10', $html);
+    }
+
     public function testMethodOptionsServerHtml(): void
     {
         $r = $this->renderer();
@@ -131,7 +148,8 @@ final class CheckoutHtmlRendererTest extends TestCase
         ], 'shipping_method', 'CNY', '', true);
         self::assertStringContainsString('name="shipping_method"', $html);
         self::assertStringContainsString('value="std"', $html);
-        self::assertStringContainsString('CNY 12.30', $html);
+        self::assertStringContainsString('¥12.30', $html);
+        self::assertStringNotContainsString('CNY 12.30', $html);
         self::assertStringContainsString('checked', $html);
     }
 

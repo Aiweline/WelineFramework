@@ -27,9 +27,16 @@
             return '';
         }
         var code = String(payload.currency || 'CNY').toUpperCase();
-        return '-' + code + ' ' + formatAmount(
+        var precision = Number(payload.currency_precision || 2);
+        var major = Number(payload.amount_minor || 0) / Math.pow(10, precision);
+        // Align with storefront-money-summary: glyph first, ISO only when no symbol.
+        var api = window.WelineStorefrontMoneySummary;
+        if (api && typeof api.formatMoney === 'function') {
+            return '-' + api.formatMoney(major, code, 'symbol');
+        }
+        return '-' + currencySymbol(code) + formatAmount(
             Number(payload.amount_minor || 0),
-            payload.currency_precision || 2,
+            precision,
         );
     }
 

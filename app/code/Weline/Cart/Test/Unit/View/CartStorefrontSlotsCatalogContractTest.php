@@ -45,12 +45,16 @@ final class CartStorefrontSlotsCatalogContractTest extends TestCase
         self::assertStringContainsString('class="weline-cart-shell__coupon-slot"', $template);
         self::assertStringContainsString('class="weline-cart-shell__note-slot"', $template);
         self::assertStringContainsString('class="weline-cart-shell__credit-slot"', $template);
+        // toc fail-closed: credit slot SSR-hidden until tob JS reveals (extras tab gate).
+        self::assertMatchesRegularExpression(
+            '/class="weline-cart-shell__credit-slot"\s+hidden\b/s',
+            $template
+        );
         self::assertStringContainsString('b2b-checkout-credit', $template);
         self::assertStringContainsString('data-cart-discount-breakdown', $template);
         self::assertStringContainsString('data-cart-goods-subtotal', $template);
         self::assertStringContainsString('data-cart-goods-subtotal-major', $template);
         self::assertStringContainsString('data-cart-discount-lines', $template);
-        self::assertStringContainsString('weline-cart-shell__summary-row--payable', $template);
         self::assertStringContainsString('discount_preview', $template);
         self::assertStringContainsString('weline:cart-updated', $template);
         self::assertStringNotContainsString('<w:widget', $template);

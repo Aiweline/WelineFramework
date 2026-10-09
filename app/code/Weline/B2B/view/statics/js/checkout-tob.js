@@ -155,7 +155,8 @@
         }
         var creditSlot = root.querySelector(
             '.weline-checkout__credit-slot, .weline-cart-shell__credit-slot,'
-            + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"]'
+            + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"],'
+            + ' [data-slot-id="checkout-summary-credit"], [data-slot-id="cart-summary-credit"]'
         );
         if (creditSlot) {
             creditSlot.hidden = type !== 'tob';
@@ -187,6 +188,8 @@
             syncCreditUi(root);
             return;
         }
+        // Restore toggle+amount before quote returns (coupon-class hydrate).
+        hydrateCreditControls(root);
         // tob：仅在显式请求时预取。MutationObserver/勾选变更不得经 applyCartType 再打 credit.quote。
         if (opts.ensureQuote === true) {
             ensureCreditQuote(root, Object.assign({ cart_type: 'tob' }, opts.quoteOpts || {}));
@@ -1141,7 +1144,8 @@
         }
         var creditSlot = root.querySelector(
             '.weline-checkout__credit-slot, .weline-cart-shell__credit-slot,'
-            + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"]'
+            + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"],'
+            + ' [data-slot-id="checkout-summary-credit"], [data-slot-id="cart-summary-credit"]'
         );
         var creditRoot = root.querySelector('[data-b2b-checkout-credit]');
         var anchor = creditSlot || creditRoot;
@@ -1389,6 +1393,60 @@
         } catch (eNotify) {}
     }
 
+
+    /**
+     * Coupon-class hydrate: restore toggle + amount from saved_apply / sessionStorage
+     * immediately on tob bind — must not wait for quote.enabled.
+     */
+    function hydrateCreditControls(root) {
+        if (!root) {
+            return;
+        }
+        var shell = String(root.getAttribute('data-cart-type') || '').toLowerCase();
+        if (shell !== 'tob') {
+            return;
+        }
+        var panel = creditPanel(root);
+        if (!panel) {
+            return;
+        }
+        var saved = readPersistedCreditChoice();
+        if (!saved || !saved.enabled || Number(saved.apply_minor) <= 0) {
+            return;
+        }
+        var toggle = panel.querySelector('[data-b2b-credit-toggle]');
+        var input = panel.querySelector('[data-b2b-credit-input]');
+        var apply = Math.max(0, Number(saved.apply_minor) || 0);
+        creditState.applyMinor = apply;
+        if (saved.currency) {
+            creditState.currency = String(saved.currency || '').toUpperCase();
+        }
+        if (toggle) {
+            toggle.disabled = false;
+            toggle.checked = true;
+        }
+        if (input) {
+            input.disabled = false;
+            var empty = String(input.value || '').trim() === '';
+            var inputMinor = 0;
+            try {
+                var parsed = parseCreditInputMajor(input.value);
+                inputMinor = (!parsed.empty && isFinite(parsed.major))
+                    ? Math.round(parsed.major * 100)
+                    : 0;
+            } catch (eParsed) {
+                inputMinor = 0;
+            }
+            if (empty || inputMinor <= 0) {
+                input.value = (apply / 100).toFixed(2);
+            }
+        }
+        // Allow quote path to clamp; do not mark restored until capReady.
+        creditState._restoredPersist = false;
+        syncCreditAppliedStatus(panel);
+        notifyCreditChanged(root, { persist: false });
+    }
+
     function syncCreditUi(root) {
         var panel = creditPanel(root);
         if (!panel) {
@@ -1423,7 +1481,8 @@
             panel.setAttribute('hidden', '');
             var creditSlotToc = root.querySelector(
                 '.weline-checkout__credit-slot, .weline-cart-shell__credit-slot,'
-                + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"]'
+                + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"],'
+                + ' [data-slot-id="checkout-summary-credit"], [data-slot-id="cart-summary-credit"]'
             );
             if (creditSlotToc) {
                 creditSlotToc.hidden = true;
@@ -1467,7 +1526,8 @@
         panel.removeAttribute('hidden');
         var creditSlotTob = root.querySelector(
             '.weline-checkout__credit-slot, .weline-cart-shell__credit-slot,'
-            + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"]'
+            + ' [data-wslot="checkout-summary-credit"], [data-wslot="cart-summary-credit"],'
+            + ' [data-slot-id="checkout-summary-credit"], [data-slot-id="cart-summary-credit"]'
         );
         if (creditSlotTob) {
             creditSlotTob.hidden = false;
@@ -1476,7 +1536,12 @@
         syncCreditExtrasTabVisibility(root, true);
         if (!quote || !quote.enabled) {
             panel.hidden = false;
+            var pendingRestore = readPersistedCreditChoice();
+            var hasPending = !!(pendingRestore && pendingRestore.enabled
+                && Number(pendingRestore.apply_minor) > 0);
             if (!quote) {
+                // Empty quote window: allow hydrate retry after quote arrives.
+                creditState._restoredPersist = false;
                 // Do not fetch from syncCreditUi — that re-enters via DOM mutations.
                 showCreditReason(
                     reasonEl,
@@ -1490,11 +1555,27 @@
                 showCreditReason(reasonEl, creditUnavailableMessage(root, quote));
             }
             if (toggle) {
-                toggle.checked = false;
-                toggle.disabled = true;
-            }
-            if (input) {
-                input.disabled = true;
+                if (hasPending && !quote) {
+                    // Pending restore during quote load — keep checked; forbid forceClear.
+                    toggle.disabled = true;
+                    toggle.checked = true;
+                    creditState.applyMinor = Math.max(0, Number(pendingRestore.apply_minor) || 0);
+                    if (input) {
+                        input.disabled = true;
+                        if (String(input.value || '').trim() === '') {
+                            input.value = (creditState.applyMinor / 100).toFixed(2);
+                        }
+                    }
+                } else {
+                    toggle.checked = false;
+                    toggle.disabled = true;
+                    if (input) {
+                        input.disabled = true;
+                    }
+                    creditState.applyMinor = 0;
+                }
+            } else if (!hasPending || quote) {
+                creditState.applyMinor = 0;
             }
             if (hint) {
                 hint.hidden = true;
@@ -1509,7 +1590,6 @@
                 help.setAttribute('data-w-tooltip', String(quote.hint_detail || quote.hint_short || ''));
                 help.setAttribute('title', String(quote.hint_detail || quote.hint_short || ''));
             }
-            creditState.applyMinor = 0;
             creditState.cashMinor = quote && quote.deposit_amount_minor != null
                 ? Number(quote.deposit_amount_minor)
                 : null;
@@ -1700,8 +1780,13 @@
         });
         syncCreditAppliedStatus(panel);
         // Shopper unchecked → clear session handoff; otherwise keep/refresh positive persist.
+        // Pending restore (quote not yet cap-ready) must not forceClear just because toggle lags.
+        var pendingForClear = readPersistedCreditChoice();
+        var blockForceClear = !!(pendingForClear && pendingForClear.enabled
+            && Number(pendingForClear.apply_minor) > 0
+            && !creditState._restoredPersist);
         notifyCreditChanged(root, {
-            forceClear: !(toggle && toggle.checked),
+            forceClear: !(toggle && toggle.checked) && !blockForceClear,
         });
     }
 
@@ -1710,6 +1795,8 @@
         var quote = payload && payload.b2b_credit && typeof payload.b2b_credit === 'object'
             ? payload.b2b_credit
             : null;
+        ingestServerSavedApply(frozen);
+        ingestServerSavedApply(payload);
         // Do NOT include bare `form` — address quick-add forms appear earlier in DOM
         // and would steal querySelector before .weline-checkout.
         var root = document.querySelector('[data-weline-checkout], [data-checkout], .weline-checkout');
@@ -1722,10 +1809,12 @@
         creditState.quote = quote;
         creditState.quoteLoading = false;
         if (root) {
-            if (readMode() === 'tob') {
+            var shell = String((root.getAttribute('data-cart-type') || '')).toLowerCase();
+            if (shell === 'tob' || readMode() === 'tob') {
                 if (panel) {
                     panel.hidden = false;
                 }
+                hydrateCreditControls(root);
             }
             // toc / tob 都同步：不可用原因必须就地出现在勾选下方。
             syncCreditUi(root, { formatInput: true });
@@ -2118,7 +2207,12 @@
     }
 
     function bindCheckout() {
-        applyCartTypeAll(readMode(), { ensureQuote: true });
+        // Prefer page shell data-cart-type; cookie/readMode must not elevate toc chrome alone.
+        creditSurfaceRoots().forEach(function (root) {
+            var shell = String(root.getAttribute('data-cart-type') || '').toLowerCase();
+            var type = (shell === 'tob' || shell === 'toc') ? shell : readMode();
+            applyCartType(root, type, { ensureQuote: type === 'tob' });
+        });
         document.querySelectorAll('[data-weline-checkout]').forEach(function (root) {
             bindHangPayment(root);
         });
@@ -2157,11 +2251,11 @@
             });
         });
         global.addEventListener('weshop:mini-cart:open', function () {
-            if (readMode() === 'tob') {
-                applyCartTypeAll('tob', { ensureQuote: true });
-            } else {
-                applyCartTypeAll('toc');
-            }
+            creditSurfaceRoots().forEach(function (root) {
+                var shell = String(root.getAttribute('data-cart-type') || '').toLowerCase();
+                var type = (shell === 'tob' || shell === 'toc') ? shell : readMode();
+                applyCartType(root, type, { ensureQuote: type === 'tob' });
+            });
         });
         // 优惠券部件可能晚于本脚本挂到 slot，观察后仅补同步「批发不可用」，禁止再走 ensureCreditQuote。
         if (global.MutationObserver) {
@@ -2212,7 +2306,8 @@
             readApplyMinor: readApplyMinor,
             cashDepositMinor: cashDepositMinor,
             readPersistedCreditChoice: readPersistedCreditChoice,
-            persistCreditChoice: persistCreditChoice
+            persistCreditChoice: persistCreditChoice,
+            hydrateCreditControls: hydrateCreditControls
         };
     }
 

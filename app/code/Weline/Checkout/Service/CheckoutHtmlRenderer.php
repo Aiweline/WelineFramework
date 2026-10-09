@@ -525,7 +525,18 @@ final class CheckoutHtmlRenderer
 
     private function money(string $currency, float $amount): string
     {
-        return $currency . ' ' . number_format($amount, 2, '.', '');
+        // Prefer glyph ($/¥/…) — bare ISO only when CurrencySymbol has no usable symbol.
+        if (\class_exists(\Weline\Currency\Helper\CurrencySymbol::class)) {
+            return \Weline\Currency\Helper\CurrencySymbol::formatAmount($amount, $currency);
+        }
+        $code = \strtoupper(\trim($currency)) ?: 'CNY';
+        $glyphs = [
+            'CNY' => '¥', 'RMB' => '¥', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥',
+        ];
+        $symbol = $glyphs[$code] ?? $code;
+        $formatted = \number_format($amount, 2, '.', ',');
+
+        return $symbol === $code ? ($code . ' ' . $formatted) : ($symbol . $formatted);
     }
 
     private function e(string $value): string

@@ -45,12 +45,26 @@ final class CartPageStateMutexContractTest extends TestCase
         self::assertStringContainsString('data-cart-page-type-host', $page);
         self::assertStringContainsString('data-cart-page-title', $page);
         self::assertStringContainsString('data-cart-subtitle', $page);
-        self::assertStringContainsString('v=20261006-header-title-right2', $page);
+        self::assertStringContainsString('v=20261010-money-summary-row-flex1', $page);
 
         self::assertStringContainsString('.weline-cart-shell--amazon .weline-cart-shell__header', $css);
         self::assertStringContainsString('justify-content: space-between', $css);
         self::assertStringContainsString('.weline-cart-shell--amazon .weline-cart-shell__heading', $css);
         self::assertStringContainsString('margin-left: auto', $css);
         self::assertStringContainsString('text-align: right', $css);
+    }
+
+    public function testMoneySummaryRowsKeepLabelAmountSpaceBetweenLikeDiscountLine(): void
+    {
+        $root = \dirname(__DIR__, 3);
+        $css = (string)\file_get_contents($root . '/view/statics/css/cart-page-amazon.css');
+
+        self::assertStringContainsString('.weline-cart-shell--amazon .w-storefront-money-summary__row', $css);
+        self::assertStringContainsString('justify-content: space-between', $css);
+        self::assertStringContainsString('.weline-cart-shell--amazon .weline-cart-shell__discount-line', $css);
+        self::assertStringContainsString(
+            'Widget CSS may bake into a print-deferred pack',
+            $css
+        );
     }
 }

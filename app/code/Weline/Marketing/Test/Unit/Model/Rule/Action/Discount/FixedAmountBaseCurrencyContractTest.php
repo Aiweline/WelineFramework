@@ -38,12 +38,13 @@ final class FixedAmountBaseCurrencyContractTest extends TestCase
         self::assertStringContainsString('base_currency', $src);
     }
 
-    public function testCheckoutCouponLabelUsesCurrencyCodeNotBareSymbol(): void
+    public function testCheckoutCouponLabelPrefersStorefrontMoneySummarySymbol(): void
     {
         $path = dirname(__DIR__, 6) . '/view/statics/js/widgets/checkout-coupon.js';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
-        self::assertStringContainsString("return '-' + code + ' ' + formatAmount(", $src);
-        self::assertStringNotContainsString("return '-' + currencySymbol(payload.currency) + formatAmount(", $src);
+        self::assertStringContainsString("api.formatMoney(major, code, 'symbol')", $src);
+        self::assertStringContainsString("return '-' + currencySymbol(code) + formatAmount(", $src);
+        self::assertStringNotContainsString("return '-' + code + ' ' + formatAmount(", $src);
     }
 }
