@@ -18,7 +18,8 @@
 
 ImageUsage JSON 可持久化 `layout_width` / `layout_height`（或 `aspect_ratio` 在写入前解析）。标签上的 `width`/`height`/`aspect_ratio` 优先于 usage 内布局尺寸；若都未设，则回退 FileAsset 元数据宽高。
 
-渲染结果始终带 class `w-file-image`。
+渲染结果始终带 class `w-file-image`。  
+在能解析 layout 宽高时，渲染器再外包一层 Theme `.w-frame[data-ratio][data-fit=cover]`（布局稳定 / 防 CLS）。若外层已自备 `.w-frame`，标签加 `frame="false"`。权威：[widget-layout-stability.md](../../Theme/doc/开发/spec/widget-layout-stability.md)。
 
 ## 优先级
 

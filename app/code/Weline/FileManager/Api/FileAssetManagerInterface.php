@@ -33,7 +33,13 @@ interface FileAssetManagerInterface
         ImageUsage $usage,
         FileAccessContext $context,
         string $class = '',
+        bool $frame = true,
     ): ResolvedFileImage;
 
-    public function renderImage(ImageUsage $usage, FileAccessContext $context, string $class = ''): string;
+    public function renderImage(
+        ImageUsage $usage,
+        FileAccessContext $context,
+        string $class = '',
+        bool $frame = true,
+    ): string;
 }

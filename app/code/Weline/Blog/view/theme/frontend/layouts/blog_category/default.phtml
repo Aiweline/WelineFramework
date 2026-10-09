@@ -186,10 +186,11 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
         .blog-storefront__card-hit { position: absolute; inset: 0; z-index: 1; }
         .blog-storefront__media {
             position: relative;
-            height: 160px;
             overflow: hidden;
             background: #f3f4f6;
         }
+        .blog-storefront__media:not(.w-frame) { height: 160px; }
+        .blog-storefront__media.w-frame { height: auto; border-radius: 0; }
         .blog-storefront__media img {
             position: absolute; inset: 0; width: 100%; height: 100%;
             object-fit: cover;

@@ -77,10 +77,33 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         self::assertStringContainsString('w-mega-menu', $panel);
         self::assertStringContainsString('data-mega-panel-lazy', $panel);
         self::assertStringContainsString('data-mega-lazy-payload', $panel);
+        self::assertStringContainsString('data-mega-img-src', $panel);
+        self::assertStringContainsString('data-layout-exempt', $panel);
+        // Closed-menu thumbs must not ship a networkable src= (native lazy fails at 0×0).
+        self::assertDoesNotMatchRegularExpression(
+            '/mega-menu-sidebar-item__media[\s\S]{0,240}<img[^>]*\ssrc=/',
+            $panel
+        );
+        // Default-active panel content is payload-hydrated — no SSR banner/card img src.
+        self::assertStringNotContainsString('mega-menu-panel__banner', $panel);
+        self::assertStringNotContainsString('mega-menu-subgrid--cards', $panel);
+
+        $sidebar = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/header/categories-sidebar-nav.phtml');
+        self::assertStringContainsString('data-sidebar-img-src', $sidebar);
+        self::assertDoesNotMatchRegularExpression(
+            '/sidebar-category-card__media[\s\S]{0,200}<img[^>]*\ssrc=/',
+            $sidebar
+        );
 
         $megaJs = $this->read('app/code/Weline/Theme/view/ui/js/components/mega-menu.js');
         self::assertStringContainsString('hydrateLazyPanel', $megaJs);
         self::assertStringContainsString('data-mega-panel-lazy', $megaJs);
+        self::assertStringContainsString('revealOpenMedia', $megaJs);
+        self::assertStringContainsString('data-mega-img-src', $megaJs);
+
+        $headerJs = $this->read('app/code/Weline/Theme/view/statics/js/partials/header-default.js');
+        self::assertStringContainsString('hydrateSidebarDeferredImages', $headerJs);
+        self::assertStringContainsString('data-sidebar-img-src', $headerJs);
     }
 
     public function testMegaMenuTopChromeUsesNavSecondaryBackground(): void

@@ -735,23 +735,64 @@ abstract class RequestAbstract extends RequestFilter
         }
 
         // WELINE_WEBSITE_URL 由 Url::parser() → processUrlParse() 写入 $_SERVER
-        // 它包含 scheme://host[:port][/sub_path]
-        // URL 生成时始终参考当前请求的端口（WLS 非标准端口如 9981 必须带上），避免生成错误链接
+        // 它包含 scheme://host[:port][/sub_path] —— 站柜公开源优先。
+        // Nginx→Worker 明文 H1 时 REQUEST_SCHEME=http、HTTP_HOST 可能被填上 WLS_PORT(:9555)；
+        // 若仍用请求口叠进 website_url，<base href>/@url 会烤成 http://host:9555/，
+        // HTTPS 店面混合内容拦掉 theme-head，.w-frame 等 foundation 全部失效。
         $websiteUrl = \w_env('website_url', '');
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
-            $hostPart = $parsed['host'] ?? 'localhost';
-            $pathPart = $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''));
-            if ($currentPort === '' && isset($parsed['port'])) {
-                $currentPort = (string)$parsed['port'];
-            }
-            if ($currentPort === '') {
-                $currentPort = $currentScheme === 'https' ? '443' : '80';
-            }
-            $isNonStandardPort = $currentPort !== '' && !(($currentScheme === 'https' && $currentPort === '443') || ($currentScheme !== 'https' && $currentPort === '80'));
+            if (\is_array($parsed) && !empty($parsed['host'])) {
+                $hostPart = (string)$parsed['host'];
+                $pathPart = $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''));
+                $websiteScheme = \strtolower((string)($parsed['scheme'] ?? ''));
+                if ($websiteScheme !== 'http' && $websiteScheme !== 'https') {
+                    $websiteScheme = $currentScheme;
+                }
+                $websitePortExplicit = isset($parsed['port']);
+                $resolvedPort = $websitePortExplicit ? (string)(int)$parsed['port'] : '';
+                if ($resolvedPort === '') {
+                    $resolvedPort = $websiteScheme === 'https' ? '443' : '80';
+                }
+                // Only WLS_PORT identifies the private Worker listen socket.
+                // Never fall back to SERVER_PORT — that may be a public
+                // non-default edge port (e.g. :27152) that must stay in URLs.
+                $wlsPortRaw = $_SERVER['WLS_PORT'] ?? \getenv('WLS_PORT') ?: '';
+                $wlsPort = (\is_int($wlsPortRaw) || (\is_string($wlsPortRaw) && $wlsPortRaw !== '' && \ctype_digit((string)$wlsPortRaw)))
+                    ? (string)(int)$wlsPortRaw
+                    : '';
+                // 站柜/解析若误把 Worker 口写进 website_url，仍按公开源剥掉。
+                if ($resolvedPort !== '' && $resolvedPort !== '80' && $resolvedPort !== '443') {
+                    $explicitWorker = ($wlsPort !== '' && $resolvedPort === $wlsPort)
+                        || ((int)$resolvedPort >= 9000 && (int)$resolvedPort <= 9999);
+                    if ($explicitWorker) {
+                        $resolvedPort = $websiteScheme === 'https' ? '443' : '80';
+                        $websitePortExplicit = false;
+                    }
+                }
+                // website_url 未写端口时：保留「公开非默认端口」(如 :27152)；
+                // 丢弃「等于 WLS_PORT 的 Worker 监听口」(如 :9555)。
+                // WLS_PORT 未知时也不得把 HTTP_HOST 上的监听口叠进公开 https 源。
+                if (!$websitePortExplicit && $currentPort !== ''
+                    && $currentPort !== '80' && $currentPort !== '443'
+                ) {
+                    $isWorkerListenPort = ($wlsPort !== '' && $currentPort === $wlsPort);
+                    // When WLS_PORT is unknown, still drop the common private
+                    // Worker band 9xxx that nginx fronts on :443.
+                    $looksLikePrivateWorkerPort = (int)$currentPort >= 9000 && (int)$currentPort <= 9999;
+                    if (!$isWorkerListenPort && !$looksLikePrivateWorkerPort) {
+                        $resolvedPort = $currentPort;
+                    }
+                }
+                $isNonStandardPort = !(
+                    ($websiteScheme === 'https' && $resolvedPort === '443')
+                    || ($websiteScheme === 'http' && $resolvedPort === '80')
+                );
 
-            $portSuffix = $isNonStandardPort ? ':' . $currentPort : '';
-            return $currentScheme . '://' . $hostPart . $portSuffix . $pathPart;
+                return $websiteScheme . '://' . $hostPart
+                    . ($isNonStandardPort ? ':' . $resolvedPort : '')
+                    . $pathPart;
+            }
         }
         if ($currentPort === '') {
             $currentPort = $currentScheme === 'https' ? '443' : '80';

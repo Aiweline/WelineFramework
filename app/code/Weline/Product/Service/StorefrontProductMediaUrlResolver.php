@@ -7,6 +7,7 @@ namespace Weline\Product\Service;
 use Throwable;
 use Weline\FileManager\Api\Data\FileAccessContext;
 use Weline\FileManager\Api\FileAssetManagerInterface;
+use Weline\FileManager\Service\FileAssetManager;
 use Weline\Framework\Runtime\ProcessSharedInterface;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Websites\Data\WebsiteData;
@@ -22,13 +23,22 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
     private const ASSET_PREFIX = 'asset://';
     private const DESCRIPTION_ALLOWED_TAGS = [
         'div', 'p', 'br', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-        'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'strong', 'em', 'span',
+        'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'strong', 'em', 'span', 'figure',
     ];
     private const DESCRIPTION_DROP_WITH_CONTENT = [
         'script', 'style', 'iframe', 'object', 'embed', 'form', 'input',
         'button', 'textarea', 'select', 'option', 'svg', 'math', 'video',
         'audio', 'source', 'link', 'meta', 'base',
     ];
+    /**
+     * How many description imgs keep a real src in SSR.
+     * 0 = all use data-src until product-detail-reveal IO hydrates (PDP below-fold).
+     * Native loading=lazy alone still storms long detail magazines on first paint.
+     */
+    private const DESCRIPTION_SSR_SRC_BUDGET = 0;
+    /** Transparent 1×1 GIF — reserves layout via width/height without a network fetch. */
+    private const DESCRIPTION_LAZY_PLACEHOLDER =
+        'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
     private const PROCESS_CACHE_MAX = 2048;
 
     /** @var array<string, string> asset\0locale\0scope => url */
@@ -512,6 +522,7 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
         }
 
         self::sanitizeDescriptionChildren($root, $assetResolver);
+        self::deferOffscreenDescriptionImages($root);
         $output = '';
         // Keep suite skip marker visible to Agents (root attrs are not serialized with children).
         $weds = trim($root->getAttribute('data-weds'));
@@ -523,6 +534,42 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
         }
 
         return trim($output);
+    }
+
+    /**
+     * Move below-budget description imgs to data-src so first paint does not fetch the magazine.
+     * product-detail-reveal.js assigns src near the viewport (rootMargin ~200px).
+     */
+    private static function deferOffscreenDescriptionImages(\DOMElement $root): void
+    {
+        $owner = $root->ownerDocument;
+        if (!$owner instanceof \DOMDocument) {
+            return;
+        }
+        $xpath = new \DOMXPath($owner);
+        $images = $xpath->query('.//img', $root);
+        if ($images === false || $images->length < 1) {
+            return;
+        }
+        $index = 0;
+        foreach ($images as $img) {
+            if (!$img instanceof \DOMElement) {
+                continue;
+            }
+            $src = trim($img->getAttribute('src'));
+            if ($src === '' || str_starts_with($src, 'data:')) {
+                continue;
+            }
+            $index++;
+            if ($index <= self::DESCRIPTION_SSR_SRC_BUDGET) {
+                continue;
+            }
+            $img->setAttribute('data-src', $src);
+            $img->setAttribute('data-pdp-desc-lazy', '1');
+            $img->setAttribute('src', self::DESCRIPTION_LAZY_PLACEHOLDER);
+            $img->removeAttribute('srcset');
+            $img->removeAttribute('loading');
+        }
     }
 
     /**
@@ -687,7 +734,11 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
         $weds = trim($element->getAttribute('data-weds'));
         $dcHue = trim($element->getAttribute('data-dc-hue'));
         $dcHueRoot = trim($element->getAttribute('data-dc-hue-root'));
-        $dcFloorStyle = self::safeDcFloorBgStyle(trim($element->getAttribute('style')));
+        $ratio = trim($element->getAttribute('data-ratio'));
+        $fit = trim($element->getAttribute('data-fit'));
+        $rawStyle = trim($element->getAttribute('style'));
+        $dcFloorStyle = self::safeDcFloorBgStyle($rawStyle);
+        $frameRatioStyle = self::safeFrameRatioStyle($rawStyle);
         $hidden = $element->hasAttribute('hidden');
         $ariaHidden = trim($element->getAttribute('aria-hidden'));
         while ($element->attributes->length > 0) {
@@ -722,8 +773,15 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
         if ($dcHueRoot === '1') {
             $element->setAttribute('data-dc-hue-root', '1');
         }
-        if ($dcFloorStyle !== '') {
-            $element->setAttribute('style', $dcFloorStyle);
+        if ($ratio !== '' && preg_match('#^\d{1,5}(?:/\d{1,5})?$#D', $ratio) === 1) {
+            $element->setAttribute('data-ratio', $ratio);
+        }
+        if ($fit === 'cover' || $fit === 'contain') {
+            $element->setAttribute('data-fit', $fit);
+        }
+        $mergedStyle = trim(implode(';', array_filter([$dcFloorStyle, $frameRatioStyle], static fn(string $s): bool => $s !== '')));
+        if ($mergedStyle !== '') {
+            $element->setAttribute('style', $mergedStyle . (str_ends_with($mergedStyle, ';') ? '' : ';'));
         }
         if ($hidden) {
             $element->setAttribute('hidden', 'hidden');
@@ -741,11 +799,30 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
         if ($style === '') {
             return '';
         }
-        if (preg_match('/^--dc-floor-bg:\s*(#[0-9a-fA-F]{6})\s*;?\s*$/D', $style, $m) !== 1) {
+        if (preg_match('/--dc-floor-bg:\s*(#[0-9a-fA-F]{6})\s*;?/i', $style, $m) !== 1) {
             return '';
         }
 
         return '--dc-floor-bg:' . strtolower($m[1]);
+    }
+
+    /**
+     * Theme .w-frame custom ratio: --weline-frame-ratio: W / H
+     */
+    private static function safeFrameRatioStyle(string $style): string
+    {
+        if ($style === '') {
+            return '';
+        }
+        if (preg_match(
+            '/--weline-frame-ratio:\s*(\d{1,5})\s*\/\s*(\d{1,5})\s*;?/i',
+            $style,
+            $m,
+        ) !== 1) {
+            return '';
+        }
+
+        return '--weline-frame-ratio:' . $m[1] . ' / ' . $m[2];
     }
 
     private static function positiveIntAttr(string $value): ?int
@@ -779,6 +856,11 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
             }
             // DaoCharms hue-diffusion floor wrapper (Apple-style bg bleed).
             if ($token === 'dc-hue-floor' || $token === 'dc-hue-root') {
+                $kept[] = $token;
+                continue;
+            }
+            // Theme layout-stability primitive (widget_layout_stability_theme_primitives).
+            if ($token === 'w-frame') {
                 $kept[] = $token;
             }
         }
@@ -876,9 +958,9 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
         if ($html === '') {
             return '';
         }
-        // Feature layouts are already storefront HTML. Skip DOMDocument on the PDP hot path.
+        // Feature layouts are already storefront HTML. Still hang Theme .w-frame for CLS.
         if (str_contains($html, 'weline-detail-feature')) {
-            return $html;
+            return self::ensureDescriptionMediaFrames($html);
         }
 
         $document = new \DOMDocument('1.0', 'UTF-8');
@@ -895,23 +977,23 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
             libxml_use_internal_errors($previous);
         }
         if (!$loaded) {
-            return $html;
+            return self::ensureDescriptionMediaFrames($html);
         }
 
         $xpath = new \DOMXPath($document);
         $containers = $xpath->query('//*[@id="weline-storefront-layout-root"]');
         $container = $containers !== false ? $containers->item(0) : null;
         if (!$container instanceof \DOMElement) {
-            return $html;
+            return self::ensureDescriptionMediaFrames($html);
         }
 
-        // Already authored as feature/figure layout — keep as-is.
+        // Already authored as feature/figure layout — keep as-is (+ frames).
         $existingFeatures = $xpath->query(
             './/*[contains(concat(" ", normalize-space(@class), " "), " weline-detail-feature ")]',
             $container,
         );
         if ($existingFeatures !== false && $existingFeatures->length > 0) {
-            return $html;
+            return self::ensureDescriptionMediaFrames($html);
         }
 
         // Already figure-stack authored — always re-run pairing so aspect rules stay fresh
@@ -931,7 +1013,9 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
                 $output .= (string)$document->saveHTML($child);
             }
 
-            return trim($output) !== '' ? trim($output) : $html;
+            $laid = trim($output) !== '' ? trim($output) : $html;
+
+            return self::ensureDescriptionMediaFrames($laid);
         }
 
         // Prose-only authored blocks: keep. Mixed prose+raw imgs still need grouping below.
@@ -1009,7 +1093,123 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
             $output .= (string)$document->saveHTML($child);
         }
 
+        $laid = trim($output) !== '' ? trim($output) : $html;
+
+        return self::ensureDescriptionMediaFrames($laid);
+    }
+
+    /**
+     * Hang Theme .w-frame on detail feature/figure media hosts (CLS).
+     * data-fit=contain preserves anti-crop policy for magazine photos.
+     */
+    public static function ensureDescriptionMediaFrames(string $html): string
+    {
+        $html = trim($html);
+        if ($html === '' || !str_contains(strtolower($html), '<img')) {
+            return $html;
+        }
+        if (str_contains($html, 'weline-detail-feature__media') === false
+            && str_contains($html, 'weline-detail-figure') === false
+        ) {
+            return $html;
+        }
+
+        $document = new \DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $document->loadHTML(
+                '<!doctype html><html><head><meta charset="utf-8"></head><body>'
+                . '<div id="weline-storefront-frame-root">' . $html . '</div>'
+                . '</body></html>',
+                LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING,
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded) {
+            return $html;
+        }
+
+        $xpath = new \DOMXPath($document);
+        $containers = $xpath->query('//*[@id="weline-storefront-frame-root"]');
+        $container = $containers !== false ? $containers->item(0) : null;
+        if (!$container instanceof \DOMElement) {
+            return $html;
+        }
+
+        $images = $xpath->query('.//img', $container);
+        if ($images === false) {
+            return $html;
+        }
+        foreach ($images as $img) {
+            if (!$img instanceof \DOMElement) {
+                continue;
+            }
+            $host = self::descriptionMediaFrameHost($img);
+            if ($host instanceof \DOMElement) {
+                self::applyLayoutFrameToHost($host, $img);
+            }
+        }
+
+        $output = '';
+        foreach ($container->childNodes as $child) {
+            $output .= (string)$document->saveHTML($child);
+        }
+
         return trim($output) !== '' ? trim($output) : $html;
+    }
+
+    private static function descriptionMediaFrameHost(\DOMElement $img): ?\DOMElement
+    {
+        for ($node = $img->parentNode; $node instanceof \DOMElement; $node = $node->parentNode) {
+            $class = ' ' . preg_replace('/\s+/', ' ', trim($node->getAttribute('class'))) . ' ';
+            if (str_contains($class, ' w-frame ')) {
+                return null;
+            }
+            if (str_contains($class, ' weline-detail-feature__media ')
+                || str_contains($class, ' weline-detail-figure ')
+            ) {
+                return $node;
+            }
+            if (str_contains($class, ' weline-detail-figure-stack ')
+                || str_contains($class, ' weline-detail-feature ')
+                || str_contains($class, ' product-native-detail__description-body ')
+            ) {
+                break;
+            }
+        }
+
+        return null;
+    }
+
+    private static function applyLayoutFrameToHost(\DOMElement $host, \DOMElement $img): void
+    {
+        $class = trim($host->getAttribute('class'));
+        if (preg_match('/\bw-frame\b/', $class) === 1) {
+            return;
+        }
+        // Refresh width/height from file when possible (square importer placeholders).
+        self::descriptionImageAspectRatio($img);
+        $width = self::positiveIntAttr($img->getAttribute('width')) ?? 0;
+        $height = self::positiveIntAttr($img->getAttribute('height')) ?? 0;
+        if ($width < 1 || $height < 1) {
+            $width = 1;
+            $height = 1;
+        }
+        $ratio = FileAssetManager::normalizeFrameRatio($width, $height);
+        $host->setAttribute('class', trim($class . ' w-frame'));
+        $host->setAttribute('data-ratio', $ratio);
+        $host->setAttribute('data-fit', 'contain');
+        $whitelist = ['1' => true, '4/3' => true, '16/9' => true, '21/9' => true];
+        if (!isset($whitelist[$ratio])) {
+            $style = trim($host->getAttribute('style'));
+            $custom = '--weline-frame-ratio:' . $width . ' / ' . $height . ';';
+            $host->setAttribute(
+                'style',
+                $style === '' ? $custom : rtrim($style, ';') . ';' . $custom,
+            );
+        }
     }
 
     /**
@@ -1095,7 +1295,12 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
         foreach ($images as $img) {
             $figure = $document->createElement('figure');
             $figure->setAttribute('class', 'weline-detail-figure');
-            $figure->appendChild($img->cloneNode(true));
+            $cloned = $img->cloneNode(true);
+            if (!$cloned instanceof \DOMElement) {
+                continue;
+            }
+            $figure->appendChild($cloned);
+            self::applyLayoutFrameToHost($figure, $cloned);
             $row->appendChild($figure);
         }
 

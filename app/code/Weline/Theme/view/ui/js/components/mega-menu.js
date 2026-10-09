@@ -1,7 +1,8 @@
 /**
  * Weline.UI mega-menu — split chrome (sidebar tabs + content panels).
  * Open/close remains on parent `popover`; this component owns tab activation.
- * Inactive panels may ship as `data-mega-panel-lazy` + compact JSON payloads.
+ * Panels + sidebar thumbs ship without networkable `src` (`data-mega-panel-lazy` /
+ * `data-mega-img-src`) and hydrate on first popover open or tab activate.
  */
 export function register(UI) {
     UI.define('mega-menu', ({ element: root, listen }) => {
@@ -17,6 +18,20 @@ export function register(UI) {
         const panelAttr = (el) => el?.getAttribute?.('data-w-mega-panel') || el?.getAttribute?.('data-mega-panel') || '';
 
         const text = (value) => (value == null ? '' : String(value));
+
+        const hydrateDeferredThumbs = (menu) => {
+            menu.querySelectorAll('img[data-mega-img-src]').forEach((img) => {
+                if (!owns(img, menu)) return;
+                const src = (img.getAttribute('data-mega-img-src') || '').trim();
+                if (!src) {
+                    img.removeAttribute('data-mega-img-src');
+                    return;
+                }
+                img.setAttribute('src', src);
+                img.removeAttribute('data-mega-img-src');
+                img.setAttribute('data-layout-exempt', '1');
+            });
+        };
 
         const hydrateLazyPanel = (panel) => {
             if (!panel || panel.getAttribute('data-mega-panel-lazy') !== '1') {
@@ -43,7 +58,10 @@ export function register(UI) {
                 introEl.setAttribute('data-testid', 'mega-menu-category-intro');
                 if (banner) {
                     const wrap = document.createElement('div');
-                    wrap.className = 'mega-menu-panel__banner';
+                    wrap.className = 'mega-menu-panel__banner w-frame';
+                    wrap.setAttribute('data-ratio', '1500/300');
+                    wrap.setAttribute('data-fit', 'cover');
+                    wrap.style.setProperty('--weline-frame-ratio', '5 / 1');
                     const img = document.createElement('img');
                     img.src = banner;
                     img.alt = text(payload.bannerAlt);
@@ -96,6 +114,7 @@ export function register(UI) {
                 img.loading = 'lazy';
                 img.width = 72;
                 img.height = 72;
+                img.setAttribute('data-layout-exempt', '1');
                 media.appendChild(img);
                 const body = document.createElement('span');
                 body.className = 'mega-menu-card__body';
@@ -136,11 +155,25 @@ export function register(UI) {
             panel.appendChild(list);
         };
 
+        const expandDefaultCards = () => {
+            const menu = menuRoot();
+            menu.querySelectorAll('[data-w-mega-card-expand="1"], [data-mega-card-expand="1"]').forEach((card) => {
+                if (!owns(card, menu)) return;
+                card.classList.add('is-expanded');
+                const children = card.querySelector('.w-mega-menu__card-children, .mega-menu-card__children');
+                if (children) {
+                    children.hidden = false;
+                    children.removeAttribute('hidden');
+                }
+            });
+        };
+
         const activateFromTab = (tab) => {
             const menu = menuRoot();
             if (!tab || !owns(tab, menu)) return false;
             const panelId = tabAttr(tab);
             if (!panelId) return false;
+            hydrateDeferredThumbs(menu);
             const tabs = Array.from(menu.querySelectorAll('[data-w-mega-tab], [data-mega-tab]')).filter((item) => owns(item, menu));
             const panels = Array.from(menu.querySelectorAll('[data-w-mega-panel], [data-mega-panel]')).filter((item) => owns(item, menu));
             tabs.forEach((item) => {
@@ -157,20 +190,24 @@ export function register(UI) {
                 panel.hidden = !active;
                 if (active) panel.removeAttribute('hidden');
             });
+            expandDefaultCards();
             return true;
         };
 
-        const expandDefaultCards = () => {
+        const revealOpenMedia = () => {
             const menu = menuRoot();
-            menu.querySelectorAll('[data-w-mega-card-expand="1"], [data-mega-card-expand="1"]').forEach((card) => {
-                if (!owns(card, menu)) return;
-                card.classList.add('is-expanded');
-                const children = card.querySelector('.w-mega-menu__card-children, .mega-menu-card__children');
-                if (children) {
-                    children.hidden = false;
-                    children.removeAttribute('hidden');
-                }
-            });
+            hydrateDeferredThumbs(menu);
+            const activeTab = menu.querySelector('[data-w-mega-tab].is-active, [data-mega-tab].is-active')
+                || menu.querySelector('[data-w-mega-tab][aria-selected="true"], [data-mega-tab][aria-selected="true"]');
+            if (activeTab) {
+                activateFromTab(activeTab);
+                return;
+            }
+            const activePanel = menu.querySelector('.mega-menu-panel.is-active, [data-mega-panel].is-active');
+            if (activePanel) {
+                hydrateLazyPanel(activePanel);
+                expandDefaultCards();
+            }
         };
 
         const onActivateEvent = (event) => {
@@ -204,17 +241,24 @@ export function register(UI) {
             }
         });
 
+        const popoverHost = root.closest('[data-w-component="popover"], [data-w-popover], .w-popover');
+        if (popoverHost) {
+            listen(popoverHost, 'weline:ui:popover:open', revealOpenMedia);
+        }
+        // Panel may itself be the popover surface (drawer flyout).
+        listen(root, 'weline:ui:popover:open', revealOpenMedia);
+
         if (!root.classList.contains('w-mega-menu')) {
             root.classList.add('w-mega-menu');
         }
         if (!root.hasAttribute('data-w-mega-menu') && !root.hasAttribute('data-mega-menu')) {
             root.setAttribute('data-w-mega-menu', '');
         }
-        expandDefaultCards();
 
         return {
             element: root,
             activateTab: activateFromTab,
+            revealOpenMedia,
             refresh: expandDefaultCards,
             destroy() {},
         };

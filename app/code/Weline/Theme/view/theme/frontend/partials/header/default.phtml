@@ -348,6 +348,7 @@ $defaultNavItemsFactory = static function (): array {
                                      width="420"
                                      height="159"
                                      decoding="async"
+                                     data-layout-exempt="1"
                                      onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
                             <?php endif; ?>
                             <span class="logo-wordmark" aria-hidden="true"<?= $hasLogo ? ' hidden' : '' ?>>
@@ -486,6 +487,14 @@ $defaultNavItemsFactory = static function (): array {
                         position="header"
                         class="header-action-item header-currency-switcher">
                     <w:hook>header-currency-switcher</w:hook>
+                </w:slot>
+
+                <w:slot id="scope-switcher"
+                        name="范围切换"
+                        accept="layout-header-scope-switcher,scope-switcher"
+                        exclusive="true"
+                        position="header"
+                        class="header-action-item header-scope-switcher">
                 </w:slot>
 
                 <w:slot id="user-area"
@@ -816,5 +825,5 @@ window.__welineHeaderLabels = {
     browse: <?= json_encode($headerLabel('浏览 %{1} 相关商品与配件'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>
 };
 </script>
-<script src="@static(Weline_Theme::js/partials/header-default.js)&v=20261007-left-more-spare-enforce"></script>
+<script src="@static(Weline_Theme::js/partials/header-default.js)&v=20261009-layout-exempt-residual"></script>
 

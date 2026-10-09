@@ -198,13 +198,20 @@
     border-radius: var(--weline-radius-md, 10px);
     background: var(--weline-theme-surface-muted, #f4f6f8);
 }
+.mega-menu-panel__banner.w-frame {
+    max-height: 9rem;
+    border-radius: var(--weline-radius-md, 10px);
+}
 
 .w-mega-menu__panel-banner img,
-.mega-menu-panel__banner img {
+.mega-menu-panel__banner:not(.w-frame) img {
     display: block;
     width: 100%;
     max-height: 9rem;
     object-fit: cover;
+}
+.mega-menu-panel__banner.w-frame > img {
+    max-height: none;
 }
 
 .w-mega-menu__panel-intro-desc,

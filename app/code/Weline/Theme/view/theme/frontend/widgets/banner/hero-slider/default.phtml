@@ -132,14 +132,16 @@ $translateDefaultCopy = static function (string $source, string $english) use ($
 $heroImage = static function (string $slug, string $alt, bool $priority = false) use ($esc): string {
     $desktop = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '.webp';
     $mobile = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '-mobile.webp';
-    return '<picture>'
+    return '<div class="w-frame" data-ratio="16/5" data-fit="cover" style="--weline-frame-ratio:16 / 5;">'
+        . '<picture>'
         . '<source media="(max-width: 768px)" srcset="' . $esc($mobile) . '" width="900" height="1200" />'
         . '<img src="' . $esc($desktop) . '" alt="' . $esc($alt) . '" '
         . 'width="1920" height="600" '
         . 'loading="' . ($priority ? 'eager' : 'lazy') . '" decoding="async"'
         . ($priority ? ' fetchpriority="high"' : '')
         . '>'
-        . '</picture>';
+        . '</picture>'
+        . '</div>';
 };
 
 // 运营配置里可能烘焙了旧版 image_file_html（缺 width/height）；渲染前补齐，避免 CLS / SEO 尺寸告警。
@@ -178,6 +180,12 @@ $ensureHeroMediaDimensions = static function (string $html): string {
         },
         $html
     ) ?? $html;
+
+    if ($html !== '' && !str_contains($html, 'w-frame')) {
+        $html = '<div class="w-frame" data-ratio="16/5" data-fit="cover" style="--weline-frame-ratio:16 / 5;">'
+            . $html
+            . '</div>';
+    }
 
     return $html;
 };

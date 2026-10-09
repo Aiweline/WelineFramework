@@ -142,6 +142,67 @@ final class WlsRequestForwardedOriginTest extends TestCase
         );
     }
 
+    public function testUntrustedForwardedPortIsIgnoredSoDirectWlsKeepsListenPort(): void
+    {
+        // Client-spoofed X-Forwarded-Port must not rewrite public origin when
+        // the transport peer is not a trusted proxy. Direct WLS keeps WLS_PORT.
+        $request = $this->createRequest(
+            "Host: p05113ef3.test.weline.com\r\n"
+            . "X-Forwarded-Proto: https\r\n"
+            . "X-Forwarded-Port: 443\r\n",
+            [
+                'HTTPS' => 'on',
+                'REQUEST_SCHEME' => 'https',
+                'WLS_PORT' => 9555,
+                'WLS_TRUST_FORWARDED_HEADERS' => '0',
+            ],
+        );
+
+        self::assertTrue($request->isSecure());
+        self::assertSame('p05113ef3.test.weline.com:9555', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('9555', $_SERVER['SERVER_PORT'] ?? null);
+        self::assertSame('https://p05113ef3.test.weline.com:9555', $request->getBaseHost());
+    }
+
+    public function testWebsiteUrlPublicOriginWinsOverWorkerListenAuthority(): void
+    {
+        // Nginx→Worker cleartext H1 can leave REQUEST_SCHEME=http and Host:…:9555
+        // while Url::parser already bound the storefront public https origin.
+        $prevWlsPort = \getenv('WLS_PORT');
+        \putenv('WLS_PORT=9555');
+        try {
+            $request = $this->createRequest(
+                "Host: p05113ef3.test.weline.com:9555\r\n",
+                [
+                    'HTTPS' => '',
+                    'REQUEST_SCHEME' => 'http',
+                    'WLS_PORT' => 9555,
+                    'WLS_TRUST_FORWARDED_HEADERS' => '0',
+                ],
+            );
+            \Weline\Framework\Env\WelineEnv::getInstance()->initFromSnapshot(
+                [],
+                [],
+                [],
+                [],
+                [
+                    'WELINE_WEBSITE_URL' => 'https://p05113ef3.test.weline.com',
+                    'HTTP_HOST' => 'p05113ef3.test.weline.com:9555',
+                    'REQUEST_SCHEME' => 'http',
+                ],
+            );
+
+            self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
+        } finally {
+            if ($prevWlsPort === false) {
+                \putenv('WLS_PORT');
+            } else {
+                \putenv('WLS_PORT=' . $prevWlsPort);
+            }
+            \Weline\Framework\Env\WelineEnv::getInstance()->reset();
+        }
+    }
+
     public function testGlobalsEmulatorKeepsDispatcherPublicAuthoritySnapshot(): void
     {
         $request = $this->createRequest(

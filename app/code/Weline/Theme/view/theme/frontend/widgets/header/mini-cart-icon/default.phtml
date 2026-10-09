@@ -143,7 +143,9 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                     data-mini-cart-swatch-trigger
                     data-mini-cart-swatch-src="<?= $esc($image) ?>"
                     aria-label="<?= $esc(__('查看商品图')) ?>">
-                <img src="<?= $esc($image) ?>" alt="">
+                <span class="w-frame" data-ratio="1" data-fit="cover">
+                    <img src="<?= $esc($image) ?>" alt="" width="72" height="72">
+                </span>
             </button>
         <?php else: ?>
             <button type="button" class="mini-cart-drawer__line-media" disabled aria-hidden="true" tabindex="-1"></button>
@@ -166,7 +168,10 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                                         aria-label="<?= $esc(__('查看规格图')) ?>">
                                     <img class="mini-cart-drawer__line-option-swatch"
                                          src="<?= $esc($optionRow['swatch_image']) ?>"
-                                         alt="">
+                                         alt=""
+                                         width="16"
+                                         height="16"
+                                         data-layout-exempt="1">
                                 </button>
                             <?php elseif ($optionRow['swatch_color'] !== ''): ?>
                                 <span class="mini-cart-drawer__line-option-swatch mini-cart-drawer__line-option-swatch--color"

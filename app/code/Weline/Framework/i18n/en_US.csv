@@ -2341,14 +2341,17 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 命令,Command
 简述,Summary
 获取命令帮助信息失败,"Failed to retrieve command help information"
-"前台 section weline-code 检查：发现 %{1} 条违规。","Front section weline-code check: %{1} violations found."
+"部件布局稳定检查：发现 %{1} 条违规。","部件布局稳定检查：发现 %{1} 条违规。"
 "其余 %{1} 条问题已省略，使用 --json 查看全部。","The remaining %{1} questions have been omitted, use --json to view them all."
-"【致命错误】前台 section/slot-section 缺少 weline-code：共 %{1} 处。请修复后重新运行 frontend:check-section-code。","[Fatal error] Foreground section/slot-section is missing weline-code: %{1} in total. Please repair and re-run frontend:check-section-code."
-"前台 section weline-code 检查通过。","The front section weline-code check passes."
-"检查前台 <section> 与 w:slot wrapper=section 是否配置 weline-code","Check whether the frontend <section> and w:slot wrapper=section are configured with weline-code"
+部件布局稳定检查通过。,部件布局稳定检查通过。
+"检查店面部件与商品卡是否挂 Theme .w-frame / .w-skeleton 布局稳定类","检查店面部件与商品卡是否挂 Theme .w-frame / .w-skeleton 布局稳定类"
 "JSON 格式输出完整报告","Output full report in JSON format"
 本地门禁,"local access control"
 "JSON 报告","JSON report"
+"前台 section weline-code 检查：发现 %{1} 条违规。","Front section weline-code check: %{1} violations found."
+"【致命错误】前台 section/slot-section 缺少 weline-code：共 %{1} 处。请修复后重新运行 frontend:check-section-code。","[Fatal error] Foreground section/slot-section is missing weline-code: %{1} in total. Please repair and re-run frontend:check-section-code."
+"前台 section weline-code 检查通过。","The front section weline-code check passes."
+"检查前台 <section> 与 w:slot wrapper=section 是否配置 weline-code","Check whether the frontend <section> and w:slot wrapper=section are configured with weline-code"
 "Theme 布局部件归属检查：发现 %{1} 条违规。","Theme layout widget ownership check: found %{1} violation(s)."
 "【致命错误】Theme 布局/partial 内嵌非 Theme 部件：共 %{1} 处。请改为 default_injections 后重新运行 frontend:check-theme-layout-widgets。","[Fatal] Theme layout/partial embeds non-Theme widgets: %{1} occurrence(s). Switch to default_injections and re-run frontend:check-theme-layout-widgets."
 "Theme 布局部件归属检查通过。","Theme layout widget ownership check passed."
@@ -2372,6 +2375,8 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：,主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：
 "静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）","静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）"
 "已 bump global/storefront/deploy（日常 Upgrade 优先 bump）","已 bump global/storefront/deploy（日常 Upgrade 优先 bump）"
+静态资源部署进程池,"Static deploy process pool"
+静态资源部署,静态资源部署
 "必须提供 --task-id。","--task-id is required."
 未找到可恢复任务。,"No resumable task found."
 查看可恢复后台任务的持久状态,"View the persistent state of resumeable background tasks"
@@ -2430,6 +2435,10 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 "只编译 weline.modules.js","Compile weline.modules.js Only"
 "只编译 less","Compile Less Only"
 使用别名,"Using alias"
+"需要 --job=/path/to/job.json","--job=/path/to/job.json is required"
+"无法读取 job JSON","Unable to read job JSON"
+"语种编译完成：%{n} 个产物","Locale compile finished: %{n} artifacts"
+"执行语种模板编译 job（进程池工人 / 调试用）","Run locale template compile job (process-pool worker / debug)"
 正在收集模块：%{1},"Collecting module: %{1}"
 正在收集所有模块的翻译词...,"Collecting translation phrases for all modules..."
 "模块 %{1} 语言包收集成功！","Module %{1} language pack collected successfully!"

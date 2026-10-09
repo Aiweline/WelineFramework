@@ -294,10 +294,12 @@ $this->assign('meta', $meta);
         .blog-storefront__card-hit { position: absolute; inset: 0; z-index: 1; }
         .blog-storefront__media {
             position: relative;
-            height: 140px;
             overflow: hidden;
             background: #f3f4f6;
         }
+        /* 布局稳定：挂 .w-frame 后用 aspect-ratio，禁止定高抢几何 */
+        .blog-storefront__media:not(.w-frame) { height: 140px; }
+        .blog-storefront__media.w-frame { height: auto; border-radius: 0; }
         .blog-storefront__media img {
             position: absolute; inset: 0; width: 100%; height: 100%;
             object-fit: cover;

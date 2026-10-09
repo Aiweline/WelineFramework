@@ -22,12 +22,16 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
            data-testid="search-hit-blog-cms"></a>
     <?php endif; ?>
     <div class="blog-storefront__media"<?= $url === '' ? ' aria-hidden="true"' : '' ?>>
-        <img src="<?= $escape($imageResolved['src']) ?>"
-             alt=""
-             data-storefront-img="1"
-             data-fallback="<?= $escape($imageResolved['fallback']) ?>"
-             loading="lazy"
-             decoding="async">
+        <span class="w-frame" data-ratio="4/3" data-fit="cover">
+            <img src="<?= $escape($imageResolved['src']) ?>"
+                 alt=""
+                 width="1200"
+                 height="800"
+                 data-storefront-img="1"
+                 data-fallback="<?= $escape($imageResolved['fallback']) ?>"
+                 loading="lazy"
+                 decoding="async">
+        </span>
         <span class="blog-storefront__badge"><lang>页面</lang></span>
     </div>
     <div class="blog-storefront__body">

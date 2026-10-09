@@ -159,7 +159,7 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
                         <?php elseif ($rPath !== ''): ?>
                             <a class="blog-storefront__card-hit" href="@url{$rPath}" aria-label="<?= $escape($rTitle) ?>"></a>
                         <?php endif; ?>
-                        <div class="blog-storefront__media">
+                        <div class="blog-storefront__media w-frame" data-ratio="4/3" data-fit="cover">
                             <img src="<?= $escape($rImage['src']) ?>" alt="" width="1200" height="800"
                                  loading="lazy" decoding="async"
                                  data-storefront-img="1" data-fallback="<?= $escape($rImage['fallback']) ?>">

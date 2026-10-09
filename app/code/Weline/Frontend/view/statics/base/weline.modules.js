@@ -39,8 +39,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261007-sibling-ssr-i18n1"],
-            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261007-sibling-ssr-i18n1"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261009-w-frame-line-media"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261009-w-frame-line-media"],
             globalVar: "WelineMiniCartIcon",
             description: "迷你购物车图标与抽屉"
         },
@@ -127,15 +127,15 @@
             description: "Cookie操作工具函数"
         },
         account: {
-            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-session.js?v=20261007-near-expiry-js-check-1"],
-            paths: ["Weline_Customer::js/account-session.js?v=20261007-near-expiry-js-check-1"],
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-session.js?v=20261009-personal-center-header-race-1"],
+            paths: ["Weline_Customer::js/account-session.js?v=20261009-personal-center-header-race-1"],
             globalVar: "WelineAccountModule",
             load: "defer",
             description: "前台账户会话与顶栏账户 chrome"
         },
         customerAccount: {
-            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20261007-personal-center-session-sync-1"],
-            paths: ["Weline_Customer::js/account-index.js?v=20261007-personal-center-session-sync-1"],
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20261009-order-uuid-locate-2"],
+            paths: ["Weline_Customer::js/account-index.js?v=20261009-order-uuid-locate-2"],
             globalVar: "WelineCustomerAccount",
             description: "前台用户中心账户页交互"
         },

@@ -214,7 +214,7 @@ $renderMedia = static function (array $node, string $label, int $seed, bool $isC
         $image = $resolveCatalogImage($node, $seed);
         ?>
         <span class="sidebar-category-card__media">
-            <img src="<?= $escAttr($image) ?>" alt="<?= $escAttr($label) ?>" loading="lazy" width="48" height="48">
+            <img data-sidebar-img-src="<?= $escAttr($image) ?>" alt="<?= $escAttr($label) ?>" loading="lazy" width="48" height="48" data-layout-exempt="1">
         </span>
         <?php
         return;

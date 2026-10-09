@@ -1344,6 +1344,10 @@ window.WelineWidgetAssets.register('product-product-info-0', function (widgetScr
             }
             const thumbSrc = item.poster || (item.type === 'image' ? item.src : '');
             if (thumbSrc) {
+                const frame = document.createElement('span');
+                frame.className = 'w-frame';
+                frame.setAttribute('data-ratio', '1');
+                frame.setAttribute('data-fit', 'cover');
                 const img = document.createElement('img');
                 img.src = thumbSrc;
                 img.alt = '';
@@ -1351,7 +1355,8 @@ window.WelineWidgetAssets.register('product-product-info-0', function (widgetScr
                 img.height = 64;
                 img.setAttribute('width', '64');
                 img.setAttribute('height', '64');
-                button.appendChild(img);
+                frame.appendChild(img);
+                button.appendChild(frame);
             } else {
                 const label = document.createElement('span');
                 label.className = 'product-native-detail__thumb-video-label';

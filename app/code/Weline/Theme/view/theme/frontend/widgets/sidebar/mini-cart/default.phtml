@@ -67,7 +67,9 @@ $itemCount = count($cartItems);
         <div class="cart-items">
             <?php foreach ($cartItems as $item): ?>
                 <div class="cart-item" data-item-id="<?= (int)$item['id'] ?>">
-                    <img src="<?= $esc((string)($item['image'] ?? '')) ?>" alt="<?= $esc((string)($item['name'] ?? '')) ?>" class="item-image">
+                    <span class="item-image w-frame" data-ratio="1" data-fit="cover">
+                        <img src="<?= $esc((string)($item['image'] ?? '')) ?>" alt="<?= $esc((string)($item['name'] ?? '')) ?>" width="64" height="64">
+                    </span>
                     <div class="item-details">
                         <h4 class="item-name"><?= $esc((string)($item['name'] ?? '')) ?></h4>
                         <div class="item-meta">

@@ -1771,6 +1771,22 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         }
         $hostPart = ($parsers['host'] ?? 'localhost');
         $portPart = ($parsers['port'] ?? '');
+        // Never publish the Worker listen port as the storefront origin — it is an
+        // internal H1 upstream address (Nginx → 127.0.0.1:WLS_PORT), not public.
+        $listenPort = self::workerListenPortString();
+        if ($listenPort !== '' && (string)$portPart === $listenPort) {
+            $portPart = '';
+        }
+        // Host:9555 请求 URL 不得带着 Worker 口去最长站匹配，否则 https://host:9555/
+        // 对不上注册的 https://host/，bestMatch 失败后会留下污染源。
+        if ($listenPort !== '' && \str_contains($url, ':' . $listenPort)) {
+            $url = \preg_replace(
+                '#^(https?://[^/:]+):' . \preg_quote($listenPort, '#') . '(?=/|$|\?|#)#i',
+                '$1',
+                $url,
+                1
+            ) ?? $url;
+        }
         $portSuffix = ($portPart === '' || $portPart === '80' || $portPart === '443') ? '' : ':' . $portPart;
         $data['website_url'] = $requestScheme . '://' . $hostPart . $portSuffix;
         self::$parserServer['WELINE_WEBSITE_URL'] = $data['website_url'];
@@ -1786,12 +1802,14 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             $data['url'] = $url;
             $parsed_url = self::parse_url($url);
             $data['parse'] = is_array($parsed_url) ? $parsed_url : [];
-            $matchedWebsiteUrl = $bestMatch['site_url_for_match'];
+            // Canonical registry URL (https://host) — NOT site_url_for_match
+            // (http://host:9555). Match URL only peels the mount; baking <base>/@url
+            // from the Worker listen origin causes HTTPS mixed-content and kills CSS.
+            $matchedWebsiteUrl = (string)$bestMatch['site_url'];
             $data['website_url'] = $matchedWebsiteUrl;
             $data['website'] = $site;
             self::$parserServer['WELINE_WEBSITE_CODE'] = $site['code'];
             self::$parserServer['WELINE_WEBSITE_ID'] = $site['website_id'];
-            // 使用当前请求的协议、host 和端口，避免 WLS 特殊端口丢失
             self::$parserServer['WELINE_WEBSITE_URL'] = $matchedWebsiteUrl;
             self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $site['default_currency'];
             self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $site['default_language'];
@@ -1840,7 +1858,7 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                 $data['url'] = $url;
                 $parsed_url = self::parse_url($url);
                 $data['parse'] = is_array($parsed_url) ? $parsed_url : [];
-                $matchedWebsiteUrl = $bestMatch['site_url_for_match'];
+                $matchedWebsiteUrl = (string)$bestMatch['site_url'];
                 $data['website_url'] = $matchedWebsiteUrl;
                 $data['website'] = $site;
                 self::$parserServer['WELINE_WEBSITE_CODE'] = $site['code'];
@@ -2661,7 +2679,12 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         foreach ($siteKeys as $siteUrl) {
             $siteUrlForMatch = self::replaceUrlScheme((string)$siteUrl, $currentScheme);
             $siteParsed = \parse_url($siteUrlForMatch);
-            if (!isset($siteParsed['port']) && $requestPort !== '') {
+            // 匹配口可叠公开非默认口；禁止把 Worker 监听口叠进 match URL。
+            $listenPort = self::workerListenPortString();
+            if (!isset($siteParsed['port']) && $requestPort !== ''
+                && ($listenPort === '' || $requestPort !== $listenPort)
+                && !((int)$requestPort >= 9000 && (int)$requestPort <= 9999)
+            ) {
                 $siteUrlForMatch = ($siteParsed['scheme'] ?? $currentScheme) . '://'
                     . ($siteParsed['host'] ?? 'localhost')
                     . ':' . $requestPort
@@ -3202,6 +3225,27 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         self::$parserServer['REQUEST_URI'] = $wire;
         self::$parserServer['WELINE_ORIGIN_REQUEST_URI'] = $wire;
         self::$parserServer['ORIGIN_REQUEST_URI'] = $wire;
+    }
+
+    /**
+     * Internal WLS Worker listen port (env WLS_PORT). Empty when unknown / FPM.
+     */
+    private static function workerListenPortString(): string
+    {
+        $raw = \getenv('WLS_PORT');
+        if (!\is_string($raw) || $raw === '' || !\ctype_digit($raw)) {
+            $server = self::currentServer();
+            $raw = $server['WLS_PORT'] ?? $server['SERVER_PORT'] ?? '';
+        }
+        if (!\is_int($raw) && !(\is_string($raw) && $raw !== '' && \ctype_digit($raw))) {
+            return '';
+        }
+        $port = (int)$raw;
+        if ($port <= 0 || $port === 80 || $port === 443) {
+            return '';
+        }
+
+        return (string)$port;
     }
 
     private static function updateCurrentServerVar(string $key, mixed $value): void

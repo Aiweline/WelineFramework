@@ -91,7 +91,7 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
          data-testid="weline-product-card"
          data-product-id="<?= $productId ?>"
          data-density="shelf">
-    <div class="wpc-media">
+    <div class="wpc-media w-frame" data-ratio="1" data-fit="cover">
         <a class="wpc-media-link" <?= $hrefAttr ?> aria-label="<?= $esc($productName) ?>">
             <img src="<?= $esc($productImage) ?>"
                  alt="<?= $esc($productName) ?>"
@@ -130,7 +130,7 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
     </div>
 
     <div class="wpc-body">
-        <h3 class="wpc-title">
+        <h3 class="wpc-title w-lines" data-lines="2">
             <a <?= $hrefAttr ?>><?= $esc($productName) ?></a>
         </h3>
 

@@ -303,13 +303,18 @@ class WlsRequest extends Request
     }
 
     /**
-     * Public listen port for a direct WLS client connection when Host omits it.
+     * Public listen port when the wire Host omits it.
      *
-     * Local browsers often hit `*.test.weline.com` via 127.0.0.1 and are therefore
-     * classified as a trusted proxy. They do not send X-Forwarded-*. In that
-     * case the worker listen port is the public authority. Explicit forwarded
-     * 80/443 (or forwarded proto without a non-standard port) still keep the
-     * protocol default so an internal worker port cannot leak into cookies.
+     * Framework rule (edge vs direct):
+     * - Trusted Nginx / dispatcher edge: read X-Forwarded-Port /
+     *   Weline-Original-Port. Default 80/443 stay out of the authority; any
+     *   other forwarded port is kept (non-standard public listen).
+     * - Direct WLS (no trusted forwarded port): the worker listen port
+     *   (WLS_PORT) is the public authority — if the worker has a port, URLs
+     *   keep that port.
+     *
+     * Do not invent or strip ports from WLS_PUBLIC_ORIGIN here; that string is
+     * a Master bounce/warmup hint, not a substitute for edge port facts.
      *
      * @param array<string, mixed> $serverInfo
      * @param array<string, string> $headers
@@ -1191,7 +1196,11 @@ class WlsRequest extends Request
     }
     
     /**
-     * 获取基础主机 URL，不依赖 $_SERVER
+     * 获取基础主机 URL，不依赖 $_SERVER。
+     *
+     * 与 RequestAbstract 同契约：站柜 website_url（公开源）优先于 wire
+     * REQUEST_SCHEME / WLS_PORT。Nginx→Worker 明文 H1 时若仍用请求口叠进
+     * website_url，会烤成 http://host:9555/，HTTPS 店面混合内容拦掉 CSS。
      */
     public function getBaseHost(): string
     {
@@ -1201,7 +1210,6 @@ class WlsRequest extends Request
             throw new \RuntimeException('Host is not available for current request.');
         }
 
-        // 透传模式：只信 Host 头（含端口），不做代理头推断
         $currentPort = '';
         if (\str_contains($host, ':')) {
             $parts = \explode(':', $host, 2);
@@ -1211,26 +1219,71 @@ class WlsRequest extends Request
             $hostName = $host;
             $currentPort = $currentScheme === 'https' ? '443' : '80';
         }
-        $isNonStandardPort = $currentPort !== '' && !(($currentScheme === 'https' && $currentPort === '443') || ($currentScheme !== 'https' && $currentPort === '80'));
 
-        // 直接从 $_SERVER 读取 WELINE_WEBSITE_URL（Url::parser → processUrlParse 写入）
-        // 不能用 getServer() / ServerBag，因为 ServerBag 可能在 parser 之前就已初始化
-        // URL 生成时始终参考当前 WLS 请求的端口，非标准端口（如 9981）必须带上
+        // Url::parser → WELINE_WEBSITE_URL；优先站柜公开源的 scheme/host/port。
         $websiteUrl = (string) \w_env('website_url', '');
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
-            $wHost = $parsed['host'] ?? 'localhost';
-            $wPath = $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''));
-
-            if ($websiteUrl !== '') {
-                if (isset($parsed['port'])) {
-                    $currentPort = (string)$parsed['port'];
-                    $isNonStandardPort = !(($currentScheme === 'https' && $currentPort === '443') || ($currentScheme !== 'https' && $currentPort === '80'));
+            if (\is_array($parsed) && !empty($parsed['host'])) {
+                $wHost = (string)$parsed['host'];
+                $wPath = $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''));
+                $websiteScheme = \strtolower((string)($parsed['scheme'] ?? ''));
+                if ($websiteScheme !== 'http' && $websiteScheme !== 'https') {
+                    $websiteScheme = $currentScheme;
                 }
-                $portSuffix = $isNonStandardPort ? ':' . $currentPort : '';
-                return $currentScheme . '://' . $wHost . $portSuffix . $wPath;
+                $websitePortExplicit = isset($parsed['port']);
+                $resolvedPort = $websitePortExplicit ? (string)(int)$parsed['port'] : '';
+                if ($resolvedPort === '') {
+                    $resolvedPort = $websiteScheme === 'https' ? '443' : '80';
+                }
+                $wlsPortRaw = \w_env('server.wls_port', \getenv('WLS_PORT') ?: '');
+                $wlsPort = (\is_int($wlsPortRaw) || (\is_string($wlsPortRaw) && $wlsPortRaw !== '' && \ctype_digit($wlsPortRaw)))
+                    ? (string)(int)$wlsPortRaw
+                    : '';
+                // 站柜/解析若误把 Worker 口写进 website_url，仍按公开源剥掉。
+                if ($resolvedPort !== '' && $resolvedPort !== '80' && $resolvedPort !== '443') {
+                    $explicitWorker = ($wlsPort !== '' && $resolvedPort === $wlsPort)
+                        || ((int)$resolvedPort >= 9000 && (int)$resolvedPort <= 9999);
+                    if ($explicitWorker) {
+                        $resolvedPort = $websiteScheme === 'https' ? '443' : '80';
+                        $websitePortExplicit = false;
+                    }
+                }
+                // website_url 未写端口：保留公开非默认口；丢弃等于 WLS_PORT 的 Worker 监听口。
+                // WLS_PORT 未知时也不得把 Host 上的 9xxx 监听口叠进公开 https 源（与 RequestAbstract 同契约）。
+                if (!$websitePortExplicit && $currentPort !== ''
+                    && $currentPort !== '80' && $currentPort !== '443'
+                ) {
+                    $isWorkerListenPort = ($wlsPort !== '' && $currentPort === $wlsPort);
+                    $looksLikePrivateWorkerPort = (int)$currentPort >= 9000 && (int)$currentPort <= 9999;
+                    if (!$isWorkerListenPort && !$looksLikePrivateWorkerPort) {
+                        $resolvedPort = $currentPort;
+                    }
+                }
+                $isNonStandardPort = !(
+                    ($websiteScheme === 'https' && $resolvedPort === '443')
+                    || ($websiteScheme === 'http' && $resolvedPort === '80')
+                );
+
+                return $websiteScheme . '://' . $wHost
+                    . ($isNonStandardPort ? ':' . $resolvedPort : '')
+                    . $wPath;
             }
         }
+
+        // No website_url yet: still never emit the Worker listen port as public.
+        $wlsPortRaw = \w_env('server.wls_port', \getenv('WLS_PORT') ?: '');
+        $wlsPort = (\is_int($wlsPortRaw) || (\is_string($wlsPortRaw) && $wlsPortRaw !== '' && \ctype_digit($wlsPortRaw)))
+            ? (string)(int)$wlsPortRaw
+            : '';
+        if ($wlsPort !== '' && $currentPort === $wlsPort) {
+            $currentPort = $currentScheme === 'https' ? '443' : '80';
+        }
+
+        $isNonStandardPort = $currentPort !== '' && !(
+            ($currentScheme === 'https' && $currentPort === '443')
+            || ($currentScheme !== 'https' && $currentPort === '80')
+        );
 
         return $currentScheme . '://' . $hostName . ($isNonStandardPort ? ':' . $currentPort : '');
     }

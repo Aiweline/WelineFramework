@@ -62,6 +62,8 @@ final class Image implements TaglibInterface, StaticMirrorCapableInterface
             'width' => false,
             'height' => false,
             'aspect_ratio' => false,
+            // Theme .w-frame wrap (default true). Set frame="false" when caller already provides .w-frame.
+            'frame' => false,
         ];
     }
 
@@ -88,7 +90,8 @@ final class Image implements TaglibInterface, StaticMirrorCapableInterface
                 . 'isset($Taglib__complement) ? filter_var($Taglib__complement, FILTER_VALIDATE_BOOL) : null, '
                 . '$Taglib__width ?? null, '
                 . '$Taglib__height ?? null, '
-                . '(string)($Taglib__aspect_ratio ?? \'\')'
+                . '(string)($Taglib__aspect_ratio ?? \'\'), '
+                . '!isset($Taglib__frame) || filter_var($Taglib__frame, FILTER_VALIDATE_BOOL)'
                 . '); ?>';
         };
     }
@@ -129,6 +132,8 @@ final class Image implements TaglibInterface, StaticMirrorCapableInterface
         try {
             /** @var FileImageRenderer $renderer */
             $renderer = ObjectManager::getInstance(FileImageRenderer::class);
+            $frame = !array_key_exists('frame', $attributes)
+                || filter_var($attributes['frame'], FILTER_VALIDATE_BOOL);
             $html = $renderer->renderFromMixed(
                 $usageString !== '' ? $usageString : null,
                 $asset,
@@ -142,6 +147,7 @@ final class Image implements TaglibInterface, StaticMirrorCapableInterface
                 $attributes['width'] ?? null,
                 $attributes['height'] ?? null,
                 CompileTimeStaticMirror::literalString($attributes['aspect_ratio'] ?? ''),
+                $frame,
             );
         } catch (\Throwable) {
             return null;

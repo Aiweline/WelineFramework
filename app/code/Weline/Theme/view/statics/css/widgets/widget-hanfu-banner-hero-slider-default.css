@@ -55,7 +55,24 @@
     line-height: 0;
 }
 
-.wc-theme_widget_hero_slider .slide-media :is(picture, img) {
+/* 有 .w-frame：交给 Theme 原语锁几何；禁止再把 picture/img 打成 static 拆掉绝对定位 */
+.wc-theme_widget_hero_slider .slide-media .w-frame {
+    width: 100%;
+    border-radius: 0;
+}
+.wc-theme_widget_hero_slider .slide-media .w-frame :is(picture, img) {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    object-fit: var(--weline-frame-fit, cover);
+    object-position: center center;
+}
+
+/* 无 frame 旧路径：图片自然比例自适应 */
+.wc-theme_widget_hero_slider .slide-media:not(:has(.w-frame)) :is(picture, img) {
     position: static;
     inset: auto;
     display: block;

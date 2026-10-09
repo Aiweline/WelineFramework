@@ -1,3 +1,4 @@
+/* w-frame-layout-exempt-20261009-residual */
 (function () {
     'use strict';
     var labels = window.__welineHeaderLabels || {};
@@ -38,6 +39,10 @@
             return;
         }
         headerInteractionsInited = true;
+        // 固化/旧 com 残留的站标裸 img：运行期补 chrome 豁免（源码已带 data-layout-exempt）
+        document.querySelectorAll('img.logo-image').forEach(function (img) {
+            img.setAttribute('data-layout-exempt', '1');
+        });
         ensureHeaderHamburgerTriggers();
         bindHeaderMegaMenu(document);
         bindDrawerFlyoutAlign(document);
@@ -1446,7 +1451,7 @@
                         + ' aria-selected="' + (isActive ? 'true' : 'false') + '"'
                         + ' aria-controls="' + escapeHeaderHtml(newPanelId) + '">'
                         + '<span class="mega-menu-sidebar-item__media">'
-                        + '<img src="' + escapeHeaderHtml(sidebarImage) + '" alt="" loading="lazy" width="36" height="36">'
+                        + '<img src="' + escapeHeaderHtml(sidebarImage) + '" alt="" loading="lazy" width="36" height="36" data-layout-exempt="1">'
                         + '</span>'
                         + '<span class="mega-menu-sidebar-item__label">' + escapeHeaderHtml(label) + '</span>'
                         + '</a>';
@@ -1470,7 +1475,7 @@
                         + '<li class="mega-menu-card">'
                         + '<a class="mega-menu-card__link" href="' + escapeHeaderHtml(href) + '">'
                         + '<span class="mega-menu-card__media">'
-                        + '<img src="' + escapeHeaderHtml(cardImage) + '" alt="" loading="lazy" width="72" height="72">'
+                        + '<img src="' + escapeHeaderHtml(cardImage) + '" alt="" loading="lazy" width="72" height="72" data-layout-exempt="1">'
                         + '</span>'
                         + '<span class="mega-menu-card__body">'
                         + '<span class="mega-menu-card__title">' + escapeHeaderHtml(label) + '</span>'
@@ -1501,7 +1506,7 @@
                         + ' aria-selected="' + (isActive ? 'true' : 'false') + '"'
                         + ' aria-controls="' + escapeHeaderHtml(newPanelId) + '">'
                         + '<span class="mega-menu-sidebar-item__media">'
-                        + '<img src="' + escapeHeaderHtml(sidebarImage) + '" alt="" loading="lazy" width="36" height="36">'
+                        + '<img src="' + escapeHeaderHtml(sidebarImage) + '" alt="" loading="lazy" width="36" height="36" data-layout-exempt="1">'
                         + '</span>'
                         + '<span class="mega-menu-sidebar-item__label">' + escapeHeaderHtml(label) + '</span>'
                         + '</a>';
@@ -1591,6 +1596,10 @@
                 container.innerHTML = '';
                 container.appendChild(sidebar);
                 container.appendChild(panels);
+                // chrome 小图：溢出重建后统一挂 layout-exempt（防旧包/缓存残留裸 img）
+                sidebar.querySelectorAll('.mega-menu-sidebar-item__media img, .mega-menu-card__media img').forEach(function (img) {
+                    img.setAttribute('data-layout-exempt', '1');
+                });
             }
 
 
@@ -2032,6 +2041,21 @@
         let lastClickTime = 0;
         let mouseDownPos = null;
 
+        function hydrateSidebarDeferredImages(root) {
+            if (!root || !root.querySelectorAll) {
+                return;
+            }
+            root.querySelectorAll('img[data-sidebar-img-src]').forEach(function(img) {
+                var src = (img.getAttribute('data-sidebar-img-src') || '').trim();
+                if (!src) {
+                    img.removeAttribute('data-sidebar-img-src');
+                    return;
+                }
+                img.setAttribute('src', src);
+                img.removeAttribute('data-sidebar-img-src');
+            });
+        }
+
         function showSidebar() {
             drawerTriggers.forEach(function(btn) {
                 btn.setAttribute('aria-expanded', 'true');
@@ -2040,7 +2064,8 @@
             categoriesSidebar.setAttribute('aria-hidden', 'false');
             categoriesSidebarOverlay.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
-            // 抽屉打开后再绑定内部 mega（右侧飞出）
+            // 抽屉打开后再赋分类图 src，并绑定内部 mega（右侧飞出）
+            hydrateSidebarDeferredImages(categoriesSidebar);
             hydrateSidebarMegaPanels(categoriesSidebar);
             bindHeaderMegaMenu(categoriesSidebar);
             bindDrawerFlyoutAlign(categoriesSidebar);

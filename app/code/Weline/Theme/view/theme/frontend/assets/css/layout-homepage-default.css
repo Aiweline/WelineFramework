@@ -92,9 +92,12 @@
             overflow: hidden;
         }
 
-        .theme-layout-homepage .homepage-hero .slide-media,
-        .theme-layout-homepage .homepage-hero .slide-media :is(picture, img),
-        .theme-layout-homepage .homepage-hero .slide-media img {
+        .theme-layout-homepage .homepage-hero .slide-media .w-frame {
+            max-height: min(40vh, 20rem);
+            width: 100%;
+        }
+        .theme-layout-homepage .homepage-hero .slide-media:not(:has(.w-frame)),
+        .theme-layout-homepage .homepage-hero .slide-media:not(:has(.w-frame)) :is(picture, img) {
             max-height: min(40vh, 20rem) !important;
             width: 100%;
             height: min(40vh, 20rem) !important;
@@ -391,8 +394,10 @@
                 max-height: min(42vh, 18rem);
             }
 
-            .theme-layout-homepage .homepage-hero .slide-media :is(picture, img),
-            .theme-layout-homepage .homepage-hero .slide-media img {
+            .theme-layout-homepage .homepage-hero .slide-media .w-frame {
+                max-height: min(42vh, 18rem);
+            }
+            .theme-layout-homepage .homepage-hero .slide-media:not(:has(.w-frame)) :is(picture, img) {
                 max-height: min(42vh, 18rem) !important;
                 height: min(42vh, 18rem) !important;
             }

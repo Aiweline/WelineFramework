@@ -95,6 +95,9 @@
         --weline-radius-md: 0.625rem;
         --weline-radius-lg: 0.875rem;
         --weline-radius-round: 999px;
+        /* Layout stability defaults (overridable via theme variables pack) */
+        --weline-skeleton-card-min-h: 14rem;
+        --weline-lines-lh: 1.4;
         --weline-control-height-sm: 2rem;
         --weline-control-height: 2.5rem;
         --weline-control-height-lg: 3rem;
@@ -1991,7 +1994,74 @@
         font-size: var(--weline-font-size-sm, 0.875rem);
     }
     .w-busy__message:empty { display: none; }
-    .w-skeleton { min-height: 1rem; border-radius: var(--weline-radius-sm); background: linear-gradient(90deg, var(--weline-theme-surface-muted), var(--weline-theme-surface-hover), var(--weline-theme-surface-muted)); background-size: 200% 100%; animation: w-skeleton 1.2s ease-in-out infinite; }
+    /*
+     * Layout stability (Theme mechanism · CLS): .w-frame / .w-skeleton / .w-lines
+     * Geometry is global; colors/radii/heights via --weline-theme-* / registered tokens.
+     * Enter theme-head once — FORBID per-layout copies or widget-private aspect locks.
+     */
+    .w-frame {
+        --weline-frame-ratio: 1;
+        --weline-frame-fit: cover;
+        box-sizing: border-box;
+        display: block;
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+        aspect-ratio: var(--weline-frame-ratio);
+        background: var(--weline-theme-surface-muted, var(--weline-theme-surface-hover, transparent));
+        border-radius: var(--weline-radius-md, var(--weline-theme-radius-md, 0.625rem));
+    }
+    .w-frame[data-ratio="1"] { --weline-frame-ratio: 1; }
+    .w-frame[data-ratio="4/3"] { --weline-frame-ratio: 4 / 3; }
+    .w-frame[data-ratio="16/9"] { --weline-frame-ratio: 16 / 9; }
+    .w-frame[data-ratio="21/9"] { --weline-frame-ratio: 21 / 9; }
+    .w-frame[data-fit="cover"] { --weline-frame-fit: cover; }
+    .w-frame[data-fit="contain"] { --weline-frame-fit: contain; }
+    .w-frame > :is(img, .w-file-image, picture),
+    .w-frame > a:first-child {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: none;
+    }
+    .w-frame > :is(img, .w-file-image),
+    .w-frame > a:first-child > :is(img, .w-file-image),
+    .w-frame > picture > img {
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        object-fit: var(--weline-frame-fit);
+        object-position: center;
+    }
+    .w-skeleton {
+        min-height: 1rem;
+        border-radius: var(--weline-radius-sm);
+        background: linear-gradient(
+            90deg,
+            var(--weline-theme-surface-muted),
+            var(--weline-theme-surface-hover),
+            var(--weline-theme-surface-muted)
+        );
+        background-size: 200% 100%;
+        animation: w-skeleton 1.2s ease-in-out infinite;
+    }
+    .w-skeleton[data-size="card"] {
+        min-height: var(--weline-skeleton-card-min-h, 14rem);
+        width: 100%;
+        border-radius: var(--weline-radius-md, var(--weline-theme-radius-md, 0.625rem));
+    }
+    .w-lines {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: var(--weline-lines-lh, 1.4);
+        min-height: calc(var(--weline-lines-n, 2) * var(--weline-lines-lh, 1.4) * 1em);
+        -webkit-line-clamp: var(--weline-lines-n, 2);
+    }
+    .w-lines[data-lines="2"] { --weline-lines-n: 2; }
+    .w-lines[data-lines="3"] { --weline-lines-n: 3; }
     @keyframes w-spin { to { rotate: 1turn; } }
     @keyframes w-skeleton { to { background-position-x: -200%; } }
     .w-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--weline-space-3); }

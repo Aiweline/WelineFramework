@@ -408,9 +408,11 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
         );
 
         self::assertStringContainsString('关于绣花颜色款式和面料', $rendered);
-        self::assertStringContainsString('/pub/media/catalog/hanfu/detail-real.jpg', $rendered);
-        self::assertMatchesRegularExpression(
-            '/<img[^>]+src="\/pub\/media\/catalog\/hanfu\/detail-real\.jpg"[^>]+width="800"[^>]+height="800"/',
+        self::assertStringContainsString('data-src="/pub/media/catalog/hanfu/detail-real.jpg"', $rendered);
+        self::assertStringContainsString('data-pdp-desc-lazy="1"', $rendered);
+        self::assertMatchesRegularExpression('/<img[^>]+width="800"[^>]+height="800"/', $rendered);
+        self::assertDoesNotMatchRegularExpression(
+            '/\ssrc="\/pub\/media\/catalog\/hanfu\/detail-real\.jpg"/',
             $rendered,
         );
         self::assertStringNotContainsString('火爆大促销', $rendered);
@@ -434,11 +436,42 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
                 : '',
         );
 
-        self::assertMatchesRegularExpression(
-            '/<img[^>]+src="\/pub\/media\/catalog\/hanfu\/size-chart\.jpg"[^>]+width="790"[^>]+height="1185"/',
+        self::assertStringContainsString('data-src="/pub/media/catalog/hanfu/size-chart.jpg"', $rendered);
+        self::assertStringContainsString('data-pdp-desc-lazy="1"', $rendered);
+        self::assertMatchesRegularExpression('/<img[^>]+width="790"[^>]+height="1185"/', $rendered);
+        self::assertStringContainsString('alt="尺码示意"', $rendered);
+        self::assertDoesNotMatchRegularExpression(
+            '/\ssrc="\/pub\/media\/catalog\/hanfu\/size-chart\.jpg"/',
             $rendered,
         );
-        self::assertStringContainsString('alt="尺码示意"', $rendered);
+    }
+
+    public function testRenderDescriptionHtmlDefersAllMagazineImagesToDataSrc(): void
+    {
+        $a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        $b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+        $html = '<div data-weline-product-description="1688">'
+            . '<p><img src="asset://' . $a . '" width="800" height="800" alt="一"></p>'
+            . '<p><img src="asset://' . $b . '" width="800" height="800" alt="二"></p>'
+            . '</div>';
+
+        $rendered = StorefrontProductMediaUrlResolver::renderDescriptionHtml(
+            $html,
+            static function (string $reference) use ($a, $b): string {
+                return match ($reference) {
+                    'asset://' . $a => '/pub/media/catalog/hanfu/a.jpg',
+                    'asset://' . $b => '/pub/media/catalog/hanfu/b.jpg',
+                    default => '',
+                };
+            },
+        );
+
+        self::assertSame(2, substr_count($rendered, 'data-pdp-desc-lazy="1"'));
+        self::assertStringContainsString('data-src="/pub/media/catalog/hanfu/a.jpg"', $rendered);
+        self::assertStringContainsString('data-src="/pub/media/catalog/hanfu/b.jpg"', $rendered);
+        self::assertDoesNotMatchRegularExpression('/\ssrc="\/pub\/media\/catalog\/hanfu\/a\.jpg"/', $rendered);
+        self::assertDoesNotMatchRegularExpression('/\ssrc="\/pub\/media\/catalog\/hanfu\/b\.jpg"/', $rendered);
+        self::assertStringContainsString('src="data:image/gif;base64,', $rendered);
     }
 
     public function testRenderDescriptionHtmlPreservesAspectOrientationMarkers(): void
@@ -527,26 +560,24 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
 
     public function testNormalizeDescriptionLayoutPairsPortraitImagesResponsively(): void
     {
-        $base = '/pub/media/catalog/hanfu/1688/factory-yueya/731150010223';
-        // ~0.73 / ~0.75 pairable portraits; ultra-tall calligraphy board stays solo.
-        $html = '<img src="' . $base . '/detail-03-5e775f11bbad.jpg" width="800" height="800" alt="a">'
-            . '<img src="' . $base . '/detail-04-3adc1cabe08c.jpg" width="800" height="800" alt="b">'
-            . '<img src="' . $base . '/detail-16-b025f8b80432.jpg" width="800" height="800" alt="tall">';
+        // Attr ratios only (no disk getimagesize): ~0.73 / ~0.75 pairable; ultra-tall solo.
+        $html = '<img src="/pub/media/catalog/hanfu/fixture-a.jpg" width="730" height="1000" alt="a">'
+            . '<img src="/pub/media/catalog/hanfu/fixture-b.jpg" width="750" height="1000" alt="b">'
+            . '<img src="/pub/media/catalog/hanfu/fixture-tall.jpg" width="400" height="1200" alt="tall">';
 
         $out = StorefrontProductMediaUrlResolver::normalizeDescriptionLayout($html);
 
         self::assertStringContainsString('weline-detail-figure-row--pair', $out);
         self::assertStringContainsString('weline-detail-figure-row--solo', $out);
         self::assertGreaterThanOrEqual(1, substr_count($out, 'weline-detail-figure-row--pair'));
-        self::assertStringContainsString('width="790"', $out);
+        self::assertStringContainsString('w-frame', $out);
     }
 
     public function testNormalizeDescriptionLayoutKeepsNearSquareCollageBoardsSolo(): void
     {
-        $base = '/pub/media/catalog/hanfu/1688/factory-yueya/731150010223';
-        // detail-02 ≈790×861 (~0.92) — 1688 multi-panel board, must not enter a half-column pair.
-        $html = '<img src="' . $base . '/detail-02-89008dbf3174.jpg" width="800" height="800" alt="board-a">'
-            . '<img src="' . $base . '/detail-05-3e614e1a7cfe.jpg" width="800" height="800" alt="board-b">';
+        // ~0.92 near-square collage boards must not enter a half-column pair.
+        $html = '<img src="/pub/media/catalog/hanfu/fixture-board-a.jpg" width="790" height="861" alt="board-a">'
+            . '<img src="/pub/media/catalog/hanfu/fixture-board-b.jpg" width="790" height="861" alt="board-b">';
 
         $out = StorefrontProductMediaUrlResolver::normalizeDescriptionLayout($html);
 
@@ -556,17 +587,43 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
 
     public function testNormalizeDescriptionLayoutRePairsExistingFigureRows(): void
     {
-        $base = '/pub/media/catalog/hanfu/1688/factory-yueya/731150010223';
         // Stale pair markup (old rule) must be re-evaluated into solos for collage boards.
         $html = '<div class="weline-detail-figure-stack">'
             . '<div class="weline-detail-figure-row weline-detail-figure-row--pair">'
-            . '<figure class="weline-detail-figure"><img src="' . $base . '/detail-02-89008dbf3174.jpg" width="800" height="800" alt="a"></figure>'
-            . '<figure class="weline-detail-figure"><img src="' . $base . '/detail-05-3e614e1a7cfe.jpg" width="800" height="800" alt="b"></figure>'
+            . '<figure class="weline-detail-figure"><img src="/pub/media/catalog/hanfu/fixture-board-a.jpg" width="790" height="861" alt="a"></figure>'
+            . '<figure class="weline-detail-figure"><img src="/pub/media/catalog/hanfu/fixture-board-b.jpg" width="790" height="861" alt="b"></figure>'
             . '</div></div>';
 
         $out = StorefrontProductMediaUrlResolver::normalizeDescriptionLayout($html);
 
         self::assertStringNotContainsString('weline-detail-figure-row--pair', $out);
         self::assertSame(2, substr_count($out, 'weline-detail-figure-row--solo'));
+    }
+
+    public function testNormalizeDescriptionLayoutHangsWFrameOnFeatureAndFigureMedia(): void
+    {
+        $html = '<div class="weline-detail-feature weline-detail-orient--landscape">'
+            . '<div class="weline-detail-feature__media">'
+            . '<img src="/pub/media/catalog/hanfu/wide.jpg" width="2400" height="1600" alt="扩横">'
+            . '</div>'
+            . '<div class="weline-detail-feature__copy"><h3>交领</h3></div>'
+            . '</div>'
+            . '<div class="weline-detail-figure-stack">'
+            . '<div class="weline-detail-figure-row weline-detail-figure-row--solo">'
+            . '<figure class="weline-detail-figure">'
+            . '<img src="/pub/media/catalog/hanfu/tall.jpg" width="1200" height="1600" alt="竖图">'
+            . '</figure></div></div>';
+
+        $out = StorefrontProductMediaUrlResolver::normalizeDescriptionLayout($html);
+
+        self::assertMatchesRegularExpression(
+            '/weline-detail-feature__media[^"]*\bw-frame\b/',
+            $out,
+        );
+        self::assertStringContainsString('data-fit="contain"', $out);
+        self::assertMatchesRegularExpression(
+            '/weline-detail-figure[^"]*\bw-frame\b/',
+            $out,
+        );
     }
 }

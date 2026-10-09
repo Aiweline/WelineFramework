@@ -2341,14 +2341,17 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 命令,命令
 简述,简述
 获取命令帮助信息失败,获取命令帮助信息失败
-"前台 section weline-code 检查：发现 %{1} 条违规。","前台 section weline-code 检查：发现 %{1} 条违规。"
+"部件布局稳定检查：发现 %{1} 条违规。","部件布局稳定检查：发现 %{1} 条违规。"
 "其余 %{1} 条问题已省略，使用 --json 查看全部。","其余 %{1} 条问题已省略，使用 --json 查看全部。"
-"【致命错误】前台 section/slot-section 缺少 weline-code：共 %{1} 处。请修复后重新运行 frontend:check-section-code。","【致命错误】前台 section/slot-section 缺少 weline-code：共 %{1} 处。请修复后重新运行 frontend:check-section-code。"
-"前台 section weline-code 检查通过。","前台 section weline-code 检查通过。"
-"检查前台 <section> 与 w:slot wrapper=section 是否配置 weline-code","检查前台 <section> 与 w:slot wrapper=section 是否配置 weline-code"
+部件布局稳定检查通过。,部件布局稳定检查通过。
+"检查店面部件与商品卡是否挂 Theme .w-frame / .w-skeleton 布局稳定类","检查店面部件与商品卡是否挂 Theme .w-frame / .w-skeleton 布局稳定类"
 "JSON 格式输出完整报告","JSON 格式输出完整报告"
 本地门禁,本地门禁
 "JSON 报告","JSON 报告"
+"前台 section weline-code 检查：发现 %{1} 条违规。","前台 section weline-code 检查：发现 %{1} 条违规。"
+"【致命错误】前台 section/slot-section 缺少 weline-code：共 %{1} 处。请修复后重新运行 frontend:check-section-code。","【致命错误】前台 section/slot-section 缺少 weline-code：共 %{1} 处。请修复后重新运行 frontend:check-section-code。"
+"前台 section weline-code 检查通过。","前台 section weline-code 检查通过。"
+"检查前台 <section> 与 w:slot wrapper=section 是否配置 weline-code","检查前台 <section> 与 w:slot wrapper=section 是否配置 weline-code"
 "Theme 布局部件归属检查：发现 %{1} 条违规。","Theme 布局部件归属检查：发现 %{1} 条违规。"
 "【致命错误】Theme 布局/partial 内嵌非 Theme 部件：共 %{1} 处。请改为 default_injections 后重新运行 frontend:check-theme-layout-widgets。","【致命错误】Theme 布局/partial 内嵌非 Theme 部件：共 %{1} 处。请改为 default_injections 后重新运行 frontend:check-theme-layout-widgets。"
 "Theme 布局部件归属检查通过。","Theme 布局部件归属检查通过。"
@@ -2372,6 +2375,8 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：,主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：
 "静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）","静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）"
 "已 bump global/storefront/deploy（日常 Upgrade 优先 bump）","已 bump global/storefront/deploy（日常 Upgrade 优先 bump）"
+静态资源部署进程池,静态资源部署进程池
+静态资源部署,静态资源部署
 "必须提供 --task-id。","必须提供 --task-id。"
 未找到可恢复任务。,未找到可恢复任务。
 查看可恢复后台任务的持久状态,查看可恢复后台任务的持久状态
@@ -2430,6 +2435,10 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "只编译 weline.modules.js","只编译 weline.modules.js"
 "只编译 less","只编译 less"
 使用别名,使用别名
+"需要 --job=/path/to/job.json","需要 --job=/path/to/job.json"
+"无法读取 job JSON","无法读取 job JSON"
+"语种编译完成：%{n} 个产物","语种编译完成：%{n} 个产物"
+"执行语种模板编译 job（进程池工人 / 调试用）","执行语种模板编译 job（进程池工人 / 调试用）"
 正在收集模块：%{1},正在收集模块：%{1}
 正在收集所有模块的翻译词...,正在收集所有模块的翻译词...
 "模块 %{1} 语言包收集成功！","模块 %{1} 语言包收集成功！"

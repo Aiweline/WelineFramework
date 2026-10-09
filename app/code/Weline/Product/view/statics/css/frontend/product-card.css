@@ -53,35 +53,18 @@
 }
 
 .weline-product-card .wpc-media {
-  /* Square lock via padding box — survives theme overrides that zero aspect-ratio
-     and prevents portrait catalog shots from stretching card rows unevenly. */
-  position: relative;
-  width: 100%;
+  /* Geometry lock: Theme .w-frame[data-ratio] (foundation). Keep surface + flex only. */
   flex: 0 0 auto;
-  height: 0;
-  padding-top: 100%;
-  overflow: hidden;
-  /* 宣纸面，禁止冷灰渐变抢水墨画布 */
   background: var(--weline-theme-surface-muted, var(--color-bg-secondary, #ede9e1));
 }
 
 .weline-product-card .wpc-media-link {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
+  /* Absolute fill comes from .w-frame > a:first-child */
+  color: inherit;
+  text-decoration: none;
 }
 
 .weline-product-card .wpc-image {
-  /* Survive design/search overrides that reset img to static (pad-lock square media). */
-  position: absolute !important;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
   transition: transform 0.4s ease;
 }
 
@@ -200,18 +183,16 @@
 }
 
 .weline-product-card .wpc-title {
+  /* Line lock: Theme .w-lines[data-lines] */
   margin: 0;
-  min-height: calc(2 * 1.4em);
   font-size: 0.92rem;
   font-weight: 500;
-  line-height: 1.4;
 }
 
 .weline-product-card.density-shelf .wpc-title,
 .weline-product-card.density-compact .wpc-title {
   font-size: 0.8125rem;
   font-weight: 400;
-  min-height: 2.8em;
 }
 
 /* 压过 foundation @layer base `a { color: primary }` 与 UA 默认下划线；

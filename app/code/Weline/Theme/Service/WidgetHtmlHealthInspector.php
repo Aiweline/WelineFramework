@@ -146,6 +146,84 @@ final class WidgetHtmlHealthInspector
         foreach ($this->inspectMissingClosedRoot($html, $meta) as $issue) {
             $issues[] = $issue;
         }
+        foreach ($this->inspectLayoutStability($html) as $issue) {
+            $issues[] = $issue;
+        }
+
+        return $issues;
+    }
+
+    /**
+     * Theme layout-stability: hydrate shells need .w-skeleton[data-size=card];
+     * business images need a .w-frame ancestor (icons exempt).
+     *
+     * @return list<array{severity:string,code:string,message:string,detail?:string}>
+     */
+    private function inspectLayoutStability(string $html): array
+    {
+        $issues = [];
+        $isDeferred = str_contains($html, 'data-pdp-lazy-shell')
+            || (str_contains($html, 'data-weline-hydrate') && str_contains($html, 'is-deferred'));
+        if ($isDeferred
+            && !preg_match('/class\s*=\s*["\'][^"\']*\bw-skeleton\b[^"\']*["\'][^>]*data-size\s*=\s*["\']card["\']/i', $html)
+            && !preg_match('/data-size\s*=\s*["\']card["\'][^>]*\bw-skeleton\b/i', $html)
+        ) {
+            $issues[] = [
+                'severity' => 'warning',
+                'code' => 'missing_layout_skeleton',
+                'message' => (string)__('异步部件缺少 Theme .w-skeleton[data-size=card] 占位'),
+            ];
+        }
+
+        if (!class_exists(\DOMDocument::class)) {
+            return $issues;
+        }
+        $prev = libxml_use_internal_errors(true);
+        $dom = new \DOMDocument();
+        $wrapped = '<?xml encoding="utf-8" ?><div id="w-health-root">' . $html . '</div>';
+        @$dom->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        libxml_clear_errors();
+        libxml_use_internal_errors($prev);
+        $xpath = new \DOMXPath($dom);
+        foreach ($xpath->query('//img') ?: [] as $img) {
+            if (!$img instanceof \DOMElement) {
+                continue;
+            }
+            $class = ' ' . $img->getAttribute('class') . ' ';
+            if (str_contains($class, ' w-icon ')
+                || $img->hasAttribute('data-layout-exempt')
+                || $img->getAttribute('aria-hidden') === 'true'
+            ) {
+                continue;
+            }
+            $w = (int)$img->getAttribute('width');
+            $h = (int)$img->getAttribute('height');
+            if ($w > 0 && $h > 0 && $w <= 48 && $h <= 48) {
+                continue;
+            }
+            $ancestor = $img->parentNode;
+            $hasFrame = false;
+            while ($ancestor instanceof \DOMElement) {
+                $ac = ' ' . $ancestor->getAttribute('class') . ' ';
+                if (str_contains($ac, ' w-frame ')) {
+                    $hasFrame = true;
+                    break;
+                }
+                if ($ancestor->getAttribute('id') === 'w-health-root') {
+                    break;
+                }
+                $ancestor = $ancestor->parentNode;
+            }
+            if (!$hasFrame) {
+                $issues[] = [
+                    'severity' => 'warning',
+                    'code' => 'missing_layout_frame',
+                    'message' => (string)__('图片缺少 Theme .w-frame 外框（防 CLS）'),
+                    'detail' => substr($img->getAttribute('src'), 0, 120),
+                ];
+                break;
+            }
+        }
 
         return $issues;
     }

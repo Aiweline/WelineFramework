@@ -228,6 +228,7 @@ final class FileAssetManager implements FileAssetManagerInterface, \Weline\FileM
         ImageUsage $usage,
         FileAccessContext $context,
         string $class = '',
+        bool $frame = true,
     ): ResolvedFileImage {
         $allowsUnreviewedLocale = in_array(
             $context->purpose,
@@ -317,15 +318,77 @@ final class FileAssetManager implements FileAssetManagerInterface, \Weline\FileM
         if ($usage->decorative) { $attributes['aria-hidden'] = 'true'; }
 
         $html = '<img' . self::htmlAttributes($attributes) . '>';
+        $html = $this->maybeWrapLayoutFrame(
+            $html,
+            $width > 0 ? $width : 0,
+            $height > 0 ? $height : 0,
+            $frame,
+        );
         if ($effective['caption'] !== null && trim($effective['caption']) !== '') {
             $html = '<figure>' . $html . '<figcaption>' . self::escape($effective['caption']) . '</figcaption></figure>';
         }
         return new ResolvedFileImage($src, $html, $effective['alt'], $effective['caption']);
     }
 
-    public function renderImage(ImageUsage $usage, FileAccessContext $context, string $class = ''): string
+    public function renderImage(
+        ImageUsage $usage,
+        FileAccessContext $context,
+        string $class = '',
+        bool $frame = true,
+    ): string {
+        return $this->resolveImage($usage, $context, $class, $frame)->html;
+    }
+
+    /**
+     * Theme layout-stability: wrap sized images in .w-frame so CLS geometry lives in foundation.
+     */
+    private function maybeWrapLayoutFrame(string $imgHtml, int $width, int $height, bool $frame): string
     {
-        return $this->resolveImage($usage, $context, $class)->html;
+        if (!$frame || $imgHtml === '' || $width <= 0 || $height <= 0) {
+            return $imgHtml;
+        }
+        $ratio = self::normalizeFrameRatio($width, $height);
+        $whitelist = ['1' => true, '4/3' => true, '16/9' => true, '21/9' => true];
+        $style = '';
+        if (!isset($whitelist[$ratio])) {
+            $style = ' style="--weline-frame-ratio:' . self::escape((string)$width) . ' / '
+                . self::escape((string)$height) . ';"';
+        }
+
+        return '<div class="w-frame" data-ratio="' . self::escape($ratio) . '" data-fit="cover"'
+            . $style . '>'
+            . $imgHtml
+            . '</div>';
+    }
+
+    public static function normalizeFrameRatio(int $width, int $height): string
+    {
+        if ($width <= 0 || $height <= 0) {
+            return '1';
+        }
+        $r = $width / $height;
+        // Use list pairs so PHP does not cast key "1" to int.
+        $candidates = [
+            ['1', 1.0],
+            ['4/3', 4 / 3],
+            ['16/9', 16 / 9],
+            ['21/9', 21 / 9],
+        ];
+        $best = '1';
+        $bestDelta = PHP_FLOAT_MAX;
+        foreach ($candidates as [$label, $value]) {
+            $delta = abs($r - $value);
+            if ($delta < $bestDelta) {
+                $bestDelta = $delta;
+                $best = $label;
+            }
+        }
+        // Keep exact whitelist match within 3%; otherwise emit W/H for custom ratios.
+        if ($bestDelta <= 0.03) {
+            return (string)$best;
+        }
+
+        return (string)$width . '/' . (string)$height;
     }
 
     /** @param array<string,string> $attributes */

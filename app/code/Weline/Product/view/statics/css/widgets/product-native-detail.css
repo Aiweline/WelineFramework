@@ -999,6 +999,24 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     object-fit: contain;
     object-position: center top;
 }
+/* Theme .w-frame：锁几何；详情仍用 contain + 限高，禁 cover 裁切 */
+.product-native-detail__description-body .weline-detail-feature__media.w-frame,
+.product-native-detail__description-body .weline-detail-figure.w-frame {
+    overflow: visible;
+    max-height: min(72vh, 42rem);
+    border-radius: 0;
+    background: transparent;
+}
+.product-native-detail__description-body .weline-detail-feature__media.w-frame > img,
+.product-native-detail__description-body .weline-detail-figure.w-frame > img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    object-fit: var(--weline-frame-fit, contain);
+    object-position: center top;
+}
 .product-native-detail__description-body .weline-detail-feature__copy {
     min-width: 0;
     max-width: 58ch;
@@ -1135,15 +1153,34 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     object-position: center top;
     display: block;
 }
+.product-native-detail__description-body .weline-detail-orient--portrait .w-frame > img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+}
 .product-native-detail__description-body .weline-detail-orient--portrait .weline-detail-figure-row--pair img {
     width: auto;
     max-width: 100%;
     max-height: min(56vh, 32rem);
 }
+.product-native-detail__description-body .weline-detail-orient--portrait .weline-detail-figure-row--pair .w-frame > img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+}
 .product-native-detail__description-body .weline-detail-feature.weline-detail-orient--landscape .weline-detail-feature__media img {
     max-height: min(56vh, 32rem);
     object-fit: contain;
     background: transparent;
+}
+.product-native-detail__description-body .weline-detail-feature.weline-detail-orient--landscape .weline-detail-feature__media.w-frame {
+    max-height: min(56vh, 32rem);
+}
+.product-native-detail__description-body .weline-detail-feature.weline-detail-orient--landscape .weline-detail-feature__media.w-frame > img {
+    max-height: none;
 }
 .product-native-detail__description-body .weline-detail-figure-stack--caption + .weline-detail-prose {
     padding-top: var(--spacing-md, 1rem);
@@ -1347,9 +1384,23 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     object-fit: contain;
     object-position: center top;
 }
-.product-native-detail__description-body .weline-detail-figure-row--pair .weline-detail-figure,
-.product-native-detail__description-body .weline-detail-figure-row--solo .weline-detail-figure {
+.product-native-detail__description-body .weline-detail-figure.w-frame > img,
+.product-native-detail__description-body .weline-detail-figure-stack .w-frame > img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+}
+.product-native-detail__description-body .weline-detail-figure-row--pair .weline-detail-figure:not(.w-frame),
+.product-native-detail__description-body .weline-detail-figure-row--solo .weline-detail-figure:not(.w-frame) {
     aspect-ratio: auto;
+    background: transparent;
+    border: none;
+}
+.product-native-detail__description-body .weline-detail-figure-row--pair .weline-detail-figure.w-frame,
+.product-native-detail__description-body .weline-detail-figure-row--solo .weline-detail-figure.w-frame {
+    aspect-ratio: var(--weline-frame-ratio, 1);
     background: transparent;
     border: none;
 }
@@ -1821,6 +1872,13 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     .product-native-detail__gallery:has(.product-native-detail__thumbs) {
         display: flex;
         flex-direction: column-reverse;
+        /* w-frame 主图绝对定位后 stage 无流式内容；stretch 才能拿到全宽，aspect-ratio 才生效 */
+        align-items: stretch;
+    }
+    .product-native-detail__stage-wrap {
+        width: 100%;
+        flex: 0 0 auto;
+        min-width: 0;
     }
     .product-native-detail__thumbs {
         flex-direction: row;

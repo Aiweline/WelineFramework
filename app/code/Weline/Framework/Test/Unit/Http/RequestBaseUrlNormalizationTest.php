@@ -136,4 +136,49 @@ final class RequestBaseUrlNormalizationTest extends TestCase
             $request->getBaseHost()
         );
     }
+
+    public function testBaseHostPrefersWebsiteUrlSchemeAndDropsWorkerListenPort(): void
+    {
+        $server = [
+            'REQUEST_URI' => '/',
+            'REQUEST_METHOD' => 'GET',
+            // Nginx → Worker 明文 H1：wire scheme=http，Host 被填上 WLS_PORT
+            'REQUEST_SCHEME' => 'http',
+            'HTTPS' => '',
+            'HTTP_HOST' => 'p05113ef3.test.weline.com:9555',
+            'SERVER_NAME' => 'p05113ef3.test.weline.com',
+            'SERVER_PORT' => '9555',
+            'WLS_PORT' => '9555',
+            'WELINE_WEBSITE_URL' => 'https://p05113ef3.test.weline.com',
+        ];
+        $_SERVER = $server;
+        WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
+
+        $request = new class extends RequestAbstract {
+        };
+
+        self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
+    }
+
+    public function testBaseHostDropsNineXxxWorkerPortEvenWithoutWlsPortEnv(): void
+    {
+        $server = [
+            'REQUEST_URI' => '/products',
+            'REQUEST_METHOD' => 'GET',
+            'REQUEST_SCHEME' => 'https',
+            'HTTPS' => 'on',
+            'HTTP_HOST' => 'p05113ef3.test.weline.com:9555',
+            'SERVER_NAME' => 'p05113ef3.test.weline.com',
+            'SERVER_PORT' => '9555',
+            // WLS_PORT intentionally omitted — still must not bake :9555 into public https base
+            'WELINE_WEBSITE_URL' => 'https://p05113ef3.test.weline.com',
+        ];
+        $_SERVER = $server;
+        WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
+
+        $request = new class extends RequestAbstract {
+        };
+
+        self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
+    }
 }

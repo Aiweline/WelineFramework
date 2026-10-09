@@ -209,7 +209,7 @@ $isStrip = $displayMode === 'strip';
             <a href="<?= $esc(\Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($category['url'] ?? '#'))) ?>"
                class="category-card<?= $isStrip ? ' category-card--tile' : '' ?>"
                role="listitem">
-                <div class="category-image-wrapper">
+                <div class="category-image-wrapper w-frame" data-ratio="1" data-fit="cover">
                     <img src="<?= $esc($categoryImage) ?>"
                          alt="<?= $esc((string)($category['alt'] ?? $category['name'] ?? '')) ?>"
                          class="category-image"

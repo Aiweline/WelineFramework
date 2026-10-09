@@ -13,6 +13,6 @@ Register::register(
     Register::MODULE,
     'Weline_Framework',
     __DIR__,
-    '2.5.0',
+    '2.5.295',
     '<a href="https://www.aiweline.com">Weline_Framework核心库</a>'
 );

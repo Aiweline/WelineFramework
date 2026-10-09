@@ -68,7 +68,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
     <?php endif; ?>
 
     <?php if ($categoryBanner !== ''): ?>
-        <div class="amz-plp__banner" data-testid="storefront-category-banner">
+        <div class="amz-plp__banner w-frame" data-ratio="21/9" data-fit="cover" data-testid="storefront-category-banner">
             <img src="<?= $escape($categoryBanner) ?>"
                  alt="<?= $escape($categoryName) ?>"
                  width="1500"
@@ -116,7 +116,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
                 ?>
                 <a class="amz-plp__child" href="<?= $escape($childUrl) ?>">
                     <?php if ($childImage !== ''): ?>
-                        <img src="<?= $escape($childImage) ?>" alt="" width="48" height="48" loading="lazy">
+                        <img src="<?= $escape($childImage) ?>" alt="" width="48" height="48" loading="lazy" data-layout-exempt="1">
                     <?php endif; ?>
                     <span><?= $escape($childName) ?></span>
                 </a>
@@ -259,9 +259,10 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
     border-radius: 8px;
     overflow: hidden;
     background: #f0f2f2;
-    aspect-ratio: 5 / 1;
     max-height: 280px;
 }
+.amz-plp__banner:not(.w-frame) { aspect-ratio: 5 / 1; }
+.amz-plp__banner.w-frame { height: auto; }
 .amz-plp__banner img {
     display: block;
     width: 100%;

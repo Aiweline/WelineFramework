@@ -874,10 +874,17 @@
                 'aria-label',
                 attr(root, 'data-i18n-image-preview', attr(root, 'data-i18n-swatch-preview', '查看商品图'))
             );
+            var frame = document.createElement('span');
+            frame.className = 'w-frame';
+            frame.setAttribute('data-ratio', '1');
+            frame.setAttribute('data-fit', 'cover');
             var img = document.createElement('img');
             img.src = image;
             img.alt = '';
-            media.appendChild(img);
+            img.width = 72;
+            img.height = 72;
+            frame.appendChild(img);
+            media.appendChild(frame);
         } else {
             media.disabled = true;
             media.setAttribute('aria-hidden', 'true');

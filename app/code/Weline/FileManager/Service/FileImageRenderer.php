@@ -28,6 +28,7 @@ final class FileImageRenderer
         mixed $width = null,
         mixed $height = null,
         string $aspectRatio = '',
+        bool $frame = true,
     ): string {
         $requestLocale = FileAssetManager::normalizeLocale(RequestContext::getWelineUserLang());
         $locale = trim($locale) !== '' ? FileAssetManager::normalizeLocale($locale) : $requestLocale;
@@ -63,7 +64,12 @@ final class FileImageRenderer
         }
 
         try {
-            return $this->assets->renderImage($imageUsage, new FileAccessContext($scope, $locale), $class);
+            return $this->assets->renderImage(
+                $imageUsage,
+                new FileAccessContext($scope, $locale),
+                $class,
+                $frame,
+            );
         } catch (\Throwable) {
             // Missing / inaccessible asset must not break the page.
             return '';
