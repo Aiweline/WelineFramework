@@ -24,7 +24,13 @@ $error = (string)($error ?? '');
         <div class="w-alert" role="alert" data-tone="danger"><lang>渠道不存在</lang></div>
     <?php else: ?>
         <div class="<?= $treeEmbed ? '' : 'w-card' ?>" style="--w-mb:var(--weline-space-4);"><div class="<?= $treeEmbed ? '' : 'w-card__body' ?>">
-            <w:form method="post" action="@backend-url('*/backend/scope-management/update-channel')" csrf="auto" class="w-grid" data-testid="sales-channel-management-edit-form" style="--w-gap:var(--weline-space-4);">
+            <w:form method="post"
+                    action="@backend-url('*/backend/scope-management/update-channel')"
+                    csrf="auto"
+                    class="w-grid"
+                    id="channel-admin-edit-form"
+                    data-testid="sales-channel-management-edit-form"
+                    style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="channel_id" value="<?= $channelId ?>">
                 <?php if ($treeEmbed): ?>
                     <input type="hidden" name="return_to" value="tree">
@@ -55,9 +61,11 @@ $error = (string)($error ?? '');
                 $this->assign('display_type_inherit_label', __('继承店铺 / 无特殊类型'));
                 echo $this->fetch('Weline_Websites::templates/Backend/partials/display-type-field.phtml');
                 ?>
-                <div class="w-cluster" data-align="end" style="--w-span-md:12;">
-                    <button class="w-button" type="submit" data-tone="primary"><lang>保存渠道</lang></button>
-                </div>
+                <?php if (!$treeEmbed): ?>
+                    <div class="w-cluster" data-align="end" style="--w-span-md:12;" data-testid="sales-channel-management-edit-actions">
+                        <button class="w-button" type="submit" data-tone="primary" data-scope-editor-save="1"><lang>保存渠道</lang></button>
+                    </div>
+                <?php endif; ?>
                 <?php
                 $this->assign('id', 'channel_edit_' . $channelId);
                 $this->assign('channel', $entity);

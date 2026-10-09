@@ -17,6 +17,17 @@ $editorKind = (string)($editor_kind ?? '');
 $editorAclOk = (bool)($editor_acl_ok ?? false);
 $editorError = (string)($editor_error ?? '');
 $editorTitle = (string)($editor_title ?? __('范围编辑'));
+$headerSaveFormId = match ($editorKind) {
+    'website' => 'website-admin-edit-form',
+    'store' => 'store-admin-edit-form',
+    'channel' => 'channel-admin-edit-form',
+    default => '',
+};
+$headerSaveLabel = match ($editorKind) {
+    'store' => (string)__('保存商店'),
+    'channel' => (string)__('保存渠道'),
+    default => (string)__('保存'),
+};
 ?>
 <header class="w-card__header w-websites-scope-editor__header"
         data-websites-scope-editor-header>
@@ -24,14 +35,16 @@ $editorTitle = (string)($editor_title ?? __('范围编辑'));
         <w-icon name="edit" size="sm"></w-icon>
         <?= $escape($editorTitle) ?>
     </h2>
-    <?php if ($editorAclOk && $editorError === '' && $editorKind === 'website'): ?>
+    <?php if ($editorAclOk && $editorError === '' && $headerSaveFormId !== ''): ?>
         <button type="submit"
                 class="w-button"
                 data-tone="primary"
-                form="website-admin-edit-form"
-                data-testid="websites-scope-editor-save">
+                form="<?= $escape($headerSaveFormId) ?>"
+                data-testid="websites-scope-editor-save"
+                data-scope-editor-save="1"
+                <?php if ($editorKind === 'website'): ?>data-website-save="1"<?php endif; ?>>
             <w-icon name="save" size="sm"></w-icon>
-            <?= $escape(__('保存')) ?>
+            <?= $escape($headerSaveLabel) ?>
         </button>
     <?php endif; ?>
 </header>

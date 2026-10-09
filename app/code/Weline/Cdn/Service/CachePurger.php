@@ -126,6 +126,76 @@ class CachePurger
     }
 
     /**
+     * Website 保存触发的 CDN 清理入口。
+     * 已绑定域名时按公开基址 purge；未绑定域名时仍返回可观测的 triggered（本机闭环用）。
+     *
+     * @param list<string> $urls
+     * @return array{success:bool,triggered:bool,skipped?:bool,message?:string,data?:mixed}
+     */
+    public function purgeWebsiteScope(int $websiteId, array $urls = []): array
+    {
+        if ($websiteId < 0) {
+            throw new \InvalidArgumentException(__('website_id 不能为负数'));
+        }
+        /** @var Domain $domainModel */
+        $domainModel = clone $this->objectManager->getInstance(Domain::class);
+        $domains = $domainModel->reset()
+            ->where(Domain::schema_fields_SITE_ID, $websiteId)
+            ->where(Domain::schema_fields_ENABLED, 1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $normalized = [];
+        foreach ($urls as $url) {
+            $url = trim((string)$url);
+            if ($url !== '' && preg_match('#^https?://#i', $url) === 1) {
+                $normalized[$url] = $url;
+            }
+        }
+        $normalized = array_values($normalized);
+        if ($domains === []) {
+            return [
+                'success' => true,
+                'triggered' => true,
+                'skipped' => true,
+                'message' => (string)__('网站未绑定 CDN 域名，已记录清理意图'),
+                'data' => ['website_id' => $websiteId, 'urls' => $normalized],
+            ];
+        }
+        $results = [];
+        foreach ($domains as $domain) {
+            if (!$domain instanceof Domain) {
+                continue;
+            }
+            $domainId = (int)$domain->getData(Domain::schema_fields_DOMAIN_ID);
+            if ($domainId < 1) {
+                continue;
+            }
+            if ($normalized === []) {
+                $host = trim((string)$domain->getData(Domain::schema_fields_DOMAIN_NAME));
+                if ($host !== '') {
+                    $results[] = $this->purge($domainId, 'hosts', ['hosts' => [$host]]);
+                }
+                continue;
+            }
+            foreach ($normalized as $baseUrl) {
+                $results[] = $this->purgePublicScope($domainId, $baseUrl);
+            }
+        }
+        $success = $results !== [];
+        foreach ($results as $result) {
+            $success = $success && (($result['success'] ?? false) === true);
+        }
+
+        return [
+            'success' => $success,
+            'triggered' => true,
+            'message' => $success ? (string)__('缓存清理成功') : (string)__('缓存清理失败'),
+            'data' => $results,
+        ];
+    }
+
+    /**
      * 获取域名模型
      * 
      * @param string|int $domain 域名ID或名称

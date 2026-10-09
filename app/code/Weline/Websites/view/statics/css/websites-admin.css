@@ -11,7 +11,27 @@
         padding: 0;
     }
 
-    /* 树右栏内嵌：保存条粘底，长表单滚动时仍可提交 */
+    /* 顶部提示：滚动时仍钉在编辑区顶，避免滚到底后「看不见」 */
+    .w-website-form .w-website-form__save-warning[data-placement="top"] {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        margin-block-end: var(--weline-space-4);
+        border-block-end: 1px solid var(--weline-theme-border);
+        background: var(--weline-theme-surface);
+    }
+
+    .w-website-form__actions {
+        display: grid;
+        gap: var(--weline-space-3);
+        margin-block-start: var(--weline-space-6);
+    }
+
+    .w-website-form__save-warning--actions {
+        margin: 0;
+    }
+
+    /* 树右栏内嵌：保存提示 + 按钮粘底，长表单滚动时仍可见 */
     .w-website-form.is-embedded .w-website-form__actions {
         position: sticky;
         bottom: 0;

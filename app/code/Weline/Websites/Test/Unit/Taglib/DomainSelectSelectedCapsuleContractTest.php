@@ -22,6 +22,9 @@ final class DomainSelectSelectedCapsuleContractTest extends TestCase
         self::assertStringContainsString('weline-domain-select-tag', $source);
         self::assertStringContainsString('function hydrateInitialSelection()', $source);
         self::assertStringContainsString('hydrateInitialSelection();', $source);
+        self::assertStringContainsString('function syncDomainValuesField()', $source);
+        self::assertStringContainsString('syncDomainValuesField();', $source);
+        self::assertStringContainsString('input[name="domain_values"]', $source);
         self::assertStringNotContainsString("__('已选择 %s 个域名')", $source);
         self::assertStringNotContainsString('$t_selected', $source);
     }
@@ -35,6 +38,9 @@ final class DomainSelectSelectedCapsuleContractTest extends TestCase
         self::assertStringContainsString('selected-domains="domainSelectSelectedDomainsEscaped"', $source);
         self::assertStringContainsString('website-id="domainSelectWebsiteId"', $source);
         self::assertStringContainsString("__('点击选择域名（可多选）')", $source);
+        self::assertStringContainsString('name="domain_values"', $source);
+        self::assertStringContainsString('selectedDomainNamesStr', $source);
+        self::assertStringNotContainsString('<input type="hidden" name="domain_values" value="">', $source);
         self::assertStringNotContainsString("__('已选择 %{1} 个域名'", $source);
     }
 }

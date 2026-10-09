@@ -34,6 +34,14 @@ final class RemoteDrawerActionLoadingContractTest extends TestCase
 
         self::assertStringContainsString('.w-button[aria-busy="true"]', $cssSrc);
         self::assertStringContainsString('.w-button[aria-busy="true"]::after', $cssSrc);
+        self::assertMatchesRegularExpression(
+            '/\.w-button\[aria-busy="true"\]\s*\{[^}]*background:\s*var\(--weline-theme-surface-muted\)/s',
+            $cssSrc,
+        );
+        self::assertMatchesRegularExpression(
+            '/\.w-button\[aria-busy="true"\]\s*\{[^}]*color:\s*var\(--weline-theme-text-muted\)/s',
+            $cssSrc,
+        );
         self::assertStringContainsString('animation: w-spin 700ms linear infinite', $cssSrc);
         self::assertStringContainsString('.w-remote-drawer__frame-host', $cssSrc);
         self::assertStringContainsString('.w-remote-drawer__loading', $cssSrc);

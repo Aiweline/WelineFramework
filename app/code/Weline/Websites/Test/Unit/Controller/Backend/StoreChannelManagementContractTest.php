@@ -63,6 +63,10 @@ final class StoreChannelManagementContractTest extends TestCase
         self::assertStringContainsString('store-management-edit-link', $template);
         self::assertStringContainsString("getHook('Weline_Websites::backend::store::form::sections-after')", $editStore);
         self::assertStringContainsString("getHook('Weline_Websites::backend::channel::form::sections-after')", $editChannel);
+        self::assertStringContainsString('id="store-admin-edit-form"', $editStore);
+        self::assertStringContainsString('id="channel-admin-edit-form"', $editChannel);
+        self::assertStringContainsString('if (!$treeEmbed):', $editStore);
+        self::assertStringContainsString('if (!$treeEmbed):', $editChannel);
         self::assertStringNotContainsString('dispatchHook', $editStore);
         self::assertStringNotContainsString('dispatchHook', $editChannel);
         self::assertStringNotContainsString('$storeId <= 0', $editStore);

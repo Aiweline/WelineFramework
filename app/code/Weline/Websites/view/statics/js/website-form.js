@@ -429,15 +429,48 @@ function defineWebsiteForm(UI) {
             queueMicrotask(runSubPathValidation);
         }
 
-        if (form instanceof HTMLFormElement) {
-            listen(form, 'submit', (event) => {
-                if (!runSubPathValidation()) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    subPathInput?.focus({ preventScroll: true });
+        const saveButtons = () => Array.from(document.querySelectorAll(
+            '[data-website-save="1"], [data-testid="website-form-save"], [data-testid="websites-scope-editor-save"]',
+        )).filter((node) => node instanceof HTMLButtonElement);
+
+        const setSaveBusy = (busy) => {
+            for (const button of saveButtons()) {
+                if (busy) {
+                    button.setAttribute('aria-busy', 'true');
+                    button.disabled = true;
+                } else {
+                    button.removeAttribute('aria-busy');
+                    button.disabled = false;
                 }
-            });
+            }
+        };
+
+        const onWebsiteFormSubmit = (event) => {
+            const submitForm = event.target instanceof HTMLFormElement
+                ? event.target
+                : form;
+            if (!(submitForm instanceof HTMLFormElement)) {
+                return;
+            }
+            if (!runSubPathValidation()) {
+                event.preventDefault();
+                event.stopPropagation();
+                setSaveBusy(false);
+                subPathInput?.focus({ preventScroll: true });
+                return;
+            }
+            // 含顶栏 form= 外挂保存键：进入提交即打 foundation spinner
+            setSaveBusy(true);
+        };
+
+        // 委托在组件根上监听，避免只绑到查询瞬间的 form 引用失效
+        listen(element, 'submit', onWebsiteFormSubmit, true);
+        if (form instanceof HTMLFormElement && form !== element) {
+            listen(form, 'submit', onWebsiteFormSubmit);
         }
+        listen(window, 'pageshow', () => setSaveBusy(false));
+        listen(document, 'weline:ui:form:error', () => setSaveBusy(false));
+        listen(document, 'weline:ui:form:complete', () => setSaveBusy(false));
 
         return {
             syncLanguages,

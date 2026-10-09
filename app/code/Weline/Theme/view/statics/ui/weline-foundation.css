@@ -698,11 +698,21 @@
         inline-size: var(--weline-control-height-lg);
     }
     .w-button:disabled, .w-button[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+    /* busy = 灰面 + spinner；禁止只降 opacity 仍显实色蓝（用户可见「没变灰」） */
     .w-button[aria-busy="true"] {
         position: relative;
         opacity: 1;
         cursor: wait;
         pointer-events: none;
+        color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-surface-muted);
+        border-color: var(--weline-theme-border);
+        box-shadow: none;
+    }
+    .w-button[aria-busy="true"]:hover {
+        color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-surface-muted);
+        border-color: var(--weline-theme-border);
     }
     .w-button[aria-busy="true"]::after {
         content: "";
@@ -2013,6 +2023,7 @@
     }
     .w-frame[data-ratio="1"] { --weline-frame-ratio: 1; }
     .w-frame[data-ratio="4/3"] { --weline-frame-ratio: 4 / 3; }
+    .w-frame[data-ratio="16/5"] { --weline-frame-ratio: 16 / 5; }
     .w-frame[data-ratio="16/9"] { --weline-frame-ratio: 16 / 9; }
     .w-frame[data-ratio="21/9"] { --weline-frame-ratio: 21 / 9; }
     .w-frame[data-fit="cover"] { --weline-frame-fit: cover; }

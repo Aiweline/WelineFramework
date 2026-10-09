@@ -59,6 +59,7 @@ class WebsiteForm implements TaglibInterface
             'selected_currencies' => false,
             'selected_languages' => false,
             'selected_pool_ids' => false,
+            'selected_domain_names' => false,
             'form_action' => false,
             'show_save_btn' => false,
             'save_btn_text' => false,
@@ -173,16 +174,19 @@ class WebsiteForm implements TaglibInterface
             $html[] = '            $__wfs_ds_id = (string)($Taglib__id ?? \'\');';
             $html[] = '            $__wfs_pools = $Taglib__selected_pool_ids ?? [];';
             $html[] = '            $__wfs_pool_str = is_array($__wfs_pools) ? implode(\',\', array_map(\'strval\', $__wfs_pools)) : (string)$__wfs_pools;';
+            $html[] = '            $__wfs_domains = $Taglib__selected_domain_names ?? [];';
+            $html[] = '            $__wfs_domain_str = is_array($__wfs_domains) ? implode(\',\', array_values(array_filter(array_map(static fn($v) => trim((string)$v), $__wfs_domains), static fn($v) => $v !== \'\'))) : trim((string)$__wfs_domains);';
             $html[] = '            $__wfs_domain_select_id = htmlspecialchars($__wfs_ds_id . \'_domain_select\', ENT_QUOTES, \'UTF-8\');';
             $html[] = '            $__wfs_domain_select_value = htmlspecialchars($__wfs_pool_str, ENT_QUOTES, \'UTF-8\');';
+            $html[] = '            $__wfs_domain_values = htmlspecialchars($__wfs_domain_str, ENT_QUOTES, \'UTF-8\');';
             $html[] = '            $__wfs_display = htmlspecialchars(' . var_export($wfsDsDisplay, true) . ', ENT_QUOTES, \'UTF-8\');';
             $html[] = '            $__wfs_website_row = $Taglib__website ?? [];';
             $html[] = '            $__wfs_domain_select_website_id = isset($__wfs_website_row[\'website_id\']) ? (int)$__wfs_website_row[\'website_id\'] : 0;';
             $html[] = '            $__wfs_auto_code = htmlspecialchars($__wfs_ds_id . \'_code\', ENT_QUOTES, \'UTF-8\');';
             $html[] = '            $__wfs_auto_name = htmlspecialchars($__wfs_ds_id . \'_name\', ENT_QUOTES, \'UTF-8\');';
             $html[] = '        ?>';
-            $html[] = '        <w:websites:domain:select id="__wfs_domain_select_id" name="pool_ids" value="__wfs_domain_select_value" display="__wfs_display" multiple="true" value-type="pool_id" site-ready-only="true" website-id="__wfs_domain_select_website_id" auto-fill-code="__wfs_auto_code" auto-fill-name="__wfs_auto_name" data-w-width="full" />';
-            $html[] = '        <input type="hidden" name="domain_values" value="">';
+            $html[] = '        <w:websites:domain:select id="__wfs_domain_select_id" name="pool_ids" value="__wfs_domain_select_value" display="__wfs_display" selected-domains="__wfs_domain_values" multiple="true" value-type="pool_id" site-ready-only="true" website-id="__wfs_domain_select_website_id" auto-fill-code="__wfs_auto_code" auto-fill-name="__wfs_auto_name" data-w-width="full" />';
+            $html[] = '        <input type="hidden" name="domain_values" value="<?= $__wfs_domain_values ?>">';
             $html[] = '        <div class="w-field__hint"><lang>从域名池选择已就绪的域名（可多选）；选择后网站代码与网站名称将自动填充</lang></div>';
             $html[] = '        <?php $this->dispatchHook("website_form_domains", ["id" => $Taglib__id, "website" => $website]); ?>';
             $html[] = '      </div>';

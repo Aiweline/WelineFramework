@@ -191,6 +191,37 @@
         loadPanel(link);
     });
 
+    function setScopeEditorSaveBusy(busy) {
+        editor.querySelectorAll('[data-scope-editor-save="1"], [data-testid="websites-scope-editor-save"]').forEach((node) => {
+            if (!(node instanceof HTMLButtonElement)) {
+                return;
+            }
+            if (busy) {
+                node.setAttribute('aria-busy', 'true');
+                node.disabled = true;
+            } else {
+                node.removeAttribute('aria-busy');
+                node.disabled = false;
+            }
+        });
+    }
+
+    // 顶栏 form= 保存键 / 表单内保存：提交中显示 foundation spinner
+    editor.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !editor.contains(form)) {
+            return;
+        }
+        if (!form.matches(
+            '#website-admin-edit-form, #store-admin-edit-form, #channel-admin-edit-form, '
+            + '[data-testid="store-management-edit-form"], [data-testid="sales-channel-management-edit-form"]',
+        )) {
+            return;
+        }
+        setScopeEditorSaveBusy(true);
+    }, true);
+    window.addEventListener('pageshow', () => setScopeEditorSaveBusy(false));
+
     window.addEventListener('popstate', () => {
         window.location.reload();
     });

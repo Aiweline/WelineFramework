@@ -199,8 +199,10 @@ final class WebsiteAdminTemplateContractTest extends TestCase
             dirname(__DIR__, 4) . '/view/templates/Admin/Website/tree-editor-panel.phtml',
         );
         self::assertStringContainsString('data-testid="websites-scope-editor-save"', $panel);
-        self::assertStringContainsString('form="website-admin-edit-form"', $panel);
-        self::assertStringContainsString("editorKind === 'website'", $panel);
+        self::assertStringContainsString("'website' => 'website-admin-edit-form'", $panel);
+        self::assertStringContainsString("'store' => 'store-admin-edit-form'", $panel);
+        self::assertStringContainsString("'channel' => 'channel-admin-edit-form'", $panel);
+        self::assertStringContainsString('data-scope-editor-save="1"', $panel);
     }
 
     public function testWebsiteFormKeepsWFormContiguousForFiberCapture(): void

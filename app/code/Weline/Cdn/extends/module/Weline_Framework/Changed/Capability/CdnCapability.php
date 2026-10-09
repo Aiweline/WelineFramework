@@ -37,11 +37,28 @@ final class CdnCapability implements ChangedCapabilityInterface
         if ($effect->code !== InvalidationEffect::CODE_CDN_PURGE) {
             return;
         }
-        /** @var Domain $domainModel */
-        $domainModel = ObjectManager::getInstance(Domain::class);
         /** @var CachePurger $cachePurger */
         $cachePurger = ObjectManager::getInstance(CachePurger::class);
 
+        $impact = $change->toArray()['impact'] ?? [];
+        $urls = $this->normalizeUrls(array_merge(
+            is_array($effect->payload['urls'] ?? null) ? $effect->payload['urls'] : [],
+            is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
+            is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
+        ));
+
+        // Website 保存：统一走 purgeWebsiteScope（无绑定域名时本机仍 triggered）
+        if ($change->resourceType() === 'website') {
+            $result = $cachePurger->purgeWebsiteScope((int)$change->websiteId(), $urls);
+            if (($result['success'] ?? false) !== true) {
+                throw new \RuntimeException(__('CDN 资源变更清理失败'));
+            }
+
+            return;
+        }
+
+        /** @var Domain $domainModel */
+        $domainModel = ObjectManager::getInstance(Domain::class);
         $domains = (clone $domainModel)->reset()
             ->where(Domain::schema_fields_SITE_ID, $change->websiteId())
             ->where(Domain::schema_fields_ENABLED, 1)
@@ -52,14 +69,7 @@ final class CdnCapability implements ChangedCapabilityInterface
             return;
         }
 
-        $impact = $change->toArray()['impact'] ?? [];
-        $urls = $this->normalizeUrls(array_merge(
-            is_array($effect->payload['urls'] ?? null) ? $effect->payload['urls'] : [],
-            is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
-            is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
-        ));
         // CDN 用原始 urls，不做 locale×currency 矩阵膨胀；若 payload 带矩阵则仍 purge
-
         foreach ($domains as $domain) {
             if (!$domain instanceof Domain) {
                 continue;
@@ -73,15 +83,6 @@ final class CdnCapability implements ChangedCapabilityInterface
                 return $match !== null && (int)$match->getData(Domain::schema_fields_DOMAIN_ID) === $domainId;
             }));
             if ($urls !== [] && $domainUrls === []) {
-                continue;
-            }
-            if ($change->resourceType() === 'website' && $domainUrls !== []) {
-                foreach ($domainUrls as $baseUrl) {
-                    $result = $cachePurger->purgePublicScope($domainId, $baseUrl);
-                    if (($result['success'] ?? false) !== true) {
-                        throw new \RuntimeException(__('CDN 资源变更清理失败'));
-                    }
-                }
                 continue;
             }
             $result = $domainUrls === []

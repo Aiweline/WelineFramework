@@ -1440,6 +1440,7 @@ lock,lock
 暂无网站,"No websites"
 折叠/展开,Collapse/Expand
 只读,Read-only
+"保存网站会清理本站本地缓存与 CDN。若未调整关键信息，不建议保存。","Saving the website clears this site's local cache and CDN. If you did not change critical information, saving is not recommended."
 保存后可翻译多语言,"Save the theme first to translate locales"
 "前台品牌字标权威来源；留空或系统占位名时前台不展示硬编码品牌。已选语言将默认 LocalModel 翻译。","Authoritative storefront brand wordmark; blank or system placeholder names are not hardcoded. Selected languages default to LocalModel translate."
 网站简介,"Website description."
@@ -1454,10 +1455,11 @@ lock,lock
 默认,Default
 "此 Store 暂无 SalesChannel","This Store has no SalesChannel"
 选择域名,"Select Domain"
-从域名池选择已就绪的域名（可多选）；选择后网站代码将自动填充，子路径由上方统一控制。,"Select ready domains from the domain pool (multi-select allowed); after selection, the site code will be auto-filled, and the sub-path is controlled uniformly from above."
+从域名池选择已就绪的域名（可多选）；选择后网站代码将自动填充，子路径由上方统一控制。已显示的域名标签会随表单一并提交，避免仅显示却无法保存。,"Select ready domains from the domain pool (multi-select allowed); after selection, the site code will be auto-filled, and the sub-path is controlled uniformly from above. Visible domain tags are submitted with the form so a display-only selection cannot fail to save."
 默认时区,"Default Time Zone"
 搜索时区...,"Search Timezone..."
 点击选择时区，可输入关键词搜索,"Click to select a timezone; type keywords to search"
+"保存会清理本站缓存与 CDN；非关键改动请勿点保存。","Saving clears this site's cache and CDN; do not save unless you changed critical settings."
 保存,Save
 返回,Back
 网站子路径不允许使用语言编码,"Website sub-paths do not allow the use of language codes."
@@ -3337,6 +3339,7 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+从域名池选择已就绪的域名（可多选）；选择后网站代码将自动填充，子路径由上方统一控制。,"Select ready domains from the domain pool (multi-select allowed); after selection, the site code will be auto-filled, and the sub-path is controlled uniformly from above."
 范围,Scope
 "Cloudflare API Token 不能为空","Cloudflare API Token cannot be empty"
 "本地域名 hosts 与通配证书已就绪","本地域名 hosts 与通配证书已就绪"

@@ -25,7 +25,13 @@ $error = (string)($error ?? '');
         <div class="w-alert" role="alert" data-tone="danger"><lang>商店不存在</lang></div>
     <?php else: ?>
         <div class="<?= $treeEmbed ? '' : 'w-card' ?>" style="--w-mb:var(--weline-space-4);"><div class="<?= $treeEmbed ? '' : 'w-card__body' ?>">
-            <w:form method="post" action="@backend-url('*/backend/scope-management/update-store')" csrf="auto" class="w-grid" data-testid="store-management-edit-form" style="--w-gap:var(--weline-space-4);">
+            <w:form method="post"
+                    action="@backend-url('*/backend/scope-management/update-store')"
+                    csrf="auto"
+                    class="w-grid"
+                    id="store-admin-edit-form"
+                    data-testid="store-management-edit-form"
+                    style="--w-gap:var(--weline-space-4);">
                 <input type="hidden" name="store_id" value="<?= $storeId ?>">
                 <?php if ($treeEmbed): ?>
                     <input type="hidden" name="return_to" value="tree">
@@ -59,9 +65,11 @@ $error = (string)($error ?? '');
                 $this->assign('display_type_inherit_label', __('继承网站 / 无特殊类型'));
                 echo $this->fetch('Weline_Websites::templates/Backend/partials/display-type-field.phtml');
                 ?>
-                <div class="w-cluster" data-align="end" style="--w-span-md:12;">
-                    <button class="w-button" type="submit" data-tone="primary"><lang>保存商店</lang></button>
-                </div>
+                <?php if (!$treeEmbed): ?>
+                    <div class="w-cluster" data-align="end" style="--w-span-md:12;" data-testid="store-management-edit-actions">
+                        <button class="w-button" type="submit" data-tone="primary" data-scope-editor-save="1"><lang>保存商店</lang></button>
+                    </div>
+                <?php endif; ?>
                 <?php
                 $this->assign('id', 'store_edit_' . $storeId);
                 $this->assign('store', $entity);

@@ -34,6 +34,7 @@ use Weline\Websites\Service\WebsiteChangeSnapshotFactory;
 use Weline\Websites\Service\WebsiteEntryUrlService;
 use Weline\Websites\Service\WebsiteScopeTreeService;
 use Weline\Websites\Service\WebsiteStoreChannelDirectory;
+use Weline\Websites\Service\WebsiteDomainSelectionAddressListBuilder;
 use Weline\Websites\Service\WebsiteSubPathValidator;
 
 #[Acl('Weline_Websites::website', '网站管理', 'globe', '网站管理', 'Weline_Websites::website_service')]
@@ -529,8 +530,9 @@ class Website extends BackendController
             $postData = $data;
             try {
                 $poolIds = $data['pool_ids'] ?? '';
+                $domainValues = $data['domain_values'] ?? '';
                 $subPath = $this->assertValidSubPath((string)($data['sub_path'] ?? ''));
-                $addressList = $this->buildAddressListFromPoolSelection($poolIds, $subPath);
+                $addressList = $this->buildAddressListFromDomainSelection($poolIds, $domainValues, $subPath);
                 if (empty($addressList)) {
                     throw new \Exception(__('请至少选择一个域名'));
                 }
@@ -724,11 +726,18 @@ class Website extends BackendController
                     throw new \InvalidArgumentException(__('网站ID与当前编辑目标不一致'));
                 }
                 $poolIds = $data['pool_ids'] ?? '';
+                $domainValues = $data['domain_values'] ?? '';
                 $subPath = $this->assertValidSubPath((string)($data['sub_path'] ?? ''));
-                $addressList = $this->buildAddressListFromPoolSelection($poolIds, $subPath);
+                $addressList = $this->buildAddressListFromDomainSelection($poolIds, $domainValues, $subPath);
                 if (empty($addressList)) {
                     throw new \Exception(__('请至少选择一个域名'));
                 }
+                // 未改统一子路径时，保留存量域名各自子路径（避免本地域名主路径冲掉正式域根路径）
+                $addressList = $this->preserveExistingDomainSubPathsUnlessUnifiedChanged(
+                    $postWebsiteId,
+                    $addressList,
+                    $subPath
+                );
                 /** @var WebsiteDomain $domainModel */
                 $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
                 foreach ($addressList as $item) {
@@ -1545,37 +1554,53 @@ class Website extends BackendController
     }
 
     /**
-     * 对地址列表排序：当同时存在根域与 www 时，www 排在前（作为主 URL）
+     * 对地址列表排序：正式根域/www 优先于本机/测试 Host；同根时 www 排前（作为主 URL）。
      */
     private function orderAddressListPreferredUrl(array $addressList): array
     {
-        $domains = array_column($addressList, 'domain');
-        $hasWww = false;
-        $hasRoot = false;
-        foreach ($domains as $d) {
-            if (str_starts_with($d, 'www.')) {
-                $hasWww = true;
-                $root = substr($d, 4);
-                if (in_array($root, $domains, true)) {
-                    $hasRoot = true;
-                    break;
-                }
-            }
-        }
-        if (!$hasWww || !$hasRoot) {
-            return $addressList;
-        }
         usort($addressList, function ($a, $b) {
-            $da = $a['domain'];
-            $db = $b['domain'];
+            $da = (string) ($a['domain'] ?? '');
+            $db = (string) ($b['domain'] ?? '');
+            $scoreA = $this->domainPrimaryPreferenceScore($da);
+            $scoreB = $this->domainPrimaryPreferenceScore($db);
+            if ($scoreA !== $scoreB) {
+                return $scoreB <=> $scoreA;
+            }
             $rootA = str_starts_with($da, 'www.') ? substr($da, 4) : $da;
             $rootB = str_starts_with($db, 'www.') ? substr($db, 4) : $db;
-            if ($rootA !== $rootB) {
-                return 0;
+            if ($rootA === $rootB) {
+                return str_starts_with($da, 'www.') ? -1 : 1;
             }
-            return str_starts_with($da, 'www.') ? -1 : 1;
+
+            return strcmp($da, $db);
         });
+
         return $addressList;
+    }
+
+    /**
+     * Higher score → more suitable as website primary / URL host.
+     */
+    private function domainPrimaryPreferenceScore(string $domain): int
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return 0;
+        }
+        if (
+            \str_ends_with($domain, '.test.weline.com')
+            || \str_ends_with($domain, '.weline.test')
+            || \str_ends_with($domain, '.localhost')
+            || $domain === 'localhost'
+            || \preg_match('/^\\d{1,3}(?:\\.\\d{1,3}){3}$/', $domain) === 1
+        ) {
+            return 1;
+        }
+        if (str_starts_with($domain, 'www.')) {
+            return 30;
+        }
+
+        return 20;
     }
 
     /**
@@ -1664,35 +1689,63 @@ class Website extends BackendController
      */
     private function buildAddressListFromPoolSelection(array|string $poolIds, string $subPath = ''): array
     {
-        $list = [];
-        $seen = [];
-        $subPath = $this->assertValidSubPath($subPath);
-        $poolIdArray = \is_array($poolIds)
-            ? \array_values(\array_filter(\array_map('intval', $poolIds)))
-            : \array_values(\array_filter(\array_map('intval', \explode(',', (string) $poolIds))));
-        foreach ($poolIdArray as $poolId) {
-            /** @var DomainPool $pool */
-            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
-            $pool->loadByPoolId((int) $poolId);
-            if (!$pool->getPoolId()) {
-                continue;
-            }
-            $domain = \strtolower(\trim((string) $pool->getDomain()));
+        return $this->buildAddressListFromDomainSelection($poolIds, '', $subPath);
+    }
+
+    /**
+     * pool_ids + domain_values（chips 主机名）合并建址；兼容未绑定 pool 的存量域名。
+     *
+     * @return list<array{domain:string,sub_path:string,pool_id:int}>
+     */
+    private function buildAddressListFromDomainSelection(
+        array|string $poolIds,
+        array|string $domainValues,
+        string $subPath = ''
+    ): array {
+        /** @var WebsiteDomainSelectionAddressListBuilder $builder */
+        $builder = ObjectManager::getInstance(WebsiteDomainSelectionAddressListBuilder::class);
+
+        return $builder->build($poolIds, $domainValues, $subPath);
+    }
+
+    /**
+     * 仅当用户改了「网站子路径」时才统一覆盖；否则保留各域名存量 sub_path。
+     *
+     * @param list<array{domain:string,sub_path:string,pool_id:int}> $addressList
+     * @return list<array{domain:string,sub_path:string,pool_id:int}>
+     */
+    private function preserveExistingDomainSubPathsUnlessUnifiedChanged(
+        int $websiteId,
+        array $addressList,
+        string $postedSubPath
+    ): array {
+        $posted = $this->normalizeSubPath($postedSubPath);
+        $baseline = $this->getPrimarySubPathForWebsite($websiteId);
+        if ($posted !== $baseline) {
+            // 用户明确改了统一子路径 → 应用到本次全部选中域名
+            return $addressList;
+        }
+        /** @var WebsiteDomain $model */
+        $model = ObjectManager::getInstance(WebsiteDomain::class);
+        $existingByDomain = [];
+        foreach ($model->getWebsiteDomains($websiteId) as $row) {
+            $domain = \strtolower(\trim((string) ($row[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
             if ($domain === '') {
                 continue;
             }
-            $key = $domain . '|' . $subPath;
-            if (isset($seen[$key])) {
+            $existingByDomain[$domain] = $this->normalizeSubPath(
+                (string) ($row[WebsiteDomain::schema_fields_SUB_PATH] ?? '')
+            );
+        }
+        foreach ($addressList as $idx => $item) {
+            $domain = \strtolower(\trim((string) ($item['domain'] ?? '')));
+            if ($domain === '' || !\array_key_exists($domain, $existingByDomain)) {
                 continue;
             }
-            $seen[$key] = true;
-            $list[] = [
-                'domain' => $domain,
-                'sub_path' => $subPath,
-                'pool_id' => (int) $poolId,
-            ];
+            $addressList[$idx]['sub_path'] = $existingByDomain[$domain];
         }
-        return $list;
+
+        return $addressList;
     }
 
     private function assertValidSubPath(string $subPath): string
@@ -1880,12 +1933,18 @@ class Website extends BackendController
             $domains = $websiteDomain->getWebsiteDomains($websiteId);
             foreach ($domains as $domain) {
                 $poolId = (int)($domain[WebsiteDomain::schema_fields_POOL_ID] ?? 0);
-                if ($poolId > 0) {
-                    $selectedPoolIds[] = $poolId;
-                }
                 $domainName = strtolower(trim((string)($domain[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
                 if ($domainName !== '' && !in_array($domainName, $selectedDomainNames, true)) {
                     $selectedDomainNames[] = $domainName;
+                }
+                if ($poolId <= 0 && $domainName !== '') {
+                    /** @var DomainPool $pool */
+                    $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+                    $pool->loadByDomain($domainName);
+                    $poolId = (int) $pool->getPoolId();
+                }
+                if ($poolId > 0 && !in_array($poolId, $selectedPoolIds, true)) {
+                    $selectedPoolIds[] = $poolId;
                 }
             }
         } catch (\Exception $e) {
