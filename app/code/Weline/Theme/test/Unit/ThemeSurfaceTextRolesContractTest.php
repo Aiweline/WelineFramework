@@ -55,6 +55,29 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
             '/\.weline-header \.w-currency-switcher__trigger\.w-button[\s\S]{0,400}?background:\s*transparent/s',
             $headerDefault
         );
+
+        // Notice-bar scope switcher: inherit ink + transparent (not primary brand chip).
+        self::assertMatchesRegularExpression(
+            '/\.weline-header \.header-site-notice-links \.w-scope-switcher__trigger\.w-button[\s\S]{0,400}?background:\s*transparent/s',
+            $headerDefault
+        );
+        self::assertMatchesRegularExpression(
+            '/\.weline-header \.header-site-notice-links \.w-scope-switcher__trigger\.w-button[\s\S]{0,400}?color:\s*inherit/s',
+            $headerDefault
+        );
+        $chrome = $this->read('app/code/Weline/Theme/view/statics/css/widgets/header-chrome-amazon.css');
+        self::assertStringContainsString(
+            '.weline-header .header-site-notice-links .w-scope-switcher__trigger.w-button',
+            $chrome
+        );
+        self::assertMatchesRegularExpression(
+            '/\.w-scope-switcher__trigger\.w-button[\s\S]{0,1200}?background:\s*transparent/s',
+            $chrome
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/header-site-notice-links \.w-scope-switcher__trigger\.w-button[\s\S]{0,1200}?background:\s*var\(--weline-component-primary\)/s',
+            $chrome
+        );
     }
 
     public function testMegaMenuIsRegisteredAsLazyUiComponent(): void
@@ -125,6 +148,7 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         $doc = $this->read('app/code/Weline/Theme/doc/theme-surface-text-roles.md');
         self::assertStringContainsString('.w-language-switcher__trigger', $doc);
         self::assertStringContainsString('.w-currency-switcher__trigger', $doc);
+        self::assertStringContainsString('.w-scope-switcher__trigger', $doc);
         self::assertStringContainsString('--w-surface-fg', $doc);
     }
 
