@@ -692,8 +692,10 @@ class RequestContext
             || !\hash_equals($executionContext->scopeBinding->digest(), $binding->digest())
             || $existing->websiteId !== $replacement->websiteId
             || !\hash_equals((string)$existing->websiteCode, (string)$replacement->websiteCode)
-            || $storeId < 1
-            || $channelId < 1) {
+            // Store::ID_DEFAULT / SalesChannel::ID_DEFAULT are 0 on the system
+            // default Website — reject only negative ids, never the lawful zero.
+            || $storeId < 0
+            || $channelId < 0) {
             throw new \LogicException('Trusted Worker Scope replacement precondition failed.');
         }
         if ($existing->equals($replacement)) {
@@ -735,7 +737,8 @@ class RequestContext
             || self::getWelineArea() !== self::AREA_FRONTEND
             || $existing->websiteId !== $replacement->websiteId
             || !\hash_equals((string)$existing->websiteCode, (string)$replacement->websiteCode)
-            || $storeId < 1
+            // Store::ID_DEFAULT is 0 — lawful on the system default Website.
+            || $storeId < 0
         ) {
             throw new \LogicException('Authorized preview Scope replacement precondition failed.');
         }

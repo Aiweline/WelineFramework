@@ -293,6 +293,49 @@ final class ScopeIdentityTest extends TestCase
         }
     }
 
+    public function testTrustedWorkerCanRefineDefaultStoreZeroIdsToSiblingChannel(): void
+    {
+        $server = $_SERVER;
+        Context::enter(new Context(['route' => ['area' => RequestContext::AREA_REST_FRONTEND]]));
+
+        try {
+            // System default Website keeps Store::ID_DEFAULT=0 and
+            // SalesChannel::ID_DEFAULT=0. Host-default QueryBin freeze must still
+            // refine to a sibling channel (e.g. /b2b) on that same store.
+            self::installFrozenScope(0, 'default', 0, 'default', 0, '/api/framework/query-bin', 'UTC');
+            $replacement = ScopeIdentity::channel(
+                0,
+                'default',
+                'default',
+                'b2b',
+                ScopeIdentity::MODE_NORMAL,
+            );
+            $binding = new FrontendWorkerScopeBinding(
+                $replacement,
+                'p05113ef3.test.weline.com',
+                hash('sha256', 'default-store-zero-id-token'),
+                1_000,
+                2_800,
+                true,
+            );
+            RequestContext::set(
+                FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY,
+                FrontendWorkerExecutionContext::frontend($binding),
+            );
+
+            RequestContext::replaceScopeIdentityForTrustedWorker($binding, 0, 998);
+
+            self::assertTrue(RequestContext::scopeIdentity()?->equals($replacement) ?? false);
+            self::assertSame(0, RequestContext::getWelineStoreId());
+            self::assertSame(998, RequestContext::getWelineChannelId());
+            self::assertSame('b2b', RequestContext::getWelineChannelCode());
+            self::assertNull(RequestContext::getStorefrontRoutePath());
+        } finally {
+            $_SERVER = $server;
+            Context::leave();
+        }
+    }
+
     public function testTrustedWorkerScopeReplacementRejectsCrossWebsiteBinding(): void
     {
         $server = $_SERVER;
@@ -357,7 +400,8 @@ final class ScopeIdentityTest extends TestCase
                 'area' => RequestContext::AREA_REST_FRONTEND,
                 'replacement_code' => 'shop_b',
                 'execution_matches' => true,
-                'store_id' => 0,
+                // 0 is Store::ID_DEFAULT (lawful); only negatives are invalid.
+                'store_id' => -1,
                 'channel_id' => 51,
             ],
             'invalid_channel_id' => [
@@ -365,7 +409,8 @@ final class ScopeIdentityTest extends TestCase
                 'replacement_code' => 'shop_b',
                 'execution_matches' => true,
                 'store_id' => 41,
-                'channel_id' => 0,
+                // 0 is SalesChannel::ID_DEFAULT (lawful); only negatives are invalid.
+                'channel_id' => -1,
             ],
         ];
 
