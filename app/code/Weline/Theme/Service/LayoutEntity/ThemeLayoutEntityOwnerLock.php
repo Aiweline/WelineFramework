@@ -52,7 +52,9 @@ final class ThemeLayoutEntityOwnerLock
         if (!is_resource($handle)) {
             throw new \RuntimeException('theme_layout_owner_lock_open_failed');
         }
-        $deadline = hrtime(true) + 10_000_000_000;
+        // Pipeline may serialize same-owner draft/formal across processes; 10s was too tight
+        // when a sibling promote is still writing a large identity tree.
+        $deadline = hrtime(true) + 120_000_000_000;
         try {
             while (!flock($handle, $mode | LOCK_NB)) {
                 if (hrtime(true) >= $deadline) {

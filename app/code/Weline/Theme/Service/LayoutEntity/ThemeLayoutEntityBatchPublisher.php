@@ -9,8 +9,46 @@ use Weline\Theme\Api\Version\ThemeVersionIdentity;
 /** All candidates are complete before promotion; ordinary failures restore old bytes. */
 class ThemeLayoutEntityBatchPublisher
 {
-    /** @param array<string,?string> $candidates Null means the derived file is no longer needed. */
-    public function publish(ThemeVersionIdentity $identity, array $candidates): void
+    /**
+     * @param array<string,?string> $candidates Null means the derived file is no longer needed.
+     * @param array{compile?:bool} $options compile=false → promote only (pipeline schedules Taglib compile).
+     * @return array{completed:array<string,?string>,rollback_plan:array<string,?string>}
+     */
+    public function publish(ThemeVersionIdentity $identity, array $candidates, array $options = []): array
+    {
+        $doCompile = ($options['compile'] ?? true) !== false;
+        $result = $this->promote($identity, $candidates);
+        $completed = $result['completed'];
+        $rollbackPlan = $result['rollback_plan'];
+
+        // Formal publish: compile language com_* outside the owner write lock.
+        // Empty promote still compiles when page candidates exist (com may be missing).
+        if (
+            $doCompile
+            && $identity->mode === ThemeVersionIdentity::MODE_FORMAL
+            && $identity->area === 'frontend'
+        ) {
+            try {
+                ObjectManager::getInstance(ThemeLayoutEntityFormalLocaleCompileService::class)
+                    ->compileAfterPromote($identity, $completed);
+            } catch (\Throwable $compileError) {
+                if ($rollbackPlan !== []) {
+                    $this->rollbackPromote($identity, $rollbackPlan);
+                }
+                throw $compileError;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Atomic entity promote only (no Taglib compile).
+     *
+     * @param array<string,?string> $candidates
+     * @return array{completed:array<string,?string>,rollback_plan:array<string,?string>}
+     */
+    public function promote(ThemeVersionIdentity $identity, array $candidates): array
     {
         /** @var array<string,?string> $completed */
         $completed = [];
@@ -71,23 +109,27 @@ class ThemeLayoutEntityBatchPublisher
             }
         });
 
-        // Formal publish: compile language com_* outside the owner write lock.
-        // Empty promote still compiles when page candidates exist (com may be missing).
-        if ($identity->mode === ThemeVersionIdentity::MODE_FORMAL && $identity->area === 'frontend') {
-            try {
-                ObjectManager::getInstance(ThemeLayoutEntityFormalLocaleCompileService::class)
-                    ->compileAfterPromote($identity, $completed);
-            } catch (\Throwable $compileError) {
-                if ($rollbackPlan !== []) {
-                    ThemeLayoutEntityOwnerLock::write($identity, function () use ($rollbackPlan): void {
-                        foreach (array_reverse(array_keys($rollbackPlan)) as $path) {
-                            $this->restorePath($path, $rollbackPlan[$path]);
-                        }
-                    });
-                }
-                throw $compileError;
-            }
+        return [
+            'completed' => $completed,
+            'rollback_plan' => $rollbackPlan,
+        ];
+    }
+
+    /**
+     * Restore entity bytes after a failed deferred Taglib compile.
+     *
+     * @param array<string,?string> $rollbackPlan
+     */
+    public function rollbackPromote(ThemeVersionIdentity $identity, array $rollbackPlan): void
+    {
+        if ($rollbackPlan === []) {
+            return;
         }
+        ThemeLayoutEntityOwnerLock::write($identity, function () use ($rollbackPlan): void {
+            foreach (array_reverse(array_keys($rollbackPlan)) as $path) {
+                $this->restorePath($path, $rollbackPlan[$path]);
+            }
+        });
     }
 
     private function restorePath(string $path, ?string $previousBytes): void

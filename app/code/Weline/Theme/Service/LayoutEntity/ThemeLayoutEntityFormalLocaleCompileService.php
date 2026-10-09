@@ -16,6 +16,8 @@ use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeHeadChromeCssPack;
+use Weline\Theme\Service\ThemeHeadChromeJsPack;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteLanguage;
@@ -37,11 +39,17 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         private readonly ThemeContextService $themeContext,
         private readonly TemplateCompileService $compiler,
         private readonly Printing $printing,
+        private readonly ThemeHeadChromeCssPack $headCssPack,
+        private readonly ThemeHeadChromeJsPack $headJsPack,
     ) {
     }
 
-    /** @param array<string,?string> $candidates completed publish candidates */
-    public function compileAfterPromote(ThemeVersionIdentity $identity, array $candidates): void
+    /**
+     * @param array<string,?string> $candidates completed publish candidates
+     * @param array{nested?:bool,locale_concurrency?:int,on_progress?:callable} $options
+     *        nested=true → force locale concurrency 1 (pipeline compile worker; no nested process pool).
+     */
+    public function compileAfterPromote(ThemeVersionIdentity $identity, array $candidates, array $options = []): void
     {
         if ($identity->area !== 'frontend' || $identity->mode !== ThemeVersionIdentity::MODE_FORMAL) {
             return;
@@ -57,19 +65,59 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             throw new \RuntimeException('theme_layout_formal_compile_theme_missing');
         }
 
-        $this->runPinnedToIdentityWebsite($identity, function () use ($identity, $pages, $locales, $currency): void {
+        $nested = !empty($options['nested']) || $this->isNestedCompileEnv();
+        $localeConcurrency = $nested
+            ? 1
+            : (isset($options['locale_concurrency'])
+                ? $this->compiler->resolveConcurrency($options['locale_concurrency'])
+                : $this->compiler->resolveConcurrency());
+        $onProgress = is_callable($options['on_progress'] ?? null) ? $options['on_progress'] : null;
+        // Bind a local map for the pinned closure (must be in use()-list; never pass null).
+        $candidateMap = $candidates;
+
+        $this->runPinnedToIdentityWebsite($identity, function () use (
+            $identity,
+            $candidateMap,
+            $pages,
+            $locales,
+            $currency,
+            $localeConcurrency,
+            $nested,
+            $onProgress,
+        ): void {
             $template = Template::getInstance();
+            if (!$nested && $localeConcurrency > 1 && count($locales) > 1) {
+                $this->printing->note(sprintf(
+                    '%s pool=%d locales=%d',
+                    (string)__('主题布局 Taglib 编译进程池'),
+                    $localeConcurrency,
+                    count($locales),
+                ));
+            }
             foreach ($pages as $page) {
-                $snapshot = ThemeLayoutSourceSnapshot::capture(
-                    $this->paths,
+                // Prefer promote-candidate bytes first (no OwnerLock). Pipeline compile
+                // otherwise contends with same-owner solidify WRITE via capture LOCK_SH.
+                $snapshot = $this->snapshotFromPublishedCandidates(
                     $identity,
+                    $candidateMap,
                     $page['layout_type'],
                     $page['layout_option'],
                     $page['target_type'],
                     $page['target_id'],
                 );
-                $pagePath = $snapshot->pagePath();
+                $pagePath = $snapshot?->pagePath();
                 if ($pagePath === null) {
+                    $snapshot = ThemeLayoutSourceSnapshot::capture(
+                        $this->paths,
+                        $identity,
+                        $page['layout_type'],
+                        $page['layout_option'],
+                        $page['target_type'],
+                        $page['target_id'],
+                    );
+                    $pagePath = $snapshot->pagePath();
+                }
+                if ($pagePath === null || $snapshot === null) {
                     throw new \RuntimeException(
                         'theme_layout_formal_compile_page_missing:' . $page['layout_type'] . '/' . $page['layout_option']
                     );
@@ -86,20 +134,33 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                         $locales,
                         $currency,
                         $widgets,
-                        function (int $done, int $total, string $locale, string $label) use ($page): void {
-                            $this->printing->note(sprintf(
-                                '%s [%d/%d] locale=%s · %s · %s/%s',
-                                (string)__('主题布局 Taglib 编译'),
+                        function (int $done, int $total, string $locale, string $label) use ($page, $onProgress, $nested): void {
+                            if ($onProgress !== null) {
+                                $onProgress($done, $total, $locale, $label, $page);
+                                return;
+                            }
+                            // Nested pipeline workers: keep stderr free of progress bars (parent owns CLI).
+                            if ($nested) {
+                                return;
+                            }
+                            $this->printing->progressBar(
                                 $done,
-                                $total,
-                                $locale,
-                                $label,
-                                $page['layout_type'],
-                                $page['layout_option'],
-                            ));
+                                max(1, $total),
+                                sprintf(
+                                    '%s locale=%s · %s · %s/%s',
+                                    (string)__('主题布局 Taglib 编译'),
+                                    $locale,
+                                    $label,
+                                    $page['layout_type'],
+                                    $page['layout_option'],
+                                ),
+                                24,
+                            );
                         },
+                        ['concurrency' => $localeConcurrency],
                     );
                 } catch (\Throwable $error) {
+                    $this->printing->finishProgressLine();
                     $this->printing->error(sprintf(
                         '%s locale_batch_failed layout=%s/%s: %s',
                         (string)__('主题布局 Taglib 编译'),
@@ -110,7 +171,62 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                     throw $error;
                 }
             }
+            // Post-com warm: bake theme-head packs so first request consumes artifacts (not hot-path merge).
+            $this->warmPublishedResourcePacks($identity->area);
         });
+    }
+
+    /**
+     * Rebuild candidate map from on-disk promoted paths (pipeline compile worker).
+     *
+     * @param list<string> $candidatePaths
+     * @param array{nested?:bool} $options
+     */
+    public function compileAfterPromoteFromPaths(
+        ThemeVersionIdentity $identity,
+        array $candidatePaths,
+        array $options = [],
+    ): void {
+        $candidates = [];
+        foreach ($candidatePaths as $path) {
+            if (!is_string($path) || $path === '') {
+                continue;
+            }
+            if (!is_file($path)) {
+                $candidates[$path] = null;
+                continue;
+            }
+            $bytes = file_get_contents($path);
+            if (!is_string($bytes)) {
+                throw new \RuntimeException('theme_layout_formal_compile_path_unreadable:' . $path);
+            }
+            $candidates[$path] = $bytes;
+        }
+        $this->compileAfterPromote($identity, $candidates, $options + ['nested' => true]);
+    }
+
+    private function isNestedCompileEnv(): bool
+    {
+        $flag = trim((string)(getenv(TemplateCompileService::ENV_NESTED)
+            ?: ($_ENV[TemplateCompileService::ENV_NESTED] ?? $_SERVER[TemplateCompileService::ENV_NESTED] ?? '')));
+
+        return $flag !== '' && $flag !== '0' && strtolower($flag) !== 'false';
+    }
+
+    /** Explicit Formal post-com half: publish theme-head CSS/JS packs for the pinned website context. */
+    private function warmPublishedResourcePacks(string $area): void
+    {
+        try {
+            $this->headCssPack->warmAreaPacks($area);
+            $this->headJsPack->warmAreaPacks($area);
+            $this->printing->note((string)__('主题布局资源合包已预热'));
+        } catch (\Throwable $error) {
+            $this->printing->error(sprintf(
+                '%s: %s',
+                (string)__('主题布局资源合包预热失败'),
+                $error->getMessage(),
+            ));
+        }
     }
 
     /**
@@ -301,6 +417,60 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         }
 
         return $pinned;
+    }
+
+    /**
+     * Rebuild a snapshot from promote candidates when disk capture missed the page
+     * (e.g. staging absolute keys vs live Paths root). Remaps the page key to the
+     * canonical Paths page path so fromCandidates can bind $page.
+     *
+     * @param array<string,?string>|null $candidates
+     */
+    private function snapshotFromPublishedCandidates(
+        ThemeVersionIdentity $identity,
+        ?array $candidates,
+        string $layoutType,
+        string $layoutOption,
+        string $targetType,
+        int $targetId,
+    ): ?ThemeLayoutSourceSnapshot {
+        $candidates = is_array($candidates) ? $candidates : [];
+        if ($candidates === []) {
+            return null;
+        }
+        $expected = $this->paths->pageLayoutPhtml($identity, $layoutType, $layoutOption, $targetType, $targetId);
+        $suffix = '/pages/layouts/' . $layoutType . '/' . $layoutOption . '.phtml';
+        $pageBytes = null;
+        $pageKey = null;
+        if (isset($candidates[$expected]) && is_string($candidates[$expected])) {
+            $pageBytes = $candidates[$expected];
+            $pageKey = $expected;
+        } else {
+            foreach ($candidates as $path => $bytes) {
+                if (!is_string($path) || !is_string($bytes)) {
+                    continue;
+                }
+                $normalized = str_replace('\\', '/', $path);
+                if (str_contains($normalized, '/sources/')) {
+                    continue;
+                }
+                if (!str_ends_with($normalized, $suffix)) {
+                    continue;
+                }
+                $pageBytes = $bytes;
+                $pageKey = $path;
+                break;
+            }
+        }
+        if ($pageBytes === null || $pageKey === null) {
+            return null;
+        }
+        $remapped = $candidates;
+        if ($pageKey !== $expected) {
+            $remapped[$expected] = $pageBytes;
+        }
+
+        return ThemeLayoutSourceSnapshot::fromCandidates($identity, $expected, $remapped);
     }
 
     /** @param array<string,?string> $candidates

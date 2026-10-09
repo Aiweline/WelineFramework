@@ -29,6 +29,13 @@ final class ThemeLayoutEntityPaths
             return \rtrim($this->rootOverride, '/\\') . \DIRECTORY_SEPARATOR;
         }
 
+        // Mode\Set prod staging pipeline: write entities under staging before rename-swap.
+        if (\class_exists(\Weline\Framework\Deploy\DeployStagingSession::class)
+            && \Weline\Framework\Deploy\DeployStagingSession::isActive()
+        ) {
+            return \Weline\Framework\Deploy\DeployStagingSession::themeLayoutEntitiesRoot();
+        }
+
         $generated = \defined('\Weline\Framework\App\Env::GENERATED_DIR')
             ? (string)\Weline\Framework\App\Env::GENERATED_DIR
             : (\rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'generated');

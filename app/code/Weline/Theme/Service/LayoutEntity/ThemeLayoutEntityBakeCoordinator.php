@@ -547,30 +547,198 @@ final class ThemeLayoutEntityBakeCoordinator
         });
     }
 
-    /** Upgrade/default-plan: current owner scopes only (website/global, own theme, or edited). */
-    public function rebakeAfterInjectionCollect(?int $themeId = null, array $changes = [], ?callable $progress = null, bool $includeSelectedDraft = true): int
-    {
+    /**
+     * Upgrade/default-plan: owner scopes with own theme application or edit intent.
+     * Theme-inner work uses solidify+compile process pipeline (overlap); themes stay serial at caller.
+     *
+     * @param array{scope?:string,all_versions?:bool,pipeline?:bool} $options
+     *        scope — canonical scope filter; all_versions — bake every version row (not only current/draft).
+     *        pipeline — default true for upgrade; false forces legacy serial promote+compile per identity.
+     */
+    public function rebakeAfterInjectionCollect(
+        ?int $themeId = null,
+        array $changes = [],
+        ?callable $progress = null,
+        bool $includeSelectedDraft = true,
+        array $options = [],
+    ): int {
+        $themeIds = $themeId === null ? [null] : [$themeId];
+
+        return $this->rebakeThemesAfterInjectionCollect(
+            $themeIds,
+            $changes,
+            $progress,
+            $includeSelectedDraft,
+            $options,
+        );
+    }
+
+    /**
+     * Flatten multi-theme upgrade into one solidify/compile pipeline (ownerHash still mutexes same scope).
+     * Prefer this over serial per-theme pipelines so different themes fill the same process pools.
+     *
+     * @param list<int|null> $themeIds null entry = all themes (legacy collect filter)
+     * @param array{scope?:string,all_versions?:bool,pipeline?:bool} $options
+     */
+    public function rebakeThemesAfterInjectionCollect(
+        array $themeIds,
+        array $changes = [],
+        ?callable $progress = null,
+        bool $includeSelectedDraft = true,
+        array $options = [],
+    ): int {
         $this->lastRebakeReport = ['migrated' => 0, 'skipped' => 0, 'unmapped' => [], 'chrome_bootstrapped' => 0];
+        $workItems = [];
+        foreach ($themeIds as $themeId) {
+            if ($themeId !== null && (int)$themeId < 1) {
+                continue;
+            }
+            $chunk = $this->collectRebakeWorkItems(
+                $themeId === null ? null : (int)$themeId,
+                $changes,
+                $includeSelectedDraft,
+                $options,
+            );
+            foreach ($chunk as $item) {
+                $workItems[] = $item;
+            }
+        }
+        if ($workItems === []) {
+            return 0;
+        }
+
+        $usePipeline = ($options['pipeline'] ?? true) !== false;
+        if (!$usePipeline) {
+            return $this->rebakeWorkItemsSerial($workItems, $progress, $changes);
+        }
+
+        $pipelineProgress = null;
+        if ($progress !== null) {
+            $pipelineProgress = static function (
+                int $done,
+                int $total,
+                ThemeVersionIdentity $identity,
+                string $phase,
+            ) use ($progress): void {
+                $progress($done, $total, $identity);
+            };
+        }
+
+        $pipeline = ObjectManager::getInstance(ThemeLayoutEntitySolidifyCompilePipeline::class);
+        $result = $pipeline->run($workItems, $pipelineProgress, $options);
+        $this->lastRebakeReport['migrated'] = (int)($result['migrated'] ?? 0);
+        $seenOwners = [];
+        foreach ($workItems as $item) {
+            $identity = $item['identity'];
+            $ownerKey = $identity->themeId . "\0" . $identity->canonicalScope . "\0" . $identity->storeMode;
+            if (isset($seenOwners[$ownerKey])) {
+                continue;
+            }
+            $seenOwners[$ownerKey] = true;
+            $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
+        }
+
+        return $this->lastRebakeReport['migrated'];
+    }
+
+    /**
+     * Promote one identity's pending layouts (optional Taglib compile).
+     * Used by pipeline solidify workers (compile=false) and legacy serial path.
+     *
+     * @param list<array{layout_type:string,layout_option:string,target_type:string,target_id:int}> $pending
+     * @return array{migrated:int,completed:array<string,?string>,rollback_plan:array<string,?string>}
+     */
+    public function solidifyPendingIdentity(
+        ThemeVersionIdentity $identity,
+        array $pending,
+        array $changes = [],
+        bool $compile = true,
+    ): array {
+        $completed = [];
+        $rollbackPlan = [];
+        $migrated = 0;
+        ThemeLayoutEntityOwnerLock::write($identity, function () use (
+            &$identity,
+            $pending,
+            $changes,
+            $compile,
+            &$completed,
+            &$rollbackPlan,
+            &$migrated,
+        ): void {
+            if (!$this->ownsPublicationDirectory($identity)) {
+                return;
+            }
+            if ($identity->mode === ThemeVersionIdentity::MODE_DRAFT) {
+                $version = $this->loadVersion($identity);
+                $identity = $version->toVersionIdentity();
+                $identity = $this->snapshotService()->captureUnresolvedCurrentIntent(
+                    $version,
+                    $this->context($identity, 'homepage', 'default', 'global', null),
+                ) ?? $identity;
+            }
+            $candidates = [];
+            foreach ($pending as $key) {
+                $candidates = array_replace($candidates, $this->candidateForIdentity(
+                    $identity,
+                    (string)$key['layout_type'],
+                    (string)$key['layout_option'],
+                    (string)$key['target_type'],
+                    (int)$key['target_id'],
+                    $changes,
+                ));
+            }
+            $result = (new ThemeLayoutEntityBatchPublisher())->publish(
+                $identity,
+                $candidates,
+                ['compile' => $compile],
+            );
+            $completed = $result['completed'];
+            $rollbackPlan = $result['rollback_plan'];
+            $migrated = count($candidates);
+        });
+
+        return [
+            'migrated' => $migrated,
+            'completed' => $completed,
+            'rollback_plan' => $rollbackPlan,
+        ];
+    }
+
+    /**
+     * @param array{scope?:string,all_versions?:bool} $options
+     * @return list<array{identity:ThemeVersionIdentity,pending:list<array<string,mixed>>,changes:array}>
+     */
+    private function collectRebakeWorkItems(
+        ?int $themeId,
+        array $changes,
+        bool $includeSelectedDraft,
+        array $options,
+    ): array {
         $planDigest = $this->injectionPlanDigest();
+        $scopeFilter = trim((string)($options['scope'] ?? ''));
+        $allVersions = !empty($options['all_versions']);
         $query = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery();
-        if ($themeId !== null) { $query->where('theme_id', $themeId); }
+        if ($themeId !== null) {
+            $query->where('theme_id', $themeId);
+        }
         $rows = $query->select()->fetchArray();
         $rows = !is_array($rows) || $rows === [] ? [] : (array_is_list($rows) ? $rows : [$rows]);
-        $live = [];
+        $workItems = [];
         foreach ($rows as $row) {
             $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->setData($row);
             $identity = $version->toVersionIdentity();
-            if (!$this->ownsPublicationDirectory($identity)) { continue; }
-            if (!$this->isCurrentlyEffectiveScopeVersion($identity, $includeSelectedDraft)) { continue; }
-            if (!$this->scopeOwnsSolidify($identity)) { continue; }
-            $live[] = [$version, $identity];
-        }
-        $total = count($live);
-        $index = 0;
-        foreach ($live as [$version, $identity]) {
-            $index++;
-            if ($progress !== null) {
-                $progress($index, $total, $identity);
+            if ($scopeFilter !== '' && $identity->canonicalScope !== $scopeFilter) {
+                continue;
+            }
+            if (!$this->ownsPublicationDirectory($identity)) {
+                continue;
+            }
+            if (!$allVersions && !$this->isCurrentlyEffectiveScopeVersion($identity, $includeSelectedDraft)) {
+                continue;
+            }
+            if (!$this->scopeOwnsSolidify($identity)) {
+                continue;
             }
             $head = $this->snapshotService()->head($identity);
             $descriptor = json_decode((string)($head['package_default_json'] ?? '{}'), true);
@@ -594,21 +762,35 @@ final class ThemeLayoutEntityBakeCoordinator
                         continue;
                     }
                 } else {
-                    $this->lastRebakeReport['unmapped'][] = ['version_id' => $identity->themeVersionId, 'content_revision' => $identity->contentRevision, 'reason' => 'historical_revision_head_missing'];
+                    $this->lastRebakeReport['unmapped'][] = [
+                        'version_id' => $identity->themeVersionId,
+                        'content_revision' => $identity->contentRevision,
+                        'reason' => 'historical_revision_head_missing',
+                    ];
                     continue;
                 }
             }
             $targets = [];
             foreach ($this->snapshotService()->resources($identity) as $resource) {
-                if (($resource['resource_type'] ?? '') !== 'layout') { continue; }
+                if (($resource['resource_type'] ?? '') !== 'layout') {
+                    continue;
+                }
                 $key = json_decode((string)$resource['resource_key_json'], true);
-                if (is_array($key)) { $targets[] = $key; }
+                if (is_array($key)) {
+                    $targets[] = $key;
+                }
             }
-            // The injection plan can add a layout that never had an editor workspace.
             foreach ($changes as $change) {
                 foreach (array_merge($change['before'] ?? [], $change['after'] ?? []) as $declaration) {
                     $type = (string)($declaration['layout_type'] ?? '*');
-                    if ($type !== '' && $type !== '*') { $targets[] = ['layout_type' => $type, 'layout_option' => ($declaration['layout_option'] ?? 'default') === '*' ? 'default' : ($declaration['layout_option'] ?? 'default')]; }
+                    if ($type !== '' && $type !== '*') {
+                        $targets[] = [
+                            'layout_type' => $type,
+                            'layout_option' => ($declaration['layout_option'] ?? 'default') === '*'
+                                ? 'default'
+                                : ($declaration['layout_option'] ?? 'default'),
+                        ];
+                    }
                 }
             }
             $targets = $this->uniqueLayoutTargets(array_merge(
@@ -616,49 +798,85 @@ final class ThemeLayoutEntityBakeCoordinator
                 $this->existingPageTargets($identity),
                 $this->declaredPageTargets($identity, $changes),
             ));
-            if ($targets === []) { $targets[] = ['layout_type' => 'homepage', 'layout_option' => 'default', 'target_type' => 'global', 'target_id' => 0]; }
+            if ($targets === []) {
+                $targets[] = [
+                    'layout_type' => 'homepage',
+                    'layout_option' => 'default',
+                    'target_type' => 'global',
+                    'target_id' => 0,
+                ];
+            }
             $pending = [];
             foreach ($targets as $key) {
                 $type = (string)($key['layout_type'] ?? 'default');
                 $option = (string)($key['layout_option'] ?? 'default');
-                if (!ThemeLayoutEntityInjectionTargets::affects($changes, $type, $option)) { continue; }
-                $targetType = (string)($key['target_type'] ?? 'global');
-                $targetId = (int)($key['target_id'] ?? 0);
-                if ($this->generatedPageMatchesInputs($identity, $type, $option, $targetType, $targetId, $changes, $planDigest)) {
-                    $this->lastRebakeReport['skipped']++;
+                if (!ThemeLayoutEntityInjectionTargets::affects($changes, $type, $option)) {
                     continue;
                 }
-                $pending[] = ['layout_type' => $type, 'layout_option' => $option, 'target_type' => $targetType, 'target_id' => $targetId];
+                $targetType = (string)($key['target_type'] ?? 'global');
+                $targetId = (int)($key['target_id'] ?? 0);
+                try {
+                    if ($this->generatedPageMatchesInputs($identity, $type, $option, $targetType, $targetId, $changes, $planDigest)) {
+                        $this->lastRebakeReport['skipped']++;
+                        continue;
+                    }
+                } catch (\Throwable $error) {
+                    // Legacy/disabled layout routes must not abort the whole theme pipeline.
+                    $this->lastRebakeReport['unmapped'][] = [
+                        'version_id' => $identity->themeVersionId,
+                        'content_revision' => $identity->contentRevision,
+                        'reason' => 'layout_route_invalid:' . $type . '/' . $option,
+                        'message' => $error->getMessage(),
+                    ];
+                    continue;
+                }
+                $pending[] = [
+                    'layout_type' => $type,
+                    'layout_option' => $option,
+                    'target_type' => $targetType,
+                    'target_id' => $targetId,
+                ];
             }
-            if ($pending === []) { continue; }
+            if ($pending === []) {
+                continue;
+            }
+            $workItems[] = [
+                'identity' => $identity,
+                'pending' => $pending,
+                'changes' => $changes,
+            ];
+        }
+
+        return $workItems;
+    }
+
+    /**
+     * @param list<array{identity:ThemeVersionIdentity,pending:list<array<string,mixed>>,changes:array}> $workItems
+     */
+    private function rebakeWorkItemsSerial(array $workItems, ?callable $progress, array $changes): int
+    {
+        $total = count($workItems);
+        $index = 0;
+        foreach ($workItems as $item) {
+            ++$index;
+            $identity = $item['identity'];
+            if ($progress !== null) {
+                $progress($index, $total, $identity);
+            }
             try {
-                ThemeLayoutEntityOwnerLock::write($identity, function () use (&$identity, $pending, $changes): void {
-                    if (!$this->ownsPublicationDirectory($identity)) { return; }
-                    if ($identity->mode === ThemeVersionIdentity::MODE_DRAFT) {
-                        $version = $this->loadVersion($identity);
-                        $identity = $version->toVersionIdentity();
-                        $identity = $this->snapshotService()->captureUnresolvedCurrentIntent($version,
-                            $this->context($identity, 'homepage', 'default', 'global', null)) ?? $identity;
-                    }
-                    $candidates = [];
-                    foreach ($pending as $key) {
-                        $candidates = array_replace($candidates, $this->candidateForIdentity(
-                            $identity,
-                            (string)$key['layout_type'],
-                            (string)$key['layout_option'],
-                            (string)$key['target_type'],
-                            (int)$key['target_id'],
-                            $changes,
-                        ));
-                    }
-                    $this->publish($identity, $candidates);
-                    $this->lastRebakeReport['migrated'] += count($candidates);
-                });
+                $result = $this->solidifyPendingIdentity(
+                    $identity,
+                    $item['pending'],
+                    $item['changes'] ?? $changes,
+                    true,
+                );
+                $this->lastRebakeReport['migrated'] += (int)($result['migrated'] ?? 0);
                 $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
             } catch (\Throwable $error) {
                 $this->reportMissingSourceOrThrow($identity, $error);
             }
         }
+
         return $this->lastRebakeReport['migrated'];
     }
 
@@ -1028,7 +1246,11 @@ final class ThemeLayoutEntityBakeCoordinator
         if ($version->getVersionId() < 1 || $version->toVersionIdentity()->ownerHash() !== $identity->ownerHash()) { throw new \RuntimeException('theme_layout_entity_version_owner_mismatch'); }
         return $version;
     }
-    private function publish(ThemeVersionIdentity $identity, array $candidates): void { (new ThemeLayoutEntityBatchPublisher())->publish($identity, $candidates); }
+    /** @param array{compile?:bool} $options */
+    private function publish(ThemeVersionIdentity $identity, array $candidates, array $options = []): void
+    {
+        (new ThemeLayoutEntityBatchPublisher())->publish($identity, $candidates, $options);
+    }
     private function snapshotService(): ThemeVersionResourceSnapshotService { return ObjectManager::getInstance(ThemeVersionResourceSnapshotService::class); }
     private function paths(): ThemeLayoutEntityPaths { return ObjectManager::getInstance(ThemeLayoutEntityPaths::class); }
     /** Return verifiable output evidence without exposing a host filesystem path. */

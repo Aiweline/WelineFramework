@@ -7,9 +7,10 @@ use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeApplicationUsageService;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
+
 /**
- * System/theme upgrade: solidify + publish (Taglib com_*) for currently effective
- * versions of website-bound themes only — not every installed design/e2e theme.
+ * System/theme upgrade: solidify + publish (Taglib com_*) for website-bound themes.
+ * Default versions: currently published + selected draft. --all expands to every version row.
  */
 final class ThemeLayoutEntityUpgradeSolidifyService
 {
@@ -32,21 +33,26 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     ) {
     }
 
-    public function runOnce(string $invalidationReason): array
+    /**
+     * @param array{scope?:string,all_versions?:bool} $options
+     */
+    public function runOnce(string $invalidationReason, array $options = []): array
     {
         if (self::$hasRun) {
             return ['purged' => 0, 'solidified' => 0, 'purged_legacy' => 0];
         }
-        $result = $this->cutover(null, $invalidationReason);
+        $result = $this->cutover(null, $invalidationReason, $options);
         self::$hasRun = true;
         return $result;
     }
 
     /**
      * setup:upgrade / theme:upgrade（无 -t）：仅站点 frontend 绑定主题
-     * + 后台应用主题 + 注册 Default；每主题只固当前生效正式版。
+     * + 后台应用主题 + 注册 Default；默认每范围正式版+草稿。
+     *
+     * @param array{scope?:string,all_versions?:bool} $options
      */
-    public function solidifyAllThemes(?string $area = null): int
+    public function solidifyAllThemes(?string $area = null, array $options = []): int
     {
         $themes = $this->themeApplicationUsage->themesForDefaultUpgrade();
         if ($themes === []) {
@@ -60,44 +66,39 @@ final class ThemeLayoutEntityUpgradeSolidifyService
             return 0;
         }
 
-        $aggregate = [
-            'migrated' => 0,
-            'skipped' => 0,
-            'unmapped' => [],
-            'chrome_bootstrapped' => 0,
-        ];
-        $this->printing->note(sprintf(
-            '%s bound_themes=%d',
-            (string)__('主题布局预固化仅处理站点已绑定主题'),
-            count($themes),
-        ));
+        $themeIds = [];
         foreach ($themes as $theme) {
             $themeId = (int)$theme->getId();
-            if ($themeId < 1) {
-                continue;
-            }
-            $this->bakeCoordinator->rebakeAfterInjectionCollect(
-                $themeId,
-                [],
-                $this->progress(...),
-                false,
-            );
-            $report = $this->bakeCoordinator->getLastRebakeReport();
-            $aggregate['migrated'] += (int)($report['migrated'] ?? 0);
-            $aggregate['skipped'] += (int)($report['skipped'] ?? 0);
-            $aggregate['chrome_bootstrapped'] += (int)($report['chrome_bootstrapped'] ?? 0);
-            foreach ((array)($report['unmapped'] ?? []) as $item) {
-                if (is_array($item)) {
-                    $aggregate['unmapped'][] = $item;
-                }
+            if ($themeId >= 1) {
+                $themeIds[] = $themeId;
             }
         }
-        $this->lastSolidifyReport = $aggregate;
+        $this->printing->note(sprintf(
+            '%s bound_themes=%d pipeline=global_flat%s%s',
+            (string)__('主题布局预固化仅处理站点已绑定主题'),
+            count($themeIds),
+            !empty($options['all_versions']) ? ' versions=all' : ' versions=current+draft',
+            ($options['scope'] ?? '') !== '' ? ' scope=' . (string)$options['scope'] : '',
+        ));
+        // One solidify/compile pipeline across all bound themes (not per-theme serial).
+        // Different themeId ⇒ different ownerHash ⇒ pools fill across themes; same scope draft/formal still mutex.
+        // Progress bar is owned by the pipeline (shows live s=/c=/themes=); do not pass a single-theme bar.
+        $this->bakeCoordinator->rebakeThemesAfterInjectionCollect(
+            $themeIds,
+            [],
+            null,
+            true,
+            $this->bakeOptions($options),
+        );
+        $this->lastSolidifyReport = $this->bakeCoordinator->getLastRebakeReport();
 
-        return $aggregate['migrated'];
+        return (int)($this->lastSolidifyReport['migrated'] ?? 0);
     }
 
-    public function solidifyTheme(int $themeId, ?string $area = null): int
+    /**
+     * @param array{scope?:string,all_versions?:bool} $options
+     */
+    public function solidifyTheme(int $themeId, ?string $area = null, array $options = []): int
     {
         if ($themeId <= 0) {
             $this->lastSolidifyReport = [
@@ -111,44 +112,46 @@ final class ThemeLayoutEntityUpgradeSolidifyService
         $migrated = $this->bakeCoordinator->rebakeAfterInjectionCollect(
             $themeId,
             [],
-            $this->progress(...),
-            false,
+            null,
+            true,
+            $this->bakeOptions($options),
         );
         $this->lastSolidifyReport = $this->bakeCoordinator->getLastRebakeReport();
 
         return (int)($this->lastSolidifyReport['migrated'] ?? $migrated);
     }
 
-    private function progress(int $index, int $total, object $identity): void
-    {
-        $this->printing->note(sprintf(
-            '%s [%d/%d] theme=%d V%d R%d %s',
-            (string)__('主题布局预固化'),
-            $index,
-            $total,
-            (int)($identity->themeId ?? 0),
-            (int)($identity->themeVersionId ?? 0),
-            (int)($identity->contentRevision ?? 0),
-            (string)($identity->canonicalScope ?? ''),
-        ));
-    }
-
-    public function solidifyFromThemeCommand(?WelineTheme $theme): int
+    /**
+     * @param array{scope?:string,all_versions?:bool} $options
+     */
+    public function solidifyFromThemeCommand(?WelineTheme $theme, array $options = []): int
     {
         return $theme !== null && (int)$theme->getId() > 0
-            ? $this->solidifyTheme((int)$theme->getId())
-            : $this->solidifyAllThemes();
+            ? $this->solidifyTheme((int)$theme->getId(), null, $options)
+            : $this->solidifyAllThemes(null, $options);
     }
 
-    public function cutoverFromThemeCommand(?WelineTheme $theme = null): array
+    /**
+     * @param array{scope?:string,all_versions?:bool} $options
+     */
+    public function cutoverFromThemeCommand(?WelineTheme $theme = null, array $options = []): array
     {
-        return $this->cutover($theme, 'theme_upgrade_layout_entities_cutover');
+        return $this->cutover($theme, 'theme_upgrade_layout_entities_cutover', $options);
     }
 
-    private function cutover(?WelineTheme $theme, string $reason): array
+    /**
+     * @param array{scope?:string,all_versions?:bool} $options
+     */
+    private function cutover(?WelineTheme $theme, string $reason, array $options = []): array
     {
         $this->printing->note((string)__('正在从已记录的版本意图生成 PHTML…'));
-        $solidified = $this->solidifyFromThemeCommand($theme);
+        try {
+            $solidified = $this->solidifyFromThemeCommand($theme, $options);
+        } catch (\Throwable $error) {
+            $this->printing->finishProgressLine();
+            throw $error;
+        }
+        $this->printing->finishProgressLine();
         $report = $this->lastSolidifyReport;
         if (!empty($report['unmapped'])) {
             $failures = array_map(static fn(array $item): string => 'V' . (int)($item['version_id'] ?? 0)
@@ -179,6 +182,24 @@ final class ThemeLayoutEntityUpgradeSolidifyService
             'purged_legacy' => $legacy,
             'unmapped' => $report['unmapped'] ?? [],
         ];
+    }
+
+    /**
+     * @param array{scope?:string,all_versions?:bool} $options
+     * @return array{scope?:string,all_versions?:bool}
+     */
+    private function bakeOptions(array $options): array
+    {
+        $out = [];
+        $scope = trim((string)($options['scope'] ?? ''));
+        if ($scope !== '') {
+            $out['scope'] = $scope;
+        }
+        if (!empty($options['all_versions'])) {
+            $out['all_versions'] = true;
+        }
+
+        return $out;
     }
 
     private function removeSidecars(?int $themeId): int
