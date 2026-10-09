@@ -74,9 +74,35 @@ final class Shipment extends BackendPageController
             $notify = $this->request->getPost('notify_customer') !== null
                 && (string)$this->request->getPost('notify_customer') !== '0'
                 && (string)$this->request->getPost('notify_customer') !== '';
+            $packageLines = $this->request->getPost('package_lines', []);
+            if (!\is_array($packageLines)) {
+                $packageLines = [];
+            }
+            $qtyMinor = (int)$this->request->getPost('qty_minor', 0);
+            if ($packageLines !== []) {
+                $fromLines = 0;
+                foreach ($packageLines as $line) {
+                    if (!\is_array($line)) {
+                        continue;
+                    }
+                    $selected = $line['selected'] ?? null;
+                    if ($selected !== null
+                        && (string)$selected !== '1'
+                        && (string)$selected !== 'true'
+                        && $selected !== true
+                        && (string)$selected !== 'on'
+                    ) {
+                        continue;
+                    }
+                    $fromLines += (int)($line['qty_minor'] ?? $line['qty'] ?? 0);
+                }
+                if ($fromLines > 0) {
+                    $qtyMinor = $fromLines;
+                }
+            }
             $result = $this->commands->ship(
                 $unitUuid,
-                (int)$this->request->getPost('qty_minor', 0),
+                $qtyMinor,
                 (int)$this->request->getPost('expected_version', -1),
                 (string)$this->request->getPost('idempotency_key', ''),
                 [
@@ -88,6 +114,7 @@ final class Shipment extends BackendPageController
                     'service_code' => (string)$this->request->getPost('service_code', ''),
                     'weight_grams' => (int)$this->request->getPost('weight_grams', 0),
                     'notify_customer' => $notify,
+                    'package_lines' => $packageLines,
                 ],
             );
             $this->flashShipResult($result, $tracking, $notify);
@@ -246,6 +273,11 @@ final class Shipment extends BackendPageController
             'shipment_label_orphaned_risk' => (string)__('履约失败且取消运单未确认，已进入补偿队列'),
             'shipment_label_failed', 'shipment_label_gateway_unavailable' => (string)__('物流商打单失败，请稍后重试或改用手工登记'),
             'shipment_not_found' => (string)__('发货记录不存在'),
+            'shipment_contents_required' => (string)__('拆货发货须勾选包裹内商品'),
+            'shipment_contents_empty' => (string)__('本履约单元暂无可发商品行'),
+            'shipment_contents_line_invalid' => (string)__('所选包裹商品无效或不属于本单元'),
+            'shipment_contents_over_line' => (string)__('某商品发货数量超过剩余可发数量'),
+            'shipment_contents_qty_mismatch' => (string)__('包裹内商品数量合计须等于本次发货数量'),
             default => $code !== '' ? $code : (string)__('发货操作失败，请稍后重试。'),
         };
     }

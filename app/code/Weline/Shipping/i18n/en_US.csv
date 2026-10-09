@@ -363,6 +363,18 @@ grid,grid
 编辑收货地址,"Edit shipping address"
 例如：家、公司、学校等,"e.g., Home, Company, School, etc."
 收货人姓名,"Recipient Name"
+"本单发货记录（共 %{1} 笔）","Shipments on this order (%{1} total)"
+同单多笔发货，仅本子订单,"Multiple shipments on this child order only"
+本子订单暂无发货记录,"No shipment records on this child order yet"
+待补运单号,"Tracking pending"
+发货时间,"Ship time"
+送达,Delivered
+包裹内商品,"Package contents"
+未记录包裹内商品,"Package contents not recorded"
+物流进程记录,"Logistics progress log"
+暂无物流进程,"No logistics progress"
+承运方尚未回传轨迹节点,"Carrier has not returned tracking nodes yet"
+打开承运商轨迹页,"Open carrier tracking page"
 选择收货地址,"Select a shipping address"
 China,China
 使用新地址,"Use a new address"
@@ -654,17 +666,12 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 已支付待发货,"Paid, awaiting shipment"
 打开发货管理,"Open shipping management"
 只看待发货,"Pending shipment only"
+本单发货记录,"Shipments on this order"
+"共 %{1} 笔","%{1} total"
+同单多笔发货，非结账组其他子单,"Multiple shipments on this order—not other child orders in the checkout group"
 办理发货,"Process shipment"
-暂无发货记录,"No Shipment Records"
-待补运单号,"Tracking pending"
 通知,Notifications
 补充,Supplement
-发货时间,"Ship time"
-送达,Delivered
-物流进程记录,"Logistics progress log"
-暂无物流进程,"No logistics progress"
-承运方尚未回传轨迹节点,"Carrier has not returned tracking nodes yet"
-打开承运商轨迹页,"Open carrier tracking page"
 店铺,Store
 渠道,Channel
 网站,Website
@@ -674,6 +681,7 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 配送报价小计溢出,"Delivery quote subtotal overflow"
 免邮金额格式非法,"Free shipping amount format is illegal"
 免邮金额溢出,"Free shipping amount exceeds"
+未命名商品,"Unnamed product"
 已发货,Shipped
 已取消,Cancelled
 发货失败,"Shipment failed"
@@ -731,6 +739,7 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 代码已存在。,"The code already exists."
 该配送方式暂不支持物流查询,"This shipping method does not support tracking"
 物流查询失败，请稍后重试,"Logistics lookup failed, please retry later"
+暂无可用物流服务商查询轨迹；运单号仍可核对,"No logistics provider available for progress; tracking number remains valid"
 当前位置：%{loc},"Current location: %{loc}"
 物流状态：%{status},"Logistics status: %{status}"
 运单已登记：%{n},"Waybill registered: %{n}"
@@ -763,10 +772,12 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 "Shipping 孤儿运单取消重试","Shipping orphan waybill cancel retry"
 "履约账本失败后的 cancelShipment 孤儿补偿队列","cancelShipment orphan compensation queue after fulfillment ledger failure"
 "孤儿运单处理：done=%{1} dead=%{2} processed=%{3}","Orphan waybill handling: done=%{1} dead=%{2} processed=%{3}"
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 运费,"Shipping charges"
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
+发货记录,发货记录
+暂无发货记录,"No Shipment Records"
 指南,指南
 快速添加地址,"Quick add address"
 保存并使用,"Save and use"

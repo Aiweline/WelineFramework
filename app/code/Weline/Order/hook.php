@@ -9,6 +9,16 @@ return [
         'description' => \__('在顾客账户首页「我的订单」分区注入订单列表、订单状态与售后入口等内容。'),
         'doc' => 'frontend/account/index/orders.md',
     ],
+    'Weline_Order::frontend::account::order-detail::payment-records' => [
+        'name' => \__('账户订单详情支付记录槽'),
+        'description' => \__('账户「订单详情」支付历史空槽；由万能支付注入 Attempt/Transaction 行与 payment_entry 来源徽章，禁止 Order 直读 Payment 表。'),
+        'doc' => 'frontend/account/order-detail/payment-records.md',
+    ],
+    'Weline_Order::frontend::account::order-detail::shipments' => [
+        'name' => \__('账户订单详情发货记录槽'),
+        'description' => \__('账户「订单详情」发货/物流空槽；由配送模块注入只读发货行与运单追踪，禁止 Order 直读 OrderShipment 表。'),
+        'doc' => 'frontend/account/order-detail/shipments.md',
+    ],
     'Weline_Order::backend::order::view::before' => [
         'name' => \__('订单详情页之前'),
         'description' => \__('在订单详情页内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。'),

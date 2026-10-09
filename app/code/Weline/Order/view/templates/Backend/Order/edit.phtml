@@ -11,6 +11,7 @@ $order = $this->getData('order');
 $items = $this->getData('items') ?? [];
 $history = $this->getData('history') ?? [];
 $customerPresent = $this->getData('customer_present') ?? [];
+$groupContext = is_array($this->getData('group_context') ?? null) ? $this->getData('group_context') : [];
 
 $isEdit = !empty($order);
 $orderData = $isEdit ? (is_object($order) ? $order->getData() : $order) : [];
@@ -112,6 +113,12 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
 <div class="w-grid">
     <div style="--w-span:12;">
         <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/status-flow.phtml') ?>
+        <?php
+        if (is_object($this) && method_exists($this, 'assign')) {
+            $this->assign('group_context_surface', 'edit');
+        }
+        echo $this->fetch('Weline_Order::templates/Backend/Order/partial/group-context.phtml');
+        ?>
         <!-- 摘要：紧凑多列 KV，减少横向空白 -->
         <div class="w-card" style="--w-mb:var(--weline-space-2);" data-testid="order-edit-summary">
             <div class="w-card__header">
@@ -298,17 +305,17 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                         <button type="button" class="w-tabs__tab" role="tab" id="order-ops-tab-shipment"
                                 aria-controls="order-ops-panel-shipment"
                                 aria-selected="<?= $opsTab === 'shipment' ? 'true' : 'false' ?>"
-                                data-panel-src="@backend-url{'order/backend/order/panel'|['id' => $orderId, 'tab' => 'shipment', 'isAjax' => 1]}"
+                                data-panel-src="@backend-url{'order/backend/order/panel'}?id=<?= (int)$orderId ?>&amp;tab=shipment&amp;isAjax=1"
                                 data-testid="order-edit-tab-shipment"><?= __('发货') ?></button>
                         <button type="button" class="w-tabs__tab" role="tab" id="order-ops-tab-refund"
                                 aria-controls="order-ops-panel-refund"
                                 aria-selected="<?= $opsTab === 'refund' ? 'true' : 'false' ?>"
-                                data-panel-src="@backend-url{'order/backend/order/panel'|['id' => $orderId, 'tab' => 'refund', 'isAjax' => 1]}"
+                                data-panel-src="@backend-url{'order/backend/order/panel'}?id=<?= (int)$orderId ?>&amp;tab=refund&amp;isAjax=1"
                                 data-testid="order-edit-tab-refund"><?= __('退款') ?></button>
                         <button type="button" class="w-tabs__tab" role="tab" id="order-ops-tab-comms"
                                 aria-controls="order-ops-panel-comms"
                                 aria-selected="<?= $opsTab === 'comms' ? 'true' : 'false' ?>"
-                                data-panel-src="@backend-url{'order/backend/order/panel'|['id' => $orderId, 'tab' => 'comms', 'isAjax' => 1]}"
+                                data-panel-src="@backend-url{'order/backend/order/panel'}?id=<?= (int)$orderId ?>&amp;tab=comms&amp;isAjax=1"
                                 data-testid="order-edit-tab-comms"><?= __('支付与沟通') ?></button>
                         <button type="button" class="w-tabs__tab" role="tab" id="order-ops-tab-customer"
                                 aria-controls="order-ops-panel-customer"
@@ -670,8 +677,12 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                     }
                 }).catch(function () { /* optional module */ });
             });
-        }).catch(function () {
-            panel.innerHTML = '<p class="w-text" data-tone="danger" data-size="sm">' + failedText + '</p>';
+        }).catch(function (err) {
+            var msg = failedText;
+            if (err && err.message && err.message !== 'http') {
+                msg = failedText + ' (' + err.message + ')';
+            }
+            panel.innerHTML = '<p class="w-text" data-tone="danger" data-size="sm" data-testid="order-edit-ops-panel-failed">' + msg + '</p>';
             panel.removeAttribute('data-loading');
         });
     }

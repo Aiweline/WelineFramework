@@ -89,6 +89,68 @@ $serviceName = (string)($shipping_ref['service_name'] ?? '');
           <input type="hidden" name="idempotency_key" value="ship-ui-<?= bin2hex(random_bytes(12)) ?>">
           <?php if ($returnUrl !== ''): ?><input type="hidden" name="return_url" value="<?= $escape($returnUrl) ?>"><?php endif; ?>
 
+          <?php
+          $packageLines = \is_array($row['package_lines'] ?? null) ? $row['package_lines'] : [];
+          $multiLineSplit = \count($packageLines) > 1;
+          ?>
+          <div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="shipment-package-lines">
+            <p class="w-text" data-size="sm" style="--w-mb:0;">
+              <strong><?= __('包裹内商品') ?></strong>
+              <?php if ($multiLineSplit): ?>
+                <span class="w-text" data-tone="muted" data-size="sm"> · <?= __('拆货时请勾选本包裹包含的商品与数量') ?></span>
+              <?php endif; ?>
+            </p>
+            <?php if ($packageLines === []): ?>
+              <p class="w-text" data-tone="warning" data-size="sm" data-testid="shipment-package-lines-empty"><?= __('暂无可选商品行') ?></p>
+            <?php else: ?>
+              <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                <?php foreach ($packageLines as $pline):
+                  if (!\is_array($pline)) {
+                      continue;
+                  }
+                  $lineKey = (string)($pline['line_key'] ?? '');
+                  if ($lineKey === '') {
+                      continue;
+                  }
+                  $lineRemain = max(1, (int)($pline['remaining_qty_minor'] ?? 1));
+                  $lineName = (string)($pline['product_name'] ?? '');
+                  $lineSku = (string)($pline['sku'] ?? '');
+                  $precheck = !$multiLineSplit;
+                  ?>
+                  <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);"
+                       data-testid="shipment-package-line"
+                       data-line-key="<?= $escape($lineKey) ?>">
+                    <label class="w-check" style="flex:1;">
+                      <input type="checkbox"
+                             name="package_lines[<?= $escape($lineKey) ?>][selected]"
+                             value="1"
+                             <?= $precheck ? 'checked' : '' ?>
+                             data-testid="shipment-package-line-selected">
+                      <span data-testid="shipment-package-line-name"><?= $escape($lineName) ?></span>
+                      <?php if ($lineSku !== ''): ?>
+                        <code data-testid="shipment-package-line-sku"><?= $escape($lineSku) ?></code>
+                      <?php endif; ?>
+                      <span class="w-text" data-tone="muted" data-size="sm"><?= __('可发') ?> <?= $lineRemain ?></span>
+                    </label>
+                    <input type="hidden" name="package_lines[<?= $escape($lineKey) ?>][line_key]" value="<?= $escape($lineKey) ?>">
+                    <label class="w-label" style="--w-mb:0;">
+                      <span class="w-text" data-size="sm"><?= __('数量') ?></span>
+                      <input class="w-input"
+                             type="number"
+                             min="0"
+                             max="<?= $lineRemain ?>"
+                             name="package_lines[<?= $escape($lineKey) ?>][qty_minor]"
+                             value="<?= $precheck ? min($lineRemain, max(1, (int)($row['remaining_qty_minor'] ?? 1))) : 0 ?>"
+                             data-size="sm"
+                             data-testid="shipment-package-line-qty"
+                             style="width:5.5rem;">
+                    </label>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
+          </div>
+
           <div class="w-grid" style="--w-gap:var(--weline-space-3);">
             <div style="--w-span:6;">
               <label class="w-label"><?= __('承运商') ?></label>
@@ -110,8 +172,8 @@ $serviceName = (string)($shipping_ref['service_name'] ?? '');
               <input class="w-input" type="text" name="tracking_number" maxlength="100" placeholder="<?= __('留空则不发送发货邮件') ?>" data-size="sm" data-testid="shipment-tracking-number">
             </div>
             <div style="--w-span:3;">
-              <label class="w-label"><?= __('本次数量') ?></label>
-              <input class="w-input" type="number" min="1" max="<?= $remaining ?>" name="qty_minor" value="<?= min($remaining, max(1, (int)($row['remaining_qty_minor'] ?? 1))) ?>" required data-size="sm">
+              <label class="w-label"><?= __('本次数量') ?> <span class="w-text" data-tone="muted" data-size="sm"><?= __('与勾选合计一致') ?></span></label>
+              <input class="w-input" type="number" min="1" max="<?= $remaining ?>" name="qty_minor" value="<?= min($remaining, max(1, (int)($row['remaining_qty_minor'] ?? 1))) ?>" required data-size="sm" data-testid="shipment-qty-minor">
             </div>
             <div style="--w-span:12;" class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
               <label class="w-check">
@@ -136,6 +198,32 @@ $serviceName = (string)($shipping_ref['service_name'] ?? '');
             <input type="hidden" name="expected_grant_version" value="<?= (int)($row['expected_grant_version'] ?? 0) ?>">
             <input type="hidden" name="idempotency_key" value="ship-label-<?= bin2hex(random_bytes(8)) ?>">
             <?php if ($returnUrl !== ''): ?><input type="hidden" name="return_url" value="<?= $escape($returnUrl) ?>"><?php endif; ?>
+            <?php
+            $labelPackageLines = \is_array($row['package_lines'] ?? null) ? $row['package_lines'] : [];
+            $labelMulti = \count($labelPackageLines) > 1;
+            ?>
+            <?php if ($labelPackageLines !== []): ?>
+            <div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="shipment-label-package-lines">
+              <p class="w-text" data-size="sm" style="--w-mb:0;"><strong><?= __('包裹内商品') ?></strong></p>
+              <?php foreach ($labelPackageLines as $pline):
+                if (!\is_array($pline)) { continue; }
+                $lineKey = (string)($pline['line_key'] ?? '');
+                if ($lineKey === '') { continue; }
+                $lineRemain = max(1, (int)($pline['remaining_qty_minor'] ?? 1));
+                $precheck = !$labelMulti;
+                ?>
+                <div class="w-cluster" data-align="center" data-justify="between" data-testid="shipment-package-line" data-line-key="<?= $escape($lineKey) ?>">
+                  <label class="w-check" style="flex:1;">
+                    <input type="checkbox" name="package_lines[<?= $escape($lineKey) ?>][selected]" value="1" <?= $precheck ? 'checked' : '' ?>>
+                    <span><?= $escape((string)($pline['product_name'] ?? '')) ?></span>
+                    <?php if (!empty($pline['sku'])): ?><code><?= $escape((string)$pline['sku']) ?></code><?php endif; ?>
+                  </label>
+                  <input type="hidden" name="package_lines[<?= $escape($lineKey) ?>][line_key]" value="<?= $escape($lineKey) ?>">
+                  <input class="w-input" type="number" min="0" max="<?= $lineRemain ?>" name="package_lines[<?= $escape($lineKey) ?>][qty_minor]" value="<?= $precheck ? min($lineRemain, max(1, (int)($row['remaining_qty_minor'] ?? 1))) : 0 ?>" data-size="sm" style="width:5.5rem;">
+                </div>
+              <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
             <div class="w-grid" style="--w-gap:var(--weline-space-3);">
               <div style="--w-span:6;">
                 <label class="w-label"><?= __('打单服务') ?></label>

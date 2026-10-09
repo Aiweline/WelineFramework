@@ -17,6 +17,7 @@ $orderTypeRows = $this->getData('order_type_rows') ?? [];
 /** @var \Weline\Order\Service\CommerceOrderTypeRegistry|null $orderTypeRegistry */
 $orderTypeRegistry = $this->getData('order_type_registry');
 $listPresenter = new BackendOrderListPresenter();
+$groupContexts = is_array($this->getData('group_contexts') ?? null) ? $this->getData('group_contexts') : [];
 
 ?>
 <div class="w-grid">
@@ -179,9 +180,32 @@ $listPresenter = new BackendOrderListPresenter();
                                             <a href="@backend-url{'order/backend/order/view'|['id' => $orderData[Order::schema_fields_ID] ?? '']}">
                                                 <?= htmlspecialchars($orderData[Order::schema_fields_ORDER_NUMBER] ?? '') ?>
                                             </a>
-                                            <?php if (($presented['checkout_group_display'] ?? '') !== ''): ?>
-                                                <div>
-                                                    <small class="w-text" data-tone="muted" data-testid="order-list-group-display"><?= htmlspecialchars((string)$presented['checkout_group_display']) ?></small>
+                                            <?php
+                                            $rowOrderId = (int)($orderData[Order::schema_fields_ID] ?? 0);
+                                            $rowGroupCtx = is_array($groupContexts[$rowOrderId] ?? null) ? $groupContexts[$rowOrderId] : [];
+                                            $rowGroupDisplay = (string)($presented['checkout_group_display'] ?? ($rowGroupCtx['group_display'] ?? ''));
+                                            ?>
+                                            <?php if ($rowGroupDisplay !== ''): ?>
+                                                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);">
+                                                    <small class="w-text" data-tone="muted" data-testid="order-list-group-display"><?= htmlspecialchars($rowGroupDisplay) ?></small>
+                                                    <?php if (!empty($rowGroupCtx['is_multi_order']) && trim((string)($rowGroupCtx['child_badge'] ?? '')) !== ''): ?>
+                                                        <span class="w-badge" data-tone="info" data-size="sm" data-testid="order-list-child-badge"><?= htmlspecialchars((string)$rowGroupCtx['child_badge']) ?></span>
+                                                    <?php endif; ?>
+                                                    <?php
+                                                    $rowShipBadge = '';
+                                                    foreach ((array)($rowGroupCtx['siblings'] ?? []) as $sibRow) {
+                                                        if (\is_array($sibRow) && !empty($sibRow['is_current'])) {
+                                                            $rowShipBadge = trim((string)($sibRow['shipment_badge'] ?? ''));
+                                                            break;
+                                                        }
+                                                    }
+                                                    if ($rowShipBadge === '' && (int)($rowGroupCtx['shipment_count'] ?? 0) > 0) {
+                                                        $rowShipBadge = (string)__('发货×%{1}', [(int)$rowGroupCtx['shipment_count']]);
+                                                    }
+                                                    ?>
+                                                    <?php if ($rowShipBadge !== ''): ?>
+                                                        <span class="w-badge" data-tone="secondary" data-size="sm" data-testid="order-list-shipment-badge"><?= htmlspecialchars($rowShipBadge) ?></span>
+                                                    <?php endif; ?>
                                                 </div>
                                             <?php endif; ?>
                                         </td>

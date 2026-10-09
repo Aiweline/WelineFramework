@@ -4,7 +4,7 @@
  *
  * Hook: Weline_Order::frontend::account::index::orders
  *
- * Group 默认汇总；partial（退款/状态分叉）展开子 Order。
+ * Group 默认汇总；多子订单或退款/履约差异时展开子 Order。
  * 必须挂在 Customer account.sidebar / account.sidebar.content，禁止独立个人中心页。
  *
  * @hook-priority 160
@@ -16,6 +16,7 @@ use Weline\Order\Service\AccountCheckoutGroupPresenter;
 /** @var list<array<string, mixed>> $accountCheckoutGroups 由站点 Order 模块注入；缺省演示空态 */
 $accountCheckoutGroups = $accountCheckoutGroups ?? [];
 $accountOrderDetail = is_array($accountOrderDetail ?? null) ? $accountOrderDetail : null;
+$requestedOrderUuid = trim((string)($requestedOrderUuid ?? ''));
 $presenter = new AccountCheckoutGroupPresenter();
 $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $formatMoney = static fn(string $currency, mixed $minor): string => sprintf(
@@ -39,8 +40,15 @@ $statusLabel = static function (string $status): string {
      aria-labelledby="account-orders-title">
     <header class="account-orders__header">
         <h2 id="account-orders-title"><?= __('我的订单') ?></h2>
-        <p class="account-orders__hint"><?= __('默认按结账组汇总；部分退款或状态分叉时展开明细') ?></p>
+        <p class="account-orders__hint" data-testid="account-orders-hint"><?= __('多仓会拆成多个子订单；同一子订单也可分批发货') ?></p>
     </header>
+<?php if ($accountOrderDetail === null && $requestedOrderUuid !== ''): ?>
+    <p class="account-orders__locate-miss"
+       data-account-order-locate-miss="true"
+       data-order-uuid="<?= $escape($requestedOrderUuid) ?>"
+       data-testid="account-order-locate-miss"
+       role="status"><?= __('未找到该订单或无权查看') ?></p>
+<?php endif; ?>
 <?php if ($accountOrderDetail !== null): ?>
     <?php
     $detailCurrency = trim((string) ($accountOrderDetail['currency'] ?? ''));
@@ -68,6 +76,7 @@ $statusLabel = static function (string $status): string {
     ?>
     <section class="account-order-detail"
              data-account-order-detail="true"
+             data-order-uuid="<?= $escape($accountOrderDetail['order_uuid'] ?? '') ?>"
              data-shipping-redacted="<?= $isHelpPayOrder ? '1' : '0' ?>"
              aria-labelledby="account-order-detail-title"
              weline-code="order.account.detail.section_1">
@@ -76,6 +85,57 @@ $statusLabel = static function (string $status): string {
                 <p class="account-order-detail__eyebrow"><?= __('订单详情') ?></p>
                 <h3 id="account-order-detail-title"><?= $escape($accountOrderDetail['display_number'] ?? $accountOrderDetail['order_uuid'] ?? '') ?></h3>
                 <p class="account-order-detail__uuid"><?= $escape($accountOrderDetail['order_uuid'] ?? '') ?></p>
+                <?php
+                $detailGroupCtx = is_array($accountOrderDetail['group_context'] ?? null)
+                    ? $accountOrderDetail['group_context']
+                    : [];
+                if ($detailGroupCtx === [] && $accountCheckoutGroups !== []) {
+                    $detailUuid = trim((string)($accountOrderDetail['order_uuid'] ?? ''));
+                    foreach ($accountCheckoutGroups as $gProbe) {
+                        $gOrders = is_array($gProbe['orders'] ?? null) ? $gProbe['orders'] : [];
+                        $found = false;
+                        foreach ($gOrders as $oProbe) {
+                            if (!is_array($oProbe)) {
+                                continue;
+                            }
+                            if (trim((string)($oProbe['order_uuid'] ?? '')) === $detailUuid) {
+                                $found = true;
+                                break;
+                            }
+                        }
+                        if (!$found) {
+                            continue;
+                        }
+                        $siblingPresenter = new \Weline\Order\Service\CheckoutGroupSiblingPresenter();
+                        $detailGroupCtx = $siblingPresenter->presentFromRows(
+                            array_map(static function (array $o): array {
+                                return [
+                                    'order_id' => (int)($o['order_id'] ?? 0),
+                                    'order_uuid' => (string)($o['order_uuid'] ?? ''),
+                                    'order_number' => (string)($o['display_number'] ?? ''),
+                                    'status' => (string)($o['status'] ?? ''),
+                                    'fulfillment_status' => (string)($o['fulfillment_status'] ?? ''),
+                                    'shipment_count' => (int)($o['shipment_count'] ?? 0),
+                                    'is_shipping_charge_owner' => !empty($o['is_shipping_charge_owner']),
+                                ];
+                            }, array_values(array_filter($gOrders, 'is_array'))),
+                            $detailUuid,
+                            [],
+                            (string)($gProbe['group_uuid'] ?? '')
+                        );
+                        break;
+                    }
+                }
+                ?>
+                <?php if (trim((string)($detailGroupCtx['group_display'] ?? '')) !== ''): ?>
+                    <p class="account-order-detail__group"
+                       data-testid="account-order-group-label">
+                        <?= $escape($detailGroupCtx['group_display']) ?>
+                        <?php if (!empty($detailGroupCtx['is_multi_order']) && trim((string)($detailGroupCtx['child_badge'] ?? '')) !== ''): ?>
+                            · <span data-testid="account-order-child-badge"><?= $escape($detailGroupCtx['child_badge']) ?></span>
+                        <?php endif; ?>
+                    </p>
+                <?php endif; ?>
             </div>
             <span class="account-orders__badge" data-order-status="true" data-status="<?= $escape($accountOrderDetail['status'] ?? '') ?>">
                 <?= $escape($statusLabel((string) ($accountOrderDetail['status'] ?? ''))) ?>
@@ -195,6 +255,25 @@ $statusLabel = static function (string $status): string {
         <?php endif; ?>
 
         <?php
+        // 发货记录优先于订单级追踪面板：紧挨收货信息，顾客可立刻看到本子单全部运单。
+        $accountShipmentOrderUuid = trim((string)($accountOrderDetail['order_uuid'] ?? ''));
+        if ($accountShipmentOrderUuid !== '' && is_object($this) && method_exists($this, 'assign')) {
+            $this->assign('account_shipment_order_uuid', $accountShipmentOrderUuid);
+        }
+        ?>
+        <w:slot id="account-order-shipments"
+                name="<?= __('发货记录') ?>"
+                accept="account-order-shipments,order-shipments,shipping"
+                exclusive="true"
+                multiple="false"
+                position="content"
+                class="account-order-shipments-slot"
+                weline-code="order.account.detail.shipments_slot">
+            <w:hook name="Weline_Order::frontend::account::order-detail::shipments"/>
+        </w:slot>
+
+        <?php
+        // 无 OrderShipment 行时才回退订单级物流追踪（可渲染 shipments[] 多运单）。
         $accountOrderTracking = is_array($accountOrderTracking ?? null) ? $accountOrderTracking : null;
         if ($accountOrderTracking !== null):
             $trackingResult = $accountOrderTracking;
@@ -213,6 +292,24 @@ $statusLabel = static function (string $status): string {
             <div><span><?= __('税费') ?></span><strong><?= $escape($formatMoney($detailCurrency, $detailMoney['tax_amount_minor'] ?? 0)) ?></strong></div>
             <div class="account-order-detail__grand-total"><span><?= __('订单总额') ?></span><strong><?= $escape($formatMoney($detailCurrency, $detailMoney['grand_total_minor'] ?? 0)) ?></strong></div>
         </div>
+
+        <?php
+        // 支付历史空槽：由 Weline_Payment Hook 注入；禁止本模板直读 Payment 表。
+        $accountPaymentOrderUuid = trim((string)($accountOrderDetail['order_uuid'] ?? ''));
+        if ($accountPaymentOrderUuid !== '' && is_object($this) && method_exists($this, 'assign')) {
+            $this->assign('account_payment_order_uuid', $accountPaymentOrderUuid);
+        }
+        ?>
+        <w:slot id="account-order-payment-records"
+                name="<?= __('支付历史') ?>"
+                accept="account-order-payment-records,payment-records,payment"
+                exclusive="true"
+                multiple="false"
+                position="content"
+                class="account-order-payment-records-slot"
+                weline-code="order.account.detail.payment_records_slot">
+            <w:hook name="Weline_Order::frontend::account::order-detail::payment-records"/>
+        </w:slot>
 
         <?php
         $detailHang = null;
@@ -264,7 +361,8 @@ $statusLabel = static function (string $status): string {
         if ($hang !== null) {
             $chatUnread = max(0, (int)($hang['chat_unread'] ?? $hang['unread'] ?? 0));
         }
-        $accordionOpen = $chatUnread > 0;
+        // 多子订单必须默认展开：否则子单追踪摘要与详情链被折叠，等同不可用。
+        $accordionOpen = $chatUnread > 0 || $hasPartial;
         ?>
         <li class="account-orders__group"
             data-group-uuid="<?= htmlspecialchars((string) $view['group_uuid'], ENT_QUOTES, 'UTF-8') ?>"
@@ -282,8 +380,11 @@ $statusLabel = static function (string $status): string {
             <?php else: ?>
                 <div class="account-orders__summary" data-group-summary="true">
             <?php endif; ?>
-                    <strong><?= htmlspecialchars((string) $view['display_number'], ENT_QUOTES, 'UTF-8') ?></strong>
-                    <span><?= htmlspecialchars((string) $view['order_count_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <strong data-testid="account-order-group-label"><?= htmlspecialchars((string) $view['display_number'], ENT_QUOTES, 'UTF-8') ?></strong>
+                    <span data-testid="account-order-group-count"><?= htmlspecialchars((string) $view['order_count_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php if (trim((string)($view['group_shipment_count_label'] ?? '')) !== ''): ?>
+                        <span class="account-orders__badge" data-testid="account-order-group-shipment-count"><?= htmlspecialchars((string) $view['group_shipment_count_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endif; ?>
                     <?php if (trim((string) ($view['order_type_label'] ?? '')) !== ''): ?>
                         <span class="account-orders__badge account-orders__badge--type"
                               data-order-type="true"
@@ -365,8 +466,15 @@ $statusLabel = static function (string $status): string {
                         role="list"
                         aria-label="<?= __('订单明细') ?>">
                         <?php foreach ($view['orders'] as $order): ?>
-                        <li data-order-uuid="<?= htmlspecialchars((string) $order['order_uuid'], ENT_QUOTES, 'UTF-8') ?>">
+                        <li data-order-uuid="<?= htmlspecialchars((string) $order['order_uuid'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-account-order-row="true">
+                            <?php if (trim((string)($order['child_label'] ?? '')) !== ''): ?>
+                                <span class="account-orders__badge" data-tone="info" data-testid="account-order-child-badge"><?= htmlspecialchars((string)($order['child_badge'] !== '' ? $order['child_badge'] : $order['child_label']), ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
                             <span><?= htmlspecialchars((string) $order['display_number'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php if (trim((string)($order['shipment_badge'] ?? '')) !== ''): ?>
+                                <span class="account-orders__badge" data-testid="account-order-child-shipment-badge"><?= htmlspecialchars((string) $order['shipment_badge'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
                             <?php if (trim((string) ($order['order_type_label'] ?? '')) !== ''): ?>
                                 <span class="account-orders__badge account-orders__badge--type"
                                       data-order-type="true"
@@ -381,9 +489,21 @@ $statusLabel = static function (string $status): string {
                             <span data-refund-label="true"><?= htmlspecialchars((string) $order['refund_label'], ENT_QUOTES, 'UTF-8') ?></span>
                             <span data-invoice-label="true"><?= htmlspecialchars((string) $order['invoice_label'], ENT_QUOTES, 'UTF-8') ?></span>
                             <span data-fulfillment-label="true"><?= htmlspecialchars((string) $order['fulfillment_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php $childUuid = trim((string)($order['order_uuid'] ?? '')); ?>
+                            <?php if ($childUuid !== ''): ?>
+                                <a class="account-orders__detail-link"
+                                   data-order-detail-link="true"
+                                   data-testid="account-order-split-detail-link"
+                                   data-order-uuid="<?= htmlspecialchars($childUuid, ENT_QUOTES, 'UTF-8') ?>"
+                                   href="@url{'customer/account/index'|['order_uuid' => $childUuid]}#orders"><?= __('查看详情') ?></a>
+                            <?php endif; ?>
                         </li>
                         <?php endforeach; ?>
                     </ul>
+                    <?php elseif (!$hasHang): ?>
+                    <p class="account-orders__panel-empty"
+                       data-account-orders-panel-empty="true"
+                       role="status"><?= __('暂无子订单明细，请点击查看详情') ?></p>
                     <?php endif; ?>
                 </div>
             </details>

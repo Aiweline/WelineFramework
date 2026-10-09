@@ -97,11 +97,16 @@ final class OrderShipmentTrackingQueryService
         $trackingUrl = $urlResolver->resolve($trackingNumber, $trackingUrl, $carrierTemplate);
 
         $ok = $result->status === ShippingTrackingResult::STATUS_OK;
-        $message = $result->message;
-        if (!$ok && $message === '') {
-            $message = $result->status === ShippingTrackingResult::STATUS_UNSUPPORTED
-                ? (string)__('该配送方式暂不支持物流查询')
-                : (string)__('物流查询失败，请稍后重试');
+        $message = trim((string)$result->message);
+        if (!$ok) {
+            $message = match ($message) {
+                '', 'failed' => $result->status === ShippingTrackingResult::STATUS_UNSUPPORTED
+                    ? (string)__('该配送方式暂不支持物流查询')
+                    : (string)__('物流查询失败，请稍后重试'),
+                'provider_missing' => (string)__('暂无可用物流服务商查询轨迹；运单号仍可核对'),
+                'unsupported' => (string)__('该配送方式暂不支持物流查询'),
+                default => $message,
+            };
         }
 
         return [

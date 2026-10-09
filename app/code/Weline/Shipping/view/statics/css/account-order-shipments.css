@@ -1,0 +1,96 @@
+/* Account order detail — read-only shipment / tracking block */
+.account-order-detail__shipments {
+  margin-block: 1.25rem;
+}
+
+.account-order-detail__shipments h4 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.account-order-detail__shipments-empty {
+  margin: 0;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 0.875rem;
+}
+
+.account-order-detail__shipments-hint {
+  margin: 0 0 0.75rem;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.account-order-detail__shipments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-order-detail__shipment-row {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.account-order-detail__shipment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.account-order-detail__shipment-times {
+  margin: 0.5rem 0 0;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 0.8125rem;
+}
+
+.account-order-detail__shipment-contents {
+  margin-top: 0.75rem;
+}
+
+.account-order-detail__shipment-contents h5 {
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.account-order-detail__shipment-contents ul {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+}
+
+.account-order-detail__shipment-contents li {
+  margin-block: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.account-order-detail__shipment-contents code {
+  margin-inline: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.account-order-detail__shipment-progress {
+  margin-top: 0.75rem;
+}
+
+.account-order-detail__shipment-progress h5 {
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.account-order-detail__shipment-progress ol {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+}
+
+.account-order-detail__shipment-progress li {
+  margin-block: 0.25rem;
+  font-size: 0.8125rem;
+}

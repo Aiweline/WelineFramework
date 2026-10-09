@@ -1,0 +1,177 @@
+<?php
+/**
+ * 账户订单详情：只读发货记录 + 运单追踪（与后台发货投影字段对齐）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Order\Model\Order;
+use Weline\Shipping\Service\BackendOrderShipmentsService;
+use Weline\Shipping\Service\OrderShipmentTrackingQueryService;
+
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$orderUuid = trim((string)($this->getData('account_shipment_order_uuid') ?? ''));
+if ($orderUuid === '') {
+    $orderUuid = trim((string)($this->getData('order_uuid') ?? ''));
+}
+if ($orderUuid === '' && isset($this->request) && is_object($this->request)) {
+    $orderUuid = trim((string)$this->request->getParam('order_uuid', ''));
+}
+if ($orderUuid === '') {
+    return;
+}
+
+/** @var Order $orderModel */
+$orderModel = ObjectManager::getInstance(Order::class);
+$orderModel->clear()->where(Order::schema_fields_ORDER_UUID, $orderUuid)->find()->fetch();
+$orderId = (int)$orderModel->getId();
+if ($orderId <= 0) {
+    return;
+}
+
+/** @var BackendOrderShipmentsService $shipmentsService */
+$shipmentsService = ObjectManager::getInstance(BackendOrderShipmentsService::class);
+/** @var OrderShipmentTrackingQueryService $trackingQuery */
+$trackingQuery = ObjectManager::getInstance(OrderShipmentTrackingQueryService::class);
+$shipments = $shipmentsService->listForOrderId($orderId);
+$shipmentCount = \count($shipments);
+$title = (string)__('本单发货记录（共 %{1} 笔）', [$shipmentCount]);
+?>
+<section class="account-order-detail__shipments"
+         data-account-order-shipments="true"
+         data-testid="account-order-shipments"
+         data-order-uuid="<?= $esc($orderUuid) ?>"
+         data-order-id="<?= $orderId ?>"
+         data-shipment-count="<?= $shipmentCount ?>"
+         aria-labelledby="account-order-shipments-title"
+         weline-code="shipping.account.order.shipments">
+    <h4 id="account-order-shipments-title">
+        <?= $esc($title) ?>
+        <span data-testid="account-order-shipments-count" hidden><?= $shipmentCount ?></span>
+    </h4>
+    <?php if ($shipmentCount >= 2): ?>
+        <p class="account-order-detail__shipments-hint"
+           data-testid="account-order-shipments-multi-hint"><?= __('同单多笔发货，仅本子订单') ?></p>
+    <?php endif; ?>
+    <?php if ($shipments === []): ?>
+        <p class="account-order-detail__shipments-empty"
+           data-testid="account-order-shipments-empty"><?= __('本子订单暂无发货记录') ?></p>
+    <?php else: ?>
+        <div class="account-order-detail__shipments-list" role="list">
+            <?php foreach ($shipments as $row):
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $sid = (int)($row['shipment_id'] ?? 0);
+                $tn = trim((string)($row['tracking_number'] ?? ''));
+                $carrier = trim((string)($row['carrier'] ?? ''));
+                $statusLabel = trim((string)($row['status_label'] ?? ''));
+                $statusTone = trim((string)($row['status_tone'] ?? 'muted')) ?: 'muted';
+                $shippedAt = trim((string)($row['shipped_at'] ?? ''));
+                $deliveredAt = trim((string)($row['delivered_at'] ?? ''));
+                $track = ($tn !== '' && $sid > 0) ? $trackingQuery->queryByShipmentId($sid) : null;
+                $progress = \is_array($track['progress'] ?? null) ? $track['progress'] : [];
+                $trackingUrl = trim((string)($track['tracking_url'] ?? ''));
+                $trackOk = (bool)($track['ok'] ?? false);
+                $trackMessage = trim((string)($track['message'] ?? ''));
+                ?>
+                <article class="account-order-detail__shipment-row"
+                         role="listitem"
+                         data-testid="account-order-shipment-row"
+                         data-shipment-id="<?= $sid ?>">
+                    <div class="account-order-detail__shipment-meta">
+                        <span data-testid="account-order-shipment-id">#<?= $sid ?></span>
+                        <?php if ($carrier !== ''): ?>
+                            <span data-testid="account-order-shipment-carrier"><?= $esc($carrier) ?></span>
+                        <?php endif; ?>
+                        <?php if ($tn === ''): ?>
+                            <span class="account-orders__badge" data-tone="warning"><?= __('待补运单号') ?></span>
+                        <?php else: ?>
+                            <code data-testid="account-order-shipment-tracking"><?= $esc($tn) ?></code>
+                        <?php endif; ?>
+                        <span class="account-orders__badge"
+                              data-tone="<?= $esc($statusTone) ?>"
+                              data-testid="account-order-shipment-status"><?= $esc($statusLabel) ?></span>
+                    </div>
+                    <p class="account-order-detail__shipment-times">
+                        <?= __('发货时间') ?>：<?= $esc($shippedAt !== '' ? $shippedAt : '—') ?>
+                        · <?= __('送达') ?>：<?= $esc($deliveredAt !== '' ? $deliveredAt : '—') ?>
+                    </p>
+                    <?php
+                    $contents = \is_array($row['contents'] ?? null) ? $row['contents'] : [];
+                    ?>
+                    <div class="account-order-detail__shipment-contents"
+                         data-testid="account-order-shipment-contents">
+                        <h5><?= __('包裹内商品') ?></h5>
+                        <?php if ($contents === []): ?>
+                            <p data-testid="account-order-shipment-contents-empty"><?= __('未记录包裹内商品') ?></p>
+                        <?php else: ?>
+                            <ul data-testid="account-order-shipment-contents-list">
+                                <?php foreach ($contents as $cline):
+                                    if (!\is_array($cline)) { continue; }
+                                    $cname = trim((string)($cline['product_name'] ?? ''));
+                                    $csku = trim((string)($cline['sku'] ?? ''));
+                                    $cqty = (int)($cline['qty_minor'] ?? 0);
+                                    ?>
+                                    <li data-testid="account-order-shipment-content-line">
+                                        <span data-testid="account-order-shipment-content-name"><?= $esc($cname) ?></span>
+                                        <?php if ($csku !== ''): ?>
+                                            <code data-testid="account-order-shipment-content-sku"><?= $esc($csku) ?></code>
+                                        <?php endif; ?>
+                                        <span data-testid="account-order-shipment-content-qty">×<?= $cqty ?></span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($tn !== '' && $sid > 0): ?>
+                        <div class="account-order-detail__shipment-progress"
+                             data-testid="account-order-shipment-progress">
+                            <h5><?= __('物流进程记录') ?></h5>
+                            <?php if (!$trackOk): ?>
+                                <p data-testid="account-order-shipment-progress-empty">
+                                    <?= $esc($trackMessage !== '' ? $trackMessage : (string)__('暂无物流进程')) ?>
+                                </p>
+                            <?php elseif ($progress === []): ?>
+                                <p data-testid="account-order-shipment-progress-empty">
+                                    <?= __('承运方尚未回传轨迹节点') ?>
+                                </p>
+                            <?php else: ?>
+                                <ol data-testid="account-order-shipment-progress-list">
+                                    <?php foreach ($progress as $step):
+                                        if (!\is_array($step)) {
+                                            continue;
+                                        }
+                                        $at = trim((string)($step['at'] ?? ''));
+                                        $text = trim((string)($step['text'] ?? ''));
+                                        if ($text === '') {
+                                            continue;
+                                        }
+                                        ?>
+                                        <li data-testid="account-order-shipment-progress-item">
+                                            <?php if ($at !== ''): ?>
+                                                <span><?= $esc($at) ?></span>
+                                                ·
+                                            <?php endif; ?>
+                                            <?= $esc($text) ?>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ol>
+                            <?php endif; ?>
+                            <?php if ($trackingUrl !== ''): ?>
+                                <p>
+                                    <a href="<?= $esc($trackingUrl) ?>"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       data-testid="account-order-shipment-track-url"><?= __('打开承运商轨迹页') ?></a>
+                                </p>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</section>

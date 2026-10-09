@@ -27,7 +27,10 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('data-account-section="security"', $content);
         $this->assertStringContainsString('data-account-section="login-info"', $content);
         $this->assertStringContainsString('data-weline-load="api,account,customerAccount"', $content);
-        $this->assertStringContainsString('20260906-profile-header-sync-1', $content);
+        $modulesFile = $moduleRoot . '/view/statics/frontend/weline.modules.js';
+        $this->assertFileExists($modulesFile);
+        $modules = (string) file_get_contents($modulesFile);
+        $this->assertStringContainsString('account-index.js?v=20261009-order-uuid-locate-2', $modules);
         $this->assertStringContainsString('data-account-pending-section', $content);
         $this->assertStringContainsString('sectionLoading', $content);
         $this->assertStringContainsString('hideBuiltinSections', $content);
@@ -37,7 +40,8 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('function parseAccountHash()', $script);
         $this->assertStringContainsString('function hasNavSection(section)', $script);
         $this->assertStringContainsString('function syncFromHash()', $script);
-        $this->assertStringContainsString("targetId = 'profile';", $script);
+        $this->assertStringContainsString("var targetId = parsed.section || 'profile';", $script);
+        $this->assertStringContainsString("targetId = orderUuid ? 'orders' : 'profile';", $script);
         $this->assertStringContainsString('function ensureSectionLoadingPlaceholder(sectionName)', $script);
         $this->assertStringContainsString('function revealAccountSection(sectionName)', $script);
         $this->assertStringContainsString('function markSectionLoadFailed(sectionName, message)', $script);
@@ -69,6 +73,9 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('loadSidebarContent(sectionName, { force: true })', $script);
         $this->assertStringContainsString('function openOrdersSectionViaBinQuery(orderUuid)', $script);
         $this->assertStringContainsString('function bindAccountOrdersSoftNavigation(root)', $script);
+        $this->assertStringContainsString('function ensureOrdersLocatedForOrderUuid(', $script);
+        $this->assertStringContainsString('function locateAccountOrder(', $script);
+        $this->assertStringContainsString('ordersSectionMatchesOrderUuid(', $script);
         $this->assertStringContainsString('[data-order-detail-link="true"]', $script);
         $this->assertStringContainsString('[data-account-orders-back="true"]', $script);
         $this->assertStringContainsString("api.resource('account').getSidebarSection(sidebarPayload)", $script);
@@ -140,7 +147,12 @@ final class AccountSidebarHookHostTest extends TestCase
         $css = (string) file_get_contents($cssFile);
         $template = (string) file_get_contents($templateFile);
 
-        $this->assertStringContainsString('20260906-profile-header-sync-1', $template);
+        $modulesFile = dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js';
+        $this->assertFileExists($modulesFile);
+        $this->assertStringContainsString(
+            'account-index.js?v=20261009-order-uuid-locate-2',
+            (string) file_get_contents($modulesFile)
+        );
         $this->assertStringContainsString('.account-index__user-info', $css);
         $this->assertStringContainsString('max-width: 100%;', $css);
         $this->assertStringContainsString('.account-index__username', $css);

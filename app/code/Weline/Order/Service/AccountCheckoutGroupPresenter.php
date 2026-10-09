@@ -62,6 +62,11 @@ final class AccountCheckoutGroupPresenter
 
         $trackingSummary = $this->trackingSummaryForGroup($orders);
         $orderType = $this->resolveGroupOrderType($orders);
+        $shipmentCountInGroup = 0;
+        foreach ($orders as $order) {
+            $shipmentCountInGroup += max(0, (int)($order['shipment_count'] ?? 0));
+        }
+        $isMultiOrder = $orderCount >= 2;
 
         return [
             'view' => $view,
@@ -74,8 +79,15 @@ final class AccountCheckoutGroupPresenter
             'currency' => $currency,
             'total_label' => $this->moneyLabel((int)($group['grand_total_minor'] ?? 0), $currency),
             'order_count' => $orderCount,
-            'order_count_label' => $orderCount . ' ' . \__('笔订单'),
-            'summary_line' => $this->summaryLine($group, $partial),
+            'order_count_label' => $isMultiOrder
+                ? (string)\__('结账组 · 含 %{1} 个子订单', [$orderCount])
+                : (string)\__('结账组 · 1 笔订单'),
+            'shipment_count_in_group' => $shipmentCountInGroup,
+            'group_shipment_count_label' => $shipmentCountInGroup > 0
+                ? (string)\__('发货共 %{1} 笔', [$shipmentCountInGroup])
+                : '',
+            'is_multi_order' => $isMultiOrder,
+            'summary_line' => $this->summaryLine($group, $partial, $isMultiOrder, $shipmentCountInGroup),
             'refund_semantics' => array_values(array_unique($refundLabels)),
             'invoice_semantics' => array_values(array_unique($invoiceLabels)),
             'fulfillment_semantics' => array_values(array_unique($fulfillmentLabels)),
@@ -89,7 +101,7 @@ final class AccountCheckoutGroupPresenter
                 && trim((string)($group['continue_pay_url'] ?? '')) !== ''
                 && $status === 'pending',
             'orders' => $partial
-                ? array_map(fn (array $order): array => $this->mapOrder($order, $currency), $orders)
+                ? $this->mapOrders($orders, $currency, $orderCount)
                 : [],
             'hook' => 'account.sidebar',
             'content_hook' => 'account.sidebar.content',
@@ -102,66 +114,80 @@ final class AccountCheckoutGroupPresenter
      */
     private function isPartial(array $orders): bool
     {
-        if (count($orders) <= 1) {
-            // 单 Order 的退款或部分履约仍需展开明细。
-            foreach ($orders as $order) {
-                $rs = (string) ($order['refund_status'] ?? '');
-                if ($rs !== '' && $rs !== 'none') {
-                    return true;
-                }
-                if ((string)($order['fulfillment_status'] ?? '') === 'partial') {
-                    return true;
-                }
-            }
-
-            return false;
+        // 多拆单（同组 ≥2 子单）必须展开，便于各自追踪/进详情；禁止一条组摘要盖住全体。
+        if (count($orders) > 1) {
+            return true;
         }
 
-        $statuses = [];
-        $refunds = [];
-        $invoices = [];
-        $fulfillments = [];
+        // 单 Order 的退款或部分履约仍需展开明细。
         foreach ($orders as $order) {
-            $statuses[(string) ($order['status'] ?? '')] = true;
-            $refunds[(string) ($order['refund_status'] ?? 'none')] = true;
-            $invoices[(string)($order['invoice_status'] ?? 'none')] = true;
-            $fulfillments[(string)($order['fulfillment_status'] ?? 'none')] = true;
-            if ((string)($order['refund_status'] ?? 'none') !== 'none'
-                || (string)($order['fulfillment_status'] ?? 'none') === 'partial'
-            ) {
+            $rs = (string) ($order['refund_status'] ?? '');
+            if ($rs !== '' && $rs !== 'none') {
+                return true;
+            }
+            if ((string)($order['fulfillment_status'] ?? '') === 'partial') {
                 return true;
             }
         }
 
-        return count($statuses) > 1
-            || count($refunds) > 1
-            || count($invoices) > 1
-            || count($fulfillments) > 1;
+        return false;
     }
 
     /**
      * @param array<string, mixed> $group
      */
-    private function summaryLine(array $group, bool $partial): string
+    private function summaryLine(array $group, bool $partial, bool $isMultiOrder, int $shipmentCountInGroup): string
     {
         $n = count($group['orders'] ?? []);
         $base = (string) ($group['display_number'] ?? $group['group_uuid'] ?? '');
-        if ($partial) {
-            return $base . ' · ' . \__('部分状态不同，已展开');
+        $parts = [$base];
+        if ($isMultiOrder) {
+            $parts[] = (string)\__('含 %{1} 个子订单', [$n]);
+        } else {
+            $parts[] = $n . ' ' . \__('笔订单');
+        }
+        if ($shipmentCountInGroup > 0) {
+            $parts[] = (string)\__('发货共 %{1} 笔', [$shipmentCountInGroup]);
+        }
+        if ($partial && $isMultiOrder) {
+            $parts[] = (string)\__('已展开各子订单');
+        } elseif ($partial) {
+            $parts[] = (string)\__('已展开明细');
         }
 
-        return $base . ' · ' . $n . ' ' . \__('笔订单');
+        return implode(' · ', $parts);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orders
+     * @return list<array<string, mixed>>
+     */
+    private function mapOrders(array $orders, string $groupCurrency, int $siblingCount): array
+    {
+        $mapped = [];
+        $index = 0;
+        foreach ($orders as $order) {
+            if (!\is_array($order)) {
+                continue;
+            }
+            ++$index;
+            $mapped[] = $this->mapOrder($order, $groupCurrency, $index, $siblingCount);
+        }
+
+        return $mapped;
     }
 
     /**
      * @param array<string, mixed> $order
      * @return array<string, mixed>
      */
-    private function mapOrder(array $order, string $groupCurrency): array
+    private function mapOrder(array $order, string $groupCurrency, int $index = 1, int $siblingCount = 1): array
     {
         $status = (string)($order['status'] ?? '');
         $currency = strtoupper(trim((string)($order['currency'] ?? $groupCurrency))) ?: 'CNY';
         $type = $this->presentOrderType((string) ($order['order_type'] ?? 'toc'));
+        $shipmentCount = max(0, (int)($order['shipment_count'] ?? 0));
+        $isMulti = $siblingCount >= 2;
 
         return [
             'order_uuid' => (string) ($order['order_uuid'] ?? ''),
@@ -175,6 +201,14 @@ final class AccountCheckoutGroupPresenter
             'invoice_label' => $this->customerInvoiceLabel((string) ($order['invoice_status'] ?? 'none')),
             'fulfillment_label' => $this->customerFulfillmentLabel((string) ($order['fulfillment_status'] ?? 'none')),
             'tracking_summary' => $this->trackingSummaryForFulfillment((string) ($order['fulfillment_status'] ?? ''), $status),
+            'shipment_count' => $shipmentCount,
+            'shipment_badge' => $shipmentCount > 0
+                ? (string)\__('发货×%{1}', [$shipmentCount])
+                : '',
+            'child_badge' => $isMulti
+                ? (string)\__('子订单 %{1}/%{2}', [$index, $siblingCount])
+                : '',
+            'child_label' => $isMulti ? (string)\__('子订单') : (string)\__('订单'),
             'order_type' => $type['code'],
             'order_type_label' => $type['label'],
             'order_type_tone' => $type['tone'],

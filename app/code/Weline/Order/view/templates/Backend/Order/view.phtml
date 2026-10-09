@@ -16,6 +16,7 @@ $availableTransitions = $this->getData('available_transitions') ?? [];
 $currentStatus = $this->getData('current_status') ?? '';
 $customerPresent = $this->getData('customer_present') ?? [];
 $paymentChrome = is_array($this->getData('payment_chrome') ?? null) ? $this->getData('payment_chrome') : [];
+$groupContext = is_array($this->getData('group_context') ?? null) ? $this->getData('group_context') : [];
 
 if (!$order) {
     return;
@@ -62,6 +63,12 @@ if ($orderTypeTone === 'muted') {
 <div class="w-grid">
     <div style="--w-span:12;">
         <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/status-flow.phtml') ?>
+        <?php
+        if (is_object($this) && method_exists($this, 'assign')) {
+            $this->assign('group_context_surface', 'view');
+        }
+        echo $this->fetch('Weline_Order::templates/Backend/Order/partial/group-context.phtml');
+        ?>
         <!-- Hook: 订单详情页之前 -->
         <w:hook name="Weline_Order::backend::order::view::before"/>
         

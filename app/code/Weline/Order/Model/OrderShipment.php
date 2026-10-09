@@ -19,6 +19,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '发货记录表')]
 #[Index(name: 'idx_order_id', columns: ['order_id'])]
 #[Index(name: 'idx_tracking_number', columns: ['tracking_number'])]
+#[Index(name: 'idx_shipment_fulfillment_unit', columns: ['fulfillment_unit_uuid'])]
 class OrderShipment extends Model
 {
 
@@ -42,6 +43,12 @@ class OrderShipment extends Model
     public const schema_fields_DELIVERED_AT = 'delivered_at';
     #[Col('timestamp', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('varchar', 36, nullable: true, comment: '履约单元 UUID')]
+    public const schema_fields_FULFILLMENT_UNIT_UUID = 'fulfillment_unit_uuid';
+    #[Col('bigint', 20, nullable: false, default: 0, comment: '本笔发货数量（minor）')]
+    public const schema_fields_QTY_MINOR = 'qty_minor';
+    #[Col('text', nullable: true, comment: '包裹内商品快照 JSON')]
+    public const schema_fields_CONTENTS_JSON = 'contents_json';
 
     // 发货状态常量
     public const STATUS_PENDING = 'pending';
@@ -58,7 +65,7 @@ class OrderShipment extends Model
     /**
      * 索引排序键
      */
-    public array $_index_sort_keys = ['shipment_id', 'order_id', 'tracking_number'];
+    public array $_index_sort_keys = ['shipment_id', 'order_id', 'tracking_number', 'fulfillment_unit_uuid'];
 }
 
 

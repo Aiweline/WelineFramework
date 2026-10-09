@@ -155,8 +155,14 @@ final class OrderTradeAdminCommandService
             $notifyCustomer = false;
         }
 
+        $packageContents = $this->resolveShipPackageContents(
+            $unitUuid,
+            $quantityMinor,
+            \is_array($logistics['package_lines'] ?? null) ? $logistics['package_lines'] : [],
+        );
+
         $requestHash = hash('sha256', $this->json([
-            'command' => 'order.fulfillment.partial-ship.v2',
+            'command' => 'order.fulfillment.partial-ship.v3',
             'fulfillment_unit_uuid' => $unitUuid,
             'qty_minor' => $quantityMinor,
             'expected_version' => $expectedVersion,
@@ -165,6 +171,7 @@ final class OrderTradeAdminCommandService
             'carrier_id' => $carrierId,
             'carrier' => $carrierName,
             'notify_customer' => $notifyCustomer ? 1 : 0,
+            'package_contents' => $packageContents,
         ]));
 
         try {
@@ -236,7 +243,11 @@ final class OrderTradeAdminCommandService
             throw $exception;
         }
 
-        $result = $result + ['request_hash' => $requestHash, 'fulfill_mode' => $fulfillMode];
+        $result = $result + [
+            'request_hash' => $requestHash,
+            'fulfill_mode' => $fulfillMode,
+            'package_contents' => $packageContents,
+        ];
         if (empty($result['replayed']) && $this->shipmentCommand === null) {
             $context = $context ?? $this->shipmentContext($unitUuid);
             $result['logistics'] = $this->attachShipmentLogistics(
@@ -246,6 +257,9 @@ final class OrderTradeAdminCommandService
                 $notifyCustomer,
                 (string)($result['status'] ?? ''),
                 $providerCode,
+                $unitUuid,
+                $quantityMinor,
+                $packageContents,
             );
             if (\is_array($labelMeta)) {
                 $result['label'] = [
@@ -531,6 +545,7 @@ final class OrderTradeAdminCommandService
             $warehouseSource = (string)($row[
                 FulfillmentUnit::schema_fields_WAREHOUSE_SOURCE
             ] ?? '');
+            $remaining = max(0, $total - $fulfilled);
             $result[] = $order + [
                 'fulfillment_unit_uuid' => $unitUuid,
                 'unit_short' => $this->shortUuid($unitUuid),
@@ -539,7 +554,7 @@ final class OrderTradeAdminCommandService
                 'warehouse_label' => $this->warehouseLabel($warehouseId, $warehouseSource),
                 'qty_minor' => $total,
                 'fulfilled_qty_minor' => $fulfilled,
-                'remaining_qty_minor' => max(0, $total - $fulfilled),
+                'remaining_qty_minor' => $remaining,
                 'fulfillment_version' => (int)($row[
                     FulfillmentUnit::schema_fields_FULFILLMENT_VERSION
                 ] ?? 0),
@@ -547,6 +562,7 @@ final class OrderTradeAdminCommandService
                 'status_label' => $this->fulfillmentStatusLabel(
                     (string)($row[FulfillmentUnit::schema_fields_STATUS] ?? ''),
                 ),
+                'package_lines' => $this->packageLinesForUnitRow($row, (string)($order['order_uuid'] ?? ''), $remaining),
             ];
         }
 
@@ -803,6 +819,7 @@ final class OrderTradeAdminCommandService
     /**
      * Persist platform logistics + optional customer email after a successful partial ship.
      *
+     * @param list<array{line_key:string,item_uuid:string,sku:string,product_name:string,qty_minor:int,offer_id:int}> $packageContents
      * @return array{tracking_number:string,carrier:string,notify_customer:bool,shipment_id:int,mail_sent:bool}
      */
     private function attachShipmentLogistics(
@@ -812,6 +829,9 @@ final class OrderTradeAdminCommandService
         bool $notifyCustomer,
         string $unitStatus,
         string $trackingProviderCode = '',
+        string $fulfillmentUnitUuid = '',
+        int $qtyMinor = 0,
+        array $packageContents = [],
     ): array {
         $order = $this->newModel(Order::class)->load($orderId);
         if (!$order instanceof Order || !$order->getId()) {
@@ -849,6 +869,22 @@ final class OrderTradeAdminCommandService
             \Weline\Order\Model\OrderShipment::schema_fields_SHIPPED_AT,
             date('Y-m-d H:i:s'),
         );
+        if ($fulfillmentUnitUuid !== '') {
+            $shipment->setData(
+                \Weline\Order\Model\OrderShipment::schema_fields_FULFILLMENT_UNIT_UUID,
+                $fulfillmentUnitUuid,
+            );
+        }
+        $shipment->setData(
+            \Weline\Order\Model\OrderShipment::schema_fields_QTY_MINOR,
+            max(0, $qtyMinor),
+        );
+        if ($packageContents !== []) {
+            $shipment->setData(
+                \Weline\Order\Model\OrderShipment::schema_fields_CONTENTS_JSON,
+                $this->json($packageContents),
+            );
+        }
         $shipment->save();
 
         $fullyShipped = $unitStatus === FulfillmentUnit::STATUS_SHIPPED
@@ -1128,5 +1164,336 @@ final class OrderTradeAdminCommandService
     private function limit(int $limit): int
     {
         return max(1, min(100, $limit));
+    }
+
+    /**
+     * @param array<string,mixed> $unitRow
+     * @return list<array{
+     *     line_key:string,
+     *     item_uuid:string,
+     *     sku:string,
+     *     product_name:string,
+     *     offer_id:int,
+     *     allocated_qty_minor:int,
+     *     shipped_qty_minor:int,
+     *     remaining_qty_minor:int
+     * }>
+     */
+    private function packageLinesForUnitRow(array $unitRow, string $orderUuid, int $unitRemaining): array
+    {
+        $unitUuid = (string)($unitRow[FulfillmentUnit::schema_fields_FULFILLMENT_UNIT_UUID] ?? '');
+        $allocations = $this->decodeAllocations(
+            (string)($unitRow[FulfillmentUnit::schema_fields_ALLOCATIONS_JSON] ?? ''),
+        );
+        if ($allocations === []) {
+            if ($unitRemaining <= 0) {
+                return [];
+            }
+
+            return [[
+                'line_key' => 'unit:' . $unitUuid,
+                'item_uuid' => '',
+                'sku' => '',
+                'product_name' => (string)__('履约单元商品'),
+                'offer_id' => 0,
+                'allocated_qty_minor' => (int)($unitRow[FulfillmentUnit::schema_fields_QTY_MINOR] ?? 0),
+                'shipped_qty_minor' => (int)($unitRow[FulfillmentUnit::schema_fields_FULFILLED_QTY_MINOR] ?? 0),
+                'remaining_qty_minor' => $unitRemaining,
+            ]];
+        }
+
+        $orderItems = $this->orderItemsByOrderUuid($orderUuid);
+        $shippedByKey = $this->shippedQtyByLineKey($unitUuid);
+        $lines = [];
+        foreach ($allocations as $alloc) {
+            $offerId = (int)($alloc['offer_id'] ?? 0);
+            $sku = trim((string)($alloc['sku'] ?? ''));
+            $itemUuid = trim((string)($alloc['item_uuid'] ?? ''));
+            $allocated = max(0, (int)($alloc['qty_minor'] ?? 0));
+            if ($allocated <= 0) {
+                continue;
+            }
+            $matched = $this->matchOrderItem($orderItems, $itemUuid, $offerId, $sku);
+            if ($matched !== null) {
+                $itemUuid = $itemUuid !== '' ? $itemUuid : (string)($matched[OrderItem::schema_fields_ITEM_UUID] ?? '');
+                $sku = $sku !== '' ? $sku : trim((string)($matched[OrderItem::schema_fields_PRODUCT_SKU] ?? ''));
+                $offerId = $offerId > 0 ? $offerId : (int)($matched[OrderItem::schema_fields_OFFER_ID] ?? 0);
+                $name = trim((string)($matched[OrderItem::schema_fields_PRODUCT_NAME] ?? ''));
+            } else {
+                $name = $sku !== '' ? $sku : (string)__('未命名商品');
+            }
+            $lineKey = $this->packageLineKey($itemUuid, $sku, $offerId, $unitUuid);
+            $shipped = (int)($shippedByKey[$lineKey] ?? 0);
+            // Legacy shipments without contents: fall back to unit-level remaining for single-line units.
+            if ($shipped === 0 && \count($allocations) === 1 && $shippedByKey === []) {
+                $shipped = max(0, (int)($unitRow[FulfillmentUnit::schema_fields_FULFILLED_QTY_MINOR] ?? 0));
+            }
+            $remaining = max(0, $allocated - $shipped);
+            if ($remaining <= 0) {
+                continue;
+            }
+            $lines[] = [
+                'line_key' => $lineKey,
+                'item_uuid' => $itemUuid,
+                'sku' => $sku,
+                'product_name' => $name !== '' ? $name : ($sku !== '' ? $sku : (string)__('未命名商品')),
+                'offer_id' => $offerId,
+                'allocated_qty_minor' => $allocated,
+                'shipped_qty_minor' => $shipped,
+                'remaining_qty_minor' => $remaining,
+            ];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param array<string,mixed> $postedLines keyed by line_key or list of rows
+     * @return list<array{line_key:string,item_uuid:string,sku:string,product_name:string,qty_minor:int,offer_id:int}>
+     */
+    private function resolveShipPackageContents(
+        string $unitUuid,
+        int $quantityMinor,
+        array $postedLines,
+    ): array {
+        $unit = $this->newModel(FulfillmentUnit::class)
+            ->where(FulfillmentUnit::schema_fields_FULFILLMENT_UNIT_UUID, $unitUuid)
+            ->find()
+            ->fetch();
+        if (!$unit instanceof FulfillmentUnit || !$unit->getId()) {
+            throw new OrderTradeAdminCommandException(
+                WarehouseFulfillmentService::ERROR_UNIT_NOT_FOUND,
+            );
+        }
+        $orderUuid = (string)$unit->getData(FulfillmentUnit::schema_fields_ORDER_UUID);
+        $total = (int)$unit->getData(FulfillmentUnit::schema_fields_QTY_MINOR);
+        $fulfilled = (int)$unit->getData(FulfillmentUnit::schema_fields_FULFILLED_QTY_MINOR);
+        $unitRemaining = max(0, $total - $fulfilled);
+        $available = $this->packageLinesForUnitRow($unit->getData(), $orderUuid, $unitRemaining);
+        if ($available === []) {
+            throw new OrderTradeAdminCommandException('shipment_contents_empty');
+        }
+
+        $normalizedPosted = $this->normalizePostedPackageLines($postedLines);
+        if ($normalizedPosted === []) {
+            if (\count($available) === 1) {
+                $only = $available[0];
+                $take = min($quantityMinor, (int)$only['remaining_qty_minor']);
+                if ($take !== $quantityMinor) {
+                    throw new OrderTradeAdminCommandException('shipment_contents_qty_mismatch');
+                }
+                $normalizedPosted = [
+                    (string)$only['line_key'] => $take,
+                ];
+            } else {
+                throw new OrderTradeAdminCommandException('shipment_contents_required');
+            }
+        }
+
+        $byKey = [];
+        foreach ($available as $line) {
+            $byKey[(string)$line['line_key']] = $line;
+        }
+        $contents = [];
+        $sum = 0;
+        foreach ($normalizedPosted as $lineKey => $qty) {
+            if ($qty <= 0) {
+                continue;
+            }
+            $line = $byKey[$lineKey] ?? null;
+            if ($line === null) {
+                throw new OrderTradeAdminCommandException('shipment_contents_line_invalid');
+            }
+            if ($qty > (int)$line['remaining_qty_minor']) {
+                throw new OrderTradeAdminCommandException('shipment_contents_over_line');
+            }
+            $sum += $qty;
+            $contents[] = [
+                'line_key' => (string)$line['line_key'],
+                'item_uuid' => (string)$line['item_uuid'],
+                'sku' => (string)$line['sku'],
+                'product_name' => (string)$line['product_name'],
+                'qty_minor' => $qty,
+                'offer_id' => (int)$line['offer_id'],
+            ];
+        }
+        if ($contents === []) {
+            throw new OrderTradeAdminCommandException('shipment_contents_required');
+        }
+        if ($sum !== $quantityMinor) {
+            throw new OrderTradeAdminCommandException('shipment_contents_qty_mismatch');
+        }
+        usort(
+            $contents,
+            static fn(array $a, array $b): int => strcmp((string)$a['line_key'], (string)$b['line_key']),
+        );
+
+        return $contents;
+    }
+
+    /**
+     * @param array<string,mixed> $posted
+     * @return array<string,int> line_key => qty_minor
+     */
+    private function normalizePostedPackageLines(array $posted): array
+    {
+        $out = [];
+        foreach ($posted as $key => $row) {
+            if (\is_array($row)) {
+                $lineKey = trim((string)($row['line_key'] ?? $key));
+                $selected = $row['selected'] ?? null;
+                if ($selected !== null
+                    && (string)$selected !== '1'
+                    && (string)$selected !== 'true'
+                    && $selected !== true
+                    && (string)$selected !== 'on'
+                ) {
+                    continue;
+                }
+                $qty = (int)($row['qty_minor'] ?? $row['qty'] ?? 0);
+            } else {
+                $lineKey = trim((string)$key);
+                $qty = (int)$row;
+            }
+            if ($lineKey === '' || $qty <= 0) {
+                continue;
+            }
+            $out[$lineKey] = ($out[$lineKey] ?? 0) + $qty;
+        }
+
+        return $out;
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function decodeAllocations(string $json): array
+    {
+        $json = trim($json);
+        if ($json === '') {
+            return [];
+        }
+        try {
+            $decoded = json_decode($json, true, 64, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+        if (!\is_array($decoded)) {
+            return [];
+        }
+        $rows = [];
+        foreach ($decoded as $row) {
+            if (\is_array($row)) {
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function orderItemsByOrderUuid(string $orderUuid): array
+    {
+        $orderUuid = trim($orderUuid);
+        if ($orderUuid === '') {
+            return [];
+        }
+        $items = $this->newModel(OrderItem::class)
+            ->where(OrderItem::schema_fields_ORDER_UUID, $orderUuid)
+            ->order(OrderItem::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        return \is_array($items) ? $items : [];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $orderItems
+     * @return array<string,mixed>|null
+     */
+    private function matchOrderItem(array $orderItems, string $itemUuid, int $offerId, string $sku): ?array
+    {
+        if ($itemUuid !== '') {
+            foreach ($orderItems as $item) {
+                if ((string)($item[OrderItem::schema_fields_ITEM_UUID] ?? '') === $itemUuid) {
+                    return $item;
+                }
+            }
+        }
+        if ($offerId > 0) {
+            foreach ($orderItems as $item) {
+                if ((int)($item[OrderItem::schema_fields_OFFER_ID] ?? 0) === $offerId) {
+                    return $item;
+                }
+            }
+        }
+        if ($sku !== '') {
+            foreach ($orderItems as $item) {
+                if (trim((string)($item[OrderItem::schema_fields_PRODUCT_SKU] ?? '')) === $sku) {
+                    return $item;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function packageLineKey(string $itemUuid, string $sku, int $offerId, string $unitUuid): string
+    {
+        if ($itemUuid !== '') {
+            return 'item:' . $itemUuid;
+        }
+        if ($sku !== '') {
+            return 'sku:' . $sku;
+        }
+        if ($offerId > 0) {
+            return 'offer:' . $offerId;
+        }
+
+        return 'unit:' . $unitUuid;
+    }
+
+    /** @return array<string,int> */
+    private function shippedQtyByLineKey(string $unitUuid): array
+    {
+        $unitUuid = trim($unitUuid);
+        if ($unitUuid === '') {
+            return [];
+        }
+        try {
+            $rows = $this->newModel(\Weline\Order\Model\OrderShipment::class)
+                ->where(\Weline\Order\Model\OrderShipment::schema_fields_FULFILLMENT_UNIT_UUID, $unitUuid)
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            // Schema not upgraded yet: do not break the whole ship panel.
+            return [];
+        }
+        $out = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            $json = trim((string)($row[\Weline\Order\Model\OrderShipment::schema_fields_CONTENTS_JSON] ?? ''));
+            if ($json === '') {
+                continue;
+            }
+            try {
+                $contents = json_decode($json, true, 64, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                continue;
+            }
+            if (!\is_array($contents)) {
+                continue;
+            }
+            foreach ($contents as $line) {
+                if (!\is_array($line)) {
+                    continue;
+                }
+                $key = trim((string)($line['line_key'] ?? ''));
+                $qty = (int)($line['qty_minor'] ?? 0);
+                if ($key === '' || $qty <= 0) {
+                    continue;
+                }
+                $out[$key] = ($out[$key] ?? 0) + $qty;
+            }
+        }
+
+        return $out;
     }
 }

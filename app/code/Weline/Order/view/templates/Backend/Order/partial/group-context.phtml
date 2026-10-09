@@ -1,0 +1,81 @@
+<?php
+/**
+ * 后台订单结账上下文条：结账组号、子订单 x/N、运费归属、同组兄弟跳转。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$groupContext = is_array($this->getData('group_context') ?? null) ? $this->getData('group_context') : [];
+if ($groupContext === [] || trim((string)($groupContext['group_display'] ?? '')) === '') {
+    return;
+}
+$surface = trim((string)($this->getData('group_context_surface') ?? 'view')) ?: 'view';
+$linkEdit = $surface === 'edit';
+$esc = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$siblings = is_array($groupContext['siblings'] ?? null) ? $groupContext['siblings'] : [];
+$isMulti = !empty($groupContext['is_multi_order']);
+$currentShipmentBadge = '';
+foreach ($siblings as $sibProbe) {
+    if (\is_array($sibProbe) && !empty($sibProbe['is_current'])) {
+        $currentShipmentBadge = trim((string)($sibProbe['shipment_badge'] ?? ''));
+        break;
+    }
+}
+if ($currentShipmentBadge === '' && (int)($groupContext['shipment_count'] ?? 0) > 0) {
+    $currentShipmentBadge = (string)__('发货×%{1}', [(int)$groupContext['shipment_count']]);
+}
+?>
+<div class="w-card" style="--w-mb:var(--weline-space-2);" data-testid="order-group-context">
+    <div class="w-card__header">
+        <h5 class="w-card__title" style="--w-mb:0;"><?= __('结账上下文') ?></h5>
+    </div>
+    <div class="w-card__body">
+        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
+            <span class="w-text" data-tone="muted" data-size="sm"><?= __('结账组') ?></span>
+            <strong data-testid="order-group-context-display"><?= $esc($groupContext['group_display'] ?? '') ?></strong>
+            <?php if ($isMulti && trim((string)($groupContext['child_badge'] ?? '')) !== ''): ?>
+                <span class="w-badge" data-tone="info" data-testid="order-group-child-badge"><?= $esc($groupContext['child_badge']) ?></span>
+            <?php endif; ?>
+            <span class="w-text" data-tone="muted" data-size="sm"><?= __('运费归属') ?></span>
+            <span data-testid="order-group-shipping-owner"><?= $esc($groupContext['shipping_owner_label'] ?? '') ?></span>
+            <?php if ($currentShipmentBadge !== ''): ?>
+                <span class="w-badge" data-tone="secondary" data-testid="order-group-shipment-badge"><?= $esc($currentShipmentBadge) ?></span>
+            <?php endif; ?>
+        </div>
+        <?php if ($isMulti && $siblings !== []): ?>
+            <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);flex-wrap:wrap;">
+                <span class="w-text" data-tone="muted" data-size="sm"><?= __('同组子订单') ?></span>
+                <?php foreach ($siblings as $sib):
+                    if (!\is_array($sib)) {
+                        continue;
+                    }
+                    $sibId = (int)($sib['order_id'] ?? 0);
+                    $sibNumber = trim((string)($sib['order_number'] ?? ''));
+                    $isCurrent = !empty($sib['is_current']);
+                    if ($sibId <= 0 || $sibNumber === '') {
+                        continue;
+                    }
+                    if ($isCurrent): ?>
+                        <span class="w-badge" data-tone="primary" data-testid="order-group-sibling-current"><?= $esc($sibNumber) ?></span>
+                    <?php elseif ($linkEdit): ?>
+                        <a class="w-button"
+                           data-tone="neutral"
+                           data-size="sm"
+                           data-testid="order-group-sibling-link"
+                           data-order-id="<?= $sibId ?>"
+                           href="@backend-url{'order/backend/order/edit'|['id' => $sibId]}"><?= $esc($sibNumber) ?></a>
+                    <?php else: ?>
+                        <a class="w-button"
+                           data-tone="neutral"
+                           data-size="sm"
+                           data-testid="order-group-sibling-link"
+                           data-order-id="<?= $sibId ?>"
+                           href="@backend-url{'order/backend/order/view'|['id' => $sibId]}"><?= $esc($sibNumber) ?></a>
+                    <?php endif; ?>
+                    <?php if (trim((string)($sib['shipment_badge'] ?? '')) !== ''): ?>
+                        <span class="w-text" data-tone="muted" data-size="sm"><?= $esc($sib['shipment_badge']) ?></span>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>

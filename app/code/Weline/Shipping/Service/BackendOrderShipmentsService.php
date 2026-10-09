@@ -31,7 +31,10 @@ final class BackendOrderShipmentsService
      *     status_label: string,
      *     status_tone: string,
      *     shipped_at: string,
-     *     delivered_at: string
+     *     delivered_at: string,
+     *     fulfillment_unit_uuid: string,
+     *     qty_minor: int,
+     *     contents: list<array{line_key:string,item_uuid:string,sku:string,product_name:string,qty_minor:int,offer_id:int}>
      * }>
      */
     public function listForOrderId(int $orderId): array
@@ -62,6 +65,52 @@ final class BackendOrderShipmentsService
                 'status_tone' => $this->statusTone($status),
                 'shipped_at' => trim((string)($data[OrderShipment::schema_fields_SHIPPED_AT] ?? '')),
                 'delivered_at' => trim((string)($data[OrderShipment::schema_fields_DELIVERED_AT] ?? '')),
+                'fulfillment_unit_uuid' => trim((string)($data[OrderShipment::schema_fields_FULFILLMENT_UNIT_UUID] ?? '')),
+                'qty_minor' => (int)($data[OrderShipment::schema_fields_QTY_MINOR] ?? 0),
+                'contents' => $this->decodeContents(
+                    (string)($data[OrderShipment::schema_fields_CONTENTS_JSON] ?? ''),
+                ),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array{line_key:string,item_uuid:string,sku:string,product_name:string,qty_minor:int,offer_id:int}>
+     */
+    private function decodeContents(string $json): array
+    {
+        $json = trim($json);
+        if ($json === '') {
+            return [];
+        }
+        try {
+            $decoded = json_decode($json, true, 64, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+        if (!\is_array($decoded)) {
+            return [];
+        }
+        $rows = [];
+        foreach ($decoded as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $name = trim((string)($row['product_name'] ?? ''));
+            $sku = trim((string)($row['sku'] ?? ''));
+            $qty = (int)($row['qty_minor'] ?? 0);
+            if ($qty <= 0 && $name === '' && $sku === '') {
+                continue;
+            }
+            $rows[] = [
+                'line_key' => trim((string)($row['line_key'] ?? '')),
+                'item_uuid' => trim((string)($row['item_uuid'] ?? '')),
+                'sku' => $sku,
+                'product_name' => $name !== '' ? $name : ($sku !== '' ? $sku : (string)__('未命名商品')),
+                'qty_minor' => max(0, $qty),
+                'offer_id' => (int)($row['offer_id'] ?? 0),
             ];
         }
 

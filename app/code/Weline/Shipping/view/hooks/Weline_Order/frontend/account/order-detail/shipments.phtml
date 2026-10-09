@@ -1,0 +1,14 @@
+<?php
+/**
+ * 账户订单详情发货记录槽默认实现：委托配送只读店面模板。
+ *
+ * @hook-priority 100
+ * @hook-sort-order 0
+ * @hook-solo true
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+?>
+<css>Weline_Shipping::css/account-order-shipments.css</css>
+<?php
+echo $this->fetch('Weline_Shipping::templates/Frontend/account/order-shipments.phtml');

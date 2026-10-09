@@ -20,6 +20,7 @@ $display = is_array($provider['display'] ?? null) ? $provider['display'] : [];
 $tracking = is_array($trackingResult['tracking'] ?? null) ? $trackingResult['tracking'] : [];
 $stages = is_array($tracking['stages'] ?? null) ? $tracking['stages'] : [];
 $nodes = is_array($tracking['nodes'] ?? null) ? $tracking['nodes'] : [];
+$allShipments = is_array($trackingResult['shipments'] ?? null) ? $trackingResult['shipments'] : [];
 $title = (string) ($display['title'] ?? __('系统订单追踪'));
 $summary = (string) ($tracking['summary'] ?? ($trackingResult['message'] ?? ''));
 $icon = trim((string) ($display['icon_url'] ?? $display['icon'] ?? ''));
@@ -70,6 +71,43 @@ if ($icon !== '' && isset($this) && is_object($this) && method_exists($this, 'fe
         <?php endif; ?>
         <?php if (!empty($tracking['tracking_number'])): ?>
             <p class="order-tracking-result__tracking-no"><?= $escape(__('物流单号')) ?>：<code><?= $escape((string) $tracking['tracking_number']) ?></code></p>
+        <?php endif; ?>
+
+        <?php if (count($allShipments) > 1): ?>
+            <ul class="order-tracking-result__shipments"
+                data-testid="order-tracking-shipments"
+                data-shipment-count="<?= count($allShipments) ?>"
+                aria-label="<?= $escape(__('本单全部运单')) ?>">
+                <?php foreach ($allShipments as $shipRow): ?>
+                    <?php
+                    if (!is_array($shipRow)) {
+                        continue;
+                    }
+                    $shipTn = trim((string)($shipRow['tracking_number'] ?? ''));
+                    $shipCarrier = trim((string)($shipRow['carrier'] ?? ''));
+                    $shipStatus = trim((string)($shipRow['status'] ?? ''));
+                    $shipId = (int)($shipRow['shipment_id'] ?? $shipRow['id'] ?? 0);
+                    if ($shipTn === '' && $shipId <= 0) {
+                        continue;
+                    }
+                    ?>
+                    <li data-testid="order-tracking-shipment-row"
+                        data-shipment-id="<?= $shipId ?>">
+                        <?php if ($shipCarrier !== ''): ?>
+                            <span><?= $escape($shipCarrier) ?></span>
+                            ·
+                        <?php endif; ?>
+                        <?php if ($shipTn !== ''): ?>
+                            <code data-testid="order-tracking-shipment-tracking"><?= $escape($shipTn) ?></code>
+                        <?php else: ?>
+                            <span><?= $escape(__('待补运单号')) ?></span>
+                        <?php endif; ?>
+                        <?php if ($shipStatus !== ''): ?>
+                            <span data-testid="order-tracking-shipment-status"><?= $escape($shipStatus) ?></span>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
         <?php endif; ?>
 
         <?php if ($stages !== []): ?>

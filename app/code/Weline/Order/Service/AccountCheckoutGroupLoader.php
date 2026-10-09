@@ -7,6 +7,7 @@ namespace Weline\Order\Service;
 use Weline\Order\Model\CheckoutGroup;
 use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderInvoice;
+use Weline\Order\Model\OrderShipment;
 use Weline\Order\Model\RefundCase;
 
 /**
@@ -84,6 +85,7 @@ final class AccountCheckoutGroupLoader
         $groupMeta = $this->loadGroupMeta($groupUuids);
         $refundByOrder = $this->loadLatestRefundStatus($orderUuids);
         $invoiceByOrder = $this->loadLatestInvoiceStatus($orderIds);
+        $shipmentCountByOrder = $this->loadShipmentCounts($orderIds);
 
         $result = [];
         foreach ($groupUuids as $groupUuid) {
@@ -92,6 +94,7 @@ final class AccountCheckoutGroupLoader
                 $orderId = (int) ($row[Order::schema_fields_ID] ?? 0);
                 $orderUuid = (string)($row[Order::schema_fields_ORDER_UUID] ?? '');
                 $orders[] = [
+                    'order_id' => $orderId,
                     'order_uuid' => $orderUuid,
                     'display_number' => (string) ($row[Order::schema_fields_ORDER_NUMBER] ?? ''),
                     'status' => (string) ($row[Order::schema_fields_STATUS] ?? ''),
@@ -99,6 +102,7 @@ final class AccountCheckoutGroupLoader
                     'refund_status' => $refundByOrder[$orderUuid] ?? 'none',
                     'invoice_status' => $invoiceByOrder[$orderId] ?? 'none',
                     'fulfillment_status' => (string) ($row[Order::schema_fields_FULFILLMENT_STATUS] ?? 'none'),
+                    'shipment_count' => (int)($shipmentCountByOrder[$orderId] ?? 0),
                     'order_type' => strtolower(trim((string) ($row[Order::schema_fields_ORDER_TYPE] ?? 'toc'))) ?: 'toc',
                     'hang' => $this->resolveHangProjection(
                         $orderUuid,
@@ -192,6 +196,47 @@ final class AccountCheckoutGroupLoader
         }
 
         return $out;
+    }
+
+    /**
+     * @param list<int> $orderIds
+     * @return array<int, int>
+     */
+    private function loadShipmentCounts(array $orderIds): array
+    {
+        $orderIds = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $id): int => (int)$id, $orderIds),
+            static fn (int $id): bool => $id > 0
+        )));
+        if ($orderIds === []) {
+            return [];
+        }
+
+        $counts = array_fill_keys($orderIds, 0);
+        try {
+            /** @var OrderShipment $shipmentModel */
+            $shipmentModel = \Weline\Framework\Manager\ObjectManager::getInstance(OrderShipment::class);
+            $rows = $shipmentModel->clear()->reset()
+                ->where(OrderShipment::schema_fields_ORDER_ID, $orderIds, 'IN')
+                ->select()
+                ->fetchArray();
+            if (!\is_array($rows)) {
+                return $counts;
+            }
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $oid = (int)($row[OrderShipment::schema_fields_ORDER_ID] ?? 0);
+                if ($oid > 0 && isset($counts[$oid])) {
+                    ++$counts[$oid];
+                }
+            }
+        } catch (\Throwable) {
+            return $counts;
+        }
+
+        return $counts;
     }
 
     /**

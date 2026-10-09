@@ -54,17 +54,42 @@ if ($requestedOrderUuid !== '' && $accountCheckoutGroups !== []) {
     $detailResolver = ObjectManager::getInstance(AccountOrderDetailResolver::class);
     $accountOrderDetail = $detailResolver->resolve($accountCheckoutGroups, $requestedOrderUuid);
     if (is_array($accountOrderDetail)) {
-        /** @var OrderTrackingService $trackingService */
-        $trackingService = ObjectManager::getInstance(OrderTrackingService::class);
-        $accountOrderTracking = $trackingService->trackByOrderUuid($requestedOrderUuid);
+        // 有 OrderShipment 行时以账户「发货记录」槽为准；无发货行才回退订单级物流追踪面板。
+        $hasShipmentRows = false;
+        if (class_exists(\Weline\Shipping\Service\BackendOrderShipmentsService::class)) {
+            try {
+                /** @var \Weline\Order\Model\Order $orderModel */
+                $orderModel = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
+                $orderModel->clear()
+                    ->where(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $requestedOrderUuid)
+                    ->find()
+                    ->fetch();
+                $detailOrderId = (int)$orderModel->getId();
+                if ($detailOrderId > 0) {
+                    /** @var \Weline\Shipping\Service\BackendOrderShipmentsService $shipmentsService */
+                    $shipmentsService = ObjectManager::getInstance(
+                        \Weline\Shipping\Service\BackendOrderShipmentsService::class
+                    );
+                    $hasShipmentRows = $shipmentsService->listForOrderId($detailOrderId) !== [];
+                }
+            } catch (\Throwable) {
+                $hasShipmentRows = false;
+            }
+        }
+        if (!$hasShipmentRows) {
+            /** @var OrderTrackingService $trackingService */
+            $trackingService = ObjectManager::getInstance(OrderTrackingService::class);
+            $accountOrderTracking = $trackingService->trackByOrderUuid($requestedOrderUuid);
+        }
     }
 }
 $this->assign('accountOrderDetail', $accountOrderDetail);
 $this->assign('accountOrderTracking', $accountOrderTracking);
+$this->assign('requestedOrderUuid', $requestedOrderUuid);
 
 ?>
 <section class="account-hook-section account-index__section motor-account-section" id="orders-section" data-account-section="orders" data-requested-order-uuid="<?= htmlspecialchars($requestedOrderUuid, ENT_QUOTES, 'UTF-8') ?>" data-order-detail-resolved="<?= $accountOrderDetail !== null ? '1' : '0' ?>" data-order-tracking-resolved="<?= is_array($accountOrderTracking) ? '1' : '0' ?>" hidden weline-code="order.hook.account_sidebar_content.orders_section">
     <w:hook name="Weline_Order::frontend::account::index::orders"/>
 </section>
-<css>Weline_Order::css/account-orders.css</css>
+<css>Weline_Order::css/account-orders.css?v=20261009-locate-inset-1</css>
 <css>Weline_Order::css/order-tracking.css</css>

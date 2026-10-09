@@ -338,3 +338,19 @@
         font-size: 0.875rem;
     }
 }
+
+.order-tracking-result__shipments {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.order-tracking-result__shipments li {
+  font-size: 0.875rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  align-items: center;
+}

@@ -126,8 +126,11 @@ class Order extends BackendPageController
         $total = \count($orders);
         $totalPages = (int)ceil($total / $pageSize);
         $orders = \array_slice($orders, ($page - 1) * $pageSize, $pageSize);
+        $groupContexts = ObjectManager::getInstance(\Weline\Order\Service\CheckoutGroupSiblingPresenter::class)
+            ->presentBatch($orders);
         
         $this->assign('orders', $orders);
+        $this->assign('group_contexts', $groupContexts);
         $this->assign('total', $total);
         $this->assign('page', $page);
         $this->assign('page_size', $pageSize);
@@ -202,6 +205,8 @@ class Order extends BackendPageController
                 ->present($order);
             $paymentChrome = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderPaymentChromePresenter::class)
                 ->present($order);
+            $groupContext = ObjectManager::getInstance(\Weline\Order\Service\CheckoutGroupSiblingPresenter::class)
+                ->presentForOrder($order);
 
             $orderTypeRegistry = ObjectManager::getInstance(\Weline\Order\Service\CommerceOrderTypeRegistry::class);
             $orderTypeCode = strtolower(trim((string)$order->getData(OrderModel::schema_fields_ORDER_TYPE)));
@@ -224,6 +229,7 @@ class Order extends BackendPageController
             $this->assign('order', $order);
             $this->assign('items', $displayItems);
             $this->assign('customer_present', $customerPresent);
+            $this->assign('group_context', $groupContext);
             $this->assign('payment_chrome', $paymentChrome);
             $this->assign('order_type', $orderTypeCode);
             $this->assign('order_type_label', $orderTypeRegistry->resolveLabel($orderTypeCode));
@@ -337,10 +343,13 @@ class Order extends BackendPageController
 
             $paymentChrome = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderPaymentChromePresenter::class)
                 ->present($order);
+            $groupContext = ObjectManager::getInstance(\Weline\Order\Service\CheckoutGroupSiblingPresenter::class)
+                ->presentForOrder($order);
 
             $this->assign('order', $order);
             $this->assign('items', $displayItems);
             $this->assign('customer_present', $customerPresent);
+            $this->assign('group_context', $groupContext);
             $this->assign('order_totals', $totals);
             $this->assign('shipping_form', $adjustService->addressFormValues($shippingMap));
             $this->assign('billing_form', $adjustService->addressFormValues($billingMap));

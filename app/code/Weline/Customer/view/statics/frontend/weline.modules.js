@@ -19,7 +19,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     customerAccount: {
         paths: [
-            "Weline_Customer::js/account-index.js?v=20261009-personal-center-header-race-1"
+            "Weline_Customer::js/account-index.js?v=20261009-order-uuid-locate-2"
         ],
         globalVar: "WelineCustomerAccount",
         description: "前台用户中心账户页交互"

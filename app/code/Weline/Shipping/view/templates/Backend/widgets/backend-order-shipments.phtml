@@ -68,15 +68,28 @@ $shipmentsService = ObjectManager::getInstance(BackendOrderShipmentsService::cla
 /** @var OrderShipmentTrackingQueryService $trackingQuery */
 $trackingQuery = ObjectManager::getInstance(OrderShipmentTrackingQueryService::class);
 $shipments = $shipmentsService->listForOrderId($orderId);
+$shipmentCount = \count($shipments);
+$title = (string)__('本单发货记录');
+$countLabel = (string)__('共 %{1} 笔', [$shipmentCount]);
+$multiHint = $shipmentCount >= 2
+    ? (string)__('同单多笔发货，非结账组其他子单')
+    : '';
 ?>
 <div class="w-card <?= $esc($wc) ?>"
      data-widget-style-class="a633806ca07c548c"
      weline-code="<?= $esc($scope->code) ?>"
      data-uid="<?= $esc($scope->uid) ?>"
      data-js-ns="<?= $esc($scope->jsNs) ?>"
-     data-testid="backend-order-shipments">
+     data-testid="backend-order-shipments"
+     data-shipment-count="<?= $shipmentCount ?>">
     <div class="w-card__header w-cluster" data-align="center" data-justify="between">
-        <h5 class="w-card__title" data-widget-style-class="31332dac1a0ef500"><?= $esc($title) ?></h5>
+        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+            <h5 class="w-card__title" data-widget-style-class="31332dac1a0ef500" style="--w-mb:0;"><?= $esc($title) ?></h5>
+            <span class="w-badge" data-tone="secondary" data-testid="backend-order-shipments-count"><?= $esc($countLabel) ?></span>
+            <?php if ($multiHint !== ''): ?>
+                <span class="w-text" data-tone="muted" data-size="sm" data-testid="backend-order-shipments-multi-hint"><?= $esc($multiHint) ?></span>
+            <?php endif; ?>
+        </div>
         <?php if ($showOpsLink): ?>
             <a class="w-button"
                data-tone="neutral"
@@ -88,7 +101,7 @@ $shipments = $shipmentsService->listForOrderId($orderId);
     <div class="w-card__body">
         <div class="w-stack" data-widget-style-class="6f1f72c98234c9a2">
             <?php if ($shipments === []): ?>
-                <p class="w-text" data-tone="muted" data-size="sm" data-align="center"><?= __('暂无发货记录') ?></p>
+                <p class="w-text" data-tone="muted" data-size="sm" data-align="center" data-testid="backend-order-shipments-empty"><?= __('本子订单暂无发货记录') ?></p>
             <?php else: ?>
                 <?php foreach ($shipments as $row):
                     $sid = (int)($row['shipment_id'] ?? 0);
@@ -131,6 +144,32 @@ $shipments = $shipmentsService->listForOrderId($orderId);
                         <div class="w-text" data-tone="muted" data-size="sm" data-widget-style-class="475cdc0ffbf52fdf">
                             <?= __('发货时间') ?>：<?= $esc((string)($row['shipped_at'] ?? '—')) ?>
                             · <?= __('送达') ?>：<?= $esc((string)($row['delivered_at'] ?? '—')) ?>
+                        </div>
+                        <?php
+                        $contents = \is_array($row['contents'] ?? null) ? $row['contents'] : [];
+                        ?>
+                        <div class="w-stack" style="--w-gap:var(--weline-space-1);" data-testid="backend-order-shipment-contents">
+                            <p class="w-text" data-size="sm" style="--w-mb:0;"><strong><?= __('包裹内商品') ?></strong></p>
+                            <?php if ($contents === []): ?>
+                                <p class="w-text" data-tone="muted" data-size="sm" data-testid="backend-order-shipment-contents-empty"><?= __('未记录包裹内商品') ?></p>
+                            <?php else: ?>
+                                <ul class="w-stack" style="--w-gap:var(--weline-space-1);list-style:none;padding:0;margin:0;" data-testid="backend-order-shipment-contents-list">
+                                    <?php foreach ($contents as $cline):
+                                        if (!\is_array($cline)) { continue; }
+                                        $cname = trim((string)($cline['product_name'] ?? ''));
+                                        $csku = trim((string)($cline['sku'] ?? ''));
+                                        $cqty = (int)($cline['qty_minor'] ?? 0);
+                                        ?>
+                                        <li class="w-text" data-size="sm" data-testid="backend-order-shipment-content-line">
+                                            <span data-testid="backend-order-shipment-content-name"><?= $esc($cname) ?></span>
+                                            <?php if ($csku !== ''): ?>
+                                                <code data-testid="backend-order-shipment-content-sku"><?= $esc($csku) ?></code>
+                                            <?php endif; ?>
+                                            <span data-testid="backend-order-shipment-content-qty">×<?= $cqty ?></span>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php endif; ?>
                         </div>
                         <?php if ($tn !== '' && $sid > 0): ?>
                             <div class="w-stack" data-widget-style-class="37a69135d6bbfeb7" data-testid="backend-order-shipment-progress">

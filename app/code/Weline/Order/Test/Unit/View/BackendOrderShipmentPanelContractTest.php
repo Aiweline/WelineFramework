@@ -17,6 +17,9 @@ final class BackendOrderShipmentPanelContractTest extends TestCase
         self::assertStringContainsString('name="carrier_id"', $src);
         self::assertStringContainsString('name="tracking_number"', $src);
         self::assertStringContainsString('name="notify_customer"', $src);
+        self::assertStringContainsString('shipment-package-lines', $src);
+        self::assertStringContainsString('package_lines', $src);
+        self::assertStringContainsString('包裹内商品', $src);
         self::assertStringContainsString('fulfill_mode', $src);
         self::assertStringContainsString('shipment_action', $src);
         self::assertStringContainsString('set_channel', $src);

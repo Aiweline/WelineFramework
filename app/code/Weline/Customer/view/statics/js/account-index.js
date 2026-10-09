@@ -298,6 +298,136 @@
             }));
         }
 
+        function getRequestedOrderUuid() {
+            try {
+                return String((parseAccountHash().query || {}).order_uuid || '').trim();
+            } catch (err) {
+                return '';
+            }
+        }
+
+        function ordersSectionMatchesOrderUuid(orderUuid) {
+            if (!orderUuid) {
+                return true;
+            }
+            var section = document.querySelector('[data-account-section="orders"]')
+                || document.getElementById('orders-section');
+            if (!section || section.getAttribute('data-account-section-loading') === 'true') {
+                return false;
+            }
+            var requested = String(section.getAttribute('data-requested-order-uuid') || '').trim();
+            return requested === orderUuid && section.hasAttribute('data-order-detail-resolved');
+        }
+
+        function clearAccountOrderLocateMarks(scope) {
+            var root = scope || document;
+            Array.prototype.forEach.call(root.querySelectorAll('.is-account-order-locate'), function(el) {
+                el.classList.remove('is-account-order-locate');
+            });
+        }
+
+        function locateAccountOrder(orderUuid) {
+            orderUuid = String(orderUuid || '').trim();
+            if (!orderUuid) {
+                return;
+            }
+
+            function applyLocate() {
+                var section = document.querySelector('[data-account-section="orders"]')
+                    || document.getElementById('orders-section')
+                    || document;
+                clearAccountOrderLocateMarks(section);
+
+                var detail = section.querySelector
+                    ? section.querySelector('[data-account-order-detail="true"]')
+                    : null;
+                if (detail) {
+                    var detailUuid = String(detail.getAttribute('data-order-uuid') || '').trim();
+                    if (!detailUuid || detailUuid === orderUuid) {
+                        detail.classList.add('is-account-order-locate');
+                        if (typeof detail.scrollIntoView === 'function') {
+                            // instant first: AJAX swap often leaves scroll below the new detail.
+                            detail.scrollIntoView({ behavior: 'auto', block: 'start' });
+                        }
+                        return true;
+                    }
+                }
+
+                var miss = section.querySelector
+                    ? section.querySelector('[data-account-order-locate-miss="true"]')
+                    : null;
+                if (miss) {
+                    miss.classList.add('is-account-order-locate');
+                    if (typeof miss.scrollIntoView === 'function') {
+                        miss.scrollIntoView({ behavior: 'auto', block: 'start' });
+                    }
+                    return true;
+                }
+
+                var row = null;
+                if (section.querySelectorAll) {
+                    Array.prototype.some.call(section.querySelectorAll('[data-order-uuid]'), function(el) {
+                        if (String(el.getAttribute('data-order-uuid') || '').trim() === orderUuid) {
+                            row = el;
+                            return true;
+                        }
+                        return false;
+                    });
+                }
+                if (!row) {
+                    return false;
+                }
+                var accordion = row.closest ? row.closest('details[data-account-orders-accordion="true"]') : null;
+                if (accordion) {
+                    accordion.open = true;
+                }
+                var locateTarget = row.closest ? (row.closest('[data-group-uuid]') || row) : row;
+                locateTarget.classList.add('is-account-order-locate');
+                if (typeof locateTarget.scrollIntoView === 'function') {
+                    locateTarget.scrollIntoView({ behavior: 'auto', block: 'center' });
+                }
+                return true;
+            }
+
+            applyLocate();
+            // DOM swap + CSS can land after the first paint; re-apply briefly.
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(function() {
+                    requestAnimationFrame(applyLocate);
+                });
+            }
+            window.setTimeout(applyLocate, 60);
+            window.setTimeout(applyLocate, 220);
+        }
+
+        function ensureOrdersLocatedForOrderUuid(orderUuid) {
+            orderUuid = String(orderUuid || getRequestedOrderUuid() || '').trim();
+            if (!orderUuid) {
+                return Promise.resolve(true);
+            }
+            try {
+                updateHash('orders', { order_uuid: orderUuid });
+            } catch (err) {}
+            setActiveNavLink('orders');
+
+            if (ordersSectionMatchesOrderUuid(orderUuid)) {
+                revealAccountSection('orders');
+                locateAccountOrder(orderUuid);
+                return Promise.resolve(true);
+            }
+
+            delete loadedSidebarSections.orders;
+            ensureSectionLoadingPlaceholder('orders');
+            return loadSidebarContent('orders', { force: true }).then(function(ok) {
+                if (ok) {
+                    revealAccountSection('orders');
+                    locateAccountOrder(orderUuid);
+                    window.dispatchEvent(new CustomEvent('weshop:orders-viewed'));
+                }
+                return !!ok;
+            });
+        }
+
         function reloadSidebarSection(sectionName) {
             if (!sectionName) {
                 return Promise.resolve(false);
@@ -308,7 +438,11 @@
 
             return loadSidebarContent(sectionName, { force: true }).then(function(ok) {
                 if (ok !== false) {
-                    showAccountSection(sectionName);
+                    revealAccountSection(sectionName);
+                    if (sectionName === 'orders') {
+                        locateAccountOrder(getRequestedOrderUuid());
+                        window.dispatchEvent(new CustomEvent('weshop:orders-viewed'));
+                    }
                 }
                 return ok !== false;
             });
@@ -487,6 +621,9 @@
                 window.dispatchEvent(new CustomEvent('weline:account-sidebar-content-loaded', {
                     detail: { section: sectionName, length: payload.length || 0 }
                 }));
+                if (sectionName === 'orders') {
+                    locateAccountOrder(getRequestedOrderUuid());
+                }
                 // Sections may mark signals seen server-side; refresh JS badges.
                 if (window.Weline && window.Weline.Api && window.Weline.Api.Account
                     && typeof window.Weline.Api.Account.refreshAccountMenuSignals === 'function') {
@@ -795,6 +932,11 @@
                 return;
             }
 
+            var orderUuid = targetId === 'orders' ? getRequestedOrderUuid() : '';
+            if (targetId === 'orders' && orderUuid) {
+                return ensureOrdersLocatedForOrderUuid(orderUuid);
+            }
+
             var targetSection = document.querySelector('[data-account-section="' + targetId + '"]');
             if (!targetSection) {
                 targetSection = document.getElementById(targetId + '-section');
@@ -835,13 +977,18 @@
 
         function syncFromHash() {
             var parsed = parseAccountHash();
+            var orderUuid = String((parsed.query || {}).order_uuid || '').trim();
             var targetId = parsed.section || 'profile';
+            // Cold link: ?order_uuid=… without #orders must still open the orders section.
+            if (orderUuid && (!parsed.section || parsed.section === 'profile')) {
+                targetId = 'orders';
+            }
             if (!hasNavSection(targetId)) {
-                targetId = 'profile';
+                targetId = orderUuid ? 'orders' : 'profile';
             }
 
             setActiveNavLink(targetId);
-            showAccountSection(targetId);
+            var shown = showAccountSection(targetId);
 
             if (typeof parsed.query.return_anchor === 'string' && parsed.query.return_anchor) {
                 var anchor = document.getElementById(parsed.query.return_anchor);
@@ -849,6 +996,7 @@
                     anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             }
+            return shown;
         }
 
         navLinks.forEach(function(link) {
