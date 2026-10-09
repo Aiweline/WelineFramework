@@ -208,14 +208,100 @@
             let cachedAllW = null;
             // 临界宽滞回：变窄立即收，变宽多要 HYSTERESIS px 才吐回一项，避免来回闪
             const OVERFLOW_HYSTERESIS_PX = 12;
-            // 两行栈：≤768 进入；>792 才退出（业界断点滞回，避免拖窗在临界来回单行/两行）
+            // 两行栈：≤768 曾进入；现与 CSS 一致——手机用单行横滑，禁止再叠两行。
+            // >792 退出仅保留给「曾 sticky」的桌面窄窗滞回（不再在 ≤768 置 sticky）。
             const NAV_STACK_ENTER_MAX = 768;
             const NAV_STACK_EXIT_MIN = 792;
             let navStackedSticky = false;
+
+            function viewportWidth() {
+                return window.innerWidth || document.documentElement.clientWidth || 0;
+            }
+
+            // 手机：顶栏汉堡已开抽屉；导航「全部」须藏；横滑承载溢出，禁止「更多」抢空档。
+            function isPhoneNavScrollMode() {
+                return viewportWidth() <= NAV_STACK_ENTER_MAX;
+            }
+
+            function isBeltHamburgerVisible() {
+                const btn = document.querySelector(
+                    '.weline-header .header-mobile-menu-btn.js-header-drawer-trigger'
+                );
+                if (!btn) {
+                    return false;
+                }
+                if (btn.hidden || btn.getAttribute('hidden') !== null) {
+                    return false;
+                }
+                const style = window.getComputedStyle(btn);
+                if (style.display === 'none' || style.visibility === 'hidden') {
+                    return false;
+                }
+                return btn.getBoundingClientRect().width > 1;
+            }
+
+            function syncNavAllWithBeltHamburger() {
+                const allRoot = document.getElementById('header-nav-all-root');
+                if (!allRoot) {
+                    return;
+                }
+                // 顶栏汉堡可见 ⇒ 导航「全部」重复；CSS 亦有 display:none，JS 再钉死避免量宽吃预算。
+                const hide = isBeltHamburgerVisible() || isPhoneNavScrollMode();
+                if (hide) {
+                    allRoot.setAttribute('hidden', '');
+                    allRoot.style.display = 'none';
+                    allRoot.setAttribute('aria-hidden', 'true');
+                } else {
+                    allRoot.removeAttribute('hidden');
+                    allRoot.style.removeProperty('display');
+                    allRoot.removeAttribute('aria-hidden');
+                }
+                cachedAllW = null;
+            }
+
+            function releasePhoneNavOverflow() {
+                // 手机横滑：全部候选外露，左右 More 均隐藏（空档留给真链接，不提前「更多」）
+                const catCandidates = collectLeftOverflowCandidates();
+                if (categoriesOverflowWrapper) {
+                    if (catCandidates.length) {
+                        applyCatVisibility(catCandidates, -1);
+                    } else {
+                        categoriesOverflowWrapper.style.display = 'none';
+                        categoriesOverflowWrapper.hidden = true;
+                    }
+                }
+                lastCatHideFrom = -1;
+                lastCatCandidateCount = catCandidates.length;
+                catMenuBuiltFor = -1;
+
+                if (navMoreWrapper && navMoreBtn && navMoreDropdown) {
+                    const extensionLinks = rightCluster
+                        ? Array.from(rightCluster.querySelectorAll(
+                            ':scope > .header-nav-extension-link, :scope > .header-nav-extensions .header-nav-extension-link'
+                        ))
+                        : [];
+                    const listItems = navLinksList
+                        ? Array.from(navLinksList.querySelectorAll(':scope > li'))
+                        : [];
+                    const navCandidates = extensionLinks.concat(listItems);
+                    if (navCandidates.length) {
+                        applyNavVisibility(navCandidates, -1);
+                    } else {
+                        navMoreWrapper.style.display = 'none';
+                        navMoreWrapper.hidden = true;
+                    }
+                    lastNavHideFrom = -1;
+                    lastNavCandidateCount = navCandidates.length;
+                    navMenuBuiltFor = -1;
+                }
+            }
             
             // 右簇溢出：「更多」默认不占位；仅当前行装不下时再 display:flex
             // 已换两行时按第二行全宽算——放得下则不显示更多；仍放不下才显示
             function clustersOnSeparateRows() {
+                if (isPhoneNavScrollMode()) {
+                    return false;
+                }
                 if (mainNavInner && mainNavInner.classList.contains('is-nav-stacked')) {
                     return true;
                 }
@@ -245,13 +331,45 @@
                 if (!mainNavInner) {
                     return;
                 }
-                const w = window.innerWidth || document.documentElement.clientWidth || 0;
-                if (!navStackedSticky && w <= NAV_STACK_ENTER_MAX) {
-                    navStackedSticky = true;
-                } else if (navStackedSticky && w > NAV_STACK_EXIT_MIN) {
+                const w = viewportWidth();
+                // 手机：CSS 单行横滑；禁止 is-nav-stacked（否则 More 按「两行全宽」错算 → 空档仍出「更多」）
+                if (isPhoneNavScrollMode()) {
+                    navStackedSticky = false;
+                    const wasStacked = mainNavInner.classList.contains('is-nav-stacked');
+                    mainNavInner.classList.remove('is-nav-stacked');
+                    if (wasStacked) {
+                        lastNavHideFrom = null;
+                        lastCatHideFrom = null;
+                        navMenuBuiltFor = null;
+                        catMenuBuiltFor = null;
+                        cachedInnerPadGap = null;
+                        cachedRightPad = null;
+                        cachedLeftGap = null;
+                        cachedAllW = null;
+                    }
+                    return;
+                }
+                if (navStackedSticky && w > NAV_STACK_EXIT_MIN) {
                     navStackedSticky = false;
                 }
-                const shouldStack = navStackedSticky || w <= NAV_STACK_ENTER_MAX;
+                // 桌面窄窗：仅在左右确已分行时 sticky；不再因 ≤768 强制叠两行
+                if (!navStackedSticky && w > NAV_STACK_ENTER_MAX && leftCluster && rightCluster) {
+                    const rowThreshold = Math.max(
+                        24,
+                        Math.floor((leftCluster.offsetHeight || 40) * 0.75)
+                    );
+                    const deltaTop = Math.abs(leftCluster.offsetTop - rightCluster.offsetTop);
+                    if (deltaTop >= rowThreshold) {
+                        const leftRect = leftCluster.getBoundingClientRect();
+                        const rightRect = rightCluster.getBoundingClientRect();
+                        const overlap = Math.min(leftRect.bottom, rightRect.bottom)
+                            - Math.max(leftRect.top, rightRect.top);
+                        if (overlap <= 2) {
+                            navStackedSticky = true;
+                        }
+                    }
+                }
+                const shouldStack = navStackedSticky;
                 const wasStacked = mainNavInner.classList.contains('is-nav-stacked');
                 mainNavInner.classList.toggle('is-nav-stacked', shouldStack);
                 if (wasStacked !== shouldStack) {
@@ -270,9 +388,14 @@
 
             function scheduleOverflowAdjust() {
                 syncNavStackMode();
+                syncNavAllWithBeltHamburger();
                 if (!overflowAdjustRaf) {
                     overflowAdjustRaf = window.requestAnimationFrame(function() {
                         overflowAdjustRaf = 0;
+                        if (isPhoneNavScrollMode()) {
+                            releasePhoneNavOverflow();
+                            return;
+                        }
                         // 先左后右：左收进更多后右簇变宽，再决定右「更多」
                         warmNavNaturalMetrics();
                         adjustCategoriesOverflow(true);
@@ -287,6 +410,10 @@
                 }
                 overflowIdleTimer = window.setTimeout(function() {
                     overflowIdleTimer = 0;
+                    if (isPhoneNavScrollMode()) {
+                        releasePhoneNavOverflow();
+                        return;
+                    }
                     warmNavNaturalMetrics();
                     adjustCategoriesOverflow(false);
                     if (rightCluster) {
@@ -343,6 +470,20 @@
             function measureAllButtonWidth() {
                 const allRoot = document.getElementById('header-nav-all-root');
                 if (!allRoot) {
+                    return 0;
+                }
+                // 顶栏汉堡已接管 / 手机横滑：导航「全部」不占预算
+                if (
+                    allRoot.hidden
+                    || allRoot.getAttribute('hidden') !== null
+                    || allRoot.style.display === 'none'
+                    || isBeltHamburgerVisible()
+                    || isPhoneNavScrollMode()
+                ) {
+                    return 0;
+                }
+                const style = window.getComputedStyle(allRoot);
+                if (style.display === 'none' || style.visibility === 'hidden') {
                     return 0;
                 }
                 // hidden fallback / 空槽不占宽
@@ -1284,6 +1425,10 @@
             }
 
             function adjustNavLinks(lightOnly) {
+                if (isPhoneNavScrollMode()) {
+                    releasePhoneNavOverflow();
+                    return;
+                }
                 const extensionLinks = rightCluster
                     ? Array.from(rightCluster.querySelectorAll(':scope > .header-nav-extension-link, :scope > .header-nav-extensions .header-nav-extension-link'))
                     : [];
@@ -1328,6 +1473,10 @@
                 if (!categoriesOverflowWrapper || !categoriesOverflowBtn || !categoriesOverflowDropdown || !headerMainNav) {
                     return;
                 }
+                if (isPhoneNavScrollMode()) {
+                    releasePhoneNavOverflow();
+                    return;
+                }
 
                 const candidates = collectLeftOverflowCandidates();
 
@@ -1343,6 +1492,7 @@
                     return;
                 }
 
+                // availableWidth = 分类+政策+More 可用宽（measureCatAvailableWidth 已扣 All）
                 const availableWidth = measureCatAvailableWidth() - measureSlotChainExtrasTotal();
                 const metrics = ensureCatNaturalMetrics(candidates);
                 let hideFrom = resolveHideFromWithHysteresis(
@@ -1361,21 +1511,25 @@
                 // 盒宽≈主栏−右自然宽，几乎恒 ≥ available → 误进封顶；再加
                 // capped=min(k, length-1) 会在「全装得下」(k===length) 时强制藏末项，
                 // 表现为中间大片空档仍显示「更多」（宽屏审图复现）。
+                //
+                // clusterNatW 含 All；availableWidth 已扣 All → 比较须用 clusterBudget，
+                // 禁止把 allReserve 再与已扣 All 的 available 比（双重扣减 → 空档仍出「更多」）。
                 const catsSlotEl = leftCluster && leftCluster.querySelector('.header-nav-left-slot, .header-categories');
                 const policySlotEl = leftCluster && leftCluster.querySelector('.header-policy-links-slot');
+                const allReserve = measureAllButtonWidth() + (cachedLeftGap || 0);
+                const clusterBudget = availableWidth + allReserve;
                 let clusterNatW = measureLeftClusterNaturalWidth(catsSlotEl, policySlotEl);
                 if (clusterNatW != null) {
                     const prefixBased = Math.ceil((metrics.prefix[candidates.length - 1] || 0) + metrics.moreW)
-                        + Math.ceil(measureAllButtonWidth() + (cachedLeftGap || 0));
+                        + Math.ceil(allReserve);
                     // 克隆若被百分比祖先污染偏小，用 prefix+All+More 抬地板；勿用 flex 盒宽。
                     clusterNatW = Math.max(clusterNatW, prefixBased);
                 }
-                if (clusterNatW != null && clusterNatW > availableWidth) {
-                    const allReserve = measureAllButtonWidth() + (cachedLeftGap || 0);
+                if (clusterNatW != null && clusterNatW > clusterBudget) {
                     let k = candidates.length;
                     while (k > 0) {
                         const visibleW = (k === 0 ? 0 : metrics.prefix[k - 1]) + metrics.moreW + allReserve;
-                        if (visibleW <= availableWidth) {
+                        if (visibleW <= clusterBudget) {
                             break;
                         }
                         k -= 1;
@@ -1603,19 +1757,24 @@
             }
 
 
-            // 首屏同步：先锁单行/两行策略；先左后右
+            // 首屏同步：先锁单行/两行策略；手机横滑直接放行；桌面先左后右
             syncNavStackMode();
-            warmNavNaturalMetrics();
-            adjustCategoriesOverflow(true);
-            if (rightCluster) {
-                void rightCluster.offsetWidth;
+            syncNavAllWithBeltHamburger();
+            if (isPhoneNavScrollMode()) {
+                releasePhoneNavOverflow();
+            } else {
+                warmNavNaturalMetrics();
+                adjustCategoriesOverflow(true);
+                if (rightCluster) {
+                    void rightCluster.offsetWidth;
+                }
+                adjustNavLinks(true);
+                adjustCategoriesOverflow(false);
+                if (rightCluster) {
+                    void rightCluster.offsetWidth;
+                }
+                adjustNavLinks(false);
             }
-            adjustNavLinks(true);
-            adjustCategoriesOverflow(false);
-            if (rightCluster) {
-                void rightCluster.offsetWidth;
-            }
-            adjustNavLinks(false);
             if (mainNavInner) {
                 mainNavInner.setAttribute('data-nav-overflow-ready', '1');
             }

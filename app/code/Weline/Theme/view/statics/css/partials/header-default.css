@@ -244,29 +244,39 @@ textarea::-webkit-scrollbar-thumb:hover,
     opacity: 0.45;
 }
 
-/* 仅极窄屏且两侧合计放不下时才允许换行；禁止 width:100% 强制各占一行 */
-@media (max-width: 480px) {
+/*
+ * ≤768 通知条：藏欢迎文案，右侧入口单行横滑。
+ * 旧 ≤480 强制换行居中会把帮助/订单/渠道/心形挤成乱麻。
+ */
+@media (max-width: 768px) {
     .header-site-notice-inner {
-        flex-wrap: wrap;
-        justify-content: center;
-        row-gap: var(--spacing-0_4);
-        column-gap: var(--spacing-md);
-        text-align: center;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        gap: var(--spacing-sm);
     }
 
     .header-site-notice-items,
     .header-top-bar-slot {
-        flex: 0 1 auto;
-        justify-content: center;
-        max-width: 100%;
+        display: none;
     }
 
     .header-site-notice-links,
-    .header-top-bar-rights-slot {
-        flex: 0 1 auto;
-        justify-content: center;
+    .header-top-bar-rights-slot,
+    .header-top-bar-rights-cluster {
+        flex: 1 1 auto;
+        justify-content: flex-end;
         max-width: 100%;
         margin-inline-start: 0;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        white-space: nowrap;
+    }
+
+    .header-site-notice-links::-webkit-scrollbar,
+    .header-top-bar-rights-slot::-webkit-scrollbar,
+    .header-top-bar-rights-cluster::-webkit-scrollbar {
+        display: none;
     }
 }
 
@@ -1905,34 +1915,49 @@ textarea::-webkit-scrollbar-thumb:hover,
     display: none !important;
 }
 
-/* 窄屏兜底两行（与 is-nav-stacked 同构）；宽屏保持单行+更多 */
+/*
+ * ≤768：单行横滑（禁两行栈）。手机双行把博客/特价压到第二行，首屏过丑。
+ * is-nav-stacked 在窄屏同样压成单行。
+ */
 @media (max-width: 768px) {
-    .header-main-nav-inner {
-        flex-wrap: wrap;
-        gap: 0;
+    .header-main-nav-inner,
+    .header-main-nav-inner.is-nav-stacked {
+        flex-wrap: nowrap;
+        gap: var(--spacing-xs);
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
     }
 
-    .header-nav-left-cluster {
-        flex: 1 1 auto;
+    .header-main-nav-inner::-webkit-scrollbar {
+        display: none;
+    }
+
+    .header-nav-left-cluster,
+    .header-main-nav-inner.is-nav-stacked .header-nav-left-cluster {
+        flex: 0 1 auto;
         min-width: 0;
-        max-width: 100%;
-        order: 1;
-        overflow: hidden;
+        max-width: none;
+        order: 0;
+        overflow: visible;
     }
 
-    .header-nav-right-cluster {
-        flex: 1 1 100%;
+    .header-nav-right-cluster,
+    .header-main-nav-inner.is-nav-stacked .header-nav-right-cluster {
+        flex: 0 0 auto;
         min-width: 0;
-        order: 2;
+        order: 0;
         justify-content: flex-start;
-        overflow: hidden;
-        min-height: var(--size-control-md);
+        overflow: visible;
+        min-height: 0;
     }
 
-    .header-nav-fill-inner {
+    .header-nav-fill-inner,
+    .header-main-nav-inner.is-nav-stacked .header-nav-fill-inner {
         justify-content: flex-start;
-        overflow: hidden;
-        width: 100%;
+        overflow: visible;
+        width: auto;
     }
 }
 
@@ -3410,14 +3435,25 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         display: flex;
         align-items: center;
         gap: var(--spacing-xs);
-        flex: 0 0 auto;
+        flex: 1 1 0;
         order: 1;
         min-width: 0;
+        max-width: calc(100% - 5.5rem);
     }
 
     .header-belt-left .header-location,
     .header-location {
         display: none;
+    }
+
+    .header-logo {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .header-logo img,
+    .header-logo .logo-wordmark {
+        max-width: 100%;
     }
 
     .header-logo img {
@@ -3475,6 +3511,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         margin-left: auto;
         order: 2;
         align-items: center;
+        max-width: 5.5rem;
     }
 
     .header-language-switcher,
@@ -3489,26 +3526,24 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         gap: var(--token-size-0-15rem);
     }
 
-    .header-user-area .register-text {
-        display: none;
-    }
-
-    .header-user-area .account-text {
-        flex-direction: row;
-        align-items: center;
-        gap: var(--token-size-0-15rem);
-    }
-
-    .header-user-area .login-text::after {
-        content: " ›";
-        font-weight: 700;
+    /* Avatar-only on phone — hide greeting/name/chevron so tools stay on logo row. */
+    .header-user-area .account-text,
+    .header-user-area .account-name,
+    .header-user-area .login-text,
+    .header-user-area .register-text,
+    .header-user-area .w-header-account__line1,
+    .header-user-area .w-header-account__line2,
+    .header-user-area .w-header-account__copy,
+    .header-user-area .account-link > .w-icon:last-of-type,
+    .header-user-area .w-header-account__trigger > .w-icon:last-of-type {
+        display: none !important;
     }
 
     .header-user-area .account-link,
     .header-user-area .w-header-account__trigger {
         color: var(--color-bg-primary) !important;
         padding: var(--spacing-1_5) var(--spacing-0_4);
-        gap: var(--spacing-1_5);
+        gap: 0;
         background: transparent;
         min-height: var(--size-control-lg);
     }
@@ -3518,12 +3553,6 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         height: var(--size-control-xs);
         background: transparent;
         color: var(--color-bg-primary);
-    }
-
-    .header-user-area .w-header-account__line1,
-    .header-user-area .w-header-account__line2,
-    .header-user-area .w-header-account__copy {
-        display: none;
     }
 
     .cart-link .action-line-2,
@@ -3564,53 +3593,54 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         display: none !important;
     }
 
-    /* ≤768 两行已由上方 stack 规则锁定；此处只收滚动条，禁止再 nowrap 挤回一行 */
     .header-main-nav-inner {
-        overflow-x: hidden;
-        overflow-y: hidden;
-        scrollbar-width: none;
         min-height: var(--size-control-md);
     }
 
-    .header-main-nav-inner::-webkit-scrollbar {
-        display: none;
+    /* Belt hamburger opens drawer — duplicate nav All is clutter on phone. */
+    .header-nav-all,
+    #header-nav-all-root {
+        display: none !important;
     }
 
-    /* 窄屏仍显示 All；分类/右侧用 overflow 折进 More，禁止只剩残条目 */
-    .header-nav-all {
-        display: flex !important;
-        flex: 0 0 auto;
+    /* Phone: horizontal scroll replaces More collapse. */
+    .categories-overflow-wrapper,
+    .header-left-cluster-more,
+    #nav-more-wrapper,
+    .nav-more-wrapper {
+        display: none !important;
     }
 
     .header-nav-left,
     .header-nav-left-slot,
-    .header-categories {
+    .header-categories,
+    .header-nav-left-cluster {
         display: flex;
-        flex: 0 1 auto;
-        flex-grow: 0;
+        flex: 0 0 auto;
         order: 0;
-        min-width: 0;
+        min-width: max-content;
         width: max-content;
-        max-width: 100%;
+        max-width: none;
         margin-left: 0;
         justify-content: flex-start;
-        overflow: hidden;
+        overflow: visible;
         height: auto;
         min-height: var(--size-control-md);
     }
 
     .header-nav-fill,
     .header-nav-right-slot,
-    .header-nav-links-slot {
+    .header-nav-links-slot,
+    .header-nav-right-cluster {
         display: flex;
-        flex: 0 1 auto;
+        flex: 0 0 auto;
         order: 0;
-        min-width: 0;
-        width: auto;
+        min-width: max-content;
+        width: max-content;
         max-width: none;
         margin-left: 0;
-        justify-content: flex-end;
-        overflow: hidden;
+        justify-content: flex-start;
+        overflow: visible;
         height: auto;
         min-height: var(--size-control-md);
     }
@@ -3650,11 +3680,8 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         display: none !important;
     }
 
-    /* More 可见性由 adjustNavLinks / adjustCategoriesOverflow 写 inline；此处只保证不被挤没 */
-    .categories-overflow-wrapper,
-    .nav-more-wrapper {
-        flex-shrink: 0;
-    }
+    /* Phone: More already display:none above; do not re-assert flex-shrink-only
+       (desktop More visibility stays JS-inline outside this media). */
 
     /* 窄屏禁用 hide-narrow，避免分类整块消失只剩右侧残链 */
     .header-categories.hide-narrow {

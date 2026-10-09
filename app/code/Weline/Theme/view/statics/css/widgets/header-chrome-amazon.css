@@ -1623,6 +1623,57 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
         display: inline-flex !important;
     }
 
+    .weline-header .header-belt-row-1 .header-belt-left {
+        order: 1;
+        flex: 1 1 0;
+        max-width: calc(100% - var(--token-size-5-5rem));
+        min-width: 0;
+    }
+
+    .weline-header .header-belt-row-1 .header-actions {
+        order: 2;
+        flex: 0 0 auto;
+        align-self: center;
+        margin-left: auto;
+        max-width: var(--token-size-5-5rem);
+    }
+
+    /* Phone: icon-only cart — cart-info was only hidden 769–1100, so ≤768 still
+     * painted「购物车 / 零售 · $…」inside a 5.5rem tool slot and shoved the badge. */
+    .weline-header .header-cart .cart-info,
+    .weline-header .header-cart .cart-label {
+        display: none !important;
+    }
+
+    .weline-header .header-cart,
+    .weline-header .header-cart .cart-link {
+        align-items: center;
+        align-self: center;
+    }
+
+    .weline-header .header-cart {
+        flex-direction: row;
+    }
+
+    /* Avatar-only — full「您好, Name」forces tools onto a second row. */
+    .weline-header .header-user-area .account-text,
+    .weline-header .header-user-area .account-name,
+    .weline-header .header-user-area .account-link > .w-icon:last-of-type,
+    .weline-header .header-user-area .w-header-account__trigger > .w-icon:last-of-type {
+        display: none !important;
+    }
+
+    /* Re-assert own-row (order after tools) — same continuum as ≤1100. */
+    .weline-header .header-belt-row-1 .header-search-wrapper {
+        display: block !important;
+        order: 3;
+        flex: 0 0 100%;
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        margin: 0;
+    }
+
     .weline-header .header-belt-left .header-location,
     .weline-header .header-location {
         display: none;
@@ -1637,22 +1688,103 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 
     .weline-header .header-search-form,
     .weline-header .w-search-form {
-        height: var(--size-control-lg, 2.75rem);
+        height: var(--size-control-lg);
         border-radius: var(--weline-theme-radius-lg);
         overflow: hidden;
-        background: var(--weline-chrome-bg-primary, #ffffff);
+        background: var(--weline-chrome-bg-primary);
     }
 
     .weline-header .header-search-form .search-input,
     .weline-header .header-search-form .w-search-input {
         border: none;
-        font-size: var(--font-size-base, 1rem);
+        font-size: var(--font-size-base);
     }
 
     .weline-header .search-submit-btn,
     .weline-header .w-search-submit {
-        width: var(--size-control-xl, 3rem);
+        width: var(--size-control-xl);
         border: none;
         background-color: var(--weline-chrome-primary, var(--color-primary)) !important;
+    }
+
+    /* Belt hamburger already opens drawer — hide duplicate nav All. */
+    .weline-header .header-nav-all,
+    .weline-header #header-nav-all-root {
+        display: none !important;
+    }
+
+    /* Phone scroll owns overflow — hide premature More chrome (JS also releases). */
+    .weline-header .categories-overflow-wrapper,
+    .weline-header .header-left-cluster-more,
+    .weline-header #nav-more-wrapper,
+    .weline-header .nav-more-wrapper {
+        display: none !important;
+    }
+
+    /*
+     * Phone: one scroll row. body+!important beats desktop is-nav-stacked and
+     * design homepage min-height helpers that otherwise keep a second nav row.
+     */
+    body .weline-header .header-main-nav-inner,
+    body .weline-header .header-main-nav-inner.is-nav-stacked {
+        flex-wrap: nowrap !important;
+        gap: var(--spacing-xs);
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    body .weline-header .header-main-nav-inner::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* No flex-shrink on phone: shrinking left to viewport width overlaps right
+       links (童装×博客). Natural max-content width + overflow-x scroll instead. */
+    body .weline-header .header-main-nav-inner.is-nav-stacked .header-nav-left-cluster,
+    body .weline-header .header-nav-left-cluster {
+        flex: 0 0 auto !important;
+        width: max-content !important;
+        min-width: max-content !important;
+        max-width: none !important;
+        order: 0;
+        overflow: visible;
+    }
+
+    body .weline-header .header-main-nav-inner.is-nav-stacked .header-nav-right-cluster,
+    body .weline-header .header-nav-right-cluster {
+        flex: 0 0 auto !important;
+        width: max-content !important;
+        min-width: max-content !important;
+        order: 0;
+        justify-content: flex-start;
+        overflow: visible;
+        min-height: 0 !important;
+    }
+
+    body .weline-header .header-nav-left-cluster .categories-list,
+    body .weline-header .header-nav-left-cluster .header-categories,
+    body .weline-header .header-nav-left-cluster .header-nav-left-slot {
+        flex: 0 0 auto !important;
+        width: max-content !important;
+        min-width: max-content !important;
+        max-width: none !important;
+        overflow: visible !important;
+    }
+
+    body .weline-header .header-main-nav-inner.is-nav-stacked .header-nav-fill-inner {
+        width: auto !important;
+        overflow: visible;
+    }
+}
+
+@media (max-width: 1100px) {
+    .weline-header .header-belt-row-1 .header-search-wrapper {
+        flex: 0 0 100%;
+        max-width: none;
+        min-width: 0;
+        width: 100%;
+        margin: 0;
+        order: 4;
     }
 }

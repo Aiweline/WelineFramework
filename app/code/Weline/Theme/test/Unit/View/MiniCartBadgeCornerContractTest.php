@@ -133,15 +133,41 @@ final class MiniCartBadgeCornerContractTest extends TestCase
             '/\.wc-theme_widget_mini_cart_icon\s+\.cart-info\s*\{[^}]*width:\s*fit-content/s',
             $widget,
         );
-        // Density only ≤1100: search own row + cart money off + signed-in avatar-only.
+        // Density ≤1100 continuum: search own row through mobile (no jump-back at 768)
+        // + cart money off + signed-in avatar-only at tablet band.
         // Wider viewports keep search in the belt mid gap and full tool labels.
         self::assertMatchesRegularExpression(
-            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]{0,400}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
+            '/@media\s*\(max-width:\s*1100px\)[\s\S]{0,600}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
             $chrome,
+        );
+        self::assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,1600}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
+            $chrome,
+            '≤768 must keep search on its own row (amazon flex:1 1 280px must not win)',
+        );
+        // Phone humanization: avatar-only + hide duplicate nav All (belt hamburger owns drawer).
+        self::assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,1600}?header-user-area \.account-text[\s\S]{0,400}?display:\s*none\s*!important/s',
+            $chrome,
+        );
+        self::assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,4500}?\.weline-header \.header-nav-all(?:,\s*\n\s*\.weline-header #header-nav-all-root)?\s*\{[\s\S]{0,120}?display:\s*none\s*!important/s',
+            $chrome,
+        );
+        self::assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,4500}?\.categories-overflow-wrapper[\s\S]{0,200}?display:\s*none\s*!important/s',
+            $chrome,
+            'phone must hide More chrome; scroll owns overflow',
         );
         self::assertMatchesRegularExpression(
             '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]{0,400}?cart-info[\s\S]{0,120}?display:\s*none/s',
             $chrome,
+        );
+        // ≤768 must also hide cart-info (769–1100 alone left phone with text inside 5.5rem slot).
+        self::assertMatchesRegularExpression(
+            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,2400}?\.header-cart \.cart-info[\s\S]{0,120}?display:\s*none\s*!important/s',
+            $chrome,
+            'Phone must hide cart-info so the icon+badge stay pixel-aligned in the tool slot',
         );
         self::assertStringContainsString(
             '[data-w-header-account="1"][data-auth-state="signed-in"]',

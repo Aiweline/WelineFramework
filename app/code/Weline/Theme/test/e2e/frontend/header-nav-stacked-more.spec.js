@@ -99,25 +99,49 @@ function readNavState() {
 moduleDescribe(test, MODULE, 'header stacked nav more full-width', () => {
   test.setTimeout(180000);
 
-  moduleCase(test, { module: MODULE, id: 'A-e2e-layout' }, '≤768 两行栈：More 可见当且仅当确有溢出项', async ({ page }) => {
-    await page.setViewportSize({ width: 720, height: 900 });
+  moduleCase(test, { module: MODULE, id: 'A-e2e-layout' }, '≤768 单行横滑：不叠两行、不提前更多、导航全部隐藏', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
     await page.goto(`${BASE}/?e2e_nav_more=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await waitForNavOverflowReady(page);
 
-    const state = await page.evaluate(readNavState);
+    const state = await page.evaluate(() => {
+      const base = (function () {
+        const inner = document.querySelector('.header-main-nav-inner');
+        const rightCluster = document.querySelector('.header-nav-right-cluster');
+        const navMore = document.getElementById('nav-more-wrapper');
+        const catMore = document.querySelector('.categories-overflow-wrapper');
+        const allRoot = document.getElementById('header-nav-all-root');
+        const beltBtn = document.querySelector('.weline-header .header-mobile-menu-btn.js-header-drawer-trigger');
+        const moreIsVisible = (el) => {
+          if (!el) return false;
+          if (el.hidden) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          return el.getBoundingClientRect().width > 1;
+        };
+        const leftHidden = Array.from(document.querySelectorAll(
+          '#categories-list > .category-item, .header-policy-links-slot .header-policy-links__inline, .header-policy-links-slot .header-policy-links__menu-wrap'
+        )).filter((el) => el.classList.contains('is-nav-overflow-hidden') || el.classList.contains('hidden'));
+        return {
+          stacked: !!(inner && inner.classList.contains('is-nav-stacked')),
+          parentOk: !!(inner && rightCluster && rightCluster.parentElement === inner),
+          catMoreVisible: moreIsVisible(catMore),
+          rightMoreVisible: moreIsVisible(navMore),
+          leftHiddenCount: leftHidden.length,
+          allVisible: moreIsVisible(allRoot),
+          beltVisible: moreIsVisible(beltBtn),
+        };
+      })();
+      return base;
+    });
 
-    expect(state.stacked || state.separateRows).toBeTruthy();
+    expect(state.stacked).toBeFalsy();
     expect(state.parentOk).toBeTruthy();
-    expect(state.leftMoreAtClusterEnd).toBeTruthy();
-    expect(state.leftMoreHasClusterClass).toBeTruthy();
-    if (state.rightCandidateCount > 0) {
-      expect(state.rightMoreVisible).toBe(state.rightHiddenCount > 0);
-      if (state.stacked || state.separateRows) {
-        expect(state.rightWidth).toBeGreaterThan(100);
-      }
-    }
-    if (state.leftCandidateCount > 0) {
-      expect(state.catMoreVisible).toBe(state.leftHiddenCount > 0);
+    expect(state.catMoreVisible).toBeFalsy();
+    expect(state.rightMoreVisible).toBeFalsy();
+    expect(state.leftHiddenCount).toBe(0);
+    if (state.beltVisible) {
+      expect(state.allVisible).toBeFalsy();
     }
     await expect(page.locator('body')).not.toContainText(/Fatal error|ParseError|WLS Runtime Error/i);
   });

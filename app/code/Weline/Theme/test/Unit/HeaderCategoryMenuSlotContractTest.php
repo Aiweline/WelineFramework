@@ -118,6 +118,12 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
         self::assertStringContainsString('k >= candidates.length ? -1 : k', $js);
         self::assertStringContainsString('function leftClusterHasSpareRoom', $js);
         self::assertStringContainsString('左簇 flex:1 吃剩余时，中间常有大片空档', $js);
+        // 手机横滑：禁止 ≤768 强制 is-nav-stacked；顶栏汉堡可见时藏导航「全部」
+        self::assertStringContainsString('function isPhoneNavScrollMode()', $js);
+        self::assertStringContainsString('function syncNavAllWithBeltHamburger()', $js);
+        self::assertStringContainsString('function releasePhoneNavOverflow()', $js);
+        self::assertStringContainsString('clusterBudget', $js);
+        self::assertStringContainsString('双重扣减', $js);
         // 旧毒化写法：flex 盒宽当地板 + capped=min(k,length-1) → 宽屏空档仍出「更多」
         self::assertStringNotContainsString(
             'clusterNatW = Math.max(clusterNatW, prefixBased, renderedNat)',
