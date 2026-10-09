@@ -683,6 +683,9 @@ class LanguageSwitcher implements TaglibInterface
             return [];
         }
 
+        // $wantedOrder is already website/inject DB order (LocaleCatalogScope.codes).
+        // resolveLanguageItems(installed, allowlist) loads ONLY those codes from Locals —
+        // never full installed catalog / Symfony global Locales files.
         try {
             $items = LanguageSelect::resolveLanguageItems($displayLocale, 'installed', $wantedOrder);
         } catch (\Throwable) {

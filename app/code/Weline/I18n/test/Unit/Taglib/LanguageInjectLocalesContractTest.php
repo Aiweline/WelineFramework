@@ -102,13 +102,19 @@ final class LanguageInjectLocalesContractTest extends TestCase
             'installed+allowlist must not call getLanguageItems(global)'
         );
         self::assertStringContainsString(
-            'Never materialize Symfony Locales::getLocales()',
-            $src
+            'buildInstalledLanguageItemsForCodes',
+            $src,
+            'website/inject allowlist must resolve only those codes from Locals'
         );
         self::assertStringContainsString(
             'Countries::getName($key, $displayLocale)',
             $src,
             'installed path must resolve country labels per-code, not Countries::getNames full table'
+        );
+        self::assertStringNotContainsString(
+            "getLanguageItems(\$displayLocale, 'installed');\n        } else {",
+            $src,
+            'allowlist path must not materialize full installed catalog then filter'
         );
     }
 
