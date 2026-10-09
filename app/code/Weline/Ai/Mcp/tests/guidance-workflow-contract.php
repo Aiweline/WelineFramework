@@ -801,6 +801,16 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), '空想')),
         false,
     ),
+    'hard_constraints include user_facing_verdict_last' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'user_facing_verdict_last'
+            && str_contains((string) ($rule['summary'] ?? ''), 'LAST')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBID mid-reply')
+            && str_contains((string) ($rule['summary'] ?? ''), 'form-matched')
+            && str_contains((string) ($rule['summary'] ?? ''), 'user-facing-verdict-last.mdc')),
+        false,
+    ),
     'hard_constraints include requirement_acceptance_always' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -2026,6 +2036,10 @@ $checks = [
         ToolService::instructions(),
         'plan_review_requires_code_evidence'
     ),
+    'mcp instructions mention user_facing_verdict_last' => str_contains(
+        ToolService::instructions(),
+        'user_facing_verdict_last'
+    ),
     'mcp instructions mention plan_complete_self_review_then_implement' => str_contains(
         ToolService::instructions(),
         'plan_complete_self_review_then_implement'
@@ -2040,6 +2054,14 @@ $checks = [
             && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_complete_self_review_then_implement')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan-complete-self-review-then-implement.mdc')),
+        false,
+    ),
+    'global_rules_dual_write mentions user_facing_verdict_last mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'user_facing_verdict_last')
+            && str_contains((string) ($rule['summary'] ?? ''), 'user-facing-verdict-last.mdc')),
         false,
     ),
     'MCP hard constraints require skills fetch from MCP' => array_reduce(

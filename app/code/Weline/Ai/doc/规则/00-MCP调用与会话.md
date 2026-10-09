@@ -124,7 +124,21 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 **禁止**：只写 `~/.cursor/rules` 不进 Catalog；或只改 Catalog 不写宿主全局。  
 **仍禁止**：把手写项目内 `.cursor/rules` 当规则源（coldstart 仍只由 MCP 生成）。  
 **冲突裁决**：仓内 `hard_constraints` / 文档 > 宿主全局 `.mdc`。  
-示例：`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`。
+示例：`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`。
+
+### 4.2 面向用户结论置尾（`user_facing_verdict_last`，强制）
+
+用户问了需要**明确结论**的问题，或要求给出判定时：面向用户的回复须**先写依据/过程/解释，最后一行（或末段）给出对应形式的结论**。
+
+| 允许 / 必须 | 禁止 |
+|------|------|
+| 证据与解释在前；**全文末尾**给出与问法对应的答案（是/不是、能/不能、通过/不通过、已完成/未完成、选哪项等） | 中段先答「是/否」再大段解释，迫使用户翻上去找答案 |
+| 开篇可点题，但**不得**把决定性结论只放在开头 | 开篇给结论、正文再解释却不再在末尾复述结论 |
+| 计划审查的「是否通过置尾」是本规则的特化（见 `plan_review_requires_code_evidence`） | 把过程进度句当成最终结论却不再收口 |
+
+**豁免**：无决定性结论的闲聊；中途进度汇报（该回合最终收口仍须末尾给结论）。
+
+宿主常带：`~/.cursor/rules/user-facing-verdict-last.mdc`（与 MCP 双写，见 §4.1）。
 
 ## 5. Codex CLI 宿主委派（`host_delegate_explore_plan_review_to_codex_cli`，**用户显式 opt-in**）
 
