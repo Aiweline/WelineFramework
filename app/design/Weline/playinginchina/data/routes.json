@@ -1,0 +1,501 @@
+[
+ {
+  "id": "r1",
+  "title": "Golden Triangle Classic",
+  "days": 8,
+  "price": "¥4,980",
+  "priceUSD": "$700+",
+  "cities": "Beijing → Xi'an → Shanghai",
+  "desc": "The essential first-China trip: the Great Wall, Forbidden City and Temple of Heaven, then the Terracotta Army and Xi'an's city wall, finishing on the Bund skyline.",
+  "img": "https://aka.doubaocdn.com/s/fq4gaVg8Jr",
+  "itin": [
+   [
+    "Day 1",
+    "Arrive Beijing; Tian'anmen Square &amp; evening Peking duck"
+   ],
+   [
+    "Day 2",
+    "Mutianyu Great Wall (cable car + toboggan)"
+   ],
+   [
+    "Day 3",
+    "Forbidden City &amp; Jingshan Park"
+   ],
+   [
+    "Day 4",
+    "Temple of Heaven, then high-speed rail to Xi'an (4.5h)"
+   ],
+   [
+    "Day 5",
+    "Terracotta Army full day"
+   ],
+   [
+    "Day 6",
+    "City Wall bike ride &amp; Muslim Quarter food tour; rail to Shanghai"
+   ],
+   [
+    "Day 7",
+    "Bund skyline, Yu Garden &amp; French Concession"
+   ],
+   [
+    "Day 8",
+    "Depart from Shanghai (or add Suzhou/Wuzhen)"
+   ],
+   [
+    "Day 9",
+    "Optional: Suzhou gardens day trip (see Route 5)"
+   ]
+  ],
+  "dests": [
+   "great-wall",
+   "forbidden-city",
+   "temple-heaven",
+   "terracotta-army",
+   "xian-city-wall",
+   "shanghai-bund"
+  ],
+  "best": "Apr–May, Sep–Nov",
+  "style": "hiking",
+  "variants": {
+   "seasonal": {
+    "t": "Best-Season Edition",
+    "d": "Run it in Oct for Mutianyu's autumn maples or Sep for crisp wall-top rides; avoid Golden Week (Oct 1–7) when queues triple.",
+    "adj": "Start mornings before 9:00; book Forbidden City tickets 7 days ahead."
+   },
+   "budget": {
+    "t": "Budget Edition — ~¥3,600 pp",
+    "d": "Metro + 2nd-class HSR instead of private transfers; chain hotels (Ji Hotel/Hanting) at ¥250–350; eat at canteens and small restaurants.",
+    "adj": "Book all attraction tickets on official mini-programs for the list price; skip optional cable car at Mutianyu."
+   },
+   "family": {
+    "t": "Family Edition — 9 days, slower pace",
+    "d": "One extra night per city; add Disneyland or Shanghai Science Museum; cable car both ways at the Wall plus the toboggan.",
+    "adj": "Ask for mild, non-spicy dishes; keep evenings free for hotel pools."
+   }
+  }
+ },
+ {
+  "id": "r2",
+  "title": "Sichuan Natural Wonders",
+  "days": 8,
+  "price": "¥4,260",
+  "priceUSD": "$600+",
+  "cities": "Chengdu → Leshan → Jiuzhaigou",
+  "desc": "Pandas, the world's biggest Buddha, and a turquoise fairyland — one province, three icons. Best in autumn when Jiuzhaigou blazes with color.",
+  "img": "https://aka.doubaocdn.com/s/4udMdHwxyC",
+  "itin": [
+   [
+    "Day 1",
+    "Arrive Chengdu; evening hotpot"
+   ],
+   [
+    "Day 2",
+    "Panda Base morning; Sichuan opera night"
+   ],
+   [
+    "Day 3",
+    "HSR to Leshan; Giant Buddha &amp; river boat"
+   ],
+   [
+    "Day 4",
+    "Return Chengdu; fly to Jiuzhai Huanglong"
+   ],
+   [
+    "Day 5–6",
+    "Jiuzhaigou full days (Y-shaped valley, Five Flower Lake)"
+   ],
+   [
+    "Day 7",
+    "Huanglong calcified pools or fly back"
+   ],
+   [
+    "Day 8",
+    "Depart from Chengdu"
+   ]
+  ],
+  "dests": [
+   "panda-base",
+   "leshan-buddha",
+   "jiuzhaigou"
+  ],
+  "best": "Sep–Oct, Apr–May",
+  "style": "nature",
+  "variants": {
+   "seasonal": {
+    "t": "Autumn Edition — mid-Oct",
+    "d": "Jiuzhaigou at peak color (after Oct 15) with Golden Week crowds gone; Huanglong's calcified pools at their most vivid.",
+    "adj": "Fly Chengdu→Jiuzhai Huanglong early; enter the park by 8:00 to beat tour groups."
+   },
+   "budget": {
+    "t": "Budget Edition — ~¥3,000 pp",
+    "d": "Run Nov–Mar off-season: Jiuzhaigou tickets drop ~50% and hotels to ¥150–250; winter flights are cheap.",
+    "adj": "Wear spikes (rentable) for icy boardwalks in Dec–Feb; park shuttle buses cover all viewpoints."
+   },
+   "family": {
+    "t": "Family Edition",
+    "d": "Panda Base first thing (cubs are active at feeding time); Leshan by river cruise so kids skip 500 steps; Jiuzhaigou in easy shuttle stages.",
+    "adj": "Pack snacks and altitude-awareness (park is 2,000–3,000 m)."
+   }
+  }
+ },
+ {
+  "id": "r3",
+  "title": "Avatar Peaks &amp; Li River",
+  "days": 6,
+  "price": "¥3,680",
+  "priceUSD": "$520+",
+  "cities": "Zhangjiajie → Guilin → Yangshuo",
+  "desc": "China's two most surreal landscapes: the pillar forests of Avatar and the karst river of every Chinese painting.",
+  "img": "https://aka.doubaocdn.com/s/XRYDLLbeKI",
+  "itin": [
+   [
+    "Day 1",
+    "Arrive Zhangjiajie; Wulingyuan entrance"
+   ],
+   [
+    "Day 2",
+    "Yuanjiajie pillars &amp; Bailong Elevator"
+   ],
+   [
+    "Day 3",
+    "Glass bridge; evening rail to Guilin"
+   ],
+   [
+    "Day 4",
+    "Li River cruise to Yangshuo"
+   ],
+   [
+    "Day 5",
+    "Yangshuo countryside cycling &amp; Yulong River"
+   ],
+   [
+    "Day 6",
+    "Return to Guilin &amp; depart"
+   ]
+  ],
+  "dests": [
+   "zhangjiajie",
+   "guilin-liriver"
+  ],
+  "best": "Apr–Jun, Sep–Nov",
+  "style": "hiking",
+  "variants": {
+   "seasonal": {
+    "t": "Misty Edition — Apr–Jun",
+    "d": "After-rain fog makes the pillar forests otherworldly; higher river levels keep the Li River rafts steady and safe.",
+    "adj": "Check the Zhangjiajie weather app — go up on the first clear morning."
+   },
+   "budget": {
+    "t": "Budget Edition — ~¥2,900 pp",
+    "d": "Stay in Wulingyuan town or Yangshuo county guesthouses (¥150–220); book the park + shuttle pass on the official site.",
+    "adj": "Skip the glass bridge if you want the cheapest combo; walk Yulong River's riverside path instead of rafting."
+   },
+   "family": {
+    "t": "Family Edition",
+    "d": "Glass bridge thrills are gentle enough for most kids; take the big Li River boat (stable) and reserve life jackets on rafts; e-bike with a child seat for Yangshuo countryside.",
+    "adj": "Pace to one big sight per day — the park itself is exhausting."
+   }
+  }
+ },
+ {
+  "id": "r4",
+  "title": "Silk Road &amp; Tibet",
+  "days": 12,
+  "price": "¥8,900",
+  "priceUSD": "$1,250+",
+  "cities": "Xi'an → Dunhuang → Lhasa",
+  "desc": "From the Terracotta Army to Mogao's thousand Buddhas to the Potala Palace — the epic trans-continental China. Requires Tibet travel permits (booked via agency).",
+  "img": "https://aka.doubaocdn.com/s/RKBsHmotuW",
+  "itin": [
+   [
+    "Day 1–2",
+    "Xi'an: Terracotta Army, City Wall"
+   ],
+   [
+    "Day 3",
+    "Night train or flight to Dunhuang"
+   ],
+   [
+    "Day 4",
+    "Mogao Caves + Singing Sand Dunes sunset"
+   ],
+   [
+    "Day 5–6",
+    "Fly Dunhuang → Lhasa; acclimatize"
+   ],
+   [
+    "Day 7",
+    "Potala Palace &amp; Jokhang Temple"
+   ],
+   [
+    "Day 8",
+    "Barkhor old town &amp; Sera Monastery debates"
+   ],
+   [
+    "Day 9–12",
+    "Optional: Namtso lake, then depart Lhasa"
+   ]
+  ],
+  "dests": [
+   "terracotta-army",
+   "mogao-caves",
+   "potala-palace"
+  ],
+  "best": "May–Oct",
+  "style": "history",
+  "variants": {
+   "seasonal": {
+    "t": "Clear-Sky Edition — May / Sep–Oct",
+    "d": "Dunhuang is bearable and Lhasa skies are blue; avoid Jul–Aug when rain and road closures disrupt the desert-to-plateau leg.",
+    "adj": "Book Mogao Caves tickets weeks ahead — daily numbers are capped."
+   },
+   "budget": {
+    "t": "Budget Edition",
+    "d": "Take the Qinghai–Tibet Railway sleeper into Lhasa instead of flying — saves ~¥800 and helps acclimatization; hostel in Dunhuang.",
+    "adj": "Bring a CPAP-friendly plan for sleep at 3,650 m; permits included via your agency."
+   },
+   "family": {
+    "t": "Family Edition — 14 days, 13+ years",
+    "d": "Three acclimatization days in Lhasa before big sights; skip Everest base camp and Namtso overnight; Mogao kids' audio guide.",
+    "adj": "Altitude medicine from a doctor before departure; keep first two Lhasa days light."
+   }
+  }
+ },
+ {
+  "id": "r5",
+  "title": "Jiangnan Water Towns",
+  "days": 6,
+  "price": "¥3,150",
+  "priceUSD": "$440+",
+  "cities": "Shanghai → Suzhou → Wuzhen → Hangzhou",
+  "desc": "Classical gardens, lantern-lit canals and the poetry of West Lake — the refined east-China classic, all linked by 30-minute high-speed trains.",
+  "img": "https://aka.doubaocdn.com/s/A6uCSu9PxK",
+  "itin": [
+   [
+    "Day 1",
+    "Arrive Shanghai; Bund night lights"
+   ],
+   [
+    "Day 2",
+    "Shanghai Tower &amp; French Concession; rail to Suzhou"
+   ],
+   [
+    "Day 3",
+    "Humble Administrator's Garden &amp; Pingjiang Road"
+   ],
+   [
+    "Day 4",
+    "Rail to Tongxiang; Wuzhen Xizha (stay overnight)"
+   ],
+   [
+    "Day 5",
+    "Morning canals; rail to Hangzhou; West Lake"
+   ],
+   [
+    "Day 6",
+    "Lakeside walk &amp; tea village; depart"
+   ]
+  ],
+  "dests": [
+   "shanghai-bund",
+   "suzhou-gardens",
+   "wuzhen",
+   "west-lake"
+  ],
+  "best": "Mar–Jun, Sep–Nov",
+  "style": "ancient",
+  "variants": {
+   "seasonal": {
+    "t": "Spring-Rain Edition — Mar–Apr",
+    "d": "Apricot blossom and rain make gardens and canals dreamlike; Oct–Nov osmanthus season works just as well.",
+    "adj": "Pack an umbrella — the rain is part of the charm; weekday visits avoid tour crowds."
+   },
+   "budget": {
+    "t": "Budget Edition — ~¥2,600 pp",
+    "d": "Intercity HSR + stay outside Wuzhen's west gate; off-peak garden tickets; meals at locals' eateries off the canal.",
+    "adj": "Buy combined garden passes in Suzhou; the Humble Administrator's Garden alone is ¥70–90."
+   },
+   "family": {
+    "t": "Family Edition",
+    "d": "West Lake boat ride + silk museum DIY; half-day in Wuzhen's east gate; Lion Grove's rock maze delights kids.",
+    "adj": "Choose Lion Grove over the (quieter, less playful) Humble Administrator's Garden if time is short."
+   }
+  }
+ },
+ {
+  "id": "r6",
+  "title": "Yunnan &amp; Tropical Escape",
+  "days": 7,
+  "price": "¥4,150",
+  "priceUSD": "$580+",
+  "cities": "Lijiang → Sanya",
+  "desc": "Old-town romance under snow mountains, then three days of turquoise beaches — the ultimate contrast trip.",
+  "img": "https://aka.doubaocdn.com/s/DHCbFn7wmy",
+  "itin": [
+   [
+    "Day 1",
+    "Arrive Lijiang; old town canals &amp; night market"
+   ],
+   [
+    "Day 2",
+    "Jade Dragon Snow Mountain day trip"
+   ],
+   [
+    "Day 3",
+    "Black Dragon Pool &amp; Baisha village; fly to Sanya"
+   ],
+   [
+    "Day 4–5",
+    "Yalong Bay beach &amp; snorkeling"
+   ],
+   [
+    "Day 6",
+    "Wuzhizhou Island boat day"
+   ],
+   [
+    "Day 7",
+    "Depart from Sanya"
+   ]
+  ],
+  "dests": [
+   "lijiang-old-town",
+   "sanya"
+  ],
+  "best": "Nov–Apr",
+  "style": "beach",
+  "variants": {
+   "seasonal": {
+    "t": "Winter-Sun Edition — Nov–Feb",
+    "d": "Lijiang under clear skies, Sanya at 25°C with empty beaches; avoids the Jul–Aug rain and heat.",
+    "adj": "Book Lijiang→Sanya flights early — winter is peak for Hainan."
+   },
+   "budget": {
+    "t": "Budget Edition — ~¥3,300 pp",
+    "d": "Train Dali→Lijiang; off-season guesthouses at ¥150; apartment-style hotels in Sanya Bay for kitchenettes.",
+    "adj": "Use city buses in Lijiang; skip the ¥170 Jade Dragon Snow Mountain ropeway if the budget is tight."
+   },
+   "family": {
+    "t": "Family Edition",
+    "d": "E-bike ride around Erhai with a child seat; Sanya's Yalong Bay for calm swimming; half-day on Wuzhizhou Island.",
+    "adj": "Sunblock and life jackets — Hainan sun is intense even in winter."
+   }
+  }
+ },
+ {
+  "id": "r7",
+  "title": "Central Plains Ancient Capitals",
+  "days": 5,
+  "price": "¥3,200",
+  "priceUSD": "$450+",
+  "cities": "Luoyang → Dengfeng → Pingyao",
+  "desc": "The cradle of Chinese civilization: the Longmen Grottoes, Shaolin kung fu on Mount Song, then a living Ming–Qing walled city.",
+  "img": "https://aka.doubaocdn.com/s/e4c95v18E9",
+  "itin": [
+   [
+    "Day 1",
+    "Arrive Luoyang; evening at the Old Town &amp; Liyang Gate lights"
+   ],
+   [
+    "Day 2",
+    "Longmen Grottoes morning; White Horse Temple afternoon"
+   ],
+   [
+    "Day 3",
+    "Bus to Dengfeng; Shaolin Temple, Pagoda Forest &amp; kung fu show"
+   ],
+   [
+    "Day 4",
+    "Rail to Pingyao via Taiyuan; old city wall walk at sunset"
+   ],
+   [
+    "Day 5",
+    "Rishengchang Bank &amp; county yamen; depart from Taiyuan"
+   ]
+  ],
+  "dests": [
+   "longmen",
+   "shaolin",
+   "pingyao"
+  ],
+  "best": "Apr–Jun, Sep–Oct",
+  "style": "history",
+  "variants": {
+   "seasonal": {
+    "t": "Peony Edition — April",
+    "d": "Luoyang's peony festival plus Longmen Grottoes at their freshest; Pingyao in crisp Sep–Oct light.",
+    "adj": "Peony show tickets sell out — book with the festival app; arrive at Longmen before 9:00."
+   },
+   "budget": {
+    "t": "Budget Edition — ~¥2,600 pp",
+    "d": "HSR to Zhengzhou/Luoyang; guesthouses just outside Pingyao's wall (¥180); Shaolin + Pagoda Forest combo ticket.",
+    "adj": "Walk the wall in Pingyao at sunset — free and beautiful."
+   },
+   "family": {
+    "t": "Family Edition",
+    "d": "Shaolin kung-fu show with monk interaction; dress-up photo session at Pingyao's ticket ‘banks’; electric carts inside Longmen.",
+    "adj": "The Longmen west bank is a long walk — use the cart for little legs."
+   }
+  }
+ },
+ {
+  "id": "r8",
+  "title": "Yunnan Highlands",
+  "days": 6,
+  "price": "¥3,600",
+  "priceUSD": "$500+",
+  "cities": "Dali → Lijiang → Shangri-La",
+  "desc": "Erhai lake loops, Naxi old-town romance under snow peaks, then Tibet-flavored Shangri-La with a river-gorge trek on the way.",
+  "img": "https://aka.doubaocdn.com/s/EfUxQeBzxj",
+  "itin": [
+   [
+    "Day 1",
+    "Arrive Dali; old town lanes &amp; Three Pagodas"
+   ],
+   [
+    "Day 2",
+    "E-bike loop along Erhai to Shuanglang; sunset cruise"
+   ],
+   [
+    "Day 3",
+    "Rail/bus to Lijiang; old town canals &amp; Black Dragon Pool"
+   ],
+   [
+    "Day 4",
+    "Jade Dragon Snow Mountain day trip (or Tiger Leaping Gorge trek)"
+   ],
+   [
+    "Day 5",
+    "Drive to Shangri-La; Dukezong old town &amp; Songzanlin Monastery"
+   ],
+   [
+    "Day 6",
+    "Depart from Shangri-La (or extend to Pudacuo Park)"
+   ]
+  ],
+  "dests": [
+   "dali",
+   "lijiang-old-town",
+   "shangrila",
+   "tiger-leaping"
+  ],
+  "best": "Apr–May, Sep–Nov",
+  "style": "ancient",
+  "variants": {
+   "seasonal": {
+    "t": "Autumn Edition — Oct–Nov",
+    "d": "Shangri-La's meadows turn gold and Meili Snow Mountain shows its peak; May–Jun adds rhododendron blooms.",
+    "adj": "Lijiang→Shangri-La by bus gives the best gradual acclimatization."
+   },
+   "budget": {
+    "t": "Budget Edition — ~¥2,900 pp",
+    "d": "Buses instead of private cars; guesthouses in Dukezong old town; the free Tiger Leaping Gorge viewpoint section.",
+    "adj": "Trek only the easy first section unless you are a hiker — the full gorge is serious."
+   },
+   "family": {
+    "t": "Family Edition — altitude note",
+    "d": "Jade Dragon Glacier Park cable car with portable oxygen; Tiger Leaping from the platform, not the trail; elevator guesthouses in Lijiang old town.",
+    "adj": "Keep children hydrated; descend if anyone feels dizzy — symptoms fade below 2,500 m."
+   }
+  }
+ }
+]

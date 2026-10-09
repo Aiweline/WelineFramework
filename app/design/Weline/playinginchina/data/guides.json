@@ -1,0 +1,242 @@
+[
+ {
+  "id": "sim",
+  "title": "China SIM Card &amp; Internet",
+  "sub": "Stay connected",
+  "ic": "sim",
+  "intro": "Getting online in China is the single most important pre-trip task — Google, Instagram and many apps are blocked on local networks. Your options: an international eSIM (easiest), a Chinese physical SIM (local number), or roaming.",
+  "body": [
+   [
+    "International eSIM (recommended for short trips)",
+    "Buy online before you fly from providers such as Airalo, Holafly, Nomad or Holafly. Plans run roughly $12–18 for 10–15 GB over 15 days. Because data routes via Hong Kong or Singapore servers, Google, WhatsApp and Instagram work without a VPN. Install and activate the eSIM QR code at home — some codes fail to load once inside the firewall. Your phone keeps its home number for calls."
+   ],
+   [
+    "Chinese physical SIM (best for stays 1 month+)",
+    "At airport counters or city stores of China Unicom (green), China Mobile (red) or China Telecom: bring your passport — a face scan and registration are required. You get a local number (useful for Didi rides and food delivery apps) plus data for ~¥40–100/month. Popular tourist packages: 10 GB/15 days around ¥85–130. Carry the passport with you when buying."
+   ],
+   [
+    "Wi-Fi &amp; hotspot",
+    "Free Wi-Fi is common in hotels, malls, airports and metros (often needs a local number for SMS verification). A pocket Wi-Fi rental (~¥30/day) is a solid backup for groups."
+   ],
+   [
+    "VPN note",
+    "If you rely on your home carrier's roaming instead of an eSIM, install a VPN before arrival. Google Play / Apple App Store downloads of VPN apps may be restricted inside China — do it at home."
+   ]
+  ],
+  "tips": "Install &amp; test your eSIM before boarding. Keep your original SIM for SMS. Download offline maps (maps.me, Baidu Maps EN) and a translation app before you land.",
+  "srcs": [
+   "https://sinotales.com/resources/apps-tech/china-travel-tips-internet-sim-vpn/",
+   "https://chinamustsee.com/posts/china-sim-card-and-internet-guide-for-tourists/",
+   "https://hiddenchinatravel.com/china-sim-card-for-foreigners",
+   "https://terminalesim.com/can-you-use-esim-china-travel-guide/"
+  ]
+ },
+ {
+  "id": "visa",
+  "title": "Visa &amp; Entry",
+  "sub": "Requirements",
+  "ic": "visa",
+  "intro": "Most travelers now enter China visa-free or visa-free-in-transit. Two policies matter most in 2026: the 240-hour transit policy and bilateral visa exemptions.",
+  "body": [
+   [
+    "240-hour visa-free transit (10 days)",
+    "Citizens of 55+ countries (US, UK, most of Europe, Australia, Japan, South Korea, Indonesia and more) can transit China visa-free for up to 240 hours / 10 days — provided they hold an onward ticket (confirmed date &amp; seat) to a third country or region. Entry is via 60 designated ports across 24 provinces; you may travel within the permitted region for tourism and business. This is ideal for layover trips (e.g. US→Beijing 5 days→Japan)."
+   ],
+   [
+    "Bilateral visa-free entry",
+    "China has mutual visa-exemption agreements with several countries (e.g. Singapore, Malaysia, Thailand, UAE, Qatar, Belarus and others, for 15–30 days) — check with your local Chinese embassy or visa service before relying on it."
+   ],
+   [
+    "Standard tourist (L) visa",
+    "For longer stays or trips that don't fit transit rules: apply at a China Visa Application Service Center with passport (6+ months validity), photos, itinerary and hotel bookings. Processing is usually 4–7 working days; costs vary by country and entry type."
+   ],
+   [
+    "On arrival &amp; registration",
+    "Bring your passport everywhere — hotels and some attractions require it. Police registration is handled by hotels for foreign guests automatically."
+   ]
+  ],
+  "tips": "Always keep a printed copy of your onward ticket for transit entry. Enter through the ports that match your permitted region. Double-check policy updates before departure — rules change frequently.",
+  "srcs": [
+   "https://en.nia.gov.cn/n147413/c183100/content.html",
+   "https://en.nia.gov.cn/n147418/n147463/c183412/content.html",
+   "https://www.visaforchina.cn/YYC3_EN/qianzhengyewu/jichuzhishi/changjianwenti/362332771198308352.html"
+  ]
+ },
+ {
+  "id": "payments",
+  "title": "Currency &amp; Payments",
+  "sub": "Alipay, WeChat Pay",
+  "ic": "pay",
+  "intro": "China is nearly cashless, but foreign cards now work easily. Set up Alipay and WeChat Pay before you fly and you'll pay like a local.",
+  "body": [
+   [
+    "Alipay (international version)",
+    "Download the Alipay app, register with your home phone number (choose your country code), then add a Visa, Mastercard, JCB, Diners Club or Discover card under 'Add Now'. No Chinese bank account needed. Pay by scanning QR codes everywhere — taxis, hotels, street food, trains."
+   ],
+   [
+    "WeChat Pay",
+    "Same flow inside WeChat: Me → Pay and Services → Wallet → Bank Cards → Add a Bank Card. Visa, Mastercard, American Express, JCB, Diners Club and Discover are accepted. Complete the setup at home — brand-new accounts may face a security check, easier to sort out before arrival."
+   ],
+   [
+    "Cash &amp; cards",
+    "¥100–500 cash is a sensible backup (rural areas and small vendors). International ATMs accept Visa/Mastercard/UnionPay. Hotel card terminals accept foreign cards; some small shops are cash/QR only."
+   ],
+   [
+    "Wallet apps &amp; UnionPay",
+    "Alipay+ also lets travelers pay with their home e-wallets in some cases. UnionPay cards work broadly. Keep both Alipay and WeChat installed — a few merchants only take one."
+   ]
+  ],
+  "tips": "Set a payment limit and enable fingerprint/face pay. Carry your passport when adding cards for identity verification. Prices are in CNY — the apps convert charges transparently.",
+  "srcs": [
+   "https://www.alipayplus.com/my/pay-in-the-chinese-mainland",
+   "https://cs.help.wechat.com/hc/en-us/articles/11975770896271-How-to-Set-Up-International-Cards-for-Weixin-Pay",
+   "https://www.tencent.com/mobile-payment-solutions-for-your-china-journey-a-practical-guide/",
+   "https://english.bjchy.gov.cn/overseas-bank-cards-accepted-weixin-pay-and-alipay"
+  ]
+ },
+ {
+  "id": "transport",
+  "title": "Transportation",
+  "sub": "Train, Flight, Metro",
+  "ic": "train",
+  "intro": "China's high-speed rail is the best way to travel between cities — and booking it as a foreigner is easier than ever.",
+  "body": [
+   [
+    "High-speed rail (高铁)",
+    "350 km/h trains link every major city: Beijing→Shanghai 4.5h, Beijing→Xi'an 4.5h, Chengdu→Leshan 1h, Shanghai→Suzhou 25 min. Book with your passport number on Trip.com or the official 12306 app; collect tickets at the station with your passport, or use e-ticket + passport scan. Fares: 2nd class ¥553 (Beijing–Shanghai); business class ~4× that."
+   ],
+   [
+    "Flights",
+    "Domestic flights are cheap and frequent (Beijing–Chengdu from ¥600). Note: use full passport names matching the booking. Check in online or at counter — domestic security is strict."
+   ],
+   [
+    "Metro &amp; city travel",
+    "Beijing, Shanghai, Chengdu, Xi'an, Hangzhou and 40+ cities have metros. Use the Alipay/WeChat transit QR codes, or buy single tickets at machines (many accept foreign cards). Taxis: use Didi (English version) — pay via Alipay/WeChat linked card. Never hail unlicensed cabs."
+   ],
+   [
+    "Practical times",
+    "Taxis from airport: Beijing ~¥150–250, Shanghai ~¥200. Metro from airport ~¥7–10. Book long-distance trains 15 days ahead in peak seasons (Spring Festival, Oct Golden Week, summer)."
+   ]
+  ],
+  "tips": "Download Trip.com or 12306 + Didi before arrival. Print or screenshot hotel addresses in Chinese characters for taxi drivers. Avoid traveling on the last 3 days before Chinese New Year.",
+  "srcs": [
+   "https://chinafortravelers.com/guides/how-to-book-china-travel/"
+  ]
+ },
+ {
+  "id": "tips",
+  "title": "Useful Travel Tips",
+  "sub": "Language, Safety, Weather",
+  "ic": "tips",
+  "intro": "A few things that make China travel smooth, safe and comfortable.",
+  "body": [
+   [
+    "Language",
+    "English is limited outside tourist hubs. Use translation apps (Google Translate offline packs, or Microsoft Translator) and carry written Chinese for addresses. Menu scanning apps help with food."
+   ],
+   [
+    "Weather &amp; packing",
+    "China spans all climates: Beijing dry &amp; cold winters, hot summers; Shanghai humid; Harbin −25°C in Jan; Sanya tropical year-round. Pack layers, comfortable walking shoes, and a power adapter (220V, sockets Type A/C/I)."
+   ],
+   [
+    "Health &amp; water",
+    "Drink bottled or boiled water. Pharmacies (药店) are everywhere; international-standard hospitals exist in Beijing, Shanghai, Chengdu. Travel insurance covering medical care is strongly recommended."
+   ],
+   [
+    "Safety &amp; etiquette",
+    "China is extremely safe for tourists. No tipping is expected — round up occasionally. In temples &amp; museums: no flash photography of artifacts, dress modestly. Queues are taken seriously; line up at stations and attractions."
+   ],
+   [
+    "Internet",
+    "Remember the connectivity guide: eSIM installed before arrival, or a VPN ready if using home roaming. Alipay/WeChat QR codes also unlock free Wi-Fi in many public places."
+   ]
+  ],
+  "tips": "Save a screenshot of your hotel name in Chinese + a map pin. Keep a photo of your passport page and visa in your phone. Learn two phrases: 谢谢 (thanks) and 多少钱? (how much?).",
+  "srcs": [
+   "https://go2-china.com/blog/things-to-do-in-china-ultimate-activity-guide/",
+   "https://www.travelofchina.com/is-china-expensive-to-visit/"
+  ]
+ },
+ {
+  "id": "health",
+  "title": "Health, Insurance & Hospitals",
+  "sub": "Stay healthy & covered",
+  "ic": "health",
+  "intro": "China's public hospitals are affordable and, in tier-1 cities, modern — but you must pay a deposit first and claim back from travel insurance later. This guide covers what to pack, how to see a doctor, and why insurance is non-negotiable.",
+  "body": [
+   [
+    "Travel insurance — buy before you fly",
+    "Comprehensive travel medical cover is essential: a broken leg or appendicitis abroad can cost ¥30,000–100,000+ without insurance. Buy a policy that covers China explicitly (most global plans do) and includes emergency evacuation, since remote areas such as Tibet or Xinjiang have limited trauma care. Keep the insurer's 24/7 hotline and policy number saved offline. Compare on price and China-specific cover rather than brand."
+   ],
+   [
+    "If you get sick: the 5-step route",
+    "1) Call your insurer's assistance line first — they arrange hospitals and guarantees. 2) Ask your hotel to recommend a 三甲 (Grade-A) hospital; in major cities English-speaking international clinics exist (Beijing United Family, Shanghai Pudong International Medical). 3) Bring your passport — clinics register foreign patients with it. 4) Pay the deposit (usually ¥200–2,000 for outpatient) and keep every receipt and medical record for your claim. 5) Submit the claim after you return; translate receipts if requested."
+   ],
+   [
+    "Pharmacies & common medicines",
+    "Chain pharmacies stock cold medicine, painkillers, antiseptics and diarrhea remedies over the counter without a prescription. Antibiotics require a doctor's prescription. Bring your own regular prescription medicines with a doctor's letter, plus basics: rehydration salts, sunscreen, motion-sickness tablets, and a small first-aid kit. Medicine names come in Chinese only — show the pharmacist the ingredient name (e.g. paracetamol = 对乙酰氨基酚)."
+   ],
+   [
+    "Emergencies & numbers to save",
+    "In emergencies dial 120 (ambulance); 110 (police) and 119 (fire). The all-in-one government hotline 12345 can connect you to translation help in major cities. On heavy-pollution days reduce outdoor time. For altitude sickness, acclimatize 1–2 days before trekking above 3,500 m in Tibet/Yunnan/Qinghai and consider medication prescribed before departure."
+   ]
+  ],
+  "tips": "Save your insurer hotline and policy number offline before departure. Note the address of the nearest international hospital in your first city.",
+  "srcs": [
+   "https://www.unitedfamilyhospital.com/",
+   "https://www.gov.cn/"
+  ]
+ },
+ {
+  "id": "accessible",
+  "title": "Accessible Travel in China",
+  "sub": "Wheelchair & mobility info",
+  "ic": "accessible",
+  "intro": "China is improving accessibility fast but unevenly: modern metros, airports and new stations are wheelchair-friendly, while old town lanes and temple steps remain hard. Plan route by route — this guide tells you what works and how to ask for help.",
+  "body": [
+   [
+    "Where accessibility is good",
+    "High-speed rail (CRH) has wide doors, accessible toilets and boarding assistance if you call 12306 ahead; airports provide free wheelchair service on request. Subway lines built after 2010 in Beijing, Shanghai, Guangzhou and Shenzhen have elevators and level boarding. New museums and scenic-area visitor centers (e.g. Forbidden City, Summer Palace, Zhangjiajie) offer ramps and wheelchairs to borrow — book the loan when you buy your ticket."
+   ],
+   [
+    "Where you need a plan B",
+    "Classic old-town districts (Lijiang, Pingyao, Wuzhen, Hongcun) and most mountain/temple sites involve cobblestones, stairs or cable-car gaps. For mountains, the cable car plus a short walk is usually the accessible option (Huangshan, Emei, Huashan). Carry a printed note in Chinese: 我需要无障碍通道/轮椅服务 (I need accessible access / wheelchair service)."
+   ],
+   [
+    "Taxis, hotels & practical help",
+    "Standard taxis rarely have ramps; book wheelchair-accessible cars via DiDi (the accessibility option) or hotel concierge. Choose hotels built after 2015 with elevators and grab bars — filter on Booking/Agoda by 'accessible bathroom'. Key public spaces meet accessible standards; small restaurants and rural B&Bs usually do not. If you need assistance in public venues, call 12345 and ask for the disability services window."
+   ]
+  ],
+  "tips": "Book wheelchair loans and accessible tickets before you travel — most big sites and airports require advance request.",
+  "srcs": [
+   "https://www.12306.cn/",
+   "https://www.didiglobal.com/"
+  ]
+ },
+ {
+  "id": "hotel",
+  "title": "Hotels & Where to Stay",
+  "sub": "Pick the right base",
+  "ic": "hotel",
+  "intro": "From 5-star international chains to ¥150 family guesthouses, China's hotel market covers every budget. The key decisions are location, star level vs. actual quality, and booking through platforms that speak your language.",
+  "body": [
+   [
+    "Choosing the right area",
+    "For first-timers, stay inside the 2nd Ring Road in Beijing (Dongcheng/Xicheng), around People's Square in Shanghai, or within walking distance of the old town in Lijiang/Pingyao/Wuzhen — you pay a premium but save hours of transit. For mountain parks (Zhangjiajie, Huangshan, Emei), book a hotel at the scenic-area gate the night before an early-morning entry, or stay one night on the mountain for sunrise."
+   ],
+   [
+    "Star ratings: read the gap",
+    "Chinese star ratings (五星/四星) are set by local tourism bureaus and often lag real quality — a 2010 5-star can be worse than a 2021 4-star. Filter by year of renovation and read recent English reviews. International chains (Hilton, Marriott, IHG, Accor) guarantee consistent quality in tier-1 cities. Mid-range domestic brands (Ji Hotel, Atour, Lavande) offer clean, modern rooms at ¥250–450 in most cities."
+   ],
+   [
+    "Booking, check-in & practical notes",
+    "Book via Agoda/Booking for English support and free cancellation, or Ctrip (Trip.com) for the widest inventory including small-town guesthouses. All hotels register foreign guests with your passport — always carry it (a photocopy is not enough). Payment: international cards work at large chains; small hotels prefer Alipay/WeChat Pay, so set those up (see the Payments guide)."
+   ]
+  ],
+  "tips": "Request a scenic-view room at booking time, not at check-in. Carry your passport for every hotel check-in.",
+  "srcs": [
+   "https://www.trip.com/",
+   "https://www.booking.com/"
+  ]
+ }
+]

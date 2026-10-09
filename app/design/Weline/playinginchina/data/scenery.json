@@ -1,0 +1,97 @@
+[
+ {
+  "id": "mountains",
+  "name": "Mountains & Peaks",
+  "sub": "Sacred peaks, granite spires & high trails"
+ },
+ {
+  "id": "lakes",
+  "name": "Lakes & Rivers",
+  "sub": "Mirror lakes, river gorges & water villages"
+ },
+ {
+  "id": "gardens",
+  "name": "Classical Gardens",
+  "sub": "Scholar gardens, imperial parks & pavilions"
+ },
+ {
+  "id": "heritage",
+  "name": "Heritage & Ruins",
+  "sub": "World Heritage sites, tombs & ancient engineering"
+ },
+ {
+  "id": "temples",
+  "name": "Temples & Monasteries",
+  "sub": "Buddhist temples, Taoist shrines & holy mountains"
+ },
+ {
+  "id": "ancient",
+  "name": "Ancient Towns & Villages",
+  "sub": "Water towns, old cities & ethnic villages"
+ },
+ {
+  "id": "city",
+  "name": "Modern Cities",
+  "sub": "Skyline towers, urban districts & night views"
+ },
+ {
+  "id": "coast",
+  "name": "Coasts & Islands",
+  "sub": "Beaches, sea cliffs & island escapes"
+ },
+ {
+  "id": "gorges",
+  "name": "Gorges & Canyons",
+  "sub": "Cliff gorges, karst & danxia landscapes"
+ },
+ {
+  "id": "grassland",
+  "name": "Grasslands & Steppe",
+  "sub": "Highland meadows, nomad culture & sky roads"
+ },
+ {
+  "id": "snow",
+  "name": "Snow & Glaciers",
+  "sub": "Ski resorts, glaciers & winter wonderlands"
+ },
+ {
+  "id": "forest",
+  "name": "Forests & Wetlands",
+  "sub": "Rainforests, primeval woods & bird wetlands"
+ },
+ {
+  "id": "desert",
+  "name": "Deserts & Badlands",
+  "sub": "Dunes, yardangs & desert oases"
+ },
+ {
+  "id": "waterfalls",
+  "name": "Waterfalls & Caves",
+  "sub": "Great falls, limestone caverns & underground rivers"
+ },
+ {
+  "id": "islands",
+  "name": "Islands",
+  "sub": "Offshore isles, coral bays & ferry escapes"
+ },
+ {
+  "id": "karst",
+  "name": "Karst Landscapes",
+  "sub": "Stone forests, karst peaks & jade rivers"
+ },
+ {
+  "id": "danxia",
+  "name": "Danxia Landforms",
+  "sub": "Rainbow cliffs & red-rock canyons"
+ },
+ {
+  "id": "terraces",
+  "name": "Terraces & Farmlands",
+  "sub": "Rice terraces, rapeseed seas & rural mosaic"
+ },
+ {
+  "id": "wetlands",
+  "name": "Wetlands",
+  "sub": "Marshlands, reed seas & bird sanctuaries"
+ }
+]

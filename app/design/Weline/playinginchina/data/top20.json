@@ -1,0 +1,328 @@
+[
+ {
+  "rank": 1,
+  "id": "great-wall",
+  "name": "Mutianyu Great Wall",
+  "cn": "慕田峪长城",
+  "city": "Beijing",
+  "region": "North China",
+  "scenery": "mountains",
+  "types": [
+   "history",
+   "hiking"
+  ],
+  "priceCNY": "¥45",
+  "priceUSD": "From $6",
+  "img": "https://aka.doubaocdn.com/s/fq4gaVg8Jr"
+ },
+ {
+  "rank": 2,
+  "id": "forbidden-city",
+  "name": "Forbidden City (Palace Museum)",
+  "cn": "故宫博物院",
+  "city": "Beijing",
+  "region": "North China",
+  "scenery": "heritage",
+  "types": [
+   "history",
+   "city"
+  ],
+  "priceCNY": "¥60 (peak) / ¥40 (off)",
+  "priceUSD": "From $6",
+  "img": "https://aka.doubaocdn.com/s/0UbSMCFnJk"
+ },
+ {
+  "rank": 3,
+  "id": "temple-heaven",
+  "name": "Temple of Heaven",
+  "cn": "天坛公园",
+  "city": "Beijing",
+  "region": "North China",
+  "scenery": "heritage",
+  "types": [
+   "history",
+   "nature"
+  ],
+  "priceCNY": "¥35 (combined)",
+  "priceUSD": "From $5",
+  "img": "https://aka.doubaocdn.com/s/XzOk7IngZ2"
+ },
+ {
+  "rank": 4,
+  "id": "terracotta-army",
+  "name": "Terracotta Army",
+  "cn": "秦始皇兵马俑博物馆",
+  "city": "Xi'an",
+  "region": "North China",
+  "scenery": "heritage",
+  "types": [
+   "history"
+  ],
+  "priceCNY": "¥120",
+  "priceUSD": "From $17",
+  "img": "https://aka.doubaocdn.com/s/3OV921t4UG"
+ },
+ {
+  "rank": 5,
+  "id": "xian-city-wall",
+  "name": "Xi'an City Wall",
+  "cn": "西安城墙",
+  "city": "Xi'an",
+  "region": "North China",
+  "scenery": "ancient",
+  "types": [
+   "history",
+   "hiking",
+   "city"
+  ],
+  "priceCNY": "¥54",
+  "priceUSD": "From $8",
+  "img": "https://aka.doubaocdn.com/s/DyL7h5eKyg"
+ },
+ {
+  "rank": 6,
+  "id": "zhangjiajie",
+  "name": "Zhangjiajie National Forest Park",
+  "cn": "张家界国家森林公园",
+  "city": "Zhangjiajie",
+  "region": "Central China",
+  "scenery": "mountains",
+  "types": [
+   "nature",
+   "hiking"
+  ],
+  "priceCNY": "¥228 (4-day pass)",
+  "priceUSD": "From $32",
+  "img": "https://aka.doubaocdn.com/s/XRYDLLbeKI"
+ },
+ {
+  "rank": 7,
+  "id": "jiuzhaigou",
+  "name": "Jiuzhaigou Valley",
+  "cn": "九寨沟",
+  "city": "Jiuzhaigou",
+  "region": "Southwest China",
+  "scenery": "lakes",
+  "types": [
+   "nature",
+   "photography"
+  ],
+  "priceCNY": "¥220 + bus ¥90",
+  "priceUSD": "From $31",
+  "img": "https://aka.doubaocdn.com/s/4udMdHwxyC"
+ },
+ {
+  "rank": 8,
+  "id": "panda-base",
+  "name": "Chengdu Panda Base",
+  "cn": "成都大熊猫繁育研究基地",
+  "city": "Chengdu",
+  "region": "Southwest China",
+  "scenery": "forest",
+  "types": [
+   "family",
+   "nature"
+  ],
+  "priceCNY": "¥55",
+  "priceUSD": "From $8",
+  "img": "https://aka.doubaocdn.com/s/X9rVoATrc8"
+ },
+ {
+  "rank": 9,
+  "id": "leshan-buddha",
+  "name": "Leshan Giant Buddha",
+  "cn": "乐山大佛",
+  "city": "Leshan",
+  "region": "Southwest China",
+  "scenery": "heritage",
+  "types": [
+   "history",
+   "nature"
+  ],
+  "priceCNY": "¥80",
+  "priceUSD": "From $11",
+  "img": "https://aka.doubaocdn.com/s/2pufKbjUGB"
+ },
+ {
+  "rank": 10,
+  "id": "guilin-liriver",
+  "name": "Guilin Li River &amp; Yangshuo",
+  "cn": "桂林漓江 · 阳朔",
+  "city": "Guilin / Yangshuo",
+  "region": "South China",
+  "scenery": "karst",
+  "types": [
+   "nature",
+   "photography",
+   "hiking"
+  ],
+  "priceCNY": "Cruise from ¥210",
+  "priceUSD": "From $30",
+  "img": "https://aka.doubaocdn.com/s/dJOx2msAS6"
+ },
+ {
+  "rank": 11,
+  "id": "huangshan",
+  "name": "Huangshan (Yellow Mountain)",
+  "cn": "黄山",
+  "city": "Huangshan",
+  "region": "East China",
+  "scenery": "mountains",
+  "types": [
+   "nature",
+   "hiking",
+   "photography"
+  ],
+  "priceCNY": "¥190 (peak) + cable car",
+  "priceUSD": "From $27",
+  "img": "https://aka.doubaocdn.com/s/RGCF2OMaFi"
+ },
+ {
+  "rank": 12,
+  "id": "west-lake",
+  "name": "West Lake",
+  "cn": "西湖",
+  "city": "Hangzhou",
+  "region": "East China",
+  "scenery": "lakes",
+  "types": [
+   "nature",
+   "city",
+   "ancient"
+  ],
+  "priceCNY": "Free (boats extra)",
+  "priceUSD": "Free",
+  "img": "https://aka.doubaocdn.com/s/kv1r7biD6d"
+ },
+ {
+  "rank": 13,
+  "id": "wuzhen",
+  "name": "Wuzhen Water Town",
+  "cn": "乌镇",
+  "city": "Tongxiang",
+  "region": "East China",
+  "scenery": "ancient",
+  "types": [
+   "ancient",
+   "city"
+  ],
+  "priceCNY": "¥120 (East) / ¥150 (West) / ¥190 both",
+  "priceUSD": "From $17",
+  "img": "https://aka.doubaocdn.com/s/A6uCSu9PxK"
+ },
+ {
+  "rank": 14,
+  "id": "suzhou-gardens",
+  "name": "Suzhou Classical Gardens",
+  "cn": "苏州园林",
+  "city": "Suzhou",
+  "region": "East China",
+  "scenery": "gardens",
+  "types": [
+   "ancient",
+   "history",
+   "nature"
+  ],
+  "priceCNY": "Humble Administrator's Garden ¥80",
+  "priceUSD": "From $11",
+  "img": "https://aka.doubaocdn.com/s/x9WTjDM7GF"
+ },
+ {
+  "rank": 15,
+  "id": "shanghai-bund",
+  "name": "Shanghai Bund &amp; Skyline",
+  "cn": "上海外滩",
+  "city": "Shanghai",
+  "region": "East China",
+  "scenery": "city",
+  "types": [
+   "city",
+   "food"
+  ],
+  "priceCNY": "Free (Bund)",
+  "priceUSD": "Free",
+  "img": "https://aka.doubaocdn.com/s/MV3G2d0dI9"
+ },
+ {
+  "rank": 16,
+  "id": "lijiang-old-town",
+  "name": "Lijiang Ancient Town",
+  "cn": "丽江古城",
+  "city": "Lijiang",
+  "region": "Southwest China",
+  "scenery": "ancient",
+  "types": [
+   "ancient",
+   "nature",
+   "city"
+  ],
+  "priceCNY": "Free (old town)",
+  "priceUSD": "Free",
+  "img": "https://aka.doubaocdn.com/s/DHCbFn7wmy"
+ },
+ {
+  "rank": 17,
+  "id": "mogao-caves",
+  "name": "Mogao Caves (Dunhuang)",
+  "cn": "敦煌莫高窟",
+  "city": "Dunhuang",
+  "region": "Northwest China",
+  "scenery": "heritage",
+  "types": [
+   "history",
+   "photography"
+  ],
+  "priceCNY": "¥238 (standard tour)",
+  "priceUSD": "From $34",
+  "img": "https://aka.doubaocdn.com/s/RKBsHmotuW"
+ },
+ {
+  "rank": 18,
+  "id": "potala-palace",
+  "name": "Potala Palace",
+  "cn": "布达拉宫",
+  "city": "Lhasa",
+  "region": "Southwest China",
+  "scenery": "heritage",
+  "types": [
+   "history",
+   "photography"
+  ],
+  "priceCNY": "¥200 (May–Oct) / ¥100 (Nov–Apr)",
+  "priceUSD": "From $14",
+  "img": "https://aka.doubaocdn.com/s/qlvI8OsbeP"
+ },
+ {
+  "rank": 19,
+  "id": "harbin-ice",
+  "name": "Harbin Ice &amp; Snow World",
+  "cn": "哈尔滨冰雪大世界",
+  "city": "Harbin",
+  "region": "Northeast China",
+  "scenery": "snow",
+  "types": [
+   "winter",
+   "family",
+   "city"
+  ],
+  "priceCNY": "From ¥230 (peak ¥328)",
+  "priceUSD": "From $32",
+  "img": "https://aka.doubaocdn.com/s/YGJAD9auj3"
+ },
+ {
+  "rank": 20,
+  "id": "sanya",
+  "name": "Sanya Tropical Beaches",
+  "cn": "三亚",
+  "city": "Sanya",
+  "region": "South China",
+  "scenery": "coast",
+  "types": [
+   "beach",
+   "family"
+  ],
+  "priceCNY": "Free (beaches)",
+  "priceUSD": "Free",
+  "img": "https://aka.doubaocdn.com/s/s3AJ2cUEwX"
+ }
+]

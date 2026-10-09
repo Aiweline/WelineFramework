@@ -1,0 +1,74 @@
+[
+ {
+  "name": "Beijing — Wangfujing/Forbidden City area",
+  "x": 28,
+  "y": 23,
+  "star": 4,
+  "from": "¥520",
+  "lat": 39.9092,
+  "lng": 116.3975
+ },
+ {
+  "name": "Xi'an — Bell Tower area",
+  "x": 34,
+  "y": 37,
+  "star": 4,
+  "from": "¥430",
+  "lat": 34.3416,
+  "lng": 108.9398
+ },
+ {
+  "name": "Shanghai — Bund/People's Square",
+  "x": 52,
+  "y": 34,
+  "star": 5,
+  "from": "¥550",
+  "lat": 31.2304,
+  "lng": 121.4737
+ },
+ {
+  "name": "Chengdu — Chunxi Road area",
+  "x": 32,
+  "y": 51,
+  "star": 4,
+  "from": "¥380",
+  "lat": 30.5728,
+  "lng": 104.0668
+ },
+ {
+  "name": "Guilin / Yangshuo — Yulong River",
+  "x": 43,
+  "y": 65,
+  "star": 4,
+  "from": "¥330",
+  "lat": 25.2736,
+  "lng": 110.29
+ },
+ {
+  "name": "Hangzhou — Lakeside Hubin",
+  "x": 53,
+  "y": 41,
+  "star": 4,
+  "from": "¥520",
+  "lat": 30.2741,
+  "lng": 120.1551
+ },
+ {
+  "name": "Sanya — Yalong Bay resorts",
+  "x": 45,
+  "y": 91,
+  "star": 5,
+  "from": "¥600",
+  "lat": 18.2528,
+  "lng": 109.5119
+ },
+ {
+  "name": "Lijiang — Old town guesthouses",
+  "x": 26,
+  "y": 60,
+  "star": 3,
+  "from": "¥260",
+  "lat": 26.8721,
+  "lng": 100.2299
+ }
+]

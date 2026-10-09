@@ -1,0 +1,82 @@
+[
+ {
+  "id": "cycling",
+  "name": "Cycling Tours",
+  "sub": "Rural roads &amp; scenic routes",
+  "desc": "China's countryside is perfect for two wheels. The classic loop rides Yangshuo's karst rice-paddies, Lijiang's ancient lanes to Jade Dragon, and Xi'an City Wall's 13.7 km circuit. E-bikes are everywhere — rent from ¥30–100/day. Avoid riding on major highways; stick to county roads and scenic areas. Best months: Apr–May and Sep–Nov for mild weather.",
+  "img": "https://aka.doubaocdn.com/s/dJOx2msAS6",
+  "match": [
+   "guilin-liriver",
+   "xian-city-wall",
+   "lijiang-old-town",
+   "west-lake"
+  ]
+ },
+ {
+  "id": "self-drive",
+  "name": "Self-Drive Tours",
+  "sub": "Freedom to explore",
+  "desc": "Road trips unlock places trains don't reach. Note: you need a Chinese driver's license or an International Driving Permit + temporary Chinese license issued at the port of entry — not all rental agencies accept IDPs, so book via international-friendly platforms. Highways are tolled and well signposted. Signature routes: the Hainan island loop, Chengdu–Jiuzhaigou mountain road, and the Yunnan–Lijiang valley drive. City driving in Beijing/Shanghai is restricted on weekdays — prefer trains in big cities.",
+  "img": "https://aka.doubaocdn.com/s/RGCF2OMaFi",
+  "match": [
+   "sanya",
+   "jiuzhaigou",
+   "lijiang-old-town",
+   "zhangjiajie"
+  ]
+ },
+ {
+  "id": "hiking",
+  "name": "Hiking &amp; Trekking",
+  "sub": "Adventure on foot",
+  "desc": "From Great Wall sections to Huangshan's granite peaks and Zhangjiajie's pillar forests, China rewards walkers. Use cable cars to save energy for the summit miles, carry water and start early. Tiger Leaping Gorge in Yunnan is the classic multi-day trek. Fitness level: moderate for wall &amp; mountain loops, challenging for full ridge lines.",
+  "img": "https://aka.doubaocdn.com/s/XRYDLLbeKI",
+  "match": [
+   "great-wall",
+   "huangshan",
+   "zhangjiajie",
+   "guilin-liriver"
+  ]
+ },
+ {
+  "id": "family",
+  "name": "Family Travel",
+  "sub": "Fun for all ages",
+  "desc": "Kid-friendly China is easy: pandas in Chengdu, the Great Wall cable car, Shanghai's skyline and Disneyland (from ¥475), Sanya's beaches, and Harbin's ice castles in winter. High-speed rail keeps travel short and comfortable. Family hotels, strollers and halal/vegetarian food are widely available in tourist cities.",
+  "img": "https://aka.doubaocdn.com/s/X9rVoATrc8",
+  "match": [
+   "panda-base",
+   "sanya",
+   "shanghai-bund",
+   "harbin-ice"
+  ]
+ },
+ {
+  "id": "photography",
+  "name": "Photography Tours",
+  "sub": "Capture the beauty",
+  "desc": "Golden hours matter: Huangshan's sea of clouds at sunrise, Jiuzhaigou's lakes in autumn, Zhangjiajie's mist, Yangshuo's karst reflections and Dunhuang's dunes at dusk. Bring a wide lens for landscapes, a tele for details, and a tripod (allowed in most parks with a permit). Plan around weather — mist and rain make Chinese landscapes moodier, not worse.",
+  "img": "https://aka.doubaocdn.com/s/4udMdHwxyC",
+  "match": [
+   "huangshan",
+   "jiuzhaigou",
+   "zhangjiajie",
+   "guilin-liriver",
+   "mogao-caves",
+   "potala-palace"
+  ]
+ },
+ {
+  "id": "luxury",
+  "name": "Luxury Tours",
+  "sub": "Premium experiences",
+  "desc": "China's luxury scene spans heritage hotels inside old-town courtyards (Beijing, Hangzhou, Lijiang), 5★ resorts on Sanya and Yalong Bay, private guided tours with drivers, and first/business-class high-speed rail. Add private evening cruises on the Huangpu or Li rivers, and spa days at Chengdu's panda-adjacent resorts.",
+  "img": "https://aka.doubaocdn.com/s/qlvI8OsbeP",
+  "match": [
+   "sanya",
+   "potala-palace",
+   "shanghai-bund",
+   "west-lake"
+  ]
+ }
+]
