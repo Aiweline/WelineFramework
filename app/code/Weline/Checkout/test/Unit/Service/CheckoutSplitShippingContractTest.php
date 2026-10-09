@@ -12,6 +12,7 @@ final class CheckoutSplitShippingContractTest extends TestCase
     {
         $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/CheckoutGroupSubmitService.php');
         self::assertStringContainsString('applyFulfillmentSplitKeys', $src);
+        self::assertStringContainsString('applyDropshipPreferredWarehouses', $src);
         self::assertStringContainsString('quoteSplit', $src);
         self::assertStringContainsString('shipping_request_hash', $src);
         self::assertStringContainsString('shipping_packages', $src);

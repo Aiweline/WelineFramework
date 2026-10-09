@@ -229,6 +229,7 @@ final class CheckoutGroupSubmitService
         }
         $configVersion = $activeConfigVersion;
 
+        $lines = $this->applyDropshipPreferredWarehouses($lines, $scope);
         $lines = $this->applyFulfillmentSplitKeys($lines, $scope);
         $orders = $this->bucketBySplitKey($lines);
         $this->allocation->assertCompatible($orders);
@@ -1348,6 +1349,35 @@ final class CheckoutGroupSubmitService
         }
 
         return $out;
+    }
+
+    /**
+     * Dropship 可选 enrichment：listing.local_warehouse_id → preferred_warehouse_id。
+     *
+     * @param list<array<string, mixed>> $lines
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function applyDropshipPreferredWarehouses(array $lines, array $scope): array
+    {
+        if (!$this->resolveRuntimeInventory && $this->splitShippingQuotes === null) {
+            return $lines;
+        }
+        if (!class_exists(\Weline\Dropship\Service\DropshipPreferredWarehouseBinder::class)) {
+            return $lines;
+        }
+        try {
+            /** @var \Weline\Dropship\Service\DropshipPreferredWarehouseBinder $binder */
+            $binder = ObjectManager::getInstance(\Weline\Dropship\Service\DropshipPreferredWarehouseBinder::class);
+
+            return $binder->bind(
+                $lines,
+                (int)($scope['website_id'] ?? 0),
+                (int)($scope['store_id'] ?? 0),
+            );
+        } catch (\Throwable) {
+            return $lines;
+        }
     }
 
     /**

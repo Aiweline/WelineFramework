@@ -62,7 +62,15 @@ final class FulfillmentSplitPlanService implements FulfillmentSplitPlanInterface
         foreach ($shippable as $line) {
             $offerId = (int)($line['offer_id'] ?? $line['product_offer_id'] ?? 0);
             $qty = $this->lineQtyMinor($line);
-            $warehouseId = $this->pickWarehouse($websiteId, $offerId, $qty, $authorized, $defaultId);
+            $preferred = (int)($line['preferred_warehouse_id'] ?? $line['warehouse_id'] ?? 0);
+            $warehouseId = $this->pickWarehouse(
+                $websiteId,
+                $offerId,
+                $qty,
+                $authorized,
+                $defaultId,
+                $preferred,
+            );
             if ($warehouseId <= 0) {
                 throw new \RuntimeException(self::ERROR_UNFULFILLABLE);
             }
@@ -91,7 +99,15 @@ final class FulfillmentSplitPlanService implements FulfillmentSplitPlanInterface
         int $qtyMinor,
         array $authorized,
         int $defaultId,
+        int $preferredWarehouseId = 0,
     ): int {
+        // Dropship/上游声明的偏好仓：须在 Store 授权内且配额足够（无配额行=允许）
+        if ($preferredWarehouseId > 0 && in_array($preferredWarehouseId, $authorized, true)) {
+            if ($offerId <= 0 || $this->quotaEnough($websiteId, $preferredWarehouseId, $offerId, $qtyMinor)) {
+                return $preferredWarehouseId;
+            }
+        }
+
         $ordered = $authorized;
         usort($ordered, static function (int $a, int $b) use ($defaultId): int {
             if ($a === $defaultId && $b !== $defaultId) {

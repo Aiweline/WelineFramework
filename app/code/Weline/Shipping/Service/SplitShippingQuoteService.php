@@ -396,6 +396,8 @@ final class SplitShippingQuoteService implements SplitShippingQuoteServiceInterf
             ]];
         }
         try {
+            $lines = $this->bindDropshipPreferredWarehouses($websiteId, $storeId, $lines);
+
             return $plan->planPackages($websiteId, $storeId, $lines);
         } catch (\Throwable $e) {
             throw new ShippingQuoteConflictException(
@@ -404,6 +406,27 @@ final class SplitShippingQuoteService implements SplitShippingQuoteServiceInterf
                 ['website_id' => $websiteId, 'store_id' => $storeId],
                 $e,
             );
+        }
+    }
+
+    /**
+     * @param list<array<string,mixed>> $lines
+     * @return list<array<string,mixed>>
+     */
+    private function bindDropshipPreferredWarehouses(int $websiteId, int $storeId, array $lines): array
+    {
+        if (!class_exists(\Weline\Dropship\Service\DropshipPreferredWarehouseBinder::class)) {
+            return $lines;
+        }
+        try {
+            /** @var \Weline\Dropship\Service\DropshipPreferredWarehouseBinder $binder */
+            $binder = $this->objectManager->getInstance(
+                \Weline\Dropship\Service\DropshipPreferredWarehouseBinder::class
+            );
+
+            return $binder->bind($lines, $websiteId, $storeId);
+        } catch (\Throwable) {
+            return $lines;
         }
     }
 
