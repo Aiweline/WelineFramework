@@ -115,3 +115,8 @@ Weline,Weline
 无法连接服务器，请检查网络后重试。,"Could not reach the server. Check your network and retry."
 请求失败,"Request failed"
 请求失败，请稍后重试。,"Request failed. Please try again later."
+商城范围已变更,"Store scope changed"
+当前页面商城范围已过期，正在刷新以继续。,"This page's store scope expired. Refreshing to continue."
+检测到渠道或店铺切换，正在刷新页面。,"A channel or store switch was detected. Refreshing the page."
+商城范围冲突,"Store scope conflict"
+当前请求与页面商城范围不一致，正在刷新页面。,"This request does not match the page store scope. Refreshing the page."

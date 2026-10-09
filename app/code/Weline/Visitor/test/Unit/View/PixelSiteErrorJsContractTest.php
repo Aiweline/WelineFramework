@@ -20,6 +20,7 @@ class PixelSiteErrorJsContractTest extends TestCore
         self::assertStringContainsString('deployVersion', $js);
         self::assertStringContainsString("window.addEventListener('weline:api:error'", $js);
         self::assertStringContainsString('__onWelineApiError', $js);
+        self::assertStringContainsString('detail && detail.silent', $js);
         self::assertStringContainsString("capture_source: 'api'", $js);
         self::assertStringContainsString('__isBenignSiteIncident', $js);
         self::assertStringContainsString('error_message: message', $js);
@@ -34,6 +35,7 @@ class PixelSiteErrorJsContractTest extends TestCore
         self::assertStringContainsString('__installSiteErrorMonitors', $js);
         self::assertStringContainsString("window.addEventListener('weline:api:error'", $js);
         self::assertStringContainsString('__onWelineApiError', $js);
+        self::assertStringContainsString('detail && detail.silent', $js);
     }
 
     public function testFrontendWelineApiAlwaysNotifiesApiFailure(): void

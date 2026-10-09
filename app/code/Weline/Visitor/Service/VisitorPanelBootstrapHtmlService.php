@@ -7,6 +7,7 @@ namespace Weline\Visitor\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\DeveloperAccessPolicy;
+use Weline\Framework\View\PublicThemeNamespace;
 
 /**
  * 生成开发面板「访问事件」Tab 的全局引导 HTML。
@@ -188,8 +189,10 @@ HTML;
     {
         $url = '/' . \trim($modulePath, '/') . '/view/statics/' . \ltrim($file, '/');
         if (\defined('PROD') && PROD) {
-            $themePath = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
-            $url = '/static/' . \str_replace('\\', '/', (string)$themePath) . $url;
+            $themePath = PublicThemeNamespace::resolve(
+                (string)(Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme')
+            );
+            $url = '/static/' . \trim($themePath, '/') . $url;
         }
 
         return $url;

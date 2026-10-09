@@ -47,6 +47,8 @@ final class StorefrontPixelBootstrapWidgetContractTest extends TestCase
         self::assertStringContainsString('header-widget-eager', $svc);
         self::assertStringContainsString('__WelinePixelPending', $svc);
         self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20261009-prod-console1'", $svc);
+        self::assertStringContainsString("@\\filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api.js')", $svc);
+        self::assertStringContainsString("@\\filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api-worker.js')", $svc);
     }
 
     public function testThemeAndHanfuHeadersDeclarePixelBootstrapSlot(): void

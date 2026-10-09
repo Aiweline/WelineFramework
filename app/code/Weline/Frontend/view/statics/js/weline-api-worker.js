@@ -696,18 +696,31 @@
 
     async function ensureSession(config) {
         const now = Math.floor(Date.now() / 1000);
+
+        // SharedWorker survives full navigations (retail ↔ /b2b). A new page comes
+        // with a fresh Scope bootstrap Cookie+meta; drop the previous session and
+        // handshake again instead of throwing a sticky 409 toast.
+        if (workerSession && (
+            workerScopeBootstrapId !== config.scopeBootstrapId ||
+            workerBackendBootstrapId !== config.backendBootstrapId
+        )) {
+            workerSession = null;
+            workerScopeBootstrapId = '';
+            workerBackendBootstrapId = '';
+        }
+
         if (
             workerSession &&
             workerSession.expires_at > now + 5 &&
             workerSession.deploy_version === config.deployVersion &&
-            workerSession.worker_build_id === config.workerBuildId &&
-            workerScopeBootstrapId === config.scopeBootstrapId &&
-            workerBackendBootstrapId === config.backendBootstrapId
+            workerSession.worker_build_id === config.workerBuildId
         ) {
             return workerSession;
         }
 
         if (workerSession && workerSession.scope_bound === true && workerSession.attested_area !== 'backend') {
+            // Scope bootstrap Cookie is one-shot; after deploy/build/expiry drift the
+            // page must reload to mint a fresh bootstrap marker.
             throw Object.assign(new Error('The page Scope has expired or changed. Reload the page to continue.'), {
                 code: 'scope_reload_required',
                 status: 401,
@@ -717,15 +730,6 @@
             // Backend PHP Session may still be valid while the Worker token or
             // page bootstrap bridge is stale (WLS reload, deploy rotation, etc.).
             workerSession = null;
-        }
-        if (workerSession && (
-            workerScopeBootstrapId !== config.scopeBootstrapId ||
-            workerBackendBootstrapId !== config.backendBootstrapId
-        )) {
-            throw Object.assign(new Error('The page Worker bootstrap changed while this worker was active.'), {
-                code: 'scope_context_conflict',
-                status: 409,
-            });
         }
 
         if (!handshakePromise) {
@@ -806,7 +810,9 @@
                 ? String(body.error.code)
                 : 'auth_error';
             if (
-                response.status === 503
+                response.status === 502
+                || response.status === 503
+                || response.status === 504
                 || code === 'worker_capacity_exhausted'
                 || /capacity|上限|exhausted/i.test(String(message || ''))
             ) {
@@ -859,6 +865,29 @@
         return run;
     }
 
+    function isTransientGatewayResult(result) {
+        if (!result) {
+            return false;
+        }
+        const status = Number(result.status) || 0;
+        if (status === 502 || status === 503 || status === 504) {
+            return true;
+        }
+        const code = result.body && result.body.error && result.body.error.code
+            ? String(result.body.error.code)
+            : '';
+        if (code === 'service_unavailable' || code === 'network_error') {
+            return true;
+        }
+        if (status === 0) {
+            const message = result.body && result.body.error && result.body.error.message
+                ? String(result.body.error.message)
+                : '';
+            return /Failed to fetch|NetworkError|network|load failed|ECONNREFUSED/i.test(message);
+        }
+        return false;
+    }
+
     async function executeSignedRequest(config, payload, capability) {
         const lane = isTelemetryCapability(capability) ? 'telemetry' : 'interactive';
         let result = await postSigned(config, payload, capability, lane);
@@ -868,6 +897,19 @@
             result = await postSigned(config, payload, capability, lane);
         } else if (!result.responseOk && shouldInvalidateWorkerSession(result.status, result.body)) {
             workerSession = null;
+            result = await postSigned(config, payload, capability, lane);
+        }
+        // Worker bounce / nginx 502 / admission 503: retry without killing the session
+        // so concurrent QueryBin callers are not blocked by one transient failure.
+        let gatewayAttempt = 0;
+        while (!result.responseOk && isTransientGatewayResult(result) && gatewayAttempt < 2) {
+            gatewayAttempt += 1;
+            if (result.status === 502 || result.status === 503 || result.status === 504) {
+                noteHandshakePressure();
+            } else {
+                noteHandshakeSoftBackoff();
+            }
+            await sleepMs(250 * gatewayAttempt);
             result = await postSigned(config, payload, capability, lane);
         }
         return result;
@@ -928,26 +970,51 @@
                 config
             );
 
-            const response = await fetch(fetchUrl, {
-                method: 'POST',
-                credentials: 'same-origin',
-                redirect: 'manual',
-                cache: 'no-store',
-                headers: {
-                    'Content-Type': CONTENT_TYPE,
-                    'X-Weline-Protocol': PROTOCOL,
-                    'X-Weline-Worker-Protocol': WORKER_PROTOCOL,
-                    'X-Weline-Deploy-Version': config.deployVersion,
-                    'X-Weline-Worker-Build-Id': config.workerBuildId,
-                    'X-Weline-Worker-Session': sessionSnapshot.worker_session_token,
-                    'X-Weline-Worker-Capability': capability,
-                    'X-Weline-Worker-Nonce': nonce,
-                    'X-Weline-Worker-Timestamp': timestamp,
-                    'X-Weline-Worker-Body-Hash': bodyHash,
-                    'X-Weline-Worker-Signature': signature,
-                },
-                body: rawBody,
-            });
+            let response;
+            try {
+                response = await fetch(fetchUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    redirect: 'manual',
+                    cache: 'no-store',
+                    headers: {
+                        'Content-Type': CONTENT_TYPE,
+                        'X-Weline-Protocol': PROTOCOL,
+                        'X-Weline-Worker-Protocol': WORKER_PROTOCOL,
+                        'X-Weline-Deploy-Version': config.deployVersion,
+                        'X-Weline-Worker-Build-Id': config.workerBuildId,
+                        'X-Weline-Worker-Session': sessionSnapshot.worker_session_token,
+                        'X-Weline-Worker-Capability': capability,
+                        'X-Weline-Worker-Nonce': nonce,
+                        'X-Weline-Worker-Timestamp': timestamp,
+                        'X-Weline-Worker-Body-Hash': bodyHash,
+                        'X-Weline-Worker-Signature': signature,
+                    },
+                    body: rawBody,
+                });
+            } catch (networkError) {
+                // Upstream refuse / brief Worker bounce → structured transient, not a thrown
+                // that aborts the signedRequestChain for sibling callers.
+                noteHandshakeSoftBackoff();
+                const message = networkError instanceof Error
+                    ? networkError.message
+                    : String(networkError || 'network_error');
+                return {
+                    responseOk: false,
+                    status: 0,
+                    statusText: '',
+                    headers: {},
+                    body: {
+                        ok: false,
+                        data: null,
+                        error: {
+                            code: 'service_unavailable',
+                            message,
+                        },
+                        request_id: '',
+                    },
+                };
+            }
 
             assertBinaryFetchResponse(response);
             const responseBytes = new Uint8Array(await response.arrayBuffer());
@@ -957,8 +1024,8 @@
                 try {
                     body = decodeResponsePacket(response, responseBytes);
                 } catch (error) {
-                    // Maintenance/startup gates return JSON/HTML, not WQB1 — keep headers for detection.
-                    if (response.status === 503) {
+                    // Gateway/admission pages return JSON/HTML, not WQB1 — keep headers for detection.
+                    if (response.status === 502 || response.status === 503 || response.status === 504) {
                         body = tryParseJsonBytes(responseBytes);
                         if (!body) {
                             throw error;

@@ -619,6 +619,21 @@
                 title: i18nText('网络异常'),
                 message: i18nText('无法连接服务器，请检查网络后重试。'),
             },
+            scope_reload_required: {
+                title: i18nText('商城范围已变更'),
+                message: i18nText('当前页面商城范围已过期，正在刷新以继续。'),
+                autoReload: true,
+            },
+            scope_context_conflict: {
+                title: i18nText('商城范围已变更'),
+                message: i18nText('检测到渠道或店铺切换，正在刷新页面。'),
+                autoReload: true,
+            },
+            request_scope_already_conflicts: {
+                title: i18nText('商城范围冲突'),
+                message: i18nText('当前请求与页面商城范围不一致，正在刷新页面。'),
+                autoReload: true,
+            },
         };
         const byStatus = {
             521: byCode.origin_unreachable,
@@ -651,7 +666,32 @@
             code: displayCode,
             details: showDetails ? details : '',
             detailsLabel: i18nText('查看详情'),
+            autoReload: !!(preset && preset.autoReload),
         };
+    };
+
+    const SCOPE_RELOAD_GUARD_KEY = 'weline.api.scope_reload_at';
+    const maybeAutoReloadForScopeConflict = (presentation) => {
+        if (!presentation || !presentation.autoReload) {
+            return false;
+        }
+        try {
+            const now = Date.now();
+            const last = Number(sessionStorage.getItem(SCOPE_RELOAD_GUARD_KEY) || 0) || 0;
+            // Prevent reload loops if the conflict persists after refresh.
+            if (last > 0 && (now - last) < 8000) {
+                return false;
+            }
+            sessionStorage.setItem(SCOPE_RELOAD_GUARD_KEY, String(now));
+        } catch (_error) {
+            // sessionStorage may be blocked; still attempt one reload.
+        }
+        try {
+            window.location.reload();
+            return true;
+        } catch (_error) {
+            return false;
+        }
     };
 
     const readErrorEnvelope = (error) => {
@@ -1088,11 +1128,9 @@
         client.config.defaultCurrency = freshConfig.defaultCurrency;
         client.config.availableCurrencies = freshConfig.availableCurrencies;
         client.config.area = freshConfig.area;
-        if (client.config.scopeBootstrapId !== freshConfig.scopeBootstrapId) {
-            const error = new Error('[Weline.Api] page Scope changed while the API client was active. Reload the page.');
-            error.code = 'scope_context_conflict';
-            throw error;
-        }
+        // Channel/store navigations mint a new bootstrap meta; adopt it so the
+        // SharedWorker can re-handshake instead of freezing on a sticky conflict.
+        client.config.scopeBootstrapId = freshConfig.scopeBootstrapId;
         return client;
     };
 
@@ -1969,17 +2007,46 @@
             return this.scopeWarmupPromise;
         }
 
+        isTransientServiceError(error) {
+            if (!error) {
+                return false;
+            }
+            const status = Number(error.status || error.statusCode || 0) || 0;
+            if (status === 502 || status === 503 || status === 504) {
+                return true;
+            }
+            const code = String(error.code || '').toLowerCase();
+            if (code === 'service_unavailable' || code === 'network_error' || code === 'worker_timeout') {
+                return true;
+            }
+            const message = String(error.message || '');
+            return /service_unavailable|502|503|504|Failed to fetch|NetworkError|Bad Gateway|temporarily unavailable/i.test(message);
+        }
+
         send(payload) {
             return this.dispatchToWorker(payload).catch((error) => {
-                if (!error || error.code !== 'worker_timeout' || (payload && payload.__workerRetry)) {
+                if (payload && payload.__workerRetry) {
                     throw error;
                 }
-                // Concurrent cart/account/bootstrap timeouts must share one recreate;
-                // otherwise each retry fetch()s weline-api-worker.js and floods Network.
-                return this.recoverWorkerAfterTimeout().then(() => {
-                    const retryPayload = Object.assign({}, payload, { __workerRetry: true });
-                    return this.dispatchToWorker(retryPayload);
-                });
+                if (error && error.code === 'worker_timeout') {
+                    // Concurrent cart/account/bootstrap timeouts must share one recreate;
+                    // otherwise each retry fetch()s weline-api-worker.js and floods Network.
+                    return this.recoverWorkerAfterTimeout().then(() => {
+                        const retryPayload = Object.assign({}, payload, { __workerRetry: true });
+                        return this.dispatchToWorker(retryPayload);
+                    });
+                }
+                // Transient gateway/network: one soft retry without resetting the Worker
+                // (reset would cancel sibling pending QueryBin calls).
+                if (this.isTransientServiceError(error)) {
+                    return new Promise((resolve) => {
+                        window.setTimeout(resolve, 350);
+                    }).then(() => {
+                        const retryPayload = Object.assign({}, payload, { __workerRetry: true });
+                        return this.dispatchToWorker(retryPayload);
+                    });
+                }
+                throw error;
             });
         }
 
@@ -2337,6 +2404,21 @@
                 if (code === 'auth_error' && /worker session is unavailable/i.test(message)) {
                     return;
                 }
+                // Silent background hydrate must not fan out into pixel site_error → more QueryBin.
+                const silentStatus = parseInt((meta && meta.status) || (error && error.status) || 0, 10) || 0;
+                if (
+                    meta && meta.silent
+                    && (
+                        silentStatus === 502
+                        || silentStatus === 503
+                        || silentStatus === 504
+                        || code === 'service_unavailable'
+                        || code === 'network_error'
+                        || code === 'worker_timeout'
+                    )
+                ) {
+                    return;
+                }
                 // Client-side handshake backoff is not a site incident worth GA4 site_error.
                 if (isWorkerHandshakeCooldownNoise(error)) {
                     return;
@@ -2457,6 +2539,9 @@
                 return;
             }
             if (isWorkerHandshakeCooldownNoise(error)) {
+                return;
+            }
+            if (maybeAutoReloadForScopeConflict(presentation)) {
                 return;
             }
             if (shouldDedupeDefaultErrorToast(presentation.code, message)) {

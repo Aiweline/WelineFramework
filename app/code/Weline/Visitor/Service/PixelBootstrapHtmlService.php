@@ -114,10 +114,18 @@ class PixelBootstrapHtmlService
         $scriptUrl = $this->moduleStaticUrl('Weline/Visitor', 'js/pixel.js') . '?v=' . self::PIXEL_SCRIPT_VERSION;
         // pixel.js 通过 Weline.Api.resource('visitor') 走 worker 通道上报；
         // 自建整页的渲染链路没有 theme.js，需要一并加载 API 运行时。
-        $apiScriptUrl = $this->moduleStaticUrl('Weline/Frontend', 'js/weline-api.js') . '?v=' . self::PIXEL_SCRIPT_VERSION;
+        // Bust api/worker with Frontend source mtime so sticky PIXEL_SCRIPT_VERSION
+        // cannot pin an obsolete SharedWorker/Scope client after Frontend edits.
+        $apiJsMtime = @\filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api.js');
+        $workerJsMtime = @\filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api-worker.js');
+        $apiScriptUrl = $this->moduleStaticUrl('Weline/Frontend', 'js/weline-api.js')
+            . '?v=' . self::PIXEL_SCRIPT_VERSION
+            . ($apiJsMtime ? ('-' . (string)$apiJsMtime) : '');
         // 自建页面无 theme.js 提供的 DEV 标记，weline-api.js 会按 PROD 规则解析 worker URL，
         // 这里由服务端直接给出正确地址，避免 404。
-        $workerScriptUrl = $this->moduleStaticUrl('Weline/Frontend', 'js/weline-api-worker.js');
+        $workerScriptUrl = $this->moduleStaticUrl('Weline/Frontend', 'js/weline-api-worker.js')
+            . '?v=' . self::PIXEL_SCRIPT_VERSION
+            . ($workerJsMtime ? ('-' . (string)$workerJsMtime) : '');
         $safePixelName = \htmlspecialchars($pixelName, \ENT_QUOTES, 'UTF-8');
         $eagerJs = $eager ? 'true' : 'false';
 
