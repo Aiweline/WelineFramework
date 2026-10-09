@@ -787,7 +787,10 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'requirement_use_case_closed_loop_acceptance'
             && str_contains((string) ($rule['summary'] ?? ''), 'covers_use_cases')
-            && str_contains((string) ($rule['summary'] ?? ''), '需求用例闭环验收未完成')),
+            && str_contains((string) ($rule['summary'] ?? ''), '需求用例闭环验收未完成')
+            && str_contains((string) ($rule['summary'] ?? ''), '任何需求都要用例闭环验收')
+            && str_contains((string) ($rule['summary'] ?? ''), '实际真机测试闭环')
+            && str_contains((string) ($rule['summary'] ?? ''), 'WB-OP')),
         false,
     ),
     'hard_constraints include requirement_fe_be_scope_analysis' => array_reduce(
