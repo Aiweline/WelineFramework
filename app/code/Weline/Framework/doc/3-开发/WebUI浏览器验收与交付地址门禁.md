@@ -57,9 +57,11 @@
 2. **计划级组套件**：另含 `id=e2e-plan-suite`（或描述含「计划链路/功能链路/e2e组/完整功能通路」）；**全部章节通路 e2e PASS 之后**，统一再跑整条功能链路组测。
 3. **真实执行** `php bin/w e2e:run <模块 test/e2e/...spec.js> --project=chromium`（或 `npx playwright test …` + 仓库 `tests/e2e/playwright.config.js`），**默认无头**（`e2e_playwright_headless_default`：不自动弹 Chromium；仅显式 `--headed`/`--ui` 或用户要求观看时才有界面），并把 **PASS evidence** 写入对应验收项；**status 必须为 `passed`**（禁止 `skipped`/`na` 冒充）。组套件 evidence 还须含 suite/组测/多 `.spec.js`/功能链路等信号。
 4. **仅正式 runner（硬，`e2e_playwright_formal_runner_only`）**：Playwright 必须由 runner 管生命周期（结束自动收浏览器）。**禁止** Agent 用 `node -e` / 一次性 `chromium.launch` 探活、后台挂起不管，导致 `chrome-headless-shell` 残留（含音频/CPU 泄漏）。缺覆盖则补模块 `Test/e2e` / `test/e2e` 的 `.spec.js` 再走正式入口。宿主 WB-OP（IDE Browser）不受本条约束。
-5. **禁止冒充 e2e**：仅 `curl`、仅 IDE Browser CDP `Runtime.evaluate`、口头「浏览器点过了」→ `e2e_evidence_weak` / `plan_suite_e2e_evidence_weak`，`closeout_allowed=false`。
-6. **禁止半截汇报 / 甩测给用户**：不得写「请刷新后再试 / 请你测试 / 请自行验证」；只做部分章节、未跑章 e2e 或未跑组套件 → 只能报 **「代码已改，e2e 未通过」**，禁止宣称计划完成。
-7. 与 WB-OP 关系：操作员 Browser（WB-OP）**不能替代**本门禁；两者都需要时都要做。
+5. **AI 录制落点（硬，`e2e_ai_record_into_module_formal_path`）**：录制脚本进所属模块 `test/e2e`/`Test/e2e` 的 `frontend/` 或 `backend/`；优先 `data-testid`；录完仍用本条正式 runner。细则：`tests/e2e/AI录制与发布门禁.md`。
+6. **全量发布前购物通路（硬，`full_release_requires_commerce_pathway_e2e`）**：用户明示全量发布 / 购物相关生产同步前，必须 `php bin/w e2e:run --suite=commerce-release` 全 PASS（清单 `tests/e2e/manifests/commerce-release-gate.v1.json`）；未过只能报「发布门禁未过」。不是仓库全部 smoke。
+7. **禁止冒充 e2e**：仅 `curl`、仅 IDE Browser CDP `Runtime.evaluate`、口头「浏览器点过了」→ `e2e_evidence_weak` / `plan_suite_e2e_evidence_weak`，`closeout_allowed=false`。
+8. **禁止半截汇报 / 甩测给用户**：不得写「请刷新后再试 / 请你测试 / 请自行验证」；只做部分章节、未跑章 e2e 或未跑组套件 → 只能报 **「代码已改，e2e 未通过」**，禁止宣称计划完成。
+9. 与 WB-OP 关系：操作员 Browser（WB-OP）**不能替代**本门禁；两者都需要时都要做。
 
 证据须含可机读信号之一：`e2e:run` / `playwright` / `.spec.js` / `passed(N)`。
 

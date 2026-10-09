@@ -2,11 +2,26 @@
 
 declare(strict_types=1);
 
+namespace Weline\Framework\Test\Console\E2e;
+
+if (!\function_exists(__NAMESPACE__ . '\\__')) {
+    function __(string $text, array $params = []): string
+    {
+        foreach ($params as $index => $value) {
+            $text = \str_replace('%{' . ((int)$index + 1) . '}', (string)$value, $text);
+        }
+
+        return $text;
+    }
+}
+
 namespace Weline\Framework\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Weline\Framework\Test\Console\E2e\Run;
+
+\defined('BP') || \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
 
 final class E2eRunArgumentsTest extends TestCase
 {
@@ -57,5 +72,43 @@ final class E2eRunArgumentsTest extends TestCase
 
         self::assertTrue($mode['headless']);
         self::assertSame('1', $mode['env']['PLAYWRIGHT_HEADLESS'] ?? null);
+    }
+
+    public function testParseControlOptionsCapturesSuiteAndListSuites(): void
+    {
+        $run = (new ReflectionClass(Run::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(Run::class, 'parseControlOptions');
+        $control = $method->invoke($run, [
+            'suite' => 'commerce-release',
+            'list-suites' => true,
+        ]);
+
+        self::assertSame('commerce-release', $control['suite']);
+        self::assertTrue($control['list_suites']);
+    }
+
+    public function testResolveSuiteFilesCommerceReleaseReturnsExistingSpecs(): void
+    {
+        $run = (new ReflectionClass(Run::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(Run::class, 'resolveSuiteFiles');
+        $e2eDir = BP . 'tests' . DIRECTORY_SEPARATOR . 'e2e';
+        $files = $method->invoke($run, 'commerce-release', $e2eDir);
+
+        self::assertNotEmpty($files);
+        foreach ($files as $file) {
+            self::assertIsString($file);
+            self::assertFileExists($file);
+            self::assertStringEndsWith('.spec.js', $file);
+        }
+    }
+
+    public function testResolveSuiteFilesUnknownSuiteFailsClosed(): void
+    {
+        $run = (new ReflectionClass(Run::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(Run::class, 'resolveSuiteFiles');
+        $e2eDir = BP . 'tests' . DIRECTORY_SEPARATOR . 'e2e';
+
+        $this->expectException(\InvalidArgumentException::class);
+        $method->invoke($run, 'not-a-real-suite', $e2eDir);
     }
 }

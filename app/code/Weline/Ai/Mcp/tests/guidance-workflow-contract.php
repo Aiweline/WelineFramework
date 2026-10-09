@@ -449,6 +449,33 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'chromium.launch')),
         false,
     ),
+    'hard_constraints include e2e_ai_record_into_module_formal_path' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'e2e_ai_record_into_module_formal_path'
+            && str_contains((string) ($rule['summary'] ?? ''), 'test/e2e')
+            && str_contains((string) ($rule['summary'] ?? ''), 'data-testid')
+            && str_contains((string) ($rule['summary'] ?? ''), 'formal runner')),
+        false,
+    ),
+    'hard_constraints include full_release_requires_commerce_pathway_e2e' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'full_release_requires_commerce_pathway_e2e'
+            && str_contains((string) ($rule['summary'] ?? ''), 'commerce-release')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FULL RELEASE')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FAIL')),
+        false,
+    ),
+    'hard_constraints include automation_test_report_durable_evidence' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'automation_test_report_durable_evidence'
+            && str_contains((string) ($rule['summary'] ?? ''), 'USER-FACING')
+            && str_contains((string) ($rule['summary'] ?? ''), 'order_uuid')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')),
+        false,
+    ),
     'hard_constraints include browser_cache_disabled_on_open' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -1654,6 +1681,21 @@ $checks = [
     'webui surface requires e2e_playwright_formal_runner_only norm' => array_reduce(
         is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'e2e_playwright_formal_runner_only'),
+        false,
+    ),
+    'webui surface requires e2e_ai_record_into_module_formal_path norm' => array_reduce(
+        is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'e2e_ai_record_into_module_formal_path'),
+        false,
+    ),
+    'webui surface requires full_release_requires_commerce_pathway_e2e norm' => array_reduce(
+        is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'full_release_requires_commerce_pathway_e2e'),
+        false,
+    ),
+    'webui surface requires automation_test_report_durable_evidence norm' => array_reduce(
+        is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'automation_test_report_durable_evidence'),
         false,
     ),
     'hard_rules require browser operator self-test' => array_reduce(

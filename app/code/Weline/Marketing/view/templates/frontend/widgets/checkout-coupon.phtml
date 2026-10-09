@@ -33,12 +33,14 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
                     name="coupon_code"
                     autocomplete="off"
                     data-marketing-coupon-input
+                    data-testid="checkout-coupon-input"
                     placeholder="<?= $esc((string)__('输入优惠券代码')) ?>"
                 />
             </div>
             <button type="button"
                     class="w-marketing-checkout-coupon__apply"
                     data-marketing-coupon-apply
+                    data-testid="checkout-coupon-apply"
                     data-i18n-loading="<?= $esc((string)\Weline\Theme\Helper\WidgetI18n::label('应用中...')) ?>">
                 <?= $esc((string)\Weline\Theme\Helper\WidgetI18n::label('应用优惠券')) ?>
             </button>

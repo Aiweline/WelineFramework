@@ -1,0 +1,150 @@
+{
+  "schema": "commerce-release-gate.v1",
+  "suite_id": "commerce-release",
+  "title": "全量发布前购物通路门禁",
+  "description": "Curated multi-scope shopping pathways that MUST PASS via php bin/w e2e:run --suite=commerce-release before full release. Not every Theme/Admin smoke. Missing sandbox credentials MUST FAIL (no skip).",
+  "runner": "php bin/w e2e:run --suite=commerce-release --project=chromium",
+  "hard_rule": "full_release_requires_commerce_pathway_e2e",
+  "pathways": [
+    {
+      "id": "CR-CONTINUE-PAY-REAL",
+      "scope": "continue_pay",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/checkout-continue-pay-real-pathway.spec.js",
+      "rationale": "真实续付主通路（order_uuid 级证据）"
+    },
+    {
+      "id": "CR-CANCEL-CONTINUE-PAY-SUITE",
+      "scope": "continue_pay_cancel",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/checkout-payment-cancel-continue-pay-plan-suite.spec.js",
+      "rationale": "取消支付后继续支付计划组套件"
+    },
+    {
+      "id": "CR-PAYPAL-ACCOUNT-LIFECYCLE",
+      "scope": "paypal_account_lifecycle",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/release-paypal-account-lifecycle-plan-suite.spec.js",
+      "rationale": "PayPal 账户生命周期发布组套件"
+    },
+    {
+      "id": "CR-EXPRESS-REVIEW",
+      "scope": "express_checkout",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/Weline_Checkout-express-review.spec.js",
+      "rationale": "快捷结账审阅通路"
+    },
+    {
+      "id": "CR-CURRENCY-ADDRESS-QUOTE",
+      "scope": "currency_address_quote",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/Weline_Checkout-currency-address-quote.spec.js",
+      "rationale": "币种/地址/报价联动"
+    },
+    {
+      "id": "CR-MULTI-WAREHOUSE-SPLIT",
+      "scope": "multi_warehouse_split",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/checkout-multi-warehouse-split.spec.js",
+      "rationale": "多仓拆单结账范围"
+    },
+    {
+      "id": "CR-ACCOUNT-CONTINUE-PAY",
+      "scope": "account_continue_pay",
+      "module": "Weline_Order",
+      "spec": "app/code/Weline/Order/Test/e2e/frontend/account-continue-pay.spec.js",
+      "rationale": "账户订单续付入口"
+    },
+    {
+      "id": "CR-HELPPAY-QUICK-SUITE",
+      "scope": "helppay_quick",
+      "module": "Weline_HelpPay",
+      "spec": "app/code/Weline/HelpPay/Test/e2e/frontend/product-quick-pay-plan-suite.spec.js",
+      "rationale": "商品快捷/帮付计划组套件"
+    },
+    {
+      "id": "CR-HELPPAY-CHECKOUT-ADDRESS",
+      "scope": "helppay_checkout_address",
+      "module": "Weline_HelpPay",
+      "spec": "app/code/Weline/HelpPay/Test/e2e/frontend/checkout-help-pay-address.spec.js",
+      "rationale": "帮付结账地址通路"
+    },
+    {
+      "id": "CR-CART-GUEST-LOGIN-MERGE",
+      "scope": "guest_login_cart_merge",
+      "module": "Weline_Cart",
+      "spec": "app/code/Weline/Cart/Test/e2e/frontend/plan-p2e02-guest-login-merge.spec.js",
+      "rationale": "游客登录购物车合并"
+    },
+    {
+      "id": "CR-CART-BOUNDARIES",
+      "scope": "cart_boundaries",
+      "module": "Weline_Cart",
+      "spec": "app/code/Weline/Cart/Test/e2e/frontend/plan-p2e01-03-cart-boundaries.spec.js",
+      "rationale": "购物车边界通路"
+    },
+    {
+      "id": "CR-B2B-WHOLESALE-DISPLAY",
+      "scope": "b2b_wholesale_display",
+      "module": "Weline_B2B",
+      "spec": "app/code/Weline/B2B/Test/e2e/frontend/wholesale-display-gate-plan-suite.spec.js",
+      "rationale": "B2B 批发展示门禁"
+    },
+    {
+      "id": "CR-B2B-QTY-TIERS",
+      "scope": "b2b_qty_tiers",
+      "module": "Weline_B2B",
+      "spec": "app/code/Weline/B2B/Test/e2e/frontend/qty-tiers-total-save-plan-suite.spec.js",
+      "rationale": "B2B 数量阶梯价"
+    },
+    {
+      "id": "CR-B2B-CART-TYPE",
+      "scope": "b2b_cart_type",
+      "module": "Weline_B2B",
+      "spec": "app/code/Weline/B2B/Test/e2e/frontend/cart-type-chooser-plan-suite.spec.js",
+      "rationale": "B2B 购车类型选择"
+    },
+    {
+      "id": "CR-SHIPPING-SPLIT-SUITE",
+      "scope": "shipping_split",
+      "module": "Weline_Shipping",
+      "spec": "app/code/Weline/Shipping/Test/e2e/backend/Weline_Shipping-split-plan-suite.spec.js",
+      "rationale": "运费/拆单计划组套件（影响购物报价范围）"
+    },
+    {
+      "id": "CR-PAYMENT-STOREFRONT-AVAIL",
+      "scope": "payment_storefront_availability",
+      "module": "Weline_Payment",
+      "spec": "app/code/Weline/Payment/Test/e2e/frontend/payment-guide-storefront-availability.spec.js",
+      "rationale": "店面支付方式可用性"
+    },
+    {
+      "id": "CR-MULTI-SCOPE-CHECKOUT",
+      "scope": "multi_scope_checkout",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/commerce-multi-scope-checkout-pathways.spec.js",
+      "rationale": "匿名/登录/批发结账 + 优惠券 + 订单留言多范围通路"
+    },
+    {
+      "id": "CR-EXPRESS-CHECKOUT-ORDER",
+      "scope": "express_checkout_order",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/commerce-express-checkout-pathway.spec.js",
+      "rationale": "快捷支付结账通路（startExpressCheckout + order_uuid 证据）"
+    },
+    {
+      "id": "CR-HELPPAY-PATHWAYS-ORDER",
+      "scope": "helppay_pathways_order",
+      "module": "Weline_HelpPay",
+      "spec": "app/code/Weline/HelpPay/Test/e2e/frontend/commerce-helppay-pathways.spec.js",
+      "rationale": "快捷购买 + 找朋友代付通路（transaction_no / order_uuid 证据）"
+    },
+    {
+      "id": "CR-B2B-STORE-CHECKOUT-PATHWAYS",
+      "scope": "b2b_store_checkout",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/commerce-b2b-store-checkout-pathways.spec.js",
+      "rationale": "独立 B2B 测试店（非默认店渠）匿名/登录/批发/快捷支付/帮付通路"
+    }
+  ]
+}

@@ -1200,10 +1200,14 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'delivery_default_host_test_weline_com', 'summary' => '本机主验收 Host 默认 {project_hash}.test.weline.com；禁止主链 *.weline.test；仅无前者时才用 127.0.0.1'],
                 ['id' => 'browser_release_after_delivery', 'summary' => '写完「交付地址」后立即关闭本回合打开的验收 Browser（unlock + close tabs）；禁止留下空转 webview；用户明确要求保留除外'],
                 ['id' => 'e2e_playwright_formal_runner_only', 'summary' => 'Playwright 仅 `php bin/w e2e:run` / `npx playwright test`；禁止 node -e / chromium.launch 探活残留 chrome-headless-shell'],
+                ['id' => 'e2e_ai_record_into_module_formal_path', 'summary' => 'AI 录制 E2E 落模块 test/e2e|Test/e2e 的 frontend/backend；优先 data-testid；只走正式 runner'],
+                ['id' => 'full_release_requires_commerce_pathway_e2e', 'summary' => '全量发布前必须 `php bin/w e2e:run --suite=commerce-release` 全 PASS（购物多范围通路门禁）'],
+                ['id' => 'automation_test_report_durable_evidence', 'summary' => '自动化验收面向用户收口必须回报可回查证据数据（order_uuid/transaction_no/券/邮箱等）；禁止只说 N passed/测试完了'],
             ],
             'verification_commands' => [
                 'curl --max-time 10 -I <probe_verified_acceptance_url>',
                 'php bin/w e2e:cleanup-browsers',
+                'php bin/w e2e:run --suite=commerce-release --project=chromium',
             ],
             'template_surface_rules' => [
                 'forbidden' => [
@@ -1221,6 +1225,8 @@ final class GuidanceWorkflowCatalog
                     'Preemptive foreground Browser navigate (position:active) stealing IDE/chat focus without user request to watch',
                     'Ad-hoc node -e / chromium.launch Playwright probes instead of php bin/w e2e:run or npx playwright test',
                     'Navigating Browser without curl --max-time probe, or waiting indefinitely on stuck Browser/lock instead of fail-closed unlock+close',
+                    'Claiming full release shippable without commerce-release suite PASS',
+                    'Leaving recorded Playwright probes outside module test/e2e|Test/e2e or treating disposable chromium.launch as deliverable E2E',
                 ],
                 'required' => [
                     'Define operator use cases (URL, steps, expected) before claiming Web done',
@@ -1231,6 +1237,8 @@ final class GuidanceWorkflowCatalog
                     'Immediately after the Delivery URLs section, close every acceptance Browser tab opened this turn (Cursor: unlock then browser_tabs close)',
                     'If Browser not run or host has no Browser: report only “代码已改，WebUI 验收未完成”',
                     'When Playwright is needed: launch only via formal runner (php bin/w e2e:run or npx playwright test)',
+                    'When AI records E2E: land under module test/e2e|Test/e2e frontend|backend; prefer data-testid; run via e2e:run',
+                    'Before full release: php bin/w e2e:run --suite=commerce-release must PASS',
                 ],
             ],
         ];

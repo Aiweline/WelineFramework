@@ -99,6 +99,17 @@ await gotoThemePreview(page, { pageType: 'homepage' });
 
 **Agent / MCP（硬，`e2e_playwright_formal_runner_only`）**：只允许本入口——`php bin/w e2e:run …` 或本目录下 `npx playwright test …`。禁止 `node -e` / 临时 `chromium.launch` 探活（易残留 `chrome-headless-shell`）。缺覆盖请补模块 `Test/e2e` / `test/e2e` 的 `.spec.js` 再跑正式 runner。
 
+**AI 录制（硬，`e2e_ai_record_into_module_formal_path`）**：录制脚本落模块 `test/e2e`/`Test/e2e` 的 `frontend/` 或 `backend/`；优先 `data-testid`；录完仍用本入口跑。细则：[AI录制与发布门禁.md](./AI录制与发布门禁.md)。
+
+**全量发布前购物通路（硬，`full_release_requires_commerce_pathway_e2e`）**：
+
+```bash
+php bin/w e2e:run --list-suites
+php bin/w e2e:run --suite=commerce-release --project=chromium
+```
+
+清单：`manifests/commerce-release-gate.v1.json`（多范围购物固化通路，非全仓 smoke）。
+
 **测试后清理（硬建议）**：`e2e:run` / Playwright `globalTeardown` 会自动清理自动化残留；Agent 验收 Browser 关完后还可补跑：
 
 ```bash

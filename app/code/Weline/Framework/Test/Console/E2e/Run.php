@@ -13,6 +13,9 @@ use Weline\Framework\Test\Service\TestCollectionService;
 class Run extends CommandAbstract
 {
     private const COLLECTED_TESTS_FILE = 'collected-tests.json';
+    private const SUITE_MANIFESTS = [
+        'commerce-release' => 'manifests' . DIRECTORY_SEPARATOR . 'commerce-release-gate.v1.json',
+    ];
 
     public function execute(array $args = [], array $data = []): int
     {
@@ -27,11 +30,22 @@ class Run extends CommandAbstract
         if ($control['list_modules']) {
             return $this->printModules($collected);
         }
+        if ($control['list_suites']) {
+            return $this->printSuites($e2eDir);
+        }
 
         $extraEnv = [];
         if ($control['spec'] === '') {
             $filesToRun = [];
-            if ($control['module'] !== '') {
+            if ($control['suite'] !== '') {
+                try {
+                    $filesToRun = $this->resolveSuiteFiles($control['suite'], $e2eDir);
+                } catch (\InvalidArgumentException $exception) {
+                    $this->printer->error($exception->getMessage());
+                    return 1;
+                }
+                $this->printer->note(__('套件 %{1}：%{2} 个通路 spec', [$control['suite'], (string)count($filesToRun)]));
+            } elseif ($control['module'] !== '') {
                 $filesToRun = $this->resolveModuleFiles($control['module'], $collected);
                 if ($filesToRun === []) {
                     $this->printer->warning(__('模块 %{1} 未找到 E2E 用例，退出。', [$control['module']]));
@@ -123,9 +137,11 @@ class Run extends CommandAbstract
                 '[spec]' => __('可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js'),
                 '--project=NAME' => __('指定 Playwright project，如 chromium/firefox/webkit'),
                 '--module=Vendor_Module' => __('只运行指定模块（基于 collected-tests.json 精准过滤）'),
+                '--suite=NAME' => __('运行固化套件（如 commerce-release＝全量发布前购物通路门禁）'),
                 '--case="用例标题关键字"' => __('按测试标题关键词筛选（映射为 --grep）'),
                 '--case-id=ID' => __('按 `[case:ID]` 标签筛选，推荐新用例使用该风格'),
                 '--list-modules' => __('列出可运行模块及文件数量'),
+                '--list-suites' => __('列出可用固化套件及通路数量'),
                 '--refresh-collection' => __('强制刷新测试收集映射'),
                 '--headed' => __('有界面模式（调试用；默认无头，需显式传入）'),
                 '--headless' => __('无界面模式（默认；设置 PLAYWRIGHT_HEADLESS=1）'),
@@ -136,11 +152,13 @@ class Run extends CommandAbstract
             [],
             [
                 __('运行全部 E2E') => 'php bin/w e2e:run',
+                __('全量发布前购物通路门禁') => 'php bin/w e2e:run --suite=commerce-release --project=chromium',
                 __('运行单个后端用例') => 'php bin/w e2e:run app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js --project=chromium',
                 __('按模块运行') => 'php bin/w e2e:run --module=WeShop_Cart --project=chromium',
                 __('按用例标题运行') => 'php bin/w e2e:run --module=WeShop_Cart --case="remove item" --project=chromium',
                 __('按用例 ID 运行') => 'php bin/w e2e:run --module=WeShop_Cart --case-id=CART-REMOVE-001 --project=chromium',
                 __('列模块') => 'php bin/w e2e:run --list-modules',
+                __('列套件') => 'php bin/w e2e:run --list-suites',
                 __('UI 调试') => 'php bin/w e2e:run --ui --project=chromium',
             ]
         );
@@ -164,6 +182,7 @@ class Run extends CommandAbstract
             'command' => true,
             'module' => true,
             'm' => true,
+            'suite' => true,
             'headless' => true,
             'case' => true,
             'case_id' => true,
@@ -172,6 +191,8 @@ class Run extends CommandAbstract
             'file' => true,
             'list_modules' => true,
             'list-modules' => true,
+            'list_suites' => true,
+            'list-suites' => true,
             'refresh_collection' => true,
             'refresh-collection' => true,
             'rc' => true,
@@ -630,13 +651,102 @@ class Run extends CommandAbstract
 
         return [
             'module' => $pick($args, ['module', 'm']),
+            'suite' => $pick($args, ['suite']),
             'headless' => isset($args['headless']),
             'case' => $pick($args, ['case']),
             'case_id' => $pick($args, ['case_id', 'case-id']),
             'spec' => $spec,
             'list_modules' => isset($args['list_modules']) || isset($args['list-modules']),
+            'list_suites' => isset($args['list_suites']) || isset($args['list-suites']),
             'refresh_collection' => isset($args['refresh_collection']) || isset($args['refresh-collection']) || isset($args['rc']),
         ];
+    }
+
+    /**
+     * Resolve frozen suite pathways to absolute Playwright file paths.
+     *
+     * @return list<string>
+     */
+    private function resolveSuiteFiles(string $suite, string $e2eDir): array
+    {
+        $suiteKey = trim($suite);
+        if ($suiteKey === '' || !isset(self::SUITE_MANIFESTS[$suiteKey])) {
+            $known = implode(', ', array_keys(self::SUITE_MANIFESTS));
+            throw new \InvalidArgumentException((string)__(
+                '未知 E2E 套件：%{1}。可用：%{2}',
+                [$suiteKey !== '' ? $suiteKey : '(empty)', $known]
+            ));
+        }
+
+        $manifestPath = $e2eDir . DIRECTORY_SEPARATOR . self::SUITE_MANIFESTS[$suiteKey];
+        if (!is_file($manifestPath)) {
+            throw new \InvalidArgumentException((string)__('套件清单不存在：%{1}', [$manifestPath]));
+        }
+
+        $raw = file_get_contents($manifestPath);
+        if ($raw === false || $raw === '') {
+            throw new \InvalidArgumentException((string)__('套件清单无法读取：%{1}', [$manifestPath]));
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            throw new \InvalidArgumentException((string)__('套件清单 JSON 无效：%{1}', [$manifestPath]));
+        }
+
+        $pathways = $decoded['pathways'] ?? null;
+        if (!is_array($pathways) || $pathways === []) {
+            throw new \InvalidArgumentException((string)__('套件清单无 pathways：%{1}', [$manifestPath]));
+        }
+
+        $files = [];
+        $missing = [];
+        foreach ($pathways as $pathway) {
+            if (!is_array($pathway)) {
+                continue;
+            }
+            $rel = trim((string)($pathway['spec'] ?? ''));
+            if ($rel === '') {
+                continue;
+            }
+            $absolute = str_starts_with($rel, DIRECTORY_SEPARATOR)
+                ? $rel
+                : BP . ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $rel), DIRECTORY_SEPARATOR);
+            if (!is_file($absolute)) {
+                $missing[] = $rel;
+                continue;
+            }
+            $files[] = $absolute;
+        }
+
+        if ($missing !== []) {
+            throw new \InvalidArgumentException((string)__(
+                '套件 %{1} 缺少 spec 文件（fail-closed）：%{2}',
+                [$suiteKey, implode('; ', $missing)]
+            ));
+        }
+
+        if ($files === []) {
+            throw new \InvalidArgumentException((string)__('套件 %{1} 未解析到任何 spec', [$suiteKey]));
+        }
+
+        return array_values(array_unique($files));
+    }
+
+    private function printSuites(string $e2eDir): int
+    {
+        $this->printer->note(__('可用 E2E 固化套件：'));
+        foreach (self::SUITE_MANIFESTS as $name => $relative) {
+            $count = 0;
+            $manifestPath = $e2eDir . DIRECTORY_SEPARATOR . $relative;
+            if (is_file($manifestPath)) {
+                $decoded = json_decode((string)file_get_contents($manifestPath), true);
+                if (is_array($decoded) && isset($decoded['pathways']) && is_array($decoded['pathways'])) {
+                    $count = count($decoded['pathways']);
+                }
+            }
+            $this->printer->note(' - ' . $name . ' (' . $count . ') → php bin/w e2e:run --suite=' . $name);
+        }
+        return 0;
     }
 
     private function loadCollectedTests(string $e2eDir, bool $refresh): array
