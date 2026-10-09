@@ -243,15 +243,16 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringNotContainsString('data-store-music-stage', $phtml);
         self::assertStringContainsString('data-store-music-spectrum', $phtml);
         self::assertStringContainsString('w-store-music__spectrum', $phtml);
-        // Emit <link data-store-music-css> even when asset pipeline skips
-        // @widget.source. Critical inline: fixed fallback outside layer;
-        // relative inside float-layer slots.
+        // CSS via @widget.source only; critical inline geometry remains.
+        self::assertStringContainsString('@widget.source', $phtml);
         self::assertStringContainsString('fetchTagSource', $phtml);
         self::assertStringContainsString('DataInterface::dir_type_STATICS', $phtml);
-        self::assertStringContainsString('data-store-music-css', $phtml);
-        self::assertStringContainsString('data-store-music-host-css', $phtml);
         self::assertStringContainsString('data-store-music-critical', $phtml);
-        self::assertStringContainsString('max(1.75rem', $phtml);
+        // Critical insets: rem literals only (empty --token-size-* IACVT unsets bottom).
+        self::assertStringContainsString('store-music-critical-bottom-iacvt-v2', $phtml);
+        self::assertStringContainsString('max(1.75rem,env(safe-area-inset-left,0px))', $phtml);
+        self::assertStringContainsString('max(1.65rem,env(safe-area-inset-bottom,0px))', $phtml);
+        self::assertStringNotContainsString('bottom:max(var(--token-size-1-65rem)', $phtml);
         self::assertStringContainsString('is-remote-playing .w-store-music__spectrum', $phtml);
         self::assertStringContainsString('position:fixed!important', $phtml);
         self::assertStringContainsString('#w-storefront-float-layer .w-store-music[data-store-music]', $phtml);
@@ -259,7 +260,9 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringNotContainsString('w-store-music-heading-lift', $phtml);
         self::assertStringContainsString('css/widgets/widget-store-music.css', $phtml);
         self::assertStringContainsString('css/store-music.css', $phtml);
-        self::assertStringContainsString('<link rel="stylesheet"', $phtml);
+        self::assertStringNotContainsString('<link rel="stylesheet"', $phtml);
+        self::assertStringNotContainsString('data-store-music-css', $phtml);
+        self::assertStringNotContainsString('data-store-music-host-css', $phtml);
         self::assertStringNotContainsString('getStaticUrl', $phtml);
         self::assertStringNotContainsString('href="@static(', $phtml);
         self::assertStringNotContainsString('src="@static(', $phtml);

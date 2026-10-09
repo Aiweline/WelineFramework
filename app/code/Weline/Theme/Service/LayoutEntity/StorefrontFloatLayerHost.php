@@ -77,16 +77,17 @@ final class StorefrontFloatLayerHost
         return <<<'HTML'
 <style data-storefront-float-layer-critical data-required-injection-host="float-layer">
 #w-storefront-float-layer{position:fixed;top:0;left:0;right:0;bottom:var(--weline-product-sticky-purchase-clearance,0px);z-index:2147482900;box-sizing:border-box;pointer-events:none;padding-bottom:0}
-#w-storefront-float-layer .w-storefront-float-layer__slot{position:absolute;pointer-events:auto;max-width:min(100vw,28rem);transition:transform var(--weline-theme-duration-normal,.28s) var(--weline-theme-easing-standard,cubic-bezier(.22,1,.36,1))}
+#w-storefront-float-layer .w-storefront-float-layer__slot{position:absolute;pointer-events:auto;max-width:min(100vw,28rem);transition:transform var(--weline-theme-duration-normal,.28s) var(--weline-theme-easing-standard,cubic-bezier(.22,1,.36,1));will-change:auto}
 #w-storefront-float-layer .w-storefront-float-layer__slot--start{left:max(.85rem,env(safe-area-inset-left,0px));bottom:max(.95rem,env(safe-area-inset-bottom,0px))}
 #w-storefront-float-layer .w-storefront-float-layer__slot--end{right:max(var(--weline-space-5,1.25rem),env(safe-area-inset-right,0px));bottom:max(var(--weline-space-5,1.25rem),env(safe-area-inset-bottom,0px))}
+#w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed{will-change:transform}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot=start],#w-storefront-float-layer .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music){left:max(0px,env(safe-area-inset-left,0px))!important;transform:translateX(-100%)}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot=end]{right:max(0px,env(safe-area-inset-right,0px))!important;transform:translateX(100%)}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed .w-storefront-float-edge__body,#w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed .w-storefront-float-edge__body *{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
 #w-storefront-float-layer .w-store-music[data-store-music],#w-storefront-float-layer .customer-service-widget{position:relative!important;left:auto!important;right:auto!important;bottom:auto!important;top:auto!important}
 @media (max-width:720px){#w-storefront-float-layer .w-store-music__avatar{width:2.5rem;height:2.5rem}#w-storefront-float-layer .cs-chat-button{width:2.5rem;height:2.5rem}}
 </style>
-<div id="w-storefront-float-layer" class="w-storefront-float-layer" data-storefront-float-layer data-required-injection-host="float-layer" aria-live="off">
+<div id="w-storefront-float-layer" class="w-storefront-float-layer" data-storefront-float-layer data-weline-load="storefrontFloatLayer" data-testid="storefront-float-layer" data-required-injection-host="float-layer" aria-live="off">
 <div data-slot-id="storefront-float-start" data-slot-multiple="true" data-testid="storefront-float-start" data-float-slot="start" data-edge-dismiss-label="收起悬浮" data-edge-recall-label="展开悬浮" class="w-storefront-float-layer__slot w-storefront-float-layer__slot--start theme-published-slot"></div>
 <div data-slot-id="storefront-float-end" data-slot-multiple="true" data-testid="storefront-float-end" data-float-slot="end" data-edge-dismiss-label="收起悬浮" data-edge-recall-label="展开悬浮" class="w-storefront-float-layer__slot w-storefront-float-layer__slot--end theme-published-slot"></div>
 </div>
@@ -117,9 +118,10 @@ $floatLayerCssUrl = htmlspecialchars($floatLayerCssUrl, ENT_QUOTES, 'UTF-8');
 <?php endif; ?>
 <style data-storefront-float-layer-critical data-required-injection-host="float-layer">
 #w-storefront-float-layer{position:fixed;top:0;left:0;right:0;bottom:var(--weline-product-sticky-purchase-clearance,0px);z-index:2147482900;box-sizing:border-box;pointer-events:none;padding-bottom:0}
-#w-storefront-float-layer .w-storefront-float-layer__slot{position:absolute;pointer-events:auto;max-width:min(100vw,28rem);transition:transform var(--weline-theme-duration-normal,.28s) var(--weline-theme-easing-standard,cubic-bezier(.22,1,.36,1))}
+#w-storefront-float-layer .w-storefront-float-layer__slot{position:absolute;pointer-events:auto;max-width:min(100vw,28rem);transition:transform var(--weline-theme-duration-normal,.28s) var(--weline-theme-easing-standard,cubic-bezier(.22,1,.36,1));will-change:auto}
 #w-storefront-float-layer .w-storefront-float-layer__slot--start{left:max(.85rem,env(safe-area-inset-left,0px));bottom:max(.95rem,env(safe-area-inset-bottom,0px))}
 #w-storefront-float-layer .w-storefront-float-layer__slot--end{right:max(var(--weline-space-5,1.25rem),env(safe-area-inset-right,0px));bottom:max(var(--weline-space-5,1.25rem),env(safe-area-inset-bottom,0px))}
+#w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed{will-change:transform}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot=start],#w-storefront-float-layer .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music){left:max(0px,env(safe-area-inset-left,0px))!important;transform:translateX(-100%)}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot=end]{right:max(0px,env(safe-area-inset-right,0px))!important;transform:translateX(100%)}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed .w-storefront-float-edge__body,#w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed .w-storefront-float-edge__body *{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
@@ -129,6 +131,8 @@ $floatLayerCssUrl = htmlspecialchars($floatLayerCssUrl, ENT_QUOTES, 'UTF-8');
 <div id="w-storefront-float-layer"
      class="w-storefront-float-layer"
      data-storefront-float-layer
+     data-weline-load="storefrontFloatLayer"
+     data-testid="storefront-float-layer"
      data-required-injection-host="float-layer"
      aria-live="off">
     <w:slot id="storefront-float-start"

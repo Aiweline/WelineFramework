@@ -29,6 +29,12 @@
       var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
     right var(--weline-theme-duration-normal, 0.28s)
       var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+  /* Expanded: no will-change hint here (would create a fixed containing block;
+   * mobile CS fullscreen panel would size to the FAB). Collapsed rule below.
+   * Marker: storefront-float-edge-transform-clear-v1 */
+}
+
+.w-storefront-float-layer__slot.is-edge-collapsed {
   will-change: transform;
 }
 
@@ -65,34 +71,41 @@ body:has(.weline-social-quick-bar:not([hidden]))
 }
 
 .w-storefront-float-edge__dismiss {
+  /* Readable × (was near-invisible 35%/0.72 on white article). Marker: storefront-float-dismiss-contrast-v1 */
   pointer-events: auto;
   position: absolute;
-  top: -0.2rem;
+  top: -0.35rem;
   z-index: 4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 1.25rem;
+  height: 1.25rem;
   margin: 0;
   padding: 0;
-  border: 0;
+  border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+    color-mix(
+      in srgb,
+      var(--weline-theme-border, #e2e8f0) 70%,
+      transparent
+    );
   border-radius: 999px;
   background: color-mix(
     in srgb,
-    var(--weline-theme-surface-raised, #fff) 35%,
+    var(--weline-theme-surface-raised, #fff) 88%,
     transparent
   );
   color: color-mix(
     in srgb,
-    var(--weline-theme-text, #111) 55%,
+    var(--weline-theme-text, #111) 78%,
     transparent
   );
-  font-size: 0.95rem;
+  box-shadow: var(--weline-theme-shadow-xs, var(--weline-theme-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08)));
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   appearance: none;
-  opacity: 0.72;
+  opacity: 0.92;
   transition:
     opacity var(--weline-theme-duration-fast, 0.16s)
       var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
@@ -113,10 +126,11 @@ body:has(.weline-social-quick-bar:not([hidden]))
 .w-storefront-float-edge__dismiss:is(:hover, :focus-visible) {
   opacity: 1;
   color: var(--weline-theme-text, #111);
-  background: color-mix(
+  background: var(--weline-theme-surface-raised, #fff);
+  border-color: color-mix(
     in srgb,
-    var(--weline-theme-surface-raised, #fff) 72%,
-    transparent
+    var(--weline-theme-primary, #0f766e) 35%,
+    var(--weline-theme-border, #e2e8f0)
   );
   outline: none;
 }

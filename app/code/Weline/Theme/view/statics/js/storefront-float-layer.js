@@ -5,6 +5,8 @@
  *
  * Owning module: Weline_Theme (mechanism). Widgets stay content-only.
  * Marker: storefront-float-edge-dock-v1
+ * Marker: storefront-float-edge-transform-clear-v1
+ * Marker: storefront-float-load-on-layer-v1
  */
 (function (global) {
   'use strict';
@@ -115,10 +117,16 @@
 
   function applyShift(slotEl, collapsed) {
     var side = sideOf(slotEl);
-    var shift = collapsed
-      ? (side === 'end' ? 'translateX(100%)' : 'translateX(-100%)')
-      : 'translateX(0)';
-    slotEl.style.transform = shift;
+    // Expanded: clear inline transform. A leftover identity translate still
+    // creates a containing block so mobile CS position:fixed panels size to the
+    // FAB slot and appear to vanish. Collapsed: class CSS owns ±100% shift.
+    // Marker: storefront-float-edge-transform-clear-v1
+    if (!collapsed) {
+      slotEl.style.transform = '';
+      slotEl.style.removeProperty('transform');
+      return;
+    }
+    slotEl.style.transform = side === 'end' ? 'translateX(100%)' : 'translateX(-100%)';
   }
 
   function slotHasDockableContent(slotEl) {
@@ -273,6 +281,15 @@
     }
   }
 
+  function endHasOpenCustomerService(slotEl) {
+    return !!(
+      slotEl &&
+      slotEl.querySelector(
+        '#customer-service-widget.is-open, .customer-service-widget.is-open'
+      )
+    );
+  }
+
   function syncDock(slotEl) {
     if (!slotEl) {
       return;
@@ -288,9 +305,18 @@
     }
     var side = sideOf(slotEl);
     var want = readStoredCollapsed(side);
+    // Open CS uses mobile position:fixed panel — never keep end slot collapsed
+    // (transform CB + visibility:hidden body would swallow the panel).
+    if (side === 'end' && endHasOpenCustomerService(slotEl)) {
+      want = false;
+    }
     var is = slotEl.classList.contains('is-edge-collapsed');
     if (want !== is || !slotEl.hasAttribute('data-edge-collapsed')) {
       setCollapsed(slotEl, want, false);
+    } else if (!want) {
+      // Re-assert clear transform even when class already expanded (legacy
+      // identity-translate inline from older builds).
+      applyShift(slotEl, false);
     }
   }
 
@@ -329,13 +355,41 @@
     }
   }
 
+  function bindCsOpenClearsEndTransform() {
+    document.addEventListener(
+      'click',
+      function (event) {
+        var t = event.target;
+        if (!t || !t.closest) {
+          return;
+        }
+        if (!t.closest('[data-cs-toggle-chat], #cs-chat-button')) {
+          return;
+        }
+        var end = slot('end');
+        if (!end) {
+          return;
+        }
+        // Expand + clear transform CB before CS toggles to position:fixed panel.
+        setCollapsed(end, false, false);
+      },
+      true
+    );
+  }
+
   function boot() {
     sync();
+    bindCsOpenClearsEndTransform();
     if (typeof MutationObserver === 'function') {
       var obs = new MutationObserver(function () {
         scheduleSync();
       });
-      obs.observe(document.documentElement, { childList: true, subtree: true });
+      obs.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class'],
+      });
     }
   }
 

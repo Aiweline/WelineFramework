@@ -72,20 +72,9 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES 
 $t = static fn (string $word): string => $esc(WidgetI18n::label($word));
 $configJson = $esc((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 $defaultVol = (int)$payload['default_volume'];
-$hostCssUrl = '';
-$cssUrl = '';
 $faceUrl = '';
 try {
-    // Always resolve + emit <link> so float CSS lands even if the widget asset
-    // pipeline skips @widget.source (editor preview / partial compile paths).
-    $hostCssUrl = (string)$this->fetchTagSource(
-        DataInterface::dir_type_STATICS,
-        'Weline_StoreMusic::css/widgets/widget-store-music.css',
-    );
-    $cssUrl = (string)$this->fetchTagSource(
-        DataInterface::dir_type_STATICS,
-        'Weline_StoreMusic::css/store-music.css',
-    );
+    // CSS via @widget.source only — forbid bare <link> dual-emit.
     $faceUrl = (string)$this->fetchTagSource(
         DataInterface::dir_type_STATICS,
         'Weline_StoreMusic::images/guofeng-cameo.png',
@@ -93,15 +82,15 @@ try {
 } catch (\Throwable) {
     // Keep the widget renderable if a host view does not expose static URLs.
 }
-$hostCssUrl = $esc($hostCssUrl);
-$cssUrl = $esc($cssUrl);
 $faceUrl = $esc($faceUrl);
 ?>
 <?php /* Critical float geometry: prefer Theme float-layer slot (relative).
  * Fallback fixed only when rendered outside #w-storefront-float-layer. */ ?>
 <style data-store-music-critical>
 .w-store-music-host[data-store-music-host]{position:static;display:block;width:0;height:0;margin:0;padding:0;border:0;overflow:visible}
-/* Keep avatar ring inside html/body overflow-x:clip. */
+/* Critical geometry: rem literals only. Bare var(--token-size-*) with empty
+ * token → IACVT unsets bottom → float-start static-positions at layer top
+ * (looks like top-bar). Marker: store-music-critical-bottom-iacvt-v2 */
 .w-store-music[data-store-music]{position:fixed!important;left:max(1.75rem,env(safe-area-inset-left,0px));bottom:max(1.65rem,env(safe-area-inset-bottom,0px));z-index:2147483001}
 #w-storefront-float-layer .w-store-music-host[data-store-music-host]{width:auto;height:auto;overflow:visible}
 #w-storefront-float-layer .w-store-music[data-store-music]{position:relative!important;left:auto!important;bottom:auto!important}
@@ -109,12 +98,6 @@ $faceUrl = $esc($faceUrl);
 #w-storefront-float-layer .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music){left:max(0px,env(safe-area-inset-left,0px))}
 .w-store-music.is-playing .w-store-music__spectrum,.w-store-music.is-remote-playing .w-store-music__spectrum{opacity:1;visibility:visible}
 </style>
-<?php if ($hostCssUrl !== ''): ?>
-<link rel="stylesheet" href="<?= $hostCssUrl ?>" data-store-music-host-css>
-<?php endif; ?>
-<?php if ($cssUrl !== ''): ?>
-<link rel="stylesheet" href="<?= $cssUrl ?>" data-store-music-css>
-<?php endif; ?>
 <span hidden data-widget-script="storemusic-store-music-0"></span>
 <div class="w-store-music-host" data-store-music-host aria-hidden="false" data-widget-style-class="077587d4f9d73a11">
 
@@ -162,13 +145,15 @@ $faceUrl = $esc($faceUrl);
                     aria-controls="weline-store-music-panel"
                     title="<?= $t('进店氛围音乐') ?>">
                 <span class="w-store-music__spectrum" data-store-music-spectrum aria-hidden="true"></span>
-                <img class="w-store-music__face"
-                     src="<?= $faceUrl ?>"
-                     alt="<?= $t('进店音乐') ?>"
-                     width="60"
-                     height="60"
-                     decoding="async"
-                     loading="lazy"/>
+                <span class="w-store-music__face-frame w-frame" data-ratio="1" data-fit="cover">
+                    <img class="w-store-music__face"
+                         src="<?= $faceUrl ?>"
+                         alt="<?= $t('进店音乐') ?>"
+                         width="60"
+                         height="60"
+                         decoding="async"
+                         loading="lazy"/>
+                </span>
             </button>
             <button type="button"
                     class="w-store-music__hint"
