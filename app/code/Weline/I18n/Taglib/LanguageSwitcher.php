@@ -773,46 +773,17 @@ class LanguageSwitcher implements TaglibInterface
             return [];
         }
 
-        $remaining = [];
-        foreach ($languages as $code => $language) {
-            $normalizedCode = \strtolower(\str_replace('-', '_', \trim((string)$code)));
-            if ($normalizedCode === '') {
-                continue;
-            }
-            $remaining[$normalizedCode] = [
-                'code' => (string)$code,
-                'language' => \is_array($language) ? $language : [],
-            ];
-        }
-
-        try {
-            $catalog = LanguageSelect::getLanguageItems($displayLocale);
-        } catch (\Throwable) {
-            $catalog = [];
-        }
-
+        // Caller order is already website_language / LocaleCatalogScope / inject allowlist.
+        // Items already carry country_* from buildLanguagesFromCodes (Locals + countries DB).
+        // NEVER reload LanguageSelect::getLanguageItems() here — that materializes the full
+        // installed (or worse, global Locales) catalog and re-loads Intl resource files.
         $ordered = [];
-        foreach ($catalog as $item) {
-            $catalogCode = (string)($item['code'] ?? '');
-            $normalizedCode = \strtolower(\str_replace('-', '_', \trim($catalogCode)));
-            if ($normalizedCode === '' || !isset($remaining[$normalizedCode])) {
+        foreach ($languages as $code => $language) {
+            $code = \trim((string)$code);
+            if ($code === '') {
                 continue;
             }
-            $entry = $remaining[$normalizedCode];
-            unset($remaining[$normalizedCode]);
-            $language = \is_array($item) ? $item : [];
-            foreach ($entry['language'] as $key => $value) {
-                if ($value !== null && $value !== '') {
-                    $language[$key] = $value;
-                }
-            }
-            $language['code'] = $entry['code'];
-            $ordered[$entry['code']] = $language;
-        }
-
-        foreach ($remaining as $entry) {
-            $code = (string)$entry['code'];
-            $language = $entry['language'];
+            $language = \is_array($language) ? $language : [];
             $language['code'] = $code;
             if (empty($language['country_code'])) {
                 $parts = \preg_split('/[-_]/', $code, -1, PREG_SPLIT_NO_EMPTY) ?: [];

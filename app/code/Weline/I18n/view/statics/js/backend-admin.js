@@ -1,7 +1,7 @@
 (function (window, document) {
     'use strict';
 
-    var I18N_ADMIN_UI_VERSION = '20260830-module-status1';
+    var I18N_ADMIN_UI_VERSION = '20261010-install-sse';
     if (window.I18nAdminUI && window.I18nAdminUI.version === I18N_ADMIN_UI_VERSION) {
         return;
     }
@@ -417,6 +417,37 @@
             : response;
     }
 
+    function parseLifecycleSseBuffer(buffer, onEvent) {
+        var parts = String(buffer || '').split('\n\n');
+        var rest = parts.pop() || '';
+        parts.forEach(function (block) {
+            if (!block || block.charAt(0) === ':') {
+                return;
+            }
+            var eventName = 'message';
+            var dataLines = [];
+            String(block).split('\n').forEach(function (line) {
+                if (line.indexOf('event:') === 0) {
+                    eventName = line.slice(6).trim() || 'message';
+                } else if (line.indexOf('data:') === 0) {
+                    dataLines.push(line.slice(5).replace(/^ /, ''));
+                }
+            });
+            if (!dataLines.length) {
+                return;
+            }
+            var raw = dataLines.join('\n');
+            var data = null;
+            try {
+                data = JSON.parse(raw);
+            } catch (e) {
+                data = { message: raw };
+            }
+            onEvent(eventName, data);
+        });
+        return rest;
+    }
+
     function requestHttpFormFallback(form) {
         var actionUrl = form.getAttribute('action') || '';
         if (!actionUrl) {
@@ -448,6 +479,120 @@
                 reject(new Error('网络请求失败，请刷新后重试'));
             };
             xhr.send(new FormData(form));
+        });
+    }
+
+    function requestSseForm(form, submitButton) {
+        var actionUrl = form.getAttribute('action') || '';
+        if (!actionUrl) {
+            return Promise.reject(new Error('缺少表单提交地址'));
+        }
+
+        return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            var seenBytes = 0;
+            var sseBuffer = '';
+            var settled = false;
+            var lastPayload = null;
+
+            function finishOk(payload) {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                resolve(payload || { success: true, message: '操作成功' });
+            }
+
+            function finishErr(message) {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                reject(new Error(message || '操作失败'));
+            }
+
+            function handleEvent(eventName, data) {
+                data = data || {};
+                if (eventName === 'start' || eventName === 'progress') {
+                    if (submitButton && data.message) {
+                        var label = String(data.message);
+                        if (data.percent != null) {
+                            label += ' ' + Number(data.percent) + '%';
+                        } else if (data.current != null && data.total != null) {
+                            label += ' (' + data.current + '/' + data.total + ')';
+                        }
+                        submitButton.textContent = label;
+                    }
+                    return;
+                }
+                if (eventName === 'done') {
+                    lastPayload = {
+                        success: data.success !== false,
+                        message: data.message || form.getAttribute('data-async-success-message') || '操作成功',
+                        data: data.data || data
+                    };
+                    if (lastPayload.success) {
+                        finishOk(lastPayload);
+                    } else {
+                        finishErr(lastPayload.message);
+                    }
+                    return;
+                }
+                if (eventName === 'error' || eventName === 'failed') {
+                    finishErr(data.message || '操作失败');
+                }
+            }
+
+            xhr.open((form.getAttribute('method') || 'POST').toUpperCase(), actionUrl, true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('Accept', 'text/event-stream');
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.onprogress = function () {
+                var text = xhr.responseText || '';
+                if (text.length <= seenBytes) {
+                    return;
+                }
+                var chunk = text.slice(seenBytes);
+                seenBytes = text.length;
+                sseBuffer = parseLifecycleSseBuffer(sseBuffer + chunk, handleEvent);
+            };
+            xhr.onload = function () {
+                var text = xhr.responseText || '';
+                if (text.length > seenBytes) {
+                    sseBuffer = parseLifecycleSseBuffer(sseBuffer + text.slice(seenBytes), handleEvent);
+                    seenBytes = text.length;
+                }
+                if (settled) {
+                    return;
+                }
+                if (xhr.status >= 200 && xhr.status < 300 && lastPayload) {
+                    finishOk(lastPayload);
+                    return;
+                }
+                // Fallback: some stacks may still answer JSON when SSE is unavailable.
+                try {
+                    var json = JSON.parse(text || '{}');
+                    if (json && json.success === true) {
+                        finishOk(json);
+                        return;
+                    }
+                    finishErr((json && (json.message || json.msg)) || ('HTTP ' + xhr.status));
+                    return;
+                } catch (e) {
+                }
+                finishErr(xhr.status ? ('HTTP ' + xhr.status) : 'SSE 连接异常结束');
+            };
+            xhr.onerror = function () {
+                finishErr('网络请求失败，请刷新后重试');
+            };
+            xhr.onabort = function () {
+                finishErr('已取消');
+            };
+            var body = new FormData(form);
+            if (!body.has('sse')) {
+                body.append('sse', '1');
+            }
+            xhr.send(body);
         });
     }
 
@@ -532,16 +677,21 @@
             }
 
             // 模块写回：直接走后台 Cookie POST，避开 Worker bin-query 鉴权抖动（403 auth_error）。
+            // 安装/激活笛卡尔入库：SSE 按批推进度到按钮文案。
+            var transport = form.getAttribute('data-async-transport') || '';
+            var preferSse = transport === 'sse';
             var preferHttp = form.hasAttribute('data-ai-module-writeback-form')
-                || form.getAttribute('data-async-transport') === 'http';
-            var submitPromise = preferHttp
-                ? requestHttpFormFallback(form)
-                : requestBinAction(action, formPayload(form)).catch(function (error) {
-                    if (!isAuthTransportError(error)) {
-                        throw error;
-                    }
-                    return requestHttpFormFallback(form);
-                });
+                || transport === 'http';
+            var submitPromise = preferSse
+                ? requestSseForm(form, submit)
+                : (preferHttp
+                    ? requestHttpFormFallback(form)
+                    : requestBinAction(action, formPayload(form)).catch(function (error) {
+                        if (!isAuthTransportError(error)) {
+                            throw error;
+                        }
+                        return requestHttpFormFallback(form);
+                    }));
 
             return submitPromise.then(finishSuccess).catch(function (error) {
                 form.dataset.asyncBusy = '0';

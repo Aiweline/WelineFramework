@@ -1,0 +1,40 @@
+{
+    "schema": "weline-i18n-locale-catalog.v1",
+    "generated_at": "2026-10-09T19:59:31+00:00",
+    "source": {
+        "symfony_intl": "Locales/Countries/Languages",
+        "ext_intl": true,
+        "icu_version": "78.3"
+    },
+    "counts": {
+        "countries": 249,
+        "locales": 682,
+        "languages": 642,
+        "locale_names": 465124,
+        "locale_names_skipped": 0,
+        "country_names": 169818,
+        "country_names_skipped": 0
+    },
+    "files": [
+        "countries.tsv.gz",
+        "locales.tsv.gz",
+        "languages.tsv.gz",
+        "locale-names.tsv.gz",
+        "country-names.tsv.gz"
+    ],
+    "elapsed_ms": 3152,
+    "sha256": {
+        "countries.tsv.gz": "2da4a0567432816ddfe698bd490b2f56b4abf001ed8f0e9f7ce6862e4a76294a",
+        "locales.tsv.gz": "b1d10f1b8e87721950ce638796fc7bbd5bb5d559bfe1e5ff09810dadcb24ece5",
+        "languages.tsv.gz": "9db88280fe592affaa29d10f4297bfecb819a472a1086354b923a0fcd3a13fb4",
+        "locale-names.tsv.gz": "7a232ed84f19c2d944fde670434a94598d8057d99dec8e3bbe21bd705d28b032",
+        "country-names.tsv.gz": "35b99eb6db49611ffc30a0ade0880bfa940124cea6cab27edd6d9b9af6ab829c"
+    },
+    "bytes": {
+        "countries.tsv.gz": 437,
+        "locales.tsv.gz": 2703,
+        "languages.tsv.gz": 1234,
+        "locale-names.tsv.gz": 2425708,
+        "country-names.tsv.gz": 806272
+    }
+}

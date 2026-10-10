@@ -94,8 +94,12 @@ class Localization extends BaseController
         
         // 确保 zh_Hans_CN 默认安装
         $this->ensureZhHansCnInstalled();
-        $this->locale->reset()->joinModel(\Weline\I18n\Model\Locale\Name::class, 'ln', 'main_table.code=ln.locale_code', 'left')
-        ->where('ln.display_locale_code', $displayLocale);
+        // Join a Name clone — joinModel(class-string) bindQuery's the OM singleton
+        // and poisons CountryLocaleLifecycleService save() on the same WLS worker.
+        $localeNameJoin = (clone ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class))->clear();
+        $this->locale = (clone ObjectManager::getInstance(\Weline\I18n\Model\Locale::class))->clear();
+        $this->locale->joinModel($localeNameJoin, 'ln', 'main_table.code=ln.locale_code', 'left')
+            ->where('ln.display_locale_code', $displayLocale);
         // 处理搜索条件
         if ($search !== '') {
             $localeCode = $this->locale::schema_fields_CODE;
@@ -389,7 +393,7 @@ class Localization extends BaseController
     private function isValidCountryCode($countryCode)
     {
         try {
-            return \Symfony\Component\Intl\Countries::exists($countryCode);
+            return $this->i18n->getCountry((string)$countryCode) !== [];
         } catch (\Exception $e) {
             return false;
         }
@@ -706,43 +710,22 @@ class Localization extends BaseController
      */
     private function getLocaleNameWithFallback($localeCode, $displayLocaleCode)
     {
-        $localeName = '';
-        
-        // 方式1: 使用I18n模型的getLocaleName方法
         try {
             $localeName = $this->i18n->getLocaleName($localeCode, $displayLocaleCode);
+            if ($localeName !== '' && $localeName !== $localeCode) {
+                return $localeName;
+            }
         } catch (\Exception $e) {
-            // 忽略错误，尝试其他方式
         }
-        
-        // 方式2: 如果第一种方式失败，直接使用Symfony Locales
-        if (empty($localeName) || $localeName === $localeCode) {
-            try {
-                if (\Symfony\Component\Intl\Locales::exists($localeCode)) {
-                    $localeName = \Symfony\Component\Intl\Locales::getName($localeCode, $displayLocaleCode);
-                }
-            } catch (\Exception $e) {
-                // 忽略错误
+        try {
+            $localeName = $this->i18n->getLocaleName($localeCode, 'zh_Hans_CN');
+            if ($localeName !== '' && $localeName !== $localeCode) {
+                return $localeName;
             }
+        } catch (\Exception $e) {
         }
-        
-        // 方式3: 如果还是获取不到，使用默认显示语言获取
-        if (empty($localeName) || $localeName === $localeCode) {
-            try {
-                if (\Symfony\Component\Intl\Locales::exists($localeCode)) {
-                    $localeName = \Symfony\Component\Intl\Locales::getName($localeCode, 'zh_Hans_CN');
-                }
-            } catch (\Exception $e) {
-                // 忽略错误
-            }
-        }
-        
-        // 最后的备选方案：使用区域代码作为名称
-        if (empty($localeName)) {
-            $localeName = $localeCode;
-        }
-        
-        return $localeName;
+
+        return (string)$localeCode;
     }
     
     /**
@@ -791,8 +774,9 @@ class Localization extends BaseController
      */
     private function getCountriesList()
     {
-        $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
-        $countriesModel->joinModel(\Weline\I18n\Model\Countries\Locale\Name::class, 'cn', 'main_table.code=cn.country_code', 'left');
+        $countriesModel = (clone ObjectManager::getInstance(\Weline\I18n\Model\Countries::class))->clear();
+        $countryNameJoin = (clone ObjectManager::getInstance(\Weline\I18n\Model\Countries\Locale\Name::class))->clear();
+        $countriesModel->joinModel($countryNameJoin, 'cn', 'main_table.code=cn.country_code', 'left');
         $countriesModel->where('cn.display_locale_code', $this->getSafeCurrentLocaleCode());
         
         $countries = $countriesModel->select('main_table.code, cn.display_name')->fetch()->getItems();
@@ -822,8 +806,9 @@ class Localization extends BaseController
      */
     private function getUnactivatedRegionsCountry()
     {
-        $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
-        $countriesModel->joinModel(\Weline\I18n\Model\Countries\Locale\Name::class, 'cn', 'main_table.code=cn.country_code', 'left');
+        $countriesModel = (clone ObjectManager::getInstance(\Weline\I18n\Model\Countries::class))->clear();
+        $countryNameJoin = (clone ObjectManager::getInstance(\Weline\I18n\Model\Countries\Locale\Name::class))->clear();
+        $countriesModel->joinModel($countryNameJoin, 'cn', 'main_table.code=cn.country_code', 'left');
         $countriesModel->where('main_table.' . $countriesModel::schema_fields_IS_INSTALL, 1);
         $countriesModel->where('cn.' . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, $this->getSafeCurrentLocaleCode());
         
@@ -1466,13 +1451,8 @@ class Localization extends BaseController
             $countriesCount = $countriesModel->reset()->count();
             
             if ($countriesCount == 0) {
-                Message::notes(__('检测到没有国家数据，开始安装默认国家...'));
-                
-                // 使用 CountryDataUpdateService 安装国家数据
-                $updateService = ObjectManager::getInstance(\Weline\I18n\Service\CountryDataUpdateService::class);
-                $updateService->updateCountryData();
-                
-                Message::success(__('默认国家数据安装完成'));
+                // 请求路径不回落读种子包、不 Message 刷屏；缺库存由安装动作走 w_msg（dedupe）报运营。
+                return;
             }
         } catch (\Exception $e) {
             Message::error(__('安装国家数据失败: %{1}', $e->getMessage()));
@@ -1491,26 +1471,8 @@ class Localization extends BaseController
             $localesCount = $localeModel->reset()->count();
             
             if ($localesCount == 0) {
-                Message::notes(__('检测到没有区域数据，开始安装默认区域...'));
-                
-                // 先确保有已安装的国家
-                $installedCountries = $this->getInstalledCountries();
-                
-                // 如果没有已安装的国家，先安装中国
-                if (empty($installedCountries)) {
-                    $this->installDefaultCountry();
-                    $installedCountries = $this->getInstalledCountries();
-                }
-                
-                // 如果有已安装的国家，为这些国家安装区域
-                if (!empty($installedCountries)) {
-                    $this->batchUpdateLocaleDataForInstalledCountries($installedCountries);
-                    Message::success(__('默认区域数据安装完成'));
-                } else {
-                    // 如果还是没有已安装的国家，至少安装 zh_Hans_CN
-                    $this->ensureZhHansCnInstalled();
-                    Message::success(__('已安装默认区域：zh_Hans_CN'));
-                }
+                // 请求路径不回落读种子包、不 Message 刷屏；缺库存由安装动作走 w_msg（dedupe）报运营。
+                return;
             }
         } catch (\Exception $e) {
             Message::error(__('安装区域数据失败: %{1}', $e->getMessage()));

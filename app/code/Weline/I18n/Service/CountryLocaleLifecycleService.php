@@ -39,22 +39,34 @@ class CountryLocaleLifecycleService
         $this->i18n = ObjectManager::getInstance(I18n::class);
     }
 
-    public function installCountry(string $countryCode): array
+    public function installCountry(string $countryCode, ?callable $onExpandProgress = null): array
     {
         // 安装即默认激活：国家安装后立即启用推荐地区，避免“装完找不到/还要再点激活”。
-        return $this->activateCountry($countryCode);
+        return $this->activateCountry($countryCode, $onExpandProgress);
     }
 
-    public function activateCountry(string $countryCode): array
+    public function activateCountry(string $countryCode, ?callable $onExpandProgress = null): array
     {
-        return $this->runLifecycleMutation(function () use ($countryCode): array {
-            $changed = false;
-            $result = $this->activateCountryRecord($countryCode, $changed);
-            if ($changed) {
-                $this->invalidateLocaleCatalogCaches();
-            }
-            return $result;
+        $countryCode = $this->normalizeCountryCode($countryCode);
+        // Emit ops tip outside the lifecycle transaction — w_msg must not roll back with it.
+        $this->assertLocaleInventoryReady($countryCode);
+
+        $changed = false;
+        $result = $this->runLifecycleMutation(function () use ($countryCode, &$changed): array {
+            return $this->activateCountryRecord($countryCode, $changed);
         });
+        // Publish resource change only after the lifecycle transaction commits —
+        // nested TransactionCoordinator::run() on the same logical connection
+        // raises "并行开启两个独立事务".
+        if ($changed) {
+            $preferred = (string)($result['preferred_locale'] ?? '');
+            if ($preferred !== '') {
+                $this->expandDisplayNamesAfterCommit($preferred, $onExpandProgress);
+            }
+            $this->invalidateLocaleCatalogCaches();
+        }
+
+        return $result;
     }
 
     private function activateCountryRecord(string $countryCode, bool &$changed): array
@@ -97,7 +109,10 @@ class CountryLocaleLifecycleService
 
     public function deactivateCountry(string $countryCode): array
     {
-        return $this->runLifecycleMutation(fn(): array => $this->deactivateCountryRecord($countryCode));
+        $summary = $this->runLifecycleMutation(fn(): array => $this->deactivateCountryRecord($countryCode));
+        $this->invalidateLocaleCatalogCaches();
+
+        return $summary;
     }
 
     private function deactivateCountryRecord(string $countryCode): array
@@ -119,15 +134,16 @@ class CountryLocaleLifecycleService
 
         $country->setData(Countries::schema_fields_IS_ACTIVE, 0)->save();
         $this->syncLocalsForCountry($countryCode);
-        $summary = $this->syncCountryState($countryCode);
-        $this->invalidateLocaleCatalogCaches();
 
-        return $summary;
+        return $this->syncCountryState($countryCode);
     }
 
     public function uninstallCountry(string $countryCode): array
     {
-        return $this->runLifecycleMutation(fn(): array => $this->uninstallCountryRecord($countryCode));
+        $payload = $this->runLifecycleMutation(fn(): array => $this->uninstallCountryRecord($countryCode));
+        $this->invalidateLocaleCatalogCaches();
+
+        return $payload;
     }
 
     private function uninstallCountryRecord(string $countryCode): array
@@ -160,27 +176,31 @@ class CountryLocaleLifecycleService
             $this->clearLanguagePacksForLocale($localeCode);
         }
         $this->syncLocalsForCountry($countryCode);
-        $this->invalidateLocaleCatalogCaches();
 
         return $this->buildCountryPayload($countryCode, $localeCodes);
     }
 
-    public function installLocale(string $localeCode): array
+    public function installLocale(string $localeCode, ?callable $onExpandProgress = null): array
     {
         // 安装即默认激活：地区语言安装后直接可用，不再要求二次点击激活。
-        return $this->activateLocale($localeCode);
+        return $this->activateLocale($localeCode, $onExpandProgress);
     }
 
-    public function activateLocale(string $localeCode): array
+    public function activateLocale(string $localeCode, ?callable $onExpandProgress = null): array
     {
-        return $this->runLifecycleMutation(function () use ($localeCode): array {
-            $changed = false;
-            $result = $this->activateLocaleRecord($localeCode, $changed);
-            if ($changed) {
-                $this->invalidateLocaleCatalogCaches();
-            }
-            return $result;
+        $changed = false;
+        $result = $this->runLifecycleMutation(function () use ($localeCode, &$changed): array {
+            return $this->activateLocaleRecord($localeCode, $changed);
         });
+        // Cartesian expand writes many Locals/Name rows; keep it outside the
+        // lifecycle owner transaction. Swallowing SQL errors inside an open
+        // PostgreSQL transaction leaves 25P02 for every later command.
+        if ($changed) {
+            $this->expandDisplayNamesAfterCommit((string)($result['locale_code'] ?? $localeCode), $onExpandProgress);
+            $this->invalidateLocaleCatalogCaches();
+        }
+
+        return $result;
     }
 
     private function activateLocaleRecord(string $localeCode, bool &$changed): array
@@ -200,9 +220,26 @@ class CountryLocaleLifecycleService
         return $this->buildLocalePayload($localeCode, $countrySummary);
     }
 
+    private function expandDisplayNamesAfterCommit(string $localeCode, ?callable $onExpandProgress = null): void
+    {
+        $localeCode = $this->normalizeLocaleCode($localeCode);
+        if ($localeCode === '') {
+            return;
+        }
+        try {
+            ObjectManager::getInstance(\Weline\I18n\Service\Catalog\DisplayNameCartesianSeeder::class)
+                ->expandForInstalledLocale($localeCode, $onExpandProgress);
+        } catch (\Throwable $e) {
+            w_log_warning('I18n: cartesian display-name expand failed for ' . $localeCode . ': ' . $e->getMessage(), [], 'i18n');
+        }
+    }
+
     public function deactivateLocale(string $localeCode): array
     {
-        return $this->runLifecycleMutation(fn(): array => $this->deactivateLocaleRecord($localeCode));
+        $payload = $this->runLifecycleMutation(fn(): array => $this->deactivateLocaleRecord($localeCode));
+        $this->invalidateLocaleCatalogCaches();
+
+        return $payload;
     }
 
     private function deactivateLocaleRecord(string $localeCode): array
@@ -221,14 +258,16 @@ class CountryLocaleLifecycleService
         $locale->setData(Locale::schema_fields_IS_ACTIVE, 0)->save();
         $this->syncLocalsStateForLocale($localeCode, true, false);
         $countrySummary = $this->syncCountryState($countryCode);
-        $this->invalidateLocaleCatalogCaches();
 
         return $this->buildLocalePayload($localeCode, $countrySummary);
     }
 
     public function uninstallLocale(string $localeCode): array
     {
-        return $this->runLifecycleMutation(fn(): array => $this->uninstallLocaleRecord($localeCode));
+        $payload = $this->runLifecycleMutation(fn(): array => $this->uninstallLocaleRecord($localeCode));
+        $this->invalidateLocaleCatalogCaches();
+
+        return $payload;
     }
 
     private function uninstallLocaleRecord(string $localeCode): array
@@ -250,7 +289,6 @@ class CountryLocaleLifecycleService
 
         $this->clearLanguagePacksForLocale($localeCode);
         $this->syncLocalsStateForLocale($localeCode, false, false);
-        $this->invalidateLocaleCatalogCaches();
         $countrySummary = $this->syncCountryState($countryCode);
 
         return $this->buildLocalePayload($localeCode, $countrySummary);
@@ -493,10 +531,17 @@ class CountryLocaleLifecycleService
     private function ensureLocaleRecordsForCountry(string $countryCode, bool &$changed = false): array
     {
         $countryCode = $this->normalizeCountryCode($countryCode);
-        $country = $this->i18n->getCountry($countryCode);
-        $localeCodes = array_values(array_unique((array)($country['locales'] ?? [])));
-        if (empty($localeCodes) && $countryCode === self::DEFAULT_COUNTRY_CODE) {
+        $localeCodes = $this->getLocaleCodesByCountry($countryCode);
+        if ($localeCodes === [] && $countryCode === self::DEFAULT_COUNTRY_CODE) {
             $localeCodes = [self::DEFAULT_LOCALE_CODE];
+        }
+        // Inventory comes only from Install/Upgrade seed. Request-time must not
+        // fall back to the on-disk pack (ops tip is emitted outside this transaction).
+        if ($localeCodes === []) {
+            throw new \RuntimeException((string)__(
+                '国家 %{1} 的地区库存尚未就绪，请先执行模块升级补齐库存后再安装。',
+                [$countryCode]
+            ));
         }
 
         foreach ($localeCodes as $localeCode) {
@@ -645,8 +690,9 @@ class CountryLocaleLifecycleService
         $isActive = ($installed && $active) ? 1 : 0;
 
         /** @var Locals $locals */
-        $locals = ObjectManager::getInstance(Locals::class);
-        $existing = $locals->clearQuery()
+        // clone+clear: clearQuery alone leaves _bind_query (joinModel pollution).
+        $locals = (clone ObjectManager::getInstance(Locals::class))->clear();
+        $existing = $locals
             ->where(Locals::schema_fields_CODE, $localeCode)
             ->select(implode(',', [Locals::schema_fields_CODE, Locals::schema_fields_IS_INSTALL, Locals::schema_fields_IS_ACTIVE]))
             ->fetchArray();
@@ -663,7 +709,7 @@ class CountryLocaleLifecycleService
             if (!$stateChanged) {
                 return;
             }
-            $locals->clearQuery()
+            $locals->clear()
                 ->where(Locals::schema_fields_CODE, $localeCode)
                 ->update([
                     Locals::schema_fields_IS_INSTALL => $isInstall,
@@ -694,7 +740,7 @@ class CountryLocaleLifecycleService
             $flag = '';
         }
 
-        $locals->clearQuery()->insert([
+        $locals->clear()->insert([
             [
                 Locals::schema_fields_CODE => $localeCode,
                 Locals::schema_fields_TARGET_CODE => $localeCode,
@@ -730,6 +776,15 @@ class CountryLocaleLifecycleService
     /** 生命周期的所有事实写入与资源变更共用现有事务。 */
     private function runLifecycleMutation(callable $mutation): array
     {
+        // WLS workers reuse ObjectManager singletons across requests. Listing
+        // joinModel(class-string) can leave _bind_query on these models; drop it
+        // before save() so getQuery() joins the coordinator owner query.
+        $this->countries->clear();
+        $this->locales->clear();
+        $this->countryLocaleNames->clear();
+        $this->localeNames->clear();
+        ObjectManager::getInstance(Locals::class)->clear();
+
         $connection = $this->locales->getConnection();
         $logicalConnection = TransactionContext::logicalConnectionKey($connection->getConnector());
         $publisher = ObjectManager::getInstance(I18nResourceChangePublisher::class);
@@ -745,7 +800,15 @@ class CountryLocaleLifecycleService
                 throw new UnsupportedAsyncTransactionConnectionException(__('语言目录写入与资源变更必须使用同一逻辑数据库连接'));
             }
         }
-        return ObjectManager::getInstance(TransactionCoordinatorInterface::class)->run($connection, $mutation);
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        // bin-query / AdminControllerBridge may already hold the logical connection;
+        // join instead of opening a second independent coordinator run.
+        if ($transactions->isActive($connection)) {
+            $result = $mutation();
+            return is_array($result) ? $result : [];
+        }
+
+        return $transactions->run($connection, $mutation);
     }
 
     /** 发布定向资源变更，提交后再通知依赖语言目录的网站解析与旧事件消费者。 */
@@ -901,21 +964,75 @@ class CountryLocaleLifecycleService
 
     private function makeCountryModel(): Countries
     {
-        return clone $this->countries;
+        return (clone $this->countries)->clear();
     }
 
     private function makeLocaleModel(): Locale
     {
-        return clone $this->locales;
+        // clear() drops any inherited _bind_query so save() joins the coordinator owner query.
+        return (clone $this->locales)->clear();
     }
 
     private function makeCountryLocaleNameModel(): CountryLocaleName
     {
-        return clone $this->countryLocaleNames;
+        return (clone $this->countryLocaleNames)->clear();
     }
 
     private function makeLocaleNameModel(): LocaleName
     {
-        return clone $this->localeNames;
+        return (clone $this->localeNames)->clear();
+    }
+
+    /**
+     * Pre-flight outside lifecycle txn: empty inventory → deduped w_msg then fail.
+     */
+    private function assertLocaleInventoryReady(string $countryCode): void
+    {
+        $countryCode = $this->normalizeCountryCode($countryCode);
+        $localeCodes = $this->getLocaleCodesByCountry($countryCode);
+        if ($localeCodes === [] && $countryCode === self::DEFAULT_COUNTRY_CODE) {
+            return;
+        }
+        if ($localeCodes !== []) {
+            return;
+        }
+        $this->notifyLocaleInventoryMissing($countryCode);
+        throw new \RuntimeException((string)__(
+            '国家 %{1} 的地区库存尚未就绪，请先执行模块升级补齐库存后再安装。',
+            [$countryCode]
+        ));
+    }
+
+    /**
+     * Ops inbox tip via w_msg. Fixed dedupe_key → one unread row; repeats only bump occurrence.
+     */
+    private function notifyLocaleInventoryMissing(string $countryCode): void
+    {
+        if (!\function_exists('w_msg')) {
+            return;
+        }
+        try {
+            w_msg(
+                'i18n_locale_inventory',
+                'warning',
+                (string)__('I18n 地区库存未就绪'),
+                (string)__(
+                    '国家 %{1} 的地区库存尚未就绪，请先执行模块升级（setup:upgrade）补齐库存后再安装。',
+                    [$countryCode]
+                ),
+                [
+                    'icon' => 'warning',
+                    'source_module' => 'Weline_I18n',
+                    // Stable across countries: keep a single unread ops tip, not one per country.
+                    'dedupe_key' => 'i18n_locale_inventory_missing',
+                    'metadata' => [
+                        'country_code' => $countryCode,
+                        'action' => 'setup:upgrade',
+                    ],
+                ]
+            );
+        } catch (\Throwable $e) {
+            w_log_warning('I18n: w_msg locale inventory tip failed: ' . $e->getMessage(), [], 'i18n');
+        }
     }
 }

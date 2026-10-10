@@ -71,6 +71,15 @@ final class HeaderCurrencySwitcherTemplateTest extends TestCase
         );
     }
 
+    public function testCurrencyTriggerOmitsCashIconThatReadsAsCamera(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
+        $content = (string) file_get_contents($path);
+
+        self::assertStringNotContainsString('name="cash"', $content);
+        self::assertStringContainsString('name="chevron-down"', $content);
+    }
+
     public function testSwitcherInstanceIdsStayUniqueWithoutSharedRequestContext(): void
     {
         $first = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency-switcher-menu');

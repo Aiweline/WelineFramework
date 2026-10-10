@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Taglib;
 
-use Symfony\Component\Intl\Countries;
-use Symfony\Component\Intl\Locales;
 use Weline\Framework\App\State;
 use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\TaglibInterface;
+use Weline\I18n\Model\Countries\Locale\Name as CountryLocaleName;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
+use Weline\I18n\Model\Locale\Name as LocaleDisplayName;
 use Weline\I18n\Model\Locals;
 
 class LanguageSelect implements TaglibInterface
@@ -569,8 +569,6 @@ DOC;
             return [];
         }
 
-        /** @var I18n $i18n */
-        $i18n = ObjectManager::getInstance(I18n::class);
         /** @var Locals $localsModel */
         $localsModel = ObjectManager::getInstance(Locals::class);
         /** @var Locale $localeModel */
@@ -580,7 +578,7 @@ DOC;
         try {
             $localsRows = $localsModel
                 ->clearQuery()
-                ->where(Locals::schema_fields_CODE, 'in', $normalized)
+                ->where(Locals::schema_fields_CODE, $normalized, 'IN')
                 ->where(Locals::schema_fields_IS_ACTIVE, 1)
                 ->where(Locals::schema_fields_IS_INSTALL, 1)
                 ->select()
@@ -601,7 +599,7 @@ DOC;
         try {
             $localeRows = $localeModel
                 ->clearQuery()
-                ->where(Locale::schema_fields_CODE, 'in', $normalized)
+                ->where(Locale::schema_fields_CODE, $normalized, 'IN')
                 ->select()
                 ->fetchArray();
             foreach ($localeRows as $row) {
@@ -622,44 +620,20 @@ DOC;
                 $neededCountryCodes[$countryCode] = true;
             }
         }
-        $countryNames = self::countryNamesForCodes(
-            \extension_loaded('intl') ? $displayLocale : 'en',
+        // Country labels from i18n_countries_locale_name — never Symfony Countries files.
+        $countryNames = self::countryNamesFromDbForCodes(
+            $displayLocale,
             \array_keys($neededCountryCodes),
+        );
+
+        $localeDisplayNames = self::localeDisplayNamesFromDbForCodes(
+            $displayLocale,
+            $normalized,
         );
 
         $items = [];
         foreach ($normalized as $code) {
             $rows = $rowsByCode[$code] ?? [];
-            if ($rows === []) {
-                $items[] = self::synthesizeLanguageItem($code, $displayLocale);
-                continue;
-            }
-
-            $name = self::pickLocalNameForTarget($rows, $displayLocale);
-            if ($name === '') {
-                try {
-                    $name = \trim((string)$i18n->getLocaleName($code, $displayLocale));
-                } catch (\Throwable) {
-                    $name = '';
-                }
-            }
-            $selfName = self::pickLocalNameForTarget($rows, $code);
-            if ($selfName === '') {
-                try {
-                    $selfName = \trim((string)$i18n->getLocaleName($code, $code));
-                } catch (\Throwable) {
-                    $selfName = '';
-                }
-            }
-            $referenceName = self::pickLocalNameForTarget($rows, 'en');
-            if ($referenceName === '') {
-                try {
-                    $referenceName = \trim((string)$i18n->getLocaleName($code, 'en'));
-                } catch (\Throwable) {
-                    $referenceName = '';
-                }
-            }
-
             $meta = $localeMeta[$code] ?? [];
             $countryCode = \strtoupper((string)($meta[Locale::schema_fields_COUNTRY_CODE] ?? self::extractCountryCode($code)));
             $countryName = $countryCode !== ''
@@ -668,6 +642,51 @@ DOC;
             $shortCode = (string)($meta[Locale::schema_fields_SHORT_CODE] ?? Locale::extractShortCode($code));
             $iso2 = (string)($meta[Locale::schema_fields_ISO2] ?? '');
             $iso3 = (string)($meta[Locale::schema_fields_ISO3] ?? '');
+
+            if ($rows === []) {
+                $fromLocaleName = $localeDisplayNames[$code] ?? [];
+                $name = (string)($fromLocaleName['display'] ?? '');
+                $selfName = (string)($fromLocaleName['self'] ?? '');
+                $referenceName = (string)($fromLocaleName['en'] ?? $selfName);
+                if ($name === '' && $selfName === '' && $referenceName === '') {
+                    $items[] = self::synthesizeLanguageItem($code, $displayLocale);
+                    continue;
+                }
+                if ($name === '') {
+                    $name = $selfName !== '' ? $selfName : ($referenceName !== '' ? $referenceName : $code);
+                }
+            } else {
+                // Locals rows are authoritative — no Symfony Intl name lookup on this path.
+                // Prefer display-locale name, then en_US/en, then native self row, then any row.
+                $name = self::pickLocalNameForTarget($rows, $displayLocale);
+                if ($name === '') {
+                    $name = self::pickLocalNameForTarget($rows, 'en_US');
+                }
+                if ($name === '') {
+                    $name = self::pickLocalNameForTarget($rows, 'en');
+                }
+                $selfName = self::pickLocalNameForTarget($rows, $code);
+                if ($name === '') {
+                    $name = $selfName;
+                }
+                if ($name === '') {
+                    foreach ($rows as $row) {
+                        $candidate = \trim((string)($row[Locals::schema_fields_NAME] ?? ''));
+                        if ($candidate !== '') {
+                            $name = $candidate;
+                            break;
+                        }
+                    }
+                }
+                $referenceName = self::pickLocalNameForTarget($rows, 'en_US');
+                if ($referenceName === '') {
+                    $referenceName = self::pickLocalNameForTarget($rows, 'en');
+                }
+                if ($referenceName === '') {
+                    $referenceName = $selfName;
+                }
+            }
+
             $displayName = self::buildDisplayName($name, $referenceName, $selfName, $code);
             $tagLabel = self::buildTagLabel($name, $selfName, $referenceName, $code);
             $items[] = [
@@ -692,6 +711,69 @@ DOC;
         }
 
         return $items;
+    }
+
+    /**
+     * Batch-read i18n_locale_name for allowlist codes (DB only).
+     *
+     * @param list<string> $codes
+     * @return array<string, array{display:string,self:string,en:string}>
+     */
+    private static function localeDisplayNamesFromDbForCodes(string $displayLocale, array $codes): array
+    {
+        $out = [];
+        foreach ($codes as $code) {
+            $out[$code] = ['display' => '', 'self' => '', 'en' => ''];
+        }
+        if ($codes === []) {
+            return $out;
+        }
+        $targets = \array_values(\array_unique(\array_filter([
+            \trim($displayLocale),
+            'en_US',
+            'en',
+            'zh_Hans_CN',
+            ...$codes,
+        ], static fn(string $v): bool => $v !== '')));
+        try {
+            /** @var LocaleDisplayName $nameModel */
+            $nameModel = ObjectManager::getInstance(LocaleDisplayName::class);
+            $rows = $nameModel
+                ->clearQuery()
+                ->where(LocaleDisplayName::schema_fields_LOCALE_CODE, $codes, 'IN')
+                ->where(LocaleDisplayName::schema_fields_DISPLAY_LOCALE_CODE, $targets, 'IN')
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return $out;
+        }
+        $byCode = [];
+        foreach ($rows as $row) {
+            $code = (string)($row[LocaleDisplayName::schema_fields_LOCALE_CODE] ?? '');
+            $tl = (string)($row[LocaleDisplayName::schema_fields_DISPLAY_LOCALE_CODE] ?? '');
+            $dn = \trim((string)($row[LocaleDisplayName::schema_fields_DISPLAY_NAME] ?? ''));
+            if ($code === '' || $tl === '' || $dn === '') {
+                continue;
+            }
+            $byCode[$code][$tl] = $dn;
+        }
+        foreach ($codes as $code) {
+            $names = $byCode[$code] ?? [];
+            $display = '';
+            foreach ([$displayLocale, 'en_US', 'en', 'zh_Hans_CN', $code] as $tl) {
+                if (isset($names[$tl]) && $names[$tl] !== '') {
+                    $display = $names[$tl];
+                    break;
+                }
+            }
+            $out[$code] = [
+                'display' => $display,
+                'self' => (string)($names[$code] ?? ''),
+                'en' => (string)($names['en_US'] ?? $names['en'] ?? ''),
+            ];
+        }
+
+        return $out;
     }
 
     /**
@@ -745,32 +827,18 @@ DOC;
     /** @return array<string, string> */
     private static function synthesizeLanguageItem(string $code, string $displayLocale): array
     {
-        /** @var I18n $i18n */
-        $i18n = ObjectManager::getInstance(I18n::class);
-        try {
-            $name = \trim((string)$i18n->getLocaleName($code, $displayLocale));
-        } catch (\Throwable) {
-            $name = '';
-        }
-        try {
-            $selfName = \trim((string)$i18n->getLocaleName($code, $code));
-        } catch (\Throwable) {
-            $selfName = '';
-        }
-        try {
-            $referenceName = \trim((string)$i18n->getLocaleName($code, 'en'));
-        } catch (\Throwable) {
-            $referenceName = '';
-        }
+        // Unknown / non-installed codes: label with the code itself.
+        // Never open Symfony Locales / Intl resource files for a storefront allowlist miss.
+        unset($displayLocale);
         $countryCode = self::extractCountryCode($code);
-        $displayName = self::buildDisplayName($name, $referenceName, $selfName, $code);
-        $tagLabel = self::buildTagLabel($name, $selfName, $referenceName, $code);
+        $displayName = self::buildDisplayName($code, '', '', $code);
+        $tagLabel = self::buildTagLabel($code, '', '', $code);
         return [
             'code' => $code,
-            'name' => $name !== '' ? $name : $code,
-            'self_name' => $selfName,
-            'english_name' => $referenceName,
-            'reference_name' => $referenceName,
+            'name' => $code,
+            'self_name' => '',
+            'english_name' => '',
+            'reference_name' => '',
             'display_name' => $displayName,
             'tag_label' => $tagLabel,
             'country_code' => $countryCode,
@@ -780,7 +848,7 @@ DOC;
             'iso2' => '',
             'iso3' => '',
             'search' => \implode(' ', self::buildSearchTerms([
-                $code, $name, $selfName, $referenceName, $displayName, $tagLabel, $countryCode,
+                $code, $displayName, $tagLabel, $countryCode,
             ])),
         ];
     }
@@ -793,18 +861,28 @@ DOC;
      */
     private static function countryNamesMap(string $displayLocale): array
     {
-        $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'en';
+        $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'zh_Hans_CN';
         if (!isset(self::$countryNamesByDisplayLocale[$displayLocale])
             || self::$countryNamesByDisplayLocale[$displayLocale] === []
         ) {
-            try {
-                $all = Countries::getNames($displayLocale);
-            } catch (\Throwable) {
-                $all = [];
-            }
             $mapped = [];
-            foreach ($all as $code => $name) {
-                $mapped[\strtoupper((string)$code)] = (string)$name;
+            try {
+                /** @var CountryLocaleName $nameModel */
+                $nameModel = ObjectManager::getInstance(CountryLocaleName::class);
+                $rows = $nameModel
+                    ->clearQuery()
+                    ->where(CountryLocaleName::schema_fields_DISPLAY_LOCALE_CODE, $displayLocale)
+                    ->select()
+                    ->fetchArray();
+                foreach ($rows as $row) {
+                    $code = \strtoupper((string)($row[CountryLocaleName::schema_fields_COUNTRY_CODE] ?? ''));
+                    $name = \trim((string)($row[CountryLocaleName::schema_fields_DISPLAY_NAME] ?? ''));
+                    if ($code !== '' && $name !== '') {
+                        $mapped[$code] = $name;
+                    }
+                }
+            } catch (\Throwable) {
+                $mapped = [];
             }
             self::$countryNamesByDisplayLocale[$displayLocale] = $mapped;
         }
@@ -813,35 +891,92 @@ DOC;
     }
 
     /**
-     * On-demand country labels: only codes present on this page (never Countries::getNames full table).
+     * On-demand country labels from DB (i18n_countries_locale_name).
+     * Storefront / installed paths must use this — never Countries::getNames / getName files.
      *
      * @param list<string> $countryCodes
      * @return array<string, string> UPPER_ISO2 => name
      */
-    private static function countryNamesForCodes(string $displayLocale, array $countryCodes): array
+    private static function countryNamesFromDbForCodes(string $displayLocale, array $countryCodes): array
     {
         $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'en';
         if (!isset(self::$countryNamesByDisplayLocale[$displayLocale])) {
             self::$countryNamesByDisplayLocale[$displayLocale] = [];
         }
         $pool =& self::$countryNamesByDisplayLocale[$displayLocale];
-        $out = [];
+        $missing = [];
         foreach ($countryCodes as $code) {
             $key = \strtoupper(\trim((string)$code));
             if ($key === '') {
                 continue;
             }
             if (!isset($pool[$key])) {
-                try {
-                    $pool[$key] = (string)Countries::getName($key, $displayLocale);
-                } catch (\Throwable) {
-                    $pool[$key] = $key;
+                $missing[$key] = true;
+            }
+        }
+        if ($missing !== []) {
+            $codes = \array_keys($missing);
+            $loaded = [];
+            try {
+                /** @var CountryLocaleName $nameModel */
+                $nameModel = ObjectManager::getInstance(CountryLocaleName::class);
+                $targets = \array_values(\array_unique([$displayLocale, 'en_US', 'en', 'zh_Hans_CN']));
+                $rows = $nameModel
+                    ->clearQuery()
+                    ->where(CountryLocaleName::schema_fields_COUNTRY_CODE, $codes, 'IN')
+                    ->where(CountryLocaleName::schema_fields_DISPLAY_LOCALE_CODE, $targets, 'IN')
+                    ->select()
+                    ->fetchArray();
+                $byCode = [];
+                foreach ($rows as $row) {
+                    $cc = \strtoupper((string)($row[CountryLocaleName::schema_fields_COUNTRY_CODE] ?? ''));
+                    $tl = (string)($row[CountryLocaleName::schema_fields_DISPLAY_LOCALE_CODE] ?? '');
+                    $dn = \trim((string)($row[CountryLocaleName::schema_fields_DISPLAY_NAME] ?? ''));
+                    if ($cc === '' || $dn === '') {
+                        continue;
+                    }
+                    $byCode[$cc][$tl] = $dn;
+                }
+                foreach ($codes as $cc) {
+                    $names = $byCode[$cc] ?? [];
+                    $picked = '';
+                    foreach ($targets as $tl) {
+                        if (isset($names[$tl]) && $names[$tl] !== '') {
+                            $picked = $names[$tl];
+                            break;
+                        }
+                    }
+                    $loaded[$cc] = $picked !== '' ? $picked : $cc;
+                }
+            } catch (\Throwable) {
+                foreach ($codes as $cc) {
+                    $loaded[$cc] = $cc;
                 }
             }
-            $out[$key] = $pool[$key];
+            foreach ($loaded as $cc => $name) {
+                $pool[$cc] = $name;
+            }
+        }
+
+        $out = [];
+        foreach ($countryCodes as $code) {
+            $key = \strtoupper(\trim((string)$code));
+            if ($key === '') {
+                continue;
+            }
+            $out[$key] = $pool[$key] ?? $key;
         }
 
         return $out;
+    }
+
+    /**
+     * @param list<string> $countryCodes
+     * @return array<string, string> UPPER_ISO2 => name
+     */
+    private static function countryNamesForCodes(string $displayLocale, array $countryCodes): array
+    {
+        return self::countryNamesFromDbForCodes($displayLocale, $countryCodes);
     }
 
     /** @return list<array<string, string>> */
@@ -849,17 +984,23 @@ DOC;
     {
         /** @var I18n $i18n */
         $i18n = ObjectManager::getInstance(I18n::class);
-        $countryNames = self::countryNamesMap(\extension_loaded('intl') ? $displayLocale : 'en');
+        $countryNames = self::countryNamesMap($displayLocale);
         $items = [];
-        foreach (Locales::getLocales() as $rawCode) {
-            $code = \str_replace('-', '_', \trim((string)$rawCode));
+        /** @var Locale $localeModel */
+        $localeModel = ObjectManager::getInstance(Locale::class);
+        $localeRows = $localeModel->clearQuery()->select()->fetchArray();
+        foreach ($localeRows as $localeRow) {
+            $code = \str_replace('-', '_', \trim((string)($localeRow[Locale::schema_fields_CODE] ?? '')));
             if ($code === '' || \preg_match('/\A[A-Za-z]{2,3}(?:_[A-Za-z]{4})?(?:_[A-Z]{2}|_[0-9]{3})?\z/D', $code) !== 1) {
                 continue;
             }
             $name = \trim($i18n->getLocaleName($code, $displayLocale));
             $selfName = \trim($i18n->getLocaleName($code, $code));
-            $referenceName = \trim($i18n->getLocaleName($code, 'en'));
-            $countryCode = self::extractCountryCode($code);
+            $referenceName = \trim($i18n->getLocaleName($code, 'en_US'));
+            if ($referenceName === '') {
+                $referenceName = \trim($i18n->getLocaleName($code, 'en'));
+            }
+            $countryCode = \strtoupper((string)($localeRow[Locale::schema_fields_COUNTRY_CODE] ?? self::extractCountryCode($code)));
             $countryName = $countryCode !== ''
                 ? (string)($countryNames[$countryCode] ?? $countryCode)
                 : (string)__('全球语言');

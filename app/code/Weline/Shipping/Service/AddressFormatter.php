@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Weline\Shipping\Service;
 
 use Weline\Framework\Http\Cookie;
-use Symfony\Component\Intl\Countries as IntlCountries;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Model\I18n;
 
 class AddressFormatter
 {
@@ -147,23 +148,21 @@ class AddressFormatter
 
         try {
             $locale = Cookie::getLangLocal() ?: 'en_US';
-            if ($locale === 'zh_Hans_CN') {
-                $intl = 'zh_Hans';
-            } elseif ($locale === 'zh_Hant_TW') {
-                $intl = 'zh_Hant';
-            } else {
-                $intl = $locale;
+            /** @var I18n $i18n */
+            $i18n = ObjectManager::getInstance(I18n::class);
+            $names = $i18n->getCountries($locale);
+            if (isset($names[$countryCode]) && $names[$countryCode] !== '') {
+                return (string)$names[$countryCode];
             }
-
-            return IntlCountries::getName($countryCode, $intl);
         } catch (\Throwable) {
-            return match ($countryCode) {
-                'CN' => 'China',
-                'US' => 'United States',
-                'GB' => 'United Kingdom',
-                'JP' => 'Japan',
-                default => $countryCode,
-            };
         }
+
+        return match ($countryCode) {
+            'CN' => 'China',
+            'US' => 'United States',
+            'GB' => 'United Kingdom',
+            'JP' => 'Japan',
+            default => $countryCode,
+        };
     }
 }

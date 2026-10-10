@@ -29,12 +29,10 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
         'country-batch-activate' => 'Weline_I18n::i18n_countries',
         'country-batch-disable' => 'Weline_I18n::i18n_countries',
         'country-batch-uninstall' => 'Weline_I18n::i18n_countries',
-        'country-sync' => 'Weline_I18n::i18n_countries',
         'locale-install' => 'Weline_I18n::i18n_countries',
         'locale-activate' => 'Weline_I18n::i18n_countries',
         'locale-deactivate' => 'Weline_I18n::i18n_countries',
         'locale-uninstall' => 'Weline_I18n::i18n_countries',
-        'locale-sync' => 'Weline_I18n::i18n_countries',
         'localization-install' => 'Weline_I18n::i18n_localization',
         'localization-activate' => 'Weline_I18n::i18n_localization',
         'localization-deactivate' => 'Weline_I18n::i18n_localization',
@@ -312,7 +310,6 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             'country-batch-activate' => ['batchActive', 'POST', null],
             'country-batch-disable' => ['batchDisable', 'POST', null],
             'country-batch-uninstall' => ['batchUninstall', 'POST', null],
-            'country-sync' => ['getUpdate', 'GET', null],
         ];
         if (isset($countryActions[$action])) {
             return [
@@ -326,7 +323,6 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             'locale-activate' => ['postActive', 'POST', null],
             'locale-deactivate' => ['postDisable', 'POST', null],
             'locale-uninstall' => ['postUninstall', 'POST', null],
-            'locale-sync' => ['getUpdate', 'GET', null],
         ];
         if (isset($localeActions[$action])) {
             return [

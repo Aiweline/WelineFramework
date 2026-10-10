@@ -14,7 +14,7 @@ namespace Weline\Shipping\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Shipping\Model\Region;
-use Symfony\Component\Intl\Countries as IntlCountries;
+use Weline\I18n\Model\I18n;
 use Weline\Shipping\Service\EmbargoService;
 
 /**
@@ -736,10 +736,12 @@ class RegionService
     /** @return list<array<string, mixed>> */
     private function getGlobalCountriesAsRegions(): array
     {
+        /** @var I18n $i18n */
+        $i18n = $this->objectManager->getInstance(I18n::class);
         try {
-            $names = IntlCountries::getNames($this->intlLocale());
+            $names = $i18n->getCountries($this->currentLocale());
         } catch (\Throwable) {
-            $names = IntlCountries::getNames('en');
+            $names = $i18n->getCountries('en_US');
         }
 
         $result = [];
@@ -1255,19 +1257,6 @@ class RegionService
         return Cookie::getLangLocal() ?: 'zh_Hans_CN';
     }
 
-    private function intlLocale(): string
-    {
-        $locale = $this->currentLocale();
-        if ($locale === 'zh_Hans_CN') {
-            return 'zh_Hans';
-        }
-        if ($locale === 'zh_Hant_TW') {
-            return 'zh_Hant';
-        }
-
-        return $locale;
-    }
-
     private function localizedCountryName(string $countryCode, string $defaultName): string
     {
         if ($countryCode === '') {
@@ -1275,10 +1264,17 @@ class RegionService
         }
 
         try {
-            return IntlCountries::getName(strtoupper($countryCode), $this->intlLocale());
+            /** @var I18n $i18n */
+            $i18n = $this->objectManager->getInstance(I18n::class);
+            $code = strtoupper($countryCode);
+            $names = $i18n->getCountries($this->currentLocale());
+            if (isset($names[$code]) && $names[$code] !== '') {
+                return (string)$names[$code];
+            }
         } catch (\Throwable) {
-            return $defaultName;
         }
+
+        return $defaultName;
     }
 
     private function localizedRegionName(

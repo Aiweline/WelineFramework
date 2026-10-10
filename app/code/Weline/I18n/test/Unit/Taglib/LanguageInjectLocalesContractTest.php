@@ -41,20 +41,28 @@ final class LanguageInjectLocalesContractTest extends TestCase
 
     public function testLanguageSwitcherPinsCurrentCountryGroupFirst(): void
     {
-        $html = LanguageSwitcher::render([
-            'allowed_values' => ['zh_Hans_CN', 'ru_RU', 'bn_IN', 'as_IN'],
-            'current' => 'bn_IN',
-            'navigation' => 'emit',
-        ]);
+        // Storefront SSR is panel-lazy (no data-lang options). Assert grouping order directly.
+        $languages = [
+            'zh_Hans_CN' => ['code' => 'zh_Hans_CN', 'country_code' => 'CN', 'country_name' => 'China'],
+            'ru_RU' => ['code' => 'ru_RU', 'country_code' => 'RU', 'country_name' => 'Russia'],
+            'bn_IN' => ['code' => 'bn_IN', 'country_code' => 'IN', 'country_name' => 'India'],
+            'as_IN' => ['code' => 'as_IN', 'country_code' => 'IN', 'country_name' => 'India'],
+        ];
+        $method = new \ReflectionMethod(LanguageSwitcher::class, 'groupLanguagesByCountry');
+        $method->setAccessible(true);
+        /** @var list<array{country_code:string,country_name:string,languages:array<string,array<string,mixed>>}> $groups */
+        $groups = $method->invoke(null, $languages, 'zh_Hans_CN', 'bn_IN');
 
-        self::assertStringContainsString('data-i18n-switcher', $html);
-
-        \preg_match_all('/data-lang="([^"]+)"/', $html, $matches);
-        $order = $matches[1] ?? [];
+        $order = [];
+        foreach ($groups as $group) {
+            foreach (\array_keys($group['languages'] ?? []) as $code) {
+                $order[] = (string)$code;
+            }
+        }
         self::assertSame(
             ['bn_IN', 'as_IN', 'zh_Hans_CN', 'ru_RU'],
             $order,
-            'current Indian country group must render before China/Russia; got: ' . \implode(',', $order)
+            'current Indian country group must sort before China/Russia; got: ' . \implode(',', $order)
         );
     }
 
@@ -68,10 +76,14 @@ final class LanguageInjectLocalesContractTest extends TestCase
 
         self::assertStringContainsString('data-i18n-switcher', $html);
         self::assertStringContainsString('data-i18n-navigation="emit"', $html);
-        self::assertStringContainsString('data-lang="as_IN"', $html);
-        self::assertStringContainsString('data-lang="en_US"', $html);
-        self::assertStringContainsString('data-lang="bn_IN"', $html);
-        self::assertMatchesRegularExpression('/data-lang="as_IN"[^>]*(?:active|aria-checked="true")/', $html);
+        // Storefront panel is lazy; authoritative inject order lands on supported-locales.
+        self::assertMatchesRegularExpression(
+            '/data-i18n-supported-locales="[^"]*as_IN[^"]*"/',
+            $html
+        );
+        self::assertStringContainsString('en_US', (string)(\preg_match('/data-i18n-supported-locales="([^"]*)"/', $html, $m) ? $m[1] : ''));
+        self::assertStringContainsString('bn_IN', (string)(\preg_match('/data-i18n-supported-locales="([^"]*)"/', $html, $m) ? $m[1] : ''));
+        self::assertStringContainsString('data-i18n-current-locale="as_IN"', $html);
     }
 
     public function testLanguageSelectResolveInjectsMissingCodesInCallerOrder(): void
@@ -96,6 +108,9 @@ final class LanguageInjectLocalesContractTest extends TestCase
         $src = (string)\file_get_contents(
             BP . '/app/code/Weline/I18n/Taglib/LanguageSelect.php'
         );
+        $switcherSrc = (string)\file_get_contents(
+            BP . '/app/code/Weline/I18n/Taglib/LanguageSwitcher.php'
+        );
         self::assertStringNotContainsString(
             "\$catalog === 'installed' ? 'global'",
             $src,
@@ -107,14 +122,39 @@ final class LanguageInjectLocalesContractTest extends TestCase
             'website/inject allowlist must resolve only those codes from Locals'
         );
         self::assertStringContainsString(
-            'Countries::getName($key, $displayLocale)',
+            'countryNamesFromDbForCodes',
             $src,
-            'installed path must resolve country labels per-code, not Countries::getNames full table'
+            'allowlist path must load country labels from i18n_countries_locale_name'
+        );
+        self::assertStringContainsString(
+            "->where(Locals::schema_fields_CODE, \$normalized, 'IN')",
+            $src,
+            'Locals subset query must use where(field, codes, IN) ORM order'
         );
         self::assertStringNotContainsString(
             "getLanguageItems(\$displayLocale, 'installed');\n        } else {",
             $src,
             'allowlist path must not materialize full installed catalog then filter'
+        );
+        self::assertStringNotContainsString(
+            'LanguageSelect::getLanguageItems($displayLocale)',
+            $switcherSrc,
+            'groupLanguagesByCountry must not reload full LanguageSelect catalog'
+        );
+        $builderStart = \strpos($src, 'function buildInstalledLanguageItemsForCodes');
+        $builderEnd = \strpos($src, 'function pickLocalNameForTarget', (int)$builderStart);
+        self::assertNotFalse($builderStart);
+        self::assertNotFalse($builderEnd);
+        $builderBody = \substr($src, (int)$builderStart, (int)$builderEnd - (int)$builderStart);
+        self::assertStringNotContainsString(
+            '->getLocaleName(',
+            $builderBody,
+            'allowlist builder must not call I18n/Symfony locale name APIs'
+        );
+        self::assertStringNotContainsString(
+            'Locales::getName',
+            $builderBody,
+            'allowlist builder must not call Symfony Locales::getName'
         );
     }
 

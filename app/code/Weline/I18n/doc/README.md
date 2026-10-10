@@ -155,8 +155,9 @@ Weline.Api.resource('i18n_admin').action({
 - `header-language-switcher` / `header-currency-switcher` 输出包含实例级 DOM id，不得登记 aggregate/output HTML 缓存；同页页头、侧栏、页脚都要独立执行。实例 id 必须由每次服务端 render 的随机命名空间生成，不能依赖会在独立 Hook/Template 上下文中重置的请求/进程计数器；trigger 的 `aria-controls` 只允许指向本实例 panel。内联国旗 SVG 的 `id` 及 `href` / `url()` 引用也必须在每次插入时生成独立的 96-bit 命名空间，避免不同 Worker/FPC 片段拼装到同一响应时复用局部序号。
 - `<w:i18n:language:select />` 与 `<w:i18n:switcher />` 共享 `LanguageSelect::getLanguageItems()` 作为唯一语言目录：统一按国家分组，组内展示地区语言、参考名称与 Locale 代码，搜索同时覆盖国家、语言和代码。PageBuilder、网站表单、SystemConfig、字典和后台顶栏只需使用官方 Taglib，不再各自维护语言 option。未声明 `multiple` 时必须单选，不得继承同页其他 Taglib 泄漏的 `Taglib__multiple`
 - `LanguageSelect catalog="installed|global"`：管理表单默认只显示已安装语言；语言支持申请使用
-  Symfony Intl 全球目录。`disabled-values` 会保留站点已支持语言但禁止再次选择。全球目录
-  不重复内嵌 SVG 国旗，浏览器按 `country_code` 生成 Unicode 国旗，以保持 QueryBin 响应在
+  库内全球目录（`i18n_locale` + `i18n_locale_name` / Locals，种子来自 `data/locale-catalog` gzip 包）。
+  运行时禁止读 Symfony Intl 语言文件。`disabled-values` 会保留站点已支持语言但禁止再次选择。
+  全球目录不重复内嵌 SVG 国旗，浏览器按 `country_code` 生成 Unicode 国旗，以保持 QueryBin 响应在
   单字段 2MB 上限内。
 - 前台 `LanguageSwitcher` 在网站 Scope 的 `i18n/language_request/enabled` 开启时显示
   “申请支持其他语言”。初始 HTML 只有入口和弹层壳；首次点击才通过

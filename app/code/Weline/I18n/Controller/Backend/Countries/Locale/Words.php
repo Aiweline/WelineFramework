@@ -99,7 +99,9 @@ class Words extends BaseController
     {
         $locale_code = $this->request->getGet('code');
         // 查询已安装并且已经激活的地方代码
-        $locale = $this->locale->clear()->where(
+        $countryNameJoin = (clone ObjectManager::getInstance(Name::class))->clear();
+        $localeNameJoin = (clone ObjectManager::getInstance(Locale\Name::class))->clear();
+        $locale = (clone $this->locale)->clear()->where(
             [
                 $this->locale::schema_fields_CODE => $locale_code,
                 $this->locale::schema_fields_IS_ACTIVE => 1,
@@ -107,8 +109,8 @@ class Words extends BaseController
             ]
         )->where('n.display_locale_code', Cookie::getLangLocal())
             ->where('ln.display_locale_code', Cookie::getLangLocal())
-            ->joinModel(Name::class, 'n', 'main_table.country_code=n.country_code')
-            ->joinModel(Locale\Name::class, 'ln', 'main_table.code=ln.locale_code')
+            ->joinModel($countryNameJoin, 'n', 'main_table.country_code=n.country_code')
+            ->joinModel($localeNameJoin, 'ln', 'main_table.code=ln.locale_code')
             ->find()
             ->fetch();
         if (!$locale->getId()) {

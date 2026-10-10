@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Shipping\Service;
 
-use Symfony\Component\Intl\Countries as IntlCountries;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Model\I18n;
 use Weline\Shipping\Model\EmbargoRegion;
 
 /**
@@ -491,25 +491,22 @@ final class SystemEmbargoAdminService
             return '';
         }
         try {
-            return IntlCountries::getName($countryCode, $this->intlLocale());
+            $locale = trim((string)Cookie::getLangLocal());
+            if ($locale === '') {
+                $locale = $this->localNames->currentLocale();
+            }
+            if ($locale === '') {
+                $locale = 'en_US';
+            }
+            /** @var I18n $i18n */
+            $i18n = $this->objectManager->getInstance(I18n::class);
+            $names = $i18n->getCountries($locale);
+            if (isset($names[$countryCode]) && $names[$countryCode] !== '') {
+                return (string)$names[$countryCode];
+            }
         } catch (\Throwable) {
-            return $countryCode;
-        }
-    }
-
-    private function intlLocale(): string
-    {
-        $locale = trim((string)Cookie::getLangLocal());
-        if ($locale === '') {
-            $locale = $this->localNames->currentLocale();
-        }
-        if ($locale === 'zh_Hans_CN') {
-            return 'zh_Hans';
-        }
-        if ($locale === 'zh_Hant_TW') {
-            return 'zh_Hant';
         }
 
-        return $locale !== '' ? $locale : 'en';
+        return $countryCode;
     }
 }

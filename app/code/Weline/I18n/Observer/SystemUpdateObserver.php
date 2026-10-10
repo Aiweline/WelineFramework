@@ -16,11 +16,11 @@ namespace Weline\I18n\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Service\CountryUpdateService;
+use Weline\I18n\Service\Catalog\DisplayNameCartesianSeeder;
 
 /**
- * 系统更新后自动检测和更新国家信息观察者
- * 监听 Weline_Framework_System::system_update_after 和 Weline_Framework_Module::module_install_after 事件
+ * 系统更新后：用种子包补齐国家/地区库存缺口（不碰安装/激活态，不走第三方 Intl）。
+ * 监听 Weline_Framework_System::system_update_after 和 Weline_Framework_Module::module_install_after。
  */
 class SystemUpdateObserver implements ObserverInterface
 {
@@ -30,23 +30,15 @@ class SystemUpdateObserver implements ObserverInterface
     public function execute(Event &$event): void
     {
         try {
-            /** @var CountryUpdateService $countryUpdateService */
-            $countryUpdateService = ObjectManager::getInstance(CountryUpdateService::class);
-            
-            // 检查并自动更新国家信息
-            $result = $countryUpdateService->checkAndUpdateCountries();
-            
+            /** @var DisplayNameCartesianSeeder $seeder */
+            $seeder = ObjectManager::getInstance(DisplayNameCartesianSeeder::class);
+            $seeder->syncInventoryGaps(false);
+
             $eventName = $event->getName();
             $source = strpos($eventName, 'module_install') !== false ? '模块安装后' : '系统更新后';
-            
-            if ($result['updated']) {
-                w_log_info("I18n: {$source}自动更新了 " . $result['updated_count'] . ' 个国家信息', [], 'i18n');
-            } else {
-                w_log_info("I18n: {$source}国家信息检查完成 - " . $result['message'], [], 'i18n');
-            }
-            
+            w_log_info("I18n: {$source}已用种子包补齐国家/地区库存缺口", [], 'i18n');
         } catch (\Exception $e) {
-            w_log_error('I18n: 国家信息自动更新失败 - ' . $e->getMessage(), [], 'i18n');
+            w_log_error('I18n: 种子包库存补洞失败 - ' . $e->getMessage(), [], 'i18n');
         }
     }
 }

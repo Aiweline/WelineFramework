@@ -36,8 +36,16 @@ final class I18nResourceChangePublisher
      */
     public function publishAction(string $action, array $payload, ?string $persistedLocale = null): ResourceChange
     {
-        return ObjectManager::getInstance(TransactionCoordinatorInterface::class)->run(
-            $this->connection(),
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        $connection = $this->connection();
+        // Join an already-open lifecycle transaction instead of opening a second
+        // coordinator run on the same logical connection (parallel-txn LogicException).
+        if ($transactions->isActive($connection)) {
+            return $this->publishInTransaction($action, $payload, null, $persistedLocale);
+        }
+
+        return $transactions->run(
+            $connection,
             fn(): ResourceChange => $this->publishInTransaction($action, $payload, null, $persistedLocale),
         );
     }

@@ -305,6 +305,8 @@ $triggerCurrencyLabel = $currentCurrencySymbol !== '' ? $currentCurrencySymbol :
 $i18nChrome = static fn(string $source): string => \Weline\Theme\Helper\WidgetI18n::label($source);
 $currencySwitcherId = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency-switcher-menu');
 ?>
+<?php /* Theme chrome lang-shell: island so shared header bag can hydrate live currency. */ ?>
+<weline-chrome-island data-weline-chrome-island="currency-switcher" style="display:contents">
 <div
     class="w-currency-switcher w-menu-root"
     data-currency-switcher="true"
@@ -323,7 +325,7 @@ $currencySwitcherId = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency
         aria-expanded="false"
         aria-label="<?= $escape($i18nChrome('切换货币') . ' · ' . (string)$displayCurrentCurrency) ?>"
     >
-        <w:icon name="cash" size="sm" />
+        <?php // 触发器只用符号/码 + chevron；勿加 cash 图标（易被看成相机） ?>
         <span class="w-currency-switcher__current current-currency"><?= $escape($triggerCurrencyLabel) ?></span>
         <span class="w-currency-switcher__code"<?= $triggerCurrencyLabel === (string)$displayCurrentCurrency ? ' hidden' : '' ?>><?= $escape((string)$displayCurrentCurrency) ?></span>
         <w:icon name="chevron-down" size="xs" />
@@ -372,6 +374,7 @@ $currencySwitcherId = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency
         <button type="button" class="w-button w-currency-switcher__more" data-tone="neutral" data-size="sm" data-w-choice-more <?= count($currencies) <= $selectorPageSize ? 'hidden' : '' ?>><?= $escape($i18nChrome('加载更多')) ?></button>
     </div>
 </div>
+</weline-chrome-island>
 <?php
 // Request-scoped dedupe (WLS-safe). Never use $GLOBALS — worker reuse leaks the flag
 // across requests and poisons static hook HTML caches without currency.js.

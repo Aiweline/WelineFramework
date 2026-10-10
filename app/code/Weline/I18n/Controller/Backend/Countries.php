@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Weline\I18n\Controller\Backend;
 
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Countries as CountriesModel;
 use Weline\I18n\Model\Countries\Locale\Name;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
-use Weline\I18n\Service\CountryDataUpdateService;
 use Weline\I18n\Service\CountryLocaleLifecycleService;
 
 class Countries extends BaseController
@@ -19,7 +19,6 @@ class Countries extends BaseController
     private CountriesModel $countries;
     private Name $countryNames;
     private CountryLocaleLifecycleService $lifecycle;
-    private CountryDataUpdateService $countryDataUpdateService;
 
     public function __construct(
         Locale $locale,
@@ -28,25 +27,14 @@ class Countries extends BaseController
         Name $countryName
     ) {
         parent::__construct($locale, $i18n);
-        $this->countries = $countries;
+        // Clone before joinModel — Countries is a shared ObjectManager singleton
+        // also held by CountryLocaleLifecycleService; binding a join query onto it
+        // breaks lifecycle TransactionCoordinator::run + Model::save().
+        $this->countries = (clone $countries)->clear();
         $this->countryNames = $countryName;
         $this->lifecycle = ObjectManager::getInstance(CountryLocaleLifecycleService::class);
-        $this->countryDataUpdateService = ObjectManager::getInstance(CountryDataUpdateService::class);
-
-        $currentLang = $this->getSafeCurrentLocaleCode();
-        $joinCondition = sprintf(
-            'main_table.code=cln.country_code AND cln.%s=\'%s\'',
-            Name::schema_fields_DISPLAY_LOCALE_CODE,
-            $currentLang
-        );
-
-        $this->countries->joinModel(
-            Name::class,
-            'cln',
-            $joinCondition,
-            'left',
-            'cln.' . Name::schema_fields_DISPLAY_NAME . ' as display_name, cln.' . Name::schema_fields_DISPLAY_LOCALE_CODE
-        );
+        // Listing joins are built in __init for GET only — avoid constructor-time
+        // joinModel during install/uninstall POSTs.
     }
 
     private function getSafeCurrentLocaleCode(): string
@@ -62,6 +50,27 @@ class Countries extends BaseController
     public function __init()
     {
         parent::__init();
+        // Mutation POSTs only need lifecycle — skip listing joins.
+        if (!$this->request->isGet()) {
+            return;
+        }
+
+        $currentLang = $this->getSafeCurrentLocaleCode();
+        $joinCondition = sprintf(
+            'main_table.code=cln.country_code AND cln.%s=\'%s\'',
+            Name::schema_fields_DISPLAY_LOCALE_CODE,
+            $currentLang
+        );
+
+        // Join a Name clone — joinModel(class-string) would bindQuery the OM singleton.
+        $countryNameJoin = (clone ObjectManager::getInstance(Name::class))->clear();
+        $this->countries->joinModel(
+            $countryNameJoin,
+            'cln',
+            $joinCondition,
+            'left',
+            'cln.' . Name::schema_fields_DISPLAY_NAME . ' as display_name, cln.' . Name::schema_fields_DISPLAY_LOCALE_CODE
+        );
 
         if ($search = trim((string)$this->request->getGet('search', ''))) {
             // Country names live in the localized name table. Resolve the
@@ -91,9 +100,6 @@ class Countries extends BaseController
         // the currently selected lifecycle state. This lets operators find an
         // uninstalled country such as India and install it in one step.
         $displayFilter = trim($search) !== '' ? 'all' : $filter;
-
-        $this->ensureCountryData();
-        $this->autoUpdateMissingCountryNames();
 
         $query = clone $this->countries;
         // Apply the search condition to the listing clone as well. The base
@@ -152,28 +158,6 @@ class Countries extends BaseController
         return $this->fetch();
     }
 
-    public function getUpdate()
-    {
-        $isJsonRequest = $this->isJsonRequest();
-        try {
-            $updated = $this->countryDataUpdateService->updateCountryData();
-            $message = $updated
-                ? (string)__('国家数据同步完成')
-                : (string)__('国家数据同步失败，请检查日志');
-            if ($isJsonRequest) {
-                return $this->jsonActionResponse($updated, $message);
-            }
-            $updated ? Message::success($message) : Message::error($message);
-        } catch (\Throwable $throwable) {
-            if ($isJsonRequest) {
-                return $this->jsonActionResponse(false, $throwable->getMessage());
-            }
-            Message::exception($throwable);
-        }
-
-        return $this->redirect('*/backend/countries');
-    }
-
     public function postInstall()
     {
         if (!$this->request->isPost()) {
@@ -190,6 +174,21 @@ class Countries extends BaseController
             }
             Message::warning(__('请选择要安装的国家！'));
             return $this->redirect($this->buildListUrl($filter));
+        }
+
+        if ($this->wantsSse()) {
+            return $this->streamLifecycle(
+                (string)__('正在安装国家 %{1}…', [$code]),
+                function (?callable $progress) use ($code): array {
+                    return $this->lifecycle->installCountry($code, $progress);
+                },
+                static function (array $summary): string {
+                    return (string)__('国家 %{1} 已安装并激活，可用地区 %{2} 个', [
+                        $summary['display_name'] ?? $summary['country_code'],
+                        $summary['locale_count'] ?? 0,
+                    ]);
+                }
+            );
         }
 
         try {
@@ -212,8 +211,50 @@ class Countries extends BaseController
         return $this->redirect($this->buildListUrl($filter));
     }
 
+    private function wantsSse(): bool
+    {
+        $accept = strtolower((string)($this->request->getHeader('Accept') ?? ''));
+        return str_contains($accept, 'text/event-stream')
+            || (string)$this->request->getGet('sse', '') === '1'
+            || (string)$this->request->getPost('sse', '') === '1';
+    }
+
+    /**
+     * @param callable(?callable):array $runner
+     * @param callable(array):string $doneMessage
+     */
+    private function streamLifecycle(string $startMessage, callable $runner, callable $doneMessage): string
+    {
+        $sse = new SseWriter();
+        $sse->start();
+        $sse->sendEvent('start', ['message' => $startMessage, 'percent' => 0]);
+        try {
+            $summary = $runner(static function (array $progress) use ($sse): void {
+                $sse->sendEvent('progress', $progress);
+            });
+            $message = $doneMessage($summary);
+            $sse->sendEvent('done', [
+                'success' => true,
+                'message' => $message,
+                'percent' => 100,
+                'data' => $summary,
+            ]);
+        } catch (\Throwable $exception) {
+            $sse->sendEvent('error', [
+                'success' => false,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+        $sse->close();
+
+        return '';
+    }
+
     private function isJsonRequest(): bool
     {
+        if ($this->wantsSse()) {
+            return false;
+        }
         $accept = strtolower((string)($this->request->getHeader('Accept') ?? ''));
         return $this->request->isAjax() || str_contains($accept, 'application/json');
     }
@@ -239,6 +280,21 @@ class Countries extends BaseController
             }
             Message::warning(__('请选择国家激活！'));
             return $this->redirect($this->buildListUrl($filter));
+        }
+
+        if ($this->wantsSse()) {
+            return $this->streamLifecycle(
+                (string)__('正在激活国家 %{1}…', [$code]),
+                function (?callable $progress) use ($code): array {
+                    return $this->lifecycle->activateCountry($code, $progress);
+                },
+                static function (array $summary): string {
+                    return (string)__('国家 %{1} 已启用，推荐地区 %{2} 已同步启用', [
+                        $summary['display_name'] ?? $summary['country_code'],
+                        $summary['preferred_locale'] ?? __('默认地区'),
+                    ]);
+                }
+            );
         }
 
         try {
@@ -492,66 +548,6 @@ class Countries extends BaseController
                 'current_locale' => $this->getSafeCurrentLocaleCode(),
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
-
-    private function ensureCountryData(): void
-    {
-        // 每次进入页面都校验并补齐全球目录；服务只插入缺失国家，
-        // 不会覆盖已有国家的安装和激活状态。
-        $this->countryDataUpdateService->updateCountryData();
-    }
-
-    private function autoUpdateMissingCountryNames(): void
-    {
-        try {
-            $currentLang = $this->getSafeCurrentLocaleCode();
-            $countryNames = $this->i18n->getCountries($currentLang);
-            if (empty($countryNames)) {
-                return;
-            }
-
-            $allCountries = (clone ObjectManager::getInstance(CountriesModel::class))->reset()->select()->fetch()->getItems();
-            if (empty($allCountries)) {
-                return;
-            }
-
-            $nameModel = ObjectManager::make(Name::class);
-            $existingNames = $nameModel->reset()
-                ->where(Name::schema_fields_DISPLAY_LOCALE_CODE, $currentLang)
-                ->select()
-                ->fetch()
-                ->getItems();
-            $existingCountryCodes = [];
-            foreach ($existingNames as $existingName) {
-                $existingCode = (string)$existingName->getData(Name::schema_fields_COUNTRY_CODE);
-                if ($existingCode !== '') {
-                    $existingCountryCodes[$existingCode] = true;
-                }
-            }
-
-            $missingData = [];
-            foreach ($allCountries as $country) {
-                $countryCode = (string)$country->getData(CountriesModel::schema_fields_CODE);
-                if (isset($existingCountryCodes[$countryCode]) || !isset($countryNames[$countryCode])) {
-                    continue;
-                }
-
-                $missingData[] = [
-                    Name::schema_fields_COUNTRY_CODE => $countryCode,
-                    Name::schema_fields_DISPLAY_LOCALE_CODE => $currentLang,
-                    Name::schema_fields_DISPLAY_NAME => $countryNames[$countryCode],
-                ];
-            }
-
-            if (!empty($missingData)) {
-                $nameModel->reset()->insert($missingData, [
-                    Name::schema_fields_COUNTRY_CODE,
-                    Name::schema_fields_DISPLAY_LOCALE_CODE,
-                ])->fetch();
-            }
-        } catch (\Throwable $throwable) {
-            w_log_error('Auto update missing country names failed: ' . $throwable->getMessage(), [], 'i18n');
-        }
     }
 
     private function hydrateCountry($country): void

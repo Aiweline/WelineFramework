@@ -5,7 +5,9 @@
     "type": "weline-module",
     "require": {
         "php": "^8.4",
-        "weline/framework": "@dev",
+        "weline/framework": "@dev"
+    },
+    "require-dev": {
         "symfony/intl": "^5.2"
     },
     "suggest": {

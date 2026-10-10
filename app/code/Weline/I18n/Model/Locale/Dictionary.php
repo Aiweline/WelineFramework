@@ -23,6 +23,8 @@ use Weline\I18n\Service\I18nResourceChangePublisher;
 #[Table(comment: '地区词典')]
 #[Index(name: 'idx_code', columns: ['locale_code'], comment: '区码索引')]
 #[Index(name: 'idx_locale_module', columns: ['locale_code', 'source_module'], comment: '地区模块词典索引')]
+// 部分覆盖索引 idx_locale_null_source_covering（NULL/'' source_module + INCLUDE word,translate）
+// 由 Setup/Upgrade 在 PostgreSQL 上创建；Attribute Index 不支持 WHERE/INCLUDE。
 class Dictionary extends Model implements DictionaryRepositoryInterface
 {
     public const schema_table = 'i18n_locale_dictionary';

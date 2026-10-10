@@ -13,9 +13,6 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Backend;
 
-use Symfony\Component\Intl\Languages;
-use Symfony\Component\Intl\Locales;
-use Symfony\Component\Intl\Scripts;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;

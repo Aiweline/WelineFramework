@@ -40,8 +40,6 @@
         "ext-dom": "*",
         "ext-libxml": "*",
         "ext-zip": "*",
-        "symfony/intl": "^5.2",
-        "symfony/polyfill-intl-icu": "^1.23",
         "jdorn/sql-formatter": "^1.2",
         "ext-gd": "*",
         "wikimedia/less.php": "^3.1",

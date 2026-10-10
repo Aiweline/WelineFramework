@@ -52,4 +52,13 @@ final class LanguageSwitcherChromeI18nTest extends TestCase
             $translate->invoke(null, '申请支持其他语言', 'zh_Hans_CN'),
         );
     }
+
+    public function testTranslateChromeDoesNotSingleWordPrefetch(): void
+    {
+        $source = (string)\file_get_contents(
+            (string)(new \ReflectionClass(LanguageSwitcher::class))->getFileName()
+        );
+        self::assertStringNotContainsString('Parser::prefetchWords([$source]', $source);
+        self::assertStringContainsString('Parser::prefetchWords($chromeSources', $source);
+    }
 }

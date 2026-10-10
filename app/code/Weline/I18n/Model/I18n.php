@@ -2,9 +2,6 @@
 
 namespace Weline\I18n\Model;
 
-use Symfony\Component\Intl\Countries;
-use Symfony\Component\Intl\Languages;
-use Symfony\Component\Intl\Locales;
 use Weline\CacheManager\Api\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
@@ -123,11 +120,23 @@ class I18n
             return self::$availableLocaleCodesCache['value'];
         }
 
-        if (class_exists(Locales::class)) {
-            try {
-                return $this->rememberAvailableLocaleCodes(Locales::getLocales());
-            } catch (\Throwable) {
+        try {
+            /** @var Locale $localeModel */
+            $localeModel = ObjectManager::getInstance(Locale::class);
+            $rows = $localeModel->clearQuery()
+                ->select(Locale::schema_fields_CODE)
+                ->fetchArray();
+            $codes = [];
+            foreach ($rows as $row) {
+                $code = trim((string)($row[Locale::schema_fields_CODE] ?? ''));
+                if ($code !== '') {
+                    $codes[] = $code;
+                }
             }
+            if ($codes !== []) {
+                return $this->rememberAvailableLocaleCodes($codes);
+            }
+        } catch (\Throwable) {
         }
 
         return $this->rememberAvailableLocaleCodes(array_keys(self::FALLBACK_LOCALE_NAMES));
@@ -135,16 +144,26 @@ class I18n
 
     public function getLocaleNames(string $displayLocale = 'zh_Hans_CN'): array
     {
-        $displayLocale = $this->normalizeIntlDisplayLocale($displayLocale);
-        if (class_exists(Locales::class)) {
-            try {
-                return Locales::getNames($displayLocale);
-            } catch (\Throwable) {
-                try {
-                    return Locales::getNames('en');
-                } catch (\Throwable) {
+        $displayLocale = $this->normalizeLocaleCode($displayLocale) ?: 'zh_Hans_CN';
+        try {
+            /** @var Locals $locals */
+            $locals = ObjectManager::getInstance(Locals::class);
+            $rows = $locals->clearQuery()
+                ->where(Locals::schema_fields_TARGET_CODE, $displayLocale)
+                ->select()
+                ->fetchArray();
+            $names = [];
+            foreach ($rows as $row) {
+                $code = trim((string)($row[Locals::schema_fields_CODE] ?? ''));
+                $name = trim((string)($row[Locals::schema_fields_NAME] ?? ''));
+                if ($code !== '' && $name !== '') {
+                    $names[$code] = $name;
                 }
             }
+            if ($names !== []) {
+                return $names;
+            }
+        } catch (\Throwable) {
         }
 
         return self::FALLBACK_LOCALE_NAMES;
@@ -153,7 +172,8 @@ class I18n
     private function normalizeIntlDisplayLocale(string $locale): string
     {
         $locale = $this->normalizeLocaleCode($locale);
-        return extension_loaded('intl') ? ($locale !== '' ? $locale : 'en') : 'en';
+
+        return $locale !== '' ? $locale : 'zh_Hans_CN';
     }
 
     private function normalizeLocaleCode(string $localeCode): string
@@ -191,12 +211,39 @@ class I18n
 
     private function getLocaleNameFromProvider(string $localeCode, string $displayLocale): string
     {
-        $displayLocale = $this->normalizeIntlDisplayLocale($displayLocale);
-        if (class_exists(Locales::class)) {
-            try {
-                return Locales::getName($localeCode, $displayLocale);
-            } catch (\Throwable) {
+        $displayLocale = $this->normalizeLocaleCode($displayLocale) ?: 'zh_Hans_CN';
+        $localeCode = $this->normalizeLocaleCode($localeCode);
+        try {
+            /** @var Locals $locals */
+            $locals = ObjectManager::getInstance(Locals::class);
+            $row = $locals->clearQuery()
+                ->where(Locals::schema_fields_CODE, $localeCode)
+                ->where(Locals::schema_fields_TARGET_CODE, $displayLocale)
+                ->find()
+                ->fetch();
+            if ($row->getId()) {
+                $name = trim((string)$row->getData(Locals::schema_fields_NAME));
+                if ($name !== '') {
+                    return $name;
+                }
             }
+        } catch (\Throwable) {
+        }
+        try {
+            /** @var \Weline\I18n\Model\Locale\Name $localeName */
+            $localeName = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class);
+            $row = $localeName->reset()
+                ->where(\Weline\I18n\Model\Locale\Name::schema_fields_LOCALE_CODE, $localeCode)
+                ->where(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, $displayLocale)
+                ->find()
+                ->fetch();
+            if ($row->getId()) {
+                $name = trim((string)$row->getData(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME));
+                if ($name !== '') {
+                    return $name;
+                }
+            }
+        } catch (\Throwable) {
         }
 
         return self::FALLBACK_LOCALE_NAMES[$localeCode] ?? $localeCode;
@@ -205,11 +252,17 @@ class I18n
     private function countryExists(string $countryCode): bool
     {
         $countryCode = strtoupper($countryCode);
-        if (class_exists(Countries::class)) {
-            try {
-                return Countries::exists($countryCode);
-            } catch (\Throwable) {
+        try {
+            /** @var \Weline\I18n\Model\Countries $countries */
+            $countries = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
+            $row = $countries->clearQuery()
+                ->where(\Weline\I18n\Model\Countries::schema_fields_CODE, $countryCode)
+                ->find()
+                ->fetch();
+            if ($row->getId()) {
+                return true;
             }
+        } catch (\Throwable) {
         }
 
         return isset(self::FALLBACK_COUNTRY_NAMES[$countryCode]);
@@ -218,11 +271,22 @@ class I18n
     private function getCountryName(string $countryCode, string $displayLocale = 'en'): string
     {
         $countryCode = strtoupper($countryCode);
-        if (class_exists(Countries::class)) {
-            try {
-                return Countries::getName($countryCode, $this->normalizeIntlDisplayLocale($displayLocale));
-            } catch (\Throwable) {
+        $displayLocale = $this->normalizeLocaleCode($displayLocale) ?: 'en_US';
+        try {
+            /** @var \Weline\I18n\Model\Countries\Locale\Name $names */
+            $names = ObjectManager::getInstance(\Weline\I18n\Model\Countries\Locale\Name::class);
+            $row = $names->reset()
+                ->where(\Weline\I18n\Model\Countries\Locale\Name::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(\Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, $displayLocale)
+                ->find()
+                ->fetch();
+            if ($row->getId()) {
+                $name = trim((string)$row->getData(\Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_NAME));
+                if ($name !== '') {
+                    return $name;
+                }
             }
+        } catch (\Throwable) {
         }
 
         return self::FALLBACK_COUNTRY_NAMES[$countryCode] ?? $countryCode;
@@ -288,7 +352,6 @@ class I18n
 
     public function getLocals(string $lang_code = 'zh_Hans_CN'): array
     {
-        // 未安装 intl 时 Symfony Polyfill 仅支持 en，传 zh_Hans_CN 会抛错，降级为 en
         $lang_code = $this->normalizeIntlDisplayLocale($lang_code);
         $cache_key = 'getLocals' . $lang_code;
         if ($data = $this->namespaceCache()?->get($cache_key)) {
@@ -301,11 +364,12 @@ class I18n
 
     public function getLocaleName(string $locale_code, string $displace_locale_code = 'zh_Hans_CN'): string
     {
-        $name = $locale_code;
-        if ($this->localeExists($locale_code)) {
-            $name = $this->getLocaleNameFromProvider($locale_code, $displace_locale_code);
+        $locale_code = trim($locale_code);
+        if ($locale_code === '') {
+            return '';
         }
-        return $name;
+
+        return $this->getLocaleNameFromProvider($locale_code, $displace_locale_code);
     }
 
     /**
@@ -319,28 +383,16 @@ class I18n
             return '';
         }
 
-        $languageTag = $this->extractLanguageTagFromLocaleCode($localeCode);
-        if ($languageTag === '') {
-            return $localeCode;
+        $self = $this->getLocaleNameFromProvider($localeCode, $localeCode);
+        if ($self !== '' && $self !== $localeCode) {
+            return $self;
         }
 
-        if (class_exists(Languages::class)) {
-            try {
-                return Languages::getName($languageTag, $languageTag);
-            } catch (\Throwable) {
-                $baseLanguage = explode('_', $languageTag)[0] ?? '';
-                if ($baseLanguage !== '') {
-                    try {
-                        return Languages::getName($baseLanguage, $baseLanguage);
-                    } catch (\Throwable) {
-                    }
-                }
-            }
-        }
+        $languageTag = $this->extractLanguageTagFromLocaleCode($localeCode);
 
         return self::FALLBACK_LANGUAGE_SELF_NAMES[$languageTag]
             ?? self::FALLBACK_LANGUAGE_SELF_NAMES[explode('_', $languageTag)[0] ?? '']
-            ?? $this->getLocaleName($localeCode, $localeCode);
+            ?? $localeCode;
     }
 
     private function extractLanguageTagFromLocaleCode(string $localeCode): string
@@ -978,6 +1030,7 @@ class I18n
                 $countryLocales[] = $locale;
             }
         }
+        // No on-disk pack fallback: inventory is Install/Upgrade only.
         return $countryLocales;
     }
 
@@ -996,11 +1049,33 @@ class I18n
 
     public function localeExists(string $locale_code): bool
     {
-        if (class_exists(Locales::class)) {
-            try {
-                return Locales::exists($locale_code);
-            } catch (\Throwable) {
+        $locale_code = trim($locale_code);
+        if ($locale_code === '') {
+            return false;
+        }
+        try {
+            /** @var Locale $localeModel */
+            $localeModel = ObjectManager::getInstance(Locale::class);
+            $row = $localeModel->clearQuery()
+                ->where(Locale::schema_fields_CODE, $locale_code)
+                ->find()
+                ->fetch();
+            if ($row->getId()) {
+                return true;
             }
+        } catch (\Throwable) {
+        }
+        try {
+            /** @var Locals $locals */
+            $locals = ObjectManager::getInstance(Locals::class);
+            $row = $locals->clearQuery()
+                ->where(Locals::schema_fields_CODE, $locale_code)
+                ->find()
+                ->fetch();
+            if ($row->getId()) {
+                return true;
+            }
+        } catch (\Throwable) {
         }
 
         return isset(self::FALLBACK_LOCALE_NAMES[$locale_code]);
@@ -1295,15 +1370,26 @@ class I18n
 
     public function getCountries(string $display_local_code = 'zh_Hans_CN'): array
     {
-        if (class_exists(Countries::class)) {
-            try {
-                return Countries::getNames($this->normalizeIntlDisplayLocale($display_local_code));
-            } catch (\Throwable) {
-                try {
-                    return Countries::getNames('en');
-                } catch (\Throwable) {
+        $display_local_code = $this->normalizeLocaleCode($display_local_code) ?: 'zh_Hans_CN';
+        try {
+            /** @var \Weline\I18n\Model\Countries\Locale\Name $names */
+            $names = ObjectManager::getInstance(\Weline\I18n\Model\Countries\Locale\Name::class);
+            $rows = $names->reset()
+                ->where(\Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, $display_local_code)
+                ->select()
+                ->fetchArray();
+            $out = [];
+            foreach ($rows as $row) {
+                $code = strtoupper(trim((string)($row[\Weline\I18n\Model\Countries\Locale\Name::schema_fields_COUNTRY_CODE] ?? '')));
+                $name = trim((string)($row[\Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_NAME] ?? ''));
+                if ($code !== '' && $name !== '') {
+                    $out[$code] = $name;
                 }
             }
+            if ($out !== []) {
+                return $out;
+            }
+        } catch (\Throwable) {
         }
 
         return self::FALLBACK_COUNTRY_NAMES;
