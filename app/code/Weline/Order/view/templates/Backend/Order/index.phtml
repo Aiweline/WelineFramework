@@ -210,10 +210,27 @@ $groupContexts = is_array($this->getData('group_contexts') ?? null) ? $this->get
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <span class="w-badge"
-                                                  data-tone="<?= htmlspecialchars($rowTypeTone) ?>"
-                                                  data-order-type-code="<?= htmlspecialchars($rowOrderType) ?>"
-                                                  data-testid="order-type-badge"><?= htmlspecialchars($rowTypeLabel) ?></span>
+                                            <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);">
+                                                <span class="w-badge"
+                                                      data-tone="<?= htmlspecialchars($rowTypeTone) ?>"
+                                                      data-order-type-code="<?= htmlspecialchars($rowOrderType) ?>"
+                                                      data-testid="order-type-badge"><?= htmlspecialchars($rowTypeLabel) ?></span>
+                                                <?php
+                                                try {
+                                                    $rowLife = \Weline\Framework\Manager\ObjectManager::getInstance(
+                                                        \Weline\Order\Service\OrderBackendLifecycleStageShell::class
+                                                    )->presentForOrder(is_array($orderData) ? $orderData : []);
+                                                } catch (\Throwable) {
+                                                    $rowLife = null;
+                                                }
+                                                if (is_array($rowLife) && trim((string)($rowLife['current_label'] ?? '')) !== ''):
+                                                ?>
+                                                    <span class="w-badge"
+                                                          data-tone="<?= htmlspecialchars((string)($rowLife['tone'] ?? 'warning')) ?>"
+                                                          data-lifecycle-code="<?= htmlspecialchars((string)($rowLife['current_code'] ?? '')) ?>"
+                                                          data-testid="order-list-lifecycle-stage"><?= htmlspecialchars((string)$rowLife['current_label']) ?></span>
+                                                <?php endif; ?>
+                                            </div>
                                         </td>
                                         <td>
                                             <span class="w-badge"

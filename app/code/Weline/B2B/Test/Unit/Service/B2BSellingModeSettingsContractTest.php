@@ -26,6 +26,9 @@ final class B2BSellingModeSettingsContractTest extends TestCase
         self::assertStringContainsString('selling_mode_tob_enabled', $declaration);
         self::assertStringContainsString('b2b_credit_enabled', $declaration);
         self::assertStringContainsString('b2b_credit_min_cash_deposit_percent', $declaration);
+        self::assertStringContainsString('b2b_hang_require_merchant_review_before_balance', $declaration);
+        self::assertStringContainsString('尾款前需卖家审查', $declaration);
+        self::assertStringContainsString('scope="global,website"', $declaration);
         self::assertStringContainsString('b2b_max_discount_bps', $declaration);
         self::assertStringContainsString('b2b_min_margin_bps', $declaration);
         self::assertStringContainsString('b2b_default_tier_policy_json', $declaration);
@@ -58,6 +61,7 @@ final class B2BSellingModeSettingsContractTest extends TestCase
         self::assertStringContainsString('selling_mode_tob_enabled', $configTemplate);
         self::assertStringContainsString('b2b_credit_enabled', $configTemplate);
         self::assertStringContainsString('b2b_credit_min_cash_deposit_percent', $configTemplate);
+        self::assertStringContainsString('b2b_hang_require_merchant_review_before_balance', $configTemplate);
         self::assertStringContainsString('b2b_max_discount_bps', $configTemplate);
         self::assertStringContainsString('b2b_min_margin_bps', $configTemplate);
         self::assertStringContainsString('b2b_default_tier_policy_json', $configTemplate);

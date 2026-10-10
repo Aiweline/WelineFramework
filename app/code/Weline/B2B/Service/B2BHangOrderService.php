@@ -58,6 +58,7 @@ final class B2BHangOrderService
         bool $useMemory = false,
         private readonly int $inventoryTtlSeconds = self::DEFAULT_INVENTORY_TTL_SECONDS,
         private ?InventoryCapabilityInterface $inventory = null,
+        private ?HangMerchantReviewPolicy $merchantReviewPolicy = null,
     ) {
         $this->recordFactory = $recordFactory !== null ? \Closure::fromCallable($recordFactory) : null;
         $this->clock = $clock !== null ? \Closure::fromCallable($clock) : static fn (): int => time();
@@ -71,12 +72,14 @@ final class B2BHangOrderService
         ?callable $clock = null,
         int $inventoryTtlSeconds = self::DEFAULT_INVENTORY_TTL_SECONDS,
         ?InventoryCapabilityInterface $inventory = null,
+        ?HangMerchantReviewPolicy $merchantReviewPolicy = null,
     ): self {
         return new self(
             clock: $clock,
             useMemory: true,
             inventoryTtlSeconds: $inventoryTtlSeconds,
             inventory: $inventory,
+            merchantReviewPolicy: $merchantReviewPolicy,
         );
     }
 
@@ -164,7 +167,7 @@ final class B2BHangOrderService
             updatedAtEpoch: $now,
         );
         $this->put($hang);
-        $this->recordEvent($hang);
+        $this->recordEvent($hang, '');
 
         return $hang->toArray();
     }
@@ -193,7 +196,7 @@ final class B2BHangOrderService
         return null;
     }
 
-    /** Deposit Payment Intent paid → reserve inventory → awaiting_merchant_approval. */
+    /** Deposit Payment Intent paid → reserve inventory → review gate or awaiting_balance. */
     public function onDepositPaid(
         string $orderRef,
         string $depositIntentCode,
@@ -225,19 +228,43 @@ final class B2BHangOrderService
             $reservations = $this->reserveInventoryForHang($hang);
         }
 
+        $requireReview = $this->merchantReviewPolicy()->isRequired($hang->websiteId);
+        $nextStatus = $requireReview
+            ? B2BOrderHang::STATUS_AWAITING_MERCHANT_APPROVAL
+            : B2BOrderHang::STATUS_AWAITING_BALANCE;
+
         $updated = $hang->with(
-            hangStatus: B2BOrderHang::STATUS_AWAITING_MERCHANT_APPROVAL,
+            hangStatus: $nextStatus,
             depositIntentCode: $depositIntentCode,
             reservationSnapshots: $reservations,
             inventoryReservedAtEpoch: $now,
             inventoryExpiresAtEpoch: $now + max(1, $this->inventoryTtlSeconds),
             updatedAtEpoch: $now,
+            merchantReviewRequired: $requireReview,
+            setMerchantReviewRequired: true,
         );
         $this->put($updated);
-        $this->recordEvent($updated);
+        $this->recordEvent($updated, $hang->hangStatus);
         $this->commitB2bCreditOnDepositPaid($orderRef, $depositIntentCode);
 
         return $updated->toArray();
+    }
+
+    private function merchantReviewPolicy(): HangMerchantReviewPolicy
+    {
+        if ($this->merchantReviewPolicy instanceof HangMerchantReviewPolicy) {
+            return $this->merchantReviewPolicy;
+        }
+        try {
+            $resolved = ObjectManager::getInstance(HangMerchantReviewPolicy::class);
+            if ($resolved instanceof HangMerchantReviewPolicy) {
+                return $this->merchantReviewPolicy = $resolved;
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+
+        return $this->merchantReviewPolicy = new HangMerchantReviewPolicy();
     }
 
     /**
@@ -340,6 +367,40 @@ final class B2BHangOrderService
         }
     }
 
+    /**
+     * 后台议价等下调订单总额后，同步 hang 尾款金额（支付/结账读 hang 表）。
+     * 终态挂单不改；无 hang 行时静默跳过。
+     */
+    public function syncBalanceAmountMinor(string $orderRef, int $balanceAmountMinor): ?B2BOrderHang
+    {
+        $orderRef = trim($orderRef);
+        if ($orderRef === '') {
+            return null;
+        }
+        $hang = $this->getByOrderRef($orderRef);
+        if ($hang === null) {
+            return null;
+        }
+        if (\in_array($hang->hangStatus, [
+            B2BOrderHang::STATUS_COMPLETED,
+            B2BOrderHang::STATUS_REJECTED,
+            B2BOrderHang::STATUS_EXPIRED,
+        ], true)) {
+            return $hang;
+        }
+        $balanceAmountMinor = max(0, $balanceAmountMinor);
+        if ($hang->balanceAmountMinor === $balanceAmountMinor) {
+            return $hang;
+        }
+        $updated = $hang->with(
+            balanceAmountMinor: $balanceAmountMinor,
+            updatedAtEpoch: ($this->clock)(),
+        );
+        $this->put($updated);
+
+        return $updated;
+    }
+
     /** Merchant approve only when awaiting_merchant_approval → awaiting_balance. */
     public function approve(string $hangIdOrOrderRef, ?string $balanceIntentCode = null): array
     {
@@ -357,7 +418,7 @@ final class B2BHangOrderService
             updatedAtEpoch: ($this->clock)(),
         );
         $this->put($updated);
-        $this->recordEvent($updated);
+        $this->recordEvent($updated, $hang->hangStatus);
 
         return $updated->toArray();
     }
@@ -437,7 +498,7 @@ final class B2BHangOrderService
             updatedAtEpoch: $updated->updatedAtEpoch,
         );
         $this->put($updated);
-        $this->recordEvent($updated);
+        $this->recordEvent($updated, $hang->hangStatus);
 
         return $updated->toArray() + ['notes' => $notes];
     }
@@ -473,7 +534,7 @@ final class B2BHangOrderService
             updatedAtEpoch: ($this->clock)(),
         );
         $this->put($updated);
-        $this->recordEvent($updated);
+        $this->recordEvent($updated, $hang->hangStatus);
 
         return $updated->toArray();
     }
@@ -556,7 +617,7 @@ final class B2BHangOrderService
             updatedAtEpoch: ($this->clock)(),
         );
         $this->put($updated);
-        $this->recordEvent($updated);
+        $this->recordEvent($updated, $hang->hangStatus);
 
         if (class_exists(\Weline\Order\Api\OrderFacadeInterface::class)) {
             try {
@@ -755,7 +816,7 @@ final class B2BHangOrderService
                 if ($websiteId > 0 && $hang->websiteId > 0 && $hang->websiteId !== $websiteId) {
                     continue;
                 }
-                $out[] = $hang->toArray();
+                $out[] = $this->hangListRow($hang);
             }
             usort(
                 $out,
@@ -779,7 +840,7 @@ final class B2BHangOrderService
                 if ($websiteId > 0 && $hang->websiteId > 0 && $hang->websiteId !== $websiteId) {
                     continue;
                 }
-                $out[] = $hang->toArray();
+                $out[] = $this->hangListRow($hang);
             }
         } catch (\Throwable) {
             return [];
@@ -810,8 +871,50 @@ final class B2BHangOrderService
     public function typePayloadForOrder(string $orderRef): array
     {
         $hang = $this->getByOrderRef($orderRef);
+        $payload = $hang !== null ? $hang->typePayload() : [];
+        if (!array_key_exists('merchant_review_required', $payload)) {
+            $fromOrder = $this->orderTypePayloadMerchantReviewRequired($orderRef);
+            if ($fromOrder !== null) {
+                $payload['merchant_review_required'] = $fromOrder;
+            }
+        }
 
-        return $hang !== null ? $hang->typePayload() : [];
+        return $payload;
+    }
+
+    /** @return array<string,mixed> */
+    private function hangListRow(B2BOrderHang $hang): array
+    {
+        $row = $hang->toArray();
+        if ($row['merchant_review_required'] === null) {
+            $fromOrder = $this->orderTypePayloadMerchantReviewRequired($hang->orderRef);
+            if ($fromOrder !== null) {
+                $row['merchant_review_required'] = $fromOrder;
+            }
+        }
+
+        return $row;
+    }
+
+    private function orderTypePayloadMerchantReviewRequired(string $orderRef): ?bool
+    {
+        if (!class_exists(\Weline\Order\Api\OrderFacadeInterface::class)) {
+            return null;
+        }
+        try {
+            $orders = ObjectManager::getInstance(\Weline\Order\Api\OrderFacadeInterface::class);
+            if (!$orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
+                return null;
+            }
+            $tp = $orders->get($orderRef)->typePayload;
+            if (!is_array($tp) || !array_key_exists('merchant_review_required', $tp)) {
+                return null;
+            }
+
+            return (bool)$tp['merchant_review_required'];
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function requireByOrderRef(string $orderRef): B2BOrderHang
@@ -847,6 +950,23 @@ final class B2BHangOrderService
         $existing->clear()->where(B2BOrderHangRecord::schema_fields_HANG_ID, $hang->hangId)->find()->fetch();
         $model = $existing->getId() ? $existing : $this->newRecord();
         $model->setData($this->recordData($hang))->save();
+        $this->syncOrderTypePayload($hang);
+    }
+
+    /** Keep Order.type_payload.hang_status aligned with hang row (edit UI / badges). */
+    private function syncOrderTypePayload(B2BOrderHang $hang): void
+    {
+        if (!class_exists(\Weline\Order\Api\OrderFacadeInterface::class)) {
+            return;
+        }
+        try {
+            $orders = ObjectManager::getInstance(\Weline\Order\Api\OrderFacadeInterface::class);
+            if ($orders instanceof \Weline\Order\Api\OrderFacadeInterface) {
+                $orders->mergeTypePayload($hang->orderRef, $hang->typePayload());
+            }
+        } catch (\Throwable) {
+            // Soft-fail when Order absent in hang-only fixtures.
+        }
     }
 
     /** @return array<string,mixed> */
@@ -933,7 +1053,7 @@ final class B2BHangOrderService
         );
     }
 
-    private function recordEvent(B2BOrderHang $hang): void
+    private function recordEvent(B2BOrderHang $hang, string $previousHangStatus = ''): void
     {
         $payload = [
             'order_type' => 'tob',
@@ -941,6 +1061,7 @@ final class B2BHangOrderService
             'order_ref' => $hang->orderRef,
             'hang_id' => $hang->hangId,
             'hang_status' => $hang->hangStatus,
+            'previous_hang_status' => $previousHangStatus,
             'website_id' => $hang->websiteId,
         ];
         $this->eventPayloads[] = $payload;

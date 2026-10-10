@@ -52,6 +52,8 @@ final class B2BOrderHang
         public readonly ?int $inventoryExpiresAtEpoch = null,
         public readonly int $createdAtEpoch = 0,
         public readonly int $updatedAtEpoch = 0,
+        /** Snapshot at deposit paid; null = legacy / unknown (treat as required). */
+        public readonly ?bool $merchantReviewRequired = null,
     ) {
         if ($hangId === '' || strlen($hangId) > 64) {
             throw new \InvalidArgumentException(__('B2B hang_id 非法'));
@@ -103,13 +105,14 @@ final class B2BOrderHang
             'inventory_expires_at_epoch' => $this->inventoryExpiresAtEpoch,
             'created_at_epoch' => $this->createdAtEpoch,
             'updated_at_epoch' => $this->updatedAtEpoch,
+            'merchant_review_required' => $this->merchantReviewRequired,
         ];
     }
 
     /** @return array<string,mixed> */
     public function typePayload(): array
     {
-        return [
+        $payload = [
             'group_id' => $this->groupId,
             'price_list_id' => $this->priceListId,
             'list_version' => $this->listVersion,
@@ -121,6 +124,11 @@ final class B2BOrderHang
             'b2b_hang_id' => $this->hangId,
             'discounts_applied' => false,
         ];
+        if ($this->merchantReviewRequired !== null) {
+            $payload['merchant_review_required'] = $this->merchantReviewRequired;
+        }
+
+        return $payload;
     }
 
     public function with(
@@ -132,6 +140,8 @@ final class B2BOrderHang
         ?int $inventoryExpiresAtEpoch = null,
         ?int $updatedAtEpoch = null,
         ?int $balanceAmountMinor = null,
+        ?bool $merchantReviewRequired = null,
+        bool $setMerchantReviewRequired = false,
     ): self {
         return new self(
             hangId: $this->hangId,
@@ -156,6 +166,9 @@ final class B2BOrderHang
             inventoryExpiresAtEpoch: $inventoryExpiresAtEpoch ?? $this->inventoryExpiresAtEpoch,
             createdAtEpoch: $this->createdAtEpoch,
             updatedAtEpoch: $updatedAtEpoch ?? $this->updatedAtEpoch,
+            merchantReviewRequired: $setMerchantReviewRequired
+                ? $merchantReviewRequired
+                : $this->merchantReviewRequired,
         );
     }
 

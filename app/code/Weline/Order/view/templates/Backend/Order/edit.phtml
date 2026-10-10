@@ -153,6 +153,39 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                         <span class="w-text" data-tone="muted" data-size="sm"><?= __('支付状态') ?></span>
                         <span><?= htmlspecialchars(Order::getPaymentStatusLabel((string)($orderData[Order::schema_fields_PAYMENT_STATUS] ?? ''))) ?></span>
                     </div>
+                    <?php
+                    $lifecycleStage = is_array($this->getData('lifecycle_stage') ?? null) ? $this->getData('lifecycle_stage') : [];
+                    $lifecycleActions = is_array($lifecycleStage['actions'] ?? null) ? $lifecycleStage['actions'] : [];
+                    if (trim((string)($lifecycleStage['current_label'] ?? '')) !== '' || $lifecycleActions !== []):
+                    ?>
+                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);" data-align="baseline" data-testid="order-edit-lifecycle-stage">
+                        <span class="w-text" data-tone="muted" data-size="sm"><?= htmlspecialchars((string)($lifecycleStage['title'] ?? __('批发支付阶段'))) ?></span>
+                        <?php if (trim((string)($lifecycleStage['current_label'] ?? '')) !== ''): ?>
+                        <span class="w-badge" data-tone="<?= htmlspecialchars((string)($lifecycleStage['tone'] ?? 'warning')) ?>"
+                              data-lifecycle-code="<?= htmlspecialchars((string)($lifecycleStage['current_code'] ?? '')) ?>"
+                              data-testid="order-edit-lifecycle-stage-badge"><?= htmlspecialchars((string)$lifecycleStage['current_label']) ?></span>
+                        <?php endif; ?>
+                        <?php if ((string)($lifecycleStage['current_code'] ?? '') === 'awaiting_merchant_approval'): ?>
+                        <span class="w-text" data-tone="muted" data-size="sm" data-testid="order-edit-hang-review-hint"><?= __('通过审查后客户方可支付尾款') ?></span>
+                        <?php endif; ?>
+                        <?php foreach ($lifecycleActions as $lifeAction):
+                            if (!is_array($lifeAction)) { continue; }
+                            $lifePath = trim((string)($lifeAction['path'] ?? ''));
+                            if ($lifePath === '') { continue; }
+                            $lifeTone = trim((string)($lifeAction['tone'] ?? 'primary'));
+                            $lifeTestid = trim((string)($lifeAction['testid'] ?? ''));
+                            $lifeParams = is_array($lifeAction['params'] ?? null) ? $lifeAction['params'] : [];
+                            ?>
+                            <w:form method="post" action="@backend-url{$lifePath}" style="display:contents;">
+                                <?php foreach ($lifeParams as $lifeParamKey => $lifeParamVal): ?>
+                                    <input type="hidden" name="<?= htmlspecialchars((string)$lifeParamKey) ?>" value="<?= htmlspecialchars((string)$lifeParamVal) ?>">
+                                <?php endforeach; ?>
+                                <button class="w-button" type="submit" data-tone="<?= htmlspecialchars($lifeTone !== '' ? $lifeTone : 'primary') ?>" data-size="sm"
+                                    <?php if ($lifeTestid !== ''): ?>data-testid="<?= htmlspecialchars($lifeTestid) ?>"<?php endif; ?>><?= htmlspecialchars((string)($lifeAction['label'] ?? '')) ?></button>
+                            </w:form>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
                     <div class="w-cluster" style="--w-gap:var(--weline-space-2);" data-align="baseline">
                         <span class="w-text" data-tone="muted" data-size="sm"><?= __('发货状态') ?></span>
                         <span><?= htmlspecialchars(Order::getFulfillmentStatusLabel((string)($orderData[Order::schema_fields_FULFILLMENT_STATUS] ?? ''))) ?></span>
@@ -215,8 +248,9 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                                         if ($dLabel === '') {
                                             continue;
                                         }
+                                        $dSource = trim((string)($discountItem['source'] ?? ''));
                                         ?>
-                                        <li class="w-cluster" style="--w-gap:var(--weline-space-2);" data-align="baseline">
+                                        <li class="w-cluster" style="--w-gap:var(--weline-space-2);" data-align="baseline"<?= $dSource === 'admin_adjustment' ? ' data-testid="order-edit-admin-adjustment-item"' : '' ?>>
                                             <span><?= htmlspecialchars($dLabel) ?></span>
                                             <span class="w-text" data-tone="muted" data-size="sm"><?= $money((float)($discountItem['amount'] ?? 0)) ?></span>
                                         </li>
@@ -225,6 +259,36 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                             <?php endif; ?>
                         </div>
                     </div>
+                    <?php
+                    $adminAmountAdjustEnabled = !empty($this->getData('admin_amount_adjust_enabled'));
+                    if ($isEdit && $adminAmountAdjustEnabled):
+                        ?>
+                    <div style="grid-column:1 / -1;" data-testid="order-edit-admin-amount-adjust">
+                        <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                            <span class="w-text" data-tone="muted" data-size="sm"><?= __('金额调整') ?></span>
+                            <p class="w-text" data-size="sm" data-tone="muted"><?= __('添加优惠小计项（说明 + 金额）下调应付；不得低于已支付金额。') ?></p>
+                            <w:form method="post" action="@backend-url{'order/backend/order/adjust-amount'}" class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="order-edit-admin-amount-form">
+                                <input type="hidden" name="order_id" value="<?= (int)$orderId ?>">
+                                <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('优惠说明') ?></span>
+                                    <input type="text" name="adjustment_label" class="w-input" required maxlength="120" data-testid="order-edit-admin-amount-label" placeholder="<?= __('例如：批量议价优惠') ?>">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('优惠金额') ?></span>
+                                    <input type="number" name="adjustment_amount" class="w-input" required min="0.01" step="0.01" data-testid="order-edit-admin-amount-value" placeholder="0.00">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('补充说明（可选）') ?></span>
+                                    <input type="text" name="adjustment_note" class="w-input" maxlength="255" data-testid="order-edit-admin-amount-note">
+                                </label>
+                                <div>
+                                    <button type="submit" class="w-button" data-tone="primary" data-size="sm" data-testid="order-edit-admin-amount-submit"><?= __('添加优惠并调整总额') ?></button>
+                                </div>
+                            </w:form>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     <?php if (empty($orderTotals['lines_match_subtotal'])): ?>
                     <div style="grid-column:1 / -1;">
                         <div class="w-text" data-tone="warning" data-size="sm"><?= __('累计校验：行累计与商品小计不一致，请核对快照') ?></div>

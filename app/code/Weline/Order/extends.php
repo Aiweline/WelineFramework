@@ -32,6 +32,20 @@ return [
             'required' => false,
             'multiple' => true,
         ],
+        'AdminAmountAdjustmentPolicy' => [
+            'path' => 'extends/module/Weline_Order/AdminAmountAdjustmentPolicy',
+            'interface' => 'Weline\\Order\\Api\\OrderAdminAmountAdjustmentPolicyInterface',
+            'description' => '后台订单金额调整类型策略（Order 壳编排；tob 等业务模块实现）。',
+            'required' => false,
+            'multiple' => true,
+        ],
+        'BackendLifecycleStagePolicy' => [
+            'path' => 'extends/module/Weline_Order/BackendLifecycleStagePolicy',
+            'interface' => 'Weline\\Order\\Api\\OrderBackendLifecycleStagePolicyInterface',
+            'description' => '后台订单类型生命周期阶段（与 order_type 徽章分离；tob hang 等由业务模块实现）。',
+            'required' => false,
+            'multiple' => true,
+        ],
         'TrackingProvider' => [
             'path' => 'extends/module/Weline_Order/TrackingProvider',
             'interface' => 'Weline\Order\Interface\TrackingProviderInterface',

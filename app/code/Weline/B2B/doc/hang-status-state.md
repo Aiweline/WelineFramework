@@ -3,15 +3,20 @@
 ```mermaid
 stateDiagram-v2
     [*] --> awaiting_deposit: create tob hang
-    awaiting_deposit --> awaiting_merchant_approval: deposit paid
-    awaiting_merchant_approval --> awaiting_balance: merchant approve
-    awaiting_merchant_approval --> rejected: merchant reject
+    awaiting_deposit --> awaiting_merchant_approval: depositPaid_reviewOn
+    awaiting_deposit --> awaiting_balance: depositPaid_reviewOff
+    awaiting_merchant_approval --> awaiting_balance: seller review approve
+    awaiting_merchant_approval --> rejected: seller review reject
     awaiting_balance --> completed: balance paid
     awaiting_deposit --> expired: inventory TTL
     awaiting_merchant_approval --> expired: inventory TTL
 ```
 
+**配置**（Website/global，默认开）：`b2b_hang_require_merchant_review_before_balance`（批发配置页）。定金成功时快照 `type_payload.merchant_review_required`；支付硬闸仍只认 `hang_status`（不读实时配置旁路）。改配置**不**自动放行已待审单。关审查直达 `awaiting_balance` 时**不发**定金待审邮件；步骤轨按快照省略「待商家确认」，禁止误标已审。
+
 账户订单 UI：`awaiting_deposit` 显示「支付定金」CTA（`purpose=deposit`）；`awaiting_balance` 显示「支付尾款」CTA（`purpose=balance`）。列表与订单详情均挂 hang partial。
+
+后台卖家审查：`awaiting_merchant_approval` 时订单编辑 / 状态轨投影「通过审查」「驳回」+ 说明「通过审查后客户方可支付尾款」（POST `control-center/approve-hang-order|reject-hang-order` + `order_id` 回跳编辑）；挂单工作台行内「批准/驳回」同入口、同 `B2BHangOrderService`。
 
 支付闭环要点：
 
@@ -24,3 +29,9 @@ stateDiagram-v2
 - Hang 状态旁路：`Weline_B2B::hang_status_changed`（见 `doc/event/hang_status_changed.md`）。
 - 定金成功：`InventoryCapabilityInterface::reserve`，幂等 `hang_{orderUuid}_{line}`。
 - 尾款协商：`proposeBalanceRevision` / `confirmBalanceRevision`；`hang_revision_pending` 时禁止 startPayment / onBalancePaid；确认后 `reviseTobHangPayable`。
+
+## 客户邮件（2.6.135）
+
+- 定金成功（→ `awaiting_merchant_approval`）：`Weline_B2B::hang_deposit_received`（等待客服联系）。
+- 尾款成功（→ `completed`）：`Weline_B2B::hang_balance_paid`（支付完成/待发货）；**不**叠加 `Weline_Order::order_paid`。
+- 事件载荷含 `previous_hang_status` 供跃迁判信。

@@ -276,13 +276,19 @@ final class ControlCenter extends BackendController
     #[Acl('Weline_B2B::commerce:partner:hang-orders', '批准挂单', 'check', '批准 B2B 定金挂单进入尾款')]
     public function approveHangOrder()
     {
-        return $this->executeWrite('approveHangOrder', 'hang-orders', '挂单已批准，进入尾款。');
+        $fromOrderEdit = (int)$this->request->getPost('order_id', 0) > 0;
+
+        return $this->executeWrite(
+            'approveHangOrder',
+            'hang-orders',
+            $fromOrderEdit ? '卖家审查已通过，可付尾款' : '挂单已批准，进入尾款。',
+        );
     }
 
     #[Acl('Weline_B2B::commerce:partner:hang-orders', '驳回挂单', 'x', '驳回 B2B 定金挂单并退定金')]
     public function rejectHangOrder()
     {
-        return $this->executeWrite('rejectHangOrder', 'hang-orders', '挂单已驳回。');
+        return $this->executeWrite('rejectHangOrder', 'hang-orders', '挂单已驳回');
     }
 
     /**
@@ -398,6 +404,11 @@ final class ControlCenter extends BackendController
             $reference = $this->reportFailure($throwable, 'write:' . $command);
             MessageManager::error((string)__('操作失败，请稍后重试。参考编号：%{1}', [$reference]));
         }
+        $returnOrderId = (int)$this->request->getPost('order_id', 0);
+        if ($returnOrderId > 0) {
+            return $this->redirect('order/backend/order/edit', ['id' => $returnOrderId]);
+        }
+
         $scope = $this->assignB2bWorkScope(true);
         $query = $this->b2bScopeQuery($scope);
         // 行内操作仍可能只带 website_id；无 target_scope 时回落旧深链。

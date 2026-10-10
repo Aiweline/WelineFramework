@@ -51,6 +51,15 @@
         scope="global"
         validation="min:0|max:100"
     />
+    <w:config:field
+        key="b2b_hang_require_merchant_review_before_balance"
+        label="尾款前需卖家审查"
+        description="开启后：定金付清进入「待商家确认」，须运营在订单编辑「通过审查」后客户才可付尾款。关闭后：定金付清直接「待付尾款」，跳过审查（不发定金待审邮件）。默认开启。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website"
+    />
 </w:config:group>
 
 <w:config:group

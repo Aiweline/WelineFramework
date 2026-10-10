@@ -31,12 +31,24 @@ $depositHref = $checkoutUrl . (str_contains($checkoutUrl, '?') ? '&' : '?')
     . 'purpose=deposit&order_uuid=' . rawurlencode($orderUuid);
 $balanceHref = $checkoutUrl . (str_contains($checkoutUrl, '?') ? '&' : '?')
     . 'purpose=balance&order_uuid=' . rawurlencode($orderUuid);
-$progressSteps = [
-    'awaiting_deposit',
-    'awaiting_merchant_approval',
-    'awaiting_balance',
-    'completed',
-];
+$reviewRequired = array_key_exists('merchant_review_required', $hang)
+    ? (bool)$hang['merchant_review_required']
+    : true;
+if ($hangStatus === 'awaiting_merchant_approval' || $hangStatus === 'rejected') {
+    $reviewRequired = true;
+}
+$progressSteps = $reviewRequired
+    ? [
+        'awaiting_deposit',
+        'awaiting_merchant_approval',
+        'awaiting_balance',
+        'completed',
+    ]
+    : [
+        'awaiting_deposit',
+        'awaiting_balance',
+        'completed',
+    ];
 ?>
 <link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)&v=20260912-order-chat-ui2" data-no-extract="true">
 <div data-weline-load="b2bOrderChat"></div>

@@ -239,6 +239,7 @@ class Order extends BackendPageController
             $this->assign('invoices', $invoices);
             $this->assign('history', $history);
             $this->assignStatusFlow($order, $history, $orderId);
+            $this->assignLifecycleStage($order);
             $this->assign('available_transitions', $availableTransitions);
             $this->assign('current_status', $currentStatus);
             $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, $record['scope']);
@@ -346,6 +347,18 @@ class Order extends BackendPageController
             $groupContext = ObjectManager::getInstance(\Weline\Order\Service\CheckoutGroupSiblingPresenter::class)
                 ->presentForOrder($order);
 
+            $orderUuid = trim((string)$order->getData(OrderModel::schema_fields_ORDER_UUID));
+            $adminAmountAdjustEnabled = false;
+            if ($orderUuid !== '') {
+                try {
+                    $adminAmountAdjustEnabled = ObjectManager::getInstance(
+                        \Weline\Order\Service\OrderAdminAmountAdjustmentShell::class,
+                    )->canAdjustOrder($orderUuid);
+                } catch (\Throwable) {
+                    $adminAmountAdjustEnabled = false;
+                }
+            }
+
             $this->assign('order', $order);
             $this->assign('items', $displayItems);
             $this->assign('customer_present', $customerPresent);
@@ -360,8 +373,10 @@ class Order extends BackendPageController
             $this->assign('order_type_label', $orderTypeRegistry->resolveLabel($orderTypeCode));
             $this->assign('order_type_tone', $orderTypeTone);
             $this->assign('type_payload', $typePayload);
+            $this->assign('admin_amount_adjust_enabled', $adminAmountAdjustEnabled);
             $this->assign('history', $history);
             $this->assignStatusFlow($order, $history, $orderId, $paymentChrome);
+            $this->assignLifecycleStage($order);
             $this->assign('current_status', $currentStatus);
             $this->assign('available_transitions', $availableTransitions);
             $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, $record['scope']);
@@ -377,6 +392,69 @@ class Order extends BackendPageController
             $this->getMessageManager()->addError($e->getMessage());
             $this->redirect('*/backend/order/index');
         }
+    }
+
+    /**
+     * 后台金额调整：添加优惠小计项并重算应付。
+     */
+    #[Acl('Weline_Order::order_admin_amount_adjust', '调整订单金额', 'edit', '为批发等订单添加优惠小计项调整应付')]
+    public function adjustAmount()
+    {
+        $orderId = (int)$this->request->getPost('order_id');
+        $label = trim((string)$this->request->getPost('adjustment_label', ''));
+        $note = trim((string)$this->request->getPost('adjustment_note', ''));
+        $amountMajor = (float)$this->request->getPost('adjustment_amount', 0);
+        $discountMinor = (int)round(max(0.0, $amountMajor) * 100);
+
+        try {
+            $record = $this->requireOrder($orderId, ObjectAction::UPDATE);
+            $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                ObjectAction::UPDATE,
+                $record['scope'],
+                $this->expectedGrantVersion(),
+            );
+            $order = $record['order'];
+            $orderUuid = trim((string)$order->getData(OrderModel::schema_fields_ORDER_UUID));
+            if ($orderUuid === '') {
+                throw new \RuntimeException((string)__('订单 UUID 缺失'));
+            }
+            $adminUserId = 0;
+            try {
+                $user = $this->session->getUser();
+                if (\is_object($user) && method_exists($user, 'getId')) {
+                    $adminUserId = (int)$user->getId();
+                } elseif (\is_array($user)) {
+                    $adminUserId = (int)($user['user_id'] ?? $user['id'] ?? 0);
+                }
+            } catch (\Throwable) {
+                $adminUserId = 0;
+            }
+            ObjectManager::getInstance(\Weline\Order\Service\OrderAdminAmountAdjustmentShell::class)
+                ->addDiscountLine($orderUuid, $label, $discountMinor, $note, $adminUserId);
+            $this->getMessageManager()->addSuccess((string)__('金额调整已保存'));
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+            $this->getMessageManager()->addError($exception->getMessage());
+        } catch (\Weline\Order\Service\OrderConflictException $e) {
+            $this->getMessageManager()->addError($e->getMessage());
+        } catch (\Exception $e) {
+            $this->getMessageManager()->addError($e->getMessage());
+        }
+
+        $this->redirect('*/backend/order/edit' . ($orderId ? '?id=' . $orderId : ''));
+    }
+
+    /** Assign type-specific lifecycle stage (separate from order_type badge). */
+    private function assignLifecycleStage(OrderModel $order): void
+    {
+        try {
+            $stage = ObjectManager::getInstance(
+                \Weline\Order\Service\OrderBackendLifecycleStageShell::class,
+            )->presentForOrder($order);
+        } catch (\Throwable) {
+            $stage = null;
+        }
+        $this->assign('lifecycle_stage', \is_array($stage) ? $stage : null);
     }
 
     /**

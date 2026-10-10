@@ -9,13 +9,17 @@ require_once dirname(__DIR__) . '/bootstrap.php';
 use PHPUnit\Framework\TestCase;
 use Weline\B2B\Model\B2BOrderHang;
 use Weline\B2B\Service\B2BHangOrderService;
+use Weline\B2B\Service\HangMerchantReviewPolicy;
 use Weline\Order\Model\Order;
 
 final class B2BHangLifecycleAndRevisionTest extends TestCase
 {
     public function testDepositApproveBalanceLifecycle(): void
     {
-        $hang = B2BHangOrderService::forTesting(clock: static fn (): int => 1_700_000_200);
+        $hang = B2BHangOrderService::forTesting(
+            clock: static fn (): int => 1_700_000_200,
+            merchantReviewPolicy: HangMerchantReviewPolicy::forTesting(['website:1' => true]),
+        );
         $hang->createAwaitingDeposit([
             'order_ref' => 'ord-life-1',
             'customer_id' => '9',
@@ -28,11 +32,31 @@ final class B2BHangLifecycleAndRevisionTest extends TestCase
             ['reservation_uuid' => 'res-1'],
         ]);
         self::assertSame(B2BOrderHang::STATUS_AWAITING_MERCHANT_APPROVAL, $afterDeposit['hang_status']);
+        self::assertTrue((bool)($afterDeposit['merchant_review_required'] ?? false));
         $afterApprove = $hang->approve('ord-life-1');
         self::assertSame(B2BOrderHang::STATUS_AWAITING_BALANCE, $afterApprove['hang_status']);
         $afterBalance = $hang->onBalancePaid('ord-life-1', 'pi_b');
         self::assertSame(B2BOrderHang::STATUS_COMPLETED, $afterBalance['hang_status']);
         self::assertTrue(defined(Order::class . '::PAYMENT_STATUS_PAID'));
+    }
+
+    public function testDepositSkipsMerchantReviewWhenConfigOff(): void
+    {
+        $hang = B2BHangOrderService::forTesting(
+            clock: static fn (): int => 1_700_000_205,
+            merchantReviewPolicy: HangMerchantReviewPolicy::forTesting(['website:1' => false]),
+        );
+        $hang->createAwaitingDeposit([
+            'order_ref' => 'ord-life-skip-1',
+            'customer_id' => '9',
+            'website_id' => 1,
+            'goods_subtotal_taxed_minor' => 10000,
+        ]);
+        $afterDeposit = $hang->onDepositPaid('ord-life-skip-1', 'pi_d', static fn (): array => []);
+        self::assertSame(B2BOrderHang::STATUS_AWAITING_BALANCE, $afterDeposit['hang_status']);
+        self::assertFalse((bool)($afterDeposit['merchant_review_required'] ?? true));
+        $tp = $hang->typePayloadForOrder('ord-life-skip-1');
+        self::assertFalse((bool)($tp['merchant_review_required'] ?? true));
     }
 
     public function testWrongBalanceAmountRejected(): void
