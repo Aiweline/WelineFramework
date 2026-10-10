@@ -78,11 +78,46 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
     color: var(--backend-color-success, #198754);
     font-weight: bold;
 }
+/* 预留右下角建站助手 FAB，避免盖住操作列「连通测试」 */
+.weline-ai-provider-card .w-table-wrap {
+    padding-bottom: var(--weline-space-10, 4.5rem);
+    padding-inline-end: var(--weline-space-8, 3rem);
+}
+.weline-ai-provider-card #accountsTable td:last-child {
+    white-space: nowrap;
+}
+.weline-ai-provider-cell {
+    display: flex;
+    flex-direction: column;
+    gap: var(--weline-space-1, 0.25rem);
+    min-width: 0;
+}
+.weline-ai-provider-cell__title {
+    font-weight: var(--weline-font-weight-semibold, 600);
+    line-height: 1.3;
+}
+.weline-ai-provider-cell__meta {
+    color: var(--backend-color-text-muted, var(--color-text-secondary, #6c757d));
+    font-size: var(--weline-font-size-sm, 0.875rem);
+    line-height: 1.35;
+}
+.weline-ai-provider-cell__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-2, 0.5rem);
+}
+.weline-ai-provider-status-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--weline-space-2, 0.5rem);
+}
 </style>
 
 <div class="w-grid">
     <div style="--w-span:12;">
-        <div class="w-card">
+        <div class="w-card weline-ai-provider-card">
             <div class="w-card__header w-cluster" data-justify="between" data-align="center">
                 <h4 class="w-card__title" style="--w-mb:0;">AI供应商账户管理</h4>
                 <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
@@ -138,23 +173,17 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
                     <table class="w-table" id="accountsTable">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>供应商</th>
-                                <th>账户名称</th>
-                                <th>API密钥</th>
-                                <th>余额</th>
-                                <th>总花费</th>
-                                <th>连接状态</th>
-                                <th>状态</th>
-                                <th>创建时间</th>
-                                <th style="width: 200px;">操作</th>
+                                <th><?= __('账户') ?></th>
+                                <th><?= __('密钥与费用') ?></th>
+                                <th style="width: 9rem;"><?= __('状态') ?></th>
+                                <th style="width: 12rem;"><?= __('操作') ?></th>
                             </tr>
                         </thead>
                         <tbody id="accountsList">
                             <tr>
-                                <td colspan="10" class="w-text" data-align="center">
+                                <td colspan="4" class="w-text" data-align="center">
                                     <div class="w-spinner" role="status">
-                                        <span class="w-visually-hidden">加载中...</span>
+                                        <span class="w-visually-hidden"><?= __('加载中...') ?></span>
                                     </div>
                                 </td>
                             </tr>
@@ -605,7 +634,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
                     displayAccounts(rows);
                     displayPagination(data.total, data.page, data.limit);
                 } else {
-                    document.getElementById('accountsList').innerHTML = '<tr><td colspan="10" class="w-text" data-align="center" data-tone="danger">' + escapeHtml(data.message || '<?= __('加载失败') ?>') + '</td></tr>';
+                    document.getElementById('accountsList').innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" data-tone="danger">' + escapeHtml(data.message || '<?= __('加载失败') ?>') + '</td></tr>';
                     if (typeof BackendModal !== 'undefined') {
                         BackendModal.alert('<?= __('加载失败') ?>', data.message);
                     } else if (typeof Weline.UI.toast !== 'undefined') {
@@ -617,7 +646,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             })
             .catch(function(error) {
                 console.error('Error:', error);
-                document.getElementById('accountsList').innerHTML = '<tr><td colspan="10" class="w-text" data-align="center" data-tone="danger"><?= __('加载失败') ?>: <?= __('请重试') ?></td></tr>';
+                document.getElementById('accountsList').innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" data-tone="danger"><?= __('加载失败') ?>: <?= __('请重试') ?></td></tr>';
                 if (typeof BackendModal !== 'undefined') {
                     BackendModal.alert('<?= __('加载失败') ?>', '<?= __('请重试') ?>');
                 } else if (typeof Weline.UI.toast !== 'undefined') {
@@ -627,37 +656,59 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
     }
     window.loadAccounts = loadAccounts;
 
-    // 显示账户列表
+    /* 显示账户列表：多字段合并为 账户 / 密钥与费用 / 状态 / 操作 四列 */
     function displayAccounts(accounts) {
         var tbody = document.getElementById('accountsList');
         accounts = Array.isArray(accounts) ? accounts : [];
 
         if (accounts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="w-text" data-align="center">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="w-text" data-align="center"><?= __('暂无数据') ?></td></tr>';
             return;
         }
-        
+
         tbody.innerHTML = accounts.map(function(account) {
             var accountId = parseInt(account.id || 0, 10) || 0;
+            var balanceClass = account.balance > 10 ? 'weline-ai-balance-normal' : 'weline-ai-balance-low';
+            var defaultBadge = account.is_default == 1
+                ? ' <span class="w-badge" data-w-background="primary"><?= __('默认') ?></span>'
+                : '';
             return '<tr>' +
-                '<td>' + accountId + '</td>' +
-                '<td>' + escapeHtml(account.provider_name) + '</td>' +
-                '<td>' + escapeHtml(account.account_name) + (account.is_default == 1 ? ' <span class="w-badge" data-w-background="primary">默认</span>' : '') + '</td>' +
-                '<td><span class="weline-ai-api-key-masked">' + escapeHtml(account.api_key_masked || '******') + '</span></td>' +
-                '<td class="' + (account.balance > 10 ? 'weline-ai-balance-normal' : 'weline-ai-balance-low') + '">' + escapeHtml(account.balance_formatted) + '</td>' +
-                '<td>' + escapeHtml(account.total_spent_formatted) + '</td>' +
-                '<td>' + escapeHtml(account.connection_status_text) + '</td>' +
                 '<td>' +
-                    '<div class="w-switch">' +
-                        '<input type="checkbox" data-provider-action="toggle-active" data-account-id="' + accountId + '"' + (account.is_active == 1 ? ' checked' : '') + '>' +
+                    '<div class="weline-ai-provider-cell">' +
+                        '<div class="weline-ai-provider-cell__row">' +
+                            '<span class="weline-ai-provider-cell__title">' + escapeHtml(account.provider_name) + '</span>' +
+                            defaultBadge +
+                        '</div>' +
+                        '<div class="weline-ai-provider-cell__meta">' + escapeHtml(account.account_name) + '</div>' +
+                        '<div class="weline-ai-provider-cell__meta">#' + accountId +
+                            (account.created_at_formatted
+                                ? ' · <?= __('创建于') ?> ' + escapeHtml(account.created_at_formatted)
+                                : '') +
+                        '</div>' +
                     '</div>' +
                 '</td>' +
-                '<td>' + escapeHtml(account.created_at_formatted) + '</td>' +
                 '<td>' +
-                    '<button type="button" class="w-button" data-provider-action="test" data-account-id="' + accountId + '" title="测试连接" data-tone="info" data-size="sm"><w:icon name="wifi" size="sm"></w:icon></button> ' +
-                    '<button type="button" class="w-button" data-provider-action="edit" data-account-id="' + accountId + '" title="编辑" data-tone="primary" data-size="sm"><w:icon name="edit" size="sm"></w:icon></button> ' +
-                    '<button type="button" class="w-button" data-provider-action="usage" data-account-id="' + accountId + '" title="使用记录" data-tone="success" data-size="sm"><w:icon name="chart" size="sm"></w:icon></button> ' +
-                    '<button type="button" class="w-button" data-provider-action="delete" data-account-id="' + accountId + '" title="删除" data-tone="danger" data-size="sm"><w:icon name="trash" size="sm"></w:icon></button>' +
+                    '<div class="weline-ai-provider-cell">' +
+                        '<div><span class="weline-ai-api-key-masked">' + escapeHtml(account.api_key_masked || '******') + '</span></div>' +
+                        '<div class="weline-ai-provider-cell__row">' +
+                            '<span class="' + balanceClass + '"><?= __('余额') ?> ' + escapeHtml(account.balance_formatted) + '</span>' +
+                            '<span class="weline-ai-provider-cell__meta"><?= __('总花费') ?> ' + escapeHtml(account.total_spent_formatted) + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</td>' +
+                '<td>' +
+                    '<div class="weline-ai-provider-status-cell">' +
+                        '<span class="weline-ai-provider-cell__meta">' + escapeHtml(account.connection_status_text) + '</span>' +
+                        '<div class="w-switch" title="<?= __('激活状态') ?>">' +
+                            '<input type="checkbox" data-provider-action="toggle-active" data-account-id="' + accountId + '"' + (account.is_active == 1 ? ' checked' : '') + '>' +
+                        '</div>' +
+                    '</div>' +
+                '</td>' +
+                '<td>' +
+                    '<button type="button" class="w-button" data-provider-action="test" data-account-id="' + accountId + '" data-testid="provider-test-connection" title="<?= __('测试连接') ?>" data-tone="info" data-size="sm"><w:icon name="wifi" size="sm"></w:icon></button> ' +
+                    '<button type="button" class="w-button" data-provider-action="edit" data-account-id="' + accountId + '" title="<?= __('编辑') ?>" data-tone="primary" data-size="sm"><w:icon name="edit" size="sm"></w:icon></button> ' +
+                    '<button type="button" class="w-button" data-provider-action="usage" data-account-id="' + accountId + '" title="<?= __('使用记录') ?>" data-tone="success" data-size="sm"><w:icon name="chart" size="sm"></w:icon></button> ' +
+                    '<button type="button" class="w-button" data-provider-action="delete" data-account-id="' + accountId + '" title="<?= __('删除') ?>" data-tone="danger" data-size="sm"><w:icon name="trash" size="sm"></w:icon></button>' +
                 '</td>' +
             '</tr>';
         }).join('');
@@ -1140,9 +1191,9 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
     function runProviderConnectionTest(id, btn, originalHtml, modelCode) {
         btn.innerHTML = '<w:icon name="circle" size="sm"></w:icon>';
         btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
 
-        var testModal = createTestModal();
-        document.body.appendChild(testModal);
+        var testModal = openProviderBusyDialog('<?= __('正在测试连接') ?>', '<?= __('请稍候，正在验证API连接...') ?>');
 
         var payload = { id: id };
         if (modelCode) payload.model_code = modelCode;
@@ -1154,71 +1205,111 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             var data = res || {};
             btn.innerHTML = originalHtml;
             btn.disabled = false;
-            document.body.removeChild(testModal);
+            btn.removeAttribute('aria-busy');
+            closeProviderBusyDialog(testModal);
 
             var images = Array.isArray(data && data.images) ? data.images : [];
             if (data && data.success) {
                 var lines = [];
                 if (data.message) lines.push(data.message);
-                if (data.model_code) lines.push('使用的测试模型: ' + data.model_code);
-                if (data.primary_modality) lines.push('模态: ' + data.primary_modality);
-                if (data.duration) lines.push('耗时: ' + data.duration + ' ms');
-                if (data.response) lines.push('响应: ' + String(data.response).slice(0, 500));
-                if (data.request_url) lines.push('请求地址: ' + data.request_url);
-                showResultModal('success', '连接测试成功', lines.join('\n'), images);
+                if (data.model_code) lines.push('<?= __('使用的测试模型') ?>: ' + data.model_code);
+                if (data.primary_modality) lines.push('<?= __('模态') ?>: ' + data.primary_modality);
+                if (data.duration) lines.push('<?= __('耗时') ?>: ' + data.duration + ' ms');
+                if (data.response) lines.push('<?= __('响应') ?>: ' + String(data.response).slice(0, 500));
+                if (data.request_url) lines.push('<?= __('请求地址') ?>: ' + data.request_url);
+                showResultModal('success', '<?= __('连接测试成功') ?>', lines.join('\n'), images);
                 loadAccounts(currentPage);
             } else {
-                var lines2 = ['测试失败: ' + ((data && data.message) || '未知错误')];
-                if (data && data.model_code) lines2.push('尝试使用的模型: ' + data.model_code);
-                if (data && data.primary_modality) lines2.push('模态: ' + data.primary_modality);
-                if (data && data.request_url) lines2.push('请求地址: ' + data.request_url);
-                if (data && data.base_url) lines2.push('基础 URL: ' + data.base_url);
-                showResultModal('error', '连接测试失败', lines2.join('\n'), []);
+                var lines2 = ['<?= __('测试失败') ?>: ' + ((data && data.message) || '<?= __('未知错误') ?>')];
+                if (data && data.model_code) lines2.push('<?= __('尝试使用的模型') ?>: ' + data.model_code);
+                if (data && data.primary_modality) lines2.push('<?= __('模态') ?>: ' + data.primary_modality);
+                if (data && data.request_url) lines2.push('<?= __('请求地址') ?>: ' + data.request_url);
+                if (data && data.base_url) lines2.push('<?= __('基础 URL') ?>: ' + data.base_url);
+                showResultModal('error', '<?= __('连接测试失败') ?>', lines2.join('\n'), []);
             }
         }).catch(function(error) {
             btn.innerHTML = originalHtml;
             btn.disabled = false;
-            document.body.removeChild(testModal);
+            btn.removeAttribute('aria-busy');
+            closeProviderBusyDialog(testModal);
             console.error('Error:', error);
-            showResultModal('error', '连接测试失败', '测试失败: 网络错误', []);
+            showResultModal('error', '<?= __('连接测试失败') ?>', '<?= __('测试失败: 网络错误') ?>', []);
         });
     }
 
-    // 测试连接
+    /* 测试连接：进度/结果必须用 Weline native <dialog> 进顶层；禁止 Bootstrap .modal 落在文档流底部（视口外=看似无反应） */
     window.testConnection = function(id, button) {
         var btn = button || document.querySelector('[data-provider-action="test"][data-account-id="' + (parseInt(id, 10) || 0) + '"]');
         if (!btn) {
             return;
         }
+        if (btn.getAttribute('aria-busy') === 'true') {
+            return;
+        }
         var originalHtml = btn.innerHTML;
+        btn.setAttribute('aria-busy', 'true');
         btn.innerHTML = '<w:icon name="circle" size="sm"></w:icon>';
         btn.disabled = true;
+        var picking = openProviderBusyDialog('<?= __('正在准备连通测试...') ?>', '<?= __('请稍候，正在拉取可测模型') ?>');
         chooseProviderTestModel(getAccountById(id)).then(function(modelCode) {
+            closeProviderBusyDialog(picking);
             btn.innerHTML = originalHtml;
             btn.disabled = false;
+            btn.removeAttribute('aria-busy');
             if (modelCode === null) return;
             runProviderConnectionTest(id, btn, originalHtml, modelCode || '');
+        }).catch(function(error) {
+            closeProviderBusyDialog(picking);
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            btn.removeAttribute('aria-busy');
+            showResultModal('error', '<?= __('连接测试失败') ?>', (error && error.message) || '<?= __('测试失败，请重试') ?>', []);
         });
     };
 
-    // 创建测试中弹窗
-    function createTestModal() {
-        var modal = document.createElement('div');
-        modal.className = 'modal fade show';
-        modal.style.display = 'block';
-        modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-        modal.innerHTML = '<div class="w-dialog__frame">' +
-            '<div class="w-dialog__surface">' +
-                '<div class="w-dialog__body w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">' +
-                    '<div class="w-spinner w-text" role="status" style="width: 3rem; height: 3rem;" data-tone="primary">' +
-                        '<span class="w-visually-hidden">测试中...</span>' +
-                    '</div>' +
-                    '<h5 style="--w-mb:var(--weline-space-2);">正在测试连接</h5>' +
-                    '<p class="w-text" data-tone="muted" style="--w-mb:0;">请稍候，正在验证API连接...</p>' +
-                '</div>' +
-            '</div>' +
-        '</div>';
-        return modal;
+    function openProviderBusyDialog(title, detail) {
+        removeDom(document.getElementById('providerTestBusyDialog'));
+        var dialog = document.createElement('dialog');
+        dialog.id = 'providerTestBusyDialog';
+        dialog.className = 'w-dialog';
+        dialog.dataset.wComponent = 'dialog';
+        dialog.dataset.state = 'closed';
+        dialog.dataset.wBackdrop = 'static';
+        dialog.dataset.wClosable = 'false';
+        dialog.dataset.size = 'sm';
+        dialog.innerHTML = ''
+            + '<div class="w-dialog__header"><h2 class="w-dialog__title">' + escapeHtml(title || '') + '</h2></div>'
+            + '<div class="w-dialog__body w-text" data-align="center">'
+            + '<div class="w-spinner w-text" role="status" data-tone="primary" style="--w-mb:var(--weline-space-3);"><span class="w-visually-hidden"><?= __('加载中...') ?></span></div>'
+            + '<p class="w-text" data-tone="muted" style="--w-mb:0;">' + escapeHtml(detail || '') + '</p>'
+            + '</div>';
+        document.body.appendChild(dialog);
+        if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.open === 'function') {
+            Weline.UI.dialog.open(dialog);
+        } else {
+            try { dialog.showModal(); } catch (e) { dialog.setAttribute('open', ''); }
+            dialog.dataset.state = 'open';
+        }
+        return dialog;
+    }
+
+    function closeProviderBusyDialog(dialog) {
+        if (!dialog) {
+            dialog = document.getElementById('providerTestBusyDialog');
+        }
+        if (!dialog) return;
+        try {
+            if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.close === 'function') {
+                Weline.UI.dialog.close(dialog);
+            }
+        } catch (e) {}
+        removeDom(dialog);
+    }
+
+    function removeDom(node) {
+        if (node && node.parentNode) {
+            node.parentNode.removeChild(node);
+        }
     }
 
     function escapeHtml(value) {
@@ -1264,47 +1355,59 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             + '</div>';
     }
 
-    // 显示结果弹窗
+    /* 显示结果弹窗（native dialog / top-layer） */
     function showResultModal(type, title, message, images) {
-        var modal = document.createElement('div');
-        modal.className = 'modal fade show';
-        modal.style.display = 'block';
-        modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        removeDom(document.getElementById('providerTestResultDialog'));
+        var dialog = document.createElement('dialog');
+        dialog.id = 'providerTestResultDialog';
+        dialog.className = 'w-dialog weline-ai-provider-result-dialog';
+        dialog.dataset.wComponent = 'dialog';
+        dialog.dataset.state = 'closed';
+        dialog.dataset.size = (Array.isArray(images) && images.length) ? 'lg' : 'sm';
+        dialog.dataset.tone = type === 'success' ? 'success' : 'danger';
 
-        var iconClass = type === 'success' ? 'mdi-check-circle text-success' : 'mdi-alert-circle text-danger';
+        var toneIconHtml = type === 'success'
+            ? '<w:icon name="check-circle" size="sm"></w:icon>'
+            : '<w:icon name="alert-circle" size="sm"></w:icon>';
         var imagesHtml = renderTestImagesHtml(images);
-        var hasImages = imagesHtml !== '';
-        var dialogClass = hasImages ? 'modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable' : 'modal-dialog modal-dialog-centered';
 
-        modal.innerHTML = '<div class="' + dialogClass + '">' +
-            '<div class="w-dialog__surface">' +
-                '<div class="w-dialog__header">' +
-                    '<h5 class="w-dialog__title">' + escapeHtml(title) + '</h5>' +
-                    '<button type="button" class="w-button" data-provider-action="close-result" data-w-close="" data-tone="quiet" data-size="sm"></button>' +
-                '</div>' +
-                '<div class="w-dialog__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">' +
-                    '<div class="w-text" data-align="center" style="--w-mb:var(--weline-space-4);"><i class="mdi ' + iconClass + '" style="font-size: 3rem;"></i></div>' +
-                    '<div class="message-content" style="white-space: pre-line; text-align: left;">' +
-                        escapeHtml(message) +
-                    '</div>' +
-                    imagesHtml +
-                '</div>' +
-                '<div class="w-dialog__footer">' +
-                    '<button type="button" class="w-button" data-provider-action="close-result" data-tone="primary">确定</button>' +
-                '</div>' +
-            '</div>' +
-        '</div>';
+        dialog.innerHTML = ''
+            + '<div class="w-dialog__header">'
+            + '<h2 class="w-dialog__title">' + toneIconHtml + ' ' + escapeHtml(title) + '</h2>'
+            + '<button type="button" class="w-button" data-provider-action="close-result" data-w-close="" data-tone="quiet" data-size="sm" aria-label="<?= __('关闭') ?>"></button>'
+            + '</div>'
+            + '<div class="w-dialog__body">'
+            + '<pre class="model-result-pre" style="white-space:pre-wrap;margin:0;">' + escapeHtml(message) + '</pre>'
+            + imagesHtml
+            + '</div>'
+            + '<div class="w-dialog__footer">'
+            + '<button type="button" class="w-button" data-provider-action="close-result" data-tone="primary"><?= __('确定') ?></button>'
+            + '</div>';
 
-        document.body.appendChild(modal);
-        return modal;
+        document.body.appendChild(dialog);
+        if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.open === 'function') {
+            Weline.UI.dialog.open(dialog);
+        } else {
+            try { dialog.showModal(); } catch (e) { dialog.setAttribute('open', ''); }
+            dialog.dataset.state = 'open';
+        }
+        return dialog;
     }
     window.showResultModal = showResultModal;
     window.renderTestImagesHtml = renderTestImagesHtml;
 
-    // 关闭结果弹窗
+    /* 关闭结果弹窗 */
     window.closeResultModal = function(button) {
-        var modal = button.closest('.modal');
-        document.body.removeChild(modal);
+        var modal = (button && button.closest)
+            ? button.closest('#providerTestResultDialog, .weline-ai-provider-result-dialog, dialog.w-dialog')
+            : document.getElementById('providerTestResultDialog');
+        if (!modal) return;
+        try {
+            if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.close === 'function') {
+                Weline.UI.dialog.close(modal);
+            }
+        } catch (e) {}
+        removeDom(modal);
     };
 
     // 加载使用记录
