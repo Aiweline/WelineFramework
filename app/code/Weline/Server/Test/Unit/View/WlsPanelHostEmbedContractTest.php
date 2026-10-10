@@ -47,7 +47,9 @@ final class WlsPanelHostEmbedContractTest extends TestCase
         self::assertStringContainsString('wlsPanelHostFrameUrl', $src);
         self::assertStringContainsString('wlsPanelHostStandaloneUrl', $src);
         self::assertStringContainsString('z-index: 13000', $src);
-        self::assertStringContainsString('body:has(.wls-panel-host-shell[data-mode="float"])', $src);
+        self::assertStringContainsString('html:has(.wls-panel-host-shell[data-mode="float"])', $src);
+        self::assertStringContainsString('overscroll-behavior: contain', $src);
+        self::assertStringContainsString('max-height: 100dvh', $src);
         // 默认布局已渲染 H1 页标题；宿主工具条禁止再叠同名 h1/h2/h3/h4
         self::assertDoesNotMatchRegularExpression(
             '/<h[1-4][^>]*>\s*<\?=\s*__\(\s*[\'"]WLS 面板[\'"]\s*\)/u',
@@ -72,18 +74,23 @@ final class WlsPanelHostEmbedContractTest extends TestCase
         );
     }
 
-    public function testStandaloneShellRecognizesEmbeddedClass(): void
+    public function testStandaloneShellUsesMainColumnScrollport(): void
     {
         $path = $this->moduleRoot() . '/view/templates/Backend/WlsPanel/index.phtml';
         self::assertFileExists($path);
         $src = (string)\file_get_contents($path);
         self::assertStringContainsString("panelEmbedded ? ' is-embedded' : ''", $src);
-        self::assertStringContainsString('.wls-standalone-shell.is-embedded', $src);
-        self::assertStringContainsString('.wls-standalone-shell.is-embedded .wls-shell-main', $src);
         self::assertStringContainsString('grid-template-rows: minmax(0, 1fr)', $src);
-        self::assertStringContainsString('overflow-y: auto', $src);
-        self::assertStringContainsString('min-height: 0', $src);
+        self::assertStringContainsString('html:has(.wls-standalone-shell)', $src);
         self::assertStringContainsString('.w-backend-standalone', $src);
         self::assertStringContainsString('#main-content', $src);
+        self::assertMatchesRegularExpression(
+            '/\.wls-shell-main\s*\{[^}]*overflow-y:\s*auto/s',
+            $src
+        );
+        self::assertMatchesRegularExpression(
+            '/\.wls-shell-main\s*\{[^}]*min-height:\s*0/s',
+            $src
+        );
     }
 }

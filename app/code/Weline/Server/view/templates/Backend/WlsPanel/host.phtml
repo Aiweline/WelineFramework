@@ -76,6 +76,8 @@ body:has(.wls-panel-host-shell[data-mode="float"]) #ssa-float-root {
     min-height: inherit;
     border: 0;
     background: var(--backend-color-card-bg, var(--color-surface, #fff));
+    /* 阻止 iframe 内滚轮链式滚到后台壳 / 整页 */
+    overscroll-behavior: contain;
 }
 .wls-panel-host-shell[data-mode="float"] .wls-panel-host-frame {
     flex: 1 1 auto;
@@ -84,8 +86,13 @@ body:has(.wls-panel-host-shell[data-mode="float"]) #ssa-float-root {
 .wls-panel-host-empty {
     padding: var(--backend-spacing-lg, var(--weline-space-6, 1.5rem));
 }
+/* 须同时锁 html：仅 body overflow:hidden 时 html 仍可能高出视口被整页拖动 */
+html:has(.wls-panel-host-shell[data-mode="float"]),
 body:has(.wls-panel-host-shell[data-mode="float"]) {
-    overflow: hidden;
+    height: 100% !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    overscroll-behavior: none;
 }
 </style>
 
@@ -192,6 +199,13 @@ body:has(.wls-panel-host-shell[data-mode="float"]) {
             }
             btn.hidden = next !== 'float';
         });
+        if (next === 'float') {
+            try {
+                window.scrollTo(0, 0);
+                document.documentElement.scrollTop = 0;
+                document.body.scrollTop = 0;
+            } catch (e) {}
+        }
     }
 
     expandBtns.forEach(function (btn) {

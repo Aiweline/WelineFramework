@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Controller\Backend;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\IPC\ControlMessage;
@@ -432,6 +433,14 @@ class ServerMonitor extends BackendController
         ];
     }
 
+    #[Acl(
+        'Weline_Server::wls_panel_security_advanced_rules',
+        'WLS 高级安全规则',
+        'settings',
+        '查看 WLS 高级安全规则',
+        'Weline_Backend::system_service_group',
+        accessMode: Acl::ACCESS_MODE_READ
+    )]
     public function getSecurityRules(): string
     {
         $state = AttackDetector::getInstance()->getRulesState();
@@ -442,6 +451,14 @@ class ServerMonitor extends BackendController
         return $this->fetch('security-rules');
     }
 
+    #[Acl(
+        'Weline_Server::wls_panel_security_advanced_rules_save',
+        '保存 WLS 高级安全规则',
+        'check',
+        '保存 WLS 高级安全规则',
+        'Weline_Backend::system_service_group',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postSaveSecurityRules(): array
     {
         try {

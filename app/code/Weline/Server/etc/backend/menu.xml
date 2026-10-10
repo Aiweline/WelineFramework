@@ -9,4 +9,11 @@
           action="*/backend/wls-panel/host"
           icon="grid"
           order="10"/>
+    <menu source="Weline_Server::wls_panel_security_advanced_rules"
+          name="wls_panel_security_advanced_rules"
+          title="WLS 高级安全规则"
+          parent="Weline_Backend::system_service_group"
+          action="*/backend/server-monitor/security-rules"
+          icon="settings"
+          order="15"/>
 </menus>
