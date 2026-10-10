@@ -30,7 +30,7 @@
     --backend-color-bg-dark-tertiary: #172033;
     --backend-color-bg-body: #0b1220;
     --backend-color-bg-surface: #111827;
-    --backend-color-bg-overlay: rgba(2, 6, 23, 0.74);
+    --backend-color-bg-overlay: rgba(2, 6, 23, 0.985);
     --color-bg-canvas: var(--backend-color-bg-canvas);
     --color-bg-primary: var(--backend-color-bg-primary);
     --color-bg-secondary: var(--backend-color-bg-secondary);
@@ -165,7 +165,7 @@
         --backend-color-bg-dark-tertiary: #172033;
         --backend-color-bg-body: #0b1220;
         --backend-color-bg-surface: #111827;
-        --backend-color-bg-overlay: rgba(2, 6, 23, 0.74);
+        --backend-color-bg-overlay: rgba(2, 6, 23, 0.985);
         --backend-color-bg-canvas: #020617;
         --color-bg-canvas: var(--backend-color-bg-canvas);
         --color-bg-primary: var(--backend-color-bg-primary);

@@ -279,3 +279,11 @@
     #ssa-float-root .ssa-float-c { grid-template-columns: 1fr; }
     #ssa-float-root .ssa-float-b__task { grid-template-columns: 1fr; }
 }
+/* Drawer/dialog scrim owns focus; keep FAB under overlay so it cannot pierce the edit panel. */
+body:has(.w-overlay) #ssa-float-root.ssa-float,
+body:has(.w-drawer[data-state="open"]) #ssa-float-root.ssa-float,
+body:has(.w-dialog[data-state="open"]) #ssa-float-root.ssa-float {
+    z-index: calc(var(--weline-z-overlay, 900) - 2);
+    visibility: hidden;
+    pointer-events: none;
+}

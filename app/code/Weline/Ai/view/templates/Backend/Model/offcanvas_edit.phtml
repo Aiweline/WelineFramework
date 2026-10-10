@@ -28,7 +28,7 @@ $modelCodeJsFallback = json_encode($model ? (string)$model->getData('model_code'
 if (!is_string($modelCodeJsFallback)) { $modelCodeJsFallback = '""';
 }
 ?> <style>
-.weline-ai-model-edit-offcanvas { background-color: var(--backend-color-body-bg, #fff); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; padding: 0.75rem; padding-bottom: 4.5rem;
+.weline-ai-model-edit-offcanvas { background-color: var(--backend-color-bg-body, var(--backend-theme-surface-canvas, var(--weline-theme-body-bg, transparent))); font-family: var(--weline-font-ui, inherit); padding: var(--weline-space-3, 0.75rem); padding-bottom: var(--weline-space-10, 4.5rem);
 } .weline-ai-offcanvas-title-bar { padding: 0.5rem 0.75rem; background-color: var(--backend-color-card-bg, #f8f9fa); border-bottom: 2px solid var(--backend-color-border, #dee2e6); margin: -0.75rem -0.75rem 0.75rem -0.75rem;
 } .weline-ai-offcanvas-title-bar h5 { font-size: 1rem; font-weight: 600; color: var(--backend-color-text-primary, #495057);
 } .weline-ai-model-edit-offcanvas .w-field__label.required::after { content: ' *'; color: var(--backend-color-danger, red);

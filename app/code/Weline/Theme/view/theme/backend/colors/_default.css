@@ -43,7 +43,7 @@
     --backend-color-bg-dark-tertiary: #243247;
     --backend-color-bg-body: #f3f6fb;
     --backend-color-bg-surface: #ffffff;
-    --backend-color-bg-overlay: rgba(15, 23, 42, 0.54);
+    --backend-color-bg-overlay: rgba(15, 23, 42, 0.72);
     --backend-color-surface: var(--backend-color-bg-surface);
     --backend-color-surface-subtle: var(--backend-color-bg-secondary);
     --backend-color-surface-muted: var(--backend-color-bg-tertiary);

@@ -8,6 +8,7 @@
     --backend-theme-primary-hover-gradient: linear-gradient(135deg, var(--backend-theme-primary-hover) 0%, var(--backend-theme-primary-active) 100%);
     --backend-theme-primary-active-gradient: linear-gradient(135deg, var(--backend-theme-primary-active) 0%, var(--backend-theme-primary) 100%);
     --backend-theme-overlay: var(--backend-color-bg-overlay, rgb(2 6 23 / 0.5));
+    --weline-theme-overlay: var(--backend-theme-overlay);
     --backend-theme-secondary: var(--backend-color-secondary, var(--backend-color-text-secondary, #74788d));
     --backend-theme-secondary-rgb: var(--backend-color-secondary-rgb, 71, 85, 105);
     --backend-theme-secondary-hover: var(--backend-color-secondary-hover, var(--backend-theme-secondary));

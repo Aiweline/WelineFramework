@@ -67,7 +67,7 @@
         --weline-theme-on-info: var(--color-on-info, #ffffff);
         --weline-theme-focus: var(--color-primary, #315ee7);
         --weline-theme-focus-ring: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 26%, transparent);
-        --weline-theme-overlay: rgba(9, 16, 29, 0.56);
+        --weline-theme-overlay: rgba(9, 16, 29, 0.64);
         --weline-theme-shadow-sm: 0 1px 2px rgba(9, 16, 29, 0.08);
         --weline-theme-shadow-md: 0 10px 28px rgba(9, 16, 29, 0.14);
         --weline-theme-shadow-lg: 0 24px 64px rgba(9, 16, 29, 0.2);
@@ -196,7 +196,7 @@
         --weline-theme-on-info: var(--color-on-info, #082f49);
         --weline-theme-focus: var(--color-primary-hover, #9ab3ff);
         --weline-theme-focus-ring: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 34%, transparent);
-        --weline-theme-overlay: rgba(0, 0, 0, 0.68);
+        --weline-theme-overlay: rgba(0, 0, 0, 0.78);
         --weline-theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
         --weline-theme-shadow-md: 0 12px 30px rgba(0, 0, 0, 0.34);
         --weline-theme-shadow-lg: 0 28px 70px rgba(0, 0, 0, 0.44);
@@ -259,7 +259,7 @@
             --weline-theme-on-info: var(--color-on-info, #082f49);
             --weline-theme-focus: var(--color-primary-hover, #9ab3ff);
             --weline-theme-focus-ring: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 34%, transparent);
-            --weline-theme-overlay: rgba(0, 0, 0, 0.68);
+            --weline-theme-overlay: rgba(0, 0, 0, 0.78);
             --weline-theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
             --weline-theme-shadow-md: 0 12px 30px rgba(0, 0, 0, 0.34);
             --weline-theme-shadow-lg: 0 28px 70px rgba(0, 0, 0, 0.44);
@@ -316,6 +316,8 @@
         --weline-theme-info-emphasis: var(--backend-color-info-text-emphasis, var(--weline-theme-info-emphasis));
         --weline-theme-on-info: var(--backend-color-on-info, var(--weline-theme-on-info));
         --weline-theme-focus: var(--backend-color-primary, var(--weline-theme-focus));
+        /* Drawer/dialog scrim must follow backend palette; otherwise list text stays sharp behind OffCanvas. */
+        --weline-theme-overlay: var(--backend-color-bg-overlay, var(--backend-theme-overlay, var(--weline-theme-overlay)));
 
         --backend-theme-canvas: var(--weline-theme-canvas);
         --backend-theme-surface: var(--weline-theme-surface);
@@ -1502,7 +1504,13 @@
         box-shadow: var(--weline-theme-shadow-lg);
         color: var(--weline-theme-text);
     }
-    .w-overlay { position: fixed; inset: 0; z-index: calc(var(--weline-z-overlay) - 1); background: var(--weline-theme-overlay); }
+    /* Solid scrim (no blur): dense admin tables look mottled under backdrop-filter. */
+    .w-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: calc(var(--weline-z-overlay) - 1);
+        background: var(--weline-theme-overlay);
+    }
 
     /*
      * In-place elevate layers (megamenu / overflow dropdown / custom flyout).
