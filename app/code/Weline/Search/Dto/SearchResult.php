@@ -65,4 +65,69 @@ final class SearchResult
             meta: $meta,
         );
     }
+
+    /** @return array<string, mixed> */
+    public function toCacheArray(): array
+    {
+        $sections = [];
+        foreach ($this->sections as $code => $hits) {
+            $sections[(string)$code] = \array_map(
+                static fn(SearchHit $hit): array => $hit->toCacheArray(),
+                $hits,
+            );
+        }
+
+        return [
+            'ok' => $this->ok,
+            'type' => $this->type,
+            'hits' => \array_map(
+                static fn(SearchHit $hit): array => $hit->toCacheArray(),
+                $this->hits,
+            ),
+            'hit_count' => $this->hitCount,
+            'sections' => $sections,
+            'error_code' => $this->errorCode,
+            'message' => $this->message,
+            'meta' => $this->meta,
+            'elapsed_ms' => $this->elapsedMs,
+            'engine' => $this->engine,
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    public static function fromCacheArray(array $data): self
+    {
+        $hits = [];
+        foreach ((array)($data['hits'] ?? []) as $row) {
+            if (is_array($row)) {
+                $hits[] = SearchHit::fromCacheArray($row);
+            }
+        }
+        $sections = [];
+        foreach ((array)($data['sections'] ?? []) as $code => $rows) {
+            if (!is_array($rows)) {
+                continue;
+            }
+            $sectionHits = [];
+            foreach ($rows as $row) {
+                if (is_array($row)) {
+                    $sectionHits[] = SearchHit::fromCacheArray($row);
+                }
+            }
+            $sections[(string)$code] = $sectionHits;
+        }
+
+        return new self(
+            ok: (bool)($data['ok'] ?? false),
+            type: (string)($data['type'] ?? 'all'),
+            hits: $hits,
+            hitCount: (int)($data['hit_count'] ?? count($hits)),
+            sections: $sections,
+            errorCode: isset($data['error_code']) ? (string)$data['error_code'] : null,
+            message: isset($data['message']) ? (string)$data['message'] : null,
+            meta: is_array($data['meta'] ?? null) ? $data['meta'] : [],
+            elapsedMs: (float)($data['elapsed_ms'] ?? 0.0),
+            engine: (string)($data['engine'] ?? 'mysql'),
+        );
+    }
 }

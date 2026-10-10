@@ -176,14 +176,23 @@ $this->assign('meta', $meta);
             border-color: var(--color-link-hover);
             color: var(--color-link-hover);
         }
+        /* 评论槽仅作布局壳：白底边框交给 .weline-review，禁止套第二层卡片 */
         .blog-layout__reviews {
-            margin-top: 1rem;
+            margin-top: var(--spacing-4, 1rem);
         }
         .blog-layout__reviews-container {
-            background: #fff;
-            border: 1px solid #d5d9d9;
-            border-radius: 8px;
-            padding: 1rem 1.25rem 1.5rem;
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            padding: 0;
+        }
+        @media (max-width: 768px) {
+            .blog-layout__reviews {
+                margin-top: var(--spacing-3, 0.75rem);
+            }
+            .blog-layout__reviews .weline-review {
+                margin-top: 0;
+            }
         }
         .amazon-blog-article__category {
             color: var(--color-link);

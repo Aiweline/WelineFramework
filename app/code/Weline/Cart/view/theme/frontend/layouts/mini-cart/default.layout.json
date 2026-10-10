@@ -5,7 +5,7 @@
     {
       "area": "footer",
       "slot_id": "footer-extras",
-      "widget_code": "mini-cart-coupon",
+      "widget_code": "checkout-coupon",
       "widget_module": "Weline_Marketing",
       "widget_type": "content",
       "config": {

@@ -31,6 +31,9 @@ final class ScopeSwitcherWidgetContractTest extends TestCase
         self::assertStringContainsString('data-testid="scope-switcher-link"', $tpl);
         self::assertStringContainsString('scope-switcher-current', $tpl);
         self::assertStringContainsString("i18nChrome('切换渠道')", $tpl);
+        self::assertStringContainsString('prefetchLabels', $tpl);
+        self::assertStringContainsString('label_source', $tpl);
+        self::assertStringContainsString('$i18nChrome($currentLabelRaw)', $tpl);
         self::assertStringNotContainsString('data-testid="scope-switcher-website"', $tpl);
         self::assertStringNotContainsString('data-testid="scope-switcher-store"', $tpl);
         self::assertStringNotContainsString("i18nChrome('网站')", $tpl);

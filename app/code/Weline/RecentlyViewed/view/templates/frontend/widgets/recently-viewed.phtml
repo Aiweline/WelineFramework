@@ -12,7 +12,7 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-product-recently-viewed","layout-product-sidebar","layout-products-recommendations","layout-search-recommendations","recently-viewed"]}
- * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-recently-viewed", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认最近浏览槽", "config":{"title":"最近浏览","limit":6,"columns":"6","layout":"carousel","lazy_load":true} }]}
+ * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-recently-viewed","area":"content","sort_order":0,"required":true,"reason":"商品详情默认最近浏览槽","config":{"title":"最近浏览","limit":6,"columns":"6","layout":"carousel","lazy_load":true}}]}
  *
  * @widget.source {Weline_RecentlyViewed::css/widgets/recently-viewed.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param title {default="最近浏览",type="string",label="标题"}
@@ -23,6 +23,8 @@
  * @param show_wishlist {default=true,type="bool",label="显示收藏"}
  * @param show_compare {default=true,type="bool",label="显示对比"}
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ *
+ * @widget.slot {product-recently-viewed}
  */
 
 use Weline\Framework\Env\WelineEnv;

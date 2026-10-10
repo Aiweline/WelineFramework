@@ -107,15 +107,18 @@ final class CheckoutStorefrontSsrService
             || $shippingHtml !== ''
             || $paymentHtml !== '';
 
-        return [
+        return $this->applyMoneySummaryPolicy([
             'ready' => $ready,
             'items' => $items,
             'currency' => $currency,
+            'cart_type' => $mode,
+            'selling_mode' => $mode,
             // array_merge：后写覆盖 — cart 自带 grand_total 不得盖掉已扣激励的应付。
             'cart' => array_merge($cart, [
                 'subtotal' => $subtotal,
                 'grand_total' => $grand,
                 'currency' => $currency,
+                'cart_type' => $mode,
                 'is_empty' => $items === [],
             ]),
             'shipping_methods' => $shippingMethods,
@@ -128,7 +131,7 @@ final class CheckoutStorefrontSsrService
             'payable_text' => $this->money($currency, $grand),
             'quote_token' => trim((string)($data['quote_token'] ?? '')),
             'tax_estimate' => \is_array($data['tax_estimate'] ?? null) ? $data['tax_estimate'] : null,
-        ];
+        ]);
     }
 
     /**
@@ -175,12 +178,19 @@ final class CheckoutStorefrontSsrService
         }
         $paymentDelta = $this->defaultPaymentMoneyDelta($methods);
         $grand = max(0.0, $grand - $paymentDelta['incentive_major'] + $paymentDelta['cod_major']);
+        $mode = $this->sellingMode();
 
-        return [
+        return $this->applyMoneySummaryPolicy([
             'ready' => $items !== [] || $paymentHtml !== '',
             'items' => $items,
             'currency' => $currency,
-            'cart' => $cart,
+            'cart_type' => $mode,
+            'selling_mode' => $mode,
+            'cart' => array_merge($cart, [
+                'cart_type' => $mode,
+                'grand_total' => $grand,
+                'currency' => $currency,
+            ]),
             'shipping_methods' => [],
             'payment_methods' => $methods,
             'shipping_methods_html' => '',
@@ -191,7 +201,29 @@ final class CheckoutStorefrontSsrService
             'payable_text' => $this->money($currency, $grand),
             'quote_token' => '',
             'tax_estimate' => null,
-        ];
+        ]);
+    }
+
+    /**
+     * Optional commerce policy (B2B ToB etc.). Missing provider → retail payload unchanged.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function applyMoneySummaryPolicy(array $payload): array
+    {
+        try {
+            $policy = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Checkout\Api\StorefrontMoneySummaryPolicyInterface::class
+            );
+            if ($policy instanceof \Weline\Checkout\Api\StorefrontMoneySummaryPolicyInterface) {
+                return $policy->adjustSsrPayload($payload);
+            }
+        } catch (\Throwable) {
+            // B2B optional — retail SSR continues.
+        }
+
+        return $payload;
     }
 
     /**

@@ -260,6 +260,8 @@ final class StorefrontCampaignRouteCacheTest extends TestCase
         self::assertNotSame('product.catalog_offers.listing.v4.3', $this->keys->catalogOffersLogicalKey(3));
         self::assertNotSame('product.catalog_offers.listing.v3.3.summary', $this->keys->catalogOffersLogicalKey(3, 'summary'));
         self::assertNotSame('product.catalog_offers.summary.v2.3.48', $this->keys->catalogSummaryOffersLogicalKey(3, 48));
+        self::assertSame('product.catalog_offers.summary.v4.3', $this->keys->catalogSummaryOffersLogicalKey(3, 24));
+        self::assertSame('product.catalog_offers.summary.v4.3', $this->keys->catalogSummaryOffersLogicalKey(3, 48));
         $ids = hash('sha256', serialize([1]));
         self::assertNotSame('product.catalog_offers.targeted.v2.3.full.' . $ids, $this->keys->catalogTargetedOffersLogicalKey(3, [1]));
         self::assertNotSame('product.catalog_offers.targeted.v1.3.summary.' . $ids, $this->keys->catalogTargetedOffersLogicalKey(3, [1], false));

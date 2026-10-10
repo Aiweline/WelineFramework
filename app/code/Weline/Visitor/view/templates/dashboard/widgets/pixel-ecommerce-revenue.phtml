@@ -2,6 +2,20 @@
 /**
  * @widget.source {Weline_Visitor::css/widgets/widget-pixel-ecommerce-revenue.css}
  * Dashboard Widget: 购成与收入（F05a / F02）
+ *
+ * @widget.code {pixel_ecommerce_revenue}
+ * @widget.name {购成与收入}
+ * @widget.description {购买次数、购买收入、客单价与相对浏览商品的购成率。}
+ * @widget.type {stats}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-detail"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-detail}
+ * @widget.supports {["dashboard-widget","dashboard-slot-detail","dashboard-stat","dashboard-kpi"]}
+ * @param range {default="7d",type="select",label="统计范围",options={"today":"今日","7d":"近 7 天","30d":"近 30 天"}}
+ * @param website_id {default="",type="string",label="站点 ID",description="留空时跟随当前 Dashboard 站点；电商报表需站点作用域。"}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"weline_visitor_event_statistics","target_type":"website","slot":"dashboard-detail","area":"content","sort_order":85,"required":false,"reason":"购成与收入部件（F05a）；Installer 种子已含本 code","config":{"dashboard_layout":{"colSpan":4,"rowSpan":1,"sortOrder":85}}}]}
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
 $config = [

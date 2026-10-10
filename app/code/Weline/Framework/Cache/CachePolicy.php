@@ -43,8 +43,10 @@ final readonly class CachePolicy
         if ($freshTtlSeconds < 1 || $staleTtlSeconds < 0) {
             throw new \InvalidArgumentException('Cache policy requires a positive fresh TTL and a non-negative stale TTL.');
         }
-        if ($singleFlightWaitMs < 0 || $singleFlightWaitMs > 5000) {
-            throw new \InvalidArgumentException('Cache policy single-flight wait must be between 0 and 5000 milliseconds.');
+        // Heavy shared builders (e.g. multi-MB search projection) need multi-second waits;
+        // peers that fall through early stampede into builder_uncontended. Cap stays finite.
+        if ($singleFlightWaitMs < 0 || $singleFlightWaitMs > 30000) {
+            throw new \InvalidArgumentException('Cache policy single-flight wait must be between 0 and 30000 milliseconds.');
         }
         $vary = array_values(array_unique($vary));
         $dependencies = array_values(array_unique($dependencies));

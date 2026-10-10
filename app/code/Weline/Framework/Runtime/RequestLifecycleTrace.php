@@ -917,7 +917,14 @@ class RequestLifecycleTrace
      */
     public static function measurePhase(string $name, callable $callback, array $meta = []): mixed
     {
-        if (!self::isEnabled()) {
+        // Tracing must never block the measured work (unit fixtures may lack w_env_cookie).
+        $enabled = false;
+        try {
+            $enabled = self::isEnabled();
+        } catch (\Throwable) {
+            $enabled = false;
+        }
+        if (!$enabled) {
             return $callback();
         }
 

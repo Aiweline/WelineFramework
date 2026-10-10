@@ -2,6 +2,20 @@
 /**
  * @widget.source {Weline_Visitor::css/widgets/widget-pixel-ecommerce-items.css}
  * Dashboard Widget: 商品表现（F05a / F03）
+ *
+ * @widget.code {pixel_ecommerce_items}
+ * @widget.name {商品表现}
+ * @widget.description {按 item_id 展示曝光、加购、购买与商品收入。}
+ * @widget.type {table}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-detail"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-detail}
+ * @widget.supports {["dashboard-widget","dashboard-slot-detail","dashboard-table","dashboard-list"]}
+ * @param range {default="7d",type="select",label="统计范围",options={"today":"今日","7d":"近 7 天","30d":"近 30 天"}}
+ * @param website_id {default="",type="string",label="站点 ID",description="留空时跟随当前 Dashboard 站点；电商报表需站点作用域。"}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"weline_visitor_event_statistics","target_type":"website","slot":"dashboard-detail","area":"content","sort_order":86,"required":false,"reason":"商品表现部件（F05a）；Installer 种子已含本 code","config":{"dashboard_layout":{"colSpan":4,"rowSpan":1,"sortOrder":86}}}]}
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
 $config = [

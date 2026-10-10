@@ -152,13 +152,18 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             pool: self::STOREFRONT_CHROME_POOL,
             // wave8-8c8: website (not channel) so deferred bag-prime and probes share L1/L2.
             scope: 'website',
-            vary: ['lang', 'currency'],
+            // Cross-scope cold dig 2026-10-09: currency in vary forced full header/footer SSR
+            // per currency. Shell is now lang-only; currency-switcher islands hydrate live
+            // (Partials::hydrateChromeCurrencyIslands) so selected currency never cross-bags.
+            vary: ['lang'],
             dependencies: ['catalog', 'config', 'global/i18n', 'theme'],
             freshTtlSeconds: max(1, $freshTtlSeconds),
             staleTtlSeconds: max(0, $staleTtlSeconds),
             // Heavy HTML: file-preflight wait (same pattern as product.filter_panel).
             // Evidence: cold lang switch → builder_uncontended + singleflight_acquired=false.
-            singleFlightWaitMs: 2000,
+            // Cold-focus 2026-10-09: new currency×locale after_ms often >2s; 2s wait too short
+            // under cross-scope chaos → peer chrome rebuilds inflate cold hit1.
+            singleFlightWaitMs: 5000,
         );
     }
 

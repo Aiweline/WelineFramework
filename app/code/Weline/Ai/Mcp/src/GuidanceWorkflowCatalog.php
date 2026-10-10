@@ -109,7 +109,7 @@ final class GuidanceWorkflowCatalog
             '[Dirty workspace] preserve_dirty_workspace: never wipe dirty with git checkout/restore/clean/stash; dirty-load current disk before edit; forbid other-session/old-baseline overwrite of live dirty files.',
             '【整机共享态】machine_shared_side_effects_require_workspace_scope：钥匙串 Local CA 与 ~/.cursor/mcp.json bound/aoci --repo 只许服务当前工作区；禁止兄弟仓 CA 进系统信任，禁止把全局 MCP 改绑到兄弟仓。',
             '[Machine-shared state] machine_shared_side_effects_require_workspace_scope: keychain Local CA and ~/.cursor/mcp.json bound/aoci --repo must stay scoped to the current workspace; forbid sibling-repo CA into System trust; forbid rebinding global MCP to a sibling repo.',
-            '【每条编码需求】提出后须：① 分析前后端是否要做（fe_be_scope）；② 澄清/用例（简单可轻量）；③ 非简单则宿主 Plan Mode（简单可 plan_skip+理由）；③b **简单用监工（每句监工:），复杂由父会话进 team（父会话仅 Team:项目经理:；每席真实子智能体；席间 channel+resume 互聊；禁扮演）**；④ **一定要验收**—即使不做 Playwright e2e，凡触及 Web 须本机 Browser 真机验视觉+逻辑（WB-OP）；⑤ 布局调整/不够人性化/被吐槽/审图时 **原型+UI 必须参与并调整**；⑥ 隐形需求、work_kind、ui_skill_decision；再 TDD→跑测→汇审→交付地址。',
+            '【每条编码需求】提出后须：① 分析前后端是否要做（fe_be_scope）；② 澄清/用例（简单可轻量）；③ 非简单则宿主 Plan Mode（简单可 plan_skip+理由）；③b **简单用监工（每句监工:），复杂由父会话进 team（父会话仅 Team:项目经理:；每席真实子智能体；席间 channel+resume 互聊；禁扮演）**；④ **一定要验收**—即使不做 Playwright e2e，凡触及 Web 须本机 **真机 Web 测试**（Browser 导航→browser_click/fill→截图/快照 Read；禁止仅 Runtime.evaluate/curl 冒充 WB-OP）；⑤ 布局调整/不够人性化/被吐槽/审图时 **原型+UI 必须参与并调整**；⑥ 隐形需求、work_kind、ui_skill_decision；再 TDD→跑测→汇审→交付地址。',
             '[Every coding requirement] Analyze FE/BE scope; clarify/use-case (light when simple); host Plan Mode unless simple skip; non-simple requirements staff the engineering team (parent=项目经理 switchboard only, one real subagent per seat, peer talk via channel+resume, 停工 and wait on architecture contradictions; simple skip and content-ops exempt); ALWAYS acceptance—Web touches need local Browser WB-OP visual+logic even without Playwright e2e; layout/humanization/complaint/审图 force prototype+UI adjustments; then TDD→verify→汇审→delivery URLs.',
         ];
     }
@@ -1956,21 +1956,28 @@ final class GuidanceWorkflowCatalog
             'label' => '性能检查（设计审查 + 开发后复审）',
             'description' => '工程团队「性能检查工程师」专席：必须检查性能。须深懂 Weline 框架结构与业务特性；审查 HotCache/CachePolicy 缓存设计是否合规；与架构师共同讨论并定制优化方向；开发后用真实证据复审。HARD：未弄清框架+业务特性禁止开药方；建议必须落在框架机制内；禁止把拆 chrome 壳/删必装部件当优化方向（theme_seat_integrity_over_peer_requests）；默认可写只读探针，业务返工交归属席；热路径/缓存相关复杂 team 必须上场。',
             'triggers' => [
-                '性能检查', '性能检查工程师', '性能优化', '性能审查', '慢请求', 'TTFB',
-                '冷启动', '热路径', 'N+1', 'HotCache', 'CachePool', 'CachePolicy', 'WLS',
+                '性能', '优化', '性能优化', '性能检查', '性能检查工程师', '性能审查',
+                '慢请求', 'TTFB', '冷启动', '热路径', 'N+1', 'HotCache', 'CachePool', 'CachePolicy', 'WLS',
                 '缓存失效', '批量预取', 'performance', 'performance check', 'performance engineer',
                 'Team:性能检查工程师', '店面列表性能', 'FPC',
+                '冷切扫描', '假写粘性',
             ],
             'authoritative_skill' => 'weline-performance-check',
             'authoritative_doc' => 'dev/ai-command/ai/性能检查.md',
             'authoritative_docs' => [
                 'dev/ai-command/ai/性能检查.md',
+                'dev/ai-command/ai/性能冷切扫描.md',
                 'dev/ai-command/ai/工程团队.md',
                 'app/code/Weline/Framework/doc/统一缓存范围与性能优化.md',
                 'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
                 'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
+                'app/code/Weline/Framework/doc/ai/skills/performance-cold-chaos-dig/SKILL.md',
                 'docs/版本计划/v3/PHP8.4+框架优化/12-性能基准与目标.md',
                 'app/code/Weline/Ai/doc/AI工程交付流程.md',
+            ],
+            'companion_skills' => [
+                'performance-cold-chaos-dig',
+                'doc:performance-cold-chaos-dig',
             ],
             'norms' => [
                 ['id' => 'perf_must_check_performance', 'summary' => '本职必须检查性能（设计+开发后）；禁止旁听式签字或不审缓存/timing'],
@@ -1983,12 +1990,15 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'perf_required_meetings', 'summary' => '立项讨论、对齐冻结会、技术方案会必到（与架构师同会）'],
                 ['id' => 'perf_dual_track', 'summary' => '设计检查轨（meetings/性能检查-design.md）+ 实现复审轨（meetings/性能检查-review.md）；fail 阻断验收'],
                 ['id' => 'perf_evidence_discipline', 'summary' => '结论须带可复现 DB/WLS/阶段耗时证据；禁止跨样本伪加速比'],
+                ['id' => 'perf_cold_chaos_dig_companion', 'summary' => '用户提到性能/优化（或乱切语种货币找慢、假写/二次不粘）时必须 get_skill(performance-cold-chaos-dig)+Read 性能冷切扫描.md：_wb_nc、慢阈值停下；修后收口必须先写修复说明四件套（改了什么/为什么/因果链/怎么证明）再给修前冷vs修后冷主表；禁止看不懂修复却甩变快数字；禁止只用暖命中表'],
                 ['id' => 'perf_rework_to_owners', 'summary' => '默认可写只读探针与纪要；业务实现返工交归属席'],
                 ['id' => 'perf_wake_pm_to_arrange', 'summary' => '查出问题后立刻 escalate 拉起项目经理组队：@项目经理：请立刻组队解决；禁止 Issue 列表与本席私自排施工波'],
                 ['id' => 'perf_not_content_ops', 'summary' => '产品优化/详情/主图/翻译等 content_ops 不拉本席'],
             ],
             'verification_commands' => [
                 'test -f dev/ai-command/ai/性能检查.md',
+                'test -f dev/ai-command/ai/性能冷切扫描.md',
+                'test -f app/code/Weline/Framework/doc/ai/skills/performance-cold-chaos-dig/SKILL.md',
                 'rg -n "performance_engineer_for_design_and_review|性能检查工程师" app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php',
                 'rg -n "性能检查工程师|performance_check|架构师" dev/ai-command/ai/工程团队.md',
             ],
@@ -2011,6 +2021,7 @@ final class GuidanceWorkflowCatalog
                 ],
                 'required' => [
                     'get_skill(performance_check|weline-performance-check) and Read 性能检查.md + 统一缓存范围与性能优化.md + 扩展点选型.md before advising',
+                    'On cold-chaos / pretend-write / stickiness digs: also get_skill(performance-cold-chaos-dig) and Read 性能冷切扫描.md; stop on slow; closeout MUST include fix-explanation quartet (what/why/causal-chain/how-proven) then cold hit1 before vs after (forbid unexplained speedup claims; forbid warm hit2/hit3-only tables)',
                     'Staff Team:性能检查工程师: on hot-path/cache/list/N+1 complex team from 立项波',
                     'Jointly discuss with Team:架构师: to customize optimization directions; record architect_joint + business特性 + cache合规',
                     'Attend align-freeze and tech-scheme; both architect and performance engineer stance required to freeze hot-path/cache UC/contracts',

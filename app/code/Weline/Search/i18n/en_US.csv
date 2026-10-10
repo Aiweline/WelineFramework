@@ -175,7 +175,7 @@ chart,chart
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计
-税费与运费将在结算时计算,税费与运费将在结算时计算
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
 去结算,去结算
 查看购物车,查看购物车
 查看“%{1}”在本站汉服、文章与帮助中的相关结果。,"See results for “%{1}” across Hanfu products, articles, and help on this site."

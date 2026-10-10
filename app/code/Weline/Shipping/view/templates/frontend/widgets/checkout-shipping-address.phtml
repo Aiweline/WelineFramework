@@ -1,5 +1,19 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {checkout-shipping-address}
+ * @widget.name {结账收货地址}
+ * @widget.description {结账页收货信息：已存地址选择标签 + 主题地址级联。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["checkout"]}
+ * @widget.slot {checkout-shipping-address}
+ * @widget.supports {["checkout-shipping-address","shipping-address","delivery-address","address"]}
+ * @param title {default="收货地址",type="string",label="标题"}
+ *
+ * @widget.default_injections {[{"layout_type":"checkout","layout_option":"default","slot":"checkout-shipping-address","area":"content","sort_order":10,"required":true,"reason":"结账收货信息默认由 Shipping 地址部件提供（theme:address + 已存地址选择）","config":{"title":"收货地址"}}]}
+ */
 /**
  * @widget.code {checkout-shipping-address}
  * @widget.default_injections {[{"layout_type":"checkout","layout_option":"default","slot":"checkout-shipping-address","area":"content","sort_order":10,"required":true,"reason":"结账收货信息默认由 Shipping 地址部件提供（theme:address + 已存地址选择）","config":{"title":"收货地址"}}]}

@@ -8,7 +8,7 @@ Register::register(
     Register::MODULE,
     'Weline_Product',
     __DIR__,
-    '1.1.3',
+    '1.1.4',
     'Product catalog website shards and commerce kernel contracts',
     [
         'Weline_Framework',

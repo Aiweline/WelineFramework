@@ -83,7 +83,43 @@ final class StorefrontCatalogCacheCoordinator
             dependencies: ['catalog', 'price', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
-            singleFlightWaitMs: 0,
+            singleFlightWaitMs: 1200,
+        );
+    }
+
+    /**
+     * Website-scoped raw representative offer pages for summary windows.
+     * Shared across lang×currency so cross-scope chaos reuses DB paging; channel bag still prices.
+     */
+    public static function catalogSummarySkeletonPolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'product.catalog_offers_summary_skeleton',
+            pool: StorefrontCatalogViewService::cachePool(),
+            scope: 'website',
+            vary: [],
+            dependencies: ['catalog'],
+            freshTtlSeconds: 300,
+            staleTtlSeconds: 1800,
+            singleFlightWaitMs: 5000,
+        );
+    }
+
+    /**
+     * Website×lang card surface without FX (names/media/catalog minors).
+     * Same-lang cross-currency chaos HITs this and only runs deal pricing.
+     */
+    public static function catalogSummaryLangSurfacePolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'product.catalog_offers_summary_lang',
+            pool: StorefrontCatalogViewService::cachePool(),
+            scope: 'website',
+            vary: ['lang'],
+            dependencies: ['catalog', 'config', 'global/i18n'],
+            freshTtlSeconds: 300,
+            staleTtlSeconds: 1800,
+            singleFlightWaitMs: 5000,
         );
     }
 
@@ -98,7 +134,8 @@ final class StorefrontCatalogCacheCoordinator
             dependencies: ['catalog', 'price', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
-            singleFlightWaitMs: 0,
+            // Same-key concurrent summary builders. Cross-currency reuse = skeleton (website), not this wait.
+            singleFlightWaitMs: 3000,
         );
     }
 
@@ -113,7 +150,8 @@ final class StorefrontCatalogCacheCoordinator
             dependencies: ['catalog', 'price', 'config', 'global/i18n'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
-            singleFlightWaitMs: 0,
+            // Homepage related stack cold miss was ~1s builder_uncontended without wait.
+            singleFlightWaitMs: 1200,
         );
     }
 
@@ -156,13 +194,88 @@ final class StorefrontCatalogCacheCoordinator
             dependencies: ['catalog'],
             freshTtlSeconds: 300,
             staleTtlSeconds: 1800,
+            singleFlightWaitMs: 3000,
         );
     }
 
+    /**
+     * Homepage three-shelf stagger **product_id** plan (website-shared).
+     * Cross-currency chaos reuses IDs; each request hydrates cards from channel summaries.
+     * Deal pick is frozen by the first builder's currency view (acceptable for shelf stagger).
+     */
+    public static function homepageShelfPlanPolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'product.homepage_shelf_id_plan',
+            pool: StorefrontCatalogViewService::cachePool(),
+            scope: 'website',
+            vary: [],
+            dependencies: ['catalog'],
+            freshTtlSeconds: 300,
+            staleTtlSeconds: 1800,
+            singleFlightWaitMs: 5000,
+        );
+    }
+
+    public static function homepageShelfPlanLogicalKey(int $websiteId): string
+    {
+        // v2: website-shared product_id lists (hydrate prices per channel).
+        return 'product.homepage.shelf_id_plan.v2.' . max(0, $websiteId);
+    }
+
+    /**
+     * Search direct/degrade reads rebuild the published offer×product projection per
+     * store/channel. Bags are multi-MB (too large for worker process L1) but must stick
+     * in durable shared L2 — otherwise every /search hits a full catalog rebuild.
+     *
+     * Wait budget must cover a real rebuild (multi-second under load). Cold-chaos
+     * 2026-10-09: 2s wait → peers fell through to builder_uncontended and stacked
+     * TemplatePerf.before_ms ≈ 20s on concurrent /search.
+     */
+    public static function searchProjectionScopePolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'product.search_projection_scope',
+            pool: StorefrontCatalogViewService::cachePool(),
+            scope: 'channel',
+            dependencies: ['catalog'],
+            freshTtlSeconds: 300,
+            staleTtlSeconds: 1800,
+            singleFlightWaitMs: 20000,
+        );
+    }
+
+    public static function searchProjectionScopeLogicalKey(
+        int $websiteId,
+        int $storeId,
+        int $channelId,
+        int $watermark,
+    ): string {
+        return 'product.search_projection.scope.v1.'
+            . max(0, $websiteId)
+            . '.'
+            . max(0, $storeId)
+            . '.'
+            . max(0, $channelId)
+            . '.'
+            . max(0, $watermark);
+    }
+
+    /** Shared candidate page size for homepage shelf + new-arrivals widget. */
+    public const CANONICAL_NEW_ARRIVAL_PAGE = 64;
+
+    /**
+     * Candidate id pages ≤ {@see self::CANONICAL_NEW_ARRIVAL_PAGE} share one website bag
+     * so shelf featured (page 64) and widget (page 16) do not double cold-query.
+     */
     public static function newArrivalCandidatesLogicalKey(int $websiteId, string $cutoff, int $limit, int $offset = 0): string
     {
-        return 'product.new_arrival.v2.' . hash('sha256', serialize([
-            max(0, $websiteId), trim($cutoff), max(1, $limit), max(0, $offset),
+        $limit = max(1, min(2000, $limit));
+        $canonical = self::CANONICAL_NEW_ARRIVAL_PAGE;
+        $page = $limit <= $canonical ? $canonical : $limit;
+
+        return 'product.new_arrival.v3.' . hash('sha256', serialize([
+            max(0, $websiteId), trim($cutoff), $page, max(0, $offset),
         ]));
     }
 
@@ -236,12 +349,56 @@ final class StorefrontCatalogCacheCoordinator
             : $key;
     }
 
-    public function catalogSummaryOffersLogicalKey(int $websiteId, int $limit = 48): string
+    /**
+     * Shared summary bag identity.
+     *
+     * Limits ≤ {@see StorefrontCatalogViewService::CANONICAL_SUMMARY_LIMIT} share one
+     * channel bag (warmup seeds 48; homepage shelves ask 24/32). Larger rare windows
+     * keep limit in the key so they do not shrink the shared bag.
+     */
+    public static function catalogSummaryOffersLogicalKey(int $websiteId, int $limit = 48): string
     {
-        return 'product.catalog_offers.summary.v3.'
+        $limit = max(1, min(2000, $limit));
+        $canonical = StorefrontCatalogViewService::CANONICAL_SUMMARY_LIMIT;
+        if ($limit <= $canonical) {
+            return 'product.catalog_offers.summary.v4.' . max(0, $websiteId);
+        }
+
+        return 'product.catalog_offers.summary.v4.'
             . max(0, $websiteId)
             . '.'
-            . max(1, min(2000, $limit));
+            . $limit;
+    }
+
+    /** Website skeleton for summary paging (no lang/currency). */
+    public static function catalogSummarySkeletonLogicalKey(int $websiteId, int $limit = 48): string
+    {
+        $limit = max(1, min(2000, $limit));
+        $canonical = StorefrontCatalogViewService::CANONICAL_SUMMARY_LIMIT;
+        $window = $limit <= $canonical ? $canonical : $limit;
+
+        return 'product.catalog_offers.summary_skeleton.v1.'
+            . max(0, $websiteId)
+            . '.'
+            . $window;
+    }
+
+    public static function catalogSummaryLangSurfaceLogicalKey(
+        int $websiteId,
+        string $lang,
+        int $limit = 48,
+    ): string {
+        $limit = max(1, min(2000, $limit));
+        $canonical = StorefrontCatalogViewService::CANONICAL_SUMMARY_LIMIT;
+        $window = $limit <= $canonical ? $canonical : $limit;
+        $lang = trim($lang);
+
+        return 'product.catalog_offers.summary_lang.v1.'
+            . max(0, $websiteId)
+            . '.'
+            . $window
+            . '.'
+            . ($lang !== '' ? $lang : '_');
     }
 
     /**

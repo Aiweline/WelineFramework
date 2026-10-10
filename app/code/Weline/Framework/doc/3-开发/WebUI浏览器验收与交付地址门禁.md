@@ -40,9 +40,11 @@
    - **宿主 Browser（Cursor ide-browser 等）**：CDP `Page.addScriptToEvaluateOnNewDocument`（或等价 init script）注入：把 `navigator.webdriver` 置为 `undefined`/`false`；再 `browser_navigate`（**禁止** `browser_cdp` `Page.reload`——在 Cursor 上会重载整个工作台窗口并杀死全部智能体）。
    - **正式 Playwright runner**：Chromium `launchOptions` 须含 `--disable-blink-features=AutomationControlled`，并用 `ignoreDefaultArgs` 去掉 `--enable-automation`；`context.addInitScript` 同样清掉 `navigator.webdriver`（仓库 `tests/e2e/playwright.config.js` 已默认开启）。
    - **禁止**：带着默认 `navigator.webdriver===true` / AutomationControlled 去点登录、提交、人机验证；禁止把「Human-machine verification failed / reCAPTCHA 拦自动化」写成 WB-OP pass 或甩测借口。
-4. **禁止替代物**：
+4. **禁止替代物**（真机 Web 测试硬门槛）：
+   - **真机定义**：宿主 Browser 打开验收 URL → 工具通道 `browser_click` / `browser_fill` / `browser_press_key` 等真操作员动作 → **`browser_take_screenshot` 改动面** → Agent **宿主 Read 截图文件（视觉）** 核对文案/布局/交互态，并按审图查裁切/溢出/一字竖排/密度挤压（`acceptance_phase_requires_shentu`）；可见 fail **同回合修好**再报 PASS
    - 禁止只用 `curl` / `http:request` 宣称页面可用
    - 禁止只用 PHPUnit / 契约测试宣称 UI 完成
+   - **禁止**仅用 CDP `Runtime.evaluate` / `getBoundingClientRect` 尺寸数字 / DOM 文本抽取 / Network 拦截 / 页内 `fetch` / 只 snapshot YAML **不截图 Read** / **拍了截图却不 Read** 冒充 WB-OP 或视觉 PASS（evaluate/metrics 可作辅助诊断，**不得**作为 Web/视觉闭环主证据）
    - 禁止「代码已改，请用户自己打开看」代替 AI 自测（宿主无 Browser 时除外，须明确标注未完成）
    - 禁止带着默认磁盘缓存验收本回合改过的 CSS/JS/HTML（易误判「没改到」）
    - 禁止未抹自动化标志就宣称登录/人机验证路径已验收
@@ -92,14 +94,16 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 3. **重试上限**：同 URL 导航重试 ≤2 次，仍失败则 fail-closed 收口，不得空转。
 4. 与门禁 D 关系：门禁 D 管**交付后**关标签；本条管**中途卡住**强制释放，避免宿主会话冻住。
 
-## 门禁 B：视觉证据（WB-VIS）
+## 门禁 B：视觉证据（WB-VIS）+ 截图审图（硬）
 
-适用：有视觉布局/前台或后台 UI，且**当前宿主能截图**。
+适用：**任何** Web/UI/.phtml/CSS/页面改动或有视觉布局的前台/后台 UI，且**当前宿主能截图**。
 
+- **硬**：交互后至少一张改动面 `browser_take_screenshot`，随后宿主 **Read 该截图**（视觉）并跑审图清单；**拍了不 Read = 未做 WB-VIS**
+- fail-closed：可见左侧/边缘裁切、溢出、一字竖排、名称被操作列挤没 → **同回合修布局**，禁止用 metrics「宽度够」宣称 PASS
 - 至少覆盖断点：≈768 / ≥1024；表面面向手机时再加 375（相关时再加 1440）
 - 截图存归属模块 `doc/evidence/`（分章则 `doc/evidence/ch{N}/`）
 - 模块若有 `doc/原型设计.md` 则对照视觉清单；**无该文件时不虚构原型验收**
-- 无截图能力或非视觉面：WB-VIS 记 `N/A`，但 **WB-OP 仍须完成**（有可交互 Browser 时）
+- 无截图能力或非视觉面：WB-VIS 记 `N/A` 并写明原因，但 **WB-OP 仍须完成**（有可交互 Browser 时）；无法截图 Read 时只能报「WebUI 验收未完成」
 
 ## 门禁 C：交付地址汇报（每次功能完成必报）
 

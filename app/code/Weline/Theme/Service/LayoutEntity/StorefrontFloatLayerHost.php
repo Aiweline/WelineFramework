@@ -45,11 +45,16 @@ final class StorefrontFloatLayerHost
 
     /**
      * Post-render HTML: append published-slot shells (data-slot-id) before </body>.
+     * Also self-heal: baked footers may lack data-weline-load on an existing layer
+     * (hidden-host IO never fired → × chrome missing). Marker: storefront-float-load-on-layer-v1
      */
     public static function ensureInHtml(string $html): string
     {
-        if ($html === '' || self::htmlHasFloatDestinations($html)) {
+        if ($html === '') {
             return $html;
+        }
+        if (self::htmlHasFloatDestinations($html)) {
+            return self::ensureFloatLayerModuleLoadAttr($html);
         }
 
         $layer = self::publishedSlotLayerMarkup();
@@ -58,6 +63,42 @@ final class StorefrontFloatLayerHost
         }
 
         return $html . $layer;
+    }
+
+    /**
+     * Ensure #w-storefront-float-layer carries data-weline-load=storefrontFloatLayer
+     * so IntersectionObserver can fire on the visible fixed layer (not a hidden stub).
+     */
+    public static function ensureFloatLayerModuleLoadAttr(string $html): string
+    {
+        if ($html === '' || !str_contains($html, 'id="w-storefront-float-layer"')) {
+            return $html;
+        }
+        if (preg_match(
+            '/<div\b[^>]*\bid\s*=\s*["\']w-storefront-float-layer["\'][^>]*\bdata-weline-load\s*=\s*["\'][^"\']*storefrontFloatLayer/i',
+            $html
+        ) === 1) {
+            return $html;
+        }
+
+        $patched = preg_replace(
+            '/(<div\b[^>]*\bid\s*=\s*["\']w-storefront-float-layer["\'][^>]*\bdata-storefront-float-layer)(\s|>)/i',
+            '$1 data-weline-load="storefrontFloatLayer" data-testid="storefront-float-layer"$2',
+            $html,
+            1
+        );
+        if (is_string($patched) && $patched !== $html) {
+            return $patched;
+        }
+
+        $patched = preg_replace(
+            '/(<div\b[^>]*\bid\s*=\s*["\']w-storefront-float-layer["\'])(\s|>)/i',
+            '$1 data-weline-load="storefrontFloatLayer" data-testid="storefront-float-layer"$2',
+            $html,
+            1
+        );
+
+        return is_string($patched) ? $patched : $html;
     }
 
     /**

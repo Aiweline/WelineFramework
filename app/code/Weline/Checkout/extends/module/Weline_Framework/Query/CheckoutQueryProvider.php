@@ -151,6 +151,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
             }
             $cartType = $this->resolveCartTypePreference($params);
             $cart = $this->cartSnapshots()->freeze($scopeIdentity, $guestToken, $customerId, $cartType);
+            $shellType = strtolower(trim((string)($cart['cart_type'] ?? $cartType))) ?: $cartType;
+            $this->assertExplicitCartTypeMatchesShell($params, $shellType);
+            $cartType = $shellType;
             $currency = strtoupper(trim((string)($cart['currency'] ?? '')));
             $runtimeCurrency = strtoupper(trim(RequestContext::getWelineUserCurrency()));
             if ($runtimeCurrency !== '' && $currency !== $runtimeCurrency) {
@@ -272,6 +275,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 if (!empty($params['express_checkout'])) {
                     $payContext['express_checkout'] = true;
                     $payContext['metadata'] = ['express_checkout' => true];
+                    $payContext['payment_entry'] = \Weline\Payment\Service\PaymentEntry::EXPRESS;
+                } else {
+                    $payContext['payment_entry'] = \Weline\Payment\Service\PaymentEntry::CHECKOUT;
                 }
                 $guestTokenForPay = trim((string) ($params['guest_token'] ?? ''));
                 if ($guestTokenForPay === '') {
@@ -286,7 +292,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 $session = $this->checkoutGroupSubmitService->getSession($quoteToken);
                 $deposit = is_array($session['deposit'] ?? null) ? $session['deposit'] : [];
                 $cartType = strtolower(trim((string)($session['cart_type'] ?? '')));
-                if ($cartType === 'tob' || $deposit !== []) {
+                // Fail-closed: deposit purpose only for tob shell with a real deposit payload.
+                if ($cartType === 'tob' && $deposit !== [] && $this->isValidTobDepositPayload($deposit)) {
                     $payContext['purpose'] = 'deposit';
                     $payContext['hang_purpose'] = 'deposit';
                     if (array_key_exists('b2b_credit_cash_deposit_minor', $deposit)) {
@@ -607,6 +614,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'locale' => (string)($params['locale'] ?? ''),
                 'quote_token' => $quoteToken,
                 'checkout_token' => $quoteToken,
+                // Already-submitted order retry / 个人中心续付：每笔支付历史记 continue_pay。
+                'payment_mode' => 'continue_pay',
+                'continue_pay' => true,
+                'payment_entry' => \Weline\Payment\Service\PaymentEntry::CONTINUE_PAY,
             ];
             $explicitEnvironment = strtolower(trim((string)($params['environment'] ?? '')));
             if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
@@ -1774,6 +1785,50 @@ class CheckoutQueryProvider implements QueryProviderInterface
         }
 
         return $cart;
+    }
+
+
+    /**
+     * Explicit client cart_type/selling_mode must match the loaded cart shell (fail-closed).
+     * Cookie-only preference is not an explicit claim and is ignored here.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function assertExplicitCartTypeMatchesShell(array $params, string $shellType): void
+    {
+        $explicit = strtolower(trim((string)($params['cart_type'] ?? $params['selling_mode'] ?? $params['sellingMode'] ?? '')));
+        if ($explicit !== 'toc' && $explicit !== 'tob') {
+            return;
+        }
+        $shell = strtolower(trim($shellType)) ?: 'toc';
+        if ($explicit !== $shell) {
+            throw new CheckoutV2ConflictException(
+                'checkout_cart_type_mismatch',
+                (string)__('结账类型与购物车不一致，请刷新后重试'),
+                ['client_cart_type' => $explicit, 'cart_type' => $shell],
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $deposit
+     */
+    private function isValidTobDepositPayload(array $deposit): bool
+    {
+        if (array_key_exists('b2b_credit_cash_deposit_minor', $deposit)) {
+            return true;
+        }
+        if ((int)($deposit['deposit_amount_minor'] ?? 0) > 0) {
+            return true;
+        }
+        if ((int)($deposit['balance_amount_minor'] ?? 0) > 0) {
+            return true;
+        }
+        if ((int)($deposit['deposit_ratio_bps'] ?? 0) > 0) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -3094,6 +3149,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'payment_idempotency_key' => ['type' => 'string', 'required' => true, 'max_length' => 128],
                         'payment_method' => ['type' => 'string', 'required' => true, 'max_length' => 64],
                         'country_code' => ['type' => 'string', 'required' => false, 'max_length' => 8],
+                        'payment_mode' => ['type' => 'string', 'required' => false, 'max_length' => 32],
+                        'continue_pay' => ['type' => 'boolean', 'required' => false],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Retry payment for the same already-submitted Checkout V2 order group',

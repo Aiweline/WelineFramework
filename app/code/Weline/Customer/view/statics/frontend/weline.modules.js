@@ -19,7 +19,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     customerAccount: {
         paths: [
-            "Weline_Customer::js/account-index.js?v=20261009-order-uuid-locate-2"
+            "Weline_Customer::js/account-index.js?v=20261009-scope-css-hoist-retry"
         ],
         globalVar: "WelineCustomerAccount",
         description: "前台用户中心账户页交互"

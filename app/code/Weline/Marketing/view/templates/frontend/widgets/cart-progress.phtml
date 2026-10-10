@@ -1,6 +1,27 @@
 <?php
 /**
- * @widget.source {Weline_Marketing::css/widgets/widget-cart-progress.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js} @var array $config */
+ * @var \Weline\Framework\View\Template $this
+ * @var array $config
+ *
+ * @widget.code {cart-progress}
+ * @widget.name {购物车满额进度}
+ * @widget.description {购物车摘要满额进度条 + 可选新客礼入口。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["summary"]}
+ * @widget.page_layouts {["cart"]}
+ * @widget.slot {cart-summary-discount}
+ * @widget.supports {["cart-summary-discount","cart-progress","marketing"]}
+ * @widget.default_injections {[{"layout_type":"cart","layout_option":"default","slot":"cart-summary-discount","area":"content","sort_order":5,"required":false,"reason":"购物车摘要可选满额进度条","config":{"title":"满额进度","threshold":99,"show_welcome":true,"welcome_label":"新客礼","welcome_url":"/account/register"}}]}
+ * @widget.source {Weline_Marketing::css/widgets/widget-cart-progress.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
+ *
+ * @param title {default="满额进度",type="string",label="标题"}
+ * @param threshold {default=99,type="number",label="满额门槛"}
+ * @param currency {default="",type="string",label="货币码"}
+ * @param show_welcome {default=true,type="bool",label="显示新客礼入口"}
+ * @param welcome_label {default="新客礼",type="string",label="新客礼文案"}
+ * @param welcome_url {default="/account/register",type="string",label="新客礼链接"}
+ */
 $config = \is_array($config ?? null) ? $config : [];
 $threshold = (float)($config['threshold'] ?? 99);
 $currency = (string)($config['currency'] ?? '');

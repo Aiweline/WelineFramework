@@ -1388,8 +1388,8 @@
         var message = i18n('data-i18n-coupon-tob-unavailable', '批发不可用');
         ensureMiniCartExtrasVisible(root, mode);
         root.querySelectorAll(
-            '.w-marketing-checkout-coupon--mini-cart, [data-testid="marketing-mini-cart-coupon"],'
-            + ' .w-marketing-checkout-coupon, [data-testid="checkout-coupon"], [data-testid="marketing-checkout-coupon"]'
+            '.w-marketing-checkout-coupon--mini-cart, .w-marketing-checkout-coupon,'
+            + ' [data-testid="checkout-coupon"], [data-testid="marketing-checkout-coupon"], [data-marketing-checkout-coupon]'
         ).forEach(function (coupon) {
             coupon.hidden = false;
             coupon.removeAttribute('hidden');

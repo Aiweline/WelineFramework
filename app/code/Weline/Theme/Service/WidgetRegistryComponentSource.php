@@ -107,6 +107,10 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                         'default_injections' => $defaultInjections,
                         'registry_group' => $type,
                         'template' => $widget['template'] ?? null,
+                        'cache' => max(0, (int)(
+                            $widget['cache']
+                            ?? ($widget['config']['cache'] ?? 0)
+                        )),
                     ]),
                     params: $params,
                     position: $this->resolvePositions($widget, $widgetType, $code),

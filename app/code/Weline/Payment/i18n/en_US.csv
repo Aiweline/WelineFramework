@@ -144,12 +144,6 @@ settings,settings
 支付成功,"Payment successful"
 支付待处理,"Payment Pending"
 支付处理中,"Payment Processing"
-快捷支付已关闭。,"Express checkout is closed."
-该商品仅支持询价，暂无快捷支付。,"This product supports inquiry only; quick payment is not available."
-使用支付商账户直接付款，地址可由支付商带回,"Pay with your payment account; address can be returned by the provider"
-更多支付说明,"More payment details"
-快捷支付暂不可用，请使用上方加入购物车或立即结账。,"Express checkout is temporarily unavailable. Please use Add to Cart or Checkout above."
-"使用 %{1} 快捷支付","Pay with %{1}"
 "DevRelay 中继","DevRelay relay."
 "左：SSE 日志 · 右：发送","Left: SSE logs · Right: Send."
 "SSE 实时详情","SSE real-time details."
@@ -330,7 +324,20 @@ More,More
 "PayPal checkout will open after you confirm payment.","PayPal checkout will open after you confirm payment."
 "【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开不会完成支付。生产环境空参访问会跳转首页。","[DEV] This is the unified payment browser return endpoint and it is ready. Real checkout or OAuth will append parameters; opening this page alone does not complete a payment. In production, empty visits redirect to the homepage."
 返回首页,"Back to Home"
+支付历史,"Payment history"
+暂无支付记录,"No Payment Records"
+来源,Source
+金额,Amount
+时间,时间
+未指定,Unspecified
+未标记,Unmarked
 或使用下方结账,"Or continue below"
+"使用 %{1} 快捷支付","Pay with %{1}"
+快捷支付已关闭。,"Express checkout is closed."
+该商品仅支持询价，暂无快捷支付。,"This product supports inquiry only; quick payment is not available."
+使用支付商账户直接付款，地址可由支付商带回,"Pay with your payment account; address can be returned by the provider"
+更多支付说明,"More payment details"
+快捷支付暂不可用，请使用上方加入购物车或立即结账。,"Express checkout is temporarily unavailable. Please use Add to Cart or Checkout above."
 失败率,"Failure Rate"
 "优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径","Prefer attempt metrics; use transaction records when attempt data is unavailable"
 未完成支付,"Incomplete Payments"
@@ -349,10 +356,8 @@ More,More
 交易,Transactions
 按币种统计,"By Currency"
 币种,Currency
-金额,Amount
 "按 scope 统计","By Scope"
 "Scope 代码","Scope Code"
-来源,Source
 只读统计,"Read-only Statistics"
 按状态统计,"By Status"
 "Intent 数量","Intent Count"
@@ -533,8 +538,6 @@ More,More
 是否必填,Required
 当前运行时配置摘要,"Current Runtime Configuration Summary"
 交易ID,"Transaction ID"
-暂无支付记录,"No Payment Records"
-未指定,Unspecified
 "Payment Webhook Inbox 消费","Payment Webhook Inbox consumption"
 "消费已验签的 Payment webhook inbox，并原子提交支付、库存和后续 effect","Consume the verified Payment webhook inbox and submit payment, inventory and subsequent effects atomically"
 "Payment 资产终态消费","Payment asset final consumption"
@@ -627,6 +630,11 @@ More,More
 支付方式授权已完成，凭据已写入当前配置。,"Payment authorization has been completed, and credentials have been written to the current configuration."
 授权完成,"Authorization completed"
 "Payment transaction number is required.","Payment transaction number is required."
+万能结账,"Universal checkout"
+快捷支付,"Express checkout"
+继续支付,"Continue payment"
+快捷购买,"Quick buy"
+找朋友代付,"Friend pays"
 "尚未记住线上凭证：请先到支付后台 DevRelay 控制台开启一次中继。","Online credentials have not been remembered: please first go to the payment backend DevRelay console to start a relay."
 "面板自动拉起中继失败（WLS 请求内子进程易被回收）。请先在本机执行：","Panel automatically triggered relay failed (child processes in WLS requests are easily recycled). Please execute the following command locally first:"
 中继未能启动：,"Relay failed to start:"
@@ -730,10 +738,16 @@ More,More
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,"Only check if the platform sandbox credentials are ready"
-"共 %{1} 个支付供应商","%{1} payment provider(s)"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 收起悬浮,收起悬浮
 展开悬浮,展开悬浮
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+小计,小计
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+去结算,去结算
+查看购物车,查看购物车
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
+"共 %{1} 个支付供应商","%{1} payment provider(s)"
 了解本地测试支付的开发验证流程、适用场景与注意事项。,"Learn how local test payments work, when to use them, and what to watch for."
 "了解如何使用银行卡或本地支付方式通过 Stripe 完成支付，以及退款与争议处理规则。","Learn how to pay with cards or local payment methods via Stripe, and how refunds and disputes are handled."
 "了解如何使用 PayPal 账户或银行卡完成支付，以及退款与争议处理规则。","Learn how to pay with a PayPal account or card, and how refunds and disputes are handled."
@@ -830,7 +844,6 @@ login,login
 "覆盖 Provider 默认图标。从图库选择图片，或留空使用 Provider 自带图标。","Override the provider default icon. Pick an image from the media library, or leave empty to keep the provider icon."
 支付已取消,"Payment cancelled"
 您已取消本次支付，订单尚未完成付款。可返回结账页重新选择支付方式。,"You cancelled this payment. The order is not paid yet. You can return to checkout and try again."
-快捷支付,"Express checkout"
 货到付款手续费,"Cash on delivery fee"
 用户协议导航,"User agreement navigation"
 支付方式激励折扣,"Payment method incentive"

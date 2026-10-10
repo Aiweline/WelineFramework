@@ -140,90 +140,64 @@ async function main() {
 
     await page.goto(FRONTEND + '/checkout', { waitUntil: 'domcontentloaded' });
     result.steps.push('checkout_opened');
-    // PDP→checkout rotates __Host-Weline-Worker-Scope-Bootstrap-{id}; leftover
-    // cookies from the PDP load can leave QueryBin without a single matching
-    // binding for the checkout meta (missing/duplicated/invalid). Keep only the
-    // cookie that matches the current page marker, then warm Scope before freeze.
-    const checkoutMeta = await page.evaluate(() => {
-      const node = document.querySelector('meta[name="weline-worker-scope-bootstrap"]');
-      return node ? String(node.getAttribute('content') || '').trim() : '';
+    // PDP→checkout (and soft getData) mint extra __Host-Weline-Worker-Scope-Bootstrap-*
+    // cookies. Selective clear by name can leave Playwright/Chromium still sending
+    // duplicates → freeze/submit fails with "Worker Scope bootstrap Cookie is
+    // missing, duplicated, or invalid". Full jar clear + one reload yields a single
+    // matching Set-Cookie+meta pair. Guest cart survives via sessionStorage token.
+    const wantedMethod = (process.env.FORCE_PAYMENT_METHOD || 'paypal').toLowerCase();
+    const guestTokenForCookie = await page.evaluate(() => {
+      try { return String(sessionStorage.getItem('weline.cart.guest_token') || '').trim(); } catch (e) { return ''; }
     }).catch(() => '');
-    const jar = await context.cookies();
-    const scopeCookies = jar.filter((c) => String(c.name || '').startsWith('__Host-Weline-Worker-Scope-Bootstrap-'));
-    const keepName = checkoutMeta
-      ? ('__Host-Weline-Worker-Scope-Bootstrap-' + checkoutMeta)
-      : '';
-    for (const cookie of scopeCookies) {
-      if (keepName && cookie.name === keepName) {
-        continue;
-      }
-      await context.clearCookies({
-        name: cookie.name,
-        domain: cookie.domain,
-        path: cookie.path || '/',
-      }).catch(() => {});
+    await context.clearCookies();
+    // Restore guest cart cookie so SSR/getData still see the cart after jar clear.
+    if (guestTokenForCookie) {
+      const cookieHost = (() => {
+        try { return new URL(FRONTEND).hostname; } catch (e) { return 'p05113ef3.test.weline.com'; }
+      })();
+      await context.addCookies([{
+        name: 'weline_cart_guest_token_w0',
+        value: guestTokenForCookie,
+        domain: cookieHost,
+        path: '/',
+        secure: true,
+        httpOnly: false,
+        sameSite: 'Lax',
+      }]).catch(() => {});
     }
-    if (!scopeCookies.some((c) => c.name === keepName)) {
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      result.steps.push('checkout_reloaded_for_scope');
-    }
-    await page.waitForFunction(() => !!(window.Weline && window.Weline.Api), null, { timeout: 60000 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    result.steps.push('checkout_reloaded_for_scope');
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('meta[name="weline-worker-scope-bootstrap"]');
+      return !!(window.Weline && window.Weline.Api && meta && String(meta.getAttribute('content') || '').trim());
+    }, null, { timeout: 60000 });
     await page.evaluate(async () => {
       if (window.Weline && Weline.Api && typeof Weline.Api.bootstrapScope === 'function') {
         await Weline.Api.bootstrapScope();
       }
-    }).catch(() => {});
+    });
     result.steps.push('scope_warmed');
-    // The payment radios are rendered by JS only after the checkout quote settles.
-    // Immediately after a full WLS restart the very first request pays for a cold
-    // FPC / layout-entity cache, so a fixed short sleep can expire before the radios
-    // exist and the run dies with `payment_method_not_selectable:...(none)` on an
-    // otherwise healthy storefront. Wait for the container to actually carry options,
-    // then keep a fixed settle for the rest of the summary widgets.
-    await page.waitForFunction(() => {
-      const box = document.querySelector('[data-payment-methods]');
-      return !!box && box.querySelectorAll('input[name="payment_method"]').length > 0;
-    }, null, { timeout: 90000 }).catch(() => {});
-    await page.waitForTimeout(1500);
-    await ensureAddress(page);
-    // Shipping/payment radios may lag or stay empty while quote API already has lanes;
-    // freezeQuote path below refreshes US quote and picks SEED_LANE_AMERICAS.
-    // The payment radios are re-rendered by JS once the quote settles, so a single
-    // `check()` can land on a stale node and silently leave the default method
-    // selected (e.g. fake_card) while the run claims to exercise paypal. Retry
-    // until the wanted radio actually sticks, then report what was selected.
-    const wantedMethod = (process.env.FORCE_PAYMENT_METHOD || 'paypal').toLowerCase();
-    // Budget must outlast a cold start: 24 x 700ms ≈ 17s. A too-small budget made a
-    // cold-cache first run fail even though the storefront was healthy.
-    for (let attempt = 0; attempt < 24; attempt += 1) {
-      const wantRadio = page.locator(`input[name="payment_method"][value="${wantedMethod}"]`).first();
-      if (await wantRadio.count()) {
-        await wantRadio.check({ force: true }).catch(() => {});
-      } else {
-        await page.evaluate((m) => {
-          const el = document.querySelector(`input[name="payment_method"][value="${m}"]`);
-          if (el) {
-            el.checked = true;
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-        }, wantedMethod).catch(() => {});
-      }
-      const now = await page.evaluate(() => {
-        const el = document.querySelector('input[name="payment_method"]:checked');
-        return el ? String(el.value || '') : '';
-      }).catch(() => '');
-      if (now.toLowerCase() === wantedMethod) break;
-      await page.waitForTimeout(700);
+    // Probe availability via getData (not SSR radios) — UI soft-reloads re-mint Scope cookies.
+    const availablePay = await page.evaluate(async () => {
+      let guestToken = '';
+      try { guestToken = String(sessionStorage.getItem('weline.cart.guest_token') || '').trim(); } catch (e) {}
+      const api = await window.Weline.Api.resource('checkout');
+      const data = await api.getData({
+        guest_token: guestToken,
+        shipping_address: {
+          name: 'Sandbox Buyer', phone: '14085551234', address1: '1 Main St', street: '1 Main St',
+          city: 'San Jose', province: 'CA', postal_code: '95131', country_code: 'US', country: 'US',
+        },
+        cart_type: 'toc', selling_mode: 'toc',
+      }, { silent: true, requestTimeoutMs: 120000 });
+      const root = (data && data.data && typeof data.data === 'object') ? data.data : data;
+      const methods = Array.isArray(root && root.payment_methods) ? root.payment_methods : [];
+      return methods.map((m) => String((m && (m.code || m.method_code)) || '')).filter(Boolean);
+    }).catch((e) => ['__probe_error__:' + String(e)]);
+    if (!availablePay.map((c) => c.toLowerCase()).includes(wantedMethod)) {
+      throw new Error(`payment_method_not_selectable:${wantedMethod}:got=${availablePay.join(',') || '(none)'}`);
     }
-    const selectedPayment = await page.evaluate(() => {
-      const el = document.querySelector('input[name="payment_method"]:checked');
-      return el ? String(el.value || '') : '';
-    }).catch(() => '');
-    if (selectedPayment.toLowerCase() !== wantedMethod) {
-      throw new Error(`payment_method_not_selectable:${wantedMethod}:got=${selectedPayment || '(none)'}`);
-    }
-    result.steps.push('payment_selected:' + selectedPayment);
+    result.steps.push('payment_selected:' + wantedMethod);
     result.steps.push('ui_ready');
 
     const started = await page.evaluate(async (forcedMethod) => {

@@ -304,23 +304,63 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         string $value,
         int $storeId = 0,
     ): array {
+        return $this->findEntityIdsByAttributeValues(
+            $websiteId,
+            $entityType,
+            [$attributeCode],
+            $value,
+            [$storeId],
+        );
+    }
+
+    /**
+     * One-shot reverse lookup: attribute_code IN + store_id IN + value_text.
+     * Prefer this over looping {@see findEntityIdsByAttributeValue()} (e.g. slug + source_slug).
+     *
+     * @param list<string> $attributeCodes
+     * @param list<int> $storeIds
+     * @return list<int>
+     */
+    public function findEntityIdsByAttributeValues(
+        int $websiteId,
+        string $entityType,
+        array $attributeCodes,
+        string $value,
+        array $storeIds = [0],
+    ): array {
         $this->assertWebsite($websiteId);
-        $this->assertStoreId($storeId);
         $entityType = trim($entityType);
-        $attributeCode = trim($attributeCode);
         $value = trim($value);
-        if ($entityType === '' || $attributeCode === '' || $value === '') {
+        $codes = [];
+        foreach ($attributeCodes as $attributeCode) {
+            if (!\is_string($attributeCode) && !\is_int($attributeCode) && !\is_float($attributeCode)) {
+                continue;
+            }
+            $attributeCode = trim((string)$attributeCode);
+            if ($attributeCode === '' || \in_array($attributeCode, $codes, true)) {
+                continue;
+            }
+            $codes[] = $attributeCode;
+        }
+        $stores = [];
+        foreach ($storeIds as $storeId) {
+            $storeId = (int)$storeId;
+            $this->assertStoreId($storeId);
+            if (!\in_array($storeId, $stores, true)) {
+                $stores[] = $storeId;
+            }
+        }
+        if ($entityType === '' || $codes === [] || $value === '' || $stores === []) {
             return [];
         }
 
-        $raw = $this->newModel($websiteId)
+        $query = $this->newModel($websiteId)
             ->clear()
             ->where(AttributeValue::schema_fields_ENTITY_TYPE, $entityType)
-            ->where(AttributeValue::schema_fields_ATTRIBUTE_CODE, $attributeCode)
-            ->where(AttributeValue::schema_fields_STORE_ID, $storeId)
-            ->where(AttributeValue::schema_fields_VALUE_TEXT, $value)
-            ->select()
-            ->fetchArray();
+            ->where(AttributeValue::schema_fields_ATTRIBUTE_CODE, $codes, 'IN')
+            ->where(AttributeValue::schema_fields_STORE_ID, $stores, 'IN')
+            ->where(AttributeValue::schema_fields_VALUE_TEXT, $value);
+        $raw = $query->select()->fetchArray();
 
         $ids = [];
         foreach ($raw as $item) {
@@ -425,11 +465,26 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
             return [];
         }
 
-        // Unfiltered attribute dumps (codes=null) × many entities still blow HARD_LIMIT
-        // even after storefront locale coercion. Auto-chunk so callers cannot OOM/500.
-        if ($attributeCodes === null && \count($entityIds) > 8) {
+        // Coerce storefront locales before chunk sizing so locale-bounded reads can one-shot IN.
+        if ($locales === null && !$allowUnfilteredLocales && self::shouldCoerceStorefrontLocales()) {
+            $locales = self::storefrontReadLocales();
+            if (\class_exists(\Weline\Framework\Runtime\MemDiag::class)) {
+                \Weline\Framework\Runtime\MemDiag::event('eav_list_explicit_rows_storefront_null_coerced', [
+                    'website_id' => $websiteId,
+                    'entity_type' => $entityType,
+                    'entity_ids' => \count($entityIds),
+                    'locales' => $locales,
+                    'request_uri' => self::resolveRequestUri(),
+                ]);
+            }
+        }
+
+        // Unfiltered dumps (codes=null × locales=null) still blow HARD_LIMIT — small chunks.
+        // Locale- or code-bounded reads: one IN shot (entity_id IN ≤256); joins stay ≤1 table.
+        $maxEntitiesPerShot = ($attributeCodes !== null || $locales !== null) ? 256 : 8;
+        if ($attributeCodes === null && \count($entityIds) > $maxEntitiesPerShot) {
             $rows = [];
-            foreach (\array_chunk($entityIds, 8) as $chunk) {
+            foreach (\array_chunk($entityIds, $maxEntitiesPerShot) as $chunk) {
                 foreach ($this->listExplicitRows(
                     $websiteId,
                     $entityType,
@@ -444,19 +499,6 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
             }
 
             return $rows;
-        }
-
-        if ($locales === null && !$allowUnfilteredLocales && self::shouldCoerceStorefrontLocales()) {
-            $locales = self::storefrontReadLocales();
-            if (\class_exists(\Weline\Framework\Runtime\MemDiag::class)) {
-                \Weline\Framework\Runtime\MemDiag::event('eav_list_explicit_rows_storefront_null_coerced', [
-                    'website_id' => $websiteId,
-                    'entity_type' => $entityType,
-                    'entity_ids' => \count($entityIds),
-                    'locales' => $locales,
-                    'request_uri' => self::resolveRequestUri(),
-                ]);
-            }
         }
 
         $localeFilter = null;

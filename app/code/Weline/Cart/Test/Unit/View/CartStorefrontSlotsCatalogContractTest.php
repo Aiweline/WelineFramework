@@ -27,7 +27,7 @@ final class CartStorefrontSlotsCatalogContractTest extends TestCase
         self::assertStringContainsString('"cart-summary-discount"', $src);
         self::assertStringContainsString('"cart-summary-note"', $src);
         self::assertStringContainsString('"cart-summary-credit"', $src);
-        self::assertStringContainsString('cart-coupon', $src);
+        self::assertStringContainsString('checkout-coupon', $src);
         self::assertStringContainsString('order-notice', $src);
         self::assertStringContainsString('b2b-checkout-credit', $src);
     }

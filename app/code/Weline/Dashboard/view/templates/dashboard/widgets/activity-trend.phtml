@@ -1,5 +1,18 @@
 <?php
-/** @widget.source {Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js} */
+/** @widget.source {Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
+ *
+ * @widget.code {activity_trend}
+ * @widget.name {活跃趋势}
+ * @widget.description {后台 Dashboard 默认趋势图部件。}
+ * @widget.type {chart}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-analysis"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-analysis}
+ * @widget.supports {["dashboard-widget","dashboard-slot-analysis","dashboard-chart","dashboard-trend"]}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"default","target_type":"website","slot":"dashboard-analysis","area":"content","sort_order":20,"required":true,"reason":"Dashboard 默认面板需要展示活跃趋势","config":{"dashboard_layout":{"colSpan":5,"rowSpan":2,"sortOrder":20}}}]}
+ */
 $bars = [42, 58, 51, 68, 61, 74, 70];
 $labels = [__('一'), __('二'), __('三'), __('四'), __('五'), __('六'), __('日')];
 $h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');

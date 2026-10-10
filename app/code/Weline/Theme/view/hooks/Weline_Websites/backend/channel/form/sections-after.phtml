@@ -1,0 +1,69 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 15
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\WebsiteThemeBindingService;
+
+$channel = (array)($this->getData('channel') ?? $this->getData('entity') ?? []);
+$hasChannelIdentity = array_key_exists('channel_id', $channel) || $this->getData('channel_id') !== null;
+$channelId = $hasChannelIdentity
+    ? (int)($this->getData('channel_id') ?? $channel['channel_id'] ?? -1)
+    : -1;
+if ($hasChannelIdentity && !array_key_exists('channel_id', $channel)) {
+    $channel['channel_id'] = $channelId;
+}
+if (!array_key_exists('store_id', $channel) && $this->getData('store_id') !== null) {
+    $channel['store_id'] = (int)$this->getData('store_id');
+}
+if (!array_key_exists('website_id', $channel) && $this->getData('website_id') !== null) {
+    $channel['website_id'] = (int)$this->getData('website_id');
+}
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'channel'));
+if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'channel_' . (is_string($hookId) ? $hookId : '');
+}
+$sectionId = $hookId . '_theme_binding';
+$themeFieldId = $sectionId . '_theme_id';
+$versionFieldId = $sectionId . '_version_id';
+
+$summary = [
+    'ok' => false,
+    'theme_id' => 0,
+    'theme_name' => '',
+    'binding_source' => 'none',
+    'inherited' => false,
+    'version_id' => 0,
+    'version_number' => 0,
+    'version_name' => '',
+    'storage_scope' => '',
+    'themes' => [],
+    'versions' => [],
+];
+
+try {
+    /** @var WebsiteThemeBindingService $bindings */
+    $bindings = ObjectManager::getInstance(WebsiteThemeBindingService::class);
+    if ($hasChannelIdentity && $channelId >= 0 && array_key_exists('code', $channel)) {
+        $summary = $bindings->summarizeChannel($channel);
+    } else {
+        $summary['themes'] = $bindings->listFrontendThemes();
+    }
+} catch (\Throwable) {
+}
+
+echo $this->fetch('Weline_Theme::templates/backend/partials/scope-theme-binding-section.phtml', [
+    'sectionId' => $sectionId,
+    'themeFieldId' => $themeFieldId,
+    'versionFieldId' => $versionFieldId,
+    'hasIdentity' => $hasChannelIdentity && $channelId >= 0 && array_key_exists('code', $channel),
+    'pendingHint' => (string)__('请先保存渠道后，再为本渠选择店面主题。'),
+    'introHint' => (string)__('本渠店面主题写入渠道范围应用引用；未配置时继承商店/网站或 Theme 默认。'),
+    'inheritedHint' => (string)__('当前显示为继承上级或 Theme 默认；保存时选择主题将写入本渠专属应用引用。'),
+    'ownHint' => (string)__('本渠已配置专属主题应用引用。'),
+    'emptyVersionHint' => (string)__('本渠范围尚无已发布主题版本；可在主题编辑器发布后再选。'),
+    'ownBindingSource' => 'channel',
+    'summary' => $summary,
+]);

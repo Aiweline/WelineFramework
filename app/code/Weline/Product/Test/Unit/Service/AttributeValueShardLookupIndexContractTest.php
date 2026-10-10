@@ -27,7 +27,7 @@ final class AttributeValueShardLookupIndexContractTest extends TestCase
     }
 
     /**
-     * findEntityIdsByAttributeValue() narrows by attribute before comparing value_text.
+     * findEntityIdsByAttributeValues() narrows by attribute_code (IN) before comparing value_text.
      */
     public function testAttributeReverseLookupIndexExcludesUnboundedText(): void
     {

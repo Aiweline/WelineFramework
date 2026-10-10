@@ -60,7 +60,7 @@ final class MiniCartFooterExtrasNativeOwnerBakeContractTest extends TestCase
             'node_uid' => 'coupon',
             'widget_module' => 'Weline_Marketing',
             'widget_type' => 'content',
-            'widget_code' => 'mini-cart-coupon',
+            'widget_code' => 'checkout-coupon',
             'slot_id' => 'footer-extras',
             'source' => 'default_injection',
             'config' => [],
@@ -95,7 +95,7 @@ final class MiniCartFooterExtrasNativeOwnerBakeContractTest extends TestCase
             'coupon' => $coupon,
             'notice' => $notice,
         ]);
-        self::assertStringContainsString("'widget_code' => 'mini-cart-coupon'", $compiled);
+        self::assertStringContainsString("'widget_code' => 'checkout-coupon'", $compiled);
         self::assertStringContainsString("'widget_code' => 'order-notice'", $compiled);
         self::assertStringContainsString("'footer-extras'", $compiled);
         self::assertGreaterThanOrEqual(3, substr_count($compiled, 'renderResolved'));
@@ -133,7 +133,7 @@ final class MiniCartFooterExtrasNativeOwnerBakeContractTest extends TestCase
             'node_uid' => 'coupon',
             'widget_module' => 'Weline_Marketing',
             'widget_type' => 'content',
-            'widget_code' => 'mini-cart-coupon',
+            'widget_code' => 'checkout-coupon',
             'slot_id' => 'footer-extras',
             'source' => 'default_injection',
             'parent_uid' => 'other-header-mini-cart',
@@ -149,7 +149,7 @@ final class MiniCartFooterExtrasNativeOwnerBakeContractTest extends TestCase
             if (($node['widget_code'] ?? '') === 'mini-cart-icon') {
                 $ownerUid = (string)$uid;
             }
-            if (($node['widget_code'] ?? '') === 'mini-cart-coupon' && (string)($node['parent_uid'] ?? '') !== 'other-header-mini-cart') {
+            if (($node['widget_code'] ?? '') === 'checkout-coupon' && (string)($node['parent_uid'] ?? '') !== 'other-header-mini-cart') {
                 $cloneUid = (string)$uid;
             }
         }
@@ -160,7 +160,7 @@ final class MiniCartFooterExtrasNativeOwnerBakeContractTest extends TestCase
         self::assertSame('other-header-mini-cart', (string)($nodes['coupon']['parent_uid'] ?? ''));
 
         $compiled = $compiler->compile($source, ['coupon' => $coupon]);
-        self::assertStringContainsString("'widget_code' => 'mini-cart-coupon'", $compiled);
+        self::assertStringContainsString("'widget_code' => 'checkout-coupon'", $compiled);
         self::assertStringContainsString("'footer-extras'", $compiled);
     }
 }

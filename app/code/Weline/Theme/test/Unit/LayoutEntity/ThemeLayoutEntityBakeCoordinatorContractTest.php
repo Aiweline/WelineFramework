@@ -60,7 +60,7 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         $nodes = [
             'coupon' => [
                 'node_uid' => 'coupon',
-                'widget_code' => 'mini-cart-coupon',
+                'widget_code' => 'checkout-coupon',
                 'slot_id' => 'footer-extras',
                 'area' => 'footer',
             ],

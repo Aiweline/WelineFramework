@@ -1,0 +1,66 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 15
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\WebsiteThemeBindingService;
+
+$store = (array)($this->getData('store') ?? $this->getData('entity') ?? []);
+$hasStoreIdentity = array_key_exists('store_id', $store) || $this->getData('store_id') !== null;
+$storeId = $hasStoreIdentity
+    ? (int)($this->getData('store_id') ?? $store['store_id'] ?? -1)
+    : -1;
+if ($hasStoreIdentity && !array_key_exists('store_id', $store)) {
+    $store['store_id'] = $storeId;
+}
+if (!array_key_exists('website_id', $store) && $this->getData('website_id') !== null) {
+    $store['website_id'] = (int)$this->getData('website_id');
+}
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'store'));
+if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'store_' . (is_string($hookId) ? $hookId : '');
+}
+$sectionId = $hookId . '_theme_binding';
+$themeFieldId = $sectionId . '_theme_id';
+$versionFieldId = $sectionId . '_version_id';
+
+$summary = [
+    'ok' => false,
+    'theme_id' => 0,
+    'theme_name' => '',
+    'binding_source' => 'none',
+    'inherited' => false,
+    'version_id' => 0,
+    'version_number' => 0,
+    'version_name' => '',
+    'storage_scope' => '',
+    'themes' => [],
+    'versions' => [],
+];
+
+try {
+    /** @var WebsiteThemeBindingService $bindings */
+    $bindings = ObjectManager::getInstance(WebsiteThemeBindingService::class);
+    if ($hasStoreIdentity && $storeId >= 0 && array_key_exists('code', $store)) {
+        $summary = $bindings->summarizeStore($store);
+    } else {
+        $summary['themes'] = $bindings->listFrontendThemes();
+    }
+} catch (\Throwable) {
+}
+
+echo $this->fetch('Weline_Theme::templates/backend/partials/scope-theme-binding-section.phtml', [
+    'sectionId' => $sectionId,
+    'themeFieldId' => $themeFieldId,
+    'versionFieldId' => $versionFieldId,
+    'hasIdentity' => $hasStoreIdentity && $storeId >= 0 && array_key_exists('code', $store),
+    'pendingHint' => (string)__('请先保存商店后，再为本店选择店面主题。'),
+    'introHint' => (string)__('本店店面主题写入商店范围应用引用；未配置时继承网站或 Theme 默认。'),
+    'inheritedHint' => (string)__('当前显示为继承上级或 Theme 默认；保存时选择主题将写入本店专属应用引用。'),
+    'ownHint' => (string)__('本店已配置专属主题应用引用。'),
+    'emptyVersionHint' => (string)__('本店范围尚无已发布主题版本；可在主题编辑器发布后再选。'),
+    'ownBindingSource' => 'store',
+    'summary' => $summary,
+]);

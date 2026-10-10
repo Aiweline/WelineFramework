@@ -11,7 +11,11 @@
  * @widget.position {["sidebar"]}
  * @widget.page_layouts {["category","search","products"]}
  * @widget.supports {["layout-category-filters","layout-products-filters","category-filters","attribute-filter","price-filter"]}
- * @widget.default_injections {[{"layout_type":"category","layout_option":"default","slot":"category-filters","area":"sidebar","sort_order":0,"required":true,"reason":"分类页默认注入 Filters 筛选部件"},{"layout_type":"products","layout_option":"default","slot":"list-filters","area":"sidebar","sort_order":0,"required":true,"reason":"商品列表默认注入 Filters 筛选部件"}]}
+ * @widget.default_injections {[{"layout_type":"category","layout_option":"default","slot":"category-filters","area":"sidebar","sort_order":0,"required":true,"reason":"分类页默认在左侧筛选槽展示 Filters 部件（含属性筛选）"},{"layout_type":"products","layout_option":"default","slot":"list-filters","area":"sidebar","sort_order":0,"required":true,"reason":"商品列表默认在筛选槽展示 Filters 部件"}]}
+ *
+ * @widget.slot {category-filters}
+ *
+ * @widget.placement {injection}
  */
 
 use Weline\Filters\Service\StorefrontFilterPanelService;

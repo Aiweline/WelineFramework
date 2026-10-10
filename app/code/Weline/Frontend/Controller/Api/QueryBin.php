@@ -234,50 +234,6 @@ class QueryBin extends FrontendRestController
             'service_profile' => \is_array($serviceProfile) ? $serviceProfile : [],
             'provider_profile' => \is_array($providerProfile) ? $providerProfile : [],
         ]);
-        // #region agent log
-        if ($elapsedMs >= 200.0) {
-            try {
-                $svc = \is_array($serviceProfile) ? $serviceProfile : [];
-                \usort($svc, static fn(array $a, array $b): int => ((float)($b['duration_ms'] ?? 0)) <=> ((float)($a['duration_ms'] ?? 0)));
-                $svcTop = [];
-                foreach (\array_slice($svc, 0, 8) as $phase) {
-                    if (!\is_array($phase)) {
-                        continue;
-                    }
-                    $meta = \is_array($phase['meta'] ?? null) ? $phase['meta'] : [];
-                    $svcTop[] = [
-                        'name' => $phase['name'] ?? null,
-                        'duration_ms' => $phase['duration_ms'] ?? null,
-                        'provider' => $meta['provider'] ?? ($meta['provider_class'] ?? null),
-                        'operation' => $meta['operation'] ?? null,
-                    ];
-                }
-                $payloadLog = [
-                    'sessionId' => '8f7f40',
-                    'runId' => 'cold-lag-pre',
-                    'hypothesisId' => 'F',
-                    'location' => 'QueryBin.php:execute',
-                    'message' => 'slow query-bin call',
-                    'data' => [
-                        'provider' => $requestSummary['provider'] ?? null,
-                        'operation' => $requestSummary['operation'] ?? null,
-                        'type' => $requestSummary['type'] ?? null,
-                        'status' => $statusCode,
-                        'duration_ms' => $elapsedMs,
-                        'request_id' => $requestId,
-                        'top_service' => $svcTop,
-                    ],
-                    'timestamp' => (int)\round(\microtime(true) * 1000),
-                ];
-                @\file_put_contents(
-                    '/Users/weline/Project/Official/框架/.cursor/debug-8f7f40.log',
-                    \json_encode($payloadLog, \JSON_UNESCAPED_UNICODE) . "\n",
-                    \FILE_APPEND | \LOCK_EX
-                );
-            } catch (\Throwable) {
-            }
-        }
-        // #endregion
         $this->logSlowQueryBin($requestId, $requestSummary, $statusCode, $elapsedMs);
 
         $responsePayload = \is_array($payload) ? $payload : [

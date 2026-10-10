@@ -187,7 +187,7 @@ final class ThemeLayoutEntityRequestSolidifyGate
                 $slot = (string)($injection['slot'] ?? '');
                 $isMiniCartCritical = $layout === 'mini-cart'
                     || $slot === 'footer-extras'
-                    || $code === 'mini-cart-coupon'
+                    || $code === 'checkout-coupon'
                     || $code === 'order-notice';
                 $isFiltersCritical = $code === 'category-filters'
                     || $slot === 'list-filters'
@@ -285,7 +285,10 @@ final class ThemeLayoutEntityRequestSolidifyGate
             }
             $anyComplete = false;
             foreach ($haystacks as $blob) {
-                $hasCoupon = str_contains($blob, 'mini-cart-coupon') || str_contains($blob, "widget_code' => 'mini-cart-coupon");
+                $hasCoupon = str_contains($blob, 'checkout-coupon')
+                    || str_contains($blob, "widget_code' => 'checkout-coupon")
+                    || str_contains($blob, 'mini-cart-coupon')
+                    || str_contains($blob, "widget_code' => 'mini-cart-coupon");
                 $hasNotice = str_contains($blob, 'order-notice') || str_contains($blob, "widget_code' => 'order-notice");
                 if ($hasCoupon && $hasNotice) {
                     $anyComplete = true;

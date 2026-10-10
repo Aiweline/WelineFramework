@@ -18,6 +18,9 @@ final class StructureCacheKeyGateContractTest extends TestCase
         $nav = StorefrontThemeCacheCoordinator::headerNavigationPolicy();
 
         self::assertContains('lang', $chrome->vary);
+        // Chrome shell is lang-only; currency-switcher islands hydrate live.
+        self::assertSame(['lang'], $chrome->vary);
+        self::assertNotContains('currency', $chrome->vary);
         self::assertContains('lang', $nav->vary);
     }
 

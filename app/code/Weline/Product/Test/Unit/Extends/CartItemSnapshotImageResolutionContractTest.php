@@ -40,4 +40,17 @@ final class CartItemSnapshotImageResolutionContractTest extends TestCase
         self::assertStringContainsString("\$eavSwatches['colors']", $source);
         self::assertStringContainsString('swatch_image', $source);
     }
+
+    public function testSnapshotAttributesPassCardCodesToAvoidUnfilteredChunkReads(): void
+    {
+        $path = dirname(__DIR__, 3)
+            . '/extends/module/Weline_Cart/CartItemSnapshotProvider/ProductCatalogCartItemSnapshotResolver.php';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString("\$cardAttributeCodes = ['name', 'product_type', 'quote_only', 'slug', 'source_slug']", $source);
+        self::assertStringContainsString('$cardAttributeCodes', $source);
+        self::assertMatchesRegularExpression(
+            '/listExplicitRows\(\s*\$websiteId,\s*\'product\',\s*\$productIds,\s*\$storeIds,\s*\$attributeLocales,\s*\$cardAttributeCodes,/s',
+            $source,
+        );
+    }
 }

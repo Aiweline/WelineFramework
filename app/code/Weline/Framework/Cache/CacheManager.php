@@ -81,10 +81,32 @@ class CacheManager implements CacheManagerInterface, ProcessSharedInterface
             'durable' => true,
             'tip' => '路由/全页缓存索引（豁免 WLS 内存劫持）',
         ],
-        'config' => ['ttl' => 0, 'permanent' => true, 'tip' => '配置缓存'],
+        // Config / view / phrase / i18n / currency: storefront scope switches
+        // (lang/currency/website) rely on these bags surviving across workers.
+        // Process L1 keeps only one heavy locale (phrase_heavy_locale_resident_max=1);
+        // if shared L2 is hijacked to wls_memory and set() returns false, every
+        // language switch reloads dictionaries from disk/DB (timing: i18n.phrase.*).
+        'config' => [
+            'ttl' => 0,
+            'permanent' => true,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '配置缓存（豁免 WLS 内存劫持）',
+        ],
         'database' => ['ttl' => 1800, 'tip' => '数据库缓存'],
-        'view' => ['ttl' => 3600, 'tip' => '视图缓存'],
-        'phrase' => ['ttl' => 86400, 'permanent' => true, 'tip' => '翻译缓存'],
+        'view' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '视图缓存（豁免 WLS 内存劫持）',
+        ],
+        'phrase' => [
+            'ttl' => 86400,
+            'permanent' => true,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '翻译词典袋（豁免 WLS 内存劫持；换语言冷启动主因）',
+        ],
         'plugin' => ['ttl' => 86400, 'permanent' => true, 'tip' => '插件缓存'],
         'event' => ['ttl' => 0, 'permanent' => true, 'tip' => '事件缓存'],
         'hook' => ['ttl' => 86400, 'tip' => '钩子缓存'],
@@ -93,21 +115,68 @@ class CacheManager implements CacheManagerInterface, ProcessSharedInterface
         'request' => ['ttl' => 300, 'tip' => '请求缓存', 'jitter' => 0.0],
         'object' => ['ttl' => 86400, 'permanent' => true, 'tip' => '对象缓存'],
         'acl' => ['ttl' => 3600, 'tip' => '权限缓存'],
-        'currency' => ['ttl' => 3600, 'tip' => '货币缓存'],
-        'i18n' => ['ttl' => 86400, 'permanent' => true, 'tip' => '国际化缓存'],
-        'theme' => ['ttl' => 3600, 'tip' => '主题缓存'],
+        'currency' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '货币装配缓存（豁免 WLS 内存劫持；换货币冷启动）',
+        ],
+        'i18n' => [
+            'ttl' => 86400,
+            'permanent' => true,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '国际化目录/开关器缓存（豁免 WLS 内存劫持）',
+        ],
+        // Theme meta HotCache bags (prefetch/meta_list) — same WLS hijack failure mode.
+        'theme' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '主题/店面 meta HotCache（豁免 WLS 内存劫持）',
+        ],
         'url_rewrite' => ['ttl' => 86400, 'tip' => 'URL重写缓存'],
-        'website' => ['ttl' => 3600, 'tip' => '网站缓存'],
+        // Website scope catalog HotCache (sales_channel_catalog etc.).
+        'website' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '网站范围目录 HotCache（豁免 WLS 内存劫持）',
+        ],
         'module_router' => ['ttl' => 86400, 'permanent' => true, 'tip' => '模块路由缓存'],
         'taglib' => ['ttl' => 86400, 'permanent' => true, 'tip' => '标签库缓存'],
-        'eav' => ['ttl' => 1800, 'tip' => 'EAV缓存'],
+        // Category filter/label HotCache — locale switch on PLP rebuilds facets
+        // when this pool is hijacked and set() fails.
+        'eav' => [
+            'ttl' => 1800,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => 'EAV/店面筛选标签 HotCache（豁免 WLS 内存劫持）',
+        ],
         'queue' => ['ttl' => 300, 'tip' => '队列缓存', 'jitter' => 0.0],
-        'system_config' => ['ttl' => 3600, 'tip' => '系统配置缓存'],
+        'system_config' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '系统配置缓存（豁免 WLS 内存劫持；换站冷启动）',
+        ],
+        'theme_layout' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '布局实体配置 HotCache（豁免 WLS 内存劫持）',
+        ],
         'payment' => ['ttl' => 600, 'tip' => '支付方式/范围覆盖只读装配'],
         'tax' => ['ttl' => 600, 'tip' => '税规则/范围 flags 只读装配'],
         'shipping' => ['ttl' => 600, 'tip' => '承运/禁运/目的地/仓源只读装配'],
         'seo' => ['ttl' => 600, 'tip' => 'SEO protocol 只读装配'],
-        'product' => ['ttl' => 1800, 'tip' => '产品缓存'],
+        // Catalog HotCache (StorefrontCatalogViewService etc.) must stick across workers.
+        'product' => [
+            'ttl' => 1800,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '产品/店面目录 HotCache（豁免 WLS 内存劫持）',
+        ],
         'file_manager' => ['ttl' => 86400, 'permanent' => true, 'tip' => '文件管理器缓存'],
         'editor' => ['ttl' => 86400, 'permanent' => true, 'tip' => '编辑器缓存'],
         'api_doc' => ['ttl' => 3600, 'tip' => 'API文档缓存'],
@@ -138,6 +207,92 @@ class CacheManager implements CacheManagerInterface, ProcessSharedInterface
             'hijack_exempt' => true,
             'durable' => true,
             'tip' => '购物车持久化（禁用 WLS file→wls_memory 劫持）',
+        ],
+        // Theme HotCache bags (chrome/head/card/nav/path). Same failure mode as
+        // router/cart: WLS file→wls_memory hijack + WlsMemoryAdapter::set()=false
+        // → shared_write looks successful but L2 never sticks → every locale cold
+        // rebuilds storefront.cache.builder (timing: same scoped_key_hash, write_fresh
+        // both times, perpetual miss).
+        'weline_theme_storefront_chrome' => [
+            'ttl' => 300,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '店面 chrome/head HotCache（豁免 WLS 内存劫持）',
+        ],
+        'weline_theme_storefront_product_card_html' => [
+            'ttl' => 1800,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '店面商品卡 HTML HotCache（豁免 WLS 内存劫持）',
+        ],
+        'weline_theme_storefront_header_nav' => [
+            'ttl' => 600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '店面顶栏导航 HotCache（豁免 WLS 内存劫持）',
+        ],
+        'weline_theme_path_resolve' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '主题路径解析 HotCache（豁免 WLS 内存劫持）',
+        ],
+        'weline_theme_area_directories' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '主题 area 目录 HotCache（豁免 WLS 内存劫持）',
+        ],
+        'weline_theme_published_snapshot' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '已发布主题快照 HotCache（豁免 WLS 内存劫持）',
+        ],
+        'weline_theme_published_layout_structure' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '已发布布局结构 HotCache（豁免 WLS 内存劫持）',
+        ],
+        'weline_theme_layout_entity_published_projection' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '布局实体已发布投影 HotCache（豁免 WLS 内存劫持）',
+        ],
+        'weline_product_storefront_category_tree' => [
+            'ttl' => 1800,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '店面分类树 HotCache（豁免 WLS 内存劫持）',
+        ],
+        // Blog public snapshots — random jump into /blog + locale switch.
+        'blog' => [
+            'ttl' => 300,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '博客公开读快照 HotCache（豁免 WLS 内存劫持）',
+        ],
+        // Search hot-words bag (results still rebuild; hot words must stick).
+        'search' => [
+            'ttl' => 300,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '搜索热词 HotCache（豁免 WLS 内存劫持）',
+        ],
+        // PDP buyer-looks gallery HTML/meta.
+        'review.buyer_looks' => [
+            'ttl' => 600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '买家秀画廊 HotCache（豁免 WLS 内存劫持）',
+        ],
+        'weline_widget_ai_registry' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => 'AI 部件注册表 HotCache（豁免 WLS 内存劫持）',
         ],
         'default' => ['ttl' => 1800, 'tip' => '默认缓存'],
     ];

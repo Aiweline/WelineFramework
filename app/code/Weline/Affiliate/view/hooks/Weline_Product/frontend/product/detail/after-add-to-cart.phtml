@@ -1,6 +1,8 @@
 <?php
 /**
  * Affiliate share in PDP buybox (after purchase CTAs), collapsed by default.
+ * Guest-safe SSR shell; affiliate identity/commission hydrated by affiliateProductShare JS.
+ * Output cache: TemplateCachePolicyProvider (context=static, ttl=300).
  *
  * @hook-priority 180
  * @hook-sort-order 0
@@ -13,12 +15,19 @@ use Weline\Framework\Runtime\RequestContext;
 
 $product = (array) ($this->getData('product') ?? []);
 $offer = (array) ($this->getData('storefront_offer') ?? []);
+$afterAddBag = null;
+if (class_exists(\Weline\Product\Helper\StorefrontPdpBuyBoxBag::class)
+    && \Weline\Product\Helper\StorefrontPdpBuyBoxBag::hasKey('after_add')
+) {
+    $afterAddBag = \Weline\Product\Helper\StorefrontPdpBuyBoxBag::get('after_add', null);
+    $afterAddBag = is_array($afterAddBag) ? $afterAddBag : null;
+}
 // PDP Theme widgets unsetData('product'); listing quick-add often has request product_id.
-// Prefer storefront_offer / request-scoped resolver so detail and modal stay in sync.
+// Prefer buy-box bag / seed so detail and modal stay in sync without cold catalog.
 if ($offer === [] && class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
     $offer = \Weline\Product\Helper\StorefrontOfferResolver::currentOffer();
 }
-if ($offer === [] && class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
+if ($offer === [] && $afterAddBag === null && class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
     try {
         $offer = \Weline\Product\Helper\StorefrontOfferResolver::resolve($this);
     } catch (\Throwable) {
@@ -26,7 +35,8 @@ if ($offer === [] && class_exists(\Weline\Product\Helper\StorefrontOfferResolver
     }
 }
 $productId = (int) (
-    $product['product_id']
+    (is_array($afterAddBag) ? ($afterAddBag['product_id'] ?? null) : null)
+    ?? $product['product_id']
     ?? $offer['product_id']
     ?? $this->getData('product_id')
     ?? 0
@@ -38,12 +48,16 @@ if ($productId <= 0) {
 $websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
 $storeId = max(0, (int)RequestContext::getWelineStoreId());
 $shareEnabled = true;
-try {
-    /** @var AffiliateStorefrontPolicy $policy */
-    $policy = ObjectManager::getInstance(AffiliateStorefrontPolicy::class);
-    $shareEnabled = $policy->isProductShareEnabled($websiteId, $storeId);
-} catch (\Throwable) {
-    $shareEnabled = true;
+if ($afterAddBag !== null && array_key_exists('share_enabled', $afterAddBag)) {
+    $shareEnabled = !empty($afterAddBag['share_enabled']);
+} else {
+    try {
+        /** @var AffiliateStorefrontPolicy $policy */
+        $policy = ObjectManager::getInstance(AffiliateStorefrontPolicy::class);
+        $shareEnabled = $policy->isProductShareEnabled($websiteId, $storeId);
+    } catch (\Throwable) {
+        $shareEnabled = true;
+    }
 }
 if (!$shareEnabled) {
     return;
@@ -65,7 +79,13 @@ try {
 }
 $freeShareUrl = '';
 try {
-    $slug = strtolower(trim((string) ($offer['slug'] ?? $product['url_key'] ?? $product['slug'] ?? '')));
+    $slug = strtolower(trim((string) (
+        (is_array($afterAddBag) ? ($afterAddBag['slug'] ?? null) : null)
+        ?? $offer['slug']
+        ?? $product['url_key']
+        ?? $product['slug']
+        ?? ''
+    )));
     if ($slug !== '') {
         $freeShareUrl = (string) $this->getUrl('product/' . $slug);
     }

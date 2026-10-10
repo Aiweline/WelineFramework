@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_B2B',
-    'version' => '2.6.123',
+    'version' => '2.6.126',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -40,5 +40,7 @@ return [
             => \Weline\B2B\Service\B2BPaymentAssetPolicyProvider::class,
         \Weline\Product\Api\StorefrontCatalogVisibilityFilterInterface::class
             => \Weline\B2B\Service\B2BStorefrontCatalogVisibilityFilter::class,
+        \Weline\Checkout\Api\StorefrontMoneySummaryPolicyInterface::class
+            => \Weline\B2B\Service\TobStorefrontMoneySummaryPolicy::class,
     ],
 ];

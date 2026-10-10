@@ -11,6 +11,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Helper\StorefrontCampaignEntry;
 use Weline\Product\Helper\StorefrontOfferResolver;
 use Weline\Product\Helper\StorefrontPageAssignBag;
+use Weline\Product\Helper\StorefrontPdpBuyBoxBag;
 use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Service\ProductStorefrontBreadcrumbBuilder;
 use Weline\Product\Service\StorefrontCatalogViewService;
@@ -243,6 +244,8 @@ final class Detail extends FrontendController
             'variant_catalog' => $variantCatalog,
             'page_title' => $seoTitle,
         ]);
+        // Buy-box nested slots + product-info parent: one request bag, slots read-only.
+        StorefrontPdpBuyBoxBag::fillFromDisplayOffer($displayOffer);
 
         $productIdForView = max(0, (int)($displayOffer['product_id'] ?? 0));
         if ($productIdForView > 0) {

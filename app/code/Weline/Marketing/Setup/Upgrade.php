@@ -20,7 +20,7 @@ use Weline\Theme\Service\DefaultLayoutSeeder;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
 
-/** Ensure rule local-description table exists for list joins; seed cart coupon slot. */
+/** Ensure rule local-description table exists; unify coupon widget codes; seed coupon slots. */
 class Upgrade implements UpgradeInterface
 {
     public function setup(Setup $setup, Context $context): void
@@ -31,7 +31,8 @@ class Upgrade implements UpgradeInterface
         $modelSetup->putModel($local);
         $local->setup($modelSetup, $context);
 
-        $this->seedCartCouponSlot();
+        $this->remapLegacyCouponWidgetCodes();
+        $this->seedCouponSlots();
         $this->migrateScheduleWindowsToUtc();
         $this->syncMailTemplatesToGlobalScope();
     }
@@ -62,7 +63,58 @@ class Upgrade implements UpgradeInterface
         }
     }
 
-    private function seedCartCouponSlot(): void
+    /**
+     * cart-coupon / mini-cart-coupon → checkout-coupon（同一部件三处注入）。
+     */
+    private function remapLegacyCouponWidgetCodes(): void
+    {
+        try {
+            /** @var ThemeLayout $layoutModel */
+            $layoutModel = ObjectManager::getInstance(ThemeLayout::class);
+            foreach (['cart-coupon', 'mini-cart-coupon'] as $legacyCode) {
+                $rows = $layoutModel->reset()
+                    ->where(ThemeLayout::schema_fields_WIDGET_MODULE, 'Weline_Marketing')
+                    ->where(ThemeLayout::schema_fields_WIDGET_CODE, $legacyCode)
+                    ->select()
+                    ->fetchArray();
+                if (!is_array($rows) || $rows === []) {
+                    continue;
+                }
+                foreach ($rows as $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $id = (int)($row[ThemeLayout::schema_fields_ID] ?? 0);
+                    if ($id <= 0) {
+                        continue;
+                    }
+                    /** @var ThemeLayout $rowModel */
+                    $rowModel = ObjectManager::getInstance(ThemeLayout::class);
+                    $rowModel->load($id);
+                    if ($rowModel->getLayoutId() !== $id) {
+                        continue;
+                    }
+                    $rowModel->setWidgetCode('checkout-coupon');
+                    $config = $rowModel->getWidgetConfig();
+                    if ($legacyCode === 'mini-cart-coupon') {
+                        $config['compact'] = true;
+                        if (!isset($config['title']) || trim((string)$config['title']) === '') {
+                            $config['title'] = '优惠券';
+                        }
+                    }
+                    $rowModel->setWidgetConfig($config);
+                    $rowModel->save();
+                }
+            }
+        } catch (\Throwable $e) {
+            throw new Exception(__(
+                '优惠券部件 code 迁移失败：%{1}',
+                [$e->getMessage()]
+            ), 0, $e);
+        }
+    }
+
+    private function seedCouponSlots(): void
     {
         try {
             /** @var WidgetDefaultInjectionService $injectionService */
@@ -84,6 +136,12 @@ class Upgrade implements UpgradeInterface
                 'target_id' => 0,
             ];
 
+            $targets = [
+                ['layout' => 'cart', 'slot' => 'cart-summary-discount', 'reason' => 'cart coupon slot default injection publish'],
+                ['layout' => 'checkout', 'slot' => 'checkout-summary-discount', 'reason' => 'checkout coupon slot default injection publish'],
+                ['layout' => 'mini-cart', 'slot' => 'footer-extras', 'reason' => 'mini-cart coupon slot default injection publish'],
+            ];
+
             foreach ($themes as $themeRow) {
                 if (!is_array($themeRow)) {
                     continue;
@@ -93,35 +151,37 @@ class Upgrade implements UpgradeInterface
                     continue;
                 }
 
-                $seeder->seedDefaultLayout($themeId, 'cart', false);
+                foreach ($targets as $target) {
+                    $seeder->seedDefaultLayout($themeId, $target['layout'], false);
 
-                foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
-                    $injectionService->initSlotDefaultInjections(
+                    foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
+                        $injectionService->initSlotDefaultInjections(
+                            $themeId,
+                            $target['layout'],
+                            $identity,
+                            $target['slot'],
+                            PreviewContextService::AREA_FRONTEND,
+                            $status,
+                        );
+                    }
+
+                    /** @var \Weline\Theme\Service\ThemeLayoutService $layoutService */
+                    $layoutService = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class);
+                    $layoutService->publishLayout(
                         $themeId,
-                        'cart',
+                        $target['layout'],
                         $identity,
-                        'cart-summary-discount',
-                        PreviewContextService::AREA_FRONTEND,
-                        $status,
+                        true,
+                        [
+                            'reason' => $target['reason'],
+                            'actor' => 'system:Weline_Marketing:Upgrade',
+                        ],
                     );
                 }
-
-                /** @var \Weline\Theme\Service\ThemeLayoutService $layoutService */
-                $layoutService = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class);
-                $layoutService->publishLayout(
-                    $themeId,
-                    'cart',
-                    $identity,
-                    true,
-                    [
-                        'reason' => 'cart-coupon slot default injection publish',
-                        'actor' => 'system:Weline_Marketing:Upgrade',
-                    ],
-                );
             }
         } catch (\Throwable $e) {
             throw new Exception(__(
-                '购物车优惠券槽默认部件迁移失败：%{1}',
+                '优惠券槽默认部件迁移失败：%{1}',
                 [$e->getMessage()]
             ), 0, $e);
         }

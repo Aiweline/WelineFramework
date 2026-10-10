@@ -64,12 +64,35 @@ async function main() {
     await page.goto(FRONTEND + PDP, { waitUntil: 'domcontentloaded' });
     result.steps.push('pdp_loaded');
     await page.waitForFunction(() => !!(window.Weline && window.Weline.Api), null, { timeout: 60000 });
-    await page.waitForSelector('[data-helppay-quick-pay], [data-testid="product-quick-pay"]', { timeout: 60000 });
-    await page.locator('[data-helppay-quick-pay], [data-testid="product-quick-pay"]').first().click();
+    const quickBtn = page.locator('[data-testid="product-quick-pay"][data-helppay-quick-pay]').first();
+    await quickBtn.waitFor({ state: 'visible', timeout: 60000 });
+    await quickBtn.scrollIntoViewIfNeeded();
+    // Widget is lazy (`data-weline-load=helpPayShare`); wait until click wiring exists.
+    await page.waitForFunction(() => {
+      const scripts = Array.from(document.scripts).some((s) => /helppay-share/i.test(String(s.src || '')));
+      const wrap = document.querySelector('[data-weline-load="helpPayShare"], [data-helppay-placement="product-quick-pay"]');
+      return scripts || !!(wrap && wrap.querySelector('[data-helppay-quick-pay]'));
+    }, null, { timeout: 60000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    let dialogVisible = false;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await quickBtn.click({ force: true }).catch(() => {});
+      const dlg = page.locator('[data-testid="help-pay-dialog"]').first();
+      try {
+        await dlg.waitFor({ state: 'visible', timeout: 8000 });
+        dialogVisible = true;
+        break;
+      } catch (_e) {
+        await page.waitForTimeout(1000);
+      }
+    }
+    if (!dialogVisible) {
+      throw new Error('help_pay_dialog_not_opened');
+    }
     result.steps.push('quick_opened');
 
-    const dialog = page.locator('[data-testid="help-pay-dialog"], [data-helppay-dialog]').first();
-    await dialog.waitFor({ state: 'visible', timeout: 30000 });
+    const dialog = page.locator('[data-testid="help-pay-dialog"]').first();
+    await dialog.waitFor({ state: 'visible', timeout: 10000 });
 
     // Address step: ThemeAddress cascade + visible fields (country is hidden cascade).
     await page.waitForSelector('[data-shipping-checkout-address]', { timeout: 30000 });
@@ -161,6 +184,27 @@ async function main() {
     const qPage = await context.newPage();
     await qPage.goto(payUrl, { waitUntil: 'domcontentloaded' });
     result.steps.push('q_page_opened');
+    // /q/ pay page: clear all Host-scope cookies then reload for a clean pair.
+    const scopePrefix = '__Host-Weline-Worker-Scope-Bootstrap-';
+    for (const cookie of (await context.cookies()).filter((c) => String(c.name || '').startsWith(scopePrefix))) {
+      await context.clearCookies({
+        name: cookie.name,
+        domain: cookie.domain,
+        path: cookie.path || '/',
+      }).catch(() => {});
+    }
+    await qPage.reload({ waitUntil: 'domcontentloaded' });
+    result.steps.push('q_reloaded_for_scope');
+    await qPage.waitForFunction(() => {
+      const meta = document.querySelector('meta[name="weline-worker-scope-bootstrap"]');
+      return !!(window.Weline && window.Weline.Api && meta && String(meta.getAttribute('content') || '').trim());
+    }, null, { timeout: 60000 });
+    await qPage.evaluate(async () => {
+      if (window.Weline && Weline.Api && typeof Weline.Api.bootstrapScope === 'function') {
+        await Weline.Api.bootstrapScope();
+      }
+    });
+    result.steps.push('q_scope_warmed');
     await qPage.waitForSelector('[data-testid="quick-pay-submit"], [data-helppay-quick-self-pay]', { timeout: 30000 });
 
     const started = await qPage.evaluate(async () => {

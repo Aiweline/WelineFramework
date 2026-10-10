@@ -2,6 +2,20 @@
 /**
  * @widget.source {Weline_Visitor::css/widgets/widget-pixel-top-events.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * Dashboard Widget: 热门像素事件
+ *
+ * @widget.code {pixel_top_events}
+ * @widget.name {热门像素事件}
+ * @widget.description {展示当前范围内触发最多的像素事件。}
+ * @widget.type {table}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-detail"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-detail}
+ * @widget.supports {["dashboard-widget","dashboard-slot-detail","dashboard-table","dashboard-list"]}
+ * @param range {default="7d",type="select",label="统计范围",options={"today":"今日","7d":"近 7 天","30d":"近 30 天","90d":"近 90 天"}}
+ * @param website_id {default="",type="string",label="站点 ID",description="留空时跟随当前 Dashboard 站点。"}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"weline_visitor_event_statistics","target_type":"website","slot":"dashboard-detail","area":"content","sort_order":70,"required":true,"reason":"安装访客统计后自动展示热门像素事件","config":{"dashboard_layout":{"colSpan":9,"rowSpan":1,"sortOrder":70}}}]}
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
 $config = [

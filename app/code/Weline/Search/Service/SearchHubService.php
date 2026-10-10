@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Search\Service;
 
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
-use Weline\Search\Dto\SearchHit;
 use Weline\Search\Dto\SearchRequest;
 use Weline\Search\Dto\SearchResult;
 
@@ -21,6 +22,7 @@ final class SearchHubService
         private readonly SearchProviderRegistry $registry,
         private readonly SearchEngineResolver $engineResolver,
         private readonly SearchAnalyticsService $analytics,
+        private readonly ?StorefrontScopeHotCache $hotCache = null,
     ) {
     }
 
@@ -59,9 +61,7 @@ final class SearchHubService
                 return $empty;
             }
 
-            $result = $request->isAllTypes()
-                ? $this->searchAll($request, $autocomplete)
-                : $this->searchSingle($request);
+            $result = $this->executeSearch($request, $autocomplete, $engineCode);
             $elapsed = (hrtime(true) - $started) / 1e6;
             $result = new SearchResult(
                 ok: $result->ok,
@@ -73,7 +73,7 @@ final class SearchHubService
                 message: $result->message,
                 meta: $result->meta,
                 elapsedMs: round($elapsed, 2),
-                engine: $engineCode,
+                engine: $engineCode !== '' ? $engineCode : $result->engine,
             );
             $this->analytics->recordQuery($request, $result);
 
@@ -100,6 +100,84 @@ final class SearchHubService
 
             return $fail;
         }
+    }
+
+    private function executeSearch(SearchRequest $request, bool $autocomplete, string $engineCode): SearchResult
+    {
+        // Autocomplete is short-lived and high-cardinality; keep it off the shared page bag.
+        if ($autocomplete) {
+            return $request->isAllTypes()
+                ? $this->searchAll($request, true)
+                : $this->searchSingle($request);
+        }
+
+        $area = $this->requestArea($request);
+        $type = $request->isAllTypes() ? 'all' : $request->type;
+        $logicalKey = SearchStorefrontCacheCoordinator::queryResultLogicalKey(
+            $request->q,
+            $type,
+            $request->page,
+            $request->pageSize,
+            $engineCode,
+            $area,
+            false,
+        );
+
+        try {
+            $payload = $this->hotCache()->rememberPolicy(
+                SearchStorefrontCacheCoordinator::queryResultPolicy(),
+                $logicalKey,
+                function () use ($request, $autocomplete): array {
+                    $built = $request->isAllTypes()
+                        ? $this->searchAll($request, $autocomplete)
+                        : $this->searchSingle($request);
+                    $cached = $built->toCacheArray();
+                    $cached['meta'] = ($cached['meta'] ?? []) + ['result_cache' => 'miss_build'];
+
+                    return $cached;
+                },
+            );
+            if (is_array($payload)) {
+                $fromBag = SearchResult::fromCacheArray($payload);
+                $meta = $fromBag->meta;
+                if (($meta['result_cache'] ?? '') !== 'miss_build') {
+                    $meta['result_cache'] = 'hit';
+                } else {
+                    $meta['result_cache'] = 'miss';
+                }
+
+                return new SearchResult(
+                    ok: $fromBag->ok,
+                    type: $fromBag->type,
+                    hits: $fromBag->hits,
+                    hitCount: $fromBag->hitCount,
+                    sections: $fromBag->sections,
+                    errorCode: $fromBag->errorCode,
+                    message: $fromBag->message,
+                    meta: $meta,
+                    elapsedMs: $fromBag->elapsedMs,
+                    engine: $fromBag->engine,
+                );
+            }
+        } catch (\Throwable) {
+            // Fall through to uncached execute.
+        }
+
+        return $request->isAllTypes()
+            ? $this->searchAll($request, $autocomplete)
+            : $this->searchSingle($request);
+    }
+
+    private function hotCache(): StorefrontScopeHotCache
+    {
+        if ($this->hotCache instanceof StorefrontScopeHotCache) {
+            return $this->hotCache;
+        }
+
+        /** @var StorefrontScopeHotCache $cache */
+        $cache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+
+        return $cache;
     }
 
     private function searchSingle(SearchRequest $request): SearchResult

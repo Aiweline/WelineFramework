@@ -268,7 +268,11 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('Authoritative shell from server hydrate', $template);
         self::assertStringNotContainsString('Number(tobApi.readApplyMinor()) > 0', $template);
         self::assertStringNotContainsString('[data-b2b-credit-toggle]:checked', $template);
-        self::assertStringContainsString('commerce_deposit_allowed: tob', $template);
+        // ToB deposit / incentive / tax policy lives in B2B adjustMoneySummaryDto — Checkout stays retail baseline.
+        self::assertStringContainsString('commerce_deposit_allowed: false', $template);
+        self::assertStringContainsString('adjustMoneySummaryDto', $template);
+        self::assertStringNotContainsString('const salesTaxMajor = tob ? 0', $template);
+        self::assertStringNotContainsString('const incentive = tob ? 0', $template);
         self::assertStringNotContainsString('readPersistedCreditChoice()', $template);
         self::assertStringContainsString('cart_type: checkoutCartType()', $template);
         self::assertStringContainsString('applyCartTypeHandoffFromUrl', $template);

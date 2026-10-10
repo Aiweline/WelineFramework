@@ -480,7 +480,9 @@ $defaultNavItemsFactory = static function (): array {
                                     <i class="fas fa-chevron-right my-menu-submenu-arrow" aria-hidden="true"></i>
                                 </span>
                                 <div class="my-menu-submenu-content">
-                                    <w:hook>header-currency-switcher</w:hook>
+                                    <weline-chrome-island data-weline-chrome-island="currency-switcher" style="display:contents">
+                                        <w:hook>header-currency-switcher</w:hook>
+                                    </weline-chrome-island>
                                 </div>
                             </li>
                         </ul>
@@ -504,7 +506,9 @@ $defaultNavItemsFactory = static function (): array {
                         exclusive="true"
                         position="header"
                         class="header-action-item header-currency-switcher">
-                    <w:hook>header-currency-switcher</w:hook>
+                    <weline-chrome-island data-weline-chrome-island="currency-switcher" style="display:contents">
+                        <w:hook>header-currency-switcher</w:hook>
+                    </weline-chrome-island>
                 </w:slot>
 
                 <w:slot id="user-area"
@@ -818,7 +822,9 @@ $defaultNavItemsFactory = static function (): array {
                 <w:i18n:switcher />
             </div>
             <div class="sidebar-locale-row" data-locale-tool="currency">
-                <w:hook>header-currency-switcher</w:hook>
+                <weline-chrome-island data-weline-chrome-island="currency-switcher" style="display:contents">
+                    <w:hook>header-currency-switcher</w:hook>
+                </weline-chrome-island>
             </div>
         </section>
     </div>

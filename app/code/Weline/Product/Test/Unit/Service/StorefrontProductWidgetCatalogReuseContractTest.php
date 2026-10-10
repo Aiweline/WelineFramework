@@ -56,6 +56,54 @@ final class StorefrontProductWidgetCatalogReuseContractTest extends TestCase
         self::assertSame('website', $candidates->scope);
     }
 
+    public function testHomepageShelfPlanUsesSharedHotCacheNotRequestOnly(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php',
+        );
+        self::assertStringContainsString('homepageShelfPlanPolicy', $source);
+        self::assertStringContainsString('homepageShelfPlanLogicalKey', $source);
+        self::assertStringContainsString('rememberPolicy(', $source);
+
+        $policy = StorefrontCatalogCacheCoordinator::homepageShelfPlanPolicy();
+        self::assertSame('product.homepage_shelf_id_plan', $policy->resource);
+        self::assertSame('website', $policy->scope);
+        self::assertSame([], $policy->vary);
+        self::assertGreaterThanOrEqual(5000, $policy->singleFlightWaitMs);
+        self::assertSame(
+            'product.homepage.shelf_id_plan.v2.0',
+            StorefrontCatalogCacheCoordinator::homepageShelfPlanLogicalKey(0),
+        );
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php',
+        );
+        self::assertStringContainsString('hydrateShelfCardsFromSummaries', $source);
+        self::assertStringContainsString('shelfProductIds', $source);
+    }
+
+    public function testNewArrivalCardsReuseRequestBagAndCanonicalCandidatePage(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php',
+        );
+        self::assertStringContainsString('NEW_ARRIVAL_CARDS_REQUEST_KEY', $source);
+        self::assertStringContainsString('finishNewArrivalCards', $source);
+        self::assertStringContainsString('CANONICAL_NEW_ARRIVAL_PAGE', $source);
+
+        $summary = StorefrontCatalogCacheCoordinator::catalogSummaryOffersPolicy();
+        self::assertGreaterThanOrEqual(3000, $summary->singleFlightWaitMs);
+
+        $candidates = StorefrontCatalogCacheCoordinator::newArrivalCandidatesPolicy();
+        self::assertGreaterThanOrEqual(3000, $candidates->singleFlightWaitMs);
+
+        $k16 = StorefrontCatalogCacheCoordinator::newArrivalCandidatesLogicalKey(0, '2026-01-01 00:00:00', 16, 0);
+        $k64 = StorefrontCatalogCacheCoordinator::newArrivalCandidatesLogicalKey(0, '2026-01-01 00:00:00', 64, 0);
+        $k128 = StorefrontCatalogCacheCoordinator::newArrivalCandidatesLogicalKey(0, '2026-01-01 00:00:00', 128, 0);
+        self::assertSame($k16, $k64);
+        self::assertNotSame($k64, $k128);
+        self::assertSame(64, StorefrontCatalogCacheCoordinator::CANONICAL_NEW_ARRIVAL_PAGE);
+    }
+
     public function testRepositoryExposesBoundedRecentPublishedApi(): void
     {
         self::assertTrue(method_exists(ProductRepository::class, 'listRecentPublishedCreatedAt'));

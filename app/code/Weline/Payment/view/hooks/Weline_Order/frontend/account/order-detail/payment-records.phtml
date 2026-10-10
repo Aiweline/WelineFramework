@@ -1,0 +1,12 @@
+<?php
+/**
+ * 账户订单详情支付历史槽默认实现：委托万能支付店面模板。
+ *
+ * @hook-priority 100
+ * @hook-sort-order 0
+ * @hook-solo true
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+echo $this->fetch('Weline_Payment::templates/Frontend/account/order-payment-records.phtml');

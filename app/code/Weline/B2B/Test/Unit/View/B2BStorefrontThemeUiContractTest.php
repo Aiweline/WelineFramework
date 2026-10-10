@@ -108,7 +108,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $modules = self::bp('app/code/Weline/B2B/view/statics/frontend/weline.modules.js');
         $modulesContent = (string)file_get_contents($modules);
         self::assertStringContainsString('selling-mode.js?v=20261010-boot-idle1', $modulesContent);
-        self::assertStringContainsString('checkout-tob.js?v=20261010-tob-retail-gate2', $modulesContent);
+        self::assertStringContainsString('checkout-tob.js?v=20261010-tob-money-policy1', $modulesContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-toc', $jsContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-bound', $jsContent);
         self::assertStringContainsString('function switchToRetailCart', $jsContent);
@@ -507,6 +507,10 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('suppressRetailEmptyChrome', $checkoutTob);
         self::assertStringContainsString('请先登录后再继续支付，登录后将自动返回此页', $checkoutTob);
         self::assertStringContainsString('syncCheckoutCouponAvailability', $checkoutTob);
+        self::assertStringContainsString('syncPaymentIncentiveAvailability', $checkoutTob);
+        self::assertStringContainsString('adjustMoneySummaryDto', $checkoutTob);
+        self::assertStringContainsString('data-payment-incentive', $checkoutTob);
+        self::assertStringContainsString('dapTaxNoteText', $checkoutTob);
         self::assertStringContainsString('is-tob-unavailable', $checkoutTob);
         self::assertStringContainsString('批发不可用', $checkoutTob);
         // 批发信用页签：仅 tob 展示；零售完全隐藏（禁止常显灰化）。
@@ -532,6 +536,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('基准货币（钱包）%{1}', $checkoutTob);
         $depositNote = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-tob-deposit-note.phtml');
         self::assertStringContainsString('data-i18n-fx-same', $depositNote);
+        self::assertStringContainsString('data-i18n-dap-tax-note', $depositNote);
         self::assertStringContainsString('data-i18n-cash-goods', $depositNote);
         self::assertStringContainsString('禁止无汇率 1:1 直扣', $checkoutTob);
         self::assertStringContainsString('Always re-resolve live display currency', $checkoutTob);
@@ -572,7 +577,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $checkoutPageContent = (string)file_get_contents($checkoutPage);
         self::assertStringContainsString('refreshCreditQuote', $checkoutPageContent);
         self::assertStringContainsString('ensureCreditQuote', $checkoutPageContent);
-        self::assertStringContainsString('estimateDepositMinor', $checkoutPageContent);
+        self::assertStringContainsString('adjustMoneySummaryDto', $checkoutPageContent);
+        self::assertStringContainsString('estimateDepositMinor', $checkoutTob);
         self::assertStringContainsString('data-checkout-credit-row', $checkoutPageContent);
         self::assertStringContainsString('data-checkout-deposit-row', $checkoutPageContent);
         self::assertStringContainsString('weline:b2b-credit-changed', $checkoutPageContent);

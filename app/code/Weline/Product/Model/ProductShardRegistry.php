@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Product\Model;
 
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Database\Schema\Shard\ShardProvisionResult;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * Product website shard registry：全局状态源，非分片表。
@@ -75,12 +77,27 @@ class ProductShardRegistry extends Model
         return self::schema_fields_ID;
     }
 
+    private const REQUEST_MEMO_RESOURCE = 'product.shard_registry.row';
+
     /**
      * Ensure a registry row exists for website_id (including 0).
+     * Request-scoped memo: storefront PDP hits assertReady/getStatus many times; one SELECT per website.
      *
      * @return array<string, mixed>
      */
     public function ensureWebsite(int $websiteId): array
+    {
+        return $this->requestMemo()->rememberForRequest(
+            self::REQUEST_MEMO_RESOURCE,
+            (string)$websiteId,
+            fn(): array => $this->loadOrCreateWebsiteRow($websiteId),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadOrCreateWebsiteRow(int $websiteId): array
     {
         $shardKey = ProductShardKey::fromWebsiteId($websiteId);
         $existing = $this->clear()
@@ -125,6 +142,16 @@ class ProductShardRegistry extends Model
         return $created->getData();
     }
 
+    private function forgetWebsiteRequestMemo(int $websiteId): void
+    {
+        $this->requestMemo()->forgetRequestMemo(self::REQUEST_MEMO_RESOURCE, (string)$websiteId);
+    }
+
+    private function requestMemo(): StorefrontScopeHotCache
+    {
+        return ObjectManager::getInstance(StorefrontScopeHotCache::class);
+    }
+
     /**
      * @param list<string> $fromStatuses
      */
@@ -147,6 +174,7 @@ class ProductShardRegistry extends Model
             ])
             ->fetch();
 
+        $this->forgetWebsiteRequestMemo($websiteId);
         $after = $this->getStatus($websiteId);
         return $after === $toStatus;
     }
@@ -231,6 +259,7 @@ class ProductShardRegistry extends Model
             ]))
             ->fetch();
 
+        $this->forgetWebsiteRequestMemo($websiteId);
         $row = $this->ensureWebsite($websiteId);
         if ((string)($row[self::schema_fields_STATUS] ?? '') !== $terminalStatus
             || ($postcondition !== null && !$postcondition($row))

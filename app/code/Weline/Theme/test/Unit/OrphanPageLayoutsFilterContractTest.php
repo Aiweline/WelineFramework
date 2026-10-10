@@ -24,13 +24,13 @@ final class OrphanPageLayoutsFilterContractTest extends TestCase
     public function testHomepageSkipsMiniCartOnlyOrphans(): void
     {
         $service = $this->newServiceWithRegistry($this->stubRegistry([
-            'Weline_Marketing::content::mini-cart-coupon' => new ThemeComponentDefinition(
+            'Weline_Marketing::content::checkout-coupon' => new ThemeComponentDefinition(
                 module: 'Weline_Marketing',
                 type: 'content',
-                code: 'mini-cart-coupon',
-                name: '迷你购物车优惠券',
+                code: 'checkout-coupon',
+                name: '优惠券',
                 pageLayouts: ['mini-cart'],
-                supports: ['layout-mini-cart-footer-extras', 'mini-cart-coupon'],
+                supports: ['layout-mini-cart-footer-extras', 'checkout-coupon'],
             ),
             'Weline_Order::form::order-notice' => new ThemeComponentDefinition(
                 module: 'Weline_Order',
@@ -56,8 +56,8 @@ final class OrphanPageLayoutsFilterContractTest extends TestCase
                 [
                     'widget_module' => 'Weline_Marketing',
                     'widget_type' => 'content',
-                    'widget_code' => 'mini-cart-coupon',
-                    'meta' => ['name' => '迷你购物车优惠券'],
+                    'widget_code' => 'checkout-coupon',
+                    'meta' => ['name' => '优惠券'],
                 ],
                 [
                     'widget_module' => 'Weline_Order',
@@ -85,11 +85,11 @@ final class OrphanPageLayoutsFilterContractTest extends TestCase
     public function testMiniCartStillReportsMissingFooterExtras(): void
     {
         $service = $this->newServiceWithRegistry($this->stubRegistry([
-            'Weline_Marketing::content::mini-cart-coupon' => new ThemeComponentDefinition(
+            'Weline_Marketing::content::checkout-coupon' => new ThemeComponentDefinition(
                 module: 'Weline_Marketing',
                 type: 'content',
-                code: 'mini-cart-coupon',
-                name: '迷你购物车优惠券',
+                code: 'checkout-coupon',
+                name: '优惠券',
                 pageLayouts: ['mini-cart'],
                 supports: ['layout-mini-cart-footer-extras'],
             ),
@@ -102,8 +102,8 @@ final class OrphanPageLayoutsFilterContractTest extends TestCase
                 [
                     'widget_module' => 'Weline_Marketing',
                     'widget_type' => 'content',
-                    'widget_code' => 'mini-cart-coupon',
-                    'meta' => ['name' => '迷你购物车优惠券'],
+                    'widget_code' => 'checkout-coupon',
+                    'meta' => ['name' => '优惠券'],
                 ],
             ],
         ], [], 'mini-cart');
@@ -111,7 +111,7 @@ final class OrphanPageLayoutsFilterContractTest extends TestCase
         $orphans = $service->getOrphanWidgets();
         self::assertCount(1, $orphans);
         self::assertSame('footer-extras', $orphans[0]['slot_id'] ?? null);
-        self::assertSame('mini-cart-coupon', $orphans[0]['widget_code'] ?? null);
+        self::assertSame('checkout-coupon', $orphans[0]['widget_code'] ?? null);
     }
 
     /**

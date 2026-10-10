@@ -249,6 +249,9 @@ final class PartialsChromeCachePolicyTest extends TestCase
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
         self::assertStringContainsString('shouldBypassStorefrontChromePolicyForSolidifiedShell', $source);
         self::assertStringContainsString('wave9-9s2 P1', $source);
+        self::assertStringContainsString('peekPolicy', $source);
+        self::assertStringContainsString('solidifiedPeekFirst', $source);
+        self::assertStringContainsString('Cold-locale after_ms dig', $source);
 
         $partials = (new ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
         $method = new ReflectionMethod(Partials::class, 'shouldBypassStorefrontChromePolicyForSolidifiedShell');
@@ -285,7 +288,9 @@ final class PartialsChromeCachePolicyTest extends TestCase
     public function testChromePartialCacheSchemaPinsStateLangOverStorefrontCookie(): void
     {
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-        self::assertStringContainsString("'schema' => 'chrome-partial-v17-head-website-slim'", $source);
+        self::assertStringContainsString("'schema' => 'chrome-partial-v19-currency-island-hook'", $source);
+        self::assertStringContainsString("'currency' => false", $source);
+        self::assertStringContainsString('hydrateChromeCurrencyIslands', $source);
         self::assertStringContainsString("return 'frontend-auth:0';", $source);
         self::assertStringContainsString('always guest-SSR', $source);
         self::assertStringContainsString("'i18n_switcher_markup'", $source);

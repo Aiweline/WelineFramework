@@ -8,8 +8,6 @@ declare(strict_types=1);
  */
 return [
     'Weline_Marketing::templates/frontend/widgets/checkout-coupon.phtml',
-    'Weline_Marketing::templates/frontend/widgets/cart-coupon.phtml',
-    'Weline_Marketing::templates/frontend/widgets/mini-cart-coupon.phtml',
     'Weline_Marketing::templates/frontend/widgets/cart-progress.phtml',
     'Weline_Marketing::templates/frontend/widgets/footer-campaign-link.phtml',
     'Weline_Marketing::templates/frontend/widgets/welcome-gift.phtml',

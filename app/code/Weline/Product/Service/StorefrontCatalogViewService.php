@@ -40,7 +40,11 @@ final class StorefrontCatalogViewService
 {
     private const CACHE_POOL = 'product';
     private const MAX_CATALOG_PRODUCTS = 2000;
+    /** Warmup + homepage shelves share one HotCache summary window; callers slice. */
+    public const CANONICAL_SUMMARY_LIMIT = 48;
     private const REQUEST_FULL_ROWS_KEY = 'product.catalog.full_rows.request';
+    /** Same-request largest summary bag so smaller limit callers slice instead of re-cold-building. */
+    private const REQUEST_SUMMARY_BAG_KEY = 'product.catalog.summary.bag.request';
     private const REQUEST_ATTRIBUTE_ROWS_PREFIX = 'product.catalog.attribute_rows.request';
 
     private ?StorefrontOfferPriceAssemblerInterface $priceAssembler = null;
@@ -156,14 +160,46 @@ final class StorefrontCatalogViewService
         }
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
-        $logicalKey = $this->catalogCache->catalogSummaryOffersLogicalKey($websiteId, $limit);
+        $scopeFingerprint = serialize([
+            $websiteId,
+            $scope->canonicalKey(),
+            max(0, RequestContext::getWelineStoreId()),
+            strtoupper(trim(RequestContext::getWelineUserCurrency())),
+            trim((string)RequestContext::getWelineUserLang()),
+        ]);
+        // Same request already built a larger (or equal) summary bag → slice only.
+        // Avoids homepage shelf cold-building summaries(32) then summaries(24) as
+        // separate limit-keyed HotCache entries in one request.
+        if (Context::hasCurrent() && RequestContext::has(self::REQUEST_SUMMARY_BAG_KEY)) {
+            $bag = RequestContext::get(self::REQUEST_SUMMARY_BAG_KEY);
+            if (is_array($bag)
+                && ($bag['scope'] ?? null) === $scopeFingerprint
+                && is_array($bag['rows'] ?? null)
+                && (int)($bag['limit'] ?? 0) >= $limit
+            ) {
+                /** @var list<array<string, mixed>> $bagRows */
+                $bagRows = $bag['rows'];
+
+                return $this->materializeCampaignUrls(array_slice(
+                    $this->applyPostCacheOfferFilters($bagRows),
+                    0,
+                    $limit,
+                ));
+            }
+        }
+        // Build/store the shared canonical window (48) for common shelf sizes so
+        // warmup summaries(48) and homepage summaries(24|32) hit the same HotCache key.
+        $buildLimit = $limit <= self::CANONICAL_SUMMARY_LIMIT
+            ? self::CANONICAL_SUMMARY_LIMIT
+            : $limit;
+        $logicalKey = $this->catalogCache->catalogSummaryOffersLogicalKey($websiteId, $buildLimit);
         $requestKey = serialize([
             $websiteId,
             $scope->canonicalKey(),
             max(0, RequestContext::getWelineStoreId()),
             strtoupper(trim(RequestContext::getWelineUserCurrency())),
             trim((string)RequestContext::getWelineUserLang()),
-            $limit,
+            $buildLimit,
         ]);
 
         /** @var list<array<string, mixed>> $rows */
@@ -177,26 +213,156 @@ final class StorefrontCatalogViewService
                     $logicalKey,
                     fn(): array => RequestLifecycleTrace::measurePhase(
                         'product.catalog.build_summary',
-                        fn(): array => $this->buildPublishedOffers(
+                        fn(): array => $this->buildPublishedOfferSummariesFromSkeleton(
                             $websiteId,
                             $scope,
-                            [],
-                            true,
-                            false,
-                            $limit,
+                            $buildLimit,
                         ),
-                        ['website_id' => $websiteId, 'limit' => $limit],
+                        ['website_id' => $websiteId, 'limit' => $buildLimit],
                     ),
                 ),
-                ['website_id' => $websiteId, 'limit' => $limit],
+                ['website_id' => $websiteId, 'limit' => $buildLimit],
             ),
         );
+
+        if (Context::hasCurrent()) {
+            $existing = RequestContext::has(self::REQUEST_SUMMARY_BAG_KEY)
+                ? RequestContext::get(self::REQUEST_SUMMARY_BAG_KEY)
+                : null;
+            $existingLimit = is_array($existing) ? (int)($existing['limit'] ?? 0) : 0;
+            if ($existingLimit < $buildLimit) {
+                RequestContext::set(self::REQUEST_SUMMARY_BAG_KEY, [
+                    'scope' => $scopeFingerprint,
+                    'limit' => $buildLimit,
+                    'rows' => $rows,
+                ]);
+            }
+        }
 
         return $this->materializeCampaignUrls(array_slice(
             $this->applyPostCacheOfferFilters($rows),
             0,
             $limit,
         ));
+    }
+
+    /**
+     * Channel summary: website skeleton → website×lang surface (names/media) → request currency price.
+     * Same-lang cross-currency chaos HITs the lang surface and only reprices.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buildPublishedOfferSummariesFromSkeleton(
+        int $websiteId,
+        ScopeIdentity $scope,
+        int $buildLimit,
+    ): array {
+        $lang = trim((string)RequestContext::getWelineUserLang());
+        $langKey = StorefrontCatalogCacheCoordinator::catalogSummaryLangSurfaceLogicalKey(
+            $websiteId,
+            $lang,
+            $buildLimit,
+        );
+        /** @var list<array<string, mixed>> $surface */
+        $surface = $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::catalogSummaryLangSurfacePolicy(),
+            $langKey,
+            fn(): array => RequestLifecycleTrace::measurePhase(
+                'product.catalog.build_summary_lang_surface',
+                function () use ($websiteId, $scope, $buildLimit): array {
+                    $prepared = $this->rememberSummarySkeletonOffers($websiteId, $buildLimit);
+                    if ($prepared === []) {
+                        return [];
+                    }
+                    $productIds = [];
+                    foreach ($prepared as $offer) {
+                        $productId = (int)($offer[Offer::schema_fields_PRODUCT_ID] ?? 0);
+                        if ($productId > 0) {
+                            $productIds[$productId] = true;
+                        }
+                    }
+
+                    return $this->buildPublishedOffers(
+                        $websiteId,
+                        $scope,
+                        array_keys($productIds),
+                        true,
+                        false,
+                        $buildLimit,
+                        $prepared,
+                        true,
+                        false,
+                    );
+                },
+                ['website_id' => $websiteId, 'limit' => $buildLimit, 'lang' => $lang],
+            ),
+        );
+        if (!is_array($surface) || $surface === []) {
+            return [];
+        }
+
+        $priced = [];
+        foreach ($surface as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $priced[] = $this->toCardSurfaceRow($this->applyUnifiedStorefrontPricing($row));
+        }
+
+        return $priced;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function rememberSummarySkeletonOffers(int $websiteId, int $buildLimit): array
+    {
+        $logicalKey = StorefrontCatalogCacheCoordinator::catalogSummarySkeletonLogicalKey(
+            $websiteId,
+            $buildLimit,
+        );
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::catalogSummarySkeletonPolicy(),
+            $logicalKey,
+            fn(): array => RequestLifecycleTrace::measurePhase(
+                'product.catalog.build_summary_skeleton',
+                fn(): array => $this->pagePublishedRepresentativeOffers($websiteId, $buildLimit),
+                ['website_id' => $websiteId, 'limit' => $buildLimit],
+            ),
+        );
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function pagePublishedRepresentativeOffers(int $websiteId, int $maxRows): array
+    {
+        $maxRows = max(1, min(self::MAX_CATALOG_PRODUCTS, $maxRows));
+        $rows = [];
+        $afterOfferId = 0;
+        do {
+            $pageSize = max(1, min(128, $maxRows - count($rows)));
+            $page = $this->offers->listPublishedRepresentativePage($websiteId, $pageSize, $afterOfferId);
+            if ($page === []) {
+                break;
+            }
+            $afterOfferId = (int)$page[array_key_last($page)][Offer::schema_fields_ID];
+            foreach ($page as $offer) {
+                if (!is_array($offer)) {
+                    continue;
+                }
+                $rows[] = $offer;
+                if (count($rows) >= $maxRows) {
+                    break 2;
+                }
+            }
+        } while (count($page) === $pageSize);
+
+        return $rows;
     }
 
     /**
@@ -894,6 +1060,7 @@ final class StorefrontCatalogViewService
         ?int $maxRows = null,
         ?array $preparedOffers = null,
         bool $includeMedia = true,
+        bool $applyStorefrontPricing = true,
     ): array
     {
         $maxRows = $maxRows === null
@@ -1195,15 +1362,17 @@ final class StorefrontCatalogViewService
             'fields_ms' => round($fieldProjectionMs, 2), 'media_ms' => round($mediaProjectionMs, 2),
         ]);
 
-        $dealStartedAt = hrtime(true);
-        foreach ($rows as $index => $row) {
-            $rows[$index] = $this->applyUnifiedStorefrontPricing(is_array($row) ? $row : []);
+        if ($applyStorefrontPricing) {
+            $dealStartedAt = hrtime(true);
+            foreach ($rows as $index => $row) {
+                $rows[$index] = $this->applyUnifiedStorefrontPricing(is_array($row) ? $row : []);
+            }
+            RequestLifecycleTrace::recordPhase(
+                'product.catalog.deal_pricing',
+                (hrtime(true) - $dealStartedAt) / 1e6,
+                ['products' => count($rows)],
+            );
         }
-        RequestLifecycleTrace::recordPhase(
-            'product.catalog.deal_pricing',
-            (hrtime(true) - $dealStartedAt) / 1e6,
-            ['products' => count($rows)],
-        );
 
         if (!$includeListingDetails) {
             foreach ($rows as $index => $row) {
@@ -1258,7 +1427,12 @@ final class StorefrontCatalogViewService
     {
         $productId = max(0, (int)($row['product_id'] ?? 0));
         $catalogMinor = max(0, (int)($row['catalog_price_minor'] ?? $row['unit_price_minor'] ?? 0));
-        $currency = \strtoupper(\trim((string)($row['currency'] ?? 'CNY'))) ?: 'CNY';
+        // Always the active request currency — lang-surface bags must reprice across currencies.
+        $currency = \strtoupper(\trim((string)RequestContext::getWelineUserCurrency())) ?: 'CNY';
+        if ($currency === '') {
+            $currency = \strtoupper(\trim((string)($row['currency'] ?? 'CNY'))) ?: 'CNY';
+        }
+        $row['currency'] = $currency;
         $row['catalog_price_minor'] = $catalogMinor;
         $row['unit_price_minor'] = $catalogMinor;
         $row['compare_at_minor'] = $catalogMinor;
@@ -1595,22 +1769,19 @@ final class StorefrontCatalogViewService
             'product.published_offers_by_slug',
             $memoKey,
             function () use ($slug, $scope, $websiteId, $storeId): array {
+                // One reverse-lookup: attribute_code IN (source_slug, slug) × store_id IN — no per-attr N+1.
                 $candidateProductIds = [];
-                foreach (\array_values(\array_unique([$storeId, 0])) as $candidateStoreId) {
-                    foreach (['source_slug', 'slug'] as $attributeCode) {
-                        foreach ($this->attributeValues->findEntityIdsByAttributeValue(
-                            $websiteId,
-                            'product',
-                            $attributeCode,
-                            $slug,
-                            $candidateStoreId,
-                        ) as $productId) {
-                            $candidateProductIds[$productId] = $productId;
-                        }
-                    }
+                foreach ($this->attributeValues->findEntityIdsByAttributeValues(
+                    $websiteId,
+                    'product',
+                    ['source_slug', 'slug'],
+                    $slug,
+                    \array_values(\array_unique([$storeId, 0])),
+                ) as $productId) {
+                    $candidateProductIds[$productId] = $productId;
                 }
-                // Resolve the matching published product once via targeted batch,
-                // then run a single live projection for the PDP main chain only.
+                // Lightweight published-id pick (status + optional slug EAV) — never full catalog projection.
+                // Then a single live projection builds the PDP bag once.
                 $candidateIds = \array_values($candidateProductIds);
                 $matchedProductId = $this->matchPublishedProductIdBySlug($candidateIds, $slug);
 
@@ -1620,6 +1791,7 @@ final class StorefrontCatalogViewService
                 }
 
                 // Compatibility fallback for legacy projections that predate product slug EAV rows.
+                // Heavy: scans up to 200 published offers — keep last-resort only.
                 if ($matchedProductId <= 0) {
                     foreach ($this->publishedOffers(200) as $offer) {
                         if (\strtolower(\trim((string)($offer['slug'] ?? ''))) !== $slug) {
@@ -1640,8 +1812,11 @@ final class StorefrontCatalogViewService
     }
 
     /**
-     * Pick the published product id whose storefront slug matches, using one
-     * targeted catalog batch (no per-candidate live_request).
+     * Pick a published product id for an exact storefront slug without building catalog offers.
+     *
+     * Reverse lookup already matched value_text; we only gate on STATUS_PUBLISHED.
+     * Collisions (rare) disambiguate with a bounded slug/source_slug EAV read — never
+     * {@see publishedOffersForProductIds()} / build_filtered.
      *
      * @param list<int> $candidateIds
      */
@@ -1655,28 +1830,94 @@ final class StorefrontCatalogViewService
             return 0;
         }
 
-        return $this->firstProductIdMatchingSlug(
-            $this->publishedOffersForProductIds($candidateIds, \count($candidateIds), false),
+        $scope = $this->currentScope();
+        $websiteId = max(0, (int)$scope->websiteId);
+        $slug = \strtolower(\trim($slug));
+
+        $publishedIds = [];
+        foreach ($this->products->listByIds($websiteId, $candidateIds) as $product) {
+            if (!\is_array($product)) {
+                continue;
+            }
+            $productId = (int)($product[Product::schema_fields_ID] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+            if (\strtolower(\trim((string)($product[Product::schema_fields_STATUS] ?? '')))
+                !== Product::STATUS_PUBLISHED
+            ) {
+                continue;
+            }
+            $publishedIds[$productId] = $productId;
+        }
+        $publishedIds = \array_values($publishedIds);
+        if ($publishedIds === []) {
+            return 0;
+        }
+        if (\count($publishedIds) === 1) {
+            return $publishedIds[0];
+        }
+
+        return $this->disambiguatePublishedProductIdBySlugEav(
+            $websiteId,
+            max(0, RequestContext::getWelineStoreId()),
+            $publishedIds,
             $slug,
         );
     }
 
     /**
-     * @param list<array<string, mixed>> $offers
+     * @param list<int> $publishedIds
      */
-    private function firstProductIdMatchingSlug(array $offers, string $slug): int
-    {
-        $slug = \strtolower(\trim($slug));
-        foreach ($offers as $offer) {
-            if (!\is_array($offer)) {
+    private function disambiguatePublishedProductIdBySlugEav(
+        int $websiteId,
+        int $storeId,
+        array $publishedIds,
+        string $slug,
+    ): int {
+        $locale = \trim((string)RequestContext::getWelineUserLang());
+        $rows = $this->attributeValues->listExplicitRows(
+            $websiteId,
+            'product',
+            $publishedIds,
+            \array_values(\array_unique([0, $storeId])),
+            $this->explicitRowLocales($locale),
+            ['slug', 'source_slug'],
+        );
+        $byProductCode = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
                 continue;
             }
-            $offerSlug = \strtolower(\trim((string)($offer['slug'] ?? '')));
-            if ($offerSlug === '') {
-                $offerSlug = \strtolower(\trim((string)($offer['source_slug'] ?? '')));
+            $productId = (int)($row['entity_id'] ?? 0);
+            $code = \strtolower(\trim((string)($row['attribute_code'] ?? '')));
+            if ($productId <= 0 || ($code !== 'slug' && $code !== 'source_slug')) {
+                continue;
             }
-            if ($offerSlug === $slug) {
-                return max(0, (int)($offer['product_id'] ?? 0));
+            $byProductCode[$productId][$code][] = $row;
+        }
+
+        $overlay = new CatalogOverlayResolver();
+        $fallbacks = $this->localeFallbacks($locale);
+        foreach ($publishedIds as $productId) {
+            $slugResolved = $overlay->resolveAttribute(
+                $byProductCode[$productId]['slug'] ?? [],
+                $storeId,
+                $locale,
+                $fallbacks,
+            );
+            $resolvedSlug = \strtolower(\trim((string)($slugResolved->value ?? '')));
+            if ($resolvedSlug === '') {
+                $sourceResolved = $overlay->resolveAttribute(
+                    $byProductCode[$productId]['source_slug'] ?? [],
+                    $storeId,
+                    $locale,
+                    $fallbacks,
+                );
+                $resolvedSlug = \strtolower(\trim((string)($sourceResolved->value ?? '')));
+            }
+            if ($resolvedSlug === $slug) {
+                return $productId;
             }
         }
 

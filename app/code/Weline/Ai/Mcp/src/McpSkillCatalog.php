@@ -900,19 +900,22 @@ final class McpSkillCatalog
                 ],
                 '性能检查工程师' => [
                     'kind' => 'framework',
-                    'mcp_skill_ids' => [$perf],
-                    'host_skills' => ['weline-performance-check'],
+                    'mcp_skill_ids' => [$perf, 'doc:performance-cold-chaos-dig'],
+                    'host_skills' => ['weline-performance-check', 'weline-performance-cold-chaos-dig'],
                     'authoritative_docs' => [
                         'dev/ai-command/ai/性能检查.md',
+                        'dev/ai-command/ai/性能冷切扫描.md',
                         'dev/ai-command/ai/工程团队.md',
                         'app/code/Weline/Framework/doc/统一缓存范围与性能优化.md',
+                        'app/code/Weline/Framework/doc/ai/skills/performance-cold-chaos-dig/SKILL.md',
                         'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
                         'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
                         'docs/版本计划/v3/PHP8.4+框架优化/12-性能基准与目标.md',
                         'app/code/Weline/Ai/doc/AI工程交付流程.md',
                     ],
-                    'must_query_scope' => '必须检查性能；深懂框架结构+业务特性；审查缓存合规；与架构师共同定制优化方向；禁拆壳药方；查出问题后拉起项目经理安排；开发后证据复审',
+                    'must_query_scope' => '必须检查性能；深懂框架结构+业务特性；审查缓存合规；与架构师共同定制优化方向；禁拆壳药方；冷切/假写粘性实测走 performance-cold-chaos-dig；查出问题后拉起项目经理安排；开发后证据复审',
                     'prompt_increment' => '你是性能检查工程师（Team:性能检查工程师:）——本职是检查性能，不是旁听。HARD：开工前 get_skill(performance_check|weline-performance-check)，并 Read 性能检查.md + 统一缓存范围与性能优化.md + 扩展点选型.md。\n'
+                        . '冷切/假写/粘性实测（硬）：用户提到性能/优化（或乱切语种货币找慢、二次仍冷）时，必须再 get_skill(performance-cold-chaos-dig|doc:performance-cold-chaos-dig)+Read 性能冷切扫描.md：UA、_wb_nc、≥2.5s 停下；修后收口必须先写修复说明四件套（改了什么/为什么/因果链/怎么证明）再给修前冷vs修后冷；禁止看不懂修复却甩变快；禁止只用暖命中表。\n'
                         . '知识门槛：必须先弄清（1）框架结构——模块边界/扩展点、WLS 请求生命周期、HotCache·CachePolicy·CachePool·WLS 分层；（2）本需求业务特性——店面/后台、是否个性化或草稿、热路径段落、可复用 owner/批量入口。未写清业务特性摘要与框架映射前禁止定制优化方向。\n'
                         . '缓存合规检查（设计与复审都要做）：CachePolicy+scope/vary/dependencies 是否正确；失效是否挂 owner；有无可变 Model/个性化 HTML/草稿进共享池；有无业务平行进程内袋；有无把 DB N+1 换成 WLS RPC N+1。不合规 → 异议/否决或 review fail。\n'
                         . 'HARD【禁拆壳药方·theme_seat_integrity_over_peer_requests】：允许方向仅 HotCache/CachePolicy、批量 Query、预取、合法 FPC/编译面等；禁止把移除 header/footer/nav/版心、删无卸载必装 widget、清空 default_injections 列为优化；此类 design=否决；此类 diff=review fail+escalate。详见 性能检查.md §禁拆壳。\n'

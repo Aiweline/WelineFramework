@@ -3274,75 +3274,39 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             return;
         }
         // Coupon / soft events may fire before getData; keep major fields coherent.
+        // Retail baseline always; optional B2B adjustMoneySummaryDto owns ToB policy (no tob ? 0 here).
         checkoutState.cart = normalizeCartMoney(checkoutState.cart);
         const subtotal = Number(checkoutState.cart.subtotal || 0);
         const shipping = selectedShippingAmount();
         const discount = discountAmountMajor(checkoutState.cart);
         const cartType = checkoutCartType();
-        const tob = cartType === 'tob';
-        const tobApi = window.WelineB2BCheckoutTob;
-        let creditApplyMajor = 0;
-        let depositMajor = 0;
-        let cashDepositMajor = null;
-        if (tob && tobApi) {
-            if (typeof tobApi.readApplyMinor === 'function') {
-                creditApplyMajor = Math.max(0, Number(tobApi.readApplyMinor()) || 0) / 100;
-            }
-            if (creditApplyMajor <= 0 && typeof tobApi.readPersistedCreditChoice === 'function') {
-                try {
-                    const saved = tobApi.readPersistedCreditChoice();
-                    if (saved && saved.enabled) {
-                        creditApplyMajor = Math.max(0, Number(saved.apply_minor) || 0) / 100;
-                    }
-                } catch (ePersistApply) {}
-            }
-            if (typeof tobApi.estimateDepositMinor === 'function') {
-                depositMajor = Math.max(0, Number(tobApi.estimateDepositMinor({
-                    cart_type: 'tob',
-                    subtotal: subtotal,
-                    currency: checkoutState.currency || 'CNY',
-                })) || 0) / 100;
-            }
-            if (typeof tobApi.cashDepositMinor === 'function') {
-                const cashMinor = tobApi.cashDepositMinor();
-                if (cashMinor !== null && cashMinor !== undefined) {
-                    cashDepositMajor = Math.max(0, Number(cashMinor) || 0) / 100;
-                }
-            }
-            // 有报价现金态时，定金行与信用面板同源（apply+cash），避免本地 30% 估算漂移。
-            if (cashDepositMajor !== null) {
-                depositMajor = cashDepositMajor + creditApplyMajor;
-            } else if (depositMajor > 0) {
-                cashDepositMajor = Math.max(0, depositMajor - creditApplyMajor);
-            }
-        }
-        const salesTaxMajor = tob ? 0 : cartSalesTaxAmount();
-        const customsDutyMajor = tob ? 0 : selectedCustomsDutyAmount();
-        const importTaxMajor = tob ? 0 : selectedImportTaxAmount();
-        const tax = tob ? 0 : Math.max(0, salesTaxMajor + customsDutyMajor + importTaxMajor);
-        const codFee = tob ? 0 : selectedCodFeeAmount();
-        const incentive = tob ? 0 : selectedIncentiveSavingsMajor();
-        const payable = tob
-            ? Math.max(0, cashDepositMajor == null ? depositMajor : cashDepositMajor)
-            : Math.max(0, subtotal + shipping - discount + tax + codFee - incentive);
+        const salesTaxMajor = cartSalesTaxAmount();
+        const customsDutyMajor = selectedCustomsDutyAmount();
+        const importTaxMajor = selectedImportTaxAmount();
+        const tax = Math.max(0, salesTaxMajor + customsDutyMajor + importTaxMajor);
+        const codFee = selectedCodFeeAmount();
+        const incentive = selectedIncentiveSavingsMajor();
+        const payableRetail = Math.max(0, subtotal + shipping - discount + tax + codFee - incentive);
         const previewCode = text(
             (checkoutState.cart && checkoutState.cart.discount_preview && checkoutState.cart.discount_preview.coupon_code)
             || pendingCouponCode
             || ''
         ).trim().toUpperCase();
-        const discountLabel = (!tob && discount > 0 && previewCode)
+        const discountLabel = (discount > 0 && previewCode)
             ? (discountLabelDefault + ' · ' + previewCode)
             : '';
         // Split rows: 销售税 / 进口关税 / 进口税费 — never muddle into one label.
-        const taxNote = tob ? '' : moneySummaryTaxNote(salesTaxMajor, customsDutyMajor, importTaxMajor);
-        const painted = paintCheckoutMoneySummary({
+        const taxNote = moneySummaryTaxNote(salesTaxMajor, customsDutyMajor, importTaxMajor);
+        let moneyDto = {
             currency: checkoutState.currency || 'CNY',
+            cart_type: cartType,
+            commerce_deposit_allowed: false,
             goods_subtotal_minor: Math.round(subtotal * 100),
             shipping_minor: Math.round(shipping * 100),
-            discount_minor: tob ? 0 : Math.round(discount * 100),
+            discount_minor: Math.round(discount * 100),
             discount_label: discountLabel,
-            deposit_minor: tob ? Math.round(depositMajor * 100) : 0,
-            credit_minor: tob ? Math.round(creditApplyMajor * 100) : 0,
+            deposit_minor: 0,
+            credit_minor: 0,
             sales_tax_minor: Math.round(salesTaxMajor * 100),
             duty_minor: Math.round(customsDutyMajor * 100),
             customs_duty_minor: Math.round(customsDutyMajor * 100),
@@ -3354,9 +3318,25 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             note: taxNote,
             cod_fee_minor: Math.round(codFee * 100),
             payment_incentive_minor: Math.round(incentive * 100),
-            payable_minor: Math.round(payable * 100),
-            payable_label: tob ? grandTotalLabelDeposit : (grandTotalLabelDefault || grandTotalLabelDeposit),
-        });
+            payable_minor: Math.round(payableRetail * 100),
+            payable_label: grandTotalLabelDefault || grandTotalLabelDeposit,
+        };
+        const tobApi = window.WelineB2BCheckoutTob;
+        if (tobApi && typeof tobApi.adjustMoneySummaryDto === 'function') {
+            try {
+                const adjusted = tobApi.adjustMoneySummaryDto(moneyDto, {
+                    cart_type: cartType,
+                    subtotal: subtotal,
+                    currency: checkoutState.currency || 'CNY',
+                    payable_label_deposit: grandTotalLabelDeposit,
+                });
+                if (adjusted && typeof adjusted === 'object') {
+                    moneyDto = adjusted;
+                }
+            } catch (eAdj) {}
+        }
+        const payable = Math.max(0, Number(moneyDto.payable_minor || 0) / 100);
+        const painted = paintCheckoutMoneySummary(moneyDto);
         if (!painted) {
             setText(subtotalNode, money(subtotal));
             setText(shippingAmountNode, money(shipping));
@@ -3767,30 +3747,17 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 root.setAttribute('data-cart-type-handoff', fromQuery);
                 return fromQuery;
             }
-            // Live credit / selling-mode beats SSR default data-cart-type="toc".
-            try {
-                const tobApi = window.WelineB2BCheckoutTob;
-                if (tobApi && typeof tobApi.readApplyMinor === 'function'
-                    && Number(tobApi.readApplyMinor()) > 0) {
-                    return 'tob';
-                }
-                if (root && root.querySelector('[data-b2b-credit-toggle]:checked')) {
-                    return 'tob';
-                }
-                if (tobApi && typeof tobApi.readMode === 'function'
-                    && String(tobApi.readMode() || '').toLowerCase() === 'tob') {
-                    return 'tob';
-                }
-            } catch (eCreditType) {}
+            // Authoritative shell from server hydrate / cart.cart_type — never elevate via
+            // credit persist, toggle, or selling-mode cookie alone.
+            const fromRoot = String((root && root.getAttribute('data-cart-type')) || '').toLowerCase();
+            if (fromRoot === 'tob' || fromRoot === 'toc') {
+                return fromRoot;
+            }
             if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
                 const preferred = String(window.WelineB2BSellingMode.preferredMode() || '').toLowerCase();
                 if (preferred === 'tob' || preferred === 'toc') {
                     return preferred;
                 }
-            }
-            const fromRoot = String((root && root.getAttribute('data-cart-type')) || '').toLowerCase();
-            if (fromRoot === 'tob' || fromRoot === 'toc') {
-                return fromRoot;
             }
             const names = [];
             const site = window.site || {};

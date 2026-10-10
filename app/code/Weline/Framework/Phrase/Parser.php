@@ -12,7 +12,6 @@ namespace Weline\Framework\Phrase;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
-use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Contract\RememberOptions;
 use Weline\Framework\Context;
@@ -35,7 +34,8 @@ class Parser
     public static bool $loaded = false;
     public const PARSER_WORDS_CACHE_KEY = 'PARSER_WORDS_CACHE_KEY';
     private const GLOBAL_DICTIONARY_SINGLE_FLIGHT_TIMEOUT_MS = 40;
-    private const GLOBAL_DICTIONARY_WORD_SHARED_TTL_SECONDS = 3600;
+    /** @deprecated Prefer GlobalDictionaryModuleBagCache::SHARED_TTL_SECONDS for module bags. */
+    private const GLOBAL_DICTIONARY_WORD_SHARED_TTL_SECONDS = GlobalDictionaryModuleBagCache::SHARED_TTL_SECONDS;
     private const MODULE_DICTIONARY_SHARED_TTL_SECONDS = 86400;
     /** Tiny process working set; authoritative module/word snapshots live in phrase Shared Memory. */
     private const WORKER_TRANSLATED_WORD_CACHE_MAX_ITEMS = 1024;
@@ -63,7 +63,6 @@ class Parser
     protected static array $workerLayeredWordsCache = [];
     protected static array $workerMaterializedWordsCache = [];
     protected static array $workerTranslatedWordsCache = [];
-    private static ?CachePoolInterface $sharedPhraseCachePool = null;
     private static ?GlobalDictionaryProviderInterface $globalDictionaryProviderInstance = null;
     /** CLI / no-RequestContext fallback only; live HTTP uses RequestContext bag. */
     private static ?ParserRequestState $cliRequestState = null;
@@ -435,7 +434,23 @@ class Parser
                     // 合并：模块词典优先，总词典作为补充（模块词典覆盖总词典）
                     // 先加载总词典，再加载模块词典，这样模块词典会覆盖总词典
                     self::$words = array_merge($all_words, $module_words);
-                    $phraseCache?->set($cache_key, self::$words);
+                    // Honor adapter refusal: WLS wls_memory hijack used to return
+                    // false here while callers assumed the bag was shared — next
+                    // locale switch then cold-reloaded dictionaries every time.
+                    $wrote = $phraseCache?->set($cache_key, self::$words);
+                    if ($wrote === false) {
+                        try {
+                            if (RequestLifecycleTrace::isEnabled()) {
+                                RequestLifecycleTrace::recordPhase(
+                                    'i18n.phrase.shared_write_failed',
+                                    0.0,
+                                    ['cache_key_hash' => \hash('sha256', (string)$cache_key)],
+                                );
+                            }
+                        } catch (\Throwable) {
+                            // Tracing must not block dictionary load.
+                        }
+                    }
                 }
                 DictionaryCacheNamespace::localCache(self::$workerWordsCache, self::WORKER_WORDS_CACHE_MAX_ITEMS, $locales)[$requestCacheKey] = self::$words;
                 $requestState->wordsId = $requestId;
@@ -545,7 +560,7 @@ class Parser
         self::$workerLayeredWordsCache = [];
         self::$workerMaterializedWordsCache = [];
         self::$workerTranslatedWordsCache = [];
-        self::$sharedPhraseCachePool = null;
+        GlobalDictionaryModuleBagCache::resetProcessPoolHandle();
         self::$globalDictionaryProviderInstance = null;
         self::resetRequestStateBag();
         self::$loaded = false;
@@ -1964,7 +1979,7 @@ class Parser
             if (\is_array($cached)) {
                 $maps[$module] = $cached;
             } else {
-                $keys[$module] = 'global_dictionary_module_words|' . $lang . '|v1|' . \sha1($module);
+                $keys[$module] = GlobalDictionaryModuleBagCache::sharedKey($lang, $module);
             }
         }
         if ($keys === []) {
@@ -2040,24 +2055,8 @@ class Parser
 
     private static function getSharedPhraseCachePool(array $locales): ?\Weline\Framework\Cache\Contract\CachePoolInterface
     {
-        if (DictionaryCacheNamespace::fingerprint($locales) === null) {
-            return null;
-        }
-        try {
-            if (!self::$sharedPhraseCachePool instanceof CachePoolInterface) {
-                $cacheManager = ObjectManager::getInstance(CacheManager::class);
-                self::$sharedPhraseCachePool = \Weline\Framework\Cache\Pool\NamespaceScopedCachePool::create(
-                    $cacheManager->pool('phrase'), [DictionaryCacheNamespace::NAMESPACE],
-                );
-            }
-            $pool = self::$sharedPhraseCachePool;
-            // 第三方旧池的基础接口保持兼容；标准池通过既有可选能力追加当前语言叶子。
-            return $pool instanceof \Weline\Framework\Cache\Contract\NamespaceScopedCachePoolInterface
-                ? $pool->withNamespaces(DictionaryCacheNamespace::namespacePaths($locales))
-                : $pool;
-        } catch (\Throwable) {
-            return null;
-        }
+        // 与 GlobalDictionaryProvider 共用键/池入口，避免 NULL_SOURCE 袋键漂移。
+        return GlobalDictionaryModuleBagCache::pool($locales);
     }
 
     /**
@@ -2094,10 +2093,15 @@ class Parser
                 $cachePool = self::getSharedPhraseCachePool([$candidateLocale]);
                 $versionPrefix = DictionaryCacheNamespace::cacheKey('', [$candidateLocale]);
                 $missing = [];
+                $workerWords = &DictionaryCacheNamespace::localCache(
+                    self::$workerGlobalDictionaryWordCache,
+                    self::WORKER_GLOBAL_DICTIONARY_WORD_CACHE_MAX_ITEMS,
+                    [$candidateLocale],
+                );
                 foreach ($words as $word) {
                     $workerKey = $versionPrefix . $candidateLocale . '|' . $word;
                     $requestTranslation = null;
-                    if (!\array_key_exists($workerKey, self::$workerGlobalDictionaryWordCache)
+                    if (!\array_key_exists($workerKey, $workerWords)
                         && !self::readRequestPrefetchedWord($candidateLocale, $word, $requestTranslation)
                     ) {
                         $missing[] = $word;

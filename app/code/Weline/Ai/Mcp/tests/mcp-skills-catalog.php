@@ -332,9 +332,13 @@ skillCheck(str_contains($ecommercePrompt, '合规'), '电商顾问 prompt merges
 skillCheck(!isset($seatMap['合规']), 'seat_skill_mirrors no longer has standalone 合规 seat');
 $perfSeat = is_array($seatMap['性能检查工程师'] ?? null) ? $seatMap['性能检查工程师'] : [];
 skillCheck(in_array(GuidanceWorkflowCatalog::SURFACE_PERFORMANCE_CHECK, is_array($perfSeat['mcp_skill_ids'] ?? null) ? $perfSeat['mcp_skill_ids'] : [], true), '性能检查工程师 mirror includes performance_check');
+skillCheck(in_array('doc:performance-cold-chaos-dig', is_array($perfSeat['mcp_skill_ids'] ?? null) ? $perfSeat['mcp_skill_ids'] : [], true), '性能检查工程师 mirror includes cold-chaos dig skill');
+skillCheck(in_array('weline-performance-cold-chaos-dig', is_array($perfSeat['host_skills'] ?? null) ? $perfSeat['host_skills'] : [], true), '性能检查工程师 host mirror includes cold-chaos dig');
 $perfDocs = is_array($perfSeat['authoritative_docs'] ?? null) ? $perfSeat['authoritative_docs'] : [];
 skillCheck(in_array('dev/ai-command/ai/性能检查.md', $perfDocs, true), '性能检查工程师 docs include 性能检查 command');
+skillCheck(in_array('dev/ai-command/ai/性能冷切扫描.md', $perfDocs, true), '性能检查工程师 docs include 性能冷切扫描 command');
 skillCheck(in_array('app/code/Weline/Framework/doc/统一缓存范围与性能优化.md', $perfDocs, true), '性能检查工程师 docs include 统一缓存');
+skillCheck(in_array('app/code/Weline/Framework/doc/ai/skills/performance-cold-chaos-dig/SKILL.md', $perfDocs, true), '性能检查工程师 docs include cold-chaos SKILL');
 $perfPrompt = (string) ($perfSeat['prompt_increment'] ?? '');
 skillCheck(str_contains($perfPrompt, 'HotCache') || str_contains($perfPrompt, 'CachePolicy'), '性能检查工程师 prompt mentions HotCache/CachePolicy');
 skillCheck(str_contains($perfPrompt, '框架') || str_contains($perfPrompt, 'WLS'), '性能检查工程师 prompt covers framework constraints');
@@ -346,6 +350,9 @@ skillCheck(str_contains($perfPrompt, '项目经理') && (str_contains($perfPromp
 skillCheck(str_contains($perfPrompt, '禁拆壳')
     && str_contains($perfPrompt, 'theme_seat_integrity_over_peer_requests')
     && (str_contains($perfPrompt, 'header') || str_contains($perfPrompt, 'default_injections')), '性能检查工程师 prompt forbids strip-shell prescriptions');
+skillCheck(str_contains($perfPrompt, 'performance-cold-chaos-dig')
+    && str_contains($perfPrompt, '_wb_nc')
+    && (str_contains($perfPrompt, '粘性') || str_contains($perfPrompt, '假写')), '性能检查工程师 prompt requires cold-chaos dig companion');
 $archSeat = is_array($seatMap['架构师'] ?? null) ? $seatMap['架构师'] : [];
 $archPrompt = (string) ($archSeat['prompt_increment'] ?? '');
 skillCheck(str_contains($archPrompt, '性能检查'), '架构师 prompt mentions 性能检查工程师 collaboration');

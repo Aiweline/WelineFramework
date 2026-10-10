@@ -88,12 +88,14 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
                 </button></w:hook>
             </div>
 
-            <!-- 货币切换 Hook -->
+            <!-- 货币切换 Hook（chrome 大壳 lang-only；岛后注水） -->
             <div class="header-action-item" data-hook="header-currency-switcher">
-                <w:hook>header-currency-switcher<else/><button class="currency-switcher-btn" title="<?= __('切换货币') ?>">
-                    <w:icon name="circle" size="sm"></w:icon>
-                    <span>CNY</span>
-                </button></w:hook>
+                <weline-chrome-island data-weline-chrome-island="currency-switcher" style="display:contents">
+                    <w:hook>header-currency-switcher<else/><button class="currency-switcher-btn" title="<?= __('切换货币') ?>">
+                        <w:icon name="circle" size="sm"></w:icon>
+                        <span>CNY</span>
+                    </button></w:hook>
+                </weline-chrome-island>
             </div>
 
             <!-- 购物车 Hook -->

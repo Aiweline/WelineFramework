@@ -28,9 +28,11 @@ framework,framework
 "按需加载 Dom 微核失败","On-demand loading of the DOM microkernel failed."
 延迟部件模块加载完成,"Delayed component module loading complete."
 模块,Module.
+近屏部件模块加载,近屏部件模块加载
 部件属性模块加载,"Component attribute module loading."
 页面,Page
 立即加载,"Load immediately."
+近屏延迟,近屏延迟
 空闲延迟,"Idle delay."
 已跳过（已加载/加载中）,"Skipped (already loaded/loading)."
 声明延后,"Deferred declaration."

@@ -1,5 +1,18 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {inquiry_form}
+ * @widget.name {Inquiry form}
+ * @widget.description {Embed any published Weline_Inquiry form without PageBuilder.}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @param inquiry_code {type="query_select",label="Inquiry form"}
+ * @param mode {default="inline",type="select",label="Display mode",options=[{"value":"inline","label":"Inline"},{"value":"modal","label":"Modal"},{"value":"trigger","label":"Trigger"}]}
+ * @param trigger_selector {type="string",label="External trigger ID / selector"}
+ * @param instance_id {type="string",label="Instance ID"}
+ * @param custom_css {type="textarea",label="Instance CSS"}
+ * @param custom_js {type="textarea",label="Trusted instance JS"}
+ */
 echo \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Inquiry\Api\InquiryRendererInterface::class)->render((string)($inquiry_code ?? ''), [
     'mode' => $mode ?? 'inline', 'id' => $instance_id ?? '', 'trigger_selector' => $trigger_selector ?? '', 'custom_css' => $custom_css ?? '', 'custom_js' => $custom_js ?? '',
 ]);

@@ -14,7 +14,7 @@
  * @widget.placement {layout}
  * @widget.supports {["layout-category-recommendations","layout-products-recommendations","recommended-products","featured-products"]}
  *
- * @widget.source {Weline_Product::css/widgets/recommended-products.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
+ * @widget.source {Weline_Product::css/widgets/recommended-products.css}
  * @param title {default="推荐产品",type="string",label="标题"}
  * @param limit {default=8,type="number",label="显示数量"}
  * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列"}}
@@ -22,6 +22,10 @@
  * @param show_wishlist {default=true,type="bool",label="显示收藏"}
  * @param show_compare {default=true,type="bool",label="显示对比"}
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ *
+ * @widget.slot {category-recommendations}
+ *
+ * @widget.default_injections {[{"placement":"injection","layout_type":"category","layout_option":"default","slot":"design-category-recommendations","area":"content","sort_order":0,"required":true,"reason":"分类页默认展示真实目录推荐产品","config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"}},{"placement":"injection","layout_type":"products","layout_option":"default","slot":"design-list-recommendations","area":"content","sort_order":0,"required":true,"reason":"产品列表页默认展示真实目录推荐产品","config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"}},{"placement":"injection","layout_type":"not_found","layout_option":"default","slot":"not-found-recommendations","area":"content","sort_order":0,"required":true,"reason":"404 静态页默认在推荐槽展示目录产品（生成快照时使用，运行时直读静态 HTML）","config":{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"}}]}
  */
 
 use Weline\Framework\Manager\ObjectManager;

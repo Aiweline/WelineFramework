@@ -13,7 +13,11 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["product"]}
  * @widget.supports {["layout-product-purchase-actions","product-purchase-actions","product-add-to-cart","add-to-cart"]}
- * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-purchase-actions", "area":"content", "sort_order":0, "required":true, "reason":"产品主要信息默认由 Cart 提供加购按钮", "config":{} }]}
+ * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-purchase-actions","area":"content","sort_order":0,"required":true,"reason":"产品主要信息默认由 Cart 提供加购按钮","config":[]}]}
+ *
+ * @widget.slot {product-purchase-actions}
+ *
+ * @widget.placement {injection}
  */
 
 use Weline\Product\Helper\StorefrontOfferResolver;

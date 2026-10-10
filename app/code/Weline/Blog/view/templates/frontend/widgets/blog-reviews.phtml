@@ -14,6 +14,16 @@
  * @widget.placement {layout}
  * @widget.supports {["layout-blog-reviews","blog-reviews","review","reviews"]}
  * @widget.source {Weline_Review::css/widgets/product-reviews.css}
+ *
+ * @widget.slot {blog-reviews}
+ * @param title {default="博客评论",type="string",label="标题"}
+ * @param intro {default="支持文字、图片与视频，内容审核后公开。",type="string",label="简介"}
+ * @param page_size {default=10,type="number",label="列表每页条数"}
+ * @param layout_mode {default="stack",type="select",label="布局方式",options={"stack":"上下布局","split":"左右布局"}}
+ * @param form_position {default="right",type="select",label="表单位置（左右布局）",options={"right":"表单在右","left":"表单在左"}}
+ * @param form_collapsed {default="1",type="select",label="表单默认折叠",options={"1":"点击写评论后展开","0":"始终显示表单"}}
+ *
+ * @widget.default_injections {[]}
  */
 
 use Weline\Framework\Env\WelineEnv;

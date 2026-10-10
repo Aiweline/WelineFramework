@@ -877,6 +877,7 @@ dev=true,dev=true
 "清理模块 %{1} 路由失败：%{2}","Failed to clean routes for module %{1}: %{2}"
 无法创建路由回滚临时目录：%{1},"Unable to create route rollback temp directory: %{1}"
 备份路由文件失败：%{1},"Failed to back up route file: %{1}"
+"- route_update：增量重收集后路由为空，正在回滚：%{1}","- route_update：增量重收集后路由为空，正在回滚：%{1}"
 "- route_update：正在批量写入控制器 ACL（可能较慢）…","- route_update: batch-writing controller ACL (may be slow)…"
 "- route_update：ACL 写入完成","- route_update: ACL write completed"
 "- route_update：增量模式，刷新路由快照…","- route_update: incremental mode, refreshing route snapshot…"
@@ -1156,7 +1157,6 @@ operation：%{id},operation：%{id}
 "无法向实例 %{1} 发送信号","Unable to send signal to instance %{1}"
 "热更新信号已发送给 %{1} 个实例","Hot update signal sent to %{1} instances."
 "没有可用的 WLS 实例接收热更新信号","No available WLS instance to receive hot update signals"
-"检测到运行中的 WLS 服务器，发送热重载信号...","Running WLS server detected, sending hot reload signal..."
 "优先运行指定阶段；framework_db_bootstrap/eav_schema/schema_diff 在全量路径仍必执行。阶段 code：%{1}。幽灵阶段 module_manager_bootstrap 已移除。","The specified phase is run first; framework_db_bootstrap/eav_schema/schema_diff must still be executed in the full path. Stage code: %{1}. The ghost phase module_manager_bootstrap has been removed."
 "热更新模式，仅通知 WLS 服务器重载（不执行 Schema/路由操作）。适用：只改了 Controller/Template/CSS/JS","Hot update mode: only notifies the WLS server to reload (no Schema/route operations). Applicable when only Controller/Template/CSS/JS have been changed."
 "跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）","Skip reflection metadata and compiled factories generation (run reflection:compile later if needed)"
@@ -2504,6 +2504,7 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 路由路径,"Route path"
 HTTP方法,"HTTP method"
 控制器,Controller
+"检测到运行中的 WLS 服务器，发送热重载信号...","Running WLS server detected, sending hot reload signal..."
 查询成功,"Query succeeded"
 查询失败：%{1},"Query failed: %{1}"
 "BinQuery Gateway","BinQuery Gateway"
@@ -2815,10 +2816,10 @@ PHPUnit报告服务器已在后台启动,"PHPUnit reporting server has started i
 "新进程命令将使用该语种，例如：php bin/w server:status","New process commands will use this locale, e.g. php bin/w server:status"
 "非交互终端请指定语言代码，例如：php bin/w cli:language zh_Hans_CN","Non-interactive terminal: pass a locale, e.g. php bin/w cli:language zh_Hans_CN"
 "查看当前：php bin/w cli:language --show","Show current: php bin/w cli:language --show"
-系统升级意图已发布，正在等待计划任务释放数据库访问门禁（剩余约 %{1} 秒）…,Setup upgrade intent published; waiting for cron to release the database access gate (about %{1}s left)...
-系统升级文件门禁等待计划任务释放超时，本次升级未启动、未访问数据库；当前数据库驱动配置未被切换，请稍后再试。,Timed out waiting for cron to release the setup database gate; upgrade did not start or touch the database; driver config was not switched. Retry later.
-系统升级 -f/--force：不等待计划任务自然结束，正在强制收回数据库访问门禁…,Setup upgrade -f/--force: not waiting for cron to finish; forcibly reclaiming the database access gate...
-已向 %{1} 个占用门禁的计划任务进程发送终止信号。,Sent termination signals to %{1} cron process(es) holding the gate.
-计划任务未及时释放门禁，已强制结束 %{1} 个进程。,Cron did not release the gate in time; forcibly ended %{1} process(es).
-系统升级 -f/--force 仍无法取得数据库访问门禁，本次升级未启动、未访问数据库；当前数据库驱动配置未被切换，请稍后再试。,Setup upgrade -f/--force still could not acquire the database access gate; upgrade did not start or touch the database; driver config was not switched. Retry later.
-框架维护标志已关闭，但 WLS Worker 门禁未完全同步。请手动运行 php bin/w maintenance:disable 关闭维护模式。,"Framework maintenance flag is off, but WLS worker gates were not fully synced. Run php bin/w maintenance:disable manually."
+"系统升级意图已发布，正在等待计划任务释放数据库访问门禁（剩余约 %{1} 秒）…","Setup upgrade intent published; waiting for cron to release the database access gate (~%{1}s left)…"
+系统升级文件门禁等待计划任务释放超时，本次升级未启动、未访问数据库；当前数据库驱动配置未被切换，请稍后再试。,"Timed out waiting for cron to release the setup database access gate; upgrade did not start and did not touch the database; DB driver config was not switched. Try again later."
+"系统升级 -f/--force：不等待计划任务自然结束，正在强制收回数据库访问门禁…","setup:upgrade -f/--force: not waiting for cron to finish; forcibly reclaiming the database access gate…"
+"已向 %{1} 个占用门禁的计划任务进程发送终止信号。","Sent termination signal to %{1} cron process(es) holding the gate."
+"计划任务未及时释放门禁，已强制结束 %{1} 个进程。","Cron did not release the gate in time; forcibly ended %{1} process(es)."
+"系统升级 -f/--force 仍无法取得数据库访问门禁，本次升级未启动、未访问数据库；当前数据库驱动配置未被切换，请稍后再试。","setup:upgrade -f/--force still could not acquire the database access gate; upgrade did not start and did not touch the database; DB driver config was not switched. Try again later."
+"框架维护标志已关闭，但 WLS Worker 门禁未完全同步。请手动运行 php bin/w maintenance:disable 关闭维护模式。","Framework maintenance flag is off, but WLS worker gates were not fully synced. Run php bin/w maintenance:disable manually."

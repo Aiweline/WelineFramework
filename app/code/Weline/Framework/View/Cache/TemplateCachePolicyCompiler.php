@@ -176,6 +176,13 @@ final class TemplateCachePolicyCompiler
             }
             $descriptor['render_once_group'] = $group;
         }
+        if (\array_key_exists('ttl', $descriptor)) {
+            $ttl = (int)$descriptor['ttl'];
+            if ($ttl < 1 || $ttl > 86400) {
+                throw new \RuntimeException("Template cache policy provider {$provider} returned invalid ttl.");
+            }
+            $descriptor['ttl'] = $ttl;
+        }
         \ksort($descriptor, \SORT_STRING);
         return $descriptor;
     }

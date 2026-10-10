@@ -572,6 +572,9 @@ final class HelpPayOrchestrator
             'payer_type' => $actorType,
             'payer_id' => $actorId,
             'customer_id' => $customerId > 0 ? $customerId : null,
+            'payment_entry' => $mode === 'quick_pay_self'
+                ? \Weline\Payment\Service\PaymentEntry::QUICK_BUY
+                : \Weline\Payment\Service\PaymentEntry::HELP_PAY,
             'metadata' => [
                 'helppay_token' => $token,
                 'mode' => $mode,
@@ -579,8 +582,17 @@ final class HelpPayOrchestrator
                 'service_label' => $selectedShipLabel,
                 'shipping_amount_minor' => $selectedShipMinor,
                 'goods_amount_minor' => max(0, $amountMinor - $selectedShipMinor),
+                'payment_entry' => $mode === 'quick_pay_self'
+                    ? \Weline\Payment\Service\PaymentEntry::QUICK_BUY
+                    : \Weline\Payment\Service\PaymentEntry::HELP_PAY,
             ],
         ];
+        $createContext = \Weline\Payment\Service\PaymentEntry::stampContext(
+            $createContext,
+            $mode === 'quick_pay_self'
+                ? \Weline\Payment\Service\PaymentEntry::QUICK_BUY
+                : \Weline\Payment\Service\PaymentEntry::HELP_PAY,
+        );
         try {
             $tx = $facade->tryCreatePayment($method, $createContext);
         } catch (\Throwable $e) {

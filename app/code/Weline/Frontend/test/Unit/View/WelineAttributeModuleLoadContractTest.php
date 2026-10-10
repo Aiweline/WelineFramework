@@ -24,6 +24,11 @@ final class WelineAttributeModuleLoadContractTest extends TestCase
         self::assertStringContainsString("modLoad === 'defer'", $js);
         self::assertStringContainsString('requestIdleCallback', $js);
         self::assertStringContainsString('空闲延迟', $js);
+        self::assertStringContainsString('近屏延迟', $js);
+        self::assertStringContainsString('data-weline-load-when', $js);
+        self::assertStringContainsString('scheduleVisibleDeferred', $js);
+        self::assertStringContainsString('IntersectionObserver', $js);
+        self::assertStringContainsString('visibleRootMargin', $js);
         self::assertStringContainsString('NEVER put business module names', $js);
         self::assertStringNotContainsString('weline.cart.pending_coupon', $js);
         self::assertStringNotContainsString("preLoad('cart')", $js);

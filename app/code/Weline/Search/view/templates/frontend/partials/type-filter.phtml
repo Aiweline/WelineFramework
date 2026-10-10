@@ -23,6 +23,30 @@ if ($types === []) {
     return;
 }
 
+// Cold-chaos dig (2026-10-09): sidebar tree called WidgetI18n::label per node
+// (~170 DB) every /search render. Batch-prefetch once; label() still memoizes.
+$collectLabels = static function (array $nodes) use (&$collectLabels): array {
+    $out = [];
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $label = trim((string)($node['label'] ?? ''));
+        if ($label !== '') {
+            $out[$label] = $label;
+        }
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+        if ($children !== []) {
+            foreach ($collectLabels($children) as $childLabel) {
+                $out[$childLabel] = $childLabel;
+            }
+        }
+    }
+
+    return $out;
+};
+WidgetI18n::prefetchLabels(array_values($collectLabels($types)));
+
 $containsCategory = static function (array $nodes, int $targetId) use (&$containsCategory): bool {
     foreach ($nodes as $node) {
         if (!is_array($node)) {

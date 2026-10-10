@@ -1,5 +1,18 @@
 <?php
-$this->getFileCss('Weline_Marketing::css/marketing-progress.css');
+/**
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {welcome-gift}
+ * @widget.name {注册见面礼入口}
+ * @widget.description {生命周期欢迎启用时展示的注册领取入口。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage","cart"]}
+ * @widget.slot {content}
+ * @widget.supports {["welcome-gift","marketing"]}
+ * @widget.source {Weline_Marketing::css/marketing-progress.css}
+ */
 $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 $href = $this->getUrl('customer/account/create');
 ?>

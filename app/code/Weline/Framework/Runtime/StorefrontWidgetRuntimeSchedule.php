@@ -86,48 +86,11 @@ final class StorefrontWidgetRuntimeSchedule
     public function primeBeforeLayoutFetch(Template $template, string ...$templateRefs): int
     {
         // path/channel/meta 不得依赖 getFetchFile（会触发 resolveThemeFile）。
-        $t0 = \microtime(true);
         $hot = $this->delegateHotCachePagePrefetch($template, ...$templateRefs);
-        $t1 = \microtime(true);
         $dict = $this->delegatePageDictionaryPrefetch($template, ...$templateRefs);
-        $t2 = \microtime(true);
         $specs = $this->scanTemplateRefs($template, ...$templateRefs);
-        $t3 = \microtime(true);
         $asset = $this->delegateAssetPrefetch($specs);
-        $t4 = \microtime(true);
         $primed = $hot + $dict + $asset;
-
-        // #region agent log
-        try {
-            $payload = [
-                'sessionId' => '8f7f40',
-                'runId' => 'cold-lag-pre',
-                'hypothesisId' => 'D,E',
-                'location' => 'StorefrontWidgetRuntimeSchedule.php:primeBeforeLayoutFetch',
-                'message' => 'page prime breakdown',
-                'data' => [
-                    'refs' => \count($templateRefs),
-                    'hot_keys' => $hot,
-                    'dict_keys' => $dict,
-                    'specs' => \count($specs),
-                    'asset_keys' => $asset,
-                    'hot_ms' => \round(($t1 - $t0) * 1000, 2),
-                    'dict_ms' => \round(($t2 - $t1) * 1000, 2),
-                    'scan_ms' => \round(($t3 - $t2) * 1000, 2),
-                    'asset_ms' => \round(($t4 - $t3) * 1000, 2),
-                    'total_ms' => \round(($t4 - $t0) * 1000, 2),
-                    'request_id' => RequestContext::getId(),
-                ],
-                'timestamp' => (int)\round(\microtime(true) * 1000),
-            ];
-            @\file_put_contents(
-                '/Users/weline/Project/Official/框架/.cursor/debug-8f7f40.log',
-                \json_encode($payload, \JSON_UNESCAPED_UNICODE) . "\n",
-                \FILE_APPEND | \LOCK_EX
-            );
-        } catch (\Throwable) {
-        }
-        // #endregion
 
         if (!RequestContext::has(self::LATCH_KEY)) {
             RequestContext::set(self::LATCH_KEY, true);

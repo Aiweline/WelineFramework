@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Product\Api\ProductIdentityV2ResolverInterface;
 use Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface;
 use Weline\Product\Model\ProductSearchProjectionStream;
@@ -68,6 +69,7 @@ final class ProductSearchProjectionService
         private readonly WebsiteCatalogInterface $websites,
         private readonly StoreCatalogInterface $stores,
         private readonly SalesChannelCatalogInterface $channels,
+        private readonly ?StorefrontScopeHotCache $hotCache = null,
     ) {
     }
 
@@ -101,6 +103,23 @@ final class ProductSearchProjectionService
             throw new \InvalidArgumentException((string)__(
                 'Product Search Scope 快照要求非负 store_id/channel_id',
             ));
+        }
+
+        $watermark = $this->stream->current($websiteId);
+        $hotCache = $this->hotCache;
+        if ($hotCache instanceof StorefrontScopeHotCache) {
+            $logicalKey = StorefrontCatalogCacheCoordinator::searchProjectionScopeLogicalKey(
+                $websiteId,
+                $storeId,
+                $channelId,
+                $watermark,
+            );
+
+            return $hotCache->rememberPolicy(
+                StorefrontCatalogCacheCoordinator::searchProjectionScopePolicy(),
+                $logicalKey,
+                fn(): array => $this->buildSnapshot($websiteId, $storeId, $channelId),
+            );
         }
 
         return $this->buildSnapshot($websiteId, $storeId, $channelId);

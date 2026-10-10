@@ -24,6 +24,7 @@ try {
         define('BP', dirname(__DIR__) . DIRECTORY_SEPARATOR);
     }
     require_once BP . 'app/code/Weline/Framework/Setup/Lock/SetupDatabaseAccessLock.php';
+    require_once BP . 'app/code/Weline/Framework/Setup/Lock/SetupUpgradeIntent.php';
     require_once BP . 'app/code/Weline/Framework/Phrase/DatabaseFreeTranslator.php';
     require_once BP . 'app/code/Weline/Framework/Console/EarlyDatabaseAccessGate.php';
     $earlyDatabaseGateExitCode = Weline\Framework\Console\EarlyDatabaseAccessGate::prepare($argv);

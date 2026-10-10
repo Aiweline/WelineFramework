@@ -28,6 +28,8 @@ final class StorefrontProductWidgetCatalogYouMayLikeCardsTest extends TestCase
         self::assertStringContainsString('Related / you-may-like fill: preserve Hanfu-first ordering', $source);
         self::assertStringContainsString('min(8, $limit)', $source);
         self::assertStringContainsString('count($bundle) >= 4', $source);
+        self::assertStringContainsString('Website::ID_DEFAULT is 0', $source);
+        self::assertStringNotContainsString('if ($websiteId <= 0)', $source);
         self::assertStringNotContainsString(
             'publishedOfferSummaries(max(($limit - count($cards))',
             $source,

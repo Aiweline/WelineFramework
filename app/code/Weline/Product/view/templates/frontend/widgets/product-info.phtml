@@ -20,11 +20,17 @@ use Weline\Theme\Helper\WidgetI18n;
  * @widget.source {Weline_Product::css/widgets/product-native-detail.css,Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Product::js/widgets/widget-product-info-0.js,Weline_Product::js/widgets/widget-product-info-1.js,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param show_brand {default=true,type="bool",label="显示品牌"}
  * @param show_supplier {default=true,type="bool",label="显示供应商"}
+ *
+ * @widget.slot {product-main}
+ *
+ * @widget.default_injections {[{"placement":"injection","layout_type":"product","layout_option":"default","slot":"design-product-main","area":"content","sort_order":0,"required":true,"config":{"show_brand":true,"show_supplier":true}}]}
+ * @widget.placement {layout}
  */
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Helper\StorefrontOfferResolver;
 use Weline\Product\Helper\StorefrontPageAssignBag;
+use Weline\Product\Helper\StorefrontPdpBuyBoxBag;
 use Weline\Product\Helper\StorefrontVariantContextResolver;
 use Weline\Product\Api\Data\StorefrontPriceContext;
 use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
@@ -236,19 +242,24 @@ $requiresShipping = array_key_exists('requires_shipping', $offer)
     ? (bool)$offer['requires_shipping']
     : true;
 $shippingHint = null;
-try {
-    $shipReg = ObjectManager::getInstance(
-        \Weline\Product\Service\Storefront\StorefrontShippingProfileCatalogProviderRegistry::class,
-    );
-    $shipProvider = $shipReg->primary();
-    if ($shipProvider !== null) {
-        $shippingHint = $shipProvider->previewHint($shippingProfileCode, $requiresShipping);
+if (StorefrontPdpBuyBoxBag::hasKey('shipping_hint')) {
+    $fromBag = StorefrontPdpBuyBoxBag::get('shipping_hint');
+    $shippingHint = is_array($fromBag) ? $fromBag : null;
+} else {
+    try {
+        $shipReg = ObjectManager::getInstance(
+            \Weline\Product\Service\Storefront\StorefrontShippingProfileCatalogProviderRegistry::class,
+        );
+        $shipProvider = $shipReg->primary();
+        if ($shipProvider !== null) {
+            $shippingHint = $shipProvider->previewHint($shippingProfileCode, $requiresShipping);
+        }
+    } catch (\Throwable) {
+        $shippingHint = null;
     }
-} catch (\Throwable) {
-    $shippingHint = null;
-}
-if (!is_array($shippingHint)) {
-    $shippingHint = null;
+    if (!is_array($shippingHint)) {
+        $shippingHint = null;
+    }
 }
 $name = trim((string)($offer['name'] ?? ''));
 $image = trim((string)($offer['image'] ?? ''));
@@ -443,17 +454,29 @@ $requiresShipping = !isset($offer['requires_shipping']) || !empty($offer['requir
 $maxQty = $quoteOnly ? 1 : max(1, min(30, $stock > 0 ? $stock : 30));
 $tobMoq = 5;
 $tobStep = 5;
-try {
-    if (class_exists(\Weline\B2B\Service\SellingModePolicy::class)) {
-        $tobPolicy = ObjectManager::getInstance(\Weline\B2B\Service\SellingModePolicy::class);
-        $tobMoq = max(1, (int)$tobPolicy->defaultMoq());
-        $tobStep = max(1, (int)$tobPolicy->defaultQtyStep());
+$sellingBag = StorefrontPdpBuyBoxBag::hasKey('selling') ? StorefrontPdpBuyBoxBag::get('selling') : null;
+if (is_array($sellingBag)) {
+    $tobMoq = max(1, (int)($sellingBag['moq'] ?? $tobMoq));
+    $tobStep = max(1, (int)($sellingBag['qty_step'] ?? $tobStep));
+} else {
+    try {
+        if (class_exists(\Weline\B2B\Service\SellingModePolicy::class)) {
+            $tobPolicy = ObjectManager::getInstance(\Weline\B2B\Service\SellingModePolicy::class);
+            $tobMoq = max(1, (int)$tobPolicy->defaultMoq());
+            $tobStep = max(1, (int)$tobPolicy->defaultQtyStep());
+        }
+    } catch (\Throwable) {
     }
-} catch (\Throwable) {
 }
 $reviewRating = 0.0;
 $reviewCount = 0;
-if ($offerUuid !== '' && class_exists(\Weline\Review\Service\ReviewService::class)) {
+if (StorefrontPdpBuyBoxBag::hasKey('review')) {
+    $reviewBag = StorefrontPdpBuyBoxBag::get('review');
+    if (is_array($reviewBag)) {
+        $reviewRating = max(0.0, (float)($reviewBag['average_rating'] ?? 0));
+        $reviewCount = max(0, (int)($reviewBag['review_count'] ?? 0));
+    }
+} elseif ($offerUuid !== '' && class_exists(\Weline\Review\Service\ReviewService::class)) {
     try {
         $reviewFacts = ObjectManager::getInstance(\Weline\Review\Service\ReviewService::class)
             ->seoFacts('product', $offerUuid, 1);

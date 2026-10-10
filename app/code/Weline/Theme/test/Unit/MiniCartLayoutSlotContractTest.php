@@ -33,7 +33,7 @@ final class MiniCartLayoutSlotContractTest extends TestCase
 
         self::assertStringContainsString('data-layout="mini-cart"', $source);
         self::assertStringContainsString('<w:slot id="footer-extras"', $source);
-        self::assertStringContainsString('mini-cart-coupon', $source);
+        self::assertStringContainsString('checkout-coupon', $source);
         self::assertStringContainsString('order-notice', $source);
     }
 
@@ -45,7 +45,7 @@ final class MiniCartLayoutSlotContractTest extends TestCase
         self::assertIsArray($decoded);
         $widgets = $decoded['widgets'] ?? [];
         self::assertCount(2, $widgets);
-        self::assertSame('mini-cart-coupon', $widgets[0]['widget_code'] ?? null);
+        self::assertSame('checkout-coupon', $widgets[0]['widget_code'] ?? null);
         self::assertSame('order-notice', $widgets[1]['widget_code'] ?? null);
         self::assertSame('footer-extras', $widgets[0]['slot_id'] ?? null);
     }

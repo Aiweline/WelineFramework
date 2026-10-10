@@ -499,15 +499,11 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                             return $entry['payload'];
                         }
                     }
-                    $tBuilder = \hrtime(true);
                     $payload = RequestLifecycleTrace::measurePhase(
                         'storefront.cache.builder',
                         $builder,
                         $phaseMeta,
                     );
-                    // #region agent log
-                    $this->debug8f7f40RecordBuilder($phaseMeta, $payload, \round((\hrtime(true) - $tBuilder) / 1e6, 2));
-                    // #endregion
                     // 空结果不落共享/L1：否则一次瞬时缺件（bake 未就绪、锁冲突）会被
                     // 固化成 fresh 负缓存，在 TTL 内持续交白卷且无自愈路径。
                     // 仅当策略显式声明 allowEmptyResult（诚实空标记）时才允许写入。
@@ -515,17 +511,22 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                         return $payload;
                     }
                     $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
-                    if ($traceMeta !== null) {
-                        $phaseMeta['write_fresh_until'] = $entry['fresh_until'];
-                        $phaseMeta['write_stale_until'] = $entry['stale_until'];
-                    }
+                    $wrote = false;
                     RequestLifecycleTrace::measurePhase(
                         'storefront.cache.shared_write',
-                        function () use ($pool, $scopedKey, $entry, $freshTtlSeconds, $staleTtlSeconds, $explicitDimensions): void {
-                            $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
+                        function () use ($pool, $scopedKey, $entry, $freshTtlSeconds, $staleTtlSeconds, $explicitDimensions, &$wrote): void {
+                            $wrote = $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
                         },
                         $phaseMeta,
                     );
+                    if ($traceMeta !== null) {
+                        $phaseMeta['shared_write_ok'] = $wrote;
+                        if ($wrote) {
+                            $phaseMeta['write_fresh_until'] = $entry['fresh_until'];
+                            $phaseMeta['write_stale_until'] = $entry['stale_until'];
+                        }
+                    }
+                    // L1 仍存：同请求复用；L2 失败时下一请求会再 miss（shared_write_ok=false）。
                     $this->storeProcessEntry($processKey, $entry);
                     return $payload;
                 } finally {
@@ -611,15 +612,11 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                     return $entry['payload'];
                 }
             }
-            $tBuilder = \hrtime(true);
             $payload = RequestLifecycleTrace::measurePhase(
                 'storefront.cache.builder',
                 $builder,
                 $phaseMeta,
             );
-            // #region agent log
-            $this->debug8f7f40RecordBuilder($phaseMeta, $payload, \round((\hrtime(true) - $tBuilder) / 1e6, 2));
-            // #endregion
             // 空结果不落共享/L1：否则一次瞬时缺件（bake 未就绪、锁冲突）会被
             // 固化成 fresh 负缓存，在 TTL 内持续交白卷且无自愈路径。
             // 仅当策略显式声明 allowEmptyResult（诚实空标记）时才允许写入。
@@ -627,17 +624,21 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                 return $payload;
             }
             $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
-            if ($traceMeta !== null) {
-                $phaseMeta['write_fresh_until'] = $entry['fresh_until'];
-                $phaseMeta['write_stale_until'] = $entry['stale_until'];
-            }
+            $wrote = false;
             RequestLifecycleTrace::measurePhase(
                 'storefront.cache.shared_write',
-                function () use ($pool, $scopedKey, $entry, $freshTtlSeconds, $staleTtlSeconds, $explicitDimensions): void {
-                    $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
+                function () use ($pool, $scopedKey, $entry, $freshTtlSeconds, $staleTtlSeconds, $explicitDimensions, &$wrote): void {
+                    $wrote = $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
                 },
                 $phaseMeta,
             );
+            if ($traceMeta !== null) {
+                $phaseMeta['shared_write_ok'] = $wrote;
+                if ($wrote) {
+                    $phaseMeta['write_fresh_until'] = $entry['fresh_until'];
+                    $phaseMeta['write_stale_until'] = $entry['stale_until'];
+                }
+            }
             $this->storeProcessEntry($processKey, $entry);
             return $payload;
         } finally {
@@ -920,13 +921,18 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         return $values;
     }
 
-    private function writeShared(CachePoolInterface $pool, string $key, array $entry, int $ttl, bool $explicitDimensions): void
+    /**
+     * Persist the envelope to the shared adapter.
+     * Callers must honor false: WlsMemoryAdapter (and peers) can refuse writes
+     * while still returning control; pretending success yields perpetual L2 miss.
+     */
+    private function writeShared(CachePoolInterface $pool, string $key, array $entry, int $ttl, bool $explicitDimensions): bool
     {
         if ($explicitDimensions) {
-            $pool->setCustom($key, $entry, $ttl);
-        } else {
-            $pool->set($key, $entry, $ttl);
+            return (bool)$pool->setCustom($key, $entry, $ttl);
         }
+
+        return (bool)$pool->set($key, $entry, $ttl);
     }
 
     private function pool(string $identity): CachePoolInterface
@@ -1050,54 +1056,4 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         });
     }
 
-    // #region agent log
-    /**
-     * @param array<string, mixed> $phaseMeta
-     */
-    private function debug8f7f40RecordBuilder(array $phaseMeta, mixed $payload, float $durationMs): void
-    {
-        try {
-            if (!\is_file('/Users/weline/Project/Official/框架/.cursor/debug-8f7f40.enable-trace')) {
-                return;
-            }
-            $resource = (string)($phaseMeta['resource'] ?? 'unknown');
-            $bagKey = 'debug.8f7f40.builder_by_resource';
-            $bag = RequestContext::get($bagKey);
-            if (!\is_array($bag)) {
-                $bag = [];
-            }
-            if (!isset($bag[$resource]) || !\is_array($bag[$resource])) {
-                $bag[$resource] = ['calls' => 0, 'duration_ms' => 0.0];
-            }
-            $bag[$resource]['calls'] = (int)$bag[$resource]['calls'] + 1;
-            $bag[$resource]['duration_ms'] = \round((float)$bag[$resource]['duration_ms'] + $durationMs, 2);
-            RequestContext::set($bagKey, $bag);
-            $n = (int)(RequestContext::get('debug.8f7f40.builder_n') ?? 0) + 1;
-            RequestContext::set('debug.8f7f40.builder_n', $n);
-            if ($n <= 20 || ($n % 10) === 0) {
-                $payloadLog = [
-                    'sessionId' => '8f7f40',
-                    'runId' => 'cold-lag-pre',
-                    'hypothesisId' => 'G',
-                    'location' => 'StorefrontScopeHotCache.php:builder',
-                    'message' => 'hotcache builder invocation',
-                    'data' => [
-                        'n' => $n,
-                        'resource' => $resource,
-                        'duration_ms' => $durationMs,
-                        'empty' => $this->isEmptyResult($payload),
-                        'request_id' => RequestContext::getId(),
-                    ],
-                    'timestamp' => (int)\round(\microtime(true) * 1000),
-                ];
-                @\file_put_contents(
-                    '/Users/weline/Project/Official/框架/.cursor/debug-8f7f40.log',
-                    \json_encode($payloadLog, \JSON_UNESCAPED_UNICODE) . "\n",
-                    \FILE_APPEND | \LOCK_EX
-                );
-            }
-        } catch (\Throwable) {
-        }
-    }
-    // #endregion
 }

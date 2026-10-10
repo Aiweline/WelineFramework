@@ -40,8 +40,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261010-minicart-paper-ink-v24"],
-            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261010-minicart-paper-ink-v24"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261010-tob-retail-gate1"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261010-tob-retail-gate1"],
             globalVar: "WelineMiniCartIcon",
             load: "eager",
             description: "迷你购物车图标与抽屉"
@@ -277,8 +277,8 @@
             description: "账户中心发货/收货地址维护"
         },
         cart: {
-            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20261007-cart-qty-hit-v3", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20261006-tob-keep-pref1"],
-            paths: ["Weline_Cart::js/cart.js?v=20261007-cart-qty-hit-v3", "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "Weline_Cart::js/widgets/product-purchase-actions.js?v=20261006-tob-keep-pref1"],
+            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20261007-cart-qty-hit-v3", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20261010-qv-mount1"],
+            paths: ["Weline_Cart::js/cart.js?v=20261007-cart-qty-hit-v3", "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "Weline_Cart::js/widgets/product-purchase-actions.js?v=20261010-qv-mount1"],
             globalVar: "WelineCartPurchaseActions",
             load: "defer",
             description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记"
@@ -298,21 +298,21 @@
             description: "快捷支付回头确认页：摘要/缺口/确认收款"
         },
         storefrontMoneySummary: {
-            origin_paths: ["app/code/Weline/Checkout/view/statics/js/widgets/storefront-money-summary.js?v=20261009-credit-loop2"],
-            paths: ["Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261009-credit-loop2"],
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/widgets/storefront-money-summary.js?v=20261010-tob-retail-gate1"],
+            paths: ["Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261010-tob-retail-gate1"],
             globalVar: "WelineStorefrontMoneySummary",
             load: "eager",
             description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"
         },
         b2bSellingMode: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-credit-persist2", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261007-switch-retail2"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-credit-persist2", "Weline_B2B::js/selling-mode.js?v=20261007-switch-retail2"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-tob-money-policy1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261010-boot-idle1"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy1", "Weline_B2B::js/selling-mode.js?v=20261010-boot-idle1"],
             globalVar: "WelineB2BSellingMode",
             description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
         },
         b2bCheckoutTob: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-credit-persist2"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-credit-persist2"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-tob-money-policy1"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy1"],
             globalVar: "WelineB2BCheckoutTob",
             description: "B2B wholesale credit + checkout deposit note for tob carts"
         },
@@ -335,8 +335,8 @@
             description: "商品对比页"
         },
         compareShopper: {
-            origin_paths: ["app/code/Weline/Compare/view/statics/js/product-card-actions.js"],
-            paths: ["Weline_Compare::js/product-card-actions.js"],
+            origin_paths: ["app/code/Weline/Compare/view/statics/js/product-card-actions.js?v=20261010-qv-product-info1"],
+            paths: ["Weline_Compare::js/product-card-actions.js?v=20261010-qv-product-info1"],
             globalVar: "WelineCompareShopper",
             load: "defer",
             description: "商品卡对比/快速查看/对比栏"

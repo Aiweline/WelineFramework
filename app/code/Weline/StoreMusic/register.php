@@ -8,7 +8,7 @@ Register::register(
     Register::MODULE,
     'Weline_StoreMusic',
     __DIR__,
-    '1.0.0',
+    '1.0.1',
     '店面进店音乐',
     [
         'Weline_Framework',

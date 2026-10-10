@@ -16,6 +16,7 @@ use Weline\Theme\Service\RuntimeTemplateMaterializer;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Taglib\ThemeTemplate;
+use Weline\Framework\View\Cache\TemplateFragmentOutputCache;
 use Weline\Framework\View\Template;
 
 final class ProcessCacheResetter implements ProcessCacheResetterInterface, MemoryStoreInterface
@@ -34,7 +35,8 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             ThemeContextService::clearProcessCache();
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
             Template::clearProcessViewFileCache();
-            return 9;
+            TemplateFragmentOutputCache::resetProcessCaches();
+            return 10;
         }
 
         // Hard memory pressure (keep-warm Worker): drop rebuildable process L1.
@@ -49,16 +51,18 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             ThemeContextService::clearProcessCache();
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
             Template::clearProcessViewFileCache();
+            TemplateFragmentOutputCache::resetProcessCaches();
 
-            return 8;
+            return 9;
         }
 
         // Soft pressure: reclaim chrome HTML + HotCache process bag; keep lighter meta.
         Partials::clearOutputCache();
         Partials::clearMetaCache();
         \Weline\Framework\Cache\Service\StorefrontScopeHotCache::trimProcessCacheToBudget(1_048_576);
+        TemplateFragmentOutputCache::resetProcessCaches();
 
-        return 3;
+        return 4;
     }
 
     public function getMemoryUsage(): int
@@ -122,6 +126,7 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
         ThemeContextService::clearProcessCache();
         \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
         Template::clearProcessViewFileCache();
+        TemplateFragmentOutputCache::resetProcessCaches();
     }
 
     public function warmUp(int $limit = 1000): int

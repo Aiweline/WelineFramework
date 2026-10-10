@@ -1680,9 +1680,8 @@ final class CheckoutGroupSubmitService
     private function discountsBannedForCartType(string $cartType): bool
     {
         $code = strtolower(trim($cartType)) ?: 'toc';
-        if ($code === 'tob') {
-            return true;
-        }
+        // Commerce type owns ban (B2B TobCommerceOrderType::disablesStorefrontDiscounts).
+        // ToB deposit defer_inventory still rides this flag until a dedicated type field exists.
         try {
             if (class_exists(\Weline\Order\Service\OrderCalculatorGate::class)) {
                 $calcGate = ObjectManager::getInstance(\Weline\Order\Service\OrderCalculatorGate::class);

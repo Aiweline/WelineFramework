@@ -2,6 +2,20 @@
 /**
  * @widget.source {Weline_Visitor::css/widgets/widget-pixel-event-trend.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * Dashboard Widget: 像素事件趋势
+ *
+ * @widget.code {pixel_event_trend}
+ * @widget.name {像素事件趋势}
+ * @widget.description {展示像素事件近几日变化趋势。}
+ * @widget.type {chart}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-analysis"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-analysis}
+ * @widget.supports {["dashboard-widget","dashboard-slot-analysis","dashboard-chart","dashboard-trend"]}
+ * @param range {default="7d",type="select",label="统计范围",options={"7d":"近 7 天","30d":"近 30 天","90d":"近 90 天"}}
+ * @param website_id {default="",type="string",label="站点 ID",description="留空时跟随当前 Dashboard 站点。"}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"weline_visitor_event_statistics","target_type":"website","slot":"dashboard-analysis","area":"content","sort_order":60,"required":true,"reason":"安装访客统计后自动展示像素事件趋势","config":{"dashboard_layout":{"colSpan":5,"rowSpan":2,"sortOrder":60}}}]}
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
 $config = [

@@ -167,16 +167,24 @@ final class DocSkillCatalog
                 $absolute = $repository . '/' . ltrim($path, '/');
                 $body = is_file($absolute) ? (string) file_get_contents($absolute) : '';
                 $parsed = self::parseSkillMarkdown($body, $name);
+                $indexAliases = [];
+                foreach (is_array($row['aliases'] ?? null) ? $row['aliases'] : [] as $alias) {
+                    $alias = trim((string) $alias);
+                    if ($alias !== '') {
+                        $indexAliases[] = $alias;
+                    }
+                }
                 $skills[] = self::skillRow(
                     skillId: 'doc:' . $name,
                     name: $parsed['name'] !== '' ? $parsed['name'] : $name,
                     description: $parsed['description'] !== ''
                         ? $parsed['description']
                         : ('Module doc skill for ' . ($module !== '' ? $module : $name)),
-                    aliases: [$name],
+                    aliases: array_values(array_unique(array_filter([$name, ...$indexAliases]))),
                     triggers: array_values(array_unique(array_filter([
                         $name,
                         $module,
+                        ...$indexAliases,
                         ...$parsed['triggers'],
                     ]))),
                     module: $module,

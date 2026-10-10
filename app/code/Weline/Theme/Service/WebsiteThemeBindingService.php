@@ -13,11 +13,13 @@ use Weline\Theme\Api\DefaultThemeInterface;
 use Weline\Theme\Api\Version\ThemeApplicationReferenceReaderInterface;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Websites\Api\Catalog\StoreCatalogInterface;
+use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
 use Weline\Websites\Api\Theme\ThemeApplicationInterface;
 use Weline\Websites\Api\Theme\ThemeApplicationReference;
 
 /**
- * 网站信息表单拥有的店面主题应用引用（websites_theme_application）。
+ * 网站树（Website/Store/Channel）管理表单拥有的店面主题应用引用（websites_theme_application）。
  * 缺省展示 Theme 模块全局 Default（磁盘；不假定库 id）；不再写 scoped theme_binding。
  */
 final class WebsiteThemeBindingService
@@ -34,6 +36,8 @@ final class WebsiteThemeBindingService
         private readonly ThemeScopeVersion $versionModel,
         private readonly WelineTheme $themes,
         private readonly TransactionCoordinatorInterface $transactions,
+        private readonly WebsiteCatalogInterface $websites,
+        private readonly StoreCatalogInterface $stores,
     ) {
     }
 
@@ -57,15 +61,110 @@ final class WebsiteThemeBindingService
      */
     public function summarize(array $website): array
     {
-        $websiteId = $this->normalizeWebsiteId($website['website_id'] ?? $website['id'] ?? null);
+        $websiteId = $this->normalizeNonNegativeId($website['website_id'] ?? $website['id'] ?? null);
         $websiteCode = strtolower(trim((string)($website['code'] ?? '')));
-        $empty = $this->emptySummary($websiteId, $websiteCode);
         if ($websiteId < 0 || $websiteCode === '') {
-            return $empty;
+            return $this->emptySummary($websiteId, $websiteCode);
         }
 
         try {
-            $identity = $this->catalog->authoritativeIdentity(ScopeIdentity::website($websiteId, $websiteCode));
+            return $this->summarizeForScope(
+                $this->catalog->authoritativeIdentity(ScopeIdentity::website($websiteId, $websiteCode)),
+            );
+        } catch (\Throwable) {
+            return $this->emptySummary($websiteId, $websiteCode);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $store
+     * @return array{
+     *   ok:bool,
+     *   website_id:int,
+     *   website_code:string,
+     *   storage_scope:string,
+     *   theme_id:int,
+     *   theme_name:string,
+     *   binding_source:string,
+     *   inherited:bool,
+     *   version_id:int,
+     *   version_number:int,
+     *   version_name:string,
+     *   themes:list<array{id:int,name:string}>,
+     *   versions:list<array{id:int,number:int,name:string,lifecycle:string}>
+     * }
+     */
+    public function summarizeStore(array $store): array
+    {
+        try {
+            return $this->summarizeForScope($this->identityFromStore($store));
+        } catch (\Throwable) {
+            $websiteId = $this->normalizeNonNegativeId($store['website_id'] ?? null);
+            $websiteCode = $this->websiteCodeById($websiteId >= 0 ? $websiteId : -1);
+
+            return $this->emptySummary($websiteId, $websiteCode);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $channel
+     * @return array{
+     *   ok:bool,
+     *   website_id:int,
+     *   website_code:string,
+     *   storage_scope:string,
+     *   theme_id:int,
+     *   theme_name:string,
+     *   binding_source:string,
+     *   inherited:bool,
+     *   version_id:int,
+     *   version_number:int,
+     *   version_name:string,
+     *   themes:list<array{id:int,name:string}>,
+     *   versions:list<array{id:int,number:int,name:string,lifecycle:string}>
+     * }
+     */
+    public function summarizeChannel(array $channel): array
+    {
+        try {
+            return $this->summarizeForScope($this->identityFromChannel($channel));
+        } catch (\Throwable) {
+            $websiteId = $this->normalizeNonNegativeId($channel['website_id'] ?? null);
+            $websiteCode = $this->websiteCodeById($websiteId >= 0 ? $websiteId : -1);
+
+            return $this->emptySummary($websiteId, $websiteCode);
+        }
+    }
+
+    /**
+     * @return array{
+     *   ok:bool,
+     *   website_id:int,
+     *   website_code:string,
+     *   storage_scope:string,
+     *   theme_id:int,
+     *   theme_name:string,
+     *   binding_source:string,
+     *   inherited:bool,
+     *   version_id:int,
+     *   version_number:int,
+     *   version_name:string,
+     *   themes:list<array{id:int,name:string}>,
+     *   versions:list<array{id:int,number:int,name:string,lifecycle:string}>
+     * }
+     */
+    public function summarizeForScope(ScopeIdentity $identity): array
+    {
+        if ($identity->isGlobal()) {
+            return $this->emptySummary(-1, '');
+        }
+
+        $websiteId = (int)($identity->websiteId ?? -1);
+        $websiteCode = strtolower(trim((string)($identity->websiteCode ?? '')));
+        $empty = $this->emptySummary($websiteId, $websiteCode);
+        $storeMode = $this->applicationStoreMode($identity);
+
+        try {
             $storageScope = $this->scopes->toStorageScope($identity);
             $keys = [];
             $cursor = $identity;
@@ -74,7 +173,7 @@ final class WebsiteThemeBindingService
                 $cursor = $this->scopes->parentIdentity($cursor);
             } while ($cursor !== null);
 
-            $resolution = $this->applications->resolve($keys, ScopeIdentity::MODE_NORMAL, 'frontend');
+            $resolution = $this->applications->resolve($keys, $storeMode, 'frontend');
             $reference = $resolution->reference;
             $inherited = false;
             $bindingSource = 'none';
@@ -82,7 +181,7 @@ final class WebsiteThemeBindingService
                 $validated = $this->defaultTheme->defaultApplicationReference(
                     'frontend',
                     $storageScope,
-                    ScopeIdentity::MODE_NORMAL,
+                    $storeMode,
                 );
                 $themeId = (int)$validated['theme_id'];
                 $inherited = true;
@@ -91,7 +190,9 @@ final class WebsiteThemeBindingService
             } else {
                 $themeId = $reference->themeId;
                 $inherited = !$resolution->own;
-                $bindingSource = $resolution->own ? 'website' : 'inherited';
+                $bindingSource = $resolution->own
+                    ? $this->ownBindingSource($identity)
+                    : 'inherited';
                 $versionId = $reference->themeVersionId;
             }
 
@@ -140,31 +241,95 @@ final class WebsiteThemeBindingService
         if ($websiteId < 0) {
             return;
         }
+        $websiteCode = strtolower(trim((string)($website['code'] ?? '')));
+        if ($websiteCode === '') {
+            return;
+        }
+
+        try {
+            $identity = $this->catalog->authoritativeIdentity(ScopeIdentity::website($websiteId, $websiteCode));
+        } catch (\Throwable) {
+            return;
+        }
+
+        $this->scheduleSaveFromScopeForm($identity, $payload, $connection, 'theme.website_application.' . $websiteId);
+    }
+
+    /**
+     * @param array<string, mixed> $store
+     * @param array<string, mixed> $payload extensions[theme]
+     */
+    public function scheduleSaveFromStoreForm(
+        array $store,
+        array $payload,
+        ?ConnectionFactory $connection,
+    ): void {
+        try {
+            $identity = $this->identityFromStore($store);
+        } catch (\Throwable) {
+            return;
+        }
+        $storeId = $this->normalizeNonNegativeId($store['store_id'] ?? $store['id'] ?? null);
+        $this->scheduleSaveFromScopeForm(
+            $identity,
+            $payload,
+            $connection,
+            'theme.store_application.' . ($storeId >= 0 ? (string)$storeId : 'unknown'),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $channel
+     * @param array<string, mixed> $payload extensions[theme]
+     */
+    public function scheduleSaveFromChannelForm(
+        array $channel,
+        array $payload,
+        ?ConnectionFactory $connection,
+    ): void {
+        try {
+            $identity = $this->identityFromChannel($channel);
+        } catch (\Throwable) {
+            return;
+        }
+        $channelId = $this->normalizeNonNegativeId($channel['channel_id'] ?? $channel['id'] ?? null);
+        $this->scheduleSaveFromScopeForm(
+            $identity,
+            $payload,
+            $connection,
+            'theme.channel_application.' . ($channelId >= 0 ? (string)$channelId : 'unknown'),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $payload extensions[theme]
+     */
+    public function scheduleSaveFromScopeForm(
+        ScopeIdentity $identity,
+        array $payload,
+        ?ConnectionFactory $connection,
+        string $afterCommitKey,
+    ): void {
         if (!array_key_exists('theme_id', $payload) && !array_key_exists('version_id', $payload)) {
             return;
         }
 
         $themeId = (int)($payload['theme_id'] ?? 0);
         $versionId = (int)($payload['version_id'] ?? 0);
-        $websiteCode = strtolower(trim((string)($website['code'] ?? '')));
-        if ($websiteCode === '') {
+        if ($themeId <= 0 && $versionId <= 0) {
             return;
         }
 
-        $runner = function () use ($websiteId, $websiteCode, $themeId, $versionId): void {
+        $runner = function () use ($identity, $themeId, $versionId): void {
             if ($themeId > 0) {
-                $this->bindThemeForWebsite($websiteId, $websiteCode, $themeId, $versionId);
+                $this->bindThemeForScope($identity, $themeId, $versionId);
             } elseif ($versionId > 0) {
-                $this->bindThemeForWebsite($websiteId, $websiteCode, 0, $versionId);
+                $this->bindThemeForScope($identity, 0, $versionId);
             }
         };
 
         if ($connection instanceof ConnectionFactory) {
-            $this->transactions->afterCommit(
-                $connection,
-                'theme.website_application.' . $websiteId,
-                $runner,
-            );
+            $this->transactions->afterCommit($connection, $afterCommitKey, $runner);
 
             return;
         }
@@ -186,19 +351,28 @@ final class WebsiteThemeBindingService
             throw new \InvalidArgumentException((string)__('网站代码无效'));
         }
         $identity = $this->catalog->authoritativeIdentity(ScopeIdentity::website($websiteId, $websiteCode));
+        $this->bindThemeForScope($identity, $themeId, $versionId);
+    }
+
+    public function bindThemeForScope(ScopeIdentity $identity, int $themeId, int $versionId = 0): void
+    {
+        if ($identity->isGlobal()) {
+            throw new \InvalidArgumentException((string)__('主题绑定参数无效'));
+        }
+
         $storageScope = $this->scopes->toStorageScope($identity);
         $scopeKey = $identity->canonicalKey();
-        $current = $this->applications->getOwn($scopeKey, ScopeIdentity::MODE_NORMAL, 'frontend');
+        $storeMode = $this->applicationStoreMode($identity);
+        $current = $this->applications->getOwn($scopeKey, $storeMode, 'frontend');
 
         if ($themeId <= 0) {
             $themeId = $current['reference']?->themeId ?? 0;
         }
         if ($themeId <= 0 || $this->defaultTheme->isModuleDefaultThemeId($themeId)) {
-            // 写回 Theme 模块包默认引用（theme_id 可能为目录 id 或 0），不假定 id=1。
             $fallback = $this->defaultTheme->defaultApplicationReference(
                 'frontend',
                 $storageScope,
-                ScopeIdentity::MODE_NORMAL,
+                $storeMode,
             );
             $themeId = (int)$fallback['theme_id'];
         } else {
@@ -213,14 +387,14 @@ final class WebsiteThemeBindingService
                 || trim((string)$version->getScope()) !== $storageScope
                 || strtolower(trim((string)$version->getArea())) !== 'frontend'
             ) {
-                throw new \InvalidArgumentException((string)__('所选主题版本不属于当前网站范围'));
+                throw new \InvalidArgumentException((string)__('所选主题版本不属于当前范围'));
             }
             $this->versions->markPublished($version);
             $ownerScope = trim((string)$version->getScope());
             $contentRevision = (int)$version->getContentRevision();
             $themeVersionId = $versionId;
         } else {
-            $published = $this->versions->getPublished($themeId, $storageScope, ScopeIdentity::MODE_NORMAL, 'frontend');
+            $published = $this->versions->getPublished($themeId, $storageScope, $storeMode, 'frontend');
             if ($published instanceof ThemeScopeVersion && (int)$published->getVersionId() > 0) {
                 $themeVersionId = (int)$published->getVersionId();
                 $contentRevision = (int)$published->getContentRevision();
@@ -237,7 +411,7 @@ final class WebsiteThemeBindingService
             'theme_version_id' => $themeVersionId,
             'content_revision' => $contentRevision,
             'owner_scope' => $ownerScope !== '' ? $ownerScope : $storageScope,
-            'store_mode' => ScopeIdentity::MODE_NORMAL,
+            'store_mode' => $storeMode,
             'area' => 'frontend',
         ]);
         $reference = new ThemeApplicationReference(
@@ -250,7 +424,7 @@ final class WebsiteThemeBindingService
         );
         $this->applications->save(
             $scopeKey,
-            ScopeIdentity::MODE_NORMAL,
+            $storeMode,
             'frontend',
             $reference,
             $current['revision'],
@@ -360,6 +534,99 @@ final class WebsiteThemeBindingService
     }
 
     /**
+     * @param array<string, mixed> $store
+     */
+    private function identityFromStore(array $store): ScopeIdentity
+    {
+        $websiteId = $this->normalizeNonNegativeId($store['website_id'] ?? null);
+        $storeCode = strtolower(trim((string)($store['code'] ?? '')));
+        $storeMode = strtolower(trim((string)($store['store_mode'] ?? $store['mode'] ?? ScopeIdentity::MODE_NORMAL)));
+        if ($storeMode === '') {
+            $storeMode = ScopeIdentity::MODE_NORMAL;
+        }
+        $websiteCode = $this->websiteCodeById($websiteId);
+        if ($websiteId < 0 || $websiteCode === '' || $storeCode === '') {
+            throw new \InvalidArgumentException('store_theme_binding_identity_invalid');
+        }
+
+        return $this->catalog->authoritativeIdentity(
+            ScopeIdentity::store($websiteId, $websiteCode, $storeCode, $storeMode),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $channel
+     */
+    private function identityFromChannel(array $channel): ScopeIdentity
+    {
+        $websiteId = $this->normalizeNonNegativeId($channel['website_id'] ?? null);
+        $storeId = $this->normalizeNonNegativeId($channel['store_id'] ?? null);
+        $channelCode = strtolower(trim((string)($channel['code'] ?? '')));
+        if ($websiteId < 0 || $storeId < 0 || $channelCode === '') {
+            throw new \InvalidArgumentException('channel_theme_binding_identity_invalid');
+        }
+
+        $parentStore = $this->stores->byId($storeId);
+        if ($parentStore === null) {
+            throw new \InvalidArgumentException('channel_theme_binding_store_missing');
+        }
+        $storeCode = strtolower(trim($parentStore->code));
+        $storeMode = strtolower(trim($parentStore->storeMode !== '' ? $parentStore->storeMode : ScopeIdentity::MODE_NORMAL));
+        if ($storeMode === '') {
+            $storeMode = ScopeIdentity::MODE_NORMAL;
+        }
+        $websiteCode = $this->websiteCodeById($websiteId);
+        if ($websiteCode === '' && $parentStore->websiteId >= 0) {
+            $websiteCode = $this->websiteCodeById($parentStore->websiteId);
+            $websiteId = $parentStore->websiteId;
+        }
+        if ($websiteCode === '' || $storeCode === '') {
+            throw new \InvalidArgumentException('channel_theme_binding_identity_invalid');
+        }
+
+        return $this->catalog->authoritativeIdentity(
+            ScopeIdentity::channel($websiteId, $websiteCode, $storeCode, $channelCode, $storeMode),
+        );
+    }
+
+    private function applicationStoreMode(ScopeIdentity $identity): string
+    {
+        $mode = strtolower(trim((string)($identity->storeMode ?? '')));
+        if (in_array($mode, [ScopeIdentity::MODE_NORMAL, ScopeIdentity::MODE_DEV, ScopeIdentity::MODE_TEST], true)) {
+            return $mode;
+        }
+
+        return ScopeIdentity::MODE_NORMAL;
+    }
+
+    private function ownBindingSource(ScopeIdentity $identity): string
+    {
+        return match ($identity->scopeKind) {
+            ScopeIdentity::KIND_STORE => 'store',
+            ScopeIdentity::KIND_CHANNEL => 'channel',
+            default => 'website',
+        };
+    }
+
+    private function websiteCodeById(int $websiteId): string
+    {
+        if ($websiteId < 0) {
+            return '';
+        }
+        try {
+            foreach ($this->websites->all() as $summary) {
+                if ((int)$summary->id === $websiteId) {
+                    return strtolower(trim($summary->code));
+                }
+            }
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return '';
+    }
+
+    /**
      * @return array{
      *   ok:bool,
      *   website_id:int,
@@ -431,10 +698,10 @@ final class WebsiteThemeBindingService
             || is_dir($basePath . $separator . 'theme' . $separator . 'frontend');
     }
 
-    private function normalizeWebsiteId(mixed $value): int
+    private function normalizeNonNegativeId(mixed $value): int
     {
         if (is_int($value)) {
-            return $value;
+            return $value >= 0 ? $value : -1;
         }
         if (is_string($value) && preg_match('/^\d+$/D', $value) === 1) {
             return (int)$value;

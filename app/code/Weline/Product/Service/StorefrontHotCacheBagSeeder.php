@@ -84,10 +84,10 @@ final class StorefrontHotCacheBagSeeder
                 $cards = $widgetCatalog->homepageFeaturedCards(8);
                 if (\is_array($cards)) {
                     $seeded++;
-                    $bags[] = 'product.homepage.featured_cards';
+                    $bags[] = 'product.homepage_shelf_id_plan';
                 }
             } catch (\Throwable $e) {
-                $errors[] = 'homepage_featured_cards:' . $e->getMessage();
+                $errors[] = 'homepage_shelf_id_plan:' . $e->getMessage();
             }
         }
 

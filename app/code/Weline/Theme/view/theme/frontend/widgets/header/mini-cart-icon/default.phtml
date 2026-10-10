@@ -267,6 +267,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-i18n-image-preview="<?= $esc(__('查看商品图')) ?>"
          data-i18n-swatch-preview-close="<?= $esc(__('关闭')) ?>"
          data-i18n-goods-subtotal="<?= $esc(__('商品小计')) ?>"
+         data-i18n-deposit-payable="<?= $esc(__('本次应付定金')) ?>"
          data-i18n-discount-coupon="<?= $esc(__('优惠券')) ?>"
          data-i18n-discount-stack="<?= $esc(__('叠加优惠')) ?>"
          data-i18n-discount-automatic="<?= $esc(__('自动优惠')) ?>"
@@ -373,7 +374,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                 <w:slot id="footer-extras"
                         layout="mini-cart"
                         name="底部扩展区"
-                        accept="layout-mini-cart-footer-extras,mini-cart-coupon,checkout-coupon,order-notice,marketing,order,b2b-checkout-credit,b2b-deposit-note,b2b"
+                        accept="layout-mini-cart-footer-extras,checkout-coupon,order-notice,marketing,order,b2b-checkout-credit,b2b-deposit-note,b2b"
                         multiple="true"
                         position="footer"
                         class="mini-cart-drawer__extras"></w:slot>

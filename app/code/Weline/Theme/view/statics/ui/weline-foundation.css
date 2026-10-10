@@ -107,6 +107,8 @@
         --weline-z-menu: 700;
         --weline-z-overlay: 900;
         --weline-z-toast: 1100;
+        /* Mini-cart drawer open: lift .weline-header stacking above store music (2147483001), below theme editor (2147483100+). */
+        --weline-z-mini-cart-modal: 2147483010;
         /* Amazon / storefront body copy (overridden by theme variables/_colors.css when loaded) */
         --weline-chrome-body-text: #0f1111;
         --weline-chrome-body-text-secondary: #565959;

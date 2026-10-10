@@ -290,18 +290,53 @@ final class BlogContentResolver implements BlogSitemapContentSourceInterface
         return $locale === 'en' || str_starts_with($locale, 'en_');
     }
 
-    /** @return array<string, string> locale => storage slug suffix (without leading dash) */
+    /**
+     * Storefront locale → storage slug suffix (without leading dash).
+     * zh_Hans_CN uses the bare base slug (no map entry).
+     *
+     * @return array<string, string> locale => storage slug suffix
+     */
     public static function localeSlugSuffixMap(): array
     {
         return [
-            'en_US' => 'en',
             'ar_SA' => 'ar',
+            'bg_BG' => 'bg',
             'bn_BD' => 'bn',
+            'ca_ES' => 'ca',
+            'cs_CZ' => 'cs',
+            'da_DK' => 'da',
+            'de_DE' => 'de',
+            'el_GR' => 'el',
+            'en_GB' => 'en-gb',
+            'en_US' => 'en',
             'es_ES' => 'es',
+            'es_MX' => 'es-mx',
+            'et_EE' => 'et',
+            'fi_FI' => 'fi',
+            'fr_CA' => 'fr-ca',
             'fr_FR' => 'fr',
+            'ga_IE' => 'ga',
             'hi_IN' => 'hi',
+            'hr_HR' => 'hr',
+            'hu_HU' => 'hu',
             'id_ID' => 'id',
+            'is_IS' => 'is',
+            'it_IT' => 'it',
+            'lt_LT' => 'lt',
+            'lv_LV' => 'lv',
+            'mt_MT' => 'mt',
+            'nb_NO' => 'nb',
+            'nl_NL' => 'nl',
+            'pl_PL' => 'pl',
             'pt_BR' => 'pt',
+            'pt_PT' => 'pt-pt',
+            'ro_RO' => 'ro',
+            'ru_RU' => 'ru',
+            'sk_SK' => 'sk',
+            'sl_SI' => 'sl',
+            'sv_SE' => 'sv',
+            'tr_TR' => 'tr',
+            'uk_UA' => 'uk',
             'ur_PK' => 'ur',
         ];
     }

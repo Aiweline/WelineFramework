@@ -2,6 +2,19 @@
 /**
  * @widget.source {Weline_Visitor::css/widgets/widget-pixel-realtime.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * Dashboard Widget: 像素实时动向
+ *
+ * @widget.code {pixel_realtime}
+ * @widget.name {像素实时动向}
+ * @widget.description {展示最近一小时像素事件触发情况。}
+ * @widget.type {list}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-side","dashboard-detail"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-side}
+ * @widget.supports {["dashboard-widget","dashboard-slot-side","dashboard-list","dashboard-status","dashboard-stat"]}
+ * @param website_id {default="",type="string",label="站点 ID",description="留空时跟随当前 Dashboard 站点。"}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"weline_visitor_event_statistics","target_type":"website","slot":"dashboard-side","area":"content","sort_order":80,"required":true,"reason":"安装访客统计后自动展示像素实时动向","config":{"dashboard_layout":{"colSpan":3,"rowSpan":2,"sortOrder":80}}}]}
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
 $config = [

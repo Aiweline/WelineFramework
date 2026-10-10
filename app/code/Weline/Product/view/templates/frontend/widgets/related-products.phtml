@@ -22,6 +22,10 @@
  * @param show_wishlist {default=true,type="bool",label="显示收藏"}
  * @param show_compare {default=true,type="bool",label="显示对比"}
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ *
+ * @widget.slot {product-related-products}
+ *
+ * @widget.default_injections {[{"placement":"injection","layout_type":"product","layout_option":"default","slot":"design-product-related-products","area":"content","sort_order":0,"required":true,"reason":"商品详情默认在相关产品槽展示真实关联推荐","config":{"title":"相关产品","limit":4,"columns":"4","layout":"carousel"}}]}
  */
 
 use Weline\Framework\Manager\ObjectManager;

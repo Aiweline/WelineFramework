@@ -139,7 +139,41 @@ final class BackendOrderPaymentRecordsServiceTest extends TestCase
         self::assertStringContainsString("'provider_reference' => trim((string)(\$responseData['provider_reference']", $src);
         self::assertStringContainsString("'provider_reference' => \$providerReference", $src);
         self::assertStringContainsString('paymentIdentityKeys', $src);
-        self::assertStringContainsString('hasSeenIdentityKey', $src);
+        self::assertStringContainsString('firstSeenIdentityIndex', $src);
+        self::assertStringContainsString('enrichMergedPaymentRow', $src);
+    }
+
+    public function testMergeEnrichesPaymentEntryFromDuplicateTransaction(): void
+    {
+        $attempts = [
+            [
+                'transaction_id' => 'CAP123',
+                'provider_reference' => 'CAP123',
+                'payment_entry' => 'unknown',
+                'status' => 'paid',
+                'paid_at' => '2026-10-09 12:00:00',
+                'source' => 'weline_payment_attempt',
+            ],
+        ];
+        $transactions = [
+            [
+                'transaction_id' => 'PAY20261009000001',
+                'provider_reference' => 'CAP123',
+                'payment_entry' => 'continue_pay',
+                'status' => 'paid',
+                'paid_at' => '2026-10-09 12:00:00',
+                'source' => 'weline_payment_transaction',
+            ],
+        ];
+
+        $merged = BackendOrderPaymentRecordsService::mergeAttemptAndTransactionRows(
+            $attempts,
+            $transactions
+        );
+
+        self::assertCount(1, $merged);
+        self::assertSame('weline_payment_attempt', $merged[0]['source']);
+        self::assertSame('continue_pay', $merged[0]['payment_entry']);
     }
 
     public function testMergePrefersAttemptWhenTransactionIdMatches(): void

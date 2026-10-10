@@ -1,0 +1,56 @@
+<div class="w-disclosure" data-w-component="disclosure" data-testid="scope-theme-binding">
+    <div id="<?= $h($sectionId . '_heading') ?>">
+        <button class="w-disclosure__trigger" type="button" aria-expanded="false" aria-controls="<?= $h($sectionId . '_body') ?>" data-w-target="#<?= $h($sectionId . '_body') ?>" data-w-action="disclosure.toggle" data-w-disclosure-trigger>
+            <w:icon name="palette" size="sm"></w:icon>
+            <span><lang>店面主题</lang></span>
+            <?php if ($themeId > 0): ?>
+                <span class="w-badge" data-tone="neutral" data-size="sm"><?= $h((string)($summary['theme_name'] ?? '')) ?></span>
+            <?php endif; ?>
+            <w:icon name="chevron-down" size="sm"></w:icon>
+        </button>
+    </div>
+    <div id="<?= $h($sectionId . '_body') ?>" class="w-disclosure__panel" aria-labelledby="<?= $h($sectionId . '_heading') ?>" data-w-disclosure-panel hidden>
+        <div class="w-disclosure__body">
+            <?php if (!$hasIdentity): ?>
+                <p class="w-text" data-tone="muted" data-size="sm"><?= $h((string)$pendingHint) ?></p>
+            <?php else: ?>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
+                    <?= $h((string)$introHint) ?>
+                </p>
+                <div class="w-grid">
+                    <div style="--w-span:6;--w-mb:var(--weline-space-4);">
+                        <label for="<?= $h($themeFieldId) ?>_input" class="w-field__label"><lang>前台主题</lang></label>
+                        <w:theme:select id="themeFieldId" name="extensions[theme][theme_id]" value="themeId" allow-empty="true" clearable="true" input-attrs="themeSelectInputAttrs" />
+                        <?php if ($inherited): ?>
+                            <p class="w-text" data-tone="warning" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                <?= $h((string)$inheritedHint) ?>
+                            </p>
+                        <?php elseif ($bindingSource === $ownBindingSource): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                <?= $h((string)$ownHint) ?>
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                    <div style="--w-span:6;--w-mb:var(--weline-space-4);">
+                        <label for="<?= $h($versionFieldId) ?>_input" class="w-field__label"><lang>已发布版本</lang></label>
+                        <w:theme:version:select id="versionFieldId" name="extensions[theme][version_id]" value="versionId" theme-id="themeId" scope="themeBindingScope" allow-empty="true" clearable="true" input-attrs="versionSelectInputAttrs" />
+                        <?php if ($versionLabel !== ''): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                <lang>当前生效</lang>：<?= $h($versionLabel) ?>
+                            </p>
+                        <?php else: ?>
+                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                <?= $h((string)$emptyVersionHint) ?>
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if ($themeBindingScope !== ''): ?>
+                    <p class="w-text" data-tone="muted" data-size="sm">
+                        <lang>范围</lang>：<code><?= $h($themeBindingScope) ?></code>
+                    </p>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

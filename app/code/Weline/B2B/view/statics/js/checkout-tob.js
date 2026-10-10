@@ -48,6 +48,7 @@
         }
         if (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.syncCouponAvailability === 'function') {
             global.WelineB2BSellingMode.syncCouponAvailability(root, mode);
+            syncPaymentIncentiveAvailability(root, mode);
             return;
         }
         root.querySelectorAll(
@@ -92,6 +93,138 @@
                 }
             }
         });
+        syncPaymentIncentiveAvailability(root, mode);
+    }
+
+    /**
+     * ToB bans payment-method incentives (discounts_banned). Hide badges so chrome
+     * matches summary / submit — do not leave「减 $x」visible on wholesale checkout.
+     */
+    function syncPaymentIncentiveAvailability(root, mode) {
+        if (!root) {
+            return;
+        }
+        var tob = String(mode || '').toLowerCase() === 'tob';
+        root.querySelectorAll('[data-payment-incentive]').forEach(function (badge) {
+            if (tob) {
+                if (!badge.hasAttribute('data-b2b-incentive-stash')) {
+                    badge.setAttribute('data-b2b-incentive-stash', '1');
+                }
+                badge.hidden = true;
+                badge.setAttribute('hidden', '');
+                badge.setAttribute('aria-hidden', 'true');
+            } else if (badge.getAttribute('data-b2b-incentive-stash') === '1') {
+                badge.hidden = false;
+                badge.removeAttribute('hidden');
+                badge.removeAttribute('aria-hidden');
+            }
+        });
+        root.querySelectorAll('.weline-checkout__option--payment').forEach(function (opt) {
+            if (tob) {
+                opt.classList.remove('weline-checkout__option--has-incentive');
+            }
+        });
+        root.querySelectorAll('[data-incentive-savings-minor]').forEach(function (el) {
+            if (tob) {
+                if (!el.hasAttribute('data-b2b-incentive-minor-stash')) {
+                    el.setAttribute(
+                        'data-b2b-incentive-minor-stash',
+                        String(el.getAttribute('data-incentive-savings-minor') || '0')
+                    );
+                }
+                el.setAttribute('data-incentive-savings-minor', '0');
+                el.setAttribute('data-incentive-available', '0');
+            } else if (el.hasAttribute('data-b2b-incentive-minor-stash')) {
+                el.setAttribute(
+                    'data-incentive-savings-minor',
+                    el.getAttribute('data-b2b-incentive-minor-stash') || '0'
+                );
+                el.setAttribute('data-incentive-available', '1');
+                el.removeAttribute('data-b2b-incentive-minor-stash');
+            }
+        });
+    }
+
+    function dapTaxNoteText() {
+        var host = document.querySelector(
+            '[data-b2b-checkout-credit], [data-b2b-deposit-note], [data-b2b-mini-cart-type="1"]'
+        );
+        var fromAttr = host
+            ? String(host.getAttribute('data-i18n-dap-tax-note') || '').trim()
+            : '';
+        if (fromAttr) {
+            return fromAttr;
+        }
+        if (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.i18n === 'function') {
+            return global.WelineB2BSellingMode.i18n(
+                'data-i18n-dap-tax-note',
+                '关税与进口税费未计入本次定金，到港由买家另付'
+            );
+        }
+        return '关税与进口税费未计入本次定金，到港由买家另付';
+    }
+
+    /**
+     * Checkout paints a retail money DTO; ToB policy lives here (deposit payable,
+     * ban coupon/incentive/tax-in-deposit, DAP note).
+     */
+    function adjustMoneySummaryDto(dto, ctx) {
+        if (!dto || typeof dto !== 'object') {
+            return dto;
+        }
+        ctx = ctx && typeof ctx === 'object' ? ctx : {};
+        var cartType = String(ctx.cart_type || dto.cart_type || readMode() || 'toc').toLowerCase();
+        if (cartType !== 'tob') {
+            return dto;
+        }
+        var out = Object.assign({}, dto);
+        var subtotal = Math.max(0, Number(ctx.subtotal) || 0);
+        if (!(subtotal > 0) && out.goods_subtotal_minor != null) {
+            subtotal = Math.max(0, Number(out.goods_subtotal_minor) || 0) / 100;
+        }
+        var currency = String(ctx.currency || out.currency || 'CNY').toUpperCase() || 'CNY';
+        var creditApplyMajor = 0;
+        var depositMajor = 0;
+        var cashDepositMajor = null;
+        if (typeof readApplyMinor === 'function') {
+            creditApplyMajor = Math.max(0, Number(readApplyMinor()) || 0) / 100;
+        }
+        if (typeof estimateDepositMinor === 'function') {
+            depositMajor = Math.max(0, Number(estimateDepositMinor({
+                cart_type: 'tob',
+                subtotal: subtotal,
+                currency: currency
+            })) || 0) / 100;
+        }
+        if (typeof cashDepositMinor === 'function') {
+            var cashMinor = cashDepositMinor();
+            if (cashMinor !== null && cashMinor !== undefined) {
+                cashDepositMajor = Math.max(0, Number(cashMinor) || 0) / 100;
+            }
+        }
+        if (cashDepositMajor !== null) {
+            depositMajor = cashDepositMajor + creditApplyMajor;
+        } else if (depositMajor > 0) {
+            cashDepositMajor = Math.max(0, depositMajor - creditApplyMajor);
+        }
+        var payableMajor = Math.max(0, cashDepositMajor == null ? depositMajor : cashDepositMajor);
+        out.cart_type = 'tob';
+        out.commerce_deposit_allowed = true;
+        out.discount_minor = 0;
+        out.discount_label = '';
+        out.payment_incentive_minor = 0;
+        out.sales_tax_minor = 0;
+        out.customs_duty_minor = 0;
+        out.duty_minor = 0;
+        out.import_tax_minor = 0;
+        out.tax_minor = 0;
+        out.cod_fee_minor = 0;
+        out.deposit_minor = Math.round(depositMajor * 100);
+        out.credit_minor = Math.round(creditApplyMajor * 100);
+        out.payable_minor = Math.round(payableMajor * 100);
+        out.payable_label = String(ctx.payable_label_deposit || out.payable_label || '本次应付定金');
+        out.note = dapTaxNoteText();
+        return out;
     }
 
     function applyCartType(root, cartType, opts) {
@@ -2307,7 +2440,9 @@
             cashDepositMinor: cashDepositMinor,
             readPersistedCreditChoice: readPersistedCreditChoice,
             persistCreditChoice: persistCreditChoice,
-            hydrateCreditControls: hydrateCreditControls
+            hydrateCreditControls: hydrateCreditControls,
+            adjustMoneySummaryDto: adjustMoneySummaryDto,
+            syncPaymentIncentiveAvailability: syncPaymentIncentiveAvailability
         };
     }
 

@@ -72,7 +72,33 @@ class CacheManagerRoutingTest extends TestCase
         $resolveDriver = $ref->getMethod('resolveDriver');
         $resolveDriver->setAccessible(true);
 
-        foreach (['router', 'fpc', 'single_flight'] as $identity) {
+        $durablePools = [
+            'router',
+            'fpc',
+            'single_flight',
+            'cart',
+            'product',
+            'weline_theme_storefront_chrome',
+            'weline_theme_storefront_product_card_html',
+            'weline_theme_storefront_header_nav',
+            'weline_theme_path_resolve',
+            'weline_product_storefront_category_tree',
+            'theme',
+            'website',
+            'phrase',
+            'i18n',
+            'currency',
+            'config',
+            'system_config',
+            'view',
+            'theme_layout',
+            'blog',
+            'search',
+            'eav',
+            'review.buyer_looks',
+            'weline_widget_ai_registry',
+        ];
+        foreach ($durablePools as $identity) {
             $poolConfig = (array)$getPoolConfig->invoke($manager, $identity);
 
             self::assertTrue(
@@ -91,6 +117,19 @@ class CacheManagerRoutingTest extends TestCase
         self::assertSame(
             'wls_memory',
             $resolveDriver->invoke($manager, 'default', ['driver' => 'file']),
+        );
+    }
+
+    public function testWriteSharedFailureIsSurfacedInHotCacheTraceMeta(): void
+    {
+        // Contract anchor: StorefrontScopeHotCache::writeShared returns bool and
+        // cold-build paths stamp shared_write_ok into phase meta (see source).
+        $path = dirname(__DIR__, 3) . '/Cache/Service/StorefrontScopeHotCache.php';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('shared_write_ok', $source);
+        self::assertMatchesRegularExpression(
+            '/private function writeShared\([^)]*\): bool/',
+            $source,
         );
     }
 

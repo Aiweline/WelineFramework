@@ -434,6 +434,9 @@ final class ProductCatalogCartItemSnapshotResolver
             $attributeRows = null;
         }
         $attributeLocales = $this->attributeRowLocales();
+        // Pass codes so AttributeValueRepository skips the unfiltered 8-id chunk path
+        // (cold locale homepage cards were N× attribute_value scans).
+        $cardAttributeCodes = ['name', 'product_type', 'quote_only', 'slug', 'source_slug'];
         $attributeRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
             'product.catalog.snapshot.attributes',
             fn() => $this->attributes->listExplicitRows(
@@ -442,6 +445,7 @@ final class ProductCatalogCartItemSnapshotResolver
                 $productIds,
                 $storeIds,
                 $attributeLocales,
+                $cardAttributeCodes,
             ),
         );
         foreach ($attributeRows as $attributeRow) {

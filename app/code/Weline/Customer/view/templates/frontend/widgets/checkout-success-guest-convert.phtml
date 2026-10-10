@@ -14,10 +14,15 @@
  * @widget.slot {checkout-success-guest-account}
  * @widget.page_layouts {["checkout"]}
  * @widget.supports {["checkout-success-guest-account","guest-account-convert","layout-checkout-success-guest-account","checkout-success-guest-convert"]}
- * @widget.default_injections {[{ "layout_type":"checkout", "layout_option":"default", "slot":"checkout-success-guest-account", "area":"content", "sort_order":0, "required":true, "reason":"结账成功页默认提供访客账户转化入口", "config":{"convert_label":"登录并保存订单","login_label":"去登录"} }]}
+ * @widget.default_injections {[{"layout_type":"checkout","layout_option":"default","slot":"checkout-success-guest-account","area":"content","sort_order":0,"required":true,"reason":"结账成功页默认提供访客账户转化入口（Customer 应用部件）","config":{"convert_label":"登录并保存订单","login_label":"去登录"}}]}
  *
  * @param convert_label {default="登录并保存订单",type="string",label="转化按钮文案"}
  * @param login_label {default="去登录",type="string",label="已有账户登录文案"}
+ *
+ * @widget.description {结账成功页访客转化：新邮箱建户登录并强制设密，已有邮箱引导登录；订单已绑定则不渲染。}
+ * @widget.position {["content"]}
+ *
+ * @widget.placement {injection}
  */
 
 use Weline\Customer\Service\GuestCheckoutConvertService;

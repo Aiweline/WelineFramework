@@ -57,8 +57,9 @@
          * Attribute / declare module load policy (framework only).
          * NEVER put business module names (cart/compare/wishlist/…) in defaults here.
          * Business modules declare via data-weline-load / declare + weline.modules.js.
-         * deferByDefault=true → attribute modules idle-defer unless listed in eagerModules
-         * (site/runtime override only; keep defaults empty of business names).
+         * deferByDefault=true → attribute modules defer unless listed in eagerModules.
+         * Default defer mode is viewport (IntersectionObserver on host); opt idle via
+         * data-weline-load-when="idle". NEVER put business module names in defaults.
          */
         modulesLoad: {
             deferByDefault: true,
@@ -69,6 +70,8 @@
             /** data-weline-declare also schedules idle load. */
             loadDeclaredDeferred: true,
             idleTimeoutMs: 2000,
+            /** rootMargin for viewport-gated data-weline-load (default visible). */
+            visibleRootMargin: '300px 0px',
         },
     };
 
@@ -1455,10 +1458,13 @@
         function process() {
             const declareNames = new Set();
             const immediateNames = [];
-            const deferredNames = [];
+            /** Modules that opt into idle (data-weline-load-when=idle) instead of viewport. */
+            const idleDeferredNames = [];
             const skippedNames = new Set();
             /** @type {Array<{el: Element, modules: string[]}>} */
             const elementLoads = [];
+            /** @type {Array<{el: Element, modules: string[]}>} */
+            const visibleDeferredLoads = [];
 
             document.querySelectorAll('[data-weline-declare]').forEach((el) => {
                 const modules = splitModules(el.getAttribute('data-weline-declare'));
@@ -1475,7 +1481,9 @@
                 if (modules.length === 0) {
                     return;
                 }
+                const when = String(el.getAttribute('data-weline-load-when') || 'visible').toLowerCase();
                 const requested = [];
+                const deferredForEl = [];
                 modules.forEach((name) => {
                     if (moduleLoader.shouldSkipAttributeLoad(name)) {
                         skippedNames.add(name);
@@ -1483,7 +1491,7 @@
                     }
                     requested.push(name);
                     if (shouldDeferAttributeModule(name)) {
-                        deferredNames.push(name);
+                        deferredForEl.push(name);
                         return;
                     }
                     immediateNames.push(name);
@@ -1491,6 +1499,16 @@
                 if (requested.length) {
                     elementLoads.push({ el: el, modules: requested });
                 }
+                if (deferredForEl.length === 0) {
+                    return;
+                }
+                // idle = legacy requestIdleCallback (still storms Finish within ~2s).
+                // visible (default) = IntersectionObserver near host element — no scroll, no fetch.
+                if (when === 'idle') {
+                    deferredForEl.forEach((name) => idleDeferredNames.push(name));
+                    return;
+                }
+                visibleDeferredLoads.push({ el: el, modules: deferredForEl });
             });
 
             const notifyElements = (loadedNames) => {
@@ -1505,11 +1523,14 @@
                 });
             };
 
-            const runDeferred = () => {
-                const deferredUnique = Array.from(new Set(deferredNames));
+            const runIdleDeferred = () => {
+                const deferredUnique = Array.from(new Set(idleDeferredNames));
+                if (deferredUnique.length === 0) {
+                    return;
+                }
                 loadModuleNames(deferredUnique).then(() => {
                     notifyElements(deferredUnique);
-                    if (!isDev || deferredUnique.length === 0) {
+                    if (!isDev) {
                         return;
                     }
                     console.log(
@@ -1520,13 +1541,73 @@
                 });
             };
 
-            const immediateUnique = Array.from(new Set(immediateNames));
-            const scheduleDeferred = () => {
-                if (typeof window.requestIdleCallback === 'function') {
-                    window.requestIdleCallback(runDeferred, { timeout: modulesLoadIdleTimeoutMs() });
+            const scheduleVisibleDeferred = () => {
+                if (visibleDeferredLoads.length === 0) {
                     return;
                 }
-                window.setTimeout(runDeferred, 0);
+                const fallbackIdleAll = () => {
+                    const all = [];
+                    visibleDeferredLoads.forEach((entry) => {
+                        entry.modules.forEach((name) => all.push(name));
+                    });
+                    const unique = Array.from(new Set(all));
+                    loadModuleNames(unique).then(() => notifyElements(unique));
+                };
+                if (typeof IntersectionObserver !== 'function') {
+                    fallbackIdleAll();
+                    return;
+                }
+                const rootMargin = String(
+                    (runtimeConfig.modulesLoad && runtimeConfig.modulesLoad.visibleRootMargin) || '300px 0px'
+                );
+                visibleDeferredLoads.forEach((entry) => {
+                    if (!entry.el || entry.el.nodeType !== 1) {
+                        return;
+                    }
+                    let done = false;
+                    const run = () => {
+                        if (done) {
+                            return;
+                        }
+                        done = true;
+                        const unique = Array.from(new Set(entry.modules));
+                        loadModuleNames(unique).then(() => {
+                            notifyElements(unique);
+                            if (!isDev || unique.length === 0) {
+                                return;
+                            }
+                            console.log(
+                                `%c[Weline] ${__('近屏部件模块加载')}`,
+                                'color: #2196F3; font-weight: bold; font-size: 12px;',
+                                `\n${__('模块')}: ${unique.join(', ')}`
+                            );
+                        });
+                    };
+                    const io = new IntersectionObserver((entries) => {
+                        for (let i = 0; i < entries.length; i += 1) {
+                            if (!entries[i].isIntersecting) {
+                                continue;
+                            }
+                            io.disconnect();
+                            run();
+                            break;
+                        }
+                    }, { root: null, rootMargin: rootMargin, threshold: 0 });
+                    io.observe(entry.el);
+                });
+            };
+
+            const immediateUnique = Array.from(new Set(immediateNames));
+            const scheduleDeferred = () => {
+                scheduleVisibleDeferred();
+                if (idleDeferredNames.length === 0) {
+                    return;
+                }
+                if (typeof window.requestIdleCallback === 'function') {
+                    window.requestIdleCallback(runIdleDeferred, { timeout: modulesLoadIdleTimeoutMs() });
+                    return;
+                }
+                window.setTimeout(runIdleDeferred, 0);
             };
 
             if (immediateUnique.length === 0) {
@@ -1539,16 +1620,20 @@
 
             if (isDev) {
                 const loadList = immediateUnique;
-                const deferredList = Array.from(new Set(deferredNames));
+                const visibleList = Array.from(new Set(
+                    visibleDeferredLoads.reduce((acc, entry) => acc.concat(entry.modules), [])
+                ));
+                const deferredList = Array.from(new Set(idleDeferredNames));
                 const declareList = Array.from(declareNames);
                 const skippedList = Array.from(skippedNames);
-                if (loadList.length || deferredList.length || declareList.length || skippedList.length) {
+                if (loadList.length || visibleList.length || deferredList.length || declareList.length || skippedList.length) {
                     console.log(
                         `%c[Weline] ${__('部件属性模块加载')}`,
                         'color: #4CAF50; font-weight: bold; font-size: 12px;',
                         '\n',
                         `${__('页面')}: ${window.location.pathname}`,
                         loadList.length ? `\n${__('立即加载')}: ${loadList.join(', ')}` : '',
+                        visibleList.length ? `\n${__('近屏延迟')}: ${visibleList.join(', ')}` : '',
                         deferredList.length ? `\n${__('空闲延迟')}: ${deferredList.join(', ')}` : '',
                         skippedList.length ? `\n${__('已跳过（已加载/加载中）')}: ${skippedList.join(', ')}` : '',
                         declareList.length ? `\n${__('声明延后')}: ${declareList.join(', ')}` : '',

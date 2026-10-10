@@ -22,6 +22,7 @@ final class WidgetI18n
 
     private const PREFERRED_MODULES = [
         'Weline_Theme',
+        'Weline_Websites',
         'Weline_Newsletter',
         'Weline_I18n',
         'Weline_Blog',
@@ -47,7 +48,7 @@ final class WidgetI18n
      * First-path-segment locales that must win over a lagging RequestContext.
      * Keep in sync with default-site + installed storefront packs.
      */
-    public const STOREFRONT_PATH_LOCALE_PATTERN = '#/(ar_SA|bn_BD|de_DE|en_US|es_ES|fr_FR|hi_IN|id_ID|ja_JP|ko_KR|pt_BR|ru_RU|th_TH|ur_PK|vi_VN|zh_Hans_CN|zh_Hant_TW|zh_CN)(?:/|$)#';
+    public const STOREFRONT_PATH_LOCALE_PATTERN = '#/(ar_SA|bg_BG|bn_BD|ca_ES|cs_CZ|da_DK|de_DE|el_GR|en_GB|en_US|es_ES|es_MX|et_EE|fi_FI|fr_CA|fr_FR|ga_IE|hi_IN|hr_HR|hu_HU|id_ID|is_IS|it_IT|ja_JP|ko_KR|lt_LT|lv_LV|mt_MT|nb_NO|nl_NL|pl_PL|pt_BR|pt_PT|ro_RO|ru_RU|sk_SK|sl_SI|sv_SE|th_TH|tr_TR|uk_UA|ur_PK|vi_VN|zh_Hans_CN|zh_Hant_TW|zh_CN)(?:/|$)#';
 
     public static function localeFromRequestUri(string $requestUri): ?string
     {

@@ -39,6 +39,7 @@
 | 标签 | 字面量时 | 动态时 |
 |------|----------|--------|
 | `theme:css` / `theme:js` | 直出 `<link>` / `<script>` | 仍吐 `fetchTagSource` PHP |
+| `theme:select` / `theme:version:select` | —（请求态选择器，禁止镜像） | SearchSelect + 主题/版本列表 |
 | `icon` | 直出 SVG | 仍吐 `IconRegistry` PHP / `runtimeCallback` |
 | `file:image` | RequestContext 可解析且有 layout 时直出 `<img>` | 否则仍吐 `FileImageRenderer` PHP |
 

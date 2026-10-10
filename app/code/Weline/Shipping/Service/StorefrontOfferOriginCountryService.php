@@ -46,6 +46,29 @@ class StorefrontOfferOriginCountryService
         return $this->countryFromWarehouseTree($warehouseId);
     }
 
+    /**
+     * PDP badge SSR: default-warehouse origin only (no fulfillment planPackages).
+     * Guest-safe material for cached widget HTML; JS still paints mode from origin×dest.
+     */
+    public function resolveDefaultOriginCountry(int $websiteId = -1, int $storeId = -1): string
+    {
+        $websiteId = $websiteId >= 0 ? $websiteId : max(0, (int)RequestContext::getWelineWebsiteId());
+        $storeId = $storeId >= 0 ? $storeId : max(0, (int)RequestContext::getWelineStoreId());
+        if ($websiteId > 0 && $storeId === 0) {
+            $storeId = $this->defaultStoreIdForWebsite($websiteId);
+        }
+        $warehouseId = $this->defaultWarehouseId($websiteId, $storeId);
+        if ($warehouseId <= 0) {
+            return '';
+        }
+        $fromOrigin = $this->countryFromShippingOrigin($websiteId, $warehouseId);
+        if ($fromOrigin !== '') {
+            return $fromOrigin;
+        }
+
+        return $this->countryFromWarehouseTree($warehouseId);
+    }
+
     private function defaultStoreIdForWebsite(int $websiteId): int
     {
         if ($websiteId <= 0 || !interface_exists(\Weline\Websites\Api\Catalog\StoreCatalogInterface::class)) {

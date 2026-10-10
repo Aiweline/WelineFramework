@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "96d9d10f14a4e5385af6d9ae0fed3f11c3dbeac87eebb474ac722dedf206eab6",
+    "build_id": "1c3649ee618a77bdc859a08736472b366ea8a5b9c56f1c797833decc37ca432a",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -399,17 +399,17 @@
             "type": "js"
         },
         "mega-menu-css": {
-            "bytes": 12586,
+            "bytes": 12774,
             "file": "components/weline-mega-menu.css",
-            "gzip_bytes": 2462,
-            "sha256": "b8e74e3d6e75bc93cce7fb2a7144323360b3e77a6909a1f35d30599092977e5d",
+            "gzip_bytes": 2496,
+            "sha256": "ff28a45decff1f594855fcc6837075352ef7f7cdb21c3b66dcb41aaa6fadebcd",
             "type": "css"
         },
         "mega-menu-js": {
-            "bytes": 9844,
+            "bytes": 11916,
             "file": "components/weline-mega-menu.js",
-            "gzip_bytes": 2236,
-            "sha256": "0deb77cb1dbbc872e2a4a28d4890163d0aadbc2ac48319e777c66c7c8df8fbb9",
+            "gzip_bytes": 2660,
+            "sha256": "2486e550549644d10040876b10fb4a9ce1d7512fbee93a5f81da8a70b139b225",
             "type": "js"
         },
         "offcanvas-result-js": {
@@ -595,17 +595,17 @@
             "type": "js"
         },
         "websites-admin-css": {
-            "bytes": 9679,
+            "bytes": 10304,
             "file": "pages/weline-websites-admin.css",
-            "gzip_bytes": 1972,
-            "sha256": "4a13dd89809c7b594d0a2232c8807c49654b204ded2b27e906dad622b2844a31",
+            "gzip_bytes": 2111,
+            "sha256": "05af81bf81fefa1136fd85dcf796c21d55f556eefbb4e294ecd5d75d07f1eb8a",
             "type": "css"
         },
         "websites-form-js": {
-            "bytes": 21715,
+            "bytes": 23190,
             "file": "pages/weline-websites-form.js",
-            "gzip_bytes": 4712,
-            "sha256": "af79e8c0b60e270ce63112c62afc028b0256da006bd0792365b497cfac74953c",
+            "gzip_bytes": 5135,
+            "sha256": "1615152300bbc81511d7cf68c37e94c1adfb3ff9d542489c2e786c4595236091",
             "type": "js"
         }
     },

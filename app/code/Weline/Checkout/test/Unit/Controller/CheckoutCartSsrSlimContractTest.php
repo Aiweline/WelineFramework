@@ -98,6 +98,9 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
         self::assertStringContainsString('function defaultPaymentMoneyDelta', $src);
         self::assertStringContainsString('incentive_savings_minor', $src);
         self::assertStringContainsString('array_merge($cart', $src);
+        self::assertStringContainsString('applyMoneySummaryPolicy', $src);
+        self::assertStringContainsString('StorefrontMoneySummaryPolicyInterface', $src);
+        self::assertStringContainsString("'cart_type' => \$mode", $src);
         self::assertStringNotContainsString("'cart' => \$cart + [", $src);
 
         foreach (['/Index.php', '/Frontend/Checkout.php'] as $rel) {

@@ -773,9 +773,9 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 "履约账本失败后的 cancelShipment 孤儿补偿队列","cancelShipment orphan compensation queue after fulfillment ledger failure"
 "孤儿运单处理：done=%{1} dead=%{2} processed=%{3}","Orphan waybill handling: done=%{1} dead=%{2} processed=%{3}"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
-运费,"Shipping charges"
 收起悬浮,收起悬浮
 展开悬浮,展开悬浮
+运费,"Shipping charges"
 发货记录,发货记录
 暂无发货记录,"No Shipment Records"
 指南,指南

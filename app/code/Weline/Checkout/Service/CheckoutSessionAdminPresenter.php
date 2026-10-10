@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Service;
 
-use Locale;
-use Symfony\Component\Intl\Countries;
 use Weline\Checkout\Model\CheckoutSession;
 use Weline\Checkout\Service\CheckoutEntry;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Model\I18n;
 
 /**
  * 后台结账会话：把技术字段译成运营可读文案。
@@ -310,20 +310,14 @@ final class CheckoutSessionAdminPresenter
         if ($iso === '') {
             return '';
         }
-        if (class_exists(Countries::class)) {
-            try {
-                $name = Countries::getName($iso, 'zh_Hans');
-                if (is_string($name) && $name !== '') {
-                    return $name;
-                }
-            } catch (\Throwable) {
-            }
-        }
-        if (class_exists(Locale::class)) {
-            $name = (string)Locale::getDisplayRegion('und_' . $iso, 'zh_Hans');
+        try {
+            /** @var I18n $i18n */
+            $i18n = ObjectManager::getInstance(I18n::class);
+            $name = trim((string)($i18n->getCountries('zh_Hans_CN')[$iso] ?? ''));
             if ($name !== '' && strtoupper($name) !== $iso) {
                 return $name;
             }
+        } catch (\Throwable) {
         }
 
         return $iso;

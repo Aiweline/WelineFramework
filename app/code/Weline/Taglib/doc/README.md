@@ -100,7 +100,7 @@ ID 与 data-only metadata。Taglib Model/Controller 不得引用 ModuleManager M
 
 完整对照表见 **[场景映射表.md](./场景映射表.md)**（写 HTML / 控件前必读）。
 
-例如：站点选择用 `<w:websites:website:select .../>`，语言配置用 `<w:i18n:language:select .../>`，界面切换用 `<w:i18n:switcher .../>`。禁止手写裸 select 拼领域选项。
+例如：站点选择用 `<w:websites:website:select .../>`，语言配置用 `<w:i18n:language:select .../>`，前台主题/版本用 `<w:theme:select />` / `<w:theme:version:select />`，界面切换用 `<w:i18n:switcher .../>`。禁止手写裸 select 拼领域选项。
 
 浮层定位与 hover 保活用 `FloatingDropdownEmitter` / `WelineTaglibFloatingDropdown` 在标签输出内自洽，禁止往 Theme.js 塞标签交互。
 

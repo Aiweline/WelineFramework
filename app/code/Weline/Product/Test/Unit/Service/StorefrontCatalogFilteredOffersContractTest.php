@@ -120,7 +120,7 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
             dirname(__DIR__, 3) . '/Service/StorefrontCatalogCacheCoordinator.php',
         );
         self::assertStringContainsString('public static function catalogSummaryOffersPolicy()', $coordinator);
-        self::assertStringContainsString('public function catalogSummaryOffersLogicalKey(', $coordinator);
+        self::assertStringContainsString('public static function catalogSummaryOffersLogicalKey(', $coordinator);
         self::assertStringContainsString('catalogSummaryOffersLogicalKey($websiteId, 48)', $coordinator);
     }
 }

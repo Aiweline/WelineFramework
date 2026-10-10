@@ -518,7 +518,7 @@ Session标识,"Session ID"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计
-税费与运费将在结算时计算,税费与运费将在结算时计算
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
 去结算,去结算
 查看购物车,查看购物车
 "按 kind 粗评是否命中分群（无 DB 分群表）","Coarse-check segment hit by kind (no DB segment table)"

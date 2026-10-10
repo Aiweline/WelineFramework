@@ -34,4 +34,32 @@ final class SearchHit
             'type' => $this->indexer,
         ] + $this->payload;
     }
+
+    /** @return array<string, mixed> */
+    public function toCacheArray(): array
+    {
+        return [
+            'indexer' => $this->indexer,
+            'entity_type' => $this->entityType,
+            'entity_id' => $this->entityId,
+            'title' => $this->title,
+            'url' => $this->url,
+            'payload' => $this->payload,
+            'score' => $this->score,
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    public static function fromCacheArray(array $data): self
+    {
+        return new self(
+            indexer: (string)($data['indexer'] ?? ''),
+            entityType: (string)($data['entity_type'] ?? ''),
+            entityId: (string)($data['entity_id'] ?? ''),
+            title: (string)($data['title'] ?? ''),
+            url: (string)($data['url'] ?? ''),
+            payload: is_array($data['payload'] ?? null) ? $data['payload'] : [],
+            score: (float)($data['score'] ?? 0.0),
+        );
+    }
 }

@@ -26,5 +26,13 @@ final class CheckoutFreezeCartTypeContractTest extends TestCase
         );
         self::assertStringContainsString("weline_selling_mode_w' . \$websiteId", $src);
         self::assertStringContainsString("\$mode === 'toc' && \$this->currentCustomerId() !== null", $src);
+        self::assertStringContainsString('assertExplicitCartTypeMatchesShell', $src);
+        self::assertStringContainsString('checkout_cart_type_mismatch', $src);
+        self::assertStringContainsString('isValidTobDepositPayload', $src);
+        self::assertStringContainsString(
+            "\$cartType === 'tob' && \$deposit !== [] && \$this->isValidTobDepositPayload(\$deposit)",
+            $src,
+        );
+        self::assertStringNotContainsString("\$cartType === 'tob' || \$deposit !== []", $src);
     }
 }

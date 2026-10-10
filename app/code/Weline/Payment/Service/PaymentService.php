@@ -34,6 +34,9 @@ class PaymentService
      */
     public function createPayment(string $methodCode, array $orderData): PaymentTransaction
     {
+        // Per-attempt entry (express / continue_pay / helppay…); survives in request_data.
+        $orderData = PaymentEntry::stampContext($orderData);
+
         $paymentMethod = $this->methodManager->getMethodByCode($methodCode);
         if (!$paymentMethod || !$this->methodManager->isMethodActiveForScope($paymentMethod, $orderData)) {
             throw new \RuntimeException(__('支付方式 %{code} 不存在或未启用', ['code' => $methodCode]));

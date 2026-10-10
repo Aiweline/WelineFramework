@@ -2,6 +2,20 @@
 /**
  * @widget.source {Weline_Visitor::css/widgets/widget-pixel-engagement.css}
  * Dashboard Widget: 像素参与度（会话/跳出/停留）
+ *
+ * @widget.code {pixel_engagement}
+ * @widget.name {像素参与度}
+ * @widget.description {会话、参与率、跳出率与平均停留，对齐 GA4 参与指标。}
+ * @widget.type {stats}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-summary"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-summary}
+ * @widget.supports {["dashboard-widget","dashboard-slot-summary","dashboard-stat","dashboard-kpi"]}
+ * @param range {default="7d",type="select",label="统计范围",options={"today":"今日","7d":"近 7 天","30d":"近 30 天","90d":"近 90 天"}}
+ * @param website_id {default="",type="string",label="站点 ID",description="留空时跟随当前 Dashboard 站点。"}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"weline_visitor_event_statistics","target_type":"website","slot":"dashboard-summary","area":"content","sort_order":55,"required":true,"reason":"安装访客统计后自动展示参与度 KPI","config":{"dashboard_layout":{"colSpan":4,"rowSpan":1,"sortOrder":55}}}]}
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
 $insightService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelAnalyticsInsightService::class);

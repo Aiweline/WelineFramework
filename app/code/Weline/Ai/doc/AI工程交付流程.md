@@ -77,7 +77,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **面向用户结论置尾（硬门槛，`user_facing_verdict_last`）**：凡需明确结论的用户问法（是不是/能不能/好了吗/是否通过/选哪项等），依据与过程在前，**对应形式的最终结论放在回复末尾**；禁止中段先答再大段解释。计划审查「是否通过置尾」是本条特化。
 - **简单需求可跳过计划**：同时满足时可记 `plan_complexity=simple` + `plan_skip_rationale`≥24 字并跳过 Plan Mode——单模块、无新建扩展点发明、无多章计划、约 ≤2 小时/单表面、前后端架构无歧义。**跳过计划 ≠ 跳过验收**（`requirement_acceptance_always`）。同一条件走**监工**，不叫团队。对外每句以 `监工:` 开头。
 - **前后端范围（硬，`requirement_fe_be_scope_analysis`）**：每条需求须分析并记录 `fe_be_scope=frontend|backend|both|na` 及各侧要点；禁止只做一侧却漏该做的另一侧。
-- **验收不可省（硬，`requirement_acceptance_always`）**：宣称完成前必须有真实验收证据。**先测后报**：禁止在验收未跑通前向用户写「已完成 / 已修好 / 可验收 / PASS」；未测只能「代码已改，验收未完成」。触及 Web/UI 时，即使不做 Playwright e2e（仅 simple 豁免），也必须本机 Browser **WB-OP**：视觉（可截图则 WB-VIS）+ 真机点选逻辑；curl/CDP 不能替代；禁止甩用户测。feature 另须满足上款 **UC 闭环**（`requirement_use_case_closed_loop_acceptance`）。
+- **验收不可省（硬，`requirement_acceptance_always`）**：宣称完成前必须有真实验收证据。**先测后报**：禁止在验收未跑通前向用户写「已完成 / 已修好 / 可验收 / PASS」；未测只能「代码已改，验收未完成」。触及 Web/UI 时，即使不做 Playwright e2e（仅 simple 豁免），也必须本机 **真机 Web 测试（WB-OP）**：导航 → `browser_click`/`browser_fill` → **`browser_take_screenshot` + 宿主 Read 截图审图**（裁切/溢出/密度；`acceptance_phase_requires_shentu`）；curl / CDP `Runtime.evaluate` / 尺寸 metrics / 截图未 Read / DOM 抽取不能替代；可见裁切须同回合修；禁止甩用户测。feature 另须满足上款 **UC 闭环**（`requirement_use_case_closed_loop_acceptance`）。
 - **计划 acceptance 映射 UC**：每条覆盖用例的验收项写 `covers_use_cases: [UC-1, …]`，与规格「映射 acceptance」id 对齐；收口对照规格全部 `UC-*`。
 - **布局/人性化/吐槽/审图**：命中时 `ui_skill_decision=participate`，**原型 + frontend-design 必须参与并调整**（禁止只点评）。
 - 会话级计划落盘：仓库根 **`dev/session/{slug}.md`**（阶段、范围、完成标准、可勾选任务；模板 [requirement-session.md](../../../../../dev/ai-command/ai/templates/requirement-session.md)）。**禁止**再写模块 `doc/开发/plan.md` / `task.md`（`module_doc_forbids_ephemeral_work_artifacts`）。
@@ -142,13 +142,13 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 3. **上线 = 生产操作，须用户明确授权**：仅当用户**明示**线上/生产/预发（线上 / 生产 / ssh weline / aiweline.com / 预发）才执行；且必须先满足第 2 步并确认本机优先、不重置数据库、有回滚路径（`runtime_status_query_local_first`）。**本地未 PASS 不得上线。**
 4. **上线后线上复验（deployed ≠ verified）**：发布后在**生产环境**对**同一逻辑通路**再跑一次验证，留可独立回查证据（真实 `order_uuid`/`transaction_no`/生产命令结果；含 UI 再走线上 WB-OP）。**部署退出码=0 不是验证**；不得用「本地已验证过」替代线上复验。复验未完成 / 无权限时只能报「**已上线，线上复验未完成**」+ 阻塞原因。
 
-**验收阶段审图（硬门槛，`acceptance_phase_requires_shentu`）**：`ui_skill_decision=participate` 或含视觉 Browser/UI 验收时，verify 阶段必须对验收截图执行 [审图](../../../../../dev/ai-command/theme/审图.md)（线稿→原型→UI→主题），`acceptance` 须含 `type=shentu` 且 passed evidence 含审图/线稿/checklist 信号；弱证据则 `不可宣称完成`。非功能且无 UI 可省略或 `na` 并写明原因。
+**验收阶段审图（硬门槛，`acceptance_phase_requires_shentu`）**：**凡 Web/UI/.phtml/CSS/页面改动**（或 `ui_skill_decision=participate`），verify 阶段必须：真机交互后 `browser_take_screenshot` → **宿主 Read 截图** → 执行 [审图](../../../../../dev/ai-command/theme/审图.md)（线稿→原型→UI→主题）；可见裁切/溢出/一字竖排/密度挤压 fail-closed 同回合修。`acceptance` 须含 `type=shentu`（或 WB-VIS 证据含审图/线稿/checklist）；**截图未 Read / 仅 CDP 尺寸** = 弱证据 → `不可宣称完成`。非功能且无 UI 可省略或 `na` 并写明原因。
 
 **结束汇审（硬门槛，`closeout_requires_huishen`）**：宣称完成前必须写 `huishen_notes`（含「汇审」），对照需求/架构/验收/(功能时)原型·UI·审图结论；用户汇报须含「**汇审**」小节。缺汇审则 `收口自检.不可宣称完成`。
 
 **收口高压线（凡含页面/UI）**：
 
-1. AI **必须**用**当前宿主可用的真实 Browser**（IDE Browser / Browser MCP / Playwright 等，**不绑定 Cursor**）**亲自按用例自测**（WB-OP）；单测 / curl **不能**替代。
+1. AI **必须**用**当前宿主可用的真实 Browser**做**真机 Web 测试**（WB-OP：工具通道真点选 + 截图/快照 Read）；单测 / curl / **仅** `Runtime.evaluate` **不能**替代。
 2. **每次打开/导航验收页前必须禁用 HTTP 缓存**（硬，`browser_cache_disabled_on_open`）：Cursor 先 `Network.setCacheDisabled` 再 `browser_navigate`；本回合改过静态资源时导航还须带 `_wb_nc=` 并抽检正文；**禁止** `browser_cdp` `Page.reload`（会重载整个工作台并杀死全部智能体）；**禁止**仅用 `Runtime.evaluate` 冒充操作员点击；`setCacheDisabled` 被拒则 `_wb_nc=` 再 navigate 并注明降级。
 3. 面向用户的完成/阶段性汇报**末尾必须**有「交付地址」小节（探活过的 http(s) Markdown 链接）；禁止省略。
 4. 细则见 [WebUI浏览器验收与交付地址门禁.md](../../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
@@ -164,7 +164,9 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 **【高压线 · 基础组件只用主题规范变量】** 开发/改主题时，基础组件（`w-button` / `w-input` / `w-select` / `w-textarea` / `w-field` / `w-badge` / `w-alert` / `w-text` / `w-menu` / `w-dialog` / `w-toast` / `w-table` 及 `foundation.css` 同级）**必须**只消费 `--weline-theme-*` / `--color-*` / `--backend-color-*`（及 spacing·radius·shadow）。**禁止**为基础组件私写 hex/rgb 或平行色变量。品牌主题只改 `colors/_*.css` 色盘叶子；默认语义合同继承自 `variables/_colors.css` + `colors/_default.css`。MCP 规则 id：`theme_base_components_token_only`。权威：`theme-semantic-color-matrix.md`。
 
 **【高压线 · inverse 下 raised 纸面墨钉字面】** 暗顶栏 / `[data-surface=inverse]` 下的浅色 raised 面板须先钉 foundation `#0f1111`/`#565959` 再消费 Token；**禁止** Token 化时把纸面种子改成 `var(--color-text-primary)`（白底浅字）。MCP 规则 id：`theme_inverse_raised_paper_ink_pin`。权威：`theme-css-variables-only.md`「WO-UI-CONTRAST-INVERSE 纸面钉」；`规则/20` §2b。
+
 **【高压线 · 前端必须守变量+表面角色双层】** Token 化/去硬编码前必须挂主题技能、字面量分类（普通→Token；纸面钉/断点→保留）、禁盲 `#hex`→`--color-text-primary`、契约+Browser+bake。MCP 规则 id：`theme_frontend_must_obey_tokens_and_surface_roles`。权威：`规则/20` §2c；`theme-css-variables-only.md` §8b。
+
 **【高压线 · CSS/主题/Token 化必须三技能齐读】** 凡任务/需求提到 **CSS** / **主题/theme** / **Token 化** / **去硬编码**，写样式前**必须**先加载：（1）`frontend-design`；（2）`prototype`；（3）`weline-theme-development`（MCP `get_skill`），再跑双层清单。MCP 规则 id：`css_or_theme_requires_ui_prototype_theme_skills`。
 
 **【高压线 · UI 技能必须叠加主题技能】** 凡启用宿主 `frontend-design` / 通用 UI / 审美类技能写本仓前台或后台界面，**必须同时**用 MCP `get_skill(weline-theme-development)`（或 surface `frontend_development`）加载主题技能，并服从主题 Token 文档。主题 CSS Token 与 Weline UI 2.0 **优先于**通用 UI 技能的自造色板；**禁止**按 UI 技能另发明 hex/rgb、px 间距阶梯、圆角阴影套件或平行 design token。UI 技能仅可指导构图、层次与文案。宿主 `SKILL.md` 仅为可选薄壳。MCP 规则 id：`ui_skill_requires_theme_skill` / `mcp_skills_fetch_from_mcp`。

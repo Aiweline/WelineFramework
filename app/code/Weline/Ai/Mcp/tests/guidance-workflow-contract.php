@@ -397,7 +397,12 @@ $checks = [
     ),
     'hard_constraints include browser_operator_self_test' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
-        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'browser_operator_self_test'),
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'browser_operator_self_test'
+            && str_contains((string) ($rule['summary'] ?? ''), '真机 Web 测试')
+            && str_contains((string) ($rule['summary'] ?? ''), 'browser_click')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Runtime.evaluate')
+            && str_contains((string) ($rule['summary'] ?? ''), 'acceptance-before-user-report.mdc')),
         false,
     ),
     'hard_constraints include browser_operator_non_preemptive' => array_reduce(
@@ -876,7 +881,10 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'requirement_acceptance_always'
             && str_contains((string) ($rule['summary'] ?? ''), 'WB-OP')
-            && str_contains((string) ($rule['summary'] ?? ''), 'visual')),
+            && str_contains((string) ($rule['summary'] ?? ''), '真机 Web 测试')
+            && str_contains((string) ($rule['summary'] ?? ''), 'browser_click')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Runtime.evaluate')
+            && str_contains((string) ($rule['summary'] ?? ''), 'acceptance-before-user-report.mdc')),
         false,
     ),
     'hard_constraints include requirement_use_case_closed_loop_acceptance' => array_reduce(
@@ -1164,6 +1172,66 @@ $checks = [
         return str_contains($body, '禁拆壳')
             && str_contains($body, 'theme_seat_integrity_over_peer_requests')
             && str_contains($body, 'header');
+    })(),
+    'performance_cold_chaos_dig skill and command exist' => (static function (): bool {
+        $root = dirname(__DIR__, 6);
+        if (!is_dir($root . '/dev/ai-command')) {
+            $root = dirname(__DIR__, 5);
+        }
+        $cmd = $root . '/dev/ai-command/ai/性能冷切扫描.md';
+        $skill = $root . '/app/code/Weline/Framework/doc/ai/skills/performance-cold-chaos-dig/SKILL.md';
+        if (!is_file($cmd) || !is_file($skill)) {
+            return false;
+        }
+        $cmdBody = (string) file_get_contents($cmd);
+        $skillBody = (string) file_get_contents($skill);
+
+        return str_contains($cmdBody, 'performance-cold-chaos-dig')
+            && str_contains($cmdBody, '_wb_nc')
+            && str_contains($cmdBody, '修前冷')
+            && str_contains($cmdBody, '修复说明四件套')
+            && str_contains($skillBody, '伪写')
+            && str_contains($skillBody, '粘性')
+            && str_contains($skillBody, '2.5s')
+            && str_contains($skillBody, '修前冷')
+            && str_contains($skillBody, '修复说明四件套')
+            && str_contains($skillBody, '因果链')
+            && (str_contains($skillBody, '禁止把 hit2/hit3') || str_contains($skillBody, 'hit2/hit3「命中'));
+    })(),
+    'performance_check surface lists cold-chaos companion' => (static function () use ($performanceCheckSurface): bool {
+        $companions = is_array($performanceCheckSurface['companion_skills'] ?? null)
+            ? $performanceCheckSurface['companion_skills']
+            : [];
+        $docs = is_array($performanceCheckSurface['authoritative_docs'] ?? null)
+            ? $performanceCheckSurface['authoritative_docs']
+            : [];
+        $triggers = is_array($performanceCheckSurface['triggers'] ?? null)
+            ? $performanceCheckSurface['triggers']
+            : [];
+        $normIds = array_values(array_filter(array_map(
+            static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
+            is_array($performanceCheckSurface['norms'] ?? null) ? $performanceCheckSurface['norms'] : [],
+        )));
+
+        return in_array('performance-cold-chaos-dig', $companions, true)
+            && in_array('doc:performance-cold-chaos-dig', $companions, true)
+            && in_array('dev/ai-command/ai/性能冷切扫描.md', $docs, true)
+            && in_array('perf_cold_chaos_dig_companion', $normIds, true)
+            && in_array('性能', $triggers, true)
+            && in_array('优化', $triggers, true);
+    })(),
+    'performance_cold_chaos_dig triggers include 性能 and 优化' => (static function (): bool {
+        $root = dirname(__DIR__, 6);
+        if (!is_dir($root . '/dev/ai-command')) {
+            $root = dirname(__DIR__, 5);
+        }
+        $cmd = (string) file_get_contents($root . '/dev/ai-command/ai/性能冷切扫描.md');
+        $skill = (string) file_get_contents($root . '/app/code/Weline/Framework/doc/ai/skills/performance-cold-chaos-dig/SKILL.md');
+
+        return str_contains($cmd, '`性能`')
+            && str_contains($cmd, '`优化`')
+            && str_contains($skill, '`性能`')
+            && str_contains($skill, '`优化`');
     })(),
     'theme_development command doc covers four layers or public component library' => (static function (): bool {
         $themeCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/主题开发.md';

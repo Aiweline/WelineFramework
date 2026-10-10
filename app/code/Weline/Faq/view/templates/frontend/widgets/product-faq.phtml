@@ -13,9 +13,11 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["product"]}
  * @widget.supports {["layout-product-faq","product-faq","faq"]}
- * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-faq", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认 FAQ 槽", "config":{"title":"常见问题"} }]}
+ * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-faq","area":"content","sort_order":0,"required":true,"reason":"商品详情默认在 FAQ 槽展示万能 FAQ 部件","config":{"title":"常见问题"}}]}
  *
  * @param title {default="常见问题",type="string",label="标题"}
+ *
+ * @widget.slot {product-faq}
  */
 
 use Weline\Faq\Service\FaqPdpResolveService;

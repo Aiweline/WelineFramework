@@ -24,6 +24,12 @@
  * @param min_open_seconds {default=3,type="number",label="最早弹出秒数"}
  * @param show_once {default=true,type="bool",label="仅显示一次"}
  * @param cookie_days {default=14,type="number",label="Cookie 天数"}
+ *
+ * @widget.slot {content}
+ * @widget.supports {["newsletter-popup","layout-homepage-content","layout-footer-above","content"]}
+ *
+ * @widget.default_injections {[]}
+ * @widget.placement {injection}
  */
 
 use Weline\Framework\View\Data\DataInterface;

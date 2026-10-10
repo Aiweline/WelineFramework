@@ -1,5 +1,18 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {dropship_overview}
+ * @widget.name {货源销售概览}
+ * @widget.description {CJ/货源近期刊登与推送异常概览}
+ * @widget.type {stats}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-summary"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-summary}
+ * @widget.supports {["dashboard-widget","dashboard-slot-summary","dashboard-stat","dashboard-kpi"]}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"default","target_type":"website","slot":"dashboard-summary","area":"content","sort_order":80,"required":false,"reason":"货源代发模块安装后展示销售概览","config":{"dashboard_layout":{"colSpan":3,"rowSpan":1,"sortOrder":80}}}]}
+ */
 use Weline\Dropship\Model\DropshipListing;
 use Weline\Dropship\Model\DropshipPushOutbox;
 use Weline\Framework\Manager\ObjectManager;

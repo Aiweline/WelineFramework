@@ -1,0 +1,19 @@
+{
+  "module": "Weline_Framework",
+  "skills": [
+    {
+      "skill_id": "doc:performance-cold-chaos-dig",
+      "name": "performance-cold-chaos-dig",
+      "aliases": [
+        "performance-cold-chaos-dig",
+        "性能",
+        "优化",
+        "性能优化",
+        "冷切扫描",
+        "假写粘性"
+      ],
+      "path": "app/code/Weline/Framework/doc/ai/skills/performance-cold-chaos-dig/SKILL.md",
+      "description": "Storefront cold-scope chaos crawl: stop on slow hits, dig pretend-write/stickiness with RouterPerf/TemplatePerf/HotCache logs. Companion of performance_check."
+    }
+  ]
+}

@@ -6,6 +6,7 @@ namespace Weline\I18n\Api\Localization;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\BatchGlobalDictionaryProviderInterface;
+use Weline\Framework\Phrase\GlobalDictionaryModuleBagCache;
 use Weline\Framework\Phrase\GlobalDictionaryProviderInterface;
 use Weline\Framework\Phrase\ModuleGlobalDictionaryProviderInterface;
 use Weline\I18n\Model\Locale\Dictionary;
@@ -109,6 +110,14 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
         } catch (\Throwable) {
         }
 
+        // Cross-request / cross-worker: same Phrase shared bag key as Parser module maps.
+        $shared = GlobalDictionaryModuleBagCache::getNullSource($locale);
+        if (\is_array($shared)) {
+            $this->rememberNullSourceMemo($memoKey, $shared);
+
+            return $shared;
+        }
+
         $pdoWords = [];
         try {
             $model = ObjectManager::getInstance(Dictionary::class)->reset();
@@ -136,16 +145,24 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
             // Fall through to empty — module-scoped path still works.
         }
 
+        // set（非 remember）：避免与 Parser::loadGlobalDictionaryModuleMaps 同键 nested single-flight。
+        GlobalDictionaryModuleBagCache::putNullSource($locale, $pdoWords);
+        $this->rememberNullSourceMemo($memoKey, $pdoWords);
+
+        return $pdoWords;
+    }
+
+    /** @param array<string, string> $words */
+    private function rememberNullSourceMemo(string $memoKey, array $words): void
+    {
         try {
             if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)
                 && \Weline\Framework\Runtime\RequestContext::isInitialized()
             ) {
-                \Weline\Framework\Runtime\RequestContext::set($memoKey, $pdoWords);
+                \Weline\Framework\Runtime\RequestContext::set($memoKey, $words);
             }
         } catch (\Throwable) {
         }
-
-        return $pdoWords;
     }
 
     public function wordsByModule(string $locale, array $modules): array

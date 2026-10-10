@@ -58,5 +58,8 @@ final class BlogContentResolverContractTest extends TestCase
         self::assertStringContainsString('contentIdentityKey', $source);
         self::assertStringContainsString('localeSlugSuffixMap', $source);
         self::assertStringContainsString("'hi_IN' => 'hi'", $source);
+        self::assertStringContainsString("'bg_BG' => 'bg'", $source);
+        self::assertStringContainsString("'de_DE' => 'de'", $source);
+        self::assertStringContainsString("'ru_RU' => 'ru'", $source);
     }
 }

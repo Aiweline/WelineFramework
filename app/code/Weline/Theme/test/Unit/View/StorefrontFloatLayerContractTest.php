@@ -70,6 +70,15 @@ final class StorefrontFloatLayerContractTest extends TestCase
             $this->themeRoot() . '/Service/LayoutEntity/StorefrontFloatLayerHost.php'
         );
         self::assertStringContainsString('data-weline-load="storefrontFloatLayer"', $host);
+        self::assertStringContainsString('ensureFloatLayerModuleLoadAttr', $host);
+        self::assertStringContainsString('storefront-float-load-on-layer-v1', $host);
+
+        $stale = '<div id="w-storefront-float-layer" class="w-storefront-float-layer" data-storefront-float-layer aria-live="off">'
+            . '<div data-slot-id="storefront-float-start" data-testid="storefront-float-start"></div>'
+            . '<div data-slot-id="storefront-float-end" data-testid="storefront-float-end"></div>'
+            . '</div>';
+        $healed = \Weline\Theme\Service\LayoutEntity\StorefrontFloatLayerHost::ensureInHtml($stale);
+        self::assertStringContainsString('data-weline-load="storefrontFloatLayer"', $healed);
     }
 
     public function testFloatLayerCssOwnsStickyClearanceOnce(): void

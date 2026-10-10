@@ -141,6 +141,9 @@
 标签太长,"Tag too long"
 展开,Expand
 折叠,Collapse
+id属性不能为空,id属性不能为空
+不修改（保持当前）,"Do not change (keep current)"
+搜索或选择已发布版本,搜索或选择已发布版本
 "w:slot wrapper=""section"" 必须配置 weline-code 属性（用于事件溯源）","w:slot wrapper=""section"" must be configured with the weline-code attribute (for event sourcing)"
 "w:slot wrapper=""section"" 的 weline-code 不能为空","The weline-code of w:slot wrapper=""section"" cannot be empty"
 "w:slot 标签缺少必填属性 id","w:slot tag missing required attribute id"
@@ -166,6 +169,7 @@
 搜索图标,"search icon"
 可用图标,"Available icons"
 没有匹配的图标,"No matching icon"
+搜索或选择前台主题,搜索或选择前台主题
 预设颜色,"Preset Colors"
 请选择或搜索...,"Select or search..."
 搜索中...,Searching...
@@ -1146,6 +1150,7 @@ Logo,Logo
 正在加载购物车...,"Loading cart..."
 正在更新购物车...,"Updating cart..."
 商品小计,"Goods subtotal"
+本次应付定金,"Deposit due now"
 优惠券,Coupon
 叠加优惠,"Stacked discount"
 自动优惠,"Automatic discount"
@@ -1213,17 +1218,21 @@ Logo,Logo
 "共 %{1} 条","Total %{1} items"
 "您好, 登录","Hello, login"
 "登录 / 注册",Login/Register
-店面主题,"Storefront theme"
 请先保存网站后，再为本站选择店面主题。,"Save the website first, then choose a storefront theme for this site."
 "本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。","本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。"
-前台主题,"Frontend Theme"
-不修改（保持当前）,"Do not change (keep current)"
 "当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。"
 本站已配置专属主题应用引用。,本站已配置专属主题应用引用。
-已发布版本,"Published version"
-当前生效,"Currently active"
 本站范围尚无已发布主题版本；可在主题编辑器发布后再选。,"No published theme version for this website scope yet. Publish in the theme editor first."
-范围,Scope
+请先保存渠道后，再为本渠选择店面主题。,请先保存渠道后，再为本渠选择店面主题。
+"本渠店面主题写入渠道范围应用引用；未配置时继承商店/网站或 Theme 默认。","本渠店面主题写入渠道范围应用引用；未配置时继承商店/网站或 Theme 默认。"
+"当前显示为继承上级或 Theme 默认；保存时选择主题将写入本渠专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本渠专属应用引用。"
+本渠已配置专属主题应用引用。,本渠已配置专属主题应用引用。
+本渠范围尚无已发布主题版本；可在主题编辑器发布后再选。,本渠范围尚无已发布主题版本；可在主题编辑器发布后再选。
+请先保存商店后，再为本店选择店面主题。,请先保存商店后，再为本店选择店面主题。
+"本店店面主题写入商店范围应用引用；未配置时继承网站或 Theme 默认。","本店店面主题写入商店范围应用引用；未配置时继承网站或 Theme 默认。"
+"当前显示为继承上级或 Theme 默认；保存时选择主题将写入本店专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本店专属应用引用。"
+本店已配置专属主题应用引用。,本店已配置专属主题应用引用。
+本店范围尚无已发布主题版本；可在主题编辑器发布后再选。,本店范围尚无已发布主题版本；可在主题编辑器发布后再选。
 CSS变量配置,"CSS variable configuration"
 选择色盘：,"Select Color Palette:"
 不使用色盘,"No color palette"
@@ -1502,7 +1511,8 @@ Favicon,Favicon
 保存当前我的盘,"Save current my disk"
 点击配置此部件,"Click to configure this widget"
 无模板,"No template"
-"店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","Configure the storefront theme under Website Info → Storefront Theme; otherwise it falls back to the registered Theme Default. Backend skin is set in System Config."
+"店面主题在「网站 / 店铺 / 渠道信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","店面主题在「网站 / 店铺 / 渠道信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。"
+前台主题,"Frontend Theme"
 后台主题,"Backend Theme"
 "前端 %{1} 个，后端 %{2} 个","Frontend: %{1}, Backend: %{2}"
 暂无主题,"No Theme"
@@ -1528,7 +1538,7 @@ AI创建虚拟主题,"AI creates virtual themes"
 在系统配置中切换后台皮肤,"Switch backend skin in System Config"
 预览主题,"Preview theme"
 可视化编辑,"Visual Editor"
-各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,"Storefront themes are configured in Website Info; this list only shows installed themes and bindings."
+各网站/店铺/渠道店面主题在对应范围信息中配置；此处仅展示安装主题与绑定关系。,各网站/店铺/渠道店面主题在对应范围信息中配置；此处仅展示安装主题与绑定关系。
 后台皮肤由系统配置决定；此处仅展示安装主题与当前选用状态。,"Backend skin is set in System Config; this list only shows installed themes and the current selection."
 参照主题,"Reference topic"
 "固定调用 Theme AI 适配器","Always use the Theme AI adapter"
@@ -1588,6 +1598,10 @@ AI目录加载失败,"AI directory loading failed"
 预览图,"Preview image"
 中...,middle...
 刷新失败,"Refresh Failed"
+店面主题,"Storefront theme"
+已发布版本,"Published version"
+当前生效,"Currently active"
+范围,Scope
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
 字体子集预热开始…,"Font subset warm-up begins..."
@@ -1659,7 +1673,8 @@ AI目录加载失败,"AI directory loading failed"
 "可选：切到项目壳 /~site/{站点} 预览。","Optional: switch to the project shell /~site/{site} for preview."
 网站主题绑定参数无效,"Invalid website theme binding parameters"
 网站代码无效,"Invalid website code"
-所选主题版本不属于当前网站范围,"Selected theme version does not belong to this website scope"
+主题绑定参数无效,主题绑定参数无效
+所选主题版本不属于当前范围,所选主题版本不属于当前范围
 主题不可用于前台,"Theme is not available for the frontend"
 定时计划参数不完整,"Incomplete schedule parameters"
 仅支持产品或分类默认产品布局定时,"Only product or category default product-layout schedules are supported"
@@ -1827,8 +1842,16 @@ AI目录加载失败,"AI directory loading failed"
 主题布局预固化仅处理站点已绑定主题,"Theme layout solidify limited to website-bound themes"
 "正在从已记录的版本意图生成 PHTML…","正在从已记录的版本意图生成 PHTML…"
 "可解析版本的主题布局 PHTML 已生成。","可解析版本的主题布局 PHTML 已生成。"
-主题布局固化编译流水线,"Theme layout solidify/compile pipeline pools"
 主题布局流水线,"Theme layout solidify/compile pipeline"
+主题布局固化编译流水线,"Theme layout solidify/compile pipeline pools"
+主题布局发布,"Theme layout publish"
+进程池,"process pool"
+整页完成,"page complete"
+语种完成,"locale complete"
+语种,locale
+编译失败,"compile failed"
+资源合包已预热,"resource packs warmed"
+资源合包预热失败,"resource pack warm failed"
 "Theme 范围版本参数无效。","Theme scope version parameters are invalid."
 "Theme 范围发布版本无效。","Theme scope published version is invalid."
 "Theme 范围版本未持久化。","Theme scope version is not persisted."
@@ -2280,6 +2303,9 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","Configure the storefront theme under Website Info → Storefront Theme; otherwise it falls back to the registered Theme Default. Backend skin is set in System Config."
+各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,"Storefront themes are configured in Website Info; this list only shows installed themes and bindings."
+所选主题版本不属于当前网站范围,"Selected theme version does not belong to this website scope"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 Pagination,Pagination
@@ -4807,11 +4833,3 @@ Chiffon,Chiffon
 选择修订冲突，请刷新后再发布,"Selection revision conflict — refresh then publish"
 作用域结构冲突，请先重置或重新基线化后再发布,"Scope structural conflict — reset or re-baseline before publishing"
 发布主题失败,"Theme publish failed"
-主题布局发布,Theme layout publish
-进程池,process pool
-整页完成,page complete
-语种完成,locale complete
-语种,locale
-编译失败,compile failed
-资源合包已预热,resource packs warmed
-资源合包预热失败,resource pack warm failed

@@ -2,6 +2,20 @@
 /**
  * @widget.source {Weline_Visitor::css/widgets/widget-pixel-channels.css}
  * Dashboard Widget: 流量渠道（E01，catalog pixel_channels）
+ *
+ * @widget.code {pixel_channels}
+ * @widget.name {流量渠道}
+ * @widget.description {按 channel_code 聚合事件与价值，可下钻事件列表。}
+ * @widget.type {table}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-detail"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-detail}
+ * @widget.supports {["dashboard-widget","dashboard-slot-detail","dashboard-table","dashboard-list"]}
+ * @param range {default="7d",type="select",label="统计范围",options={"today":"今日","7d":"近 7 天","30d":"近 30 天"}}
+ * @param website_id {default="",type="string",label="站点 ID",description="留空时跟随当前 Dashboard 站点。"}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"weline_visitor_event_statistics","target_type":"website","slot":"dashboard-detail","area":"content","sort_order":78,"required":false,"reason":"流量渠道报表部件（E01）；Installer 种子已含本 code（E05）","config":{"dashboard_layout":{"colSpan":4,"rowSpan":1,"sortOrder":78}}}]}
  */
 $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Visitor\Service\PixelDashboardWidgetData::class);
 $config = [

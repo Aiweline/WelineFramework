@@ -28,6 +28,9 @@
  * @param popup_scroll_percent {default=40,type="number",label="弹窗滚动百分比"}
  * @param popup_min_open_seconds {default=3,type="number",label="弹窗最早弹出秒数"}
  * @param popup_cookie_days {default=14,type="number",label="弹窗 Cookie 天数"}
+ *
+ * @widget.default_injections {[{"layout_type":"homepage","slot":"footer-above","area":"content","sort_order":100,"required":true,"reason":"全站页脚上方 footer-above 常驻邮件订阅（与 trust-badges 同槽追加）","config":{"title":"订阅我们的邮件","description":"获取最新的优惠信息和新品资讯","placeholder":"请输入您的邮箱地址","button_text":"订阅","layout":"horizontal","enable_popup":true,"popup_trigger":"deferred","popup_delay_seconds":15,"popup_scroll_percent":40,"popup_min_open_seconds":3,"popup_cookie_days":14}}]}
+ * @widget.placement {injection}
  */
 
 use Weline\Theme\Helper\WidgetI18n;

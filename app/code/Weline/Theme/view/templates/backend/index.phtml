@@ -35,7 +35,7 @@ foreach ($themes as $themeItem) {
         $backendThemeCount++;
     }
 }
-$pageHint = $h(__('店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。'));
+$pageHint = $h(__('店面主题在「网站 / 店铺 / 渠道信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。'));
 $tabFrontendLabel = $h(__('前台主题'));
 $tabBackendLabel = $h(__('后台主题'));
 $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $backendThemeCount]));
@@ -392,7 +392,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
 
                 <div class="w-tabs__panel" id="weline-theme-tab-frontend" role="tabpanel" aria-labelledby="weline-theme-tab-frontend-trigger">
                     <div class="themes-grid" data-theme-list="frontend">
-                        <p class="w-text themes-grid__hint" data-tone="muted" data-size="sm"><?= $h(__('各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。')) ?></p>
+                        <p class="w-text themes-grid__hint" data-tone="muted" data-size="sm"><?= $h(__('各网站/店铺/渠道店面主题在对应范围信息中配置；此处仅展示安装主题与绑定关系。')) ?></p>
                         <?php $renderThemeCards('frontend'); ?>
                     </div>
                 </div>

@@ -1558,7 +1558,10 @@ class Template extends DataObject implements RequestLocalInterface
             return $this->ob_file($compiledFile);
         }
 
-        $ttl = $this->staticHookOutputCacheTtl();
+        $ttl = \Weline\Framework\View\Cache\TemplateFragmentOutputCache::resolveTtl(
+            $cachePolicy,
+            $this->staticHookOutputCacheTtl(),
+        );
         // Hook chrome must vary by lang/currency/website/auth — not by product
         // area_route. Default environmentHash includes area_route and would copy
         // one HTML blob per PDP URL into the worker process cache.
@@ -1570,6 +1573,7 @@ class Template extends DataObject implements RequestLocalInterface
             'cache_version' => '20260921-hook-origin-base',
             'hook_context' => $cacheContext,
             'policy_digest' => $templateCachePolicies->digest(),
+            'ttl' => $ttl,
         ], [
             'area_route' => false,
         ]));

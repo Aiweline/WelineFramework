@@ -17,6 +17,11 @@
  * @param enable_google {default=true,type="bool",label="启用 Google"}
  * @param enable_facebook {default=true,type="bool",label="启用 Facebook"}
  * @param enable_instagram {default=true,type="bool",label="启用 Instagram"}
+ *
+ * @widget.slot {account-login-social-providers}
+ *
+ * @widget.default_injections {[]}
+ * @widget.placement {layout}
  */
 
 use Weline\Customer\Service\SocialLogin\SocialLoginPresentationService;

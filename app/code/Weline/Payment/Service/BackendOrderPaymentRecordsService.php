@@ -28,6 +28,9 @@ final class BackendOrderPaymentRecordsService
      *     payment_method: string,
      *     method_label: string,
      *     method_icon_url: string,
+     *     payment_entry: string,
+     *     payment_entry_label: string,
+     *     payment_entry_tone: string,
      *     amount: float,
      *     currency: string,
      *     transaction_id: string,
@@ -66,6 +69,9 @@ final class BackendOrderPaymentRecordsService
      *     payment_method: string,
      *     method_label: string,
      *     method_icon_url: string,
+     *     payment_entry: string,
+     *     payment_entry_label: string,
+     *     payment_entry_tone: string,
      *     amount: float,
      *     currency: string,
      *     transaction_id: string,
@@ -98,7 +104,7 @@ final class BackendOrderPaymentRecordsService
         }
         $transactionRows = $this->transactionsForPayable($payableId);
         foreach (self::mergeAttemptAndTransactionRows($attemptRows, $transactionRows) as $row) {
-            $rows[] = $this->withMethodChrome($row);
+            $rows[] = $this->withPaymentEntryChrome($this->withMethodChrome($row));
         }
 
         return $rows;
@@ -127,6 +133,7 @@ final class BackendOrderPaymentRecordsService
         array $transactionRows,
     ): array {
         $merged = [];
+        /** @var array<string, int> $seenKeys key → merged index */
         $seenKeys = [];
 
         foreach ([$attemptRows, $transactionRows] as $side) {
@@ -135,11 +142,17 @@ final class BackendOrderPaymentRecordsService
                     continue;
                 }
                 $keys = self::paymentIdentityKeys($row);
-                if (self::hasSeenIdentityKey($keys, $seenKeys)) {
+                $existingIndex = self::firstSeenIdentityIndex($keys, $seenKeys);
+                if ($existingIndex !== null) {
+                    $merged[$existingIndex] = self::enrichMergedPaymentRow(
+                        $merged[$existingIndex],
+                        $row,
+                    );
                     continue;
                 }
+                $index = \count($merged);
                 foreach ($keys as $key) {
-                    $seenKeys[$key] = true;
+                    $seenKeys[$key] = $index;
                 }
                 $merged[] = $row;
             }
@@ -155,6 +168,45 @@ final class BackendOrderPaymentRecordsService
         });
 
         return array_values($merged);
+    }
+
+    /**
+     * Keep Attempt chrome; fill payment_entry from the duplicate side when missing.
+     *
+     * @param array<string, mixed> $kept
+     * @param array<string, mixed> $incoming
+     * @return array<string, mixed>
+     */
+    private static function enrichMergedPaymentRow(array $kept, array $incoming): array
+    {
+        $keptEntry = PaymentEntry::normalize(
+            (string)($kept['payment_entry'] ?? ''),
+            PaymentEntry::UNKNOWN,
+        );
+        $incomingEntry = PaymentEntry::normalize(
+            (string)($incoming['payment_entry'] ?? ''),
+            PaymentEntry::UNKNOWN,
+        );
+        if ($keptEntry === PaymentEntry::UNKNOWN && $incomingEntry !== PaymentEntry::UNKNOWN) {
+            $kept['payment_entry'] = $incomingEntry;
+        }
+
+        return $kept;
+    }
+
+    /**
+     * @param list<string> $keys
+     * @param array<string, int> $seenKeys
+     */
+    private static function firstSeenIdentityIndex(array $keys, array $seenKeys): ?int
+    {
+        foreach ($keys as $key) {
+            if (isset($seenKeys[$key])) {
+                return $seenKeys[$key];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -177,21 +229,6 @@ final class BackendOrderPaymentRecordsService
     }
 
     /**
-     * @param list<string> $keys
-     * @param array<string, bool> $seenKeys
-     */
-    private static function hasSeenIdentityKey(array $keys, array $seenKeys): bool
-    {
-        foreach ($keys as $key) {
-            if (isset($seenKeys[$key])) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * @param array<string, mixed> $row
      * @return array<string, mixed>
      */
@@ -202,6 +239,20 @@ final class BackendOrderPaymentRecordsService
         $row['payment_method'] = $code;
         $row['method_label'] = $chrome['label'];
         $row['method_icon_url'] = $chrome['icon_url'];
+
+        return $row;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function withPaymentEntryChrome(array $row): array
+    {
+        $entry = PaymentEntry::normalize((string)($row['payment_entry'] ?? ''), PaymentEntry::UNKNOWN);
+        $row['payment_entry'] = $entry;
+        $row['payment_entry_label'] = PaymentEntry::label($entry);
+        $row['payment_entry_tone'] = PaymentEntry::tone($entry);
 
         return $row;
     }
@@ -293,11 +344,15 @@ final class BackendOrderPaymentRecordsService
             $amountMinor = (int)($data[PaymentAttempt::schema_fields_AMOUNT_MINOR] ?? 0);
             $divisor = 10 ** $precision;
             $providerReference = trim((string)($data[PaymentAttempt::schema_fields_PROVIDER_REFERENCE] ?? ''));
+            $snapshot = $this->decodeJsonArray(
+                (string)($data[PaymentAttempt::schema_fields_REQUEST_SNAPSHOT] ?? ''),
+            );
             $rows[] = [
                 'payment_method' => $this->firstNonEmpty(
                     (string)($data[PaymentAttempt::schema_fields_METHOD_CODE] ?? ''),
                     (string)($data[PaymentAttempt::schema_fields_PROVIDER_CODE] ?? ''),
                 ),
+                'payment_entry' => PaymentEntry::resolveFromContext($snapshot),
                 'amount' => $divisor > 0 ? ($amountMinor / $divisor) : (float)$amountMinor,
                 'currency' => $this->firstNonEmpty(
                     (string)($data[PaymentAttempt::schema_fields_PAYMENT_CURRENCY_CODE] ?? ''),
@@ -343,8 +398,12 @@ final class BackendOrderPaymentRecordsService
             $responseData = $this->decodeJsonArray(
                 (string)($data[PaymentTransaction::schema_fields_RESPONSE_DATA] ?? ''),
             );
+            $requestData = $this->decodeJsonArray(
+                (string)($data[PaymentTransaction::schema_fields_REQUEST_DATA] ?? ''),
+            );
             $rows[] = [
                 'payment_method' => (string)($data[PaymentTransaction::schema_fields_METHOD_CODE] ?? ''),
+                'payment_entry' => PaymentEntry::resolveFromContext($requestData),
                 'amount' => (float)($data[PaymentTransaction::schema_fields_AMOUNT] ?? 0),
                 'currency' => $this->firstNonEmpty(
                     (string)($data[PaymentTransaction::schema_fields_CURRENCY] ?? ''),

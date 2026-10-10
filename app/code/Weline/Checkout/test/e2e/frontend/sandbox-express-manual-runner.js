@@ -173,6 +173,31 @@ async function main() {
       if (m2) result.transaction_no = decodeURIComponent(m2[1]);
     }
 
+    // PayPal return opens a new document with a new Scope meta; leftover
+    // __Host-Weline-Worker-Scope-Bootstrap-* cookies from PDP leave confirm
+    // QueryBin as missing/duplicated/invalid. Drop ALL Host-scope cookies,
+    // reload once for a single matching Set-Cookie+meta pair, then warm Scope.
+    const scopePrefix = '__Host-Weline-Worker-Scope-Bootstrap-';
+    for (const cookie of (await context.cookies()).filter((c) => String(c.name || '').startsWith(scopePrefix))) {
+      await context.clearCookies({
+        name: cookie.name,
+        domain: cookie.domain,
+        path: cookie.path || '/',
+      }).catch(() => {});
+    }
+    await paypal.reload({ waitUntil: 'domcontentloaded' });
+    result.steps.push('express_review_reloaded_for_scope');
+    await paypal.waitForFunction(() => {
+      const meta = document.querySelector('meta[name="weline-worker-scope-bootstrap"]');
+      return !!(window.Weline && window.Weline.Api && meta && String(meta.getAttribute('content') || '').trim());
+    }, null, { timeout: 60000 });
+    await paypal.evaluate(async () => {
+      if (window.Weline && Weline.Api && typeof Weline.Api.bootstrapScope === 'function') {
+        await Weline.Api.bootstrapScope();
+      }
+    });
+    result.steps.push('express_scope_warmed');
+
     await paypal.waitForSelector('[data-testid="checkout-express-review"]', { timeout: 60000 });
     const body = await paypal.content();
     if (!body.includes('尚未扣款')) {
@@ -186,29 +211,65 @@ async function main() {
       throw new Error('address_still_readonly_copy');
     }
 
-    // Prefer Shipping widget phone/name fields; fall back to gap inputs.
+    // Force a US destination + Americas lane so confirm can capture.
+    await paypal.evaluate(async () => {
+      if (window.WelineThemeAddress && typeof window.WelineThemeAddress.applyValues === 'function') {
+        await window.WelineThemeAddress.applyValues('checkout-shipping-address', {
+          country_code: 'US',
+          country: 'United States',
+          province: 'California',
+          city: 'San Jose',
+          district: '',
+          street: '1 Main St',
+        }).catch(() => {});
+      }
+      const root = document.querySelector('[data-shipping-checkout-address]');
+      const set = (n, v) => {
+        const el = root && root.querySelector(`[name="${n}"]`);
+        if (el) {
+          el.value = v;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      };
+      set('name', 'Sandbox Buyer');
+      set('phone', '14085551234');
+      set('address1', '1 Main St');
+      set('street', '1 Main St');
+      set('city', 'San Jose');
+      set('postal_code', '95131');
+      set('country_code', 'US');
+      set('province', 'CA');
+      document.dispatchEvent(new CustomEvent('weline:checkout:address-updated', { bubbles: true }));
+    }).catch(() => {});
     const shipPhone = paypal.locator('[data-shipping-checkout-address] input[name="phone"]').first();
     if (await shipPhone.isVisible().catch(() => false)) {
-      const cur = await shipPhone.inputValue().catch(() => '');
-      if (!String(cur || '').trim()) {
-        await shipPhone.fill('13800138000');
-      }
+      await shipPhone.fill('14085551234');
+      await shipPhone.blur().catch(() => {});
     }
     const shipName = paypal.locator('[data-shipping-checkout-address] input[name="name"]').first();
     if (await shipName.isVisible().catch(() => false)) {
-      const cur = await shipName.inputValue().catch(() => '');
-      if (!String(cur || '').trim()) {
-        await shipName.fill('John Doe');
-      }
+      await shipName.fill('Sandbox Buyer');
     }
     const phone = paypal.locator('#express-phone');
     if (await phone.isVisible().catch(() => false)) {
-      await phone.fill('13800138000');
+      await phone.fill('14085551234');
     }
     const emailGap = paypal.locator('#express-email');
     if (await emailGap.isVisible().catch(() => false)) {
       await emailGap.fill(BUYER_EMAIL);
     }
+    await paypal.waitForTimeout(2000);
+    await paypal.evaluate(() => {
+      const radios = Array.from(document.querySelectorAll('input[name="shipping_method"], input[data-shipping-method]'));
+      const want = radios.find((r) => /AMERICAS|INTL/i.test(String(r.value || '')))
+        || radios.find((r) => !/DOMESTIC/i.test(String(r.value || '')));
+      if (want && !want.checked) {
+        want.checked = true;
+        want.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }).catch(() => {});
+    await paypal.waitForTimeout(2000);
 
     if (process.env.EXPRESS_STOP_AT_REVIEW === '1') {
       result.steps.push('stopped_at_review');
@@ -219,16 +280,6 @@ async function main() {
       return;
     }
 
-    // PayPal US address may need phone gap + shipping re-select; wait for can_confirm.
-    const shipPhone2 = paypal.locator('[data-shipping-checkout-address] input[name="phone"]').first();
-    if (await shipPhone2.isVisible().catch(() => false)) {
-      const cur = await shipPhone2.inputValue().catch(() => '');
-      if (!String(cur || '').trim()) {
-        await shipPhone2.fill('14085551234');
-        await shipPhone2.blur().catch(() => {});
-        await paypal.waitForTimeout(1500);
-      }
-    }
     const confirm = paypal.locator('[data-testid="express-confirm-pay"]');
     await confirm.waitFor({ state: 'visible', timeout: 30000 });
     await paypal.waitForFunction(() => {
@@ -236,43 +287,85 @@ async function main() {
       const status = (document.querySelector('[data-express-status]') || {}).innerText || '';
       return !!(btn && !btn.disabled) || /已支付/.test(status);
     }, null, { timeout: 90000 }).catch(() => {});
-    if (await confirm.isEnabled()) {
-      await Promise.all([
-        paypal.waitForURL((url) => {
-          const u = String(url);
-          if (/\/cart(?:\?|$)/.test(u)) return true;
-          if (/\/checkout\/success/.test(u)) return true;
-          if (/\/payment\/.*handoff|\/checkout\/handoff/.test(u)) return true;
-          return false;
-        }, { timeout: 120000 }).catch(() => {}),
-        confirm.click(),
-      ]);
-      for (let i = 0; i < 10; i += 1) {
-        const u = paypal.url();
-        if (/\/checkout\/success/.test(u) || /\/cart(?:\?|$)/.test(u)) {
-          break;
+    if (!(await confirm.isEnabled())) {
+      const status = await paypal.locator('[data-express-status]').innerText().catch(() => '');
+      throw new Error('confirm_disabled:' + status);
+    }
+    await Promise.all([
+      paypal.waitForURL((url) => {
+        const u = String(url);
+        return /\/cart(?:\?|$)/.test(u)
+          || /\/checkout\/success/.test(u)
+          || /\/payment\/.*handoff|\/checkout\/handoff/.test(u);
+      }, { timeout: 120000 }).catch(() => {}),
+      confirm.click(),
+    ]);
+    for (let i = 0; i < 15; i += 1) {
+      const u = paypal.url();
+      if (/\/checkout\/success/.test(u) || /\/cart(?:\?|$)/.test(u)) {
+        break;
+      }
+      if (/handoff/.test(u)) {
+        await paypal.waitForTimeout(1200);
+        continue;
+      }
+      await paypal.waitForTimeout(800);
+    }
+    // If UI click stalled on review, call confirmExpressCheckout directly.
+    if (/express-review/.test(paypal.url())) {
+      const statusBefore = await paypal.locator('[data-express-status]').innerText().catch(() => '');
+      const apiConfirm = await paypal.evaluate(async (txn) => {
+        const api = await window.Weline.Api.resource('checkout');
+        const root = document.querySelector('[data-testid="checkout-express-review"]') || document;
+        const get = (n) => {
+          const el = root.querySelector(`[name="${n}"]`);
+          return el ? String(el.value || '').trim() : '';
+        };
+        const ship = document.querySelector('input[name="shipping_method"]:checked, input[data-shipping-method]:checked');
+        return api.confirmExpressCheckout({
+          transaction_no: txn,
+          shipping_address: {
+            name: get('name') || 'Sandbox Buyer',
+            phone: get('phone') || '14085551234',
+            address1: get('address1') || get('street') || '1 Main St',
+            street: get('street') || get('address1') || '1 Main St',
+            city: get('city') || 'San Jose',
+            province: get('province') || 'CA',
+            postal_code: get('postal_code') || '95131',
+            country_code: get('country_code') || 'US',
+            country: 'US',
+          },
+          contact_phone: get('phone') || '14085551234',
+          email: (document.querySelector('#express-email') || {}).value || '',
+          service_code: ship ? String(ship.value || '') : '',
+        }, { silent: true, requestTimeoutMs: 120000 });
+      }, result.transaction_no);
+      result.api_confirm = apiConfirm;
+      result.steps.push('api_confirm:' + ((apiConfirm && apiConfirm.success) ? 'ok' : 'fail'));
+      if (apiConfirm && apiConfirm.success !== false) {
+        const data = apiConfirm.data && typeof apiConfirm.data === 'object' ? apiConfirm.data : apiConfirm;
+        const redirect = String(data.redirect_url || apiConfirm.redirect_url || '').trim();
+        if (redirect) {
+          await paypal.goto(redirect, { waitUntil: 'domcontentloaded' });
         }
-        if (/handoff/.test(u)) {
-          await paypal.waitForTimeout(1200);
-          continue;
-        }
+      } else {
+        throw new Error('confirm_failed:' + statusBefore + ':' + JSON.stringify(apiConfirm).slice(0, 600));
+      }
+      for (let i = 0; i < 12; i += 1) {
+        if (/\/checkout\/success/.test(paypal.url()) || /handoff/.test(paypal.url())) break;
         await paypal.waitForTimeout(800);
       }
-      result.steps.push('confirm_done:' + paypal.url());
-      result.handoff_url = paypal.url();
-      result.review_url = paypal.url();
-      if (/\/cart(?:\?|$)/.test(paypal.url())) {
-        throw new Error('final_url_is_cart:' + paypal.url());
-      }
-      const finalHtml = await paypal.content();
-      if (!/\/checkout\/success/.test(paypal.url()) && !/订单已支付|感谢您的订购|已支付成功|结账成功/.test(finalHtml)) {
-        throw new Error('missing_paid_success_copy:' + paypal.url());
-      }
-    } else {
-      const status = await paypal.locator('[data-express-status]').innerText().catch(() => '');
-      result.steps.push('confirm_disabled:' + status);
-      // Still success if we reached real review with txn.
-      result.error = status ? ('confirm_disabled:' + status) : 'confirm_disabled';
+    }
+    result.steps.push('confirm_done:' + paypal.url());
+    result.handoff_url = paypal.url();
+    result.review_url = paypal.url();
+    result.success_url = paypal.url();
+    if (/\/cart(?:\?|$)/.test(paypal.url())) {
+      throw new Error('final_url_is_cart:' + paypal.url());
+    }
+    const finalHtml = await paypal.content();
+    if (!/\/checkout\/success/.test(paypal.url()) && !/订单已支付|感谢您的订购|已支付成功|结账成功/.test(finalHtml)) {
+      throw new Error('missing_paid_success_copy:' + paypal.url() + ':' + (await paypal.locator('[data-express-status]').innerText().catch(() => '')));
     }
 
     result.ok = !!result.transaction_no

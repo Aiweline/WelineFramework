@@ -14,6 +14,7 @@
  * @widget.page_layouts {["cart","checkout","mini-cart","*"]}
  * @widget.supports {["storefront-money-summary","checkout-money-summary","money-summary"]}
  * @widget.source {Weline_Checkout::css/widgets/storefront-money-summary.css,Weline_Checkout::js/widgets/storefront-money-summary.js}
+ * @widget.default_injections {[{"layout_type":"mini-cart","layout_option":"default","slot":"money-summary","area":"footer","sort_order":5,"required":true,"reason":"迷你购物车金额小计由 Checkout 统一部件注入","config":{"mode":"mini-cart"}}]}
  *
  * @param mode {default="checkout",type="select",label="表面模式",options="checkout,cart,mini-cart,express,helppay"}
  * @param note {default="",type="string",label="摘要说明（空则隐藏）"}

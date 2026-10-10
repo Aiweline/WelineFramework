@@ -6,7 +6,14 @@
  * @widget.code {checkout-tax-identity}
  * @widget.slot {checkout-tax-identity}
  * @widget.supports {["checkout-tax-identity","tax-identity","buyer-tax","tax"]}
- * @widget.default_injections {[{"layout_type":"checkout","layout_option":"default","slot":"checkout-tax-identity","area":"content","sort_order":20,"required":true,"reason":"结账税号由 Tax 模块嵌入，禁止 Checkout ORM/EAV","config":{}}]}
+ * @widget.default_injections {[{"layout_type":"checkout","layout_option":"default","slot":"checkout-tax-identity","area":"content","sort_order":20,"required":true,"reason":"结账税号由 Tax 模块嵌入","config":[]}]}
+ *
+ * @widget.name {结账税号（税收）}
+ * @widget.description {由 Tax 嵌入结账采集买家税号（欧盟 VAT 示例）；禁止 Checkout EAV。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["checkout"]}
  */
 use Weline\Tax\Service\BuyerTaxIdentityService;
 

@@ -75,6 +75,14 @@ final class CachePolicyTest extends TestCase
         self::assertTrue(class_exists(CachePolicy::class), 'CachePolicy must declare resource, scope and cache dependencies centrally.');
     }
 
+    public function testSingleFlightWaitAllowsHeavySharedBuildersWithinFiniteCap(): void
+    {
+        $ok = new CachePolicy('heavy.bag', 'product', 'channel', [], ['catalog'], 60, 300, 20000);
+        self::assertSame(20000, $ok->singleFlightWaitMs);
+        $this->expectException(\InvalidArgumentException::class);
+        new CachePolicy('heavy.bag', 'product', 'channel', [], ['catalog'], 60, 300, 30001);
+    }
+
     public function testWebsiteResourceSharesAcrossChildrenAndIgnoresUnrelatedFrozenVersions(): void
     {
         $policy = new CachePolicy('category.tree', 'product', 'website', [], ['catalog'], 60, 300);

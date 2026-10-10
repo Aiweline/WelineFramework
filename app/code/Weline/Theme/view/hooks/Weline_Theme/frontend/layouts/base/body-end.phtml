@@ -21,7 +21,13 @@ window.Weline.Theme = window.Weline.Theme || {};
 window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?>;
 </script>
 <?php // mini-cart-drawer：由 mini-cart-icon 组件自带；shopper-toast CSS：风格层 storefront-shopper-toast-amazon.css（head 加载） ?>
+<?php
+// Image fallback has no natural visible host → idle (not default IntersectionObserver).
+// Float-layer JS loads on #w-storefront-float-layer in footer (always intersects).
+// Marker: storefront-float-load-on-layer-v1
+?>
 <div hidden
-     data-weline-load="storefrontImageFallback,storefrontFloatLayer"
+     data-weline-load="storefrontImageFallback"
+     data-weline-load-when="idle"
      aria-hidden="true"></div>
 <?php // Theme 全局店面 JS：经 modules + data-weline-load，禁止 @static 直引 ?>

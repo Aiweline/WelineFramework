@@ -22,6 +22,10 @@
  * @param show_wishlist {default=true,type="bool",label="显示收藏"}
  * @param show_compare {default=true,type="bool",label="显示对比"}
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ *
+ * @widget.slot {product-cross-sell}
+ *
+ * @widget.default_injections {[{"placement":"injection","layout_type":"product","layout_option":"default","slot":"design-product-cross-sell","area":"content","sort_order":3,"required":true,"reason":"商品详情默认在搭配推荐槽展示经常一起买","config":{"title":"经常一起购买","limit":3,"show_add_all_button":true,"show_total_price":true,"lazy_load":true}},{"placement":"injection","layout_type":"cart","layout_option":"default","slot":"cart-recommendations","area":"content","sort_order":0,"required":true,"reason":"购物车默认在推荐槽展示交叉销售（非 Theme 部件，禁止布局内嵌）","config":{"title":"经常一起购买","limit":3,"show_add_all_button":true,"show_total_price":true}}]}
  */
 
 use Weline\Framework\Manager\ObjectManager;

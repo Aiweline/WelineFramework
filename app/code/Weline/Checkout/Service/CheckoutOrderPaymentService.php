@@ -190,12 +190,17 @@ final class CheckoutOrderPaymentService
                 'discount_lines' => $seedDiscountLines,
                 'shipping_snapshot' => $order->shipping,
                 'coupon_code' => trim((string) ($context['coupon_code'] ?? '')),
+                'checkout_entry' => (string) ($order->checkoutEntry ?? ''),
+                'payment_mode' => strtolower(trim((string) ($context['payment_mode'] ?? ''))),
+                'continue_pay' => !empty($context['continue_pay'])
+                    || strtolower(trim((string) ($context['payment_mode'] ?? ''))) === 'continue_pay',
                 'metadata' => [
                     'checkout_group_uuid' => $order->checkoutGroupUuid,
                     'display_number' => $order->displayNumber,
                     'purpose' => $hangPurpose !== '' ? $hangPurpose : 'full',
                     'hang_purpose' => $hangPurpose !== '' ? $hangPurpose : 'full',
                     'order_type' => $order->orderType,
+                    'checkout_entry' => (string) ($order->checkoutEntry ?? ''),
                 ],
                 'idempotency_key' => $idempotencyKey . ':' . $order->orderUuid
                     . ($hangPurpose !== '' ? ':' . $hangPurpose : ''),
@@ -217,6 +222,17 @@ final class CheckoutOrderPaymentService
                     $paymentContext['metadata']['express_checkout'] = true;
                 }
             }
+            // Prefer caller payment_entry; else express / continue_pay / checkout default.
+            $paymentContext = \Weline\Payment\Service\PaymentEntry::stampContext(
+                $paymentContext,
+                !empty($paymentContext['express_checkout'])
+                    ? \Weline\Payment\Service\PaymentEntry::EXPRESS
+                    : (
+                        !empty($paymentContext['continue_pay'])
+                            ? \Weline\Payment\Service\PaymentEntry::CONTINUE_PAY
+                            : \Weline\Payment\Service\PaymentEntry::CHECKOUT
+                    ),
+            );
             $guestToken = trim((string) ($context['guest_token'] ?? ''));
             if ($guestToken !== '') {
                 $paymentContext['guest_token'] = $guestToken;

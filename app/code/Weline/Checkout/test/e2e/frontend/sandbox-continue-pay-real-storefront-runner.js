@@ -704,6 +704,32 @@ async function adoptAndResume(page, context, evidence, phase) {
   evidence.address_filled = addr;
   evidence.steps.push('C5.address_filled');
 
+  // Cancel→continue-pay 跨页会堆积 Scope Host Cookie；清干净再 reload 恢复 hash。
+  const recoveryUrl = page.url();
+  const scopePrefix = '__Host-Weline-Worker-Scope-Bootstrap-';
+  for (const cookie of (await context.cookies()).filter((c) => String(c.name || '').startsWith(scopePrefix))) {
+    await context.clearCookies({
+      name: cookie.name,
+      domain: cookie.domain,
+      path: cookie.path || '/',
+    }).catch(() => {});
+  }
+  await page.goto(recoveryUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => {
+    const meta = document.querySelector('meta[name="weline-worker-scope-bootstrap"]');
+    return !!(window.Weline && window.Weline.Api && meta && String(meta.getAttribute('content') || '').trim());
+  }, null, { timeout: 60000 });
+  await page.evaluate(async () => {
+    if (window.Weline && Weline.Api && typeof Weline.Api.bootstrapScope === 'function') {
+      await Weline.Api.bootstrapScope();
+    }
+  });
+  evidence.steps.push('C5.scope_rewarmed');
+  await page.waitForTimeout(2000);
+  // Reload may wipe filled address; re-apply US sandbox destination.
+  await ensureAddress(page);
+  await page.waitForTimeout(2500);
+
   // 反「假通过」硬门禁：必须显式选中真实网关支付方式（paypal），
   // 否则提交会落进本地测试通道 fake_card 并立即 paid（无网关跳转）。
   evidence.payment_method_picked = await pickGatewayPaymentMethod(page, phase);

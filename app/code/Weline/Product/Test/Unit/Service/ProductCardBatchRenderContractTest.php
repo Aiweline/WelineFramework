@@ -47,6 +47,7 @@ final class ProductCardBatchRenderContractTest extends TestCase
 
     public function testBucketCardIndexCollapsesEagerAndLazyPositions(): void
     {
+        \Weline\Framework\Runtime\RequestContext::init();
         $method = new \ReflectionMethod(ProductCardRenderer::class, 'bucketCardIndexForFragmentReuse');
         $method->setAccessible(true);
 

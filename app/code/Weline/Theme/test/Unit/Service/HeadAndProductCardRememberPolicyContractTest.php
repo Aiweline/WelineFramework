@@ -57,7 +57,9 @@ final class HeadAndProductCardRememberPolicyContractTest extends TestCase
     {
         $policy = StorefrontThemeCacheCoordinator::storefrontChromePolicy();
         self::assertSame('theme.storefront_chrome', $policy->resource);
-        self::assertSame(2000, $policy->singleFlightWaitMs);
+        self::assertSame(5000, $policy->singleFlightWaitMs);
+        self::assertSame(['lang'], $policy->vary);
+        self::assertNotContains('currency', $policy->vary);
     }
 
     public function testProductCardLogicalKeyPartitionsByProductAndFlags(): void
@@ -77,7 +79,7 @@ final class HeadAndProductCardRememberPolicyContractTest extends TestCase
             ['density' => 'compact', 'show_price' => true]
         );
 
-        self::assertStringStartsWith('theme.product_card.html.v4.', $a);
+        self::assertStringStartsWith('theme.product_card.html.v6.', $a);
         self::assertNotSame($a, $b);
         self::assertNotSame($a, $c);
     }
@@ -89,7 +91,7 @@ final class HeadAndProductCardRememberPolicyContractTest extends TestCase
         );
         // Absolute @url links in card HTML must not cross Worker :19655 vs public :9555.
         self::assertStringContainsString('storefrontOriginSegment', $src);
-        self::assertStringContainsString('theme.product_card.html.v4.', $src);
+        self::assertStringContainsString('theme.product_card.html.v6.', $src);
         self::assertStringContainsString("'website_url' => true", $src);
         self::assertStringContainsString("'host' => true", $src);
         self::assertStringContainsString("'base_url' => true", $src);

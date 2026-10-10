@@ -8,7 +8,7 @@ Register::register(
     Register::MODULE,
     'Weline_Newsletter',
     __DIR__,
-    '1.0.0',
+    '1.0.1',
     '邮件订阅：名单台账、订阅有奖、Smtp 默认模板；与周期订购/企业邮箱隔离',
     [
         'Weline_Framework',

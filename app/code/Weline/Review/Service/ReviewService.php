@@ -4,13 +4,43 @@ declare(strict_types=1);
 
 namespace Weline\Review\Service;
 
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Review\Api\ReviewSeoFactsInterface;
 use Weline\Review\Model\ProductReview;
 
 final class ReviewService implements ReviewSeoFactsInterface
 {
+    /**
+     * Chinese source strings for QueryBin form schema labels/placeholders.
+     * WLS __() does not hydrate generated/language packs; prefetch + LocaleDictionary required.
+     *
+     * @return list<string>
+     */
+    public static function formSchemaSourcePhrases(): array
+    {
+        return [
+            '标题（选填）',
+            '一句话概括您的观点',
+            '一句话概括您的体验',
+            '评论内容',
+            '请至少填写 10 个字符，分享您的阅读感受。',
+            '请至少填写 10 个字符，分享车型、交付或使用体验。',
+            '添加图片',
+            '添加视频',
+            '您的称呼（游客选填）',
+            '邮箱（游客选填，不公开）',
+            '匿名展示这条评论',
+            '总体评分',
+            '质量评分',
+            '交付评分',
+            '服务评分',
+            '未找到对应的评论对象。',
+        ];
+    }
+
     public function __construct(
         private readonly ReviewTypeRegistry $types,
         private readonly ReviewMediaService $media,
@@ -22,6 +52,8 @@ final class ReviewService implements ReviewSeoFactsInterface
     public function form(string $typeCode, string $externalEntityUuid): array
     {
         $type = $this->types->get($typeCode);
+        $this->bindFormTranslationModules($type->typeCode());
+        Parser::prefetchWords(self::formSchemaSourcePhrases());
         $entity = $type->resolveEntity($externalEntityUuid);
         if ($entity === null) {
             throw new \InvalidArgumentException((string)__('未找到对应的评论对象。'));
@@ -35,6 +67,24 @@ final class ReviewService implements ReviewSeoFactsInterface
             'authenticated' => $this->customers->currentCustomerId() !== null,
             'media' => ['image_max_files' => 6, 'video_max_files' => 2],
         ];
+    }
+
+    /** Ensure module CSV layers (en_US/zh) are visible to Phrase on QueryBin workers. */
+    private function bindFormTranslationModules(string $typeCode): void
+    {
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $request->addModule('Weline_Review');
+            if ($typeCode === 'blog') {
+                $request->addModule('Weline_Blog');
+            }
+            if ($typeCode === 'product') {
+                $request->addModule('Weline_Product');
+            }
+        } catch (\Throwable) {
+            // Phrase still falls back to prefetch / LocaleDictionary.
+        }
     }
 
     /** @return array<string,mixed> */

@@ -1,5 +1,18 @@
 <?php
-/** @widget.source {Weline_Dashboard::css/widgets/widget-detail-snapshot.css} */
+/** @widget.source {Weline_Dashboard::css/widgets/widget-detail-snapshot.css}
+ *
+ * @widget.code {detail_snapshot}
+ * @widget.name {默认明细}
+ * @widget.description {后台 Dashboard 默认明细表格。}
+ * @widget.type {table}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-detail"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-detail}
+ * @widget.supports {["dashboard-widget","dashboard-slot-detail","dashboard-table","dashboard-list"]}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","default_view":"default","target_type":"website","slot":"dashboard-detail","area":"content","sort_order":40,"required":true,"reason":"Dashboard 默认面板需要明细快照","config":{"dashboard_layout":{"colSpan":9,"rowSpan":1,"sortOrder":40}}}]}
+ */
 $rows = [
     [__('视图'), __('默认概览'), __('系统共享视图')],
     [__('布局'), __('4 个固定区域'), __('指标、分析、侧栏、明细')],

@@ -37,9 +37,14 @@ final class ProductSearchProviderPerfContractTest extends TestCase
         $repo = (string)file_get_contents(
             dirname(__DIR__, 5) . '/Repository/StoreProductRepository.php',
         );
+        $coordinator = (string)file_get_contents(
+            dirname(__DIR__, 5) . '/Service/StorefrontCatalogCacheCoordinator.php',
+        );
 
         self::assertStringContainsString('SNAPSHOT_PROCESS_CACHE_MAX', $source);
         self::assertStringContainsString('$snapshotProcessCache', $source);
+        self::assertStringContainsString('searchProjectionScopePolicy', $source);
+        self::assertStringContainsString('rememberPolicy', $source);
         self::assertStringContainsString('resolveOffersByUuids', $source);
         self::assertStringContainsString('resolveProductsByUuids', $source);
         self::assertStringContainsString('selectionMap($websiteId, $storeId, $productIds)', $source);
@@ -49,5 +54,10 @@ final class ProductSearchProviderPerfContractTest extends TestCase
             $source,
         );
         self::assertStringContainsString('function selectionMap(', $repo);
+        self::assertStringContainsString('searchProjectionScopePolicy', $coordinator);
+        self::assertStringContainsString('product.search_projection_scope', $coordinator);
+        $policy = \Weline\Product\Service\StorefrontCatalogCacheCoordinator::searchProjectionScopePolicy();
+        // Rebuild is multi-second; short wait causes concurrent uncontended rebuilds.
+        self::assertGreaterThanOrEqual(15000, $policy->singleFlightWaitMs);
     }
 }

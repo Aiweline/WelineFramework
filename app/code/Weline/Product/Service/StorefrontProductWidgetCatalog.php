@@ -24,6 +24,9 @@ final class StorefrontProductWidgetCatalog
 
     private const HOMEPAGE_SHELF_PLAN_KEY = 'product.homepage.shelf_plan.request';
 
+    /** Same-request base cards (no reviews) so shelf newArrival(32) feeds widget newArrival(8). */
+    private const NEW_ARRIVAL_CARDS_REQUEST_KEY = 'product.new_arrival.cards.request';
+
     public function __construct(
         private readonly StorefrontCatalogViewService $catalog,
         private readonly ProductRepository $products,
@@ -88,22 +91,186 @@ final class StorefrontProductWidgetCatalog
             return $cached;
         }
 
-        // Cold path: candidate pools track shelf take (2×), not fixed 24/48 windows.
-        $featuredPool = $this->buildFeaturedCandidateCards(16);
-        $dealsPool = $this->buildDealCandidateCards(12);
-        $hotPool = $this->bestSellerCards(16, false);
+        $websiteId = max(0, (int)$this->currentScope()->websiteId);
+        $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+        /** @var array{featured?:list<int>,deals?:list<int>,hot?:list<int>}|mixed $idPlan */
+        $idPlan = $hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::homepageShelfPlanPolicy(),
+            StorefrontCatalogCacheCoordinator::homepageShelfPlanLogicalKey($websiteId),
+            function (): array {
+                // Cold path once per website: pick staggered product_ids.
+                // Prefetch canonical summary so pools share one channel bag while selecting.
+                $this->catalog->publishedOfferSummaries(48);
+                $featuredPool = $this->buildFeaturedCandidateCards(16);
+                $dealsPool = $this->buildDealCandidateCards(12);
+                $hotPool = $this->bestSellerCards(16, false);
+                $selected = HomepageShelfStagger::select(
+                    $featuredPool,
+                    $dealsPool,
+                    $hotPool,
+                    8,
+                    4,
+                    8,
+                );
 
-        $plan = HomepageShelfStagger::select(
-            $featuredPool,
-            $dealsPool,
-            $hotPool,
-            8,
-            4,
-            8,
+                return [
+                    'featured' => $this->shelfProductIds($selected['featured'] ?? []),
+                    'deals' => $this->shelfProductIds($selected['deals'] ?? []),
+                    'hot' => $this->shelfProductIds($selected['hot'] ?? []),
+                ];
+            },
         );
+        if (!is_array($idPlan)) {
+            $idPlan = [];
+        }
+        // Per currency×lang: hydrate display cards from channel summaries (skeleton shared).
+        $plan = [
+            'featured' => $this->hydrateShelfCardsFromSummaries(
+                is_array($idPlan['featured'] ?? null) ? $idPlan['featured'] : [],
+            ),
+            'deals' => $this->hydrateShelfDealCardsFromSummaries(
+                is_array($idPlan['deals'] ?? null) ? $idPlan['deals'] : [],
+            ),
+            'hot' => $this->hydrateShelfHotCardsFromSummaries(
+                is_array($idPlan['hot'] ?? null) ? $idPlan['hot'] : [],
+            ),
+        ];
         RequestContext::set(self::HOMEPAGE_SHELF_PLAN_KEY, $plan);
 
         return $plan;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $cards
+     * @return list<int>
+     */
+    private function shelfProductIds(array $cards): array
+    {
+        $ids = [];
+        $seen = [];
+        foreach ($cards as $card) {
+            $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
+            if ($productId <= 0 || isset($seen[$productId])) {
+                continue;
+            }
+            $seen[$productId] = true;
+            $ids[] = $productId;
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function summaryOffersByProductId(): array
+    {
+        $byId = [];
+        foreach ($this->catalog->publishedOfferSummaries(48) as $offer) {
+            if (!is_array($offer)) {
+                continue;
+            }
+            $productId = max(0, (int)($offer['product_id'] ?? 0));
+            if ($productId <= 0 || isset($byId[$productId])) {
+                continue;
+            }
+            $byId[$productId] = $offer;
+        }
+
+        return $byId;
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    private function hydrateShelfCardsFromSummaries(array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+        $byId = $this->summaryOffersByProductId();
+        $missing = [];
+        foreach ($productIds as $productId) {
+            $productId = max(0, (int)$productId);
+            if ($productId > 0 && !isset($byId[$productId])) {
+                $missing[] = $productId;
+            }
+        }
+        if ($missing !== []) {
+            foreach ($this->cardsByIds($missing, count($missing), false) as $card) {
+                $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
+                if ($productId > 0 && !isset($byId[$productId])) {
+                    $byId[$productId] = [
+                        'product_id' => $productId,
+                        '_card' => $card,
+                    ];
+                }
+            }
+        }
+        $cards = [];
+        foreach ($productIds as $productId) {
+            $productId = max(0, (int)$productId);
+            if ($productId <= 0 || !isset($byId[$productId])) {
+                continue;
+            }
+            $row = $byId[$productId];
+            if (isset($row['_card']) && is_array($row['_card'])) {
+                $card = $row['_card'];
+            } else {
+                if (!$this->isDisplayableShelfOffer($row)) {
+                    continue;
+                }
+                $card = $this->mapOffer($row, count($cards));
+            }
+            if (!$this->isDisplayableShelfCard($card)) {
+                continue;
+            }
+            $cards[] = $card;
+        }
+
+        return $cards;
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    private function hydrateShelfDealCardsFromSummaries(array $productIds): array
+    {
+        $cards = [];
+        foreach ($this->hydrateShelfCardsFromSummaries($productIds) as $card) {
+            $percent = HomepageShelfStagger::discountPercent($card);
+            $card['discount_percent'] = (int)max(
+                (int)round($percent),
+                !empty($card['is_limited_deal']) ? (int)HomepageShelfStagger::MIN_DEAL_DISCOUNT_PERCENT : 0,
+            );
+            $card['is_sale'] = 1;
+            $cards[] = $card;
+        }
+
+        return $cards;
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    private function hydrateShelfHotCardsFromSummaries(array $productIds): array
+    {
+        $ranked = [];
+        foreach ($this->hydrateShelfCardsFromSummaries($productIds) as $index => $card) {
+            $rank = $index + 1;
+            $card['rank'] = $rank;
+            $card['sales_count'] = max(
+                20,
+                (int)($card['review_count'] ?? 0) * 8 + ($rank * 37),
+            );
+            $ranked[] = $card;
+        }
+
+        return $ranked;
     }
 
     /**
@@ -448,9 +615,28 @@ final class StorefrontProductWidgetCatalog
             ->modify('-' . $days . ' days')
             ->format('Y-m-d H:i:s');
         $websiteId = max(0, (int)$this->currentScope()->websiteId);
-        // Cold path: page by widget limit (2× fill margin). Keep paging until filled;
-        // never start with a hard floor of 48 that ignores configured quantity.
+        // Same request: shelf featured already built a larger base bag → slice + optional reviews.
+        $requestFp = serialize([$websiteId, $days, $cutoff]);
+        if (RequestContext::has(self::NEW_ARRIVAL_CARDS_REQUEST_KEY)) {
+            $bag = RequestContext::get(self::NEW_ARRIVAL_CARDS_REQUEST_KEY);
+            if (is_array($bag)
+                && ($bag['fp'] ?? null) === $requestFp
+                && is_array($bag['cards'] ?? null)
+                && count($bag['cards']) >= $limit
+            ) {
+                /** @var list<array<string, mixed>> $bagCards */
+                $bagCards = $bag['cards'];
+                $sliced = array_slice($bagCards, 0, $limit);
+
+                return $withReviews ? $this->withReviewAggregates($sliced) : $sliced;
+            }
+        }
+        // Cold path: fetch canonical candidate page (64) so featured pool and widget share HotCache.
         $candidateLimit = max($limit * 2, $limit);
+        $canonicalPage = StorefrontCatalogCacheCoordinator::CANONICAL_NEW_ARRIVAL_PAGE;
+        if ($candidateLimit <= $canonicalPage) {
+            $candidateLimit = $canonicalPage;
+        }
 
         $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
         $cards = [];
@@ -515,24 +701,50 @@ final class StorefrontProductWidgetCatalog
                 }
 
                 if (count($cards) >= $limit) {
-                    return $withReviews ? $this->withReviewAggregates($cards) : $cards;
+                    return $this->finishNewArrivalCards($cards, $limit, $withReviews, $requestFp);
                 }
             }
             $offset += count($createdAtByProductId);
         } while (count($createdAtByProductId) === $candidateLimit);
 
         if ($cards !== []) {
-            return $withReviews ? $this->withReviewAggregates($cards) : $cards;
+            return $this->finishNewArrivalCards($cards, $limit, $withReviews, $requestFp);
         }
 
         // Day-window empty or no sellable offers: stable catalog fallback for widgets/page.
         $fallback = [];
-        foreach ($this->cards($limit, $withReviews) as $card) {
+        foreach ($this->cards($limit, false) as $card) {
             $card['is_new'] = 1;
             $fallback[] = $card;
         }
 
-        return $fallback;
+        return $this->finishNewArrivalCards($fallback, $limit, $withReviews, $requestFp);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $cards
+     * @return list<array<string, mixed>>
+     */
+    private function finishNewArrivalCards(array $cards, int $limit, bool $withReviews, string $requestFp): array
+    {
+        if ($cards !== []) {
+            $existing = RequestContext::has(self::NEW_ARRIVAL_CARDS_REQUEST_KEY)
+                ? RequestContext::get(self::NEW_ARRIVAL_CARDS_REQUEST_KEY)
+                : null;
+            $existingCount = (is_array($existing) && ($existing['fp'] ?? null) === $requestFp
+                && is_array($existing['cards'] ?? null))
+                ? count($existing['cards'])
+                : 0;
+            if ($existingCount < count($cards)) {
+                RequestContext::set(self::NEW_ARRIVAL_CARDS_REQUEST_KEY, [
+                    'fp' => $requestFp,
+                    'cards' => $cards,
+                ]);
+            }
+        }
+        $sliced = array_slice($cards, 0, $limit);
+
+        return $withReviews ? $this->withReviewAggregates($sliced) : $sliced;
     }
 
     /**
@@ -669,15 +881,11 @@ final class StorefrontProductWidgetCatalog
         }
 
         try {
-            $websiteId = max(0, RequestContext::getWelineWebsiteId());
-            if ($websiteId <= 0) {
-                $scope = RequestContext::scopeIdentity();
-                if ($scope instanceof ScopeIdentity && $scope->websiteId !== null) {
-                    $websiteId = max(0, (int)$scope->websiteId);
-                }
-            }
-            if ($websiteId <= 0) {
-                return [];
+            // Website::ID_DEFAULT is 0 — a real storefront scope. Do not treat 0 as "missing".
+            $websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
+            $scope = RequestContext::scopeIdentity();
+            if ($websiteId === 0 && $scope instanceof ScopeIdentity && $scope->websiteId !== null) {
+                $websiteId = max(0, (int)$scope->websiteId);
             }
 
             /** @var \Weline\Product\Repository\CategoryLinkRepository $links */

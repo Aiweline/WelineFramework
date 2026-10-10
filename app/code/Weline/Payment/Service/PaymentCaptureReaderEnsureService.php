@@ -199,6 +199,7 @@ final class PaymentCaptureReaderEnsureService
                 $providerReference,
             ]))
             : null;
+        $paymentEntry = PaymentEntry::resolveFromContext($request);
         $attempt = [
             PaymentAttempt::schema_fields_ATTEMPT_CODE => $attemptCode,
             PaymentAttempt::schema_fields_INTENT_CODE => $intentCode,
@@ -219,6 +220,13 @@ final class PaymentCaptureReaderEnsureService
             PaymentAttempt::schema_fields_IDEMPOTENCY_KEY => 'capture_reader:' . $attemptCode,
             PaymentAttempt::schema_fields_PROVIDER_REFERENCE => $providerReference !== '' ? $providerReference : null,
             PaymentAttempt::schema_fields_PROVIDER_REFERENCE_GUARD => $guard,
+            PaymentAttempt::schema_fields_REQUEST_SNAPSHOT => json_encode([
+                'payment_entry' => $paymentEntry,
+                'express_checkout' => !empty($request['express_checkout'])
+                    || !empty(($request['metadata']['express_checkout'] ?? null)),
+                'payment_mode' => (string)($request['payment_mode'] ?? ($request['metadata']['payment_mode'] ?? '')),
+                'metadata' => \is_array($request['metadata'] ?? null) ? $request['metadata'] : [],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
             PaymentAttempt::schema_fields_RESPONSE_SNAPSHOT => json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
         ];
 

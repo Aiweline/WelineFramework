@@ -1,5 +1,19 @@
 <?php
-/** @widget.source {Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Mail::js/widgets/widget-account-mail-register-0.js,Weline_Mail::css/widgets/widget-account-mail-register.css} */
+/** @widget.source {Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Mail::js/widgets/widget-account-mail-register-0.js,Weline_Mail::css/widgets/widget-account-mail-register.css}
+ *
+ * @widget.code {account-mail-register}
+ * @widget.name {企业邮箱注册}
+ * @widget.description {注册页申请本站企业邮箱；须 SystemConfig 开启（mail/frontend_register）。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["account/register","account.auth"]}
+ * @widget.slot {account-mail-register-panel}
+ * @widget.supports {["account-register-extras","account-mail-register-panel","layout-account-register-extras"]}
+ *
+ * @widget.default_injections {[{"layout_type":"account/register","layout_option":"default","slot":"account-mail-register-panel","area":"content","sort_order":0,"required":true,"config":{"mail_register_variant":"panel"}},{"layout_type":"account","layout_option":"auth","slot":"account-mail-register-panel","area":"content","sort_order":0,"required":true,"config":{"mail_register_variant":"panel"}}]}
+ * @widget.placement {injection}
+ */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Mail\Service\MailCustomerAccountService;
 use Weline\Mail\Service\MailFrontendFeatureConfig;
