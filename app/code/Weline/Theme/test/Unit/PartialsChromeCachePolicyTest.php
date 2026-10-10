@@ -288,7 +288,8 @@ final class PartialsChromeCachePolicyTest extends TestCase
     public function testChromePartialCacheSchemaPinsStateLangOverStorefrontCookie(): void
     {
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-        self::assertStringContainsString("'schema' => 'chrome-partial-v19-currency-island-hook'", $source);
+        self::assertStringContainsString("'schema' => 'chrome-partial-v20-nested-content-hash'", $source);
+        self::assertStringContainsString('NestedChromeSourceFingerprint::compute()', $source);
         self::assertStringContainsString("'currency' => false", $source);
         self::assertStringContainsString('hydrateChromeCurrencyIslands', $source);
         self::assertStringContainsString("return 'frontend-auth:0';", $source);
@@ -314,12 +315,14 @@ final class PartialsChromeCachePolicyTest extends TestCase
 
     public function testFrontendHeaderFingerprintIncludesNestedNavigationTemplates(): void
     {
-        $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-
-        self::assertStringContainsString('categories-horizontal-nav.phtml', $source);
-        self::assertStringContainsString('categories-sidebar-nav.phtml', $source);
-        self::assertStringContainsString('mega-menu-panel.phtml', $source);
-        self::assertStringContainsString('/widgets/header/mini-cart-icon/default.phtml', $source);
+        // Paths live on NestedChromeSourceFingerprint (not Partials literals).
+        $rels = \Weline\Theme\Service\NestedChromeSourceFingerprint::sourceRelativePaths();
+        self::assertContains('view/theme/frontend/partials/header/categories-horizontal-nav.phtml', $rels);
+        self::assertContains('view/theme/frontend/partials/header/categories-sidebar-nav.phtml', $rels);
+        self::assertContains('view/theme/frontend/partials/header/mega-menu-panel.phtml', $rels);
+        self::assertContains('view/theme/frontend/widgets/header/mini-cart-icon/default.phtml', $rels);
+        $partials = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
+        self::assertStringContainsString('NestedChromeSourceFingerprint::compute()', $partials);
     }
 
     public function testRememberPartialOutputEvictsOldestWhenFull(): void

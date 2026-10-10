@@ -213,6 +213,32 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
     }
 
     /**
+     * Theme frontend modules stamp must match Frontend base bag (no dual-bust drift).
+     */
+    public function testMiniCartIconModuleStampMatchesThemeAndFrontendBags(): void
+    {
+        $themeModules = dirname(__DIR__, 2) . '/view/statics/frontend/weline.modules.js';
+        $frontendModules = dirname(__DIR__, 3) . '/Frontend/view/statics/base/weline.modules.js';
+        self::assertFileExists($themeModules);
+        self::assertFileExists($frontendModules);
+        $themeSrc = (string)file_get_contents($themeModules);
+        $frontendSrc = (string)file_get_contents($frontendModules);
+
+        $extract = static function (string $src): string {
+            if (!preg_match('/mini-cart-icon\.js\?v=([^\s"\']+)/', $src, $m)) {
+                return '';
+            }
+
+            return (string)$m[1];
+        };
+        $themeStamp = $extract($themeSrc);
+        $frontendStamp = $extract($frontendSrc);
+        self::assertNotSame('', $themeStamp, 'Theme weline.modules.js must bust mini-cart-icon.js');
+        self::assertNotSame('', $frontendStamp, 'Frontend weline.modules.js must bust mini-cart-icon.js');
+        self::assertSame($themeStamp, $frontendStamp, 'Theme and Frontend mini-cart-icon ?v= stamps must match');
+    }
+
+    /**
      * 迷你购物车是 aria-modal 抽屉，打开时必须盖过店面常驻浮层（进店音乐 / 社交快捷条 / 筛选 FAB）。
      * 抽屉位于 .weline-header{position:sticky;z-index:100} 的层叠上下文内，只改抽屉自身 z-index
      * 无法越过 body 级浮层，所以必须由 :has(.header-cart.is-drawer-open) 抬高 header 的上下文。

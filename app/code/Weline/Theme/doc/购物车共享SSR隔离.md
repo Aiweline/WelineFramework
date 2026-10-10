@@ -8,7 +8,7 @@
 
 真实状态复用现有 `miniCartIcon` 模块：`bootMiniCartRoots()` 调用 `scheduleCartSync()`；`syncCartState()` 沿已有客户端摘要恢复规则，通过 `Weline.Api.resource('cart')` 的 `getCart` / `summary` 获取当前访客或会话状态，再由 `applySummary()` 更新。抽屉继续通过 `loadDrawer()` 加载当前购物车。没有增加接口、缓存或另一套前端请求。主题编辑器继续 `data-demo-chrome="0"`，使用同一条实时恢复链，不读取演示购物车。
 
-旧编译产物与旧 header HTML 需要配套迁移：框架编译作用域版本 `context-env-v4`，header chrome 版本 `v12`，并将 mini-cart 源文件纳入已有嵌套 chrome 指纹。由统一部署流程编译和重载，不直接修改 `view/tpl`，不全局清池。
+旧编译产物与旧 header HTML 需要配套迁移：框架编译作用域版本 `context-env-v4`，header chrome 版本随 schema（现行 `chrome-partial-v20-nested-content-hash`），mini-cart 等嵌套源由 `NestedChromeSourceFingerprint`（内容 sha256）打进 `storefront_chrome` 键。改嵌套 header 结构 → 活路径自动 miss，禁止手清 `var/cache` 当主路径；Theme 升版/`theme:upgrade` cutover 清投影池僵尸。由统一部署流程编译和重载，不直接修改 `view/tpl`，不全局清池。
 
 定向测试：
 

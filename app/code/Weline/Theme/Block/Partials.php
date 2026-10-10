@@ -27,6 +27,7 @@ use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeDirectoryResolver;
+use Weline\Theme\Service\NestedChromeSourceFingerprint;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot;
 
@@ -999,8 +1000,9 @@ class Partials extends Block
                 // v17：head Policy website + 瘦键 + assets 片段复用（wave9-9s）。
                 // v18：chrome 大壳 lang-only；货币开关器岛后注水（跨货币共享 shell）。
                 // v19：I18n hook 自带岛标记；无岛旧袋按 data-currency-switcher 回退剥离（防错显币种）。
+                // v20：嵌套 chrome 源指纹由 mtime|size 升为内容 sha256（NestedChromeSourceFingerprint）。
                 // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v19-currency-island-hook',
+                'schema' => 'chrome-partial-v20-nested-content-hash',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',
@@ -1051,27 +1053,12 @@ class Partials extends Block
     }
 
     /**
-     * Header chrome HTML embeds placeable widgets (account avatar shell). Fingerprint
-     * those sources so widget-only edits do not keep serving stale shared chrome.
+     * Header chrome HTML embeds placeable widgets (account / mini-cart / nav).
+     * Authority: {@see NestedChromeSourceFingerprint} (content sha256; mtime|size memo gate).
      */
     private function frontendHeaderNestedChromeFingerprint(): string
     {
-        $files = [
-            \dirname(__DIR__) . '/view/theme/frontend/widgets/header/account/default.phtml',
-            \dirname(__DIR__) . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml',
-            \dirname(__DIR__) . '/view/theme/frontend/partials/header/categories-horizontal-nav.phtml',
-            \dirname(__DIR__) . '/view/theme/frontend/partials/header/categories-sidebar-nav.phtml',
-            \dirname(__DIR__) . '/view/theme/frontend/partials/header/mega-menu-panel.phtml',
-        ];
-        $fingerprints = [];
-        foreach ($files as $file) {
-            $stat = @\stat($file);
-            $fingerprints[] = \is_array($stat)
-                ? (int)$stat['mtime'] . '|' . (int)$stat['size']
-                : '0|0';
-        }
-
-        return \implode(';', $fingerprints);
+        return NestedChromeSourceFingerprint::compute();
     }
 
     private function resolveChromePartialCacheDataContext(
