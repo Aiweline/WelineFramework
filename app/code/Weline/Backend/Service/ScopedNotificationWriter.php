@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Backend\Service;
 
 use Weline\Backend\Model\SystemNotification;
+use Weline\Backend\Model\UserNotificationStatus;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 
 /**
@@ -42,33 +44,52 @@ final class ScopedNotificationWriter
         $suppressBroadcast = $requireExplicit && $notifyUsers === [];
 
         $now = \date('Y-m-d H:i:s');
+        $skipIfUnread = !empty($metadata['skip_if_unread']) || !empty($data['skip_if_unread']);
         $existing = null;
         if ($dedupeKey !== '') {
             $existing = $this->findExisting($topic, $scopeHash, $dedupeKey);
         }
 
         if ($existing instanceof SystemNotification && (int)$existing->getId() > 0) {
-            $count = $existing->getOccurrenceCount() + 1;
-            $meta = $existing->getMetadata();
-            $meta['last_title'] = $title;
-            $meta['last_content_excerpt'] = \mb_substr(\strip_tags($content), 0, 240);
-            $meta['occurrence_count'] = $count;
-            $existing->setTitle($title)
-                ->setContent($content)
-                ->setType($type)
-                ->setPriority((int)($data['priority'] ?? $existing->getPriority()))
-                ->setMetadata($meta)
-                ->setOccurrenceCount($count)
-                ->setLastOccurrenceAt($now)
-                ->save();
+            if ($skipIfUnread && $this->hasUnreadRecipients((int)$existing->getId())) {
+                return [
+                    'notification' => $existing,
+                    'created' => false,
+                    'skipped' => true,
+                    'require_explicit_recipients' => $requireExplicit,
+                    'notify_users' => $notifyUsers,
+                    'suppress_broadcast' => true,
+                ];
+            }
 
-            return [
-                'notification' => $existing,
-                'created' => false,
-                'require_explicit_recipients' => $requireExplicit,
-                'notify_users' => $notifyUsers,
-                'suppress_broadcast' => $suppressBroadcast,
-            ];
+            if ($skipIfUnread && !$this->hasUnreadRecipients((int)$existing->getId())) {
+                // Release UNIQUE so a fresh unread tip can be inserted.
+                $existing->setDedupeKey(null)->save();
+                $existing = null;
+            } else {
+                $count = $existing->getOccurrenceCount() + 1;
+                $meta = $existing->getMetadata();
+                $meta['last_title'] = $title;
+                $meta['last_content_excerpt'] = \mb_substr(\strip_tags($content), 0, 240);
+                $meta['occurrence_count'] = $count;
+                $existing->setTitle($title)
+                    ->setContent($content)
+                    ->setType($type)
+                    ->setPriority((int)($data['priority'] ?? $existing->getPriority()))
+                    ->setMetadata($meta)
+                    ->setOccurrenceCount($count)
+                    ->setLastOccurrenceAt($now)
+                    ->save();
+
+                return [
+                    'notification' => $existing,
+                    'created' => false,
+                    'skipped' => false,
+                    'require_explicit_recipients' => $requireExplicit,
+                    'notify_users' => $notifyUsers,
+                    'suppress_broadcast' => $suppressBroadcast,
+                ];
+            }
         }
 
         $notification = clone $this->notificationModel;
@@ -95,10 +116,30 @@ final class ScopedNotificationWriter
         return [
             'notification' => $notification,
             'created' => true,
+            'skipped' => false,
             'require_explicit_recipients' => $requireExplicit,
             'notify_users' => $notifyUsers,
             'suppress_broadcast' => $suppressBroadcast,
         ];
+    }
+
+    public function hasUnreadRecipients(int $notificationId): bool
+    {
+        if ($notificationId <= 0) {
+            return false;
+        }
+        try {
+            $status = clone ObjectManager::getInstance(UserNotificationStatus::class);
+            $row = $status->clearData()->reset()
+                ->where(UserNotificationStatus::schema_fields_notification_id, $notificationId)
+                ->where(UserNotificationStatus::schema_fields_is_read, 0)
+                ->find()
+                ->fetch();
+
+            return (int)$row->getId() > 0;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public static function hashScopeIdentity(ScopeIdentity $identity): string

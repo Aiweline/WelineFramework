@@ -6038,7 +6038,8 @@ while (true) {
                 'websocket_connections' => $drainCounters['websocket_connections'],
                 'http2_connections' => $http2StatusConnectionCount,
                 'drain_counters_version' => 1,
-            ] + \Weline\Server\Service\Runtime\WorkerReadinessState::statusReportHomepageFields();
+            ] + \Weline\Server\Service\Runtime\WorkerReadinessState::statusReportHomepageFields()
+              + \Weline\Server\Service\WorkerResponseMemoryGuard::capacityStatusScalars();
             foreach ($http3Status as $http3Metric => $http3Value) {
                 if (!\is_string($http3Metric) || !\is_int($http3Value)) {
                     continue;
@@ -8505,7 +8506,7 @@ while (true) {
         // the existing bounded compaction cadence below the fast-path gate.
         if ($requestCount - $lastRequestGcCount >= $requestGcInterval) {
             $lastRequestGcCount = $requestCount;
-            $compaction = wlsCompactWorkerMemoryCaches('ssl_request_interval', $maxMemoryBytes, 0.55, 16 * 1024 * 1024);
+            $compaction = wlsCompactWorkerMemoryCaches('ssl_request_interval', $maxMemoryBytes, 0.70, 16 * 1024 * 1024);
             $collected = (int)($compaction['cycles'] ?? 0);
             $currentMemory = \memory_get_usage(true);
             $memoryPeak = \memory_get_peak_usage(true);

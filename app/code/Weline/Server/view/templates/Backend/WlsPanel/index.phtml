@@ -83,6 +83,9 @@ $template = $this;
 $dashboardPath = '*/backend/wls-panel';
 $projectsPath = '*/backend/wls-panel/projects';
 $gatewayPath = '*/backend/wls-panel/gateway';
+$capacityPath = '*/backend/wls-panel/capacity';
+$capacityConfigSavePath = '*/backend/wls-panel/capacity-config';
+$capacitySeriesPath = '*/backend/wls-panel/capacity-series';
 $pluginViewerPath = '*/backend/wls-panel/plugin';
 $marketplacePath = '*/backend/wls-panel/marketplace';
 $securityPath = '*/backend/wls-panel/security';
@@ -105,6 +108,9 @@ $toBackendUrl = static function (string $path, array $params = []) use ($templat
 $dashboardUrl = $toBackendUrl($dashboardPath);
 $projectsUrl = $toBackendUrl($projectsPath);
 $gatewayUrl = $toBackendUrl($gatewayPath);
+$capacityUrl = $toBackendUrl($capacityPath);
+$capacityConfigSaveUrl = $toBackendUrl($capacityConfigSavePath);
+$capacitySeriesUrl = $toBackendUrl($capacitySeriesPath);
 $pluginViewerUrl = $toBackendUrl($pluginViewerPath);
 $marketplaceUrl = $toBackendUrl($marketplacePath);
 $securityUrl = $toBackendUrl($securityPath);
@@ -158,6 +164,7 @@ $panelTitle = match ($activePage) {
     'security_probes' => __('安全探针'),
     'projects' => __('项目'),
     'nginx' => __('Nginx 公网入口'),
+    'capacity' => __('容量顾问'),
     'plugin' => $panelPluginViewerLabel !== '' ? $panelPluginViewerLabel : __('插件能力'),
     default => __('仪表盘'),
 };
@@ -492,6 +499,7 @@ $wlsInstalledPluginsUrl = $appStoreInstalledUrl . '?' . http_build_query($wlsMar
 $navItems = [
     ['key' => 'dashboard', 'label' => __('仪表盘'), 'path' => $dashboardPath],
     ['key' => 'projects', 'label' => __('项目'), 'path' => $projectsPath],
+    ['key' => 'capacity', 'label' => __('容量顾问'), 'path' => $capacityPath],
     ['key' => 'nginx', 'label' => __('Nginx 公网入口'), 'path' => $gatewayPath],
     [
         'key' => 'security',
@@ -3252,6 +3260,433 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                 </div>
             </section>
 
+        <?php elseif ($activePage === 'capacity'): ?>
+            <?php
+            $panelCapacityConfig = $this->getData('panelCapacityConfig');
+            $panelCapacityConfig = is_array($panelCapacityConfig) ? $panelCapacityConfig : [];
+            $panelCapacitySeries = $this->getData('panelCapacitySeries');
+            $panelCapacitySeries = is_array($panelCapacitySeries) ? $panelCapacitySeries : [];
+            $capRules = is_array($panelCapacityConfig['rules'] ?? null) ? $panelCapacityConfig['rules'] : [];
+            // application/json script body must be raw JSON (not htmlspecialchars); HEX_TAG avoids </script> breakout.
+            $capSeriesJson = (string)json_encode(
+                $panelCapacitySeries,
+                JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS
+            );
+            if ($capSeriesJson === '') {
+                $capSeriesJson = '{}';
+            }
+            $capacityAdviceLabels = [
+                'frequent_compact' => (string)__('频繁 compact'),
+                'sustained_soft' => (string)__('持续 soft'),
+                'high_volatility' => (string)__('高波动'),
+                'host_tight' => (string)__('主机紧张'),
+            ];
+            $capacityAdviceText = [];
+            foreach ((array)($panelCapacitySeries['latest_advice'] ?? []) as $adviceCode) {
+                $adviceCode = (string)$adviceCode;
+                if ($adviceCode === '') {
+                    continue;
+                }
+                $capacityAdviceText[] = $capacityAdviceLabels[$adviceCode] ?? $adviceCode;
+            }
+            $capacityWindowOptions = [
+                3600 => (string)__('1 小时'),
+                21600 => (string)__('6 小时'),
+                86400 => (string)__('24 小时'),
+                604800 => (string)__('7 天'),
+            ];
+            $capacityWindowSec = 3600;
+            ?>
+            <section class="wls-section"
+                     id="wls-capacity-advisor"
+                     data-capacity-series-url="<?= $escapeHtml($capacitySeriesUrl) ?>"
+                     data-capacity-window-sec="<?= (int)$capacityWindowSec ?>">
+                <div class="wls-section-head">
+                    <div>
+                        <span class="wls-shell-kicker"><?= __('全局 · 非范围配置') ?></span>
+                        <h2><?= __('容量顾问与负载曲线') ?></h2>
+                    </div>
+                    <button type="button"
+                            class="wls-secondary-button"
+                            data-wls-capacity-config-open><?= __('顾问配置') ?></button>
+                </div>
+                <span class="wls-help-text"><?= __('Master 周期自检；阈值保存在后台管理配置（非 env）。负载升高时请人工增加服务器内存或 Worker 配置。') ?></span>
+                <div class="wls-empty-state wls-capacity-advice"
+                     id="wls-capacity-advice"
+                     <?= $capacityAdviceText === [] ? 'hidden' : '' ?>>
+                    <strong><?= __('最近建议') ?></strong>
+                    <span data-wls-capacity-advice-text><?= $escapeHtml(implode(', ', $capacityAdviceText)) ?></span>
+                </div>
+                <div class="wls-capacity-chart-toolbar">
+                    <div class="wls-capacity-range"
+                         role="radiogroup"
+                         aria-label="<?= $escapeHtml(__('时间范围')) ?>"
+                         data-wls-capacity-range>
+                        <?php foreach ($capacityWindowOptions as $sec => $label): ?>
+                            <label class="wls-capacity-range-option <?= (int)$sec === (int)$capacityWindowSec ? 'is-active' : '' ?>">
+                                <input type="radio"
+                                       name="capacity_window_sec"
+                                       value="<?= (int)$sec ?>"
+                                       <?= (int)$sec === (int)$capacityWindowSec ? 'checked' : '' ?>>
+                                <span><?= $escapeHtml($label) ?></span>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="wls-capacity-chart-meta" id="wls-capacity-chart-meta" aria-live="polite"></div>
+                </div>
+                <div class="wls-capacity-chart-wrap">
+                    <canvas id="wls-capacity-chart" width="960" height="280" aria-label="<?= __('负载曲线') ?>"></canvas>
+                    <script type="application/json" id="wls-capacity-series-data"><?= $capSeriesJson ?></script>
+                </div>
+
+                <dialog class="wls-lifecycle-dialog wls-capacity-dialog" data-wls-capacity-dialog>
+                    <form method="post"
+                          action="<?= $escapeHtml($capacityConfigSaveUrl) ?>"
+                          data-wls-capacity-form
+                          aria-labelledby="wls-capacity-editor-title">
+                        <div class="wls-lifecycle-dialog-head">
+                            <div>
+                                <span class="wls-shell-kicker"><?= __('全局 · 非范围配置') ?></span>
+                                <h3 id="wls-capacity-editor-title"><?= __('顾问阈值（全局）') ?></h3>
+                            </div>
+                            <button class="wls-dialog-close"
+                                    type="button"
+                                    data-wls-capacity-dialog-close
+                                    aria-label="<?= $escapeHtml(__('关闭')) ?>">×</button>
+                        </div>
+                        <div class="wls-form-grid">
+                            <label class="wls-checkbox-field">
+                                <input type="hidden" name="enabled" value="0">
+                                <input type="checkbox"
+                                       name="enabled"
+                                       value="1"
+                                       <?= !empty($panelCapacityConfig['enabled']) ? 'checked' : '' ?>>
+                                <span><?= __('启用检测') ?></span>
+                            </label>
+                            <label class="wls-checkbox-field">
+                                <input type="hidden" name="notify_enabled" value="0">
+                                <input type="checkbox"
+                                       name="notify_enabled"
+                                       value="1"
+                                       <?= !empty($panelCapacityConfig['notify_enabled']) ? 'checked' : '' ?>>
+                                <span><?= __('启用 w_msg 通知') ?></span>
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('检测间隔(秒)') ?></span>
+                                <input type="number"
+                                       name="interval_sec"
+                                       min="60"
+                                       value="<?= (int)($panelCapacityConfig['interval_sec'] ?? 60) ?>">
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('滑动窗(秒)') ?></span>
+                                <input type="number"
+                                       name="window_sec"
+                                       min="60"
+                                       value="<?= (int)($panelCapacityConfig['window_sec'] ?? 600) ?>">
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('Soft 压力') ?></span>
+                                <input type="number"
+                                       step="0.01"
+                                       name="soft_pressure"
+                                       value="<?= $escapeHtml((string)($panelCapacityConfig['soft_pressure'] ?? 0.7)) ?>">
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('频繁 compact 次数') ?></span>
+                                <input type="number"
+                                       name="frequent_compact_count"
+                                       value="<?= (int)($panelCapacityConfig['frequent_compact_count'] ?? 8) ?>">
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('持续 soft 占比') ?></span>
+                                <input type="number"
+                                       step="0.01"
+                                       name="sustained_soft_sample_ratio"
+                                       value="<?= $escapeHtml((string)($panelCapacityConfig['sustained_soft_sample_ratio'] ?? 0.5)) ?>">
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('波动 CV') ?></span>
+                                <input type="number"
+                                       step="0.01"
+                                       name="volatility_cv"
+                                       value="<?= $escapeHtml((string)($panelCapacityConfig['volatility_cv'] ?? 0.35)) ?>">
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('主机压力上限') ?></span>
+                                <input type="number"
+                                       step="0.01"
+                                       name="host_pressure_max"
+                                       value="<?= $escapeHtml((string)($panelCapacityConfig['host_pressure_max'] ?? 0.85)) ?>">
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('主机可用比下限') ?></span>
+                                <input type="number"
+                                       step="0.01"
+                                       name="host_available_ratio_min"
+                                       value="<?= $escapeHtml((string)($panelCapacityConfig['host_available_ratio_min'] ?? 0.15)) ?>">
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('采样保留天数') ?></span>
+                                <input type="number"
+                                       name="sample_retain_days"
+                                       value="<?= (int)($panelCapacityConfig['sample_retain_days'] ?? 14) ?>">
+                            </label>
+                        </div>
+                        <fieldset class="wls-rule-editor-panel wls-capacity-rules-panel">
+                            <legend><?= __('启用的规则') ?></legend>
+                            <span class="wls-help-text"><?= __('关闭某条规则后，顾问将不再因该信号发出建议。') ?></span>
+                            <div class="wls-capacity-rule-switches">
+                                <label class="wls-rule-switch">
+                                    <input type="hidden" name="rule_frequent_compact" value="0">
+                                    <input type="checkbox"
+                                           name="rule_frequent_compact"
+                                           value="1"
+                                           <?= !empty($capRules['frequent_compact']) ? 'checked' : '' ?>>
+                                    <span><?= __('频繁 compact') ?></span>
+                                </label>
+                                <label class="wls-rule-switch">
+                                    <input type="hidden" name="rule_sustained_soft" value="0">
+                                    <input type="checkbox"
+                                           name="rule_sustained_soft"
+                                           value="1"
+                                           <?= !empty($capRules['sustained_soft']) ? 'checked' : '' ?>>
+                                    <span><?= __('持续 soft') ?></span>
+                                </label>
+                                <label class="wls-rule-switch">
+                                    <input type="hidden" name="rule_high_volatility" value="0">
+                                    <input type="checkbox"
+                                           name="rule_high_volatility"
+                                           value="1"
+                                           <?= !empty($capRules['high_volatility']) ? 'checked' : '' ?>>
+                                    <span><?= __('高波动') ?></span>
+                                </label>
+                                <label class="wls-rule-switch">
+                                    <input type="hidden" name="rule_host_tight" value="0">
+                                    <input type="checkbox"
+                                           name="rule_host_tight"
+                                           value="1"
+                                           <?= !empty($capRules['host_tight']) ? 'checked' : '' ?>>
+                                    <span><?= __('主机紧张') ?></span>
+                                </label>
+                            </div>
+                        </fieldset>
+                        <div class="wls-lifecycle-dialog-actions wls-form-actions">
+                            <button class="wls-secondary-button" type="button" data-wls-capacity-dialog-cancel><?= __('取消') ?></button>
+                            <button class="wls-primary-button" type="submit"><?= __('保存全局配置') ?></button>
+                        </div>
+                    </form>
+                </dialog>
+
+                <script>
+                (function () {
+                    const section = document.getElementById('wls-capacity-advisor');
+                    const el = document.getElementById('wls-capacity-series-data');
+                    const canvas = document.getElementById('wls-capacity-chart');
+                    const meta = document.getElementById('wls-capacity-chart-meta');
+                    const adviceBox = document.getElementById('wls-capacity-advice');
+                    const adviceText = adviceBox ? adviceBox.querySelector('[data-wls-capacity-advice-text]') : null;
+                    const rangeRoot = section ? section.querySelector('[data-wls-capacity-range]') : null;
+                    const dialog = section ? section.querySelector('[data-wls-capacity-dialog]') : null;
+                    const openBtn = section ? section.querySelector('[data-wls-capacity-config-open]') : null;
+                    if (!el || !canvas || !section) return;
+                    const seriesUrl = section.getAttribute('data-capacity-series-url') || '';
+                    let windowSec = Math.max(60, parseInt(section.getAttribute('data-capacity-window-sec') || '3600', 10) || 3600);
+                    const refreshMs = 15000;
+                    const adviceLabels = {
+                        frequent_compact: <?= json_encode((string)__('频繁 compact'), JSON_UNESCAPED_UNICODE) ?>,
+                        sustained_soft: <?= json_encode((string)__('持续 soft'), JSON_UNESCAPED_UNICODE) ?>,
+                        high_volatility: <?= json_encode((string)__('高波动'), JSON_UNESCAPED_UNICODE) ?>,
+                        host_tight: <?= json_encode((string)__('主机紧张'), JSON_UNESCAPED_UNICODE) ?>
+                    };
+                    const i18n = {
+                        host: <?= json_encode((string)__('主机'), JSON_UNESCAPED_UNICODE) ?>,
+                        workerAvg: <?= json_encode((string)__('Worker 均值'), JSON_UNESCAPED_UNICODE) ?>,
+                        soft: <?= json_encode((string)__('Soft 阈值'), JSON_UNESCAPED_UNICODE) ?>,
+                        empty: <?= json_encode((string)__('暂无采样；Master 启用后将按间隔写入'), JSON_UNESCAPED_UNICODE) ?>,
+                        meta: <?= json_encode((string)__('采样 {n} 点 · 最近 {last} · 每 {sec}s 自动刷新'), JSON_UNESCAPED_UNICODE) ?>,
+                        metaEmpty: <?= json_encode((string)__('尚无采样 · 每 {sec}s 自动刷新'), JSON_UNESCAPED_UNICODE) ?>,
+                        softHint: <?= json_encode((string)__('橙虚线是 Soft 阈值（配置值），不是实时曲线'), JSON_UNESCAPED_UNICODE) ?>
+                    };
+                    const tokenRoot = document.querySelector('.wls-standalone-shell') || document.documentElement;
+                    const token = (name, fallback) => {
+                        const value = getComputedStyle(tokenRoot).getPropertyValue(name).trim();
+                        return value || fallback;
+                    };
+                    const colors = {
+                        surface2: token('--wls-surface-2', '#f7fbfc'),
+                        border: token('--wls-border', '#d7e2e7'),
+                        muted: token('--wls-muted', '#657380'),
+                        accent: token('--wls-accent-2', '#1267a8'),
+                        success: token('--wls-success', '#0f8f86'),
+                        warning: token('--wls-warning', '#b98212')
+                    };
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+
+                    const syncRangeUi = () => {
+                        if (!rangeRoot) return;
+                        rangeRoot.querySelectorAll('.wls-capacity-range-option').forEach((label) => {
+                            const input = label.querySelector('input[type="radio"]');
+                            const on = !!(input && Number(input.value) === Number(windowSec));
+                            label.classList.toggle('is-active', on);
+                            if (input) input.checked = on;
+                        });
+                        section.setAttribute('data-capacity-window-sec', String(windowSec));
+                    };
+
+                    const formatMeta = (series) => {
+                        const labels = Array.isArray(series.labels) ? series.labels : [];
+                        const n = labels.length;
+                        const last = n ? String(labels[n - 1]) : '';
+                        const sec = String(Math.round(refreshMs / 1000));
+                        if (!n) {
+                            return i18n.metaEmpty.replace('{sec}', sec);
+                        }
+                        return i18n.meta
+                            .replace('{n}', String(n))
+                            .replace('{last}', last)
+                            .replace('{sec}', sec)
+                            + ' · ' + i18n.softHint;
+                    };
+
+                    const paint = (series) => {
+                        const labels = Array.isArray(series.labels) ? series.labels : [];
+                        const avg = Array.isArray(series.worker_pressure_avg) ? series.worker_pressure_avg : [];
+                        const host = Array.isArray(series.host_pressure) ? series.host_pressure : [];
+                        const soft = Number(series.soft_pressure || 0.7);
+                        const w = canvas.width, h = canvas.height, pad = 28;
+                        ctx.clearRect(0, 0, w, h);
+                        ctx.fillStyle = colors.surface2;
+                        ctx.fillRect(0, 0, w, h);
+                        ctx.strokeStyle = colors.border;
+                        ctx.beginPath();
+                        ctx.moveTo(pad, pad);
+                        ctx.lineTo(pad, h - pad);
+                        ctx.lineTo(w - pad, h - pad);
+                        ctx.stroke();
+                        const softY = pad + (1 - soft) * (h - 2 * pad);
+                        ctx.strokeStyle = colors.warning;
+                        ctx.setLineDash([4, 4]);
+                        ctx.beginPath();
+                        ctx.moveTo(pad, softY);
+                        ctx.lineTo(w - pad, softY);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                        const draw = (arr, color) => {
+                            if (!arr.length) return;
+                            ctx.strokeStyle = color;
+                            ctx.fillStyle = color;
+                            ctx.beginPath();
+                            if (arr.length === 1) {
+                                const y = pad + (1 - Math.max(0, Math.min(1, Number(arr[0]) || 0))) * (h - 2 * pad);
+                                const x = pad + (w - 2 * pad) / 2;
+                                ctx.arc(x, y, 4, 0, Math.PI * 2);
+                                ctx.fill();
+                                return;
+                            }
+                            arr.forEach((v, i) => {
+                                const x = pad + i / (arr.length - 1) * (w - 2 * pad);
+                                const y = pad + (1 - Math.max(0, Math.min(1, Number(v) || 0))) * (h - 2 * pad);
+                                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                            });
+                            ctx.stroke();
+                            arr.forEach((v, i) => {
+                                const x = pad + i / (arr.length - 1) * (w - 2 * pad);
+                                const y = pad + (1 - Math.max(0, Math.min(1, Number(v) || 0))) * (h - 2 * pad);
+                                ctx.beginPath();
+                                ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                                ctx.fill();
+                            });
+                        };
+                        draw(host, colors.accent);
+                        draw(avg, colors.success);
+                        ctx.font = '12px sans-serif';
+                        ctx.fillStyle = colors.muted;
+                        ctx.fillText(i18n.host, pad + 8, pad + 12);
+                        ctx.fillStyle = colors.success;
+                        ctx.fillText(i18n.workerAvg, pad + 48, pad + 12);
+                        ctx.fillStyle = colors.warning;
+                        ctx.fillText(i18n.soft, pad + 140, pad + 12);
+                        if (!labels.length) {
+                            ctx.fillStyle = colors.muted;
+                            ctx.fillText(i18n.empty, pad + 8, h / 2);
+                        }
+                        if (meta) meta.textContent = formatMeta(series);
+                        const advice = Array.isArray(series.latest_advice) ? series.latest_advice : [];
+                        if (adviceBox && adviceText) {
+                            const text = advice.map((code) => adviceLabels[code] || String(code)).filter(Boolean).join(', ');
+                            if (text) {
+                                adviceText.textContent = text;
+                                adviceBox.hidden = false;
+                            } else {
+                                adviceText.textContent = '';
+                                adviceBox.hidden = true;
+                            }
+                        }
+                        try { el.textContent = JSON.stringify(series); } catch (e) {}
+                    };
+
+                    let series;
+                    try { series = JSON.parse(el.textContent || '{}'); } catch (e) { series = {}; }
+                    paint(series);
+                    syncRangeUi();
+
+                    const refresh = async () => {
+                        if (!seriesUrl || document.hidden) return;
+                        try {
+                            const url = new URL(seriesUrl, window.location.origin);
+                            url.searchParams.set('window_sec', String(windowSec));
+                            url.searchParams.set('_wb_nc', String(Date.now()));
+                            const resp = await fetch(url.toString(), {
+                                credentials: 'same-origin',
+                                headers: { 'Accept': 'application/json' }
+                            });
+                            if (!resp.ok) return;
+                            const json = await resp.json();
+                            const next = json && json.data && typeof json.data === 'object' ? json.data : null;
+                            if (!next) return;
+                            paint(next);
+                        } catch (e) {}
+                    };
+
+                    if (rangeRoot) {
+                        rangeRoot.addEventListener('change', (event) => {
+                            const input = event.target;
+                            if (!(input instanceof HTMLInputElement) || input.type !== 'radio') return;
+                            const next = parseInt(input.value, 10);
+                            if (!Number.isFinite(next) || next < 60) return;
+                            windowSec = next;
+                            syncRangeUi();
+                            refresh();
+                        });
+                    }
+
+                    const openDialog = () => {
+                        if (!dialog || typeof dialog.showModal !== 'function') return;
+                        if (!dialog.open) dialog.showModal();
+                    };
+                    const closeDialog = () => {
+                        if (!dialog || typeof dialog.close !== 'function') return;
+                        if (dialog.open) dialog.close();
+                    };
+                    if (openBtn) openBtn.addEventListener('click', openDialog);
+                    if (dialog) {
+                        dialog.querySelectorAll('[data-wls-capacity-dialog-close], [data-wls-capacity-dialog-cancel]').forEach((btn) => {
+                            btn.addEventListener('click', closeDialog);
+                        });
+                        dialog.addEventListener('click', (event) => {
+                            if (event.target === dialog) closeDialog();
+                        });
+                    }
+
+                    window.setInterval(refresh, refreshMs);
+                    document.addEventListener('visibilitychange', () => {
+                        if (!document.hidden) refresh();
+                    });
+                })();
+                </script>
+            </section>
         <?php elseif ($activePage === 'nginx'): ?>
             <section class="wls-section" id="nginx-public-edge">
                 <div class="wls-section-head">
@@ -5617,6 +6052,90 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-empty-state strong,
 .wls-inline-warning {
     color: var(--wls-text);
+}
+.wls-capacity-chart-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 16px;
+    margin: 0 0 12px;
+}
+.wls-capacity-range {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid var(--wls-border);
+    border-radius: 10px;
+    background: var(--wls-surface-2);
+}
+.wls-capacity-range-option {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    cursor: pointer;
+}
+.wls-capacity-range-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+.wls-capacity-range-option span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 8px;
+    color: var(--wls-muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+.wls-capacity-range-option.is-active span,
+.wls-capacity-range-option:has(input:checked) span {
+    background: var(--wls-surface);
+    color: var(--wls-text);
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--wls-border) 80%, transparent);
+}
+.wls-capacity-chart-meta {
+    color: var(--wls-muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.45;
+    margin: 0;
+    flex: 1 1 220px;
+    text-align: right;
+}
+.wls-capacity-chart-wrap {
+    border: 1px solid var(--wls-border);
+    border-radius: 8px;
+    background: var(--wls-surface);
+    box-shadow: var(--wls-shadow-soft);
+    margin: 0 0 18px;
+    padding: 16px;
+}
+.wls-capacity-chart-wrap canvas {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+}
+.wls-capacity-advice {
+    margin-bottom: 16px;
+}
+.wls-capacity-dialog {
+    max-width: min(760px, calc(100vw - 28px));
+}
+.wls-capacity-dialog .wls-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.wls-capacity-rules-panel {
+    margin-top: 4px;
+}
+.wls-capacity-rule-switches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 18px;
 }
 .wls-project-editor {
     border-bottom: 1px solid var(--wls-border);

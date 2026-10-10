@@ -124,6 +124,7 @@ Theme 等渲染层需要当前后台页面标题和面包屑时，使用
 - Scoped urgent 必须带非 Global `ScopeIdentity`（经 `ScopedUrgentNotifier` 或显式
   `scope_hash` / `dedupe_key` / `metadata.scoped`）。
 - 唯一约束 `(topic_code, scope_hash, dedupe_key)`；重复事件累加 `occurrence_count`。
+- `metadata.skip_if_unread=true`：若该通知仍有任一收件人未读则整单跳过（不 bump、不 route）；全员已读后释放旧 `dedupe_key` 再 INSERT 新未读（容量顾问等安静提示用）。无该标志时仍走 occurrence upsert。
 - 空 `notify_users` 在 **普通通知** 仍表示全员；在 **scoped urgent** 表示仅写受控审计、零广播。
 - 授权收件人由 `ScopedNotificationRecipientResolver` 按对象 Scope ACL（VIEW）解析；
   无权用户不会收到敏感摘要。回滚：停外发即可，审计行保留。

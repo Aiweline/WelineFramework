@@ -39,6 +39,9 @@ class SystemNotificationObserver implements ObserverInterface
         }
 
         $result = $this->writer->write($data);
+        if (!empty($result['skipped'])) {
+            return;
+        }
         $notification = $result['notification'];
         $notificationId = (int)$notification->getId();
         if ($notificationId <= 0) {

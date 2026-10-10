@@ -24,6 +24,8 @@ final class MemoryPressureController
     private bool $hostCoordinationRequired = false;
     private float $lastHostCoordinationDeferralAt = -1e12;
     private float $lastHostCoordinationFailureAt = -1e12;
+    /** @var array<string, mixed>|null */
+    private ?array $lastTick = null;
 
     public function __construct(
         ?HostMemorySampler $sampler = null,
@@ -273,7 +275,34 @@ final class MemoryPressureController
             }
         }
 
-        return $tick + ['sample' => $sample];
+        $this->lastTick = $tick + ['sample' => $sample];
+
+        return $this->lastTick;
+    }
+
+    public function getLastPressureRatio(): ?float
+    {
+        if ($this->lastTick === null) {
+            return null;
+        }
+        $ratio = $this->lastTick['pressure_ratio'] ?? null;
+
+        return \is_numeric($ratio) ? (float)$ratio : null;
+    }
+
+    public function getLastAvailableRatio(): ?float
+    {
+        $sample = \is_array($this->lastTick['sample'] ?? null) ? $this->lastTick['sample'] : null;
+        if ($sample === null) {
+            return null;
+        }
+        $avail = $sample['available_mb'] ?? null;
+        $total = $sample['mem_total_mb'] ?? null;
+        if (!\is_numeric($avail) || !\is_numeric($total) || (float)$total <= 0) {
+            return null;
+        }
+
+        return (float)$avail / (float)$total;
     }
 
     public function getStateMachine(): MemoryPressureStateMachine

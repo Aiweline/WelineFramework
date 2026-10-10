@@ -234,6 +234,7 @@ store,store
 "WLS 面板","WLS panel"
 "WLS 项目","WLS project"
 "Nginx 公网入口","Nginx public endpoint"
+容量顾问,"Capacity advisor"
 "WLS 插件","WLS plug-in"
 "WLS 插件商城","WLS plug-in mall"
 "WLS 安全","WLS security"
@@ -272,6 +273,14 @@ star,star
 "保持 Master 在线并重建项目全部 WLS 工作进程","Keep the Master online and rebuild all WLS worker processes for the project"
 "查看 WLS 面板网关","View WLS Panel Gateway"
 circle,circle
+"查看 WLS 容量顾问","查看 WLS 容量顾问"
+chart,chart
+查看负载曲线与容量阈值,查看负载曲线与容量阈值
+"查询 WLS 容量曲线","查询 WLS 容量曲线"
+查询容量采样序列,查询容量采样序列
+"保存 WLS 容量顾问配置","保存 WLS 容量顾问配置"
+save,save
+保存全局容量顾问阈值,保存全局容量顾问阈值
 "查看 WLS 面板插件","View WLS Panel Plug-in"
 puzzle,puzzle
 "查看 WLS 面板插件页面","View the WLS Panel plugin page"
@@ -292,7 +301,6 @@ clock,clock
 unlock,unlock
 "解封安全探针实战封禁产生的本机 IP","Unban local IP from security probe live ban"
 "保存 WLS 面板项目","Save WLS Panel Project"
-save,save
 "保存 WLS 面板托管项目","Save WLS Panel Hosting Project"
 "删除 WLS 面板项目","Delete WLS panel project"
 trash,trash
@@ -385,6 +393,9 @@ minus,minus
 安全规则已提交，但外部同步通知仍待重试。,"The security rule was submitted, but the external synchronization notification is still pending retry."
 安全规则已保存,"Security rules saved"
 保存失败：%{1},"Save failed: %{1}"
+"WLS 高级安全规则","WLS 高级安全规则"
+"查看 WLS 高级安全规则","查看 WLS 高级安全规则"
+"保存 WLS 高级安全规则","保存 WLS 高级安全规则"
 定时器间隔必须大于0,"Timer interval must be greater than 0"
 "定时器需要 pcntl 扩展或事件循环支持","Timer requires pcntl extension or event loop support"
 无效的监听地址：%{1},"Invalid listen address: %{1}"
@@ -957,6 +968,43 @@ IP,IP
 "使用 WLS 侧边栏菜单和原生外壳。","Use WLS sidebar menu and native shell."
 未声明面板入口,"Panel entry not declared"
 运维,"Operation and maintenance"
+"频繁 compact","Frequent compact"
+"持续 soft","Sustained soft"
+高波动,"High volatility"
+主机紧张,"Host tight"
+"1 小时","1 hour"
+"6 小时","6 hours"
+"24 小时","24 hours"
+"7 天","7 天"
+"全局 · 非范围配置","Global · non-scope config"
+容量顾问与负载曲线,"Capacity advisor and load curve"
+顾问配置,顾问配置
+"Master 周期自检；阈值保存在后台管理配置（非 env）。负载升高时请人工增加服务器内存或 Worker 配置。","Master periodic self-check; thresholds live in backend admin config (not env). When load rises, manually increase host RAM or Worker settings."
+最近建议,"Latest advice"
+时间范围,"Time range"
+负载曲线,"Load curve"
+顾问阈值（全局）,"Advisor thresholds (global)"
+启用检测,"Enable detection"
+"启用 w_msg 通知","Enable w_msg notifications"
+检测间隔(秒),"Check interval (seconds)"
+滑动窗(秒),"Sliding window (seconds)"
+"Soft 压力","Soft pressure"
+"频繁 compact 次数","Frequent compact count"
+"持续 soft 占比","Sustained soft sample ratio"
+"波动 CV","Volatility CV"
+主机压力上限,"Host pressure max"
+主机可用比下限,"Host available ratio min"
+采样保留天数,"Sample retention days"
+启用的规则,"Enabled rules"
+关闭某条规则后，顾问将不再因该信号发出建议。,"When a rule is turned off, the advisor will no longer emit tips for that signal."
+保存全局配置,"Save global configuration"
+主机,Host
+"Worker 均值","Worker average"
+"Soft 阈值","Soft threshold"
+"暂无采样；Master 启用后将按间隔写入","No samples yet; Master will write on its interval once enabled."
+"采样 {n} 点 · 最近 {last} · 每 {sec}s 自动刷新","Samples: {n} · latest {last} · auto-refresh every {sec}s"
+"尚无采样 · 每 {sec}s 自动刷新","No samples yet · auto-refresh every {sec}s"
+"橙虚线是 Soft 阈值（配置值），不是实时曲线","The orange dashed line is the Soft threshold (config), not a live series"
 公网协议,"Public protocols"
 "Nginx 是唯一公网边缘，不能跳过其启动。","Nginx is the only public edge, so its startup cannot be skipped."
 项目切换,"Project switch"
@@ -1747,6 +1795,13 @@ Configured,Configured
 当前运行实例,"Currently running instance"
 Local,Local
 Path,Path
+"BackendConfigStore 不可用，无法保存容量顾问配置","BackendConfigStore 不可用，无法保存容量顾问配置"
+容量顾问配置已保存,容量顾问配置已保存
+"WLS 容量建议：机器资源可能不足","WLS 容量建议：机器资源可能不足"
+原因：%{1},原因：%{1}
+建议：%{1},建议：%{1}
+"Worker 压力 avg=%{1} max=%{2}；主机压力=%{3}","Worker 压力 avg=%{1} max=%{2}；主机压力=%{3}"
+"请在 WLS 面板查看负载曲线，并人工增加服务器内存/Worker 配置。","请在 WLS 面板查看负载曲线，并人工增加服务器内存/Worker 配置。"
 "Runtime action skipped.","Runtime action skipped."
 "Select a target WLS instance before applying runtime changes.","Select a target WLS instance before applying runtime changes."
 "WLS runtime reload requested.","WLS runtime reload requested."
@@ -2949,6 +3004,10 @@ Previous：%{1},Previous：%{1}
 无法证明受管代次时拒绝发送任何终止信号,"Refuse to send any termination signal when the managed generation cannot be proven"
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","Retired: console:server:start no longer starts the PHP built-in web server."
 "已退役：PHP 内置 Web Server 启动入口","Retired: PHP built-in Web Server startup entry"
+高级安全规则,高级安全规则
+保存高级安全规则,保存高级安全规则
+"采样 %{1} 点 · 最近 %{2} · 每 %{3}s 自动刷新","Samples: %{1} · latest %{2} · auto-refresh every %{3}s"
+"尚无采样 · 每 %{1}s 自动刷新","No samples yet · auto-refresh every %{1}s"
 操作：status/list/request/renew/sync/enable/disable,"Action: status/list/request/renew/sync/enable/disable"
 "[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)","[WLS] = Weline Server (High Performance) | [CLI] = PHP Built-in Server (Development)"
 "最大挂起 Fiber 数，0=不限制","Max Suspended Fibers, 0 = Unlimited"

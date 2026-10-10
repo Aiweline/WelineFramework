@@ -9,6 +9,8 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Server\Service\Capacity\CapacityAdvisorConfigService;
+use Weline\Server\Service\Capacity\CapacitySampleStore;
 use Weline\Server\Service\WlsPanelDashboardDataService;
 use Weline\Server\Service\WlsPanelLifecycleService;
 use Weline\Server\Service\WlsPanelPluginDiscoveryService;
@@ -75,6 +77,65 @@ class WlsPanel extends BackendController
     public function getGateway(): string
     {
         return $this->renderPanel('nginx', (string)__('Nginx 公网入口'));
+    }
+
+    #[Acl('Weline_Server::wls_panel_capacity', '查看 WLS 容量顾问', 'chart', '查看负载曲线与容量阈值', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
+    public function getCapacity(): string
+    {
+        return $this->renderPanel('capacity', (string)__('容量顾问'));
+    }
+
+    #[Acl('Weline_Server::wls_panel_capacity_series', '查询 WLS 容量曲线', 'chart', '查询容量采样序列', 'Weline_Server::wls_panel_capacity', accessMode: Acl::ACCESS_MODE_READ)]
+    public function getCapacitySeries(): string
+    {
+        $instance = \trim((string)$this->request->getGet('instance', 'default'));
+        $window = (int)$this->request->getGet('window_sec', 3600);
+        /** @var CapacitySampleStore $store */
+        $store = ObjectManager::getInstance(CapacitySampleStore::class);
+        return $this->fetchJson([
+            'success' => true,
+            'data' => $store->series($instance !== '' ? $instance : 'default', $window),
+        ]);
+    }
+
+    #[Acl('Weline_Server::wls_panel_capacity_save', '保存 WLS 容量顾问配置', 'save', '保存全局容量顾问阈值', 'Weline_Server::wls_panel_capacity', accessMode: Acl::ACCESS_MODE_EDIT)]
+    public function postCapacityConfig(): string
+    {
+        /** @var CapacityAdvisorConfigService $configService */
+        $configService = ObjectManager::getInstance(CapacityAdvisorConfigService::class);
+        $rules = [
+            'frequent_compact' => (bool)$this->request->getPost('rule_frequent_compact', 0),
+            'sustained_soft' => (bool)$this->request->getPost('rule_sustained_soft', 0),
+            'high_volatility' => (bool)$this->request->getPost('rule_high_volatility', 0),
+            'host_tight' => (bool)$this->request->getPost('rule_host_tight', 0),
+        ];
+        $input = [
+            'enabled' => (bool)$this->request->getPost('enabled', 0),
+            'notify_enabled' => (bool)$this->request->getPost('notify_enabled', 0),
+            'interval_sec' => (int)$this->request->getPost('interval_sec', 60),
+            'window_sec' => (int)$this->request->getPost('window_sec', 600),
+            'soft_pressure' => (float)$this->request->getPost('soft_pressure', 0.70),
+            'frequent_compact_count' => (int)$this->request->getPost('frequent_compact_count', 8),
+            'sustained_soft_sample_ratio' => (float)$this->request->getPost('sustained_soft_sample_ratio', 0.50),
+            'volatility_cv' => (float)$this->request->getPost('volatility_cv', 0.35),
+            'host_pressure_max' => (float)$this->request->getPost('host_pressure_max', 0.85),
+            'host_available_ratio_min' => (float)$this->request->getPost('host_available_ratio_min', 0.15),
+            'sample_retain_days' => (int)$this->request->getPost('sample_retain_days', 14),
+            'rules' => $rules,
+        ];
+        $result = $configService->save($input);
+        if ($this->request->isAjax()) {
+            return $this->fetchJson([
+                'success' => (bool)$result['ok'],
+                'message' => (string)$result['message'],
+                'data' => $result['config'],
+            ]);
+        }
+        $notice = (bool)$result['ok'] ? 'capacity_saved' : 'capacity_save_failed';
+        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('*/backend/wls-panel/capacity', [
+            'panel_notice' => $notice,
+        ]));
+        return '';
     }
 
     #[Acl('Weline_Server::wls_panel_plugin', '查看 WLS 面板插件', 'puzzle', '查看 WLS 面板插件页面', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
@@ -376,6 +437,33 @@ class WlsPanel extends BackendController
         $this->assign('panelPluginViewerContext', $panelPluginViewerContext);
         $this->assign('panelProjectConfigCenter', $projectConfigCenterService->build($panelProjects, $operationCapabilities));
         $this->assign('appStorePlatformResolution', $this->resolveAppStorePlatformResolution());
+        $capacityConfig = CapacityAdvisorConfigService::defaults();
+        $capacitySeries = [
+            'labels' => [],
+            'host_pressure' => [],
+            'worker_pressure_avg' => [],
+            'worker_pressure_max' => [],
+            'connections_sum' => [],
+            'compact_delta' => [],
+            'soft_pressure' => 0.70,
+            'latest_advice' => [],
+        ];
+        if ($activePage === 'capacity') {
+            try {
+                /** @var CapacityAdvisorConfigService $capacityConfigService */
+                $capacityConfigService = ObjectManager::getInstance(CapacityAdvisorConfigService::class);
+                $capacityConfig = $capacityConfigService->get();
+            } catch (\Throwable) {
+            }
+            try {
+                /** @var CapacitySampleStore $capacitySampleStore */
+                $capacitySampleStore = ObjectManager::getInstance(CapacitySampleStore::class);
+                $capacitySeries = $capacitySampleStore->series('default', 3600);
+            } catch (\Throwable) {
+            }
+        }
+        $this->assign('panelCapacityConfig', $capacityConfig);
+        $this->assign('panelCapacitySeries', $capacitySeries);
         return $this->fetch('index');
     }
 

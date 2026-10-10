@@ -926,7 +926,7 @@ if (!\function_exists('wlsCompactWorkerMemoryCaches')) {
 function wlsCompactWorkerMemoryCaches(
     string $reason,
     int $maxMemoryBytes = 0,
-    float $staticClearPressure = 0.55,
+    float $staticClearPressure = 0.70,
     int $staticClearMinBytes = 16777216,
     bool $forceStaticClear = false
 ): array {

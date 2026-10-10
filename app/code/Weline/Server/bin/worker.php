@@ -2041,7 +2041,8 @@ $buildWorkerRuntimeSnapshot = static function (string $event = 'runtime') use (
         'should_exit' => $shouldExit ? 1 : 0,
         'ipc_draining' => $ipcDraining ? 1 : 0,
         'ts' => \microtime(true),
-    ] + \Weline\Server\Service\Runtime\WorkerReadinessState::statusReportHomepageFields();
+    ] + \Weline\Server\Service\Runtime\WorkerReadinessState::statusReportHomepageFields()
+      + \Weline\Server\Service\WorkerResponseMemoryGuard::capacityStatusScalars();
 };
 $sendExitReasonToMaster = static function (string $reason, int $code = 0, array $context = []) use (&$ipcClient, &$exitReasonSent, $buildWorkerRuntimeSnapshot): void {
     $reason = \trim($reason);
@@ -5141,7 +5142,7 @@ function wlsDispatchRequestFiberStep(
     // immutable cache gates. Hot Static/FPC traffic never pays these costs.
     if ($requestGcInterval > 0 && $requestCount - $lastRequestGcCount >= $requestGcInterval) {
         $lastRequestGcCount = $requestCount;
-        $compaction = wlsCompactWorkerMemoryCaches('request_interval', $maxMemoryBytes, 0.55, 16 * 1024 * 1024);
+        $compaction = wlsCompactWorkerMemoryCaches('request_interval', $maxMemoryBytes, 0.70, 16 * 1024 * 1024);
         $currentMemory = \memory_get_usage(true);
         $memoryPeak = \memory_get_peak_usage(true);
         $runtimeCompactions = (array)($compaction['runtime_cache_compactions'] ?? []);

@@ -215,8 +215,9 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
             64 * 1024 * 1024,
             true
         ));
+        // soft default 0.70 → need ≥179.2MiB of 256MiB budget before ratchet drain is eligible
         self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
-            160 * 1024 * 1024,
+            192 * 1024 * 1024,
             100 * 1024 * 1024,
             64 * 1024 * 1024,
             true
@@ -228,7 +229,7 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
             true
         ));
         self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
-            160 * 1024 * 1024,
+            192 * 1024 * 1024,
             100 * 1024 * 1024,
             null,
             false

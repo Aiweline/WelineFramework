@@ -12,10 +12,14 @@ final class WorkerResponseMemoryGuard
 {
     public const LARGE_RESPONSE_BYTES = 262144;
     public const LARGE_BUFFER_BYTES = 524288;
-    /** Soft water mark: reclaim rebuildable process L1 (keep-warm ratchet control). */
-    private const RUNTIME_CACHE_PRESSURE_THRESHOLD = 0.55;
+    /**
+     * Soft water mark: reclaim rebuildable process L1 (cold locale bags).
+     * Aligned with env.sample + process-l1-pressure-eviction spec (0.70).
+     * 0.55 was too eager on small Worker budgets (e.g. 256M) and thrashed dictionaries.
+     */
+    private const RUNTIME_CACHE_PRESSURE_THRESHOLD = 0.70;
     /** Hard water mark: aggressive process-bag clear + allocator freelist trim (no Worker drain). */
-    private const RUNTIME_CACHE_HARD_PRESSURE_THRESHOLD = 0.70;
+    private const RUNTIME_CACHE_HARD_PRESSURE_THRESHOLD = 0.85;
     /** 绝对量触发 allocator 整理；未知上限时仍保留原 soft 回收。 */
     private const SOFT_HEAP_FORCE_BYTES = 48 * 1024 * 1024;
     /** 未知内存上限时，保留绝对量触发的 aggressive 回收。 */
@@ -35,6 +39,11 @@ final class WorkerResponseMemoryGuard
     private static ?int $warmRealBaselineBytes = null;
     private static ?string $drainAfterResponseReason = null;
     private static int $incompleteRequestFiberCancelStreak = 0;
+    /** Passiveive counters for Master capacity advisor (statusReport scalars). */
+    private static int $compactSoftCount = 0;
+    private static int $compactHardCount = 0;
+    private static int $drainRequestCount = 0;
+    private static float $lastPressure = 0.0;
 
     /** Consecutive incomplete Fiber cancels before Worker quarantine. */
     public const INCOMPLETE_REQUEST_FIBER_CANCEL_QUARANTINE_STREAK = 3;
@@ -240,6 +249,32 @@ final class WorkerResponseMemoryGuard
     {
         $reason = \trim($reason);
         self::$drainAfterResponseReason = $reason !== '' ? $reason : 'memory_pressure';
+        self::$drainRequestCount++;
+    }
+
+    /**
+     * Scalar diagnostics for ControlMessage::statusReport context.
+     *
+     * @return array{
+     *   compact_soft_count:int,
+     *   compact_hard_count:int,
+     *   drain_request_count:int,
+     *   last_pressure:float
+     * }
+     */
+    public static function capacityStatusScalars(): array
+    {
+        try {
+            self::$lastPressure = self::getMemoryPressure();
+        } catch (\Throwable) {
+        }
+
+        return [
+            'compact_soft_count' => self::$compactSoftCount,
+            'compact_hard_count' => self::$compactHardCount,
+            'drain_request_count' => self::$drainRequestCount,
+            'last_pressure' => self::$lastPressure,
+        ];
     }
 
     public static function drainTimeoutSecondsForReason(string $reason, int $currentTimeout): int
@@ -333,6 +368,7 @@ final class WorkerResponseMemoryGuard
         ];
 
         $pressure = self::getMemoryPressure();
+        self::$lastPressure = $pressure;
         $thresholds = self::getRuntimeCacheThresholds();
         // hard 压力先清可重建缓存；退役还须满足回收后的 ratchet 与预算判据。
         $criticalHard = $pressure >= $thresholds['hard'];
@@ -340,6 +376,11 @@ final class WorkerResponseMemoryGuard
 
         if ($forceSoftReclaim || $forceAggressive || $pressure >= $thresholds['soft']) {
             $runtimeCacheCompactions = self::compactRuntimeCaches($aggressive);
+            if ($aggressive || $criticalHard) {
+                self::$compactHardCount++;
+            } else {
+                self::$compactSoftCount++;
+            }
         }
 
         $forcedReclaim = $forceSoftReclaim || $forceAggressive || $forceAllocatorTrim;
@@ -447,6 +488,18 @@ final class WorkerResponseMemoryGuard
 
         if (\class_exists(\Weline\Framework\View\TemplateCacheManager::class, false)) {
             \Weline\Framework\View\TemplateCacheManager::clearProcessMemoryCache();
+            $compactions['cleared_process_caches']++;
+        }
+
+        // AST intern pools: soft half-trim; hard/aggressive full reset.
+        if (\class_exists(\Weline\Framework\View\Taglib\Ast\NodePool::class, false)
+            || \class_exists(\Weline\Framework\View\Taglib\Ast\NodePool::class, true)
+        ) {
+            if ($aggressive) {
+                \Weline\Framework\View\Taglib\Ast\NodePool::reset();
+            } else {
+                \Weline\Framework\View\Taglib\Ast\NodePool::trimForMemoryPressure();
+            }
             $compactions['cleared_process_caches']++;
         }
 

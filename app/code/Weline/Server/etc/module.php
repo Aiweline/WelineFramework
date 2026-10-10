@@ -2,13 +2,13 @@
 
 return [
     "name" => 'Weline_Server',
-    "version" => '2.0.154',
+    "version" => '2.0.158',
     "requires" => [
         'Weline_Framework' => '*',
+        'Weline_Backend' => '*',
     ],
     "optional" => [
         'Weline_AppStore' => '*',
-        'Weline_Backend' => '*',
     ],
     "provides" => [
         \Weline\Framework\Runtime\RuntimeEdgeCacheInvalidatorInterface::class => \Weline\Server\Api\Runtime\RuntimeEdgeCacheInvalidator::class,

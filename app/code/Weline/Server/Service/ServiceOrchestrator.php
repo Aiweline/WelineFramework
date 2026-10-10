@@ -319,6 +319,7 @@ class ServiceOrchestrator
     private float $lastMemoryPressureExitAt = 0.0;
     private float $memoryPressureShrinkFenceUntil = 0.0;
     private float $lastMemoryPressureTickAt = 0.0;
+    private float $lastCapacityAdviseTickAt = 0.0;
     private float $lastMemoryPressureHostCoordinationInitAt = -1e12;
     private bool $workerReloadCapacityTransitionInProgress = false;
     private float $lastMemoryPressureTransitionDeferralAt = 0.0;
@@ -14117,6 +14118,26 @@ class ServiceOrchestrator
                     } catch (\Throwable $e) {
                         WlsLogger::error_(
                             '[Orchestrator][MemoryPressure] tick failed: '
+                            . $e::class . ': ' . $e->getMessage()
+                            . ' @' . $e->getFile() . ':' . $e->getLine()
+                        );
+                    }
+                })) {
+                    continue;
+                }
+            }
+
+            if ($this->startupAcceptanceComplete
+                && !$this->hasMainLoopTask('periodic:capacity_advise')
+                && ($now - $this->lastCapacityAdviseTickAt) >= $this->capacityAdviseIntervalSec()
+            ) {
+                $this->lastCapacityAdviseTickAt = $now;
+                if ($this->scheduleMainLoopTask('periodic:capacity_advise', 'capacity_advise', function (): void {
+                    try {
+                        $this->tickCapacityAdvise();
+                    } catch (\Throwable $e) {
+                        WlsLogger::error_(
+                            '[Orchestrator][CapacityAdvisor] tick failed: '
                             . $e::class . ': ' . $e->getMessage()
                             . ' @' . $e->getFile() . ':' . $e->getLine()
                         );
@@ -33486,6 +33507,57 @@ class ServiceOrchestrator
             $this->memoryPressureController?->setShrinkInProgress(false);
         }
         $this->memoryPressureController?->maybeTick($now, $this);
+    }
+
+    private function capacityAdviseIntervalSec(): float
+    {
+        try {
+            $runner = new \Weline\Server\Service\Capacity\CapacityAdviseRunner();
+
+            return (float)$runner->intervalSec();
+        } catch (\Throwable) {
+            return 60.0;
+        }
+    }
+
+    /**
+     * Read-only capacity advice + sample row. Never scales workers.
+     */
+    private function tickCapacityAdvise(): void
+    {
+        $reports = [];
+        foreach ($this->registry->getAllInstances() as $instance) {
+            if ($instance->role !== ControlMessage::ROLE_WORKER) {
+                continue;
+            }
+            $report = $instance->getMeta('last_status_report', []);
+            if (!\is_array($report)) {
+                $report = [];
+            }
+            $reports[] = [
+                'report' => $report,
+                'at' => (float)$instance->getMeta('last_status_report_at', 0),
+            ];
+        }
+
+        $instanceName = 'default';
+        try {
+            if ($this->context !== null) {
+                $name = \trim((string)$this->context->getConfig('wls.instance', ''));
+                if ($name === '') {
+                    $name = \trim((string)$this->context->getConfig('instance', ''));
+                }
+                if ($name !== '') {
+                    $instanceName = $name;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $hostPressure = $this->memoryPressureController?->getLastPressureRatio();
+        $hostAvailable = $this->memoryPressureController?->getLastAvailableRatio();
+        $runner = new \Weline\Server\Service\Capacity\CapacityAdviseRunner();
+        $runner->tick($instanceName, $reports, $hostPressure, $hostAvailable);
     }
 
     private function ensureHostMemoryPressureCoordination(
