@@ -45,6 +45,7 @@ final class CacheClearCommandContractTest extends TestCase
         );
         self::assertStringNotContainsString('StorefrontFpcWarmer', $source);
         self::assertStringContainsString('warmUp(\'fpc\')', $source);
+        self::assertStringContainsString('warmUp(\'website\')', $source);
     }
 
     public function testForceClearsPermanentPools(): void

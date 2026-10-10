@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.8.100',
+    "version" => '1.8.102',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
@@ -47,5 +47,6 @@ return [
         'localization_provider.Weline_Websites' => \Weline\Websites\Api\Localization\LocalizationProvider::class,
         'request_resetter.Weline_Websites' => \Weline\Websites\Api\Runtime\RequestResetter::class,
         'process_cache_resetter.Weline_Websites' => \Weline\Websites\Api\Runtime\ProcessCacheResetter::class,
+        'cache.warmer.websites.scope_catalog' => \Weline\Websites\Service\ScopeCatalogCacheWarmer::class,
     ],
 ];

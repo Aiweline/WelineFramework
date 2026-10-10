@@ -151,6 +151,12 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             } else {
                 $this->printing->note(__('店面 FPC 预热未命中可暖路径（WLS 未就绪或主机不可达）'));
             }
+            // Website pool: store/channel catalog HotCache (soft-clear cold hit1 tax).
+            $scopeResult = $registry->warmUp('website');
+            $scopeWarmed = (int)($scopeResult['warmed'] ?? 0);
+            if ($scopeWarmed > 0) {
+                $this->printing->successIcon(__('网站范围目录已预热 %{1} 条', [$scopeWarmed]));
+            }
         } catch (\Throwable $e) {
             $this->printing->note(__('店面 FPC 预热跳过：%{1}', [$e->getMessage()]));
         }

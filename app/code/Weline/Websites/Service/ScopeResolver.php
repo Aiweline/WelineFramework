@@ -150,7 +150,23 @@ class ScopeResolver
             );
         }
 
+        // HotCache: scope=store channel catalog can write L2 only after freeze.
+        // Publish now so layout/chrome consumers HIT instead of paying a cold builder.
+        $this->publishScopeCatalogHotCache($store, $channel);
+
         return new StorefrontNavigationScope($identity, $routePath);
+    }
+
+    private function publishScopeCatalogHotCache(StoreSummary $store, SalesChannelSummary $channel): void
+    {
+        try {
+            $publisher = ObjectManager::getInstance(ScopeCatalogHotCachePublisher::class);
+            if ($publisher instanceof ScopeCatalogHotCachePublisher) {
+                $publisher->publishAfterScopeFrozen($store, $channel);
+            }
+        } catch (\Throwable) {
+            // Fail-open: catalog publish is an optimization boundary.
+        }
     }
 
     private function isUsableCachedStore(int $websiteId, StoreSummary $store): bool

@@ -140,9 +140,19 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
             if ($default !== null) {
                 return $default;
             }
-            // Keep the already resolved parent Store on the fallback path too.
-            // A missing default flag should not trigger another Store lookup.
-            $byCode = $this->byCodeForStore($store, SalesChannel::CODE_DEFAULT);
+            // Fallback: load code=default in THIS builder only.
+            // Do not nest byCodeForStore→rememberPolicy (double storefront.cache.builder
+            // inclusive tax after soft-clear). code: keys are filled by
+            // ScopeCatalogHotCachePublisher / explicit byCode after Scope freeze.
+            $codeRows = $this->newChannel()
+                ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
+                ->where(SalesChannel::schema_fields_CODE, SalesChannel::CODE_DEFAULT)
+                ->select()
+                ->fetchArray();
+            $byCode = $this->singleOrNull(
+                $this->mapRows($codeRows, $storeId, $store),
+                __('渠道代码在同一店铺下不唯一'),
+            );
             if ($byCode !== null && !$byCode->isDefault) {
                 throw new \RuntimeException(__('code=default 的渠道缺少默认标记'));
             }
