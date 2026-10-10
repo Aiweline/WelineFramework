@@ -672,7 +672,7 @@ LiteSSL,LiteSSL
 正在热重载...,"Hot reloading..."
 热重载命令发送失败,"Failed to send hot reload command."
 热重载失败：请检查网络连接后重试。,"Hot reload failed: Please check your network connection and try again."
-确认执行该操作吗？此操作会影响流量接入状态。,"Are you sure you want to perform this operation? This operation will affect traffic access status."
+确认退出维护模式？将恢复前台与后台正常访问。,"Disable maintenance mode? Storefront and admin access will be restored."
 确认,Confirm
 成功,Success
 失败,Failed
@@ -3048,6 +3048,7 @@ Previous：%{1},Previous：%{1}
 无法证明受管代次时拒绝发送任何终止信号,"Refuse to send any termination signal when the managed generation cannot be proven"
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","Retired: console:server:start no longer starts the PHP built-in web server."
 "已退役：PHP 内置 Web Server 启动入口","Retired: PHP built-in Web Server startup entry"
+确认执行该操作吗？此操作会影响流量接入状态。,"Are you sure you want to perform this operation? This operation will affect traffic access status."
 高级安全规则,高级安全规则
 保存高级安全规则,保存高级安全规则
 "采样 %{1} 点 · 最近 %{2} · 每 %{3}s 自动刷新","Samples: %{1} · latest %{2} · auto-refresh every %{3}s"
@@ -3719,4 +3720,3 @@ Nginx-only,Nginx-only
 "边缘 PID","Edge PID"
 "删除证书（被站点引用时需 --confirm）","Delete certificate (use --confirm when referenced by a site)"
 "确认启用维护模式？前台与后台（含本页）都会被维护门禁拦截；退出请点「退出维护」，或本机执行 php bin/w maintenance:disable。","Enable maintenance mode? Storefront and admin (including this page) will be blocked by the maintenance gate. Exit with Exit Maintenance, or run php bin/w maintenance:disable locally."
-"确认退出维护模式？将恢复前台与后台正常访问。","Disable maintenance mode? Storefront and admin access will be restored."

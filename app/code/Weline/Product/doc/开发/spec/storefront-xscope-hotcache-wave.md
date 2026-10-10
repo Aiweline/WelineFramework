@@ -1,5 +1,5 @@
 ---
-status: ready-for-plan
+status: delivered
 work_kind: feature
 feature_slug: storefront-xscope-hotcache-wave
 module: Weline_Product
@@ -9,11 +9,14 @@ team_path: ../../../../../../../dev/team/storefront-xscope-hotcache-wave/
 related_specs:
   - search-projection-scope-hotcache-prime.md
   - homepage-shelf-offers-locale-hotcache-prime.md
+  - plp-filter-offers-light-hotcache-prime.md
   - ../../Theme/doc/开发/spec/chrome-warmer-l2-shelf-locale-warm.md
+  - ../../Theme/doc/开发/spec/storefront-chrome-locale-hotcache-prime.md
 freeze_gate: clear_advisor_block
 advisor_constraints_status: merged
 align_freeze_prep: ready
-mechanism_freeze: pending_architect_joint
+mechanism_freeze: delivered
+delivery_status: implemented_accepted
 covers_use_cases:
   - UC-search-query-result
   - UC-plp-filter-offers
@@ -25,6 +28,20 @@ mcp_note: prepare_project / get_skill(requirement_clarify_use_case) / aoci_rules
 ---
 
 # Spec: 店面跨范围 HotCache 波（search / PLP / 非 home chrome）
+
+## 0. 已交付摘要（2026-10-11）
+
+**状态：`delivered`**（施工 + issuer + 测试 + ops 已 pass；无新增对外 REST/Query 契约，仅内部 warmer / chrome 键对齐）。
+
+| plan | 实现落点 | 验收指针 |
+|------|----------|----------|
+| P-search-query-result | Search `SearchQueryResultTipCacheWarmer` · `cache.warmer.search.query_result_tip` · Clear `warmUp('search')` | **A-search-query-result** pass · `meetings/性能检查-review.md` · `test-exec.md` · dig quiet2/quiet3 |
+| P-plp-filter-offers | Product `PlpFilterOffersLightCacheWarmer` · `cache.warmer.product.plp_light` | **A-plp-filter-offers** pass · 同上 · 子规格 `plp-filter-offers-light-hotcache-prime.md` |
+| P-theme-xscope-chrome | Theme path=A · layout-agnostic shell · schema `chrome-partial-v22-layout-agnostic-shell` | **A-xscope-chrome-hit** pass（含 fr_FR/EUR）· `chrome_n=0` |
+| 横切 | 禁拆壳 | **A-no-shell-strip** / **ops_acceptance** pass · `meetings/电商顾问-ops.md` |
+
+主证据：`dev/tmp/perf-xscope-accept-20261011-025246-quiet2.json` · `…-quiet3-retry.json`；Host `https://p05113ef3.test.weline.com`。  
+耐久说明：Search README「店面 tip 查询结果袋预热」· Product 本规格 §0 / `plp-filter-offers-light-hotcache-prime.md` · Theme `storefront-chrome-locale-hotcache-prime.md` v22 注 · Framework Clear `warmUp('search')` 开发日志。
 
 ## 1. 背景（证据锚定）
 
@@ -300,7 +317,7 @@ so that **跨范围冷切不再把 chrome 空袋当成「全站已暖」的盲�
 ## 11. 就绪检查
 
 - [x] 草稿落盘后已并入顾问约束（msg-3 + design.md）
-- [x] `status: ready-for-plan`（澄清轨完成；**可进对齐冻结筹备**）
+- [x] `status: ready-for-plan`（澄清轨完成；对齐冻结后施工）→ **已升 `delivered`**
 - [x] ≥1 用户故事 + 每故事 ≥2 条 EARS
 - [x] ≥1 用例且含主成功路径（3 条 UC）
 - [x] 每条 UC 已填映射 acceptance id
@@ -309,7 +326,7 @@ so that **跨范围冷切不再把 chrome 空袋当成「全站已暖」的盲�
 - [x] 未把具体类补丁步骤写成强制 how
 - [x] 顾问约束节已并入（含 OPS-S1…S5）
 - [x] 顾问阻塞 `blocked_pending_ecommerce_advisor` **已解除**
-- [ ] **机制已冻** → **否**（`mechanism_freeze: pending_architect_joint`；架构∥性能共定制后由对齐冻结会落 contracts）
-- [ ] 收口前全 UC 闭环 + 顾问 ops_acceptance（施工后）
+- [x] **机制已交付**（`mechanism_freeze: delivered`；path=A chrome + tip/plp warmers + Clear search pool）
+- [x] 全 UC 闭环 + issuer/测试/ops_acceptance（见 §0）
 
-**冻结结论（本席）**：规格 **`ready-for-plan`**；顾问约束已并入；**可进对齐冻结筹备**。机制/阈值数字 **以架构师 + 性能检查工程师冻结为准**——本席不宣称机制已冻。澄清轨本批完成。
+**收口结论**：规格 **`delivered`**。验收指针见 §0；P-card-html / P-pdp-xscope-triage 仍 deferred，不阻塞本波。

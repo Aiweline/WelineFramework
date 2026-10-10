@@ -56,9 +56,11 @@ final class CacheClearCommandContractTest extends TestCase
         self::assertStringNotContainsString('HomepageShelfOffersLocaleCacheWarmer', $source);
         self::assertStringNotContainsString('SearchQueryResultTipCacheWarmer', $source);
         self::assertStringNotContainsString('PlpFilterOffersLightCacheWarmer', $source);
-        self::assertStringContainsString(
-            "warmUp('weline_theme_storefront_chrome')",
-            $source,
+        // Chrome reseeds via fresh subprocess (pool arg) — not in-process warmUp FQCN.
+        self::assertTrue(
+            \str_contains($source, "warmUp('weline_theme_storefront_chrome')")
+            || \str_contains($source, 'cache:warm --pool=weline_theme_storefront_chrome'),
+            'Clear must reseed chrome pool via warmUp or cache:warm subprocess',
         );
         self::assertStringNotContainsString('StorefrontChromeLocaleCacheWarmer', $source);
         // Multi-warmer pools must print Registry details (not one aggregate count).

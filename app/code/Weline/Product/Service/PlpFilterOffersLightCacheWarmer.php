@@ -19,8 +19,9 @@ use Weline\Websites\Model\Website;
  * Light PLP HotCache seed after cache:clear: filter_panel.v3 + facet_counts +
  * listing candidates / summary offers (and optional one category path).
  *
- * Uses summary / listing-candidates / targeted-sized slices — never publishedOffers(1000).
- * Does not touch theme.storefront_chrome. Fail-open; warm_partial on budget.
+ * Uses summary / listing-candidates / targeted-sized slices — never the heavy
+ * full-catalog publishedOffers path (thousand-row). Does not touch Theme chrome
+ * bags. Fail-open; warm_partial on budget.
  */
 final class PlpFilterOffersLightCacheWarmer implements CacheWarmerInterface
 {

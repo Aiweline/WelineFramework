@@ -11,7 +11,7 @@ covers_use_cases: UC-proj-1a, UC-proj-1b, UC-proj-2
 
 | mechanism | owning_module | not_to_do |
 |-----------|---------------|-----------|
-| `SearchProjectionScopeCacheWarmer` + `cache:clear` → `warmUp('product')`：freeze 默认 channel 后 `snapshotScope` 写 durable L2 | `Weline_Product` | 不 `snapshotWebsite`；不预热高基数 `search.query_result` 全 q |
+| `SearchProjectionScopeCacheWarmer` + `cache:clear` → `warmUp('product')`：freeze 默认 channel 后 `snapshotScope` 写 durable L2 | `Weline_Product` | 不 `snapshotWebsite`；不预热高基数 `search.query_result` 全 q（tip 有界种子归 **Search** `SearchQueryResultTipCacheWarmer` / `warmUp('search')`，见 Search README「店面 tip 查询结果袋预热」） |
 | `StorefrontHotCacheBagSeeder::primeSearchProjectionScope` peek 后代建（critical / locale / currency / peer / post_critical / 空 stage） | `Weline_Product` | 不 full×locales；不把 publishedOffers(1000) 塞进 light |
 | Framework Clear 只 `warmUp('product')`，禁 soft-pull Product FQCN | `Weline_Framework` | 禁拆 chrome；禁平行 static 袋 |
 

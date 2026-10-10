@@ -21,6 +21,20 @@
 
 历史 P3C 投影索引能力仍保留，详见 [`search-index.md`](search-index.md)。
 
+## 店面 tip 查询结果袋预热（Clear / HotCache）
+
+**无新增对外 REST/Query 契约**——仅内部 `CacheWarmer` + Clear 编排行为。
+
+| 项 | 说明 |
+|----|------|
+| Warmer | `SearchQueryResultTipCacheWarmer`（`cache.warmer.search.query_result_tip`） |
+| 池 | `search`；Clear 经 `CacheWarmerRegistry::warmUp('search')`（Framework `Cache/Clear::warmStorefrontFpcAfterClear`） |
+| 种子 | **有界 tip**：默认 `q=hanfu` × 冻结矩阵 `de_DE/USD` · `ja_JP/USD` · `fr_FR/EUR`（page=1、type=all、area=frontend）；**禁止**全 q 笛卡尔 |
+| 袋 | 写入既有 `search.query_result` HotCache（`StorefrontScopeHotCache`）；**不等于** Product `product.search_projection_scope` peek HIT |
+| 验收指针 | 波 `storefront-xscope-hotcache-wave` · UC `A-search-query-result`；安静窗冷 hit1 无主导 `search.query_result` 空袋 builder（见 team `meetings/性能检查-review.md` / `test-exec.md`） |
+
+契约：`Test/Unit/Service/SearchQueryResultTipCacheWarmerContractTest.php`。投影 warmer 仍属 Product；本 warmer 只补 tip 结果袋。
+
 ## Provider 内容索引（Blog 等）
 
 非 Product 类型通过 `Searcher` 的 `documentsForIndex()` 写入 `search_provider_document` 表。**前台查询只读索引，禁止回退源表 SQL。**

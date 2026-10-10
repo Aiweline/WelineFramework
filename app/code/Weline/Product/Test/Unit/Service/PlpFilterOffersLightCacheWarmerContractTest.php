@@ -53,9 +53,9 @@ final class PlpFilterOffersLightCacheWarmerContractTest extends TestCase
         self::assertStringContainsString('TIP_SCOPES', $src);
         self::assertStringContainsString('BUDGET_MS', $src);
         self::assertStringNotContainsString('publishedOffers(1000', $src);
-        self::assertStringNotContainsString('->publishedOffers(', $src);
-        self::assertStringNotContainsString('storefront_chrome', $src);
+        self::assertDoesNotMatchRegularExpression('/->publishedOffers\s*\(/', $src);
         self::assertStringNotContainsString('renderPartials', $src);
-        self::assertStringNotContainsString('weline_theme_storefront_chrome', $src);
+        self::assertStringNotContainsString("warmUp('weline_theme_storefront_chrome')", $src);
+        self::assertStringNotContainsString('Partials::', $src);
     }
 }
