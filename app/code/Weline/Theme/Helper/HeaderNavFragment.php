@@ -334,6 +334,8 @@ final class HeaderNavFragment
     public static function fetchCategoriesHorizontalNav(Template $template, array $params): string
     {
         $items = \is_array($params['items'] ?? null) ? $params['items'] : [];
+        // Collapse nav copy Dictionary N+1 before HTML fragment remember/render.
+        HeaderCommerceData::prefetchNavItemLabels($items);
         $showBannerWithChildren = self::coerceBool($params['show_banner_with_children'] ?? true, true);
         if ($items === [] || self::shouldBypass($template)) {
             return (string)RequestLifecycleTrace::measurePhase(
@@ -378,6 +380,9 @@ final class HeaderNavFragment
     public static function fetchMegaMenuPanel(Template $template, array $params): string
     {
         $item = \is_array($params['item'] ?? null) ? $params['item'] : [];
+        if ($item !== []) {
+            HeaderCommerceData::prefetchNavItemLabels([$item]);
+        }
         $panelId = \trim((string)($params['panel_id'] ?? ''));
         $drawerFlyout = !empty($params['drawer_flyout']);
         if ($item === [] || self::shouldBypass($template)) {
@@ -430,6 +435,7 @@ final class HeaderNavFragment
     public static function fetchCategoriesSidebarNav(Template $template, array $params): string
     {
         $items = \is_array($params['items'] ?? null) ? $params['items'] : [];
+        HeaderCommerceData::prefetchNavItemLabels($items);
         if ($items === [] || self::shouldBypass($template)) {
             return (string)RequestLifecycleTrace::measurePhase(
                 'theme.header.sidebar.render',

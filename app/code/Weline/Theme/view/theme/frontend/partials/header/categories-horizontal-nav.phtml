@@ -8,11 +8,13 @@
  * @var callable(string):string|null $esc_desc
  * @var bool|null $show_banner_with_children
  */
+use Weline\Theme\Helper\HeaderCommerceData;
 use Weline\Theme\Helper\HeaderNavFragment;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 use Weline\Theme\Helper\WidgetI18n;
 
 $items = is_array($items ?? null) ? $items : [];
+HeaderCommerceData::prefetchNavItemLabels($items);
 $showBannerWithChildren = $show_banner_with_children ?? true;
 if (is_string($showBannerWithChildren)) {
     $normalized = strtolower(trim($showBannerWithChildren));

@@ -730,6 +730,40 @@ final class HeaderCommerceData
         WidgetI18n::prefetchLabels($sources);
     }
 
+    /**
+     * Batch-prefetch category / all-menu nav copy before per-node WidgetI18n::label.
+     * Cold-chaos: non-default locale storefront-shell inclusive q is dominated by
+     * horizontal + sidebar nav label() → Dictionary::getEntry N+1.
+     *
+     * @param list<array<string, mixed>> $items
+     */
+    public static function prefetchNavItemLabels(array $items): void
+    {
+        $sources = [];
+        $collect = static function (array $nodes) use (&$collect, &$sources): void {
+            foreach ($nodes as $node) {
+                if (!\is_array($node)) {
+                    continue;
+                }
+                foreach (['text', 'name', 'title', 'label', 'description', 'desc'] as $field) {
+                    $value = \trim((string)($node[$field] ?? ''));
+                    if ($value !== '') {
+                        $sources[] = $value;
+                    }
+                }
+                $children = $node['children'] ?? null;
+                if (\is_array($children) && $children !== []) {
+                    $collect($children);
+                }
+            }
+        };
+        $collect($items);
+        if ($sources === []) {
+            return;
+        }
+        WidgetI18n::prefetchLabels($sources);
+    }
+
     private static function rememberRequestMemo(
         string $resource,
         string $logicalKey,

@@ -67,6 +67,16 @@ $hot = HeaderCommerceData::resolveHotWords(8);
 $hotWords = is_array($hot['words'] ?? null) ? $hot['words'] : [];
 $hotIsDemo = (bool)($hot['is_demo'] ?? false);
 $searchTypes = HeaderCommerceData::resolveSearchTypes();
+// Batch-prefetch chrome + hot-word copy before per-string label() (locale cold N+1).
+$hotLabelSources = ['搜索商品...', '搜索', '热搜'];
+foreach ($hotWords as $hotWord) {
+    $hotWord = trim((string)$hotWord);
+    if ($hotWord !== '') {
+        $hotLabelSources[] = $hotWord;
+    }
+}
+WidgetI18n::prefetchLabels($hotLabelSources);
+HeaderCommerceData::prefetchSearchTypeLabels($searchTypes);
 if ($showTypeSelect && $searchType === 'all' && $searchCategoryId > 0) {
     $findOwner = static function (array $nodes, int $categoryId) use (&$findOwner): bool {
         foreach ($nodes as $node) {
