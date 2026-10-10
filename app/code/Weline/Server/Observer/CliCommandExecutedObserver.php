@@ -57,6 +57,42 @@ class CliCommandExecutedObserver implements ObserverInterface
         } else {
             $printer->note($message, '', Printing::DEEP_ORANGE);
         }
+
+        // setup:upgrade 等在命令内先关维护，本观察者再异步 reload。
+        // Direct 拓扑下 reload/补位可能留下粘性 Worker 门禁；若框架标志已是关闭，再推一次 disable 愈合。
+        if ($reloadType === self::RELOAD_TYPE_CODE && \str_starts_with($command, 'setup:')) {
+            $this->reconcileMaintenanceOffAfterSetupReload($printer);
+        }
+    }
+
+    private function reconcileMaintenanceOffAfterSetupReload(Printing $printer): void
+    {
+        $enabled = (bool)Env::getInstance()->getConfig('system.maintenance', false);
+        if ($enabled) {
+            return;
+        }
+
+        try {
+            $result = $this->getDispatchService()->setMaintenanceMode(false);
+            if (($result['attempted'] ?? []) === []) {
+                return;
+            }
+            if (!empty($result['success'])) {
+                $printer->note(
+                    (string)__('WLS 维护门禁已在代码重载后再次确认关闭：%{1}', [$result['message'] ?? 'ok']),
+                    '',
+                    Printing::SUCCESS
+                );
+                return;
+            }
+            $printer->warning(
+                (string)__('WLS 维护门禁在代码重载后确认关闭未完全成功：%{1}', [$result['message'] ?? 'unknown'])
+            );
+        } catch (\Throwable $throwable) {
+            $printer->warning(
+                (string)__('WLS 维护门禁在代码重载后确认关闭失败：%{1}', [$throwable->getMessage()])
+            );
+        }
     }
 
     public static function triggerReload(string $type = self::RELOAD_TYPE_CODE): void

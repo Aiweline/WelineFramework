@@ -34,8 +34,11 @@ final class CliCommandExecutedObserverTest extends TestCase
 
     public function testCodeCommandDispatchesReloadAsync(): void
     {
+        Env::getInstance()->setConfig('system.maintenance', false);
+
         $dispatchService = new class extends BroadcastControlDispatchService {
             public int $reloadCalls = 0;
+            public int $maintenanceDisableCalls = 0;
 
             public function __construct()
             {
@@ -50,16 +53,35 @@ final class CliCommandExecutedObserverTest extends TestCase
                     'attempted' => ['verify_http'],
                     'succeeded' => ['verify_http'],
                     'failed_by_instance' => [],
+                    'skipped_by_instance' => [],
+                    'results_by_instance' => [],
                     'message' => 'ok',
+                ];
+            }
+
+            public function setMaintenanceMode(bool $enabled, ?string $instanceName = null, float $timeout = 6.0): array
+            {
+                if (!$enabled) {
+                    $this->maintenanceDisableCalls++;
+                }
+
+                return [
+                    'success' => true,
+                    'attempted' => ['verify_http'],
+                    'succeeded' => ['verify_http'],
+                    'failed_by_instance' => [],
+                    'skipped_by_instance' => [],
+                    'results_by_instance' => [],
+                    'message' => 'disable-ok',
                 ];
             }
         };
 
         $printing = $this->getMockBuilder(Printing::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['note'])
+            ->onlyMethods(['note', 'warning'])
             ->getMock();
-        $printing->expects($this->once())->method('note');
+        $printing->expects($this->atLeast(2))->method('note');
 
         ObjectManager::setInstance(BroadcastControlDispatchService::class, $dispatchService);
         ObjectManager::setInstance(Printing::class, $printing);
@@ -69,6 +91,7 @@ final class CliCommandExecutedObserverTest extends TestCase
         $observer->execute($event);
 
         $this->assertSame(1, $dispatchService->reloadCalls);
+        $this->assertSame(1, $dispatchService->maintenanceDisableCalls);
     }
 
     public function testCacheCommandSkipsDuplicateDispatch(): void

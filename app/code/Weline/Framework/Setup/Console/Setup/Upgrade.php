@@ -747,9 +747,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     } finally {
                         $this->metrics()->end('completeUpgrade');
                     }
-
-                    // 通知 WLS 服务器热重载（如果正在运行）
-                    $this->notifyWlsReload();
+                    // 代码重载改由 CliCommandExecutedObserver 在 cleanup 关闭维护之后触发，
+                    // 禁止在仍处维护态时 SIGUSR1/重载（否则易留下 Direct Worker 粘性门禁）。
                 }
 
             } catch (\Exception $e) {
@@ -780,13 +779,16 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
     }
 
-    private function syncWlsMaintenanceMode(bool $enabled): void
+    /**
+     * @return bool true when WLS sync succeeded or no running instance needed sync
+     */
+    private function syncWlsMaintenanceMode(bool $enabled): bool
     {
         try {
             $dispatchService = ObjectManager::getInstance(RuntimeProviderResolver::class)
                 ->resolve(RuntimeControlBroadcasterInterface::class);
             if (!$dispatchService instanceof RuntimeControlBroadcasterInterface) {
-                return;
+                return true;
             }
             $result = $dispatchService->setMaintenanceMode($enabled);
 
@@ -798,12 +800,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
 
             if (($result['attempted'] ?? []) === []) {
-                return;
+                return true;
             }
 
             if (!empty($result['success'])) {
                 $this->printing->note(__('WLS 维护模式已同步：%{1}', [$result['message'] ?? 'ok']));
-                return;
+                return true;
             }
 
             $failed = $result['failed_by_instance'] ?? [];
@@ -819,7 +821,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
             if ($aliveFailures === []) {
                 $this->printing->warning(__('WLS 维护模式同步：无存活失败实例（死亡实例已跳过）'));
-                return;
+                return true;
             }
 
             $detail = implode('; ', array_map(
@@ -831,6 +833,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 throw new Exception(__('WLS 维护模式启用失败（存活实例）：%{1}', [$detail]));
             }
             $this->printing->warning(__('WLS 维护模式同步未完全成功：%{1}', [$detail]));
+            return false;
         } catch (Exception $e) {
             throw $e;
         } catch (\Throwable $throwable) {
@@ -838,6 +841,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 throw new Exception(__('WLS 维护模式同步失败：%{1}', [$throwable->getMessage()]), 0, $throwable);
             }
             $this->printing->warning(__('WLS 维护模式同步失败：%{1}', [$throwable->getMessage()]));
+            return false;
         }
     }
 
@@ -1841,13 +1845,17 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 如果标识符文件在 cleanupUpgrade 时还存在，说明可能发生了异常
         // 这种情况下，标识符文件会保留到下次运行，以便检测到需要再次收集
         
-        // 3. 关闭维护模式
+        // 3. 关闭维护模式（须先写 env 再同步 WLS；成功判定含 Worker 门禁 ACK）
         if ($maintenanceEnabled) {
             try {
-                $result = Env::getInstance()->setConfig('system.maintenance', false);
-                $this->syncWlsMaintenanceMode(false);
-                if ($result) {
+                $envOk = Env::getInstance()->setConfig('system.maintenance', false);
+                $wlsOk = $this->syncWlsMaintenanceMode(false);
+                if ($envOk && $wlsOk) {
                     $this->printing->note(__('维护模式已关闭。'));
+                } elseif ($envOk) {
+                    $this->printing->warning(__(
+                        '框架维护标志已关闭，但 WLS Worker 门禁未完全同步。请手动运行 php bin/w maintenance:disable 关闭维护模式。'
+                    ));
                 } else {
                     $this->printing->warning(__('关闭维护模式失败，配置可能未保存。请手动运行 php bin/w maintenance:disable 关闭维护模式。'));
                 }
@@ -4024,31 +4032,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->success(__('热更新信号已发送给 %{1} 个实例', [$reloadCount]));
         } else {
             $this->printing->warning(__('没有可用的 WLS 实例接收热更新信号'));
-        }
-    }
-    
-    /**
-     * 通知 WLS 服务器热重载
-     */
-    private function notifyWlsReload(): void
-    {
-        // 检查是否有运行中的 WLS 服务器
-        $serverConfig = Env::getInstance()->getConfig('wls');
-        if (empty($serverConfig) || empty($serverConfig['instances'])) {
-            return;
-        }
-        
-        $hasRunning = false;
-        foreach ($serverConfig['instances'] as $instance) {
-            if (!empty($instance['pid']) && $this->isProcessRunning((int) $instance['pid'])) {
-                $hasRunning = true;
-                break;
-            }
-        }
-        
-        if ($hasRunning) {
-            $this->printing->note(__('检测到运行中的 WLS 服务器，发送热重载信号...'));
-            $this->executeHotReload();
         }
     }
     

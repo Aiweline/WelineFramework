@@ -10047,6 +10047,20 @@ class ServiceOrchestrator
         } finally {
             if ($maintenanceEnabledForReload && !$maintenanceStickyBeforeReload) {
                 $this->disableMaintenanceMode();
+            } elseif (
+                $this->context?->isDirect()
+                && !$this->maintenanceMode
+                && !$this->maintenanceSticky
+            ) {
+                // setup:upgrade 等会先关维护再异步 reload；reload 期间旧 Worker 门禁
+                // 可能未清干净。Master 已是关闭态时再广播一次 false 愈合粘性门禁。
+                $heal = $this->broadcastDirectMaintenanceMode(false);
+                if (!($heal['success'] ?? false)) {
+                    WlsLogger::warning_(
+                        '[Orchestrator] reload 后 Direct 维护门禁愈合未完成: '
+                        . (string)($heal['message'] ?? 'ACK incomplete')
+                    );
+                }
             }
             $this->broadcastRoutingPolicyToWorkers();
         }
@@ -18357,15 +18371,15 @@ class ServiceOrchestrator
         }
 
         // Direct 维护模式不存在 Dispatcher 维护池。新代 Worker READY 后必须
-        // 在对外服务前继承 Master 的维护 epoch，防止 reload/补位产生短暂绕过。
+        // 在对外服务前继承 Master 的维护 epoch（true/false 均下发）。
+        // 只推 true 会让「Master 已关、旧门禁仍粘」的 Worker 在 reload/补位后继续 503。
         if ($instance->role === ControlMessage::ROLE_WORKER
             && $this->context?->isDirect()
-            && $this->maintenanceMode
             && $instance->ipcClientId !== null
         ) {
             $this->controlServer?->sendTo(
                 $instance->ipcClientId,
-                ControlMessage::setMaintenanceMode(true, '', true)
+                ControlMessage::setMaintenanceMode($this->maintenanceMode, '', true)
             );
         }
 
