@@ -1,7 +1,7 @@
 (function (window, document) {
     'use strict';
 
-    var I18N_ADMIN_UI_VERSION = '20261010-install-sse';
+    var I18N_ADMIN_UI_VERSION = '20261010-locales-panel';
     if (window.I18nAdminUI && window.I18nAdminUI.version === I18N_ADMIN_UI_VERSION) {
         return;
     }
@@ -659,6 +659,11 @@
                     options.onSuccess(payload);
                 }
                 if (form.getAttribute('data-async-reload') === '1') {
+                    var panelRoot = form.closest('[data-locales-panel-root]');
+                    if (panelRoot && typeof reloadLocalesPanel === 'function') {
+                        reloadLocalesPanel(panelRoot);
+                        return payload;
+                    }
                     var reloadUrl = form.getAttribute('data-async-reload-url') || '';
                     if (reloadUrl) {
                         window.location.href = reloadUrl;
@@ -2637,6 +2642,277 @@
         }, true);
     }
 
+    var localesPanelAbort = null;
+    var localesPanelSeq = 0;
+
+    function localesPanelDialog() {
+        return document.getElementById('i18n-locales-panel-dialog');
+    }
+
+    function localesPanelHost() {
+        var dialog = localesPanelDialog();
+        return dialog ? dialog.querySelector('[data-locales-panel-host]') : null;
+    }
+
+    function openLocalesDialog() {
+        var dialog = localesPanelDialog();
+        if (!dialog) {
+            return;
+        }
+        try {
+            if (window.Weline && window.Weline.UI) {
+                if (typeof window.Weline.UI.mount === 'function') {
+                    window.Weline.UI.mount(dialog);
+                }
+                if (window.Weline.UI.dialog && typeof window.Weline.UI.dialog.open === 'function') {
+                    window.Weline.UI.dialog.open(dialog);
+                    return;
+                }
+            }
+            if (typeof dialog.showModal === 'function') {
+                dialog.showModal();
+            } else {
+                dialog.hidden = false;
+                dialog.setAttribute('data-state', 'open');
+                dialog.setAttribute('aria-hidden', 'false');
+            }
+        } catch (e) {
+            dialog.hidden = false;
+            dialog.setAttribute('data-state', 'open');
+            dialog.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    function remountLocalesPanel(scope) {
+        if (!(scope instanceof Element)) {
+            return;
+        }
+        try {
+            if (window.Weline && window.Weline.UI && typeof window.Weline.UI.unmount === 'function') {
+                window.Weline.UI.unmount(scope);
+            }
+        } catch (e) {
+        }
+        try {
+            if (window.Weline && window.Weline.UI && typeof window.Weline.UI.mount === 'function') {
+                window.Weline.UI.mount(scope);
+            }
+        } catch (e) {
+        }
+    }
+
+    function panelRequestUrl(url) {
+        var next = new URL(url, window.location.href);
+        next.searchParams.set('panel', '1');
+        return next;
+    }
+
+    function loadLocalesPanel(url, options) {
+        options = options || {};
+        var host = localesPanelHost();
+        if (!host) {
+            return Promise.reject(new Error('区域弹窗容器不可用'));
+        }
+        if (localesPanelAbort) {
+            try {
+                localesPanelAbort.abort();
+            } catch (e) {
+            }
+        }
+        localesPanelAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var mySeq = ++localesPanelSeq;
+        var requestUrl = panelRequestUrl(url);
+        host.setAttribute('aria-busy', 'true');
+        host.dataset.loading = '1';
+        if (!options.silent) {
+            host.innerHTML = '<div class="w-text" data-tone="muted" data-size="sm">正在加载区域…</div>';
+        }
+
+        return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', requestUrl.toString(), true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.setRequestHeader('X-Weline-Locales-Panel', '1');
+            if (localesPanelAbort) {
+                localesPanelAbort.signal.addEventListener('abort', function () {
+                    try {
+                        xhr.abort();
+                    } catch (e) {
+                    }
+                });
+            }
+            xhr.onload = function () {
+                if (mySeq !== localesPanelSeq) {
+                    return;
+                }
+                var payload = null;
+                try {
+                    payload = JSON.parse(xhr.responseText || '{}');
+                } catch (e) {
+                    payload = null;
+                }
+                host.removeAttribute('aria-busy');
+                delete host.dataset.loading;
+                if (xhr.status < 200 || xhr.status >= 300 || !payload || payload.success !== true || typeof payload.html !== 'string') {
+                    var message = (payload && (payload.message || payload.msg)) || ('HTTP ' + xhr.status);
+                    host.innerHTML = '<div class="w-text" data-tone="danger" data-size="sm">' + escapeHtml(message) + '</div>';
+                    reject(new Error(message));
+                    return;
+                }
+                host.innerHTML = payload.html;
+                remountLocalesPanel(host);
+                var titleEl = localesPanelDialog() && localesPanelDialog().querySelector('#i18n-locales-panel-dialog-title');
+                var panelTitle = host.querySelector('[data-locales-panel-title]');
+                if (titleEl && options.countryName) {
+                    titleEl.textContent = '区域管理 · ' + String(options.countryName)
+                        + (options.countryCode ? (' / ' + options.countryCode) : '');
+                } else if (titleEl && panelTitle) {
+                    titleEl.textContent = '区域管理 · ' + String(panelTitle.textContent || '').replace(/\s+/g, ' ').trim();
+                }
+                resolve(payload);
+            };
+            xhr.onerror = function () {
+                if (mySeq !== localesPanelSeq) {
+                    return;
+                }
+                host.removeAttribute('aria-busy');
+                delete host.dataset.loading;
+                host.innerHTML = '<div class="w-text" data-tone="danger" data-size="sm">网络请求失败，请重试</div>';
+                reject(new Error('网络请求失败，请重试'));
+            };
+            xhr.send();
+        });
+    }
+
+    function reloadLocalesPanel(panelRoot) {
+        var root = panelRoot instanceof Element ? panelRoot : null;
+        var host = localesPanelHost();
+        if (!root && host) {
+            root = host.querySelector('[data-locales-panel-root]');
+        }
+        if (!root) {
+            return Promise.resolve();
+        }
+        var base = root.getAttribute('data-panel-base') || '';
+        var countryCode = root.getAttribute('data-country-code') || '';
+        var searchInput = root.querySelector('input[name="search"]');
+        var search = searchInput ? String(searchInput.value || '') : '';
+        if (!base || !countryCode) {
+            return Promise.resolve();
+        }
+        try {
+            var next = new URL(base, window.location.href);
+            next.searchParams.set('country_code', countryCode);
+            if (search) {
+                next.searchParams.set('search', search);
+            } else {
+                next.searchParams.delete('search');
+            }
+            next.searchParams.delete('page');
+            return loadLocalesPanel(next.toString(), { silent: true, countryCode: countryCode });
+        } catch (e) {
+            return Promise.resolve();
+        }
+    }
+
+    function bindLocalesPanel(scope) {
+        var root = scope || document;
+        if (root.__i18nLocalesPanelBound) {
+            return;
+        }
+        root.__i18nLocalesPanelBound = 1;
+
+        root.addEventListener('click', function (event) {
+            var openBtn = event.target && event.target.closest
+                ? event.target.closest('[data-locales-panel-open]')
+                : null;
+            if (openBtn && root.contains(openBtn)) {
+                event.preventDefault();
+                var url = openBtn.getAttribute('data-locales-panel-url') || '';
+                if (!url) {
+                    return;
+                }
+                openLocalesDialog();
+                loadLocalesPanel(url, {
+                    countryCode: openBtn.getAttribute('data-country-code') || '',
+                    countryName: openBtn.getAttribute('data-country-name') || ''
+                }).catch(function (error) {
+                    toast('error', error && error.message ? error.message : '区域加载失败');
+                });
+                return;
+            }
+
+            var resetBtn = event.target && event.target.closest
+                ? event.target.closest('[data-locales-panel-reset]')
+                : null;
+            if (resetBtn) {
+                var panel = resetBtn.closest('[data-locales-panel-root]');
+                if (!panel) {
+                    return;
+                }
+                event.preventDefault();
+                var searchField = panel.querySelector('input[name="search"]');
+                if (searchField) {
+                    searchField.value = '';
+                }
+                reloadLocalesPanel(panel);
+                return;
+            }
+
+            var pageLink = event.target && event.target.closest
+                ? event.target.closest('[data-locales-panel-pagination] a')
+                : null;
+            if (pageLink && pageLink.href) {
+                event.preventDefault();
+                loadLocalesPanel(pageLink.href, { silent: true }).catch(function (error) {
+                    toast('error', error && error.message ? error.message : '分页加载失败');
+                });
+            }
+        });
+
+        root.addEventListener('submit', function (event) {
+            var form = event.target;
+            if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-locales-panel-search')) {
+                return;
+            }
+            event.preventDefault();
+            var panel = form.closest('[data-locales-panel-root]');
+            if (!panel) {
+                return;
+            }
+            try {
+                var next = new URL(form.getAttribute('action') || panel.getAttribute('data-panel-base') || '', window.location.href);
+                var fd = new FormData(form);
+                fd.forEach(function (value, key) {
+                    if (value === '' || value == null) {
+                        next.searchParams.delete(key);
+                    } else {
+                        next.searchParams.set(key, String(value));
+                    }
+                });
+                loadLocalesPanel(next.toString(), {
+                    silent: true,
+                    countryCode: panel.getAttribute('data-country-code') || ''
+                }).catch(function (error) {
+                    toast('error', error && error.message ? error.message : '搜索失败');
+                });
+            } catch (e) {
+                toast('error', '搜索失败');
+            }
+        }, true);
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     window.I18nAdminUI = {
         version: I18N_ADMIN_UI_VERSION,
         confirm: confirmAction,
@@ -2650,6 +2926,9 @@
         bindSelectAll: bindSelectAll,
         bindAiExportDialog: bindAiExportDialog,
         bindAiModuleWorkspace: bindAiModuleWorkspace,
+        bindLocalesPanel: bindLocalesPanel,
+        reloadLocalesPanel: reloadLocalesPanel,
+        loadLocalesPanel: loadLocalesPanel,
         requestForm: requestAsyncForm,
         requestBinAction: requestBinAction,
         markActionComplete: markAsyncActionComplete
@@ -2661,5 +2940,6 @@
     bindConfirmLinks(document);
     bindAiExportDialog(document);
     bindAiModuleWorkspace(document);
+    bindLocalesPanel(document);
 })(window, document);
 // 1788008815

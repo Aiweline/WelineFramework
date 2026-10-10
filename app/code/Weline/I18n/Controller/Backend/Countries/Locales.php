@@ -116,10 +116,36 @@ class Locales extends BaseController
         // 空列表不回落读种子包、不 Message 刷屏；缺库存由安装动作走 w_msg（dedupe）报运营。
         $this->assign('locales', $locales_result->getItems());
         $this->assign('pagination', $locales_result->getPagination());
+
+        // 国家列表「区域」弹窗：返回 HTML 片段 JSON，不跳整页。
+        if ($this->wantsLocalesPanel()) {
+            $html = (string)$this->template('Weline_I18n::templates/Backend/Countries/Locales/panel.phtml');
+
+            return $this->fetchJson([
+                'success' => true,
+                'html' => $html,
+                'country_code' => (string)$this->request->getParam('country_code', ''),
+                'search' => (string)$this->request->getParam('search', ''),
+            ]);
+        }
+
         // The view intentionally uses getIndex.phtml to distinguish the
         // locale listing from the country listing. The implicit action view
         // resolver looks for index.phtml, so select the template explicitly.
         return $this->fetch('getIndex');
+    }
+
+    private function wantsLocalesPanel(): bool
+    {
+        if (trim((string)$this->request->getGet('panel', '')) === '1') {
+            return true;
+        }
+        $header = $this->request->getHeader('X-Weline-Locales-Panel');
+        if (is_array($header)) {
+            $header = (string)($header[0] ?? '');
+        }
+
+        return trim((string)$header) === '1';
     }
 
 

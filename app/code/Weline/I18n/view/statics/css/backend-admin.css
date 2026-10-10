@@ -487,3 +487,21 @@ body .weline-language-select-dropdown[id^="dictionary_"] {
     background: var(--i18n-primary-soft, rgba(96, 165, 250, 0.22));
 }
 
+/* 国家列表 → 区域管理异步弹窗 */
+.i18n-locales-panel-dialog .i18n-locales-panel-dialog__surface {
+    width: min(56rem, calc(100vw - 2 * var(--weline-space-4, 1rem)));
+    max-width: min(56rem, calc(100vw - 2 * var(--weline-space-4, 1rem)));
+    max-height: min(90vh, 48rem);
+}
+
+.i18n-locales-panel-dialog .i18n-locales-panel-dialog__body {
+    max-height: min(70vh, 36rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.i18n-locales-panel__search .w-field {
+    min-width: 12rem;
+    flex: 1 1 14rem;
+}
+
