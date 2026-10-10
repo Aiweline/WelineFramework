@@ -79,4 +79,26 @@ interface OrderFacadeInterface
      * @throws OrderFacadeConflictException
      */
     public function reviseTobHangPayable(string $orderUuid, array $revision): array;
+
+    /**
+     * Append an admin_adjustment discount line and recompute money totals.
+     * Preserves non-admin discount_lines (e.g. payment_method_incentive).
+     *
+     * @param array{
+     *   label: string,
+     *   discount_amount_minor: int,
+     *   note?: string,
+     *   admin_user_id?: int
+     * } $line
+     * @return array{
+     *   money: array<string,mixed>,
+     *   type_payload: array<string,mixed>,
+     *   line: array<string,mixed>,
+     *   grand_total_minor: int,
+     *   discount_amount_minor: int
+     * }
+     *
+     * @throws OrderFacadeConflictException
+     */
+    public function appendAdminAdjustmentLine(string $orderUuid, array $line): array;
 }

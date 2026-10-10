@@ -6,6 +6,7 @@ namespace Weline\Marketing\Extends\Module\Weline_Ops\Lane;
 
 use Weline\Framework\Http\Url;
 use Weline\Ops\Api\OpsLaneContributionInterface;
+use Weline\Ops\Service\OpsLaneDeepLink;
 
 final class GrowthLane implements OpsLaneContributionInterface
 {
@@ -37,10 +38,30 @@ final class GrowthLane implements OpsLaneContributionInterface
     public function getActions(int $websiteId): array
     {
         return [
-            ['code' => 'winback', 'label' => (string)__('挽回活动'), 'url' => $this->url->getBackendUrl('marketing/backend/winback/index'), 'connected' => null],
-            ['code' => 'winback_dashboard', 'label' => (string)__('挽回看板'), 'url' => $this->url->getBackendUrl('marketing/backend/winbackdashboard/index'), 'connected' => null],
-            ['code' => 'lifecycle', 'label' => (string)__('生命周期'), 'url' => $this->url->getBackendUrl('marketing/backend/lifecycle/index'), 'connected' => null],
-            ['code' => 'segment', 'label' => (string)__('营销分群'), 'url' => $this->url->getBackendUrl('marketing/backend/segment/index'), 'connected' => null],
+            [
+                'code' => 'winback',
+                'label' => (string)__('挽回活动'),
+                'url' => OpsLaneDeepLink::backend($this->url, 'marketing/backend/winback/index', $websiteId),
+                'connected' => null,
+            ],
+            [
+                'code' => 'winback_dashboard',
+                'label' => (string)__('挽回看板'),
+                'url' => OpsLaneDeepLink::backend($this->url, 'marketing/backend/winbackdashboard/index', $websiteId),
+                'connected' => null,
+            ],
+            [
+                'code' => 'lifecycle',
+                'label' => (string)__('生命周期'),
+                'url' => OpsLaneDeepLink::backend($this->url, 'marketing/backend/lifecycle/index', $websiteId),
+                'connected' => null,
+            ],
+            [
+                'code' => 'segment',
+                'label' => (string)__('营销分群'),
+                'url' => OpsLaneDeepLink::backend($this->url, 'marketing/backend/segment/index', $websiteId),
+                'connected' => null,
+            ],
         ];
     }
 

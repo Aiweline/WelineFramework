@@ -21,6 +21,8 @@ final class SearchStorefrontCacheCoordinator
     /**
      * Shared query result bag (channel × lang × currency × area).
      * Cross-scope cold-chaos: projection sticks but type=all fan-out re-ran every hit (~0.5s action floor).
+     * Tip priming: SearchQueryResultTipCacheWarmer seeds a bounded tip set after Clear —
+     * never the full q space. Sticky hit2 alone is not an acceptance pass for cold hit1.
      */
     public static function queryResultPolicy(): CachePolicy
     {

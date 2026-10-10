@@ -6,6 +6,7 @@ namespace Weline\Seo\Extends\Module\Weline_Ops\Lane;
 
 use Weline\Framework\Http\Url;
 use Weline\Ops\Api\OpsLaneContributionInterface;
+use Weline\Ops\Service\OpsLaneDeepLink;
 
 final class SeoLane implements OpsLaneContributionInterface
 {
@@ -40,7 +41,7 @@ final class SeoLane implements OpsLaneContributionInterface
             [
                 'code' => 'seo_accounts',
                 'label' => (string)__('SEO 账户'),
-                'url' => $this->url->getBackendUrl('seo/backend/account/index'),
+                'url' => OpsLaneDeepLink::backend($this->url, 'seo/backend/account/index', $websiteId),
                 'connected' => null,
             ],
         ];

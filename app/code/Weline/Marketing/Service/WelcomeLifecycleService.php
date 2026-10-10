@@ -43,7 +43,7 @@ final class WelcomeLifecycleService
             $campaignId = (int)$row->getId();
             $websiteId = (int)$row->getData(LifecycleCampaign::schema_fields_WEBSITE_ID);
             $custWebsite = (int)($customer['website_id'] ?? 0);
-            if ($websiteId > 0 && $custWebsite > 0 && $websiteId !== $custWebsite) {
+            if ($websiteId >= 0 && $websiteId !== max(0, $custWebsite)) {
                 continue;
             }
             if ($this->alreadySent($campaignId, $customerId)) {

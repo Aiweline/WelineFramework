@@ -33,11 +33,12 @@ class Promotion extends BackendController
     public function index(): string
     {
         $scope = $this->scopeResolver->resolve();
+        $websiteParamPresent = $this->request->hasGet('website_id');
         $websiteId = (int)$this->request->getGet('website_id', $scope['website_id'] ?? 0);
         $storeCode = trim((string)$this->request->getGet('store_code', $scope['store_code'] ?? ''));
         $channelCode = trim((string)$this->request->getGet('channel_code', $scope['channel_code'] ?? ''));
 
-        $view = $this->deskService->buildDeskView($websiteId, $storeCode, $channelCode);
+        $view = $this->deskService->buildDeskView($websiteId, $storeCode, $channelCode, $websiteParamPresent);
         foreach ($view as $key => $value) {
             $this->assign($key, $value);
         }

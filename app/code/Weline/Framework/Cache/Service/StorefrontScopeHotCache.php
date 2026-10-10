@@ -683,6 +683,30 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     }
 
     /**
+     * Drop process L1 for Policy-keyed entries. {@see purgeProcessCacheForLogicalKey}
+     * only matches substring of the logical key, but rememberPolicy stores
+     * `pool|policy:resource:sha256…` which does NOT embed the logical key —
+     * warmers' verify peek then false-HIT from L1 while durable L2 is empty.
+     */
+    public function purgeProcessCacheForPolicy(CachePolicy|string $policy, string $logicalKey): void
+    {
+        $policy = $this->resolvePolicy($policy);
+        foreach ($this->policyKeyVariants($policy, $logicalKey) as $scopedKey) {
+            if ($scopedKey === '') {
+                continue;
+            }
+            self::dropProcessEntry($policy->pool . '|' . $scopedKey);
+            $hash = \hash('sha256', $scopedKey);
+            foreach (\array_keys(self::$refreshQueued) as $queuedKey) {
+                if (\str_contains($queuedKey, $hash) || \str_contains($queuedKey, $scopedKey)) {
+                    unset(self::$refreshQueued[$queuedKey]);
+                }
+            }
+        }
+        $this->purgeProcessCacheForLogicalKey($logicalKey);
+    }
+
+    /**
      * @param array{website?:bool,lang?:bool,currency?:bool,include_area?:bool} $dimensionFlags
      */
     public function forget(string $poolIdentity, string $logicalKey, array $dimensionFlags = ['website' => true]): void

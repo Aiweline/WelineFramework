@@ -78,8 +78,8 @@ final class LifecycleWelcomeService
             if ($campaignId <= 0) {
                 continue;
             }
-            $campWebsite = (int)($campaign['website_id'] ?? 0);
-            if ($campWebsite > 0 && $websiteId > 0 && $campWebsite !== $websiteId) {
+            $campWebsite = (int)($campaign['website_id'] ?? -1);
+            if ($campWebsite >= 0 && $campWebsite !== max(0, $websiteId)) {
                 continue;
             }
             $stats['processed']++;

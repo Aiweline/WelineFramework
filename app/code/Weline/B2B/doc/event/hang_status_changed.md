@@ -25,6 +25,7 @@ $eventsManager->dispatch('Weline_B2B::hang_status_changed', [
     'order_ref' => (string) $hang->orderRef,
     'hang_id' => (string) $hang->hangId,
     'hang_status' => (string) $hang->hangStatus,
+    'previous_hang_status' => (string) $previousHangStatus,
     'type_payload' => $hang->typePayload(), // array
     'website_id' => (int) $hang->websiteId,
 ]);
@@ -36,6 +37,7 @@ $eventsManager->dispatch('Weline_B2B::hang_status_changed', [
 | `order_ref` | string | Order UUID |
 | `hang_id` | string | Hang 主键 |
 | `hang_status` | string | 当前 hang 状态 |
+| `previous_hang_status` | string | 变更前 hang 状态（创建可为空） |
 | `type_payload` | array | Hang 投影片段（deposit/balance/hang_status 等） |
 | `website_id` | int | 网站范围 |
 

@@ -17,9 +17,39 @@ $typeLabels = [
           <?= __('注册后欢迎信 ± 礼券；同客同活动仅发送一次。') ?>
         </p>
       </div>
-      <a class="w-button" data-tone="primary" data-size="sm" href="<?= $escape($this->getUrl('*/backend/lifecycle/add')) ?>" data-testid="marketing-lifecycle-create">
+      <?php
+        $createQuery = [];
+        $filterWebsiteId = $filter_website_id ?? $this->getData('filter_website_id');
+        if ($filterWebsiteId !== null && $filterWebsiteId !== '') {
+            $createQuery['website_id'] = (int)$filterWebsiteId;
+        }
+      ?>
+      <a class="w-button" data-tone="primary" data-size="sm" href="<?= $escape($this->getUrl('*/backend/lifecycle/add', $createQuery)) ?>" data-testid="marketing-lifecycle-create">
         <?= __('新建生命周期活动') ?>
       </a>
+    </div>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="marketing-lifecycle-website-filter">
+      <div class="w-card__body">
+        <form method="get" id="marketing-lifecycle-website-form" class="w-cluster" data-align="end" data-wrap="true" style="--w-gap:var(--weline-space-3);">
+          <div class="w-field" style="min-width:min(100%,18rem); flex:1 1 16rem;">
+            <label class="w-field__label" for="marketing-lifecycle-website"><?= __('站点范围') ?></label>
+            <w:websites:website:select
+              id="marketing-lifecycle-website"
+              name="website_id"
+              value="websiteSelectValue"
+              display="websiteSelectDisplay"
+              options="websiteSelectOptionsJson"
+              multiple="false"
+              allow-empty="true"
+              clearable="true"
+              empty-label="@lang(全部站点)"
+              placeholder="@lang(搜索站点名称或域名)"
+              auto-submit="true"
+              form="marketing-lifecycle-website-form"
+            />
+          </div>
+        </form>
+      </div>
     </div>
     <?php if ($load_error !== ''): ?>
       <div class="w-alert" data-tone="danger"><?= $escape($load_error) ?></div>
@@ -55,7 +85,7 @@ $typeLabels = [
               <td><?= $escape($typeLabels[$type] ?? $type) ?></td>
               <td><span class="w-badge" data-tone="<?= $status === 'enabled' ? 'success' : 'neutral' ?>"><?= $escape($status === 'enabled' ? __('已启用') : __('已停用')) ?></span></td>
               <td><?= $ruleId > 0 ? $ruleId : '—' ?></td>
-              <td><?= $websiteId > 0 ? $websiteId : __('全部') ?></td>
+              <td><?= $websiteId < 0 ? __('全部') : ('#' . $websiteId) ?></td>
               <td>
                 <a class="w-button" data-tone="neutral" data-size="sm" href="<?= $escape($this->getUrl('*/backend/lifecycle/edit', ['id' => $id])) ?>"><?= __('编辑') ?></a>
               </td>

@@ -76,10 +76,22 @@ $typeLabels = [
           <span class="w-field__label"><?= __('分群 ID（0=全部）') ?></span>
           <input class="w-input" type="number" min="0" name="segment_id" value="<?= $segmentId ?>" data-testid="marketing-winback-segment">
         </label>
-        <label class="w-field">
-          <span class="w-field__label"><?= __('网站 ID（0=全部）') ?></span>
-          <input class="w-input" type="number" min="0" name="website_id" value="<?= $websiteId ?>">
-        </label>
+        <div class="w-field" data-testid="marketing-winback-website">
+          <span class="w-field__label"><?= __('站点范围') ?></span>
+          <w:websites:website:select
+            id="marketing-winback-form-website"
+            name="website_id"
+            value="websiteSelectValue"
+            display="websiteSelectDisplay"
+            options="websiteSelectOptionsJson"
+            multiple="false"
+            allow-empty="true"
+            clearable="true"
+            empty-label="@lang(全部站点)"
+            placeholder="@lang(搜索站点名称或域名)"
+          />
+          <span class="w-field__help"><?= __('清空表示全部站点；选择具体站时含默认站 #0。') ?></span>
+        </div>
         <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
           <button class="w-button" type="submit" data-tone="primary" data-testid="marketing-winback-save"><?= __('保存') ?></button>
           <a class="w-button" data-tone="neutral" href="<?= $escape($this->getUrl('*/backend/winback/index')) ?>"><?= __('返回') ?></a>

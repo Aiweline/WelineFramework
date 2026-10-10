@@ -8,6 +8,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Coupon\Coupon;
 use Weline\Marketing\Model\Winback\WinbackCampaign;
 use Weline\Marketing\Model\Winback\WinbackSendLog;
+use Weline\Marketing\Service\MarketingWebsiteScope;
 
 /**
  * 挽回运营看板：按活动汇总 sent / skipped(reason) / 已发券 / 券核销（若可关联）。
@@ -17,11 +18,19 @@ final class WinbackDashboardAggregator
     /**
      * @return list<array<string,mixed>>
      */
-    public function summarize(?int $campaignId = null): array
+    public function summarize(?int $campaignId = null, ?int $filterWebsiteId = null): array
     {
         /** @var WinbackCampaign $campaignModel */
         $campaignModel = ObjectManager::getInstance(WinbackCampaign::class);
-        $campaignModel->clear()->order(WinbackCampaign::schema_fields_ID, 'DESC')->select()->fetch();
+        $campaignModel->clear();
+        if ($filterWebsiteId !== null) {
+            $campaignModel->where(
+                WinbackCampaign::schema_fields_WEBSITE_ID,
+                MarketingWebsiteScope::listMatchIds($filterWebsiteId),
+                'IN'
+            );
+        }
+        $campaignModel->order(WinbackCampaign::schema_fields_ID, 'DESC')->select()->fetch();
         $campaigns = $campaignModel->getItems();
         $out = [];
 

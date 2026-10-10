@@ -124,7 +124,8 @@ if BIN="$(find_binary)"; then
   else
     echo "service: started_by_installer_or_pending"
   fi
-  echo "Bootstrap admin (recovery): http://127.0.0.1:8080/admin — password in journalctl -u stalwart"
+  echo "Bootstrap admin: http://127.0.0.1:8080/login (user=admin; password: journalctl -u stalwart -b --no-pager | grep -iE 'password|admin|secret')"
+  echo "Do NOT expose :8080 to the public internet; use SSH tunnel if remote."
   exit 0
 fi
 

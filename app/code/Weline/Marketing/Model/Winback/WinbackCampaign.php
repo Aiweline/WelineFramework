@@ -45,7 +45,7 @@ class WinbackCampaign extends Model
     #[Col(type: 'int', nullable: false, default: 168, comment: '同一订单冷却小时')]
     public const schema_fields_COOLDOWN_HOURS = 'cooldown_hours';
 
-    #[Col(type: 'int', nullable: false, default: 0, comment: '网站ID，0=全部')]
+    #[Col(type: 'int', nullable: false, default: -1, comment: '网站ID，-1=全部，>=0=具体站（含默认站0）')]
     public const schema_fields_WEBSITE_ID = 'website_id';
 
     #[Col(type: 'int', nullable: false, default: 0, comment: '激励券规则ID，step≥2 时发券；0=不发')]

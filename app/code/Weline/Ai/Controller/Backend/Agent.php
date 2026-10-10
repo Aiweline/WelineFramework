@@ -9,6 +9,7 @@ use Weline\Ai\Service\AgentScanner;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\AdminWebsiteScope;
 
 #[Acl('Weline_Ai::ai_agent_list', 'AI 智能体治理', 'circle', 'AI 智能体目录与工具治理', 'Weline_Backend::ai_group')]
 class Agent extends BackendController
@@ -19,9 +20,17 @@ class Agent extends BackendController
         if ($this->request->getGet('embed') === '1') {
             $this->layoutType = 'default.blank';
         }
+        $opsWebsiteId = AdminWebsiteScope::resolveFilterIdFromGet($this->request);
+        $opsWebsiteSelect = AdminWebsiteScope::buildSelectView($opsWebsiteId);
         $this->assign('activeTab', 'agent');
         $this->assign('agents', $this->catalog()->listCatalog(true));
         $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+        $this->assign('ops_website_id', $opsWebsiteId);
+        $this->assign('ops_website_label', $opsWebsiteId === null
+            ? ''
+            : ((string)($opsWebsiteSelect['display'] ?? '') !== ''
+                ? (string)$opsWebsiteSelect['display']
+                : ('#' . $opsWebsiteId)));
 
         return $this->fetch();
     }

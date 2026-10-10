@@ -6,6 +6,7 @@ namespace Weline\Ops\Extends\Module\Weline_Ops\Lane;
 
 use Weline\Framework\Http\Url;
 use Weline\Ops\Api\OpsLaneContributionInterface;
+use Weline\Ops\Service\OpsLaneDeepLink;
 
 /**
  * Ops 内置内容车道（任务登记 + 说明；P1 不自动跑 content_ops）。
@@ -40,11 +41,14 @@ final class ContentLane implements OpsLaneContributionInterface
     public function getActions(int $websiteId): array
     {
         $actions = [];
-        if (class_exists(\Weline\Blog\Controller\Backend\Post::class)) {
+        if (
+            class_exists(\Weline\Blog\Controller\Backend\Post::class)
+            || class_exists(\Weline\Blog\Controller\Backend\PostAdmin::class)
+        ) {
             $actions[] = [
                 'code' => 'blog_posts',
                 'label' => (string)__('博客文章'),
-                'url' => $this->url->getBackendUrl('blog/backend/post/index'),
+                'url' => OpsLaneDeepLink::backend($this->url, 'blog/backend/post/index', $websiteId),
                 'connected' => null,
             ];
         }

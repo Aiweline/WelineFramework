@@ -315,6 +315,17 @@ final class OrderCutoverGuardTest extends TestCase
             {
                 return $revision;
             }
+
+            public function appendAdminAdjustmentLine(string $orderUuid, array $line): array
+            {
+                return [
+                    'money' => [],
+                    'type_payload' => [],
+                    'line' => $line,
+                    'grand_total_minor' => 0,
+                    'discount_amount_minor' => 0,
+                ];
+            }
         };
         $reader = new OrderCompatibilityReader($facade);
         $reader->seedLegacy('SAME-KEY', ['order_number' => 'SAME-KEY']);

@@ -57,7 +57,7 @@ class WebsiteAccount extends BackendController
         $websiteId = (int)$this->request->getGet('website_id', 0);
         $scope = trim((string)$this->request->getGet('scope', ''));
 
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             Message::error(__('站点ID无效'));
             return $this->fetchJson([
                 'success' => false,
@@ -111,7 +111,7 @@ class WebsiteAccount extends BackendController
         $accountIds = $this->request->getPost('account_ids', []);
         $configs = $this->request->getPost('configs', []);
 
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('站点ID无效'),

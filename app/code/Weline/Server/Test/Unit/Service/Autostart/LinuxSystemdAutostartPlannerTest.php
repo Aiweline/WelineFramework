@@ -35,6 +35,10 @@ final class LinuxSystemdAutostartPlannerTest extends TestCase
         self::assertStringContainsString('--dispatcher', $plan['script_body']);
         self::assertStringContainsString('--worker-memory-limit=512M', $plan['script_body']);
         self::assertStringContainsString('server:shared:start', $plan['script_body']);
+        self::assertStringContainsString('Must probe WLS', $plan['health_script_body']);
+        self::assertStringContainsString('has_wls_marker', $plan['health_script_body']);
+        self::assertStringContainsString('WORKER_PORT=9510', $plan['health_script_body']);
+        self::assertStringNotContainsString('probe "http://127.0.0.1/"', $plan['health_script_body']);
         self::assertTrue($planner->isInstallSatisfied(
             [
                 $plan['service_unit'] => $plan['service_body'],

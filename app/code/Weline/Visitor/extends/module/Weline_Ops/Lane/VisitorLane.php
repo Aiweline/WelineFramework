@@ -6,6 +6,7 @@ namespace Weline\Visitor\Extends\Module\Weline_Ops\Lane;
 
 use Weline\Framework\Http\Url;
 use Weline\Ops\Api\OpsLaneContributionInterface;
+use Weline\Ops\Service\OpsLaneDeepLink;
 
 final class VisitorLane implements OpsLaneContributionInterface
 {
@@ -40,7 +41,7 @@ final class VisitorLane implements OpsLaneContributionInterface
             [
                 'code' => 'visitor_dashboard',
                 'label' => (string)__('Visitor 分析'),
-                'url' => $this->url->getBackendUrl('visitor/backend/pixel-dashboard/index'),
+                'url' => OpsLaneDeepLink::visitorDashboard($this->url, $websiteId),
                 'connected' => null,
             ],
         ];

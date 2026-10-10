@@ -312,6 +312,37 @@ endif;
                                             </ul>
                                             <p><?= __('邮箱地址使用邮箱域，例如：') ?> <code>user@<?= $escape($configDomain) ?></code></p>
                                             <div class="w-alert" data-tone="warning"><?= __('无论使用哪个名称，TLS 证书都必须覆盖客户端实际连接的主机名。') ?></div>
+                                            <div class="w-alert" data-tone="info" style="--w-mt:var(--weline-space-3);" data-testid="mail-index-admin-login">
+                                                <div class="w-alert__title"><?= __('Stalwart Admin（:8080）登录账户与初始密码') ?></div>
+                                                <p class="w-text" data-size="sm" style="--w-m:0;">
+                                                    <?= __('官方安装后首次用本机浏览器打开管理台完成初始化；账户与密码不会出现在本页，须在服务器上按下列方式取回。') ?>
+                                                </p>
+                                                <ul class="w-text" data-size="sm" style="--w-m:0; --w-mt:var(--weline-space-2); padding-inline-start:1.25rem;">
+                                                    <li><?= __('地址（仅本机或 SSH 隧道）：') ?> <code>http://127.0.0.1:8080/login</code>（<?= __('或') ?> <code>/admin</code>）</li>
+                                                    <li><?= __('用户名：官方安装默认为') ?> <code>admin</code></li>
+                                                    <li>
+                                                        <?= __('初始密码：安装时一次性写入 systemd 日志，在服务器执行：') ?>
+                                                        <code>journalctl -u stalwart -b --no-pager | grep -iE 'password|admin|secret'</code>
+                                                    </li>
+                                                    <li><?= __('登录后请立即修改管理员密码；忘记密码只能查当时日志或按 Stalwart 文档重置 recovery。') ?></li>
+                                                    <li><?= __('禁止把 :8080 裸暴露到公网；需要远程时用 SSH 本地转发，例如：') ?> <code>ssh -L 8080:127.0.0.1:8080 user@服务器</code></li>
+                                                </ul>
+                                            </div>
+                                            <div class="w-alert" data-tone="warning" style="--w-mt:var(--weline-space-3);" data-testid="mail-index-firewall-ports">
+                                                <div class="w-alert__title"><?= __('云安全组 / 防火墙：先放行这些端口（必需）') ?></div>
+                                                <p class="w-text" data-size="sm" style="--w-m:0;">
+                                                    <?= __('引擎装好后还不能公网收发：请到 VPS / 云厂商控制台，为邮局服务器公网 IP 配置入站放行。未放行时 DNS 配齐也会收不到信、客户端连不上。') ?>
+                                                </p>
+                                                <ul class="w-text" data-size="sm" style="--w-m:0; --w-mt:var(--weline-space-2); padding-inline-start:1.25rem;">
+                                                    <li><code>25/tcp</code> <?= __('入站') ?> — <?= __('服务器间接收入站邮件（MTA）') ?>；<?= __('部分云默认封禁 25，须在控制台单独申请解封后再放行。') ?></li>
+                                                    <li><code>587/tcp</code> <?= __('入站') ?> — <?= __('客户端提交发信（推荐）') ?>（STARTTLS）</li>
+                                                    <li><code>465/tcp</code> <?= __('入站') ?> — <?= __('客户端提交发信（可选）') ?>（<?= __('隐式 TLS') ?>）</li>
+                                                    <li><code>993/tcp</code> <?= __('入站') ?> — <?= __('客户端收信（IMAPS）') ?></li>
+                                                    <li><code>995/tcp</code> <?= __('入站') ?> — <?= __('客户端收信（POP3S，可选）') ?></li>
+                                                    <li><?= __('禁止把 Stalwart 管理口 8080 裸暴露到公网；账户密码见上方「Stalwart Admin（:8080）登录」提醒。') ?></li>
+                                                    <li><?= __('本机防火墙（ufw/firewalld/iptables）若开启，须与云安全组同步放行同一批端口。') ?></li>
+                                                </ul>
+                                            </div>
                                             <div class="w-table-wrap" style="--w-mt:var(--weline-space-4);">
                                                 <table class="w-table">
                                                     <thead>

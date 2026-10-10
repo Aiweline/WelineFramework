@@ -25,13 +25,18 @@ class WidgetAssetArtifactPublisher
     }
 
     /**
-     * Cold Worker latch: one shared MGET for all module_source asset keys before canMerge/publish.
+     * Cold Worker latch: MGET then prime misses into durable L2 before canMerge/publish.
+     *
+     * Prefetch alone is MGET-only — empty bags still pay N× rememberPolicy builders
+     * interleaved in transform (locale-switch tip ~2s). Miss priming writes once up front.
      *
      * @param list<array<string, mixed>> $assets
+     * @return int number of sources primed via rememberPolicy (0 on fail-open)
      */
-    public function prefetchSources(array $assets): void
+    public function prefetchSources(array $assets): int
     {
-        $keys = [];
+        /** @var array<string, array{path:string,type:string,tag:string,module_source:string}> $byKey */
+        $byKey = [];
         foreach ($assets as $asset) {
             if (!\is_array($asset)) {
                 continue;
@@ -40,20 +45,141 @@ class WidgetAssetArtifactPublisher
             if ($path === null) {
                 continue;
             }
-            $keys[] = 'widget-source-v3|' . $path . '|' . filemtime($path) . '|' . filesize($path);
+            $moduleSource = \trim((string)($asset['module_source'] ?? ''));
+            if ($moduleSource === '') {
+                $moduleSource = $this->moduleSourceFromAbsolutePath($path) ?? '';
+            }
+            $key = $this->sourceLogicalKey($path, $moduleSource);
+            if ($key === null || isset($byKey[$key])) {
+                continue;
+            }
+            $type = $asset['type'] ?? (str_starts_with(strtolower((string)($asset['tag'] ?? '')), '<link') ? 'css' : 'js');
+            $byKey[$key] = [
+                'path' => $path,
+                'type' => (string)$type,
+                'tag' => (string)($asset['tag'] ?? ''),
+                'module_source' => $moduleSource,
+            ];
         }
-        $keys = array_values(array_unique($keys));
-        if ($keys === []) {
-            return;
+        if ($byKey === []) {
+            return 0;
         }
+        $keys = array_keys($byKey);
+        $hot = null;
         try {
-            ObjectManager::getInstance(StorefrontScopeHotCache::class)->prefetchPolicy(
-                $this->sourceCachePolicy(),
-                $keys,
-            );
+            $hot = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+            if ($hot instanceof StorefrontScopeHotCache) {
+                $hot->prefetchPolicy($this->sourceCachePolicy(), $keys);
+            }
         } catch (\Throwable) {
-            // Fail-open: per-asset rememberPolicy still works.
+            $hot = null;
         }
+        if (!$hot instanceof StorefrontScopeHotCache) {
+            return 0;
+        }
+
+        $primed = 0;
+        foreach ($byKey as $key => $meta) {
+            try {
+                $synthetic = [
+                    'module_source' => $meta['module_source'] !== ''
+                        ? $meta['module_source']
+                        : ($this->moduleSourceFromAbsolutePath($meta['path']) ?? ''),
+                    'tag' => $meta['tag'] !== ''
+                        ? $meta['tag']
+                        : ($meta['type'] === 'css'
+                            ? '<link rel="stylesheet" href="#">'
+                            : '<script src="#" defer></script>'),
+                    'type' => $meta['type'],
+                ];
+                if ($synthetic['module_source'] === '') {
+                    $path = $meta['path'];
+                    $type = $meta['type'];
+                    $hot->rememberPolicy(
+                        $this->sourceCachePolicy(),
+                        $key,
+                        static function () use ($path, $type): ?array {
+                            return self::buildSourcePayload($path, $type);
+                        },
+                    );
+                    ++$primed;
+                    continue;
+                }
+                if ($this->source($synthetic) !== null) {
+                    ++$primed;
+                }
+            } catch (\Throwable) {
+                // Fail-open: remaining sources still resolve per-asset.
+            }
+        }
+
+        return $primed;
+    }
+
+    /**
+     * Stable HotCache logical key (v4): prefer Module::relative over absolute path
+     * so CLI warmer and WLS workers share L2 across process roots / BP spellings.
+     */
+    private function sourceLogicalKey(string $absolutePath, string $moduleSource = ''): ?string
+    {
+        if (!\is_file($absolutePath)) {
+            return null;
+        }
+        $mtime = filemtime($absolutePath);
+        $size = filesize($absolutePath);
+        if ($mtime === false || $size === false) {
+            return null;
+        }
+        $id = \trim($moduleSource);
+        if ($id === '') {
+            $id = $this->moduleSourceFromAbsolutePath($absolutePath) ?? $absolutePath;
+        }
+
+        return 'widget-source-v4|' . $id . '|' . $mtime . '|' . $size;
+    }
+
+    /** @return array{content:string,hash:string,relocatable:bool,mergeable:bool}|null */
+    private static function buildSourcePayload(string $path, string $type): ?array
+    {
+        $content = file_get_contents($path);
+        if (!is_string($content)) {
+            return null;
+        }
+        $relocatable = $type === 'css'
+            ? !preg_match('/@(?:import|namespace)\b/i', $content)
+            : !preg_match('/\b(?:import\s*(?:\(|\.|[\w{*])|export\s|document\s*\.\s*currentScript\b)/', $content);
+        $leading = preg_replace('~\A(?:\s+|/\*.*?\*/|//[^\n]*\n)+~s', '', $content) ?? $content;
+        $mergeable = $type !== 'js' || self::isIsolatedJavaScript($leading);
+
+        return [
+            'content' => $content,
+            'hash' => hash('sha256', $content),
+            'relocatable' => $relocatable,
+            'mergeable' => $mergeable,
+        ];
+    }
+
+    /** Reverse absolute statics path to Module::relative when possible. */
+    private function moduleSourceFromAbsolutePath(string $path): ?string
+    {
+        $path = str_replace('\\', '/', $path);
+        foreach (Env::getInstance()->getModuleList() as $name => $module) {
+            if (!\is_array($module)) {
+                continue;
+            }
+            $base = rtrim(str_replace('\\', '/', (string)($module['base_path'] ?? '')), '/');
+            if ($base === '' || !str_starts_with($path, $base . '/view/statics/')) {
+                continue;
+            }
+            $relative = substr($path, strlen($base . '/view/statics/'));
+            if ($relative === '' || str_contains($relative, '..')) {
+                return null;
+            }
+
+            return $name . '::' . $relative;
+        }
+
+        return null;
     }
 
     /**
@@ -187,20 +313,13 @@ class WidgetAssetArtifactPublisher
             return null;
         }
         // Source metadata is cheap on warm requests; content/minification is behind the framework hot cache.
-        $key = 'widget-source-v3|' . $path . '|' . filemtime($path) . '|' . filesize($path);
+        $moduleSource = \trim((string)($asset['module_source'] ?? ''));
+        $key = $this->sourceLogicalKey($path, $moduleSource);
+        if ($key === null) {
+            return null;
+        }
         $builder = static function () use ($path, $type): ?array {
-            $content = file_get_contents($path);
-            if (!is_string($content)) {
-                return null;
-            }
-            $relocatable = $type === 'css'
-                ? !preg_match('/@(?:import|namespace)\b/i', $content)
-                : !preg_match('/\b(?:import\s*(?:\(|\.|[\w{*])|export\s|document\s*\.\s*currentScript\b)/', $content);
-            // A script-level strict directive must not change the mode of a neighbouring file.
-            $leading = preg_replace('~\A(?:\s+|/\*.*?\*/|//[^\n]*\n)+~s', '', $content) ?? $content;
-            $mergeable = $type !== 'js' || self::isIsolatedJavaScript($leading);
-
-            return ['content' => $content, 'hash' => hash('sha256', $content), 'relocatable' => $relocatable, 'mergeable' => $mergeable];
+            return self::buildSourcePayload($path, $type);
         };
 
         return ObjectManager::getInstance(StorefrontScopeHotCache::class)->rememberPolicy(

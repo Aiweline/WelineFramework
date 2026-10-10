@@ -74,7 +74,16 @@ final class OpsDeskService
                 ['website_id' => $websiteId, 'sse' => 1]
             ),
             'persona_sse_steps_json' => \json_encode(
-                OpsPersonaService::progressSteps(),
+                array_map(
+                    static function (array $step): array {
+                        return [
+                            'key' => (string)($step['key'] ?? ''),
+                            'label' => (string)__((string)($step['label'] ?? '')),
+                            'icon' => (string)($step['icon'] ?? 'check'),
+                        ];
+                    },
+                    OpsPersonaService::progressSteps()
+                ),
                 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
             ) ?: '[]',
             'memory_note' => (string)__('画像与任务写入 Ops 结构化表；提交配置会生成会话并异步派发「分析+博客/社媒」任务，外发须审批。'),

@@ -105,7 +105,7 @@ final class WinbackUnpaidOrderRunner
                 'lookback_hours' => $lookbackHours,
                 'limit' => 200,
             ];
-            if ($websiteId > 0) {
+            if ($websiteId >= 0) {
                 $params['website_id'] = $websiteId;
             }
 

@@ -53,11 +53,15 @@ final class QueueSnapshotControllerTest extends TestCase
         self::assertStringNotContainsString("'*/backend/queue'", $source);
 
         $statsSource = $this->readStatsPartialSource();
-        self::assertSame(6, \substr_count($statsSource, "@backend-url('queue/backend/queue')"));
+        // 状态卡片在 foreach 内共用一条 @backend-url，运行时拼 6 个 status 链接
+        self::assertSame(1, \substr_count($statsSource, "@backend-url('queue/backend/queue')"));
+        self::assertStringContainsString("foreach (\$queueStatItems as \$item)", $statsSource);
         self::assertStringNotContainsString("@backend-url('*/backend/queue')", $statsSource);
 
         $listingSource = $this->readListingPartialSource();
-        self::assertStringContainsString('<?php if (empty($queues)): ?>', $listingSource);
+        self::assertStringContainsString('if ($queueItems === [])', $listingSource);
+        self::assertStringContainsString('w-queue-table--compact', $listingSource);
+        self::assertStringContainsString('<lang>状态与结果</lang>', $listingSource);
         self::assertStringNotContainsString('<empty name="queues">', $listingSource);
     }
 

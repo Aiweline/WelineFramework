@@ -79,6 +79,171 @@ class Partials extends Block
     }
 
     /**
+     * After a warm render under the same RequestContext identity, drop process L1
+     * and peek durable shared L2 for the storefront chrome/head bag.
+     *
+     * @return array{hit:bool,logical_key:string,resource:string}
+     */
+    public function verifyStorefrontSharedDurableL2(
+        string $area,
+        string $type,
+        array $data = [],
+        string $defaultOption = 'default',
+    ): array {
+        $miss = ['hit' => false, 'logical_key' => '', 'resource' => ''];
+        try {
+            $resolved = $this->resolveStorefrontSharedLogicalKeyAndPolicy(
+                $area,
+                $type,
+                $data,
+                $defaultOption,
+            );
+            if ($resolved === null) {
+                return $miss;
+            }
+            /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache */
+            $hotCache = ObjectManager::getInstance(
+                \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
+            );
+            // Must purge Policy-keyed L1 (pool|policy:resource:hash). Logical-key
+            // substring purge misses those entries → warmer gate_ok false-positive.
+            $hotCache->purgeProcessCacheForPolicy($resolved['policy'], $resolved['logical_key']);
+            $peeked = $hotCache->peekPolicy($resolved['policy'], $resolved['logical_key']);
+            $hit = \is_string($peeked) && !$this->isEmptyPartialHtml($peeked);
+
+            return [
+                'hit' => $hit,
+                'logical_key' => $resolved['logical_key'],
+                'resource' => $resolved['resource'],
+            ];
+        } catch (\Throwable) {
+            return $miss;
+        }
+    }
+
+    /**
+     * Peek route-invariant head assets bags after a composed head warm.
+     *
+     * @return array{hit:bool,logical_keys:list<string>}
+     */
+    public function verifyStorefrontHeadAssetsDurableL2(array $data = []): array
+    {
+        $empty = ['hit' => false, 'logical_keys' => []];
+        try {
+            $area = 'frontend';
+            $prefixPath = $this->resolveForcedPartialsOption($area, 'head', 'assets-prefix');
+            $suffixPath = $this->resolveForcedPartialsOption($area, 'head', 'assets-suffix');
+            if ($prefixPath === null || $suffixPath === null) {
+                return $empty;
+            }
+            $template = Template::getInstance();
+            $dictionary = \array_merge([
+                'theme' => $template->getData('theme') ?? [],
+                'colors' => $template->getData('colors') ?? [],
+                'meta' => $template->getData('meta') ?? [],
+            ], $data);
+            $assetsKey = $this->resolveStorefrontHeadAssetsCacheKey(
+                $area,
+                $dictionary,
+                $prefixPath,
+                $suffixPath,
+            );
+            $keys = [
+                'theme.head.assets.prefix.' . $assetsKey,
+                'theme.head.assets.suffix.' . $assetsKey,
+            ];
+            /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache */
+            $hotCache = ObjectManager::getInstance(
+                \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
+            );
+            $policy = StorefrontThemeCacheCoordinator::storefrontHeadAssetsPolicy(90, 600);
+            $hits = 0;
+            foreach ($keys as $logicalKey) {
+                $hotCache->purgeProcessCacheForLogicalKey($logicalKey);
+                $peeked = $hotCache->peekPolicy($policy, $logicalKey);
+                if (\is_string($peeked) && !$this->isEmptyPartialHtml($peeked)) {
+                    ++$hits;
+                }
+            }
+
+            return [
+                'hit' => $hits === \count($keys),
+                'logical_keys' => $keys,
+            ];
+        } catch (\Throwable) {
+            return $empty;
+        }
+    }
+
+    /**
+     * @return array{logical_key:string,policy:\Weline\Framework\Cache\CachePolicy,resource:string}|null
+     */
+    private function resolveStorefrontSharedLogicalKeyAndPolicy(
+        string $area,
+        string $type,
+        array $data,
+        string $defaultOption,
+    ): ?array {
+        $path = $this->getPartialsPath($area, $type, $defaultOption);
+        if (!\is_string($path) || $path === '') {
+            return null;
+        }
+        $template = Template::getInstance();
+        $dictionary = \array_merge([
+            'theme' => $template->getData('theme') ?? [],
+            'colors' => $template->getData('colors') ?? [],
+            'meta' => $template->getData('meta') ?? [],
+        ], $data);
+        $policyMeta = $this->resolveChromeCachePolicy(
+            $path,
+            \is_array($dictionary['meta'] ?? null) ? (array)$dictionary['meta'] : [],
+            $type,
+        );
+        if ($policyMeta === null) {
+            return null;
+        }
+        $cacheContext = $this->resolvePartialOutputCacheContext(
+            $area,
+            $type,
+            $defaultOption,
+            $dictionary,
+            $policyMeta,
+        );
+        if ($cacheContext === null) {
+            return null;
+        }
+        $snapshot = ThemeLayoutSourceSnapshot::current();
+        $captured = $snapshot?->source($path);
+        $sourceFile = $captured === null ? $this->resolveModulePath($path) : null;
+        if ((!is_string($sourceFile) || $sourceFile === '' || !is_file($sourceFile)) && is_file($path)) {
+            $sourceFile = $path;
+        }
+        $sourceStat = $captured === null && is_string($sourceFile) ? @stat($sourceFile) : false;
+        $sourceFingerprint = $this->resolveStorefrontChromeSourceFingerprint(
+            $type,
+            $path,
+            $snapshot,
+            $captured,
+            $sourceStat,
+        );
+        $cacheKey = \sha1($path . '|' . $sourceFingerprint . '|' . $cacheContext);
+        $typeLc = \strtolower(\trim($type));
+        $logicalPrefix = $typeLc === 'head' ? 'theme.head.' : 'theme.chrome.';
+        $logicalKey = $logicalPrefix . $typeLc . '.' . $cacheKey;
+        $ttl = \max(60, (int)$policyMeta['ttl']);
+        $stale = $this->partialOutputStaleTtl();
+        $sharedPolicy = $typeLc === 'head'
+            ? StorefrontThemeCacheCoordinator::storefrontHeadPolicy($ttl, $stale)
+            : StorefrontThemeCacheCoordinator::storefrontChromePolicy($ttl, $stale);
+
+        return [
+            'logical_key' => $logicalKey,
+            'policy' => $sharedPolicy,
+            'resource' => $typeLc === 'head' ? 'theme.storefront_head' : 'theme.storefront_chrome',
+        ];
+    }
+
+    /**
      * Drop request-memoized backend chrome auth context so a bumped inbox
      * revision (backend_notification_inbox_rev) can participate in partial
      * cache keys on the same response after mark-as-read.
@@ -218,9 +383,13 @@ class Partials extends Block
             $sourceFile = $fileName;
         }
         $sourceStat = $captured === null && is_string($sourceFile) ? @stat($sourceFile) : false;
-        $sourceFingerprint = $captured !== null ? $snapshot->fingerprint() : (is_array($sourceStat)
-            ? (int)$sourceStat['mtime'] . '|' . (int)$sourceStat['size']
-            : '0|0');
+        $sourceFingerprint = $this->resolveStorefrontChromeSourceFingerprint(
+            $type,
+            $fileName,
+            $snapshot,
+            $captured,
+            $sourceStat,
+        );
         $cacheKey = \sha1($fileName . '|' . $sourceFingerprint . '|' . $cacheContext);
 
         $cached = $this->readPartialOutputCache($cacheKey);
@@ -320,19 +489,22 @@ class Partials extends Block
     }
 
     /**
-     * Header/footer shared bag stores lang-only shell HTML: currency-switcher islands
-     * are stripped so the bag can be reused across currencies.
+     * Header/footer shared bag stores lang-only shell HTML: currency-switcher and
+     * header-search facade islands are stripped so the bag can be reused across
+     * currencies and search tip keys (q/type/category).
      *
      * @param array<string, mixed> $dictionary
      */
     private function renderStorefrontChromeShellForSharedBag(string $fileName, array $dictionary): string
     {
-        return $this->stripChromeCurrencyIslands(
-            $this->renderCompiledPartial($fileName, $dictionary),
+        return $this->stripChromeSearchFacadeIslands(
+            $this->stripChromeCurrencyIslands(
+                $this->renderCompiledPartial($fileName, $dictionary),
+            ),
         );
     }
 
-    /** Serve path: fill currency-switcher islands with the active request currency. */
+    /** Serve path: fill currency + search-facade islands from the active request. */
     private function finalizeStorefrontChromeHtml(string $type, string $html): string
     {
         $typeLc = \strtolower(\trim($type));
@@ -340,7 +512,12 @@ class Partials extends Block
             return $html;
         }
 
-        return $this->hydrateChromeCurrencyIslands($html);
+        $html = $this->hydrateChromeCurrencyIslands($html);
+        if ($typeLc === 'header') {
+            $html = $this->hydrateChromeSearchFacadeIslands($html);
+        }
+
+        return $html;
     }
 
     private function stripChromeCurrencyIslands(string $html): string
@@ -426,6 +603,170 @@ class Partials extends Block
         }
 
         return $html;
+    }
+
+    /**
+     * Shared chrome bag: strip header-search facade so tip q/type/category never bake in.
+     */
+    private function stripChromeSearchFacadeIslands(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        if (\str_contains($html, 'data-weline-chrome-island="header-search"')) {
+            $replaced = \preg_replace(
+                '#(<weline-chrome-island\b[^>]*\bdata-weline-chrome-island="header-search"[^>]*>).*?(</weline-chrome-island>)#is',
+                '$1<!--weline-chrome-island-pending:header-search-->$2',
+                $html,
+            );
+            $html = \is_string($replaced) ? $replaced : $html;
+        }
+
+        // Legacy bags: wrap+clear each data-w-search panel root.
+        if (\str_contains($html, 'data-w-search')
+            && !\str_contains($html, '<!--weline-chrome-island-pending:header-search-->')
+        ) {
+            $html = $this->rewriteHeaderSearchRoots(
+                $html,
+                '<!--weline-chrome-island-pending:header-search-->',
+            );
+        }
+
+        return $html;
+    }
+
+    /** Serve path: fill header-search islands with the active request search facade. */
+    private function hydrateChromeSearchFacadeIslands(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        $needs = \str_contains($html, 'data-weline-chrome-island="header-search"')
+            || \str_contains($html, '<!--weline-chrome-island-pending:header-search-->')
+            || \str_contains($html, 'data-w-search');
+        if (!$needs) {
+            return $html;
+        }
+
+        try {
+            $live = $this->renderHeaderSearchFacadeIslandHtml();
+        } catch (\Throwable $e) {
+            $this->logPartialCacheDiagnostic('chrome_search_facade_island_hydrate_failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $html;
+        }
+
+        if ($live === '') {
+            return $html;
+        }
+
+        $liveInner = $live;
+        if (\preg_match(
+            '#^\\s*<weline-chrome-island\\b[^>]*\\bdata-weline-chrome-island="header-search"[^>]*>(.*)</weline-chrome-island>\\s*$#is',
+            $live,
+            $unwrap,
+        )) {
+            $liveInner = $unwrap[1];
+        }
+
+        if (\str_contains($html, 'data-weline-chrome-island="header-search"')) {
+            $replaced = \preg_replace_callback(
+                '#(<weline-chrome-island\b[^>]*\bdata-weline-chrome-island="header-search"[^>]*>).*?(</weline-chrome-island>)#is',
+                static fn(array $m): string => $m[1] . $liveInner . $m[2],
+                $html,
+            );
+            $html = \is_string($replaced) ? $replaced : $html;
+        }
+
+        if (\str_contains($html, 'data-w-search')
+            && !\str_contains($html, 'data-weline-chrome-island="header-search"')
+            && !\str_contains($html, '<!--weline-chrome-island-pending:header-search-->')
+        ) {
+            $html = $this->rewriteHeaderSearchRoots($html, $liveInner);
+        }
+
+        return $html;
+    }
+
+    private function renderHeaderSearchFacadeIslandHtml(): string
+    {
+        $q = '';
+        try {
+            $q = \trim((string)($this->request->getQuery('q', '') ?? ''));
+        } catch (\Throwable) {
+            $q = '';
+        }
+        if ($q === '') {
+            $q = \trim((string)($_GET['q'] ?? $this->request->getParam('q', '') ?? ''));
+        }
+
+        $live = (string)Template::getInstance()->fetch(
+            'Weline_Theme::theme/frontend/partials/search/header-bar.phtml',
+            [
+                'placeholder' => (string)__('搜索商品、分类与关键词...'),
+                'query' => $q,
+                'show_hot_words' => true,
+                'panel_id' => 'header-search-panel',
+            ],
+        );
+
+        if ($live === '' || $this->isEmptyPartialHtml($live)) {
+            return '';
+        }
+
+        return '<weline-chrome-island data-weline-chrome-island="header-search" style="display:contents">'
+            . $live
+            . '</weline-chrome-island>';
+    }
+
+    /**
+     * Replace each data-w-search panel root with an island wrapping $innerHtml.
+     * Skips roots already inside a header-search island.
+     */
+    private function rewriteHeaderSearchRoots(string $html, string $innerHtml): string
+    {
+        $needle = 'data-w-search';
+        $offset = 0;
+        $out = '';
+        $len = \strlen($html);
+        while (($pos = \strpos($html, $needle, $offset)) !== false) {
+            $openStart = \strrpos(\substr($html, 0, $pos), '<');
+            if ($openStart === false) {
+                $out .= \substr($html, $offset, $pos - $offset + \strlen($needle));
+                $offset = $pos + \strlen($needle);
+                continue;
+            }
+
+            $lookBehind = \substr($html, \max(0, $openStart - 220), \min(220, $openStart));
+            if (\str_contains($lookBehind, 'data-weline-chrome-island="header-search"')
+                && !\str_contains($lookBehind, '</weline-chrome-island>')
+            ) {
+                $out .= \substr($html, $offset, ($pos + \strlen($needle)) - $offset);
+                $offset = $pos + \strlen($needle);
+                continue;
+            }
+
+            $range = $this->findHtmlElementRange($html, $openStart);
+            if ($range === null) {
+                $out .= \substr($html, $offset, $pos - $offset + \strlen($needle));
+                $offset = $pos + \strlen($needle);
+                continue;
+            }
+
+            [$start, $end] = $range;
+            $out .= \substr($html, $offset, $start - $offset);
+            $out .= '<weline-chrome-island data-weline-chrome-island="header-search" style="display:contents">'
+                . $innerHtml
+                . '</weline-chrome-island>';
+            $offset = $end;
+        }
+        $out .= \substr($html, $offset);
+
+        return $out;
     }
 
     /**
@@ -990,7 +1331,7 @@ class Partials extends Block
                 }
             }
 
-            return KeyBuilder::environmentHash([
+            $hashPayload = [
                 // v9: language-switcher SSR no longer inlines flags; bust stale SVG chrome.
                 // v12：账户与购物车共享中性首屏，旧编译时固化的购物车摘要必须失效。
                 // v13：CJK identity 不再挡住词典后，旧 header/footer 中文壳必须失效。
@@ -1001,8 +1342,11 @@ class Partials extends Block
                 // v18：chrome 大壳 lang-only；货币开关器岛后注水（跨货币共享 shell）。
                 // v19：I18n hook 自带岛标记；无岛旧袋按 data-currency-switcher 回退剥离（防错显币种）。
                 // v20：嵌套 chrome 源指纹由 mtime|size 升为内容 sha256（NestedChromeSourceFingerprint）。
+                // v21：搜索 facade（q/type/category）岛后注水；header 键 guest-neutral（禁按 tip q 分袋）。
+                // v22：xscope A — frontend header/footer layout-agnostic（SharedChrome inherit）；
+                //     去 layout 分区 + 路径级源指纹，homepage warmer 与 search/plp 同键。
                 // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v20-nested-content-hash',
+                'schema' => 'chrome-partial-v22-layout-agnostic-shell',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',
@@ -1035,10 +1379,18 @@ class Partials extends Block
                 'i18n_switcher_markup' => \class_exists(\Weline\I18n\Taglib\LanguageSwitcher::class)
                     ? (string)\Weline\I18n\Taglib\LanguageSwitcher::SWITCHER_MARKUP_VERSION
                     : '',
-                'layout_type' => (string)($themeData['layoutType'] ?? ''),
-                'layout_option' => (string)($themeData['layoutOption'] ?? ''),
+                // Frontend header/footer: SharedChrome non-carrier = inherit homepage shell.
+                // Neutralize layout dims so homepage warmer L2 hits search/plp/blog/pdp.
+                // Head stays page-scoped (seo_fp) and keeps request layout dims.
+                'layout_type' => ($area === 'frontend' && ($type === 'header' || $type === 'footer'))
+                    ? 'shared'
+                    : (string)($themeData['layoutType'] ?? ''),
+                'layout_option' => ($area === 'frontend' && ($type === 'header' || $type === 'footer'))
+                    ? 'default'
+                    : (string)($themeData['layoutOption'] ?? ''),
                 'data' => $this->resolveChromePartialCacheDataContext($area, $type, $data),
-            ], [
+            ];
+            $hashDims = [
                 // Reuse chrome across routes, but retain KeyBuilder's existing
                 // website_url/host/base_url dimensions: rendered HTML contains
                 // absolute links and cannot cross the actual URL origin.
@@ -1046,7 +1398,9 @@ class Partials extends Block
                 'area' => false,
                 'area_route' => false,
                 'currency' => false,
-            ]);
+            ];
+
+            return KeyBuilder::environmentHash($hashPayload, $hashDims);
         } catch (\Throwable) {
             return null;
         }
@@ -1059,6 +1413,40 @@ class Partials extends Block
     private function frontendHeaderNestedChromeFingerprint(): string
     {
         return NestedChromeSourceFingerprint::compute();
+    }
+
+    /**
+     * Source fingerprint for storefront chrome HotCache keys (xscope A).
+     *
+     * Header/footer share one layout-agnostic shell (SharedChrome inherit). Folding the
+     * full page {@see ThemeLayoutSourceSnapshot::fingerprint()} into the key forked
+     * homepage warmer seeds away from search/plp/blog/pdp — use path-local digest instead.
+     * Head remains page-scoped and may keep the layout snapshot fingerprint.
+     *
+     * @param array{bytes?:string,origin?:string}|null $captured
+     * @param array<string,mixed>|false|null $sourceStat
+     */
+    private function resolveStorefrontChromeSourceFingerprint(
+        string $type,
+        string $path,
+        ?ThemeLayoutSourceSnapshot $snapshot,
+        ?array $captured,
+        $sourceStat,
+    ): string {
+        $typeLc = \strtolower(\trim($type));
+        if (($typeLc === 'header' || $typeLc === 'footer') && \is_array($captured)) {
+            $bytes = (string)($captured['bytes'] ?? '');
+            $origin = (string)($captured['origin'] ?? $path);
+
+            return \hash('sha256', $origin . "\0" . $bytes);
+        }
+        if ($captured !== null && $snapshot instanceof ThemeLayoutSourceSnapshot) {
+            return $snapshot->fingerprint();
+        }
+
+        return \is_array($sourceStat)
+            ? (int)$sourceStat['mtime'] . '|' . (int)$sourceStat['size']
+            : '0|0';
     }
 
     private function resolveChromePartialCacheDataContext(
@@ -1079,40 +1467,10 @@ class Partials extends Block
     private function resolvePartialCacheDataContext(string $type, array $data, bool $isChrome = false): mixed
     {
         if ($type === 'header') {
-            // Search facade embeds type + category_id; chrome header HTML must vary on them.
-            // Prefer query bag so Request data leftovers cannot collapse keys across navigations.
-            $q = '';
-            $typeParam = '';
-            $categoryId = 0;
-            $blogCategoryId = 0;
-            try {
-                $q = \trim((string)($this->request->getQuery('q', '') ?? ''));
-                $typeParam = \trim((string)($this->request->getQuery('type', '') ?? ''));
-                $categoryId = (int)($this->request->getQuery('category_id', 0) ?? 0);
-                $blogCategoryId = (int)($this->request->getQuery('blog_category_id', 0) ?? 0);
-            } catch (\Throwable) {
-                // fall through to getParam / $_GET
-            }
-            if ($q === '') {
-                $q = \trim((string)($_GET['q'] ?? $this->request->getParam('q', '') ?? ''));
-            }
-            if ($typeParam === '') {
-                $typeParam = \trim((string)($_GET['type'] ?? $this->request->getParam('type', '') ?? ''));
-            }
-            if ($categoryId <= 0) {
-                $categoryId = (int)($_GET['category_id'] ?? $this->request->getParam('category_id', 0) ?? 0);
-            }
-            if ($blogCategoryId <= 0) {
-                $blogCategoryId = (int)($_GET['blog_category_id'] ?? $this->request->getParam('blog_category_id', 0) ?? 0);
-            }
-
+            // Guest-neutral header key (v21): search facade q/type/category_* hydrate
+            // live via header-search islands — do NOT partition the shared chrome bag
+            // (same spirit as cart_* removal and currency islands).
             return $this->normalizePartialCacheData([
-                'q' => $q,
-                'type' => $typeParam,
-                'category_id' => $categoryId,
-                'blog_category_id' => $blogCategoryId,
-                // Legacy key kept for older callers that still send ?category=
-                'category' => \trim((string)($_GET['category'] ?? $this->request->getParam('category', '') ?? '')),
                 'lang' => (string)State::getLang(),
                 'lang_local' => (string)State::getLangLocal(),
                 // wave8-8c8: guest-neutral header key — do NOT partition on cart_*
@@ -1595,7 +1953,17 @@ class Partials extends Block
         $snapshot = ThemeLayoutSourceSnapshot::current();
         if ($snapshot !== null && $snapshot->identity->area === strtolower($area)) {
             $selected = $snapshot->selectedPartialPath($type, $defaultOption);
-            if ($selected !== null) { return $selected; }
+            if ($selected !== null) {
+                // Snapshot may hand back a generated absolute path; chrome HotCache
+                // keys must stay on the stable Weline_Theme:: logical form so CLI
+                // warmers and storefront HTTP (often without snapshot on header)
+                // share one bag. Keep using $selected for source() lookup via aliases.
+                $normalizedArea = \strtolower(\trim($area));
+                $option = \trim($defaultOption) !== '' ? \trim($defaultOption) : 'default';
+
+                return 'Weline_Theme::theme/' . $normalizedArea . '/partials/'
+                    . $type . '/' . $option . '.phtml';
+            }
         }
         /** @var ThemeContextService $ctx */
         $ctx = ObjectManager::getInstance(ThemeContextService::class);

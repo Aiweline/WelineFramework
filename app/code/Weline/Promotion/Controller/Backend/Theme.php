@@ -65,12 +65,16 @@ class Theme extends BackendController
             $this->assign($key, $value);
         }
 
+        $websiteParamPresent = $this->request->hasGet('website_id');
         $this->assign('themes', $themes);
         $this->assign('scope', $scope);
         $this->assign('filter_website_id', max(0, $websiteId));
         $this->assign('filter_store_code', $storeCode);
         $this->assign('filter_channel_code', $channelCode);
-        $this->assign('scope_filter_active', $websiteId > 0 || $storeCode !== '' || $channelCode !== '');
+        $this->assign(
+            'scope_filter_active',
+            $websiteParamPresent || $storeCode !== '' || $channelCode !== ''
+        );
 
         return $this->fetch('Weline_Promotion::templates/backend/promotion/theme/index.phtml');
     }

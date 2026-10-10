@@ -2,12 +2,13 @@
 
 return [
     "name" => 'Weline_Marketing',
-    "version" => '1.3.20',
+    "version" => '1.3.21',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Currency' => '*',
         'Weline_Framework' => '*',
         'Weline_I18n' => '*',
+        'Weline_Websites' => '*',
     ],
     "optional" => [
         'Weline_Theme' => '*',

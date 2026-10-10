@@ -306,8 +306,8 @@ ID,ID
 结果文件较大,"The resulting file is larger"
 "当前结果约 %{1} MB，请下载后查看。","The current result is about %{1} MB, please download and view it."
 暂无执行结果,"No execution result yet"
-队列信息,"Queue information"
-进度/结果,Progress/Result
+队列,Queue
+状态与结果,"Status & result"
 等待执行…,"Waiting for execution…"
 正在执行…,Executing…
 查看全部,"View all"
@@ -466,6 +466,8 @@ ID,ID
 队列执行详情（失败）,"Queue execution detail (failed)"
 运行队列.,"Run queue."
 说明：,illustrate:
+队列信息,"Queue information"
+进度/结果,Progress/Result
 Inbox,Inbox
 Outbox,Outbox
 "查看可靠异步事件 Outbox","View reliable asynchronous events Outbox"

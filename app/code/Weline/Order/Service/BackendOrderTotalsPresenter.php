@@ -154,6 +154,35 @@ final class BackendOrderTotalsPresenter
     {
         $items = [];
         $lineDiscountSum = 0.0;
+        $adminSum = 0.0;
+
+        $discountLines = \is_array($typePayload['discount_lines'] ?? null) ? $typePayload['discount_lines'] : [];
+        foreach ($discountLines as $payloadLine) {
+            if (!\is_array($payloadLine)) {
+                continue;
+            }
+            if (strtolower(trim((string)($payloadLine['source_type'] ?? ''))) !== 'admin_adjustment') {
+                continue;
+            }
+            $amount = abs((int)($payloadLine['amount_minor'] ?? 0)) / 100;
+            if ($amount <= 0.0001) {
+                continue;
+            }
+            $label = trim((string)($payloadLine['label'] ?? ''));
+            if ($label === '') {
+                $label = $this->phrase('后台优惠调整');
+            }
+            $note = trim((string)($payloadLine['note'] ?? ''));
+            if ($note !== '') {
+                $label .= ' · ' . $note;
+            }
+            $items[] = [
+                'label' => $label,
+                'amount' => $amount,
+                'source' => 'admin_adjustment',
+            ];
+            $adminSum += $amount;
+        }
 
         foreach ($displayLines as $line) {
             if (!\is_array($line)) {
@@ -178,7 +207,7 @@ final class BackendOrderTotalsPresenter
             ];
         }
 
-        $remainder = max(0.0, $orderDiscount - $lineDiscountSum);
+        $remainder = max(0.0, $orderDiscount - $lineDiscountSum - $adminSum);
         if ($remainder > 0.0001) {
             $kind = strtolower(trim((string)($typePayload['discount_kind'] ?? '')));
             $orderLabel = match ($kind) {

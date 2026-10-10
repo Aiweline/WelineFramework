@@ -36,6 +36,9 @@ class AudienceSegment extends Model
     #[Col(type: 'varchar', length: 20, nullable: false, default: 'enabled', comment: '状态')]
     public const schema_fields_STATUS = 'status';
 
+    #[Col(type: 'int', nullable: false, default: -1, comment: '网站ID，-1=全部，>=0=具体站（含默认站0）')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+
     public const KIND_NEW_CUSTOMER = 'new_customer';
     public const KIND_RETURNING = 'returning';
     public const KIND_IDLE_DAYS = 'idle_days';

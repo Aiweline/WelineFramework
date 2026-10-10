@@ -38,4 +38,21 @@ interface PaymentRefundFacadeInterface
     public function getOccupiedAmountMinor(string $payableType, string $payableId): int;
 
     public function getCapturedAmountMinor(string $payableType, string $payableId): int;
+
+    /**
+     * Sum amount_minor across all captured/paid intents for the payable
+     * (deposit + balance multi-intent). Excludes fully refunded intents.
+     * Prefer this over getCapturedAmountMinor() when computing remaining due floors.
+     */
+    public function sumCapturedAmountMinor(string $payableType, string $payableId): int;
+
+    /**
+     * Mark incomplete (non-captured) intents for a payable as cancelled.
+     * Does not touch captured/paid/refund* intents. Returns abandoned count.
+     */
+    public function abandonOpenIntentsForPayable(
+        string $payableType,
+        string $payableId,
+        string $reason = 'admin_amount_adjusted',
+    ): int;
 }

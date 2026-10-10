@@ -626,6 +626,182 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         return $rows;
     }
 
+    /**
+     * Stream explicit EAV rows into a nested text map without a flat typed-row array.
+     * Caller owns entity chunking so each shot stays under {@see LIST_EXPLICIT_ROWS_HARD_LIMIT}.
+     *
+     * @param list<int> $entityIds
+     * @param list<int> $storeIds
+     * @param list<string> $attributeCodes required non-empty after normalize
+     * @param list<string>|null $locales null + allowUnfilteredLocales=true → all locales
+     * @return array<int, array<string, array<string, string>>> entity_id → code → locale → text
+     */
+    public function listLocalizedTextMap(
+        int $websiteId,
+        string $entityType,
+        array $entityIds,
+        array $storeIds,
+        array $attributeCodes,
+        bool $allowUnfilteredLocales = true,
+        ?array $locales = null,
+    ): array {
+        $this->assertWebsite($websiteId);
+        $entityType = trim($entityType);
+        $entityIds = array_values(array_unique(array_filter(
+            array_map('intval', $entityIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        $storeIds = array_values(array_unique(array_filter(
+            array_map('intval', $storeIds),
+            static fn(int $id): bool => $id >= 0,
+        )));
+        if ($entityType === '' || $entityIds === [] || $storeIds === []) {
+            return [];
+        }
+
+        if ($locales === null && !$allowUnfilteredLocales && self::shouldCoerceStorefrontLocales()) {
+            $locales = self::storefrontReadLocales();
+        }
+
+        $localeFilter = null;
+        if ($locales !== null) {
+            $localeFilter = [];
+            foreach ($locales as $locale) {
+                if (!\is_string($locale) && !\is_int($locale) && !\is_float($locale)) {
+                    continue;
+                }
+                $locale = \trim((string)$locale);
+                if (!\in_array($locale, $localeFilter, true)) {
+                    $localeFilter[] = $locale;
+                }
+            }
+            if (!\in_array('', $localeFilter, true)) {
+                $localeFilter[] = '';
+            }
+        }
+
+        $codeFilter = [];
+        foreach ($attributeCodes as $code) {
+            if (!\is_string($code) && !\is_int($code) && !\is_float($code)) {
+                continue;
+            }
+            $code = \trim((string)$code);
+            if ($code === '' || \in_array($code, $codeFilter, true)) {
+                continue;
+            }
+            $codeFilter[] = $code;
+        }
+        if ($codeFilter === []) {
+            return [];
+        }
+
+        $diagBefore = \memory_get_usage(false);
+        $query = $this->newModel($websiteId)
+            ->clear()
+            ->where(AttributeValue::schema_fields_ENTITY_TYPE, $entityType)
+            ->where(AttributeValue::schema_fields_ENTITY_ID, $entityIds, 'IN')
+            ->where(AttributeValue::schema_fields_STORE_ID, $storeIds, 'IN');
+        if ($localeFilter !== null) {
+            $query->where(AttributeValue::schema_fields_LOCALE, $localeFilter, 'IN');
+        }
+        $query->where(AttributeValue::schema_fields_ATTRIBUTE_CODE, $codeFilter, 'IN');
+        $raw = $query
+            ->order(AttributeValue::schema_fields_ENTITY_ID, 'ASC')
+            ->order(AttributeValue::schema_fields_STORE_ID, 'ASC')
+            ->order(AttributeValue::schema_fields_ATTRIBUTE_CODE, 'ASC')
+            ->order(AttributeValue::schema_fields_LOCALE, 'ASC')
+            ->select()
+            ->fetchIterator();
+
+        $texts = [];
+        $rawCount = 0;
+        $outEntries = 0;
+        $distinctLocales = [];
+        foreach ($raw as $item) {
+            ++$rawCount;
+            if ($rawCount > self::LIST_EXPLICIT_ROWS_HARD_LIMIT) {
+                if (\class_exists(\Weline\Framework\Runtime\MemDiag::class)) {
+                    \Weline\Framework\Runtime\MemDiag::event('eav_list_localized_text_map', [
+                        'mode' => 'text_map',
+                        'website_id' => $websiteId,
+                        'entity_type' => $entityType,
+                        'entity_ids' => \count($entityIds),
+                        'store_ids' => $storeIds,
+                        'locales' => $localeFilter,
+                        'attribute_codes_n' => \count($codeFilter),
+                        'distinct_locale' => \count($distinctLocales),
+                        'request_uri' => self::resolveRequestUri(),
+                        'raw_rows' => $rawCount,
+                        'out_entries' => $outEntries,
+                        'hard_limit' => self::LIST_EXPLICIT_ROWS_HARD_LIMIT,
+                        'delta_after_materialize' => \memory_get_usage(false) - $diagBefore,
+                    ]);
+                }
+                throw new \Weline\Framework\App\Exception(
+                    'listLocalizedTextMap materialize hard limit exceeded: ' . self::LIST_EXPLICIT_ROWS_HARD_LIMIT,
+                );
+            }
+
+            $cleared = (string)($item['scope_state'] ?? '') === 'cleared'
+                || (int)($item[AttributeValue::schema_fields_CLEARED] ?? 0) === 1;
+            if ($cleared) {
+                continue;
+            }
+
+            $entityId = (int)($item[AttributeValue::schema_fields_ENTITY_ID] ?? 0);
+            $attributeCode = \trim((string)($item[AttributeValue::schema_fields_ATTRIBUTE_CODE] ?? ''));
+            if ($entityId <= 0 || $attributeCode === '') {
+                continue;
+            }
+
+            $locale = \trim((string)($item[AttributeValue::schema_fields_LOCALE] ?? ''));
+            $distinctLocales[$locale] = true;
+
+            $decoded = $this->decodeTypedValue($item);
+            if ($decoded === null || \is_array($decoded) || \is_object($decoded)) {
+                continue;
+            }
+            $value = \trim((string)$decoded);
+            if ($value === '') {
+                continue;
+            }
+
+            $texts[$entityId][$attributeCode][$locale] = $value;
+            ++$outEntries;
+        }
+
+        $deltaMaterialize = \memory_get_usage(false) - $diagBefore;
+        if (\class_exists(\Weline\Framework\Runtime\MemDiag::class)) {
+            \Weline\Framework\Runtime\MemDiag::event('eav_list_localized_text_map', [
+                'mode' => 'text_map',
+                'website_id' => $websiteId,
+                'entity_type' => $entityType,
+                'entity_ids' => \count($entityIds),
+                'store_ids' => $storeIds,
+                'locales' => $localeFilter,
+                'attribute_codes_n' => \count($codeFilter),
+                'distinct_locale' => \count($distinctLocales),
+                'request_uri' => self::resolveRequestUri(),
+                'raw_rows' => $rawCount,
+                'out_entries' => $outEntries,
+                'delta_after_materialize' => $deltaMaterialize,
+            ]);
+        }
+
+        return $texts;
+    }
+
+    /**
+     * Entity IN chunk size for code-bounded all-locale reads under {@see LIST_EXPLICIT_ROWS_HARD_LIMIT}.
+     */
+    public static function boundedEntityChunkSize(int $attributeCodeCount, int $maxLocalesEstimate = 50): int
+    {
+        $codesN = \max(1, $attributeCodeCount);
+        $localeN = \max(1, $maxLocalesEstimate);
+
+        return \max(1, \min(256, \intdiv(self::LIST_EXPLICIT_ROWS_HARD_LIMIT, $codesN * $localeN)));
+    }
+
     private static function resolveRequestUri(): string
     {
         if (\function_exists('w_env_request_uri')) {

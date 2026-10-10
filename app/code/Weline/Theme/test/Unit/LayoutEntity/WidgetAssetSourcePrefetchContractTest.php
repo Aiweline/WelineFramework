@@ -31,8 +31,14 @@ final class WidgetAssetSourcePrefetchContractTest extends TestCase
             dirname(__DIR__, 3) . '/Service/LayoutEntity/WidgetAssetArtifactPublisher.php'
         );
         self::assertStringContainsString('prefetchPolicy', $src);
+        self::assertStringContainsString('rememberPolicy', $src);
         self::assertStringContainsString('theme.widget_asset_source', $src);
         self::assertStringContainsString('resolveModuleSourcePath', $src);
         self::assertStringContainsString('sourceCachePolicy', $src);
+        // Prime-on-prefetch: miss must build L2, not MGET-only.
+        self::assertStringContainsString('Miss priming', $src);
+        // v4 keys use Module::relative so CLI warmer and WLS share L2.
+        self::assertStringContainsString('widget-source-v4|', $src);
+        self::assertStringContainsString('sourceLogicalKey', $src);
     }
 }

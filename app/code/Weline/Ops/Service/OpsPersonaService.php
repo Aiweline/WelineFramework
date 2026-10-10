@@ -24,18 +24,22 @@ final class OpsPersonaService
         'gemini-2.5-flash',
     ];
 
-    /** @return list<array{key:string,label:string,icon:string}> */
+    /**
+     * 步骤定义（中文源串；展示层再 __()）。
+     *
+     * @return list<array{key:string,label:string,icon:string}>
+     */
     public static function progressSteps(): array
     {
         return [
-            ['key' => 'site', 'label' => (string)__('站点身份'), 'icon' => 'store'],
-            ['key' => 'catalog', 'label' => (string)__('分类树'), 'icon' => 'folder'],
-            ['key' => 'products', 'label' => (string)__('商品抽样'), 'icon' => 'cart'],
-            ['key' => 'policy', 'label' => (string)__('政策履约'), 'icon' => 'shield'],
-            ['key' => 'market', 'label' => (string)__('语种市场'), 'icon' => 'globe'],
-            ['key' => 'compress', 'label' => (string)__('压缩证据'), 'icon' => 'layers'],
-            ['key' => 'ai', 'label' => (string)__('AI 策略生成'), 'icon' => 'robot'],
-            ['key' => 'persist', 'label' => (string)__('写入记忆'), 'icon' => 'check'],
+            ['key' => 'site', 'label' => '站点身份', 'icon' => 'store'],
+            ['key' => 'catalog', 'label' => '分类树', 'icon' => 'folder'],
+            ['key' => 'products', 'label' => '商品抽样', 'icon' => 'cart'],
+            ['key' => 'policy', 'label' => '政策履约', 'icon' => 'shield'],
+            ['key' => 'market', 'label' => '语种市场', 'icon' => 'globe'],
+            ['key' => 'compress', 'label' => '压缩证据', 'icon' => 'layers'],
+            ['key' => 'ai', 'label' => 'AI 策略生成', 'icon' => 'robot'],
+            ['key' => 'persist', 'label' => '写入记忆', 'icon' => 'check'],
         ];
     }
 

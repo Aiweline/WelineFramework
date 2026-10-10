@@ -155,30 +155,37 @@ puzzle,puzzle
 请填写页面标题和标识,"Please fill in page title and handle"
 "Page preview","Page preview"
 "The w:widget tags in this preview need server-side rendering before actual widget content is shown.","The w:widget tags in this preview need server-side rendering before actual widget content is shown."
-快速查看、筛选并预览部件详情,"Quickly view, filter, and preview part details"
+"快速查看、筛选并预览部件详情。列表按类型分组，名称 / Code / 类型一目了然。","Quickly view and filter widgets. Grouped by type with name / code / type visible."
+视觉预览,"Visual preview"
+加载预览…,"Loading preview…"
 关闭,Close
 加载中...,Loading...
 操作失败,"Operation failed"
 类型,Type
+Code,Code
 模块,Module.
 版本,Version
+路径,Path
 参数配置,"Parameter configuration"
+元数据加载失败，仍尝试视觉预览,"Metadata failed to load; still trying visual preview"
 总部件数,"Total Parts"
 部件类型,"Component type"
 来源模块,"Source Module"
 关键字,Keyword
-搜索部件...,"Search widgets..."
+搜索名称、Code、类型或模块…,"Search name, code, type, or module…"
 所有模块,"All Modules"
 所有类型,"All Types"
 筛选,Filter
 重置筛选,"Reset Filter"
+"共 %{1} 个","%{1} total"
 没有找到部件,"No widgets found"
-部件名称,"Widget Name"
-操作,Actions
-详情,Details
+"展开 / 收起","Expand / collapse"
+AI生成,"AI generated"
+暂无描述,"No description"
 页面标题,"Page Title"
 页面标识,"Page Handle"
 部件库,"Widget Library"
+搜索部件...,"Search widgets..."
 画布,Canvas
 从左侧拖放部件到这里,"Drag widgets from left panel here"
 属性配置,Properties
@@ -231,6 +238,10 @@ FAQ部件,"FAQ widget"
 位置：generated/param_schemas.php,"Location: generated/param_schemas.php"
 "✖ 写入 ParamSchema 注册表失败。","✖ Writing to ParamSchema registry failed."
 刷新失败：%{1},"Refresh Failed: %{1}"
+详情,Details
+快速查看、筛选并预览部件详情,"Quickly view, filter, and preview part details"
+部件名称,"Widget Name"
+操作,Actions
 缩略图加载中…,"Loading thumbnail..."
 保存配置,"Save configuration"
 添加轮播项,"Add Slide"

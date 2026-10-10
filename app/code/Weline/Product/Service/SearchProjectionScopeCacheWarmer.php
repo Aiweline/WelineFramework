@@ -20,6 +20,10 @@ use Weline\Websites\Model\Website;
  * Channel-scoped (not lang-vary): one durable L2 bag per website×store×channel×watermark.
  * Soft-clear / empty L2 otherwise forces /search first hit to nested-rebuild inside
  * search.query_result (~0.5–1.2s). Fail-open; never whole-website snapshot.
+ *
+ * IMPORTANT: a projection peek_hit / L2 HIT is NOT proof that tip search.query_result
+ * is warm. Tip result bags are owned by Weline_Search (SearchQueryResultTipCacheWarmer).
+ * Sticky hit2 alone is also not an acceptance pass for query_result cold hit1.
  */
 final class SearchProjectionScopeCacheWarmer implements CacheWarmerInterface
 {

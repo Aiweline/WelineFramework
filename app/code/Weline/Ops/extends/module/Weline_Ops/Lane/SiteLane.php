@@ -6,6 +6,7 @@ namespace Weline\Ops\Extends\Module\Weline_Ops\Lane;
 
 use Weline\Framework\Http\Url;
 use Weline\Ops\Api\OpsLaneContributionInterface;
+use Weline\Ops\Service\OpsLaneDeepLink;
 use Weline\Ops\Service\OpsWebsiteContextReader;
 
 final class SiteLane implements OpsLaneContributionInterface
@@ -42,15 +43,15 @@ final class SiteLane implements OpsLaneContributionInterface
             [
                 'code' => 'ai_agents',
                 'label' => (string)__('AI 智能体治理'),
-                'url' => $this->url->getBackendUrl('ai/backend/agent'),
+                'url' => OpsLaneDeepLink::backend($this->url, 'ai/backend/agent', $websiteId),
                 'connected' => null,
             ],
         ];
-        if (class_exists(\Weline\Websites\Controller\Backend\Website::class)) {
+        if (class_exists(\Weline\Websites\Controller\Admin\Website::class)) {
             $actions[] = [
                 'code' => 'websites',
                 'label' => (string)__('网站管理'),
-                'url' => $this->url->getBackendUrl('websites/backend/website/index'),
+                'url' => OpsLaneDeepLink::websiteEdit($this->url, $websiteId),
                 'connected' => null,
             ];
         }

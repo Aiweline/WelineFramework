@@ -11,8 +11,8 @@ use Weline\Widget\Service\WidgetData;
 use Weline\Widget\Service\WidgetRegistry;
 
 /**
- * N3 小步：StorefrontWidgetRuntimeSchedule 的 Theme 侧 asset 预取协作。
- * 只走 {@see WidgetAssetArtifactPublisher::prefetchSources} → HotCache prefetchPolicy（协议 MGET）。
+ * N3：StorefrontWidgetRuntimeSchedule 的 Theme 侧 asset 预取协作。
+ * 走 {@see WidgetAssetArtifactPublisher::prefetchSources}（MGET + miss 代建写 L2）。
  */
 final class StorefrontWidgetRuntimeAssetPrimer
 {

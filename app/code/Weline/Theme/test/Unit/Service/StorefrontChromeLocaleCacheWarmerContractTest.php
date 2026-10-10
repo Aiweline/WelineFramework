@@ -19,7 +19,7 @@ final class StorefrontChromeLocaleCacheWarmerContractTest extends TestCase
             StorefrontChromeLocaleCacheWarmer::class,
             $provides['cache.warmer.theme.storefront_chrome_locales'] ?? null,
         );
-        self::assertSame('2.2.968', (string)($module['version'] ?? ''));
+        self::assertSame('2.2.974', (string)($module['version'] ?? ''));
     }
 
     public function testWarmerTargetsStorefrontChromePool(): void
@@ -37,7 +37,13 @@ final class StorefrontChromeLocaleCacheWarmerContractTest extends TestCase
         $src = (string)file_get_contents(
             dirname(__DIR__, 4) . '/Framework/Cache/Console/Cache/Clear.php'
         );
+        // Subprocess reseed: in-process warmUp shared Clear RequestContext and
+        // produced sticky false HIT; Clear must shell cache:warm --pool=…
         self::assertStringContainsString(
+            'cache:warm --pool=weline_theme_storefront_chrome',
+            $src,
+        );
+        self::assertStringNotContainsString(
             "warmUp('weline_theme_storefront_chrome')",
             $src,
         );
@@ -102,6 +108,18 @@ final class StorefrontChromeLocaleCacheWarmerContractTest extends TestCase
         // Prefer bare public_host; strip WLS listen / 9xxx ports from origin.
         self::assertStringContainsString('isPrivateListenPort', $src);
         self::assertStringContainsString('Prefer bare public_host BEFORE public_origin', $src);
+        // Home Index installs ThemeLayoutSourceSnapshot — warmer captures chrome bytes.
+        self::assertStringContainsString('installHomepageLayoutSourceSnapshot', $src);
+        self::assertStringContainsString('SolidifiedControllerTemplateResolver', $src);
+        self::assertStringContainsString('snapshot_fp=', $src);
+        self::assertStringContainsString('ThemeLayoutSourceSnapshot::REQUEST_KEY', $src);
+        // xscope A: path-local digests (not full layout fp) for header/footer keys.
+        self::assertStringContainsString('path-local digests', $src);
+        self::assertStringContainsString('chrome-partial-v22', $src);
+        // Published site theme via ThemeApplicationContext (not module default id=1).
+        self::assertStringContainsString('ThemeApplicationContextProducer', $src);
+        self::assertStringContainsString('layoutType', $src);
+        self::assertStringContainsString("'homepage'", $src);
         // gate_ok requires header+footer L2 (chrome_n=2), not head-only.
         self::assertStringContainsString('$chromeL2 = $headerL2 && $footerL2', $src);
         // Ban shell-strip optimization language in warmer.
@@ -116,7 +134,7 @@ final class StorefrontChromeLocaleCacheWarmerContractTest extends TestCase
         );
         self::assertStringContainsString('function verifyStorefrontSharedDurableL2', $src);
         self::assertStringContainsString('function verifyStorefrontHeadAssetsDurableL2', $src);
-        self::assertStringContainsString('purgeProcessCacheForLogicalKey', $src);
+        self::assertStringContainsString('purgeProcessCacheForPolicy', $src);
         self::assertStringContainsString('peekPolicy', $src);
     }
 }

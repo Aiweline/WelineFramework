@@ -20,6 +20,18 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringNotContainsString('omitClientDictionaries', $content);
     }
 
+    public function testFloatPrefetchesWidgetI18nLabelsBeforePerStringLabel(): void
+    {
+        $hookFile = dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml';
+        $content = (string) file_get_contents($hookFile);
+        $prefetch = strpos($content, 'WidgetI18n::prefetchLabels');
+        $csFn = strpos($content, '$cs = static fn');
+        $this->assertNotFalse($prefetch);
+        $this->assertNotFalse($csFn);
+        $this->assertLessThan($csFn, $prefetch);
+        $this->assertStringContainsString("'客服服务'", $content);
+    }
+
     public function testBodyEndKeepsSlimConfigWithoutEmbeddedDictionaries(): void
     {
         $hookFile = dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml';

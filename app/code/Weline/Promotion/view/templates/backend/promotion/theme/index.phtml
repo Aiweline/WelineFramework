@@ -9,7 +9,7 @@ $filterWebsiteId = max(0, (int)$this->getData('filter_website_id'));
 $filterStoreCode = (string)$this->getData('filter_store_code');
 $filterChannelCode = (string)$this->getData('filter_channel_code');
 $newThemeQuery = http_build_query(array_filter([
-    'website_id' => $filterWebsiteId > 0 ? $filterWebsiteId : null,
+    'website_id' => $scopeFilterActive ? $filterWebsiteId : null,
     'store_code' => $filterStoreCode !== '' ? $filterStoreCode : null,
     'channel_code' => $filterChannelCode !== '' ? $filterChannelCode : null,
 ], static fn (mixed $value): bool => $value !== null && $value !== ''));

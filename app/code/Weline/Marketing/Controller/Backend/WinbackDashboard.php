@@ -9,6 +9,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Service\WinbackDashboardAggregator;
+use Weline\Websites\Service\AdminWebsiteScope;
 
 #[Acl('Weline_Marketing::commerce:marketing:winback_dashboard', '挽回看板', 'chart', '挽回发送与券核销只读汇总', 'Weline_Backend::marketing_group')]
 final class WinbackDashboard extends BackendController
@@ -16,10 +17,13 @@ final class WinbackDashboard extends BackendController
     #[Acl('Weline_Marketing::commerce:marketing:winback_dashboard_index', '挽回看板', 'chart', '查看挽回运营汇总')]
     public function index(): string
     {
+        $filterWebsiteId = AdminWebsiteScope::resolveFilterIdFromGet($this->request);
+        $websiteSelect = AdminWebsiteScope::buildSelectView($filterWebsiteId);
+
         try {
             /** @var WinbackDashboardAggregator $agg */
             $agg = ObjectManager::getInstance(WinbackDashboardAggregator::class);
-            $rows = $agg->summarize();
+            $rows = $agg->summarize(null, $filterWebsiteId);
             $this->assign('rows', $rows);
             $this->assign('load_error', '');
         } catch (\Throwable $e) {
@@ -27,6 +31,11 @@ final class WinbackDashboard extends BackendController
             $this->assign('rows', []);
             $this->assign('load_error', $e->getMessage());
         }
+
+        $this->assign('filter_website_id', $filterWebsiteId);
+        $this->assign('websiteSelectValue', $websiteSelect['value']);
+        $this->assign('websiteSelectDisplay', $websiteSelect['display']);
+        $this->assign('websiteSelectOptionsJson', $websiteSelect['options_json']);
 
         return $this->fetch();
     }

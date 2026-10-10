@@ -6942,7 +6942,7 @@
         },
         {
             "name": "weline/module-ai",
-            "version": "dev-codex/welineframework-2-architecture",
+            "version": "dev-dev",
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Ai",

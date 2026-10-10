@@ -10,7 +10,11 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
+use Weline\Marketing\Model\Audience\AudienceSegment;
+use Weline\Marketing\Model\Lifecycle\LifecycleCampaign;
 use Weline\Marketing\Model\Rule\LocalDescription;
+use Weline\Marketing\Model\Winback\WinbackCampaign;
+use Weline\Marketing\Service\MarketingWebsiteScope;
 use Weline\Smtp\Service\MailTemplateSeeder;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Theme\Model\ThemeLayout;
@@ -26,9 +30,45 @@ class Upgrade implements UpgradeInterface
         $modelSetup->putModel($local);
         $local->setup($modelSetup, $context);
 
+        $this->ensureAudienceSegmentWebsiteColumn($modelSetup, $context);
+        $this->migrateLegacyWebsiteIdZeroMeansAll();
         $this->remapLegacyCouponWidgetCodes();
         $this->migrateScheduleWindowsToUtc();
         $this->syncMailTemplatesToGlobalScope();
+    }
+
+    private function ensureAudienceSegmentWebsiteColumn(ModelSetup $modelSetup, Context $context): void
+    {
+        try {
+            /** @var AudienceSegment $segment */
+            $segment = ObjectManager::getInstance(AudienceSegment::class);
+            $modelSetup->putModel($segment);
+            $segment->setup($modelSetup, $context);
+        } catch (\Throwable $e) {
+            w_log_warning('Marketing AudienceSegment website_id setup: ' . $e->getMessage(), [], 'marketing');
+        }
+    }
+
+    /**
+     * 历史文案「website_id=0 表示全部」→ MarketingWebsiteScope::ENTITY_ALL (-1)。
+     */
+    private function migrateLegacyWebsiteIdZeroMeansAll(): void
+    {
+        foreach ([
+            WinbackCampaign::class => WinbackCampaign::schema_fields_WEBSITE_ID,
+            LifecycleCampaign::class => LifecycleCampaign::schema_fields_WEBSITE_ID,
+        ] as $modelClass => $field) {
+            try {
+                /** @var \Weline\Framework\Database\Model $model */
+                $model = ObjectManager::getInstance($modelClass);
+                $model->reset()
+                    ->where($field, 0)
+                    ->update([$field => MarketingWebsiteScope::ENTITY_ALL])
+                    ->fetch();
+            } catch (\Throwable $e) {
+                w_log_warning('Marketing migrate website_id 0→-1 (' . $modelClass . '): ' . $e->getMessage(), [], 'marketing');
+            }
+        }
     }
 
     /**

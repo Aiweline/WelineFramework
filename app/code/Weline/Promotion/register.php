@@ -8,7 +8,7 @@ Register::register(
     Register::MODULE,
     'Weline_Promotion',
     __DIR__,
-    '1.0.0',
+    '1.0.1',
     '万能促销运营台：活动投放决策、前台活动页与 campaign run 持久化',
-    ['Weline_Backend', 'Weline_Theme'],
+    ['Weline_Backend', 'Weline_Theme', 'Weline_Websites'],
 );

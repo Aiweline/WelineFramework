@@ -9,6 +9,8 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Winback\WinbackCampaign;
+use Weline\Marketing\Service\MarketingWebsiteScope;
+use Weline\Websites\Service\AdminWebsiteScope;
 
 #[Acl('Weline_Marketing::commerce:marketing:winback', '挽回活动', 'mail', '未付订单挽回营销', 'Weline_Backend::marketing_group')]
 final class Winback extends BackendController
@@ -16,10 +18,21 @@ final class Winback extends BackendController
     #[Acl('Weline_Marketing::commerce:marketing:winback_index', '挽回活动列表', 'list', '查看挽回活动')]
     public function index(): string
     {
+        $filterWebsiteId = AdminWebsiteScope::resolveFilterIdFromGet($this->request);
+        $websiteSelect = AdminWebsiteScope::buildSelectView($filterWebsiteId);
+
         /** @var WinbackCampaign $model */
         $model = ObjectManager::getInstance(WinbackCampaign::class);
         try {
-            $model->clear()->order(WinbackCampaign::schema_fields_ID, 'DESC')->pagination()->select()->fetch();
+            $model->clear();
+            if ($filterWebsiteId !== null) {
+                $model->where(
+                    WinbackCampaign::schema_fields_WEBSITE_ID,
+                    MarketingWebsiteScope::listMatchIds($filterWebsiteId),
+                    'IN'
+                );
+            }
+            $model->order(WinbackCampaign::schema_fields_ID, 'DESC')->pagination()->select()->fetch();
             $this->assign('campaigns', $model->getItems());
             $this->assign('pagination', $model->getPagination());
             $this->assign('load_error', '');
@@ -30,14 +43,21 @@ final class Winback extends BackendController
             $this->assign('load_error', $e->getMessage());
         }
 
+        $this->assign('filter_website_id', $filterWebsiteId);
+        $this->assign('websiteSelectValue', $websiteSelect['value']);
+        $this->assign('websiteSelectDisplay', $websiteSelect['display']);
+        $this->assign('websiteSelectOptionsJson', $websiteSelect['options_json']);
+
         return $this->fetch();
     }
 
     #[Acl('Weline_Marketing::commerce:marketing:winback_add', '新建挽回活动', 'plus', '新建挽回活动')]
     public function getAdd(): string
     {
+        $prefill = AdminWebsiteScope::resolveFilterIdFromGet($this->request);
         $this->assign('campaign', null);
         $this->assign('allowed_types', WinbackCampaign::allowedTypes());
+        $this->assignWebsiteFormSelect($prefill ?? MarketingWebsiteScope::ENTITY_ALL);
 
         return $this->fetch('form');
     }
@@ -56,6 +76,10 @@ final class Winback extends BackendController
         }
         $this->assign('campaign', $model);
         $this->assign('allowed_types', WinbackCampaign::allowedTypes());
+        $entityWebsite = MarketingWebsiteScope::normalizeEntity(
+            $model->getData(WinbackCampaign::schema_fields_WEBSITE_ID)
+        );
+        $this->assignWebsiteFormSelect($entityWebsite);
 
         return $this->fetch('form');
     }
@@ -77,7 +101,7 @@ final class Winback extends BackendController
         $maxSteps = max(1, min(10, (int)$this->request->getParam('max_steps', 1)));
         $stepInterval = max(1, (int)$this->request->getParam('step_interval_hours', 24));
         $cooldown = max(0, (int)$this->request->getParam('cooldown_hours', 168));
-        $websiteId = max(0, (int)$this->request->getParam('website_id', 0));
+        $websiteId = MarketingWebsiteScope::normalizeEntity($this->request->getParam('website_id', ''));
         $incentiveRuleId = max(0, (int)$this->request->getParam('incentive_rule_id', 0));
         $segmentId = max(0, (int)$this->request->getParam('segment_id', 0));
 
@@ -123,6 +147,18 @@ final class Winback extends BackendController
             Message::error(__('保存失败：%{1}', $e->getMessage()));
         }
 
-        return $this->redirect('*/backend/winback/index');
+        $redirectQuery = $websiteId >= 0 ? '?website_id=' . $websiteId : '';
+
+        return $this->redirect('*/backend/winback/index' . $redirectQuery);
+    }
+
+    private function assignWebsiteFormSelect(int $entityWebsiteId): void
+    {
+        $filterId = $entityWebsiteId < 0 ? null : $entityWebsiteId;
+        $websiteSelect = AdminWebsiteScope::buildSelectView($filterId);
+        $this->assign('form_website_id', $entityWebsiteId);
+        $this->assign('websiteSelectValue', $websiteSelect['value']);
+        $this->assign('websiteSelectDisplay', $websiteSelect['display']);
+        $this->assign('websiteSelectOptionsJson', $websiteSelect['options_json']);
     }
 }

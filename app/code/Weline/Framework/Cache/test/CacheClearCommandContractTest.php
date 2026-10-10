@@ -51,8 +51,11 @@ final class CacheClearCommandContractTest extends TestCase
             $source,
         );
         self::assertStringContainsString("warmUp('product')", $source);
+        self::assertStringContainsString("warmUp('search')", $source);
         self::assertStringNotContainsString('SearchProjectionScopeCacheWarmer', $source);
         self::assertStringNotContainsString('HomepageShelfOffersLocaleCacheWarmer', $source);
+        self::assertStringNotContainsString('SearchQueryResultTipCacheWarmer', $source);
+        self::assertStringNotContainsString('PlpFilterOffersLightCacheWarmer', $source);
         self::assertStringContainsString(
             "warmUp('weline_theme_storefront_chrome')",
             $source,

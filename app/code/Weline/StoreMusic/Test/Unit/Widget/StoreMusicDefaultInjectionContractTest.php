@@ -30,6 +30,17 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('"waveform_default":true', $src);
     }
 
+    public function testWidgetPrefetchesWidgetI18nLabelsBeforePerStringLabel(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/store-music.phtml');
+        $prefetch = strpos($src, 'WidgetI18n::prefetchLabels');
+        $labelFn = strpos($src, '$t = static fn');
+        self::assertNotFalse($prefetch);
+        self::assertNotFalse($labelFn);
+        self::assertLessThan($labelFn, $prefetch);
+        self::assertStringContainsString("'进店音乐'", $src);
+    }
+
     public function testWidgetDeclaresComponentConfigParams(): void
     {
         $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/store-music.phtml');

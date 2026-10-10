@@ -71,6 +71,40 @@ try {
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 // Path-aware WidgetI18n (not State-lagging __()) so /{locale}/ float chrome
 // matches storefront locale on WLS Fiber; keep Chinese source keys.
+// Batch-prefetch before per-string label() — avoids N× Dictionary::getEntry on
+// non-default locales (cold-chaos: store-music ~45q on ar_SA PLP).
+WidgetI18n::prefetchLabels([
+    '请先同意营销 Cookie 后再播放',
+    '点击开启音乐',
+    '点击开启声音',
+    '波形不可用',
+    '开启波形',
+    '关闭波形',
+    '播放中',
+    '进店音乐',
+    '当前浏览器暂不支持此音频格式',
+    '音频加载失败，请换一首曲目或格式',
+    '已关闭自动播放，点击播放可重新开启',
+    '已在其他页面播放',
+    '播放列表',
+    '共 {n} 首',
+    '展开简介',
+    '收起简介',
+    '搜索歌曲…',
+    '未找到匹配曲目',
+    '搜索播放列表',
+    '进店氛围音乐',
+    '点开选曲',
+    '选择曲目聆听',
+    '关闭选曲',
+    '播放控制',
+    '上一首',
+    '播放',
+    '停止',
+    '停止播放',
+    '下一首',
+    '音量',
+]);
 $t = static fn (string $word): string => $esc(WidgetI18n::label($word));
 $configJson = $esc((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 $defaultVol = (int)$payload['default_volume'];

@@ -703,6 +703,83 @@ if ($oauthCfError === 'invalid_scope') {
                     <li><code>php bin/w mail:env:check</code> — <?= __('检测企业邮箱服务环境') ?></li>
                     <li><code>php bin/w mail:env:install</code> — <?= __('查看或执行安装计划') ?></li>
                 </ul>
+
+                <div class="w-alert" data-tone="info" data-testid="mail-enterprise-admin-login">
+                    <div class="w-alert__content">
+                        <div class="w-alert__title"><?= __('Stalwart Admin（:8080）登录账户与初始密码') ?></div>
+                        <p class="w-text" data-size="sm" style="--w-m:0;">
+                            <?= __('官方安装后首次用本机浏览器打开管理台完成初始化；账户与密码不会出现在本页，须在服务器上按下列方式取回。') ?>
+                        </p>
+                        <ul class="w-text" data-size="sm" style="--w-m:0; --w-mt:var(--weline-space-2); padding-inline-start:1.25rem;">
+                            <li><?= __('地址（仅本机或 SSH 隧道）：') ?> <code>http://127.0.0.1:8080/login</code>（<?= __('或') ?> <code>/admin</code>）</li>
+                            <li><?= __('用户名：官方安装默认为') ?> <code>admin</code></li>
+                            <li>
+                                <?= __('初始密码：安装时一次性写入 systemd 日志，在服务器执行：') ?>
+                                <code>journalctl -u stalwart -b --no-pager | grep -iE 'password|admin|secret'</code>
+                            </li>
+                            <li><?= __('登录后请立即修改管理员密码；忘记密码只能查当时日志或按 Stalwart 文档重置 recovery。') ?></li>
+                            <li><?= __('禁止把 :8080 裸暴露到公网；需要远程时用 SSH 本地转发，例如：') ?> <code>ssh -L 8080:127.0.0.1:8080 user@服务器</code></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="w-alert" data-tone="warning" data-testid="mail-enterprise-firewall-ports">
+                    <div class="w-alert__content">
+                        <div class="w-alert__title"><?= __('云安全组 / 防火墙：先放行这些端口（必需）') ?></div>
+                        <p class="w-text" data-size="sm" style="--w-m:0;">
+                            <?= __('引擎装好后还不能公网收发：请到 VPS / 云厂商控制台，为邮局服务器公网 IP 配置入站放行。未放行时 DNS 配齐也会收不到信、客户端连不上。') ?>
+                        </p>
+                        <div class="w-table-wrap" style="--w-mt:var(--weline-space-2);">
+                            <table class="w-table" data-testid="mail-enterprise-firewall-ports-table">
+                                <thead>
+                                <tr>
+                                    <th scope="col"><?= __('端口') ?></th>
+                                    <th scope="col"><?= __('方向') ?></th>
+                                    <th scope="col"><?= __('用途') ?></th>
+                                    <th scope="col"><?= __('操作提示') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td><code>25/tcp</code></td>
+                                    <td><?= __('入站') ?></td>
+                                    <td><?= __('服务器间接收入站邮件（MTA）') ?></td>
+                                    <td><?= __('部分云默认封禁 25，须在控制台单独申请解封后再放行。') ?></td>
+                                </tr>
+                                <tr>
+                                    <td><code>587/tcp</code></td>
+                                    <td><?= __('入站') ?></td>
+                                    <td><?= __('客户端提交发信（推荐）') ?></td>
+                                    <td><?= __('STARTTLS；客户端发信主端口。') ?></td>
+                                </tr>
+                                <tr>
+                                    <td><code>465/tcp</code></td>
+                                    <td><?= __('入站') ?></td>
+                                    <td><?= __('客户端提交发信（可选）') ?></td>
+                                    <td><?= __('隐式 TLS；按客户端需要放行。') ?></td>
+                                </tr>
+                                <tr>
+                                    <td><code>993/tcp</code></td>
+                                    <td><?= __('入站') ?></td>
+                                    <td><?= __('客户端收信（IMAPS）') ?></td>
+                                    <td><?= __('客户端收信主端口。') ?></td>
+                                </tr>
+                                <tr>
+                                    <td><code>995/tcp</code></td>
+                                    <td><?= __('入站') ?></td>
+                                    <td><?= __('客户端收信（POP3S，可选）') ?></td>
+                                    <td><?= __('仅当业务需要 POP3 时放行。') ?></td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <ul class="w-text" data-size="sm" style="--w-m:0; --w-mt:var(--weline-space-2); padding-inline-start:1.25rem;">
+                            <li><?= __('推荐顺序：放行上表端口 → 引擎就绪 → DNS（灰云）→ 启用域名 → 真实收发验收。') ?></li>
+                            <li><?= __('禁止把 Stalwart 管理口 8080 裸暴露到公网；账户密码见上方「Stalwart Admin（:8080）登录」提醒。') ?></li>
+                            <li><?= __('本机防火墙（ufw/firewalld/iptables）若开启，须与云安全组同步放行同一批端口。') ?></li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </section>
 

@@ -36,7 +36,7 @@ class LifecycleCampaign extends Model
     #[Col(type: 'int', nullable: false, default: 0, comment: '分群ID')]
     public const schema_fields_SEGMENT_ID = 'segment_id';
 
-    #[Col(type: 'int', nullable: false, default: 0, comment: '网站ID')]
+    #[Col(type: 'int', nullable: false, default: -1, comment: '网站ID，-1=全部，>=0=具体站（含默认站0）')]
     public const schema_fields_WEBSITE_ID = 'website_id';
 
     #[Col(type: 'timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]

@@ -52,6 +52,11 @@ final class B2BHangPaymentService
                 $cashDeposit = max(0, (int)$tp['b2b_credit_cash_deposit_minor']);
                 $amountMinor = $cashDeposit;
                 $creditApply = max(0, (int)($tp['b2b_credit_apply_checkout_minor'] ?? 0));
+            } elseif ($purpose === B2BHangOrderService::PURPOSE_BALANCE
+                && array_key_exists('balance_amount_minor', $tp)
+            ) {
+                // 后台议价后 type_payload 与 hang 双写；以订单投影为准避免漂移。
+                $amountMinor = max(0, (int)$tp['balance_amount_minor']);
             }
             $orderSummary = $this->buildOrderSummary($hang, $read, $amountMinor);
         } catch (\Throwable) {
@@ -120,6 +125,8 @@ final class B2BHangPaymentService
             'hang_status' => $hang->hangStatus,
             'hang_status_label' => $this->hangStatusLabel($hang->hangStatus),
             'lines' => [],
+            'discount_lines' => [],
+            'discount_amount_minor' => 0,
             'goods_subtotal_minor' => max(0, (int)$hang->goodsSubtotalTaxedMinor),
             'deposit_amount_minor' => max(0, (int)$hang->depositAmountMinor),
             'balance_amount_minor' => max(0, (int)$hang->balanceAmountMinor),
@@ -173,6 +180,18 @@ final class B2BHangPaymentService
             $goodsSubtotal = max(0, (int)$hang->goodsSubtotalTaxedMinor);
         }
         $display = trim((string)($read->displayNumber ?? ''));
+        $discountLines = $this->presentDiscountLines(
+            \is_array($read->typePayload['discount_lines'] ?? null)
+                ? $read->typePayload['discount_lines']
+                : [],
+        );
+        $discountAbs = 0;
+        foreach ($discountLines as $dl) {
+            $discountAbs += max(0, (int)($dl['amount_minor_abs'] ?? 0));
+        }
+        $balanceFromOrder = array_key_exists('balance_amount_minor', $read->typePayload)
+            ? max(0, (int)$read->typePayload['balance_amount_minor'])
+            : max(0, (int)$hang->balanceAmountMinor);
 
         return [
             'display_number' => $display,
@@ -180,11 +199,46 @@ final class B2BHangPaymentService
             'hang_status' => $hang->hangStatus,
             'hang_status_label' => $this->hangStatusLabel($hang->hangStatus),
             'lines' => $lines,
+            'discount_lines' => $discountLines,
+            'discount_amount_minor' => $discountAbs,
             'goods_subtotal_minor' => $goodsSubtotal,
             'deposit_amount_minor' => max(0, (int)$hang->depositAmountMinor),
-            'balance_amount_minor' => max(0, (int)$hang->balanceAmountMinor),
+            'balance_amount_minor' => $balanceFromOrder,
             'payable_minor' => max(0, $payableMinor),
         ];
+    }
+
+    /**
+     * @param list<mixed> $raw
+     * @return list<array{label:string,source_type:string,amount_minor_abs:int,note:string}>
+     */
+    private function presentDiscountLines(array $raw): array
+    {
+        $out = [];
+        foreach ($raw as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $abs = abs((int)($row['amount_minor'] ?? 0));
+            if ($abs <= 0) {
+                continue;
+            }
+            $label = trim((string)($row['label'] ?? ''));
+            $source = strtolower(trim((string)($row['source_type'] ?? '')));
+            if ($label === '') {
+                $label = $source === 'admin_adjustment'
+                    ? (string)__('后台议价优惠')
+                    : (string)__('优惠');
+            }
+            $out[] = [
+                'label' => $label,
+                'source_type' => $source,
+                'amount_minor_abs' => $abs,
+                'note' => trim((string)($row['note'] ?? '')),
+            ];
+        }
+
+        return $out;
     }
 
     /**
@@ -305,13 +359,7 @@ final class B2BHangPaymentService
 
     private function hangStatusLabel(string $status): string
     {
-        return match ($status) {
-            B2BOrderHang::STATUS_AWAITING_DEPOSIT => (string)__('待付定金'),
-            B2BOrderHang::STATUS_AWAITING_MERCHANT_APPROVAL => (string)__('待商家确认'),
-            B2BOrderHang::STATUS_AWAITING_BALANCE => (string)__('待付尾款'),
-            B2BOrderHang::STATUS_COMPLETED => (string)__('挂单已完成'),
-            default => $status,
-        };
+        return HangStatusLabels::label($status);
     }
 
     /**
@@ -419,10 +467,11 @@ final class B2BHangPaymentService
             throw new B2BConflictException(self::ERROR_PURPOSE, __('支付幂等键无效'));
         }
 
+        $balanceMinor = $hang->balanceAmountMinor;
         $payContext = [
             'purpose' => $purpose,
             'hang_purpose' => $purpose,
-            'balance_amount_minor' => $hang->balanceAmountMinor,
+            'balance_amount_minor' => $balanceMinor,
             'country_code' => (string)($context['country_code'] ?? ''),
             'locale' => (string)($context['locale'] ?? ''),
             'quote_token' => (string)($context['quote_token'] ?? ''),
@@ -432,16 +481,22 @@ final class B2BHangPaymentService
         if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
             $payContext['environment'] = $explicitEnvironment;
         }
-        // Prefer order type_payload cash deposit; do not force full hang deposit.
-        if ($purpose === B2BHangOrderService::PURPOSE_DEPOSIT) {
-            try {
-                $tp = $this->orders()->get($hang->orderRef)->typePayload;
+        // Prefer order type_payload cash deposit / balance after admin议价; do not force stale hang.
+        try {
+            $tp = $this->orders()->get($hang->orderRef)->typePayload;
+            if ($purpose === B2BHangOrderService::PURPOSE_DEPOSIT) {
                 if (array_key_exists('b2b_credit_cash_deposit_minor', $tp)) {
                     $payContext['deposit_amount_minor'] = max(0, (int)$tp['b2b_credit_cash_deposit_minor']);
                 } else {
                     $payContext['deposit_amount_minor'] = $hang->depositAmountMinor;
                 }
-            } catch (\Throwable) {
+            } elseif ($purpose === B2BHangOrderService::PURPOSE_BALANCE
+                && array_key_exists('balance_amount_minor', $tp)
+            ) {
+                $payContext['balance_amount_minor'] = max(0, (int)$tp['balance_amount_minor']);
+            }
+        } catch (\Throwable) {
+            if ($purpose === B2BHangOrderService::PURPOSE_DEPOSIT) {
                 $payContext['deposit_amount_minor'] = $hang->depositAmountMinor;
             }
         }

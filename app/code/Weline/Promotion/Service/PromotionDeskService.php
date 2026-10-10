@@ -19,10 +19,14 @@ final class PromotionDeskService
     }
 
     /** @return array<string, mixed> */
-    public function buildDeskView(int $websiteId = 0, string $storeCode = '', string $channelCode = ''): array
-    {
+    public function buildDeskView(
+        int $websiteId = 0,
+        string $storeCode = '',
+        string $channelCode = '',
+        bool $websiteParamPresent = false,
+    ): array {
         $resolved = $this->scopeResolver->resolve();
-        if ($websiteId <= 0 && $storeCode === '' && $channelCode === '') {
+        if (!$websiteParamPresent && $websiteId <= 0 && $storeCode === '' && $channelCode === '') {
             $websiteId = (int)($resolved['website_id'] ?? 0);
             $storeCode = trim((string)($resolved['store_code'] ?? ''));
             $channelCode = trim((string)($resolved['channel_code'] ?? ''));
@@ -48,7 +52,9 @@ final class PromotionDeskService
             'actions' => $actions,
             'context' => $context,
             'scope' => $scopeFilter + ['label' => (string)$scopeSummary['label'], 'level' => (string)$scopeSummary['level']],
-            'scope_filter_active' => $scopeFilter['website_id'] > 0 || $scopeFilter['store_code'] !== '' || $scopeFilter['channel_code'] !== '',
+            'scope_filter_active' => $websiteParamPresent
+                || $scopeFilter['store_code'] !== ''
+                || $scopeFilter['channel_code'] !== '',
             'active_themes' => $activeThemes,
             'scorecards' => $this->buildScorecards(),
             'lanes' => $this->buildLanes(),

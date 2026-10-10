@@ -144,29 +144,23 @@
     }
 
     .w-queue-table {
-        min-width: 68rem;
+        min-width: 48rem;
     }
 
-    .w-queue-table th:first-child {
-        width: 3rem;
+    .w-queue-table--compact th:first-child {
+        width: 2.75rem;
     }
 
-    .w-queue-table th:nth-child(2) {
-        width: 5rem;
+    .w-queue-table--compact th:nth-child(3) {
+        width: 16rem;
     }
 
-    .w-queue-table th:nth-child(4) {
-        width: 8rem;
-    }
-
-    .w-queue-table th:nth-child(6) {
+    .w-queue-table--compact th:last-child {
         width: 11rem;
     }
 
-    .w-queue-table th:last-child {
-        width: 13rem;
-    }
-
+    .w-queue-table__main,
+    .w-queue-table__status-block,
     .w-queue-table__identity,
     .w-queue-table__info,
     .w-queue-table__time {
@@ -175,8 +169,23 @@
         gap: var(--weline-space-1);
     }
 
+    .w-queue-table__title-row,
+    .w-queue-table__meta-row {
+        display: flex;
+        align-items: center;
+        gap: var(--weline-space-2);
+        min-width: 0;
+        flex-wrap: wrap;
+    }
+
+    .w-queue-table__id {
+        color: var(--weline-theme-text-muted);
+        font-family: var(--weline-font-mono);
+        font-size: var(--weline-font-size-sm);
+    }
+
     .w-queue-table__name {
-        max-width: 22rem;
+        max-width: 28rem;
         overflow: hidden;
         font-weight: var(--weline-font-weight-semibold);
         text-overflow: ellipsis;
@@ -198,14 +207,19 @@
     }
 
     .w-queue-table__result {
-        max-width: 26rem;
+        max-width: 18rem;
         overflow-wrap: anywhere;
         color: var(--weline-theme-text-muted);
         font-size: var(--weline-font-size-sm);
+        line-height: 1.35;
     }
 
     .w-queue-table__view-more {
         margin-inline-start: var(--weline-space-1);
+    }
+
+    .w-queue-table__actions {
+        justify-content: flex-end;
     }
 
     .w-queue-table__actions .w-button {
@@ -214,7 +228,18 @@
     }
 
     .w-queue-table__empty {
-        min-height: 16rem;
+        min-height: 12rem;
+    }
+
+    @media (max-width: 56rem) {
+        .w-queue-table {
+            min-width: 0;
+        }
+
+        .w-queue-table--compact th:nth-child(3),
+        .w-queue-table--compact th:last-child {
+            width: auto;
+        }
     }
 
     .w-queue-result-dialog__body {

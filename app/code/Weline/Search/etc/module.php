@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Search',
-    'version' => '1.4.27',
+    'version' => '1.4.28',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -16,6 +16,8 @@ return [
         'Weline_Product' => '*',
     ],
     'provides' => [
+        'cache.warmer.search.query_result_tip'
+            => \Weline\Search\Service\SearchQueryResultTipCacheWarmer::class,
         \Weline\Search\Api\SearchShardRegistryInterface::class
             => \Weline\Search\Model\SearchShardRegistry::class,
         \Weline\Search\Api\SearchIndexStorageInterface::class

@@ -317,6 +317,120 @@ class PaymentRefundService implements PaymentRefundFacadeInterface
             : 0;
     }
 
+    public function sumCapturedAmountMinor(string $payableType, string $payableId): int
+    {
+        $payableId = trim($payableId);
+        if ($payableId === '') {
+            return 0;
+        }
+        try {
+            $this->captureReaders()->ensureFromPayable($payableType, $payableId);
+        } catch (\Throwable) {
+        }
+        $sum = 0;
+        $seen = [];
+        foreach (PaymentCaptureReaderEnsureService::payableTypeAliases($payableType) as $type) {
+            foreach ($this->listCapturedIntents($type, $payableId) as $intent) {
+                $code = (string)$intent->getData(PaymentIntent::schema_fields_INTENT_CODE);
+                if ($code !== '' && isset($seen[$code])) {
+                    continue;
+                }
+                if ($code !== '') {
+                    $seen[$code] = true;
+                }
+                $sum += max(0, (int)$intent->getData(PaymentIntent::schema_fields_AMOUNT_MINOR));
+            }
+        }
+
+        return $sum;
+    }
+
+    public function abandonOpenIntentsForPayable(
+        string $payableType,
+        string $payableId,
+        string $reason = 'admin_amount_adjusted',
+    ): int {
+        $payableId = trim($payableId);
+        if ($payableId === '') {
+            return 0;
+        }
+        $openStatuses = [
+            PaymentIntent::STATUS_DRAFT,
+            PaymentIntent::STATUS_PENDING,
+            PaymentIntent::STATUS_ZERO_AMOUNT_READY,
+            PaymentIntent::STATUS_REDIRECT_PENDING,
+            PaymentIntent::STATUS_QR_PENDING,
+            PaymentIntent::STATUS_AUTHENTICATION_REQUIRED,
+            PaymentIntent::STATUS_REQUIRES_ACTION,
+            PaymentIntent::STATUS_PROCESSING,
+            PaymentIntent::STATUS_PARTIALLY_PAID,
+            PaymentIntent::STATUS_RETRYABLE_FAILED,
+            PaymentIntent::STATUS_REVIEW_REQUIRED,
+        ];
+        $abandoned = 0;
+        $seen = [];
+        $now = date('Y-m-d H:i:s');
+        foreach (PaymentCaptureReaderEnsureService::payableTypeAliases($payableType) as $type) {
+            $model = $this->objectManager->getInstance(PaymentIntent::class, [], false);
+            $model->where(PaymentIntent::schema_fields_PAYABLE_TYPE, strtolower(trim($type)))
+                ->where(PaymentIntent::schema_fields_PAYABLE_ID, $payableId)
+                ->where(PaymentIntent::schema_fields_STATUS, $openStatuses, 'IN')
+                ->select()
+                ->fetch();
+            foreach ($model->getItems() as $intent) {
+                if (!$intent instanceof PaymentIntent || !$intent->getId()) {
+                    continue;
+                }
+                $code = (string)$intent->getData(PaymentIntent::schema_fields_INTENT_CODE);
+                if ($code !== '' && isset($seen[$code])) {
+                    continue;
+                }
+                if ($code !== '') {
+                    $seen[$code] = true;
+                }
+                $intent->setData(PaymentIntent::schema_fields_STATUS, PaymentIntent::STATUS_CANCELLED);
+                $intent->setData(PaymentIntent::schema_fields_ACTIVE_FLAG, 0);
+                $intent->setData(PaymentIntent::schema_fields_ACTIVE_GUARD, null);
+                $intent->setData(PaymentIntent::schema_fields_CLOSE_REASON, $reason !== '' ? $reason : 'admin_amount_adjusted');
+                $intent->setData(PaymentIntent::schema_fields_CLOSED_AT, $now);
+                $intent->setData(PaymentIntent::schema_fields_UPDATED_AT, $now);
+                $intent->save();
+                ++$abandoned;
+            }
+        }
+
+        return $abandoned;
+    }
+
+    /**
+     * @return list<PaymentIntent>
+     */
+    private function listCapturedIntents(string $payableType, string $payableId): array
+    {
+        $model = $this->objectManager->getInstance(PaymentIntent::class, [], false);
+        $model->where(PaymentIntent::schema_fields_PAYABLE_TYPE, strtolower(trim($payableType)))
+            ->where(PaymentIntent::schema_fields_PAYABLE_ID, $payableId)
+            ->where(PaymentIntent::schema_fields_STATUS, [
+                PaymentIntent::STATUS_AUTHORIZED,
+                PaymentIntent::STATUS_CAPTURED,
+                PaymentIntent::STATUS_PAID,
+                PaymentIntent::STATUS_REFUNDING,
+                PaymentIntent::STATUS_PARTIALLY_REFUNDED,
+                'succeeded',
+            ], 'IN')
+            ->order(PaymentIntent::schema_fields_CREATED_AT, 'ASC')
+            ->select()
+            ->fetch();
+        $out = [];
+        foreach ($model->getItems() as $intent) {
+            if ($intent instanceof PaymentIntent && $intent->getId()) {
+                $out[] = $intent;
+            }
+        }
+
+        return $out;
+    }
+
     private function reserveInTransaction(RefundReserveCommand $command): RefundOperationResult
     {
         $intent = $this->loadCapturedIntent(

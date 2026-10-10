@@ -387,6 +387,10 @@ Product,Product
 热销榜内容由控制器渲染,"Best-seller content is rendered by the controller"
 我的询价,"My quotes"
 查看询价进度与回复,"View quote status and replies"
+清除筛选条件,"Clear filters"
+浏览全部分类,"Browse all categories."
+部门,Department
+全部类目,"Any Department"
 查看您提交的商品询价与处理状态,"Review your product quote requests and status"
 暂无询价记录,"No quote requests yet"
 SKU,SKU
@@ -1341,10 +1345,6 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 "共 %{1} 件商品","%{1} products"
 查找分类,"Find category."
 "当前 Website 还没有分类。请先建立分类目录，再回到商品选择。","The website currently has no categories. Please create a category directory first, and then return to the product selection page."
-全部类目,"Any Department"
-清除筛选条件,"Clear filters"
-部门,Department
-浏览全部分类,"Browse all categories."
 "规格轴必须使用有效的 EAV 属性代码","Specification axes must use valid EAV attribute codes."
 规格轴不能重复：%{1},"Specification axis cannot be repeated: %{1}"
 多规格商品至少需要一个规格轴,"Products with multiple specifications require at least one specification attribute."

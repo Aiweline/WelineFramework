@@ -15,11 +15,12 @@ Register::register(
     Register::MODULE,
     'Weline_Seo',
     __DIR__,
-    '1.1.1',  // 默认文本模型绑定 deepseek-flash（V4.1 Flash）
+    '1.1.2',
     'SEO 集成与智能优化模块',
     [
         'Weline_Ai',
         'Weline_Backend',
+        'Weline_Websites',
         'WeShop_Store',
     ]
 );

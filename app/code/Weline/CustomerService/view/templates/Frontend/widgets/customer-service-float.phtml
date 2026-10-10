@@ -69,6 +69,36 @@ $currentLocale = $storefrontLocale
 // P10: keep body-end config slim — dictionaries load on first chat open via Query.
 // Prefer {} over [] so clients treat it as a locale map, not a list.
 $widgetTranslations = new \stdClass();
+// Batch-prefetch SSR chrome copy before per-string label() — collapses
+// Dictionary::getEntry N+1 on non-default locales (cold-chaos: ~29q on ar_SA).
+WidgetI18n::prefetchLabels([
+    '客服服务',
+    '检测中...',
+    '修改邮箱身份',
+    '设置',
+    '收起',
+    '我的语言',
+    '显示模式',
+    '仅显示译文',
+    '原文+译文',
+    '仅显示原文',
+    '欢迎使用客服服务！',
+    '请输入您的问题，我们的客服将尽快为您解答。',
+    '验证邮箱',
+    '聊天工具',
+    '表情',
+    '图片',
+    '文件',
+    '截图',
+    '输入消息...',
+    '接收客服回复与优惠通知',
+    '留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。',
+    '仅用于本次客服咨询相关通知，不是简报订阅。',
+    '接收通知的邮箱',
+    '请输入用于接收客服通知的邮箱',
+    '稍后再说',
+    '发送验证邮件',
+]);
 $cs = static fn (string $source): string => WidgetI18n::label($source);
 
 $customerServiceModule = Env::getInstance()->getModuleList()['Weline_CustomerService'] ?? [];

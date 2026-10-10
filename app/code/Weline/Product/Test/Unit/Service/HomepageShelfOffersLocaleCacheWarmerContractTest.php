@@ -19,7 +19,7 @@ final class HomepageShelfOffersLocaleCacheWarmerContractTest extends TestCase
             HomepageShelfOffersLocaleCacheWarmer::class,
             $provides['cache.warmer.product.homepage_shelf_offers_locale'] ?? null,
         );
-        self::assertSame('1.0.388', (string)($module['version'] ?? ''));
+        self::assertSame('1.0.390', (string)($module['version'] ?? ''));
     }
 
     public function testWarmerTargetsProductPoolAfterSearchProjection(): void

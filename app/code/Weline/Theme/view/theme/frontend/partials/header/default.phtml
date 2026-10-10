@@ -400,12 +400,15 @@ $defaultNavItemsFactory = static function (): array {
                             exclusive="true"
                             position="header"
                             class="header-search-wrapper">
+                        <?php // Guest-neutral chrome bag: empty query in shell; Partials hydrates request q/type/category. ?>
+                        <weline-chrome-island data-weline-chrome-island="header-search" style="display:contents">
                         <?= $this->fetch('Weline_Theme::theme/frontend/partials/search/header-bar.phtml', [
                             'placeholder' => (string)__('搜索商品、分类与关键词...'),
-                            'query' => (string)($this->request->getParam('q') ?? ''),
+                            'query' => '',
                             'show_hot_words' => true,
                             'panel_id' => 'header-search-panel',
                         ]) ?>
+                        </weline-chrome-island>
                     </w:slot>
                 <?php endif; ?>
                 <w:hook>Weline_Theme::frontend::partials::header::search-after</w:hook>

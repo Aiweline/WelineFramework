@@ -161,18 +161,66 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                 $registry->warmUp('weline_theme_layout_entity_published_projection'),
                 '部件静态源袋已预热 %{1} 条',
             );
-            // Product pool: search projection + shelf/offers locale warmers (Registry details).
+            // Product pool: search projection + shelf/offers + PLP light warmers (Registry details).
             $this->reportWarmUpDetails(
                 $registry->warmUp('product'),
                 '商品池缓存已预热 %{1} 条',
             );
-            // Chrome pool: enabled-locale header/footer HotCache (Theme warmer provides).
+            // Search pool: bounded tip search.query_result warmer (owning module provides).
             $this->reportWarmUpDetails(
-                $registry->warmUp('weline_theme_storefront_chrome'),
-                '店面 chrome 语种袋已预热 %{1} 条',
+                $registry->warmUp('search'),
+                '搜索池缓存已预热 %{1} 条',
             );
+            // Chrome must be re-seeded in a fresh CLI process after WLS IPC clear.
+            // In-process warmUp here shares the Clear RequestContext / generation
+            // dust and quiet dig still rebuilds theme.storefront_chrome (G-chrome-ex).
+            $this->reseedStorefrontChromeLocalesViaSubprocess();
         } catch (\Throwable $e) {
             $this->printing->note(__('店面 FPC 预热跳过：%{1}', [$e->getMessage()]));
+        }
+    }
+
+    /**
+     * Fresh-process chrome locale warm after soft-clear IPC.
+     * In-process Registry warm shares Clear dust and fails quiet G-chrome-ex.
+     */
+    private function reseedStorefrontChromeLocalesViaSubprocess(): void
+    {
+        if (!\defined('BP')) {
+            return;
+        }
+        $php = \PHP_BINARY !== '' ? \PHP_BINARY : 'php';
+        $bin = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+        if (!\is_file($bin)) {
+            $this->printing->note(__('店面 chrome 子进程预热跳过：找不到 bin/w'));
+
+            return;
+        }
+        $cmd = \escapeshellarg($php)
+            . ' -d memory_limit=512M -d opcache.enable_cli=0 '
+            . \escapeshellarg($bin)
+            . ' cache:warm --pool=weline_theme_storefront_chrome 2>&1';
+        $this->printing->note(__('店面 chrome 语种袋：子进程二次预热…'));
+        $output = [];
+        $code = 0;
+        // phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- intentional Clear subprocess
+        @\exec($cmd, $output, $code);
+        $joined = \implode("\n", $output);
+        foreach ($output as $line) {
+            $line = \trim((string)$line);
+            if ($line === '') {
+                continue;
+            }
+            if (\str_contains($line, 'gate_ok:') || \str_contains($line, 'theme.storefront_chrome_locales')) {
+                if (\str_contains($line, 'warm_partial=1') || \str_contains($line, 'remaining=')) {
+                    $this->printing->warning($line);
+                } else {
+                    $this->printing->successIcon($line);
+                }
+            }
+        }
+        if ($code !== 0 && !\str_contains($joined, 'gate_ok:')) {
+            $this->printing->note(__('店面 chrome 子进程预热失败 exit=%{1}', [(string)$code]));
         }
     }
 

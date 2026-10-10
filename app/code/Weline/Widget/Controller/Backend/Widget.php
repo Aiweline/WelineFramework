@@ -54,14 +54,26 @@ class Widget extends BackendController
                     continue;
                 }
 
-                // 搜索筛选
+                // 搜索筛选：名称 / code / 描述 / 模块 / 类型
                 if ($search) {
                     $searchLower = strtolower($search);
-                    $nameMatch = strpos(strtolower($widget['name'] ?? ''), $searchLower) !== false;
-                    $descMatch = strpos(strtolower($widget['description'] ?? ''), $searchLower) !== false;
-                    $moduleMatch = strpos(strtolower($widget['module'] ?? ''), $searchLower) !== false;
-                    
-                    if (!$nameMatch && !$descMatch && !$moduleMatch) {
+                    $code = (string)($widget['code'] ?? $name);
+                    $haystacks = [
+                        (string)($widget['name'] ?? ''),
+                        $code,
+                        (string)$name,
+                        (string)($widget['description'] ?? ''),
+                        (string)($widget['module'] ?? ''),
+                        (string)$type,
+                    ];
+                    $matched = false;
+                    foreach ($haystacks as $haystack) {
+                        if ($haystack !== '' && str_contains(strtolower($haystack), $searchLower)) {
+                            $matched = true;
+                            break;
+                        }
+                    }
+                    if (!$matched) {
                         continue;
                     }
                 }
@@ -124,9 +136,13 @@ class Widget extends BackendController
                 ]);
             }
 
+            // Admin modal only needs meta + param schema; omit template_content (can be large / 503).
+            $payload = $widget;
+            unset($payload['template_content']);
+
             return $this->fetchJson([
                 'success' => true,
-                'widget' => $widget
+                'widget' => $payload
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([

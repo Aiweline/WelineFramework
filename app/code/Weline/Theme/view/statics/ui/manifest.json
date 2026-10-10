@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "1c3649ee618a77bdc859a08736472b366ea8a5b9c56f1c797833decc37ca432a",
+    "build_id": "e4972f910fff369547f9e7e581ce9049fedb263a5f315209661a1d3328ebfa7a",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -336,10 +336,10 @@
             "type": "js"
         },
         "foundation": {
-            "bytes": 128735,
+            "bytes": 129867,
             "file": "weline-foundation.css",
-            "gzip_bytes": 19389,
-            "sha256": "d32aaf8b897432061488b96c93858abde2b4fc328701cf94a107827d661d0bc7",
+            "gzip_bytes": 19730,
+            "sha256": "5b0edcfad06bed032479c2ceb5e8a3385a59cc0ed74aabbaec7a3b5465c0f93e",
             "type": "css"
         },
         "frontend": {
@@ -371,10 +371,10 @@
             "type": "js"
         },
         "language-switcher-js": {
-            "bytes": 52413,
+            "bytes": 58296,
             "file": "components/weline-language-switcher.js",
-            "gzip_bytes": 12272,
-            "sha256": "808ec6083ee68a7e8474bf05ac7f44dc7eb98ccb84d8b17ef9aa9dc4d7292ec1",
+            "gzip_bytes": 13041,
+            "sha256": "60a60de116806590d141553a260b09c9687eeba090f5970818e948e2b878d443",
             "type": "js"
         },
         "local-translation-js": {
@@ -434,10 +434,10 @@
             "type": "js"
         },
         "queue-admin-css": {
-            "bytes": 17251,
+            "bytes": 17919,
             "file": "pages/weline-queue-admin.css",
-            "gzip_bytes": 2497,
-            "sha256": "166551b57bd6633a4bad4d6d3efcc3faf323859f1bbbdf1e606b5068e73100b4",
+            "gzip_bytes": 2572,
+            "sha256": "7529405ff8089fc1d30379ba05be652cca711137f3763831b6ba074b5f482619",
             "type": "css"
         },
         "queue-content-js": {
@@ -588,10 +588,10 @@
             "type": "js"
         },
         "ui-core": {
-            "bytes": 171584,
+            "bytes": 175612,
             "file": "weline-ui.js",
-            "gzip_bytes": 36332,
-            "sha256": "ba76668849543325aa6b281f88366fac3ed01b5d10d0161c89aa8a599b541f76",
+            "gzip_bytes": 37153,
+            "sha256": "91cdbb081c6ffe5e7f05d92036418d4c74e3e9ddd5613ff02f087fdfea5618fc",
             "type": "js"
         },
         "websites-admin-css": {

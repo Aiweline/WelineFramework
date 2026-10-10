@@ -22,6 +22,7 @@ use Weline\Seo\Service\SeoPlatformCapabilityService;
 use Weline\Seo\Service\SeoAccountConfig;
 use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Service\SitemapAdapterRegistry;
+use Weline\Websites\Service\AdminWebsiteScope;
 
 /**
  * SEO 账户管理后台控制器
@@ -54,75 +55,95 @@ class Account extends BackendController
     #[AclAttribute('Weline_Seo::seo_account_index', '查看SEO账户列表', 'list', '查看SEO账户列表')]
     public function index(): string
     {
+        $filterWebsiteId = AdminWebsiteScope::resolveFilterIdFromGet($this->request);
+        $websiteSelect = AdminWebsiteScope::buildSelectView($filterWebsiteId);
+
         $query = $this->getAccountModel()->reset()->select();
-
         $query->order(SeoAccount::schema_fields_CREATED_AT, 'DESC');
-
         $accounts = $query->fetchArray();
-        
-        // 获取每个账户绑定的站点数量
-        /** @var \Weline\Seo\Model\SeoWebsiteAccount $websiteAccountModel */
-        $websiteAccountModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
+
+        /** @var SeoWebsiteAccount $websiteAccountModel */
+        $websiteAccountModel = ObjectManager::getInstance(SeoWebsiteAccount::class);
+
+        $scopedAccountIds = null;
+        if ($filterWebsiteId !== null) {
+            $scopedAccountIds = [];
+            foreach ($websiteAccountModel->reset()
+                ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $filterWebsiteId)
+                ->select()
+                ->fetchArray() as $binding) {
+                $aid = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
+                if ($aid > 0) {
+                    $scopedAccountIds[$aid] = true;
+                }
+            }
+            $accounts = array_values(array_filter(
+                $accounts,
+                static fn(array $row): bool => isset($scopedAccountIds[(int)($row['account_id'] ?? 0)])
+            ));
+        }
+
         $bindingCounts = [];
         foreach ($accounts as $account) {
             $accountId = (int)($account['account_id'] ?? 0);
             if ($accountId > 0) {
                 $bindings = $websiteAccountModel->reset()
-                    ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
+                    ->where(SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
                     ->select()
                     ->fetchArray();
                 $bindingCounts[$accountId] = count($bindings);
             }
         }
-        
-        // 获取每个账户的统计数据汇总
-        /** @var \Weline\Seo\Model\SeoWebsiteStats $statsModel */
-        $statsModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteStats::class);
+
+        /** @var SeoWebsiteStats $statsModel */
+        $statsModel = ObjectManager::getInstance(SeoWebsiteStats::class);
         $accountStats = [];
         foreach ($accounts as $account) {
             $accountId = (int)($account['account_id'] ?? 0);
-            if ($accountId > 0) {
-                // 获取该账户关联的所有统计数据（取每个站点最新一条汇总）
-                $stats = $statsModel->reset()
-                    ->where(\Weline\Seo\Model\SeoWebsiteStats::schema_fields_ACCOUNT_ID, $accountId)
-                    ->order(\Weline\Seo\Model\SeoWebsiteStats::schema_fields_STATS_DATE, 'DESC')
-                    ->select()
-                    ->fetchArray();
-                
-                // 汇总统计数据（去重：每个站点只取最新一条）
-                $processedWebsites = [];
-                $totalStats = [
-                    'indexed_pages' => 0,
-                    'submitted_urls' => 0,
-                    'clicks' => 0,
-                    'impressions' => 0,
-                    'error_count' => 0,
-                    'last_sync_at' => null,
-                ];
-                
-                foreach ($stats as $stat) {
-                    $websiteId = (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_WEBSITE_ID] ?? 0);
-                    if ($websiteId > 0 && !in_array($websiteId, $processedWebsites)) {
-                        $processedWebsites[] = $websiteId;
-                        $totalStats['indexed_pages'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_INDEXED_PAGES] ?? 0);
-                        $totalStats['submitted_urls'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_SUBMITTED_URLS] ?? 0);
-                        $totalStats['clicks'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_CLICKS] ?? 0);
-                        $totalStats['impressions'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_IMPRESSIONS] ?? 0);
-                        $totalStats['error_count'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_ERROR_COUNT] ?? 0);
-                        
-                        // 取最新的同步时间
-                        $syncAt = $stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_LAST_SYNC_AT] ?? null;
-                        if ($syncAt && (!$totalStats['last_sync_at'] || $syncAt > $totalStats['last_sync_at'])) {
-                            $totalStats['last_sync_at'] = $syncAt;
-                        }
-                    }
-                }
-                
-                $accountStats[$accountId] = $totalStats;
+            if ($accountId <= 0) {
+                continue;
             }
+            $statsQuery = $statsModel->reset()
+                ->where(SeoWebsiteStats::schema_fields_ACCOUNT_ID, $accountId);
+            if ($filterWebsiteId !== null) {
+                $statsQuery->where(SeoWebsiteStats::schema_fields_WEBSITE_ID, $filterWebsiteId);
+            }
+            $stats = $statsQuery
+                ->order(SeoWebsiteStats::schema_fields_STATS_DATE, 'DESC')
+                ->select()
+                ->fetchArray();
+
+            $processedWebsites = [];
+            $totalStats = [
+                'indexed_pages' => 0,
+                'submitted_urls' => 0,
+                'clicks' => 0,
+                'impressions' => 0,
+                'error_count' => 0,
+                'last_sync_at' => null,
+            ];
+
+            foreach ($stats as $stat) {
+                $websiteId = (int)($stat[SeoWebsiteStats::schema_fields_WEBSITE_ID] ?? -1);
+                if ($websiteId < 0 || in_array($websiteId, $processedWebsites, true)) {
+                    continue;
+                }
+                $processedWebsites[] = $websiteId;
+                $totalStats['indexed_pages'] += (int)($stat[SeoWebsiteStats::schema_fields_INDEXED_PAGES] ?? 0);
+                $totalStats['submitted_urls'] += (int)($stat[SeoWebsiteStats::schema_fields_SUBMITTED_URLS] ?? 0);
+                $totalStats['clicks'] += (int)($stat[SeoWebsiteStats::schema_fields_CLICKS] ?? 0);
+                $totalStats['impressions'] += (int)($stat[SeoWebsiteStats::schema_fields_IMPRESSIONS] ?? 0);
+                $totalStats['error_count'] += (int)($stat[SeoWebsiteStats::schema_fields_ERROR_COUNT] ?? 0);
+
+                $syncAt = $stat[SeoWebsiteStats::schema_fields_LAST_SYNC_AT] ?? null;
+                if ($syncAt && (!$totalStats['last_sync_at'] || $syncAt > $totalStats['last_sync_at'])) {
+                    $totalStats['last_sync_at'] = $syncAt;
+                }
+            }
+
+            $accountStats[$accountId] = $totalStats;
         }
-        
-        // 将绑定数量和统计数据添加到账户数据中
+
         foreach ($accounts as &$account) {
             $accountId = (int)($account['account_id'] ?? 0);
             $account['bound_websites_count'] = $bindingCounts[$accountId] ?? 0;
@@ -130,13 +151,16 @@ class Account extends BackendController
         }
         unset($account);
 
-        // 检测是否是 AJAX 请求（三方调用）
         $xRequestedWith = (string)($this->request->getHeader('X-Requested-With') ?? '');
         $isAjax = $xRequestedWith === 'XMLHttpRequest';
 
         $this->assign('accounts', $accounts);
         $this->assign('scope', '');
         $this->assign('is_ajax', $isAjax);
+        $this->assign('filter_website_id', $filterWebsiteId);
+        $this->assign('websiteSelectValue', $websiteSelect['value']);
+        $this->assign('websiteSelectDisplay', $websiteSelect['display']);
+        $this->assign('websiteSelectOptionsJson', $websiteSelect['options_json']);
 
         return $this->fetch();
     }

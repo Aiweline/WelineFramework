@@ -1647,6 +1647,203 @@ final class OrderFacade implements OrderFacadeInterface
     }
 
     /**
+     * @param array{
+     *   label: string,
+     *   discount_amount_minor: int,
+     *   note?: string,
+     *   admin_user_id?: int
+     * } $line
+     * @return array{
+     *   money: array<string,mixed>,
+     *   type_payload: array<string,mixed>,
+     *   line: array<string,mixed>,
+     *   grand_total_minor: int,
+     *   discount_amount_minor: int
+     * }
+     */
+    public function appendAdminAdjustmentLine(string $orderUuid, array $line): array
+    {
+        $orderUuid = trim($orderUuid);
+        if ($orderUuid === '') {
+            throw new OrderFacadeConflictException(
+                self::ERROR_NOT_FOUND,
+                \__('Order 不存在：%{1}', [$orderUuid]),
+                ['order_uuid' => $orderUuid],
+            );
+        }
+        $label = trim((string)($line['label'] ?? ''));
+        $discountAbs = max(0, (int)($line['discount_amount_minor'] ?? 0));
+        $note = trim((string)($line['note'] ?? ''));
+        $adminUserId = max(0, (int)($line['admin_user_id'] ?? 0));
+        if ($label === '' || $discountAbs <= 0) {
+            throw new OrderFacadeConflictException(
+                self::ERROR_INVALID_COMMAND,
+                \__('金额调整行无效'),
+                ['label' => $label, 'discount_amount_minor' => $discountAbs],
+            );
+        }
+
+        $row = $this->loadOrderBagForAdjustment($orderUuid);
+        $money = \is_array($row['money'] ?? null) ? $row['money'] : [];
+        $typePayload = \is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [];
+        $existingLines = \is_array($typePayload['discount_lines'] ?? null) ? $typePayload['discount_lines'] : [];
+
+        $newLine = [
+            'key' => 'admin_adj:' . $this->newAdjustmentKey(),
+            'source_type' => DiscountLinesBySourceMerger::adminSource(),
+            'amount_minor' => -1 * $discountAbs,
+            'label' => $label,
+            'note' => $note,
+            'admin_user_id' => $adminUserId,
+            'created_at' => gmdate('c'),
+        ];
+        $mergedLines = DiscountLinesBySourceMerger::merge(
+            $existingLines,
+            array_merge(
+                DiscountLinesBySourceMerger::filterBySource(
+                    $existingLines,
+                    DiscountLinesBySourceMerger::adminSource(),
+                ),
+                [$newLine],
+            ),
+            [DiscountLinesBySourceMerger::adminSource()],
+        );
+
+        $prevAdmin = max(
+            0,
+            (int)($typePayload['admin_adjustment_amount_minor'] ?? 0),
+            DiscountLinesBySourceMerger::absSumForSource(
+                $existingLines,
+                DiscountLinesBySourceMerger::adminSource(),
+            ),
+        );
+        $incentiveAbs = max(
+            0,
+            abs((int)($typePayload['payment_method_incentive_amount_minor'] ?? 0)),
+            DiscountLinesBySourceMerger::absSumForSource(
+                $existingLines,
+                DiscountLinesBySourceMerger::SOURCE_PAYMENT_INCENTIVE,
+            ),
+        );
+        $prevDiscount = max(0, (int)($money['discount_amount_minor'] ?? 0));
+        $baseNonAdmin = max(0, $prevDiscount - $prevAdmin - $incentiveAbs);
+        $newAdmin = $prevAdmin + $discountAbs;
+        $newDiscount = $baseNonAdmin + $newAdmin + $incentiveAbs;
+
+        $subtotal = max(0, (int)($money['subtotal_minor'] ?? 0));
+        $shipping = max(0, (int)($money['shipping_amount_minor'] ?? 0));
+        $tax = max(0, (int)($money['tax_amount_minor'] ?? 0));
+        $cod = max(0, (int)($money['cod_fee_amount_minor'] ?? 0));
+        $newGrand = max(0, $subtotal + $shipping + $tax + $cod - $newDiscount);
+
+        $money['discount_amount_minor'] = $newDiscount;
+        $money['grand_total_minor'] = $newGrand;
+        $typePayload['discount_lines'] = $mergedLines;
+        $typePayload['admin_adjustment_amount_minor'] = $newAdmin;
+
+        $this->persistAdminAdjustmentMoney($orderUuid, $money, $typePayload);
+
+        return [
+            'money' => $money,
+            'type_payload' => $typePayload,
+            'line' => $newLine,
+            'grand_total_minor' => $newGrand,
+            'discount_amount_minor' => $newDiscount,
+        ];
+    }
+
+    /**
+     * @return array{money: array<string,mixed>, type_payload: array<string,mixed>}
+     */
+    private function loadOrderBagForAdjustment(string $orderUuid): array
+    {
+        if ($this->memory !== null) {
+            $row = $this->memory['orders'][$orderUuid] ?? null;
+            if (!\is_array($row)) {
+                throw new OrderFacadeConflictException(
+                    self::ERROR_NOT_FOUND,
+                    \__('Order 不存在：%{1}', [$orderUuid]),
+                    ['order_uuid' => $orderUuid],
+                );
+            }
+
+            return [
+                'money' => \is_array($row['money'] ?? null) ? $row['money'] : [],
+                'type_payload' => \is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [],
+            ];
+        }
+        $store = $this->dbStore();
+        $row = $store->findOrder($orderUuid);
+        if ($row === null) {
+            throw new OrderFacadeConflictException(
+                self::ERROR_NOT_FOUND,
+                \__('Order 不存在：%{1}', [$orderUuid]),
+                ['order_uuid' => $orderUuid],
+            );
+        }
+
+        return [
+            'money' => \is_array($row['money'] ?? null) ? $row['money'] : [],
+            'type_payload' => \is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $money
+     * @param array<string,mixed> $typePayload
+     */
+    private function persistAdminAdjustmentMoney(string $orderUuid, array $money, array $typePayload): void
+    {
+        if ($this->memory !== null) {
+            $this->memory['orders'][$orderUuid]['money'] = $money;
+            $this->memory['orders'][$orderUuid]['type_payload'] = $typePayload;
+            $this->memory['orders'][$orderUuid]['discount_amount_minor'] = (int)($money['discount_amount_minor'] ?? 0);
+            $this->memory['orders'][$orderUuid]['grand_total_minor'] = (int)($money['grand_total_minor'] ?? 0);
+
+            return;
+        }
+        $store = $this->dbStore();
+        if (method_exists($store, 'updateMoneyAndTypePayload')) {
+            $store->updateMoneyAndTypePayload($orderUuid, $money, $typePayload);
+            return;
+        }
+        if (method_exists($store, 'updateTypePayload')) {
+            $store->updateTypePayload($orderUuid, $typePayload);
+        }
+        /** @var Order $row */
+        $row = ObjectManager::getInstance(Order::class);
+        $row->clear()->where(Order::schema_fields_ORDER_UUID, $orderUuid)->find()->fetch();
+        if (!$row->getId()) {
+            throw new OrderFacadeConflictException(
+                self::ERROR_NOT_FOUND,
+                \__('Order 不存在：%{1}', [$orderUuid]),
+                ['order_uuid' => $orderUuid],
+            );
+        }
+        $toMajor = static fn (int $minor): float => round($minor / 100, 2);
+        $row->setData(Order::schema_fields_DISCOUNT_AMOUNT, $toMajor((int)($money['discount_amount_minor'] ?? 0)));
+        $row->setData(Order::schema_fields_GRAND_TOTAL, $toMajor((int)($money['grand_total_minor'] ?? 0)));
+        $row->setData(
+            Order::schema_fields_MONEY_SNAPSHOT_JSON,
+            json_encode($money, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        );
+        $row->setData(
+            Order::schema_fields_TYPE_PAYLOAD_JSON,
+            json_encode($typePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        );
+        $row->save();
+    }
+
+    private function newAdjustmentKey(): string
+    {
+        try {
+            return bin2hex(random_bytes(8));
+        } catch (\Throwable) {
+            return str_replace('.', '', uniqid('adj', true));
+        }
+    }
+
+    /**
      * @param array<string,mixed> $audit
      */
     private function applyHangPayableGrandTotal(string $orderUuid, int $payableGrandTotalMinor, array $audit): void

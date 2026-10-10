@@ -376,6 +376,8 @@ final class CheckoutOrderPaymentService
                             'payment_method' => $transaction->methodCode,
                             'payment_transaction_id' => $transaction->id,
                             'payment_transaction_no' => $transaction->transactionNumber,
+                            'suppress_customer_paid_mail' => true,
+                            'hang_purpose' => 'balance',
                         ]);
                     } else {
                         $this->orders->notifyOrderPaid($order->orderUuid, [
@@ -441,11 +443,22 @@ final class CheckoutOrderPaymentService
             return;
         }
         if ($newGrand <= 0 || $newGrand === $prevGrand) {
-            // 仍落盘 discount_lines，供下次支付幂等
+            // 仍落盘 discount_lines，供下次支付幂等（保留 admin_adjustment）
             if ($lines !== []) {
                 try {
+                    $mergedLines = $lines;
+                    if (
+                        class_exists(\Weline\Order\Service\DiscountLinesBySourceMerger::class)
+                        && \is_array($order->typePayload['discount_lines'] ?? null)
+                    ) {
+                        $mergedLines = \Weline\Order\Service\DiscountLinesBySourceMerger::merge(
+                            $order->typePayload['discount_lines'],
+                            $lines,
+                            [\Weline\Order\Service\DiscountLinesBySourceMerger::SOURCE_PAYMENT_INCENTIVE],
+                        );
+                    }
                     $this->orders->mergeTypePayload($order->orderUuid, [
-                        'discount_lines' => $lines,
+                        'discount_lines' => $mergedLines,
                         'payment_method_incentive_amount_minor' => $incentiveMinor,
                     ]);
                 } catch (\Throwable) {
@@ -460,12 +473,40 @@ final class CheckoutOrderPaymentService
         $incentiveAbs = abs($incentiveMinor);
         // 若应付已含旧激励，先还原再写入新激励绝对值
         $prevIncentiveAbs = abs((int)($order->typePayload['payment_method_incentive_amount_minor'] ?? 0));
-        $baseDiscount = max(0, $prevDiscount - $prevIncentiveAbs);
-        $discountAmountMinor = $baseDiscount + $incentiveAbs;
+        $adminAbs = max(
+            0,
+            (int)($order->typePayload['admin_adjustment_amount_minor'] ?? 0),
+        );
+        if (
+            class_exists(\Weline\Order\Service\DiscountLinesBySourceMerger::class)
+            && \is_array($order->typePayload['discount_lines'] ?? null)
+        ) {
+            $adminAbs = max(
+                $adminAbs,
+                \Weline\Order\Service\DiscountLinesBySourceMerger::absSumForSource(
+                    $order->typePayload['discount_lines'],
+                    \Weline\Order\Service\DiscountLinesBySourceMerger::adminSource(),
+                ),
+            );
+        }
+        $baseDiscount = max(0, $prevDiscount - $prevIncentiveAbs - $adminAbs);
+        $discountAmountMinor = $baseDiscount + $adminAbs + $incentiveAbs;
         $money['discount_amount_minor'] = $discountAmountMinor;
         $money['grand_total_minor'] = $newGrand;
         $money['payment_method_incentive_amount_minor'] = $incentiveMinor;
         $toMajor = static fn (int $minor): float => round($minor / 100, 2);
+
+        $mergedLines = $lines;
+        if (
+            class_exists(\Weline\Order\Service\DiscountLinesBySourceMerger::class)
+            && \is_array($order->typePayload['discount_lines'] ?? null)
+        ) {
+            $mergedLines = \Weline\Order\Service\DiscountLinesBySourceMerger::merge(
+                $order->typePayload['discount_lines'],
+                $lines,
+                [\Weline\Order\Service\DiscountLinesBySourceMerger::SOURCE_PAYMENT_INCENTIVE],
+            );
+        }
 
         try {
             /** @var \Weline\Order\Model\Order $row */
@@ -482,8 +523,9 @@ final class CheckoutOrderPaymentService
             );
             $row->save();
             $this->orders->mergeTypePayload($order->orderUuid, [
-                'discount_lines' => $lines,
+                'discount_lines' => $mergedLines,
                 'payment_method_incentive_amount_minor' => $incentiveMinor,
+                'admin_adjustment_amount_minor' => $adminAbs,
             ]);
         } catch (\Throwable) {
             // 支付仍以 paymentContext 金额为准；同步失败不阻断扣款

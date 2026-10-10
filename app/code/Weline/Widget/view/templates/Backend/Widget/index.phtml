@@ -1,5 +1,4 @@
 
-
 <?php
 /**@var \Weline\Framework\View\Template $this */
 
@@ -10,38 +9,179 @@ $allowedTypes = $this->getData('allowedTypes') ?? [];
 $moduleFilter = $this->getData('moduleFilter') ?? '';
 $typeFilter = $this->getData('typeFilter') ?? '';
 $search = $this->getData('search') ?? '';
-$totalWidgetCount = count($allWidgets, COUNT_RECURSIVE) - count($allWidgets);
+$totalWidgetCount = 0;
+foreach ($allWidgets as $typeWidgets) {
+    if (is_array($typeWidgets)) {
+        $totalWidgetCount += count($typeWidgets);
+    }
+}
+$filteredWidgetCount = 0;
+foreach ($widgets as $typeWidgets) {
+    if (is_array($typeWidgets)) {
+        $filteredWidgetCount += count($typeWidgets);
+    }
+}
 $totalTypeCount = count($allWidgets);
 $totalModuleCount = count($modules);
-$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
-    | JSON_UNESCAPED_SLASHES
-    | JSON_HEX_TAG
-    | JSON_HEX_AMP
-    | JSON_HEX_APOS
-    | JSON_HEX_QUOT
-    | JSON_INVALID_UTF8_SUBSTITUTE;
+$shortText = static function (mixed $value, int $length = 80): string {
+    $text = trim((string)$value);
+    if ($text === '') {
+        return '';
+    }
+    if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+        return mb_strlen($text, 'UTF-8') > $length ? mb_substr($text, 0, $length, 'UTF-8') . '…' : $text;
+    }
+    return strlen($text) > $length ? substr($text, 0, $length) . '…' : $text;
+};
+$isAiWidget = static function (array $widget): bool {
+    if (!empty($widget['is_ai_generated'])) {
+        return true;
+    }
+    $meta = $widget['meta'] ?? null;
+    return is_array($meta) && !empty($meta['is_ai_generated']);
+};
 ?>
 <style>
+    .widget-admin { width: min(100%, 96rem); margin-inline: auto; }
     .widget-admin-toolbar .w-input,
-    .widget-admin-toolbar .w-select { min-height: 38px; }
-    .widget-admin-summary .card { border: 0; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
-    .widget-admin-summary .summary-value { font-size: 1.25rem; font-weight: 700; line-height: 1.1; }
-    .widget-admin-table td, .widget-admin-table th { vertical-align: middle; }
-    .widget-admin-name { max-width: 300px; }
-    .widget-admin-name .text-muted { font-size: 12px; }
+    .widget-admin-toolbar .w-select { min-height: var(--weline-control-height-md, 2.375rem); }
+    .widget-admin-summary .summary-value {
+        font-size: var(--weline-font-size-xl);
+        font-weight: var(--weline-font-weight-bold);
+        line-height: 1.1;
+        color: var(--weline-theme-text);
+    }
+    .widget-admin-group {
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-surface-raised);
+        overflow: hidden;
+    }
+    .widget-admin-group + .widget-admin-group { margin-block-start: var(--weline-space-3); }
+    .widget-admin-group > summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-3);
+        flex-wrap: wrap;
+        padding: var(--weline-space-3) var(--weline-space-4);
+        cursor: pointer;
+        list-style: none;
+        background: var(--weline-theme-surface-muted);
+    }
+    .widget-admin-group > summary::-webkit-details-marker { display: none; }
+    .widget-admin-group > summary:hover { background: var(--weline-theme-surface); }
+    .widget-admin-group__title {
+        display: flex;
+        align-items: center;
+        gap: var(--weline-space-2);
+        min-width: 0;
+        flex-wrap: wrap;
+    }
+    .widget-admin-group__title strong {
+        font-size: var(--weline-font-size-md);
+        color: var(--weline-theme-text);
+    }
+    .widget-admin-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.6fr) auto;
+        gap: var(--weline-space-3);
+        align-items: start;
+        padding: var(--weline-space-3) var(--weline-space-4);
+        border-block-start: 1px solid var(--weline-theme-border);
+    }
+    .widget-admin-row:hover { background: var(--weline-theme-surface-muted); }
+    .widget-admin-identity { min-width: 0; display: grid; gap: var(--weline-space-1); }
+    .widget-admin-identity__name {
+        margin: 0;
+        font-size: var(--weline-font-size-md);
+        font-weight: var(--weline-font-weight-semibold);
+        color: var(--weline-theme-text);
+        overflow-wrap: anywhere;
+    }
+    .widget-admin-identity__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--weline-space-2);
+        align-items: center;
+    }
+    .widget-admin-code {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--weline-space-1);
+        padding: 0.1rem 0.4rem;
+        border-radius: var(--weline-radius-sm);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text);
+        font-family: var(--weline-font-mono);
+        font-size: var(--weline-font-size-xs);
+        overflow-wrap: anywhere;
+    }
+    .widget-admin-code__label {
+        color: var(--weline-theme-text-muted);
+        font-family: var(--weline-font-sans, inherit);
+        font-weight: var(--weline-font-weight-semibold);
+    }
+    .widget-admin-desc {
+        margin: 0;
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+        line-height: var(--weline-line-height);
+        overflow-wrap: anywhere;
+    }
+    .widget-admin-side {
+        display: grid;
+        gap: var(--weline-space-1);
+        min-width: 0;
+    }
+    .widget-admin-side__label {
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-xs);
+        font-weight: var(--weline-font-weight-semibold);
+    }
+    .widget-admin-actions { display: flex; justify-content: flex-end; }
+    .widget-admin-preview-stage {
+        min-height: 10rem;
+        padding: var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+        overflow: auto;
+    }
+    .widget-admin-preview-stage iframe {
+        width: 100%;
+        min-height: 10rem;
+        border: 0;
+        display: block;
+        background: var(--weline-theme-surface-raised, #fff);
+    }
+    .widget-admin-preview-title {
+        margin: 0 0 var(--weline-space-2);
+        font-size: var(--weline-font-size-sm);
+        font-weight: var(--weline-font-weight-semibold);
+        color: var(--weline-theme-text);
+    }
+    @media (max-width: 56rem) {
+        .widget-admin-row {
+            grid-template-columns: 1fr;
+        }
+        .widget-admin-actions { justify-content: flex-start; }
+    }
 </style>
-<!-- 页面标题 -->
-                <div class="w-grid">
-                    <div style="--w-span:12;">
-                        <small class="w-text" data-tone="muted"><?= __('快速查看、筛选并预览部件详情') ?></small>
-                    </div>
-                </div>
+
+<div class="widget-admin w-stack" data-testid="widget-admin-list" style="--w-gap:var(--weline-space-4);">
+    <div class="w-grid">
+        <div style="--w-span:12;">
+            <small class="w-text" data-tone="muted"><?= __('快速查看、筛选并预览部件详情。列表按类型分组，名称 / Code / 类型一目了然。') ?></small>
+        </div>
+    </div>
 
 <js:part>
 (function () {
     'use strict';
 
     var WIDGET_DETAIL_URL = "@backend-url{'widget/backend/widget/detail'}";
+    var WIDGET_PREVIEW_URL = "@backend-url{'widget/backend/preview/widget'}";
 
     function escapeHtml(str) {
         if (str === null || str === undefined) return '';
@@ -53,20 +193,94 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             .replace(/'/g, '&#039;');
     }
 
+    function defaultsFromParamsSchema(params) {
+        var config = {};
+        if (!params || typeof params !== 'object') return config;
+        Object.keys(params).forEach(function (key) {
+            var def = params[key];
+            if (!def || typeof def !== 'object') return;
+            if (Object.prototype.hasOwnProperty.call(def, 'default')) {
+                config[key] = def['default'];
+            }
+        });
+        return config;
+    }
+
+    function renderPreviewFrame(stageEl, html) {
+        var frame = document.createElement('iframe');
+        frame.setAttribute('sandbox', '');
+        frame.setAttribute('referrerpolicy', 'no-referrer');
+        frame.setAttribute('title', '<?= __('视觉预览') ?>');
+        frame.setAttribute('data-testid', 'widget-admin-preview-frame');
+        frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+            + '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src http: https: data:; media-src http: https: data:; font-src http: https: data:; style-src \'unsafe-inline\'; form-action \'none\'; base-uri \'none\'; script-src \'none\'; object-src \'none\'">'
+            + '<style>html,body{margin:0;padding:0;min-height:100%;font-family:var(--weline-font-sans, system-ui, sans-serif);}img,video{max-width:100%;height:auto;}</style>'
+            + '</head><body>' + html + '</body></html>';
+        stageEl.replaceChildren(frame);
+    }
+
+    function loadWidgetPreview(stageEl, type, name, widget) {
+        if (!stageEl) return;
+        stageEl.innerHTML = '<div class="w-text" data-tone="muted"><?= __('加载预览…') ?></div>';
+
+        var config = defaultsFromParamsSchema(widget.params || {});
+        var area = (widget.area || 'frontend') || 'frontend';
+        var paramsJson = '{}';
+        try {
+            paramsJson = JSON.stringify(config);
+        } catch (e) {
+            paramsJson = '{}';
+        }
+
+        var url = WIDGET_PREVIEW_URL
+            + '?type=' + encodeURIComponent(type)
+            + '&name=' + encodeURIComponent(name)
+            + '&area=' + encodeURIComponent(area)
+            + '&params=' + encodeURIComponent(paramsJson);
+
+        backendJsonGet(url)
+            .then(function (result) {
+                if (result && result.success && result.preview_safe === true && typeof result.html === 'string') {
+                    renderPreviewFrame(stageEl, result.html);
+                    return;
+                }
+                stageEl.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;">'
+                    + escapeHtml((result && result.message) ? result.message : '<?= __('预览失败') ?>')
+                    + '</div>';
+            })
+            .catch(function () {
+                stageEl.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;"><?= __('预览失败') ?></div>';
+            });
+    }
+
     function ensureModal() {
         var modalEl = document.getElementById('widgetDetailModal');
-        if (modalEl) return modalEl;
+        if (modalEl) {
+            // Migrate leftover Bootstrap shell from older builds (dialog.open no-ops on it).
+            if (!modalEl.classList.contains('w-dialog')
+                || modalEl.getAttribute('data-w-component') !== 'dialog'
+            ) {
+                modalEl.remove();
+                modalEl = null;
+            } else {
+                return modalEl;
+            }
+        }
 
         modalEl = document.createElement('div');
-        modalEl.className = 'modal fade';
+        modalEl.className = 'w-dialog';
         modalEl.id = 'widgetDetailModal';
         modalEl.tabIndex = -1;
         modalEl.setAttribute('aria-hidden', 'true');
+        modalEl.setAttribute('data-w-component', 'dialog');
+        modalEl.setAttribute('data-state', 'closed');
+        modalEl.setAttribute('data-testid', 'widget-admin-detail-dialog');
+        modalEl.hidden = true;
         modalEl.innerHTML = '' +
             '<div class="w-dialog__frame" data-size="lg">' +
             '  <div class="w-dialog__surface">' +
             '    <div class="w-dialog__header">' +
-            '      <h5 class="w-dialog__title" id="widgetDetailModalLabel"><?= __('部件详情') ?></h5>' +
+            '      <h5 class="w-dialog__title" id="widgetDetailModalLabel"><?= __('部件预览') ?></h5>' +
             '      <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>' +
             '    </div>' +
             '    <div class="w-dialog__body" id="widgetDetailModalBody">' +
@@ -82,6 +296,32 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         return modalEl;
     }
 
+    function openWidgetDetailDialog(modalEl) {
+        if (!modalEl || !window.Weline || !Weline.UI || !Weline.UI.dialog
+            || typeof Weline.UI.dialog.open !== 'function'
+        ) {
+            return false;
+        }
+        return !!Weline.UI.dialog.open(modalEl);
+    }
+
+    /** Backend Controller JSON (not BinQuery). adminRequest('widget') hits Query and is denied. */
+    function backendJsonGet(url) {
+        return fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function (resp) {
+            if (!resp.ok) {
+                throw new Error('HTTP ' + resp.status);
+            }
+            return resp.json();
+        });
+    }
+
     window.viewWidgetDetail = function (type, name) {
         if (!type || !name) return;
 
@@ -89,24 +329,28 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         var bodyEl = modalEl.querySelector('#widgetDetailModalBody');
         var labelEl = modalEl.querySelector('#widgetDetailModalLabel');
         if (bodyEl) bodyEl.innerHTML = '<div class="w-text" data-tone="muted"><?= __('加载中...') ?></div>';
-        if (labelEl) labelEl.textContent = '<?= __('部件详情') ?>';
+        if (labelEl) labelEl.textContent = '<?= __('部件预览') ?>';
+        openWidgetDetailDialog(modalEl);
 
         var url = WIDGET_DETAIL_URL + '?type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name);
-        Weline.adminRequest('widget', url, { credentials: 'include' })
-            .then(function (resp) { return resp.json(); })
+        backendJsonGet(url)
             .then(function (data) {
                 if (!data || !data.success) {
                     if (bodyEl) bodyEl.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;">' + escapeHtml((data && data.message) ? data.message : '<?= __('操作失败') ?>') + '</div>';
+                    openWidgetDetailDialog(modalEl);
                     return;
                 }
 
                 var widget = data.widget || {};
-                if (labelEl) labelEl.textContent = widget.name ? escapeHtml(widget.name) : (name || '');
+                if (labelEl) labelEl.textContent = widget.name ? String(widget.name) : (name || '');
 
                 var params = widget.params || {};
                 var description = widget.description || '';
                 var module = widget.module || '';
                 var version = widget.version || '';
+                var code = widget.code || name || '';
+                var widgetType = widget.type || type || '';
+                var path = widget.path || widget.template || '';
 
                 var paramsText = '';
                 try {
@@ -122,34 +366,54 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                         '    <div class="w-card" data-w-border="none" data-w-background="muted">' +
                         '      <div class="w-card__body">' +
                         '        <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">' +
-                        '          <span class="w-badge" data-w-background="info" data-tone="info"><?= __('类型') ?>: ' + escapeHtml(type || '') + '</span>' +
+                        '          <span class="w-badge" data-w-background="info" data-tone="info"><?= __('类型') ?>: ' + escapeHtml(widgetType) + '</span>' +
+                        '          <span class="w-badge" data-w-background="muted" data-tone="muted"><?= __('Code') ?>: ' + escapeHtml(code) + '</span>' +
                         '          <span class="w-badge" data-w-background="muted" data-tone="muted"><?= __('模块') ?>: ' + escapeHtml(module) + '</span>' +
                         '          <span class="w-badge" data-w-background="primary" data-tone="inverse"><?= __('版本') ?>: ' + escapeHtml(version || '') + '</span>' +
                         '        </div>' +
+                        (path ? '        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);"><?= __('路径') ?>: <code>' + escapeHtml(path) + '</code></div>' : '') +
                         '        <div class="w-text" data-tone="muted" style="--w-mb:0;">' + escapeHtml(description) + '</div>' +
                         '      </div>' +
                         '    </div>' +
                         '  </div>' +
                         '  <div style="--w-span:12;">' +
-                        '    <h6 style="--w-mb:var(--weline-space-2);"><?= __('参数配置') ?></h6>' +
-                        '    <pre style="white-space: pre-wrap;" data-w-background="muted" data-w-radius="md">' + escapeHtml(paramsText) + '</pre>' +
+                        '    <p class="widget-admin-preview-title"><?= __('视觉预览') ?></p>' +
+                        '    <div class="widget-admin-preview-stage" id="widgetAdminPreviewStage" data-testid="widget-admin-preview">' +
+                        '      <div class="w-text" data-tone="muted"><?= __('加载预览…') ?></div>' +
+                        '    </div>' +
+                        '  </div>' +
+                        '  <div style="--w-span:12;">' +
+                        '    <details>' +
+                        '      <summary class="w-text" data-tone="muted" style="cursor:pointer;"><?= __('参数配置') ?></summary>' +
+                        '      <pre style="white-space: pre-wrap;margin-block-start:var(--weline-space-2);" data-w-background="muted" data-w-radius="md">' + escapeHtml(paramsText) + '</pre>' +
+                        '    </details>' +
                         '  </div>' +
                         '</div>';
                 }
 
-                try {
-                    Weline.UI.dialog.open(modalEl);
-                } catch (e) {
-                    // ignore: 不影响主要功能
-                }
+                openWidgetDetailDialog(modalEl);
+
+                var stageEl = modalEl.querySelector('#widgetAdminPreviewStage');
+                loadWidgetPreview(stageEl, type, name, widget);
             })
             .catch(function () {
-                if (bodyEl) bodyEl.innerHTML = '<div class="w-alert" data-tone="danger" style="--w-mb:0;"><?= __('操作失败') ?></div>';
-                try {
-                    Weline.UI.dialog.open(modalEl);
-                } catch (e) {
-                    // ignore
+                // Detail failed (e.g. transient 503): still open preview stage; Preview API loads defaults.
+                if (bodyEl) {
+                    bodyEl.innerHTML =
+                        '<div class="w-grid" style="--w-gap:var(--weline-space-4);">' +
+                        '  <div style="--w-span:12;">' +
+                        '    <div class="w-alert" data-tone="warning" style="--w-mb:0;"><?= __('元数据加载失败，仍尝试视觉预览') ?></div>' +
+                        '  </div>' +
+                        '  <div style="--w-span:12;">' +
+                        '    <p class="widget-admin-preview-title"><?= __('视觉预览') ?></p>' +
+                        '    <div class="widget-admin-preview-stage" id="widgetAdminPreviewStage" data-testid="widget-admin-preview">' +
+                        '      <div class="w-text" data-tone="muted"><?= __('加载预览…') ?></div>' +
+                        '    </div>' +
+                        '  </div>' +
+                        '</div>';
                 }
+                openWidgetDetailDialog(modalEl);
+                loadWidgetPreview(modalEl.querySelector('#widgetAdminPreviewStage'), type, name, { params: {}, area: 'frontend' });
             });
     };
 
@@ -169,142 +433,166 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 })();
 </js:part>
 
-                <!-- 概览卡片 -->
-                <div class="w-grid widget-admin-summary" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
-                    <div style="--w-span-md:4;">
-                        <div class="w-card" data-w-height="full">
-                            <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
-                                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('总部件数') ?></div>
-                                <div class="summary-value"><?= (int)$totalWidgetCount ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="--w-span-md:4;">
-                        <div class="w-card" data-w-height="full">
-                            <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
-                                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('部件类型') ?></div>
-                                <div class="summary-value"><?= (int)$totalTypeCount ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="--w-span-md:4;">
-                        <div class="w-card" data-w-height="full">
-                            <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
-                                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('来源模块') ?></div>
-                                <div class="summary-value"><?= (int)$totalModuleCount ?></div>
-                            </div>
-                        </div>
-                    </div>
+    <div class="w-grid widget-admin-summary" style="--w-gap:var(--weline-space-4);">
+        <div style="--w-span-md:4;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+                    <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('总部件数') ?></div>
+                    <div class="summary-value"><?= (int)$totalWidgetCount ?></div>
                 </div>
+            </div>
+        </div>
+        <div style="--w-span-md:4;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+                    <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('部件类型') ?></div>
+                    <div class="summary-value"><?= (int)$totalTypeCount ?></div>
+                </div>
+            </div>
+        </div>
+        <div style="--w-span-md:4;">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
+                    <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><?= __('来源模块') ?></div>
+                    <div class="summary-value"><?= (int)$totalModuleCount ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                <!-- 筛选工具栏 -->
-                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                    <div style="--w-span:12;">
-                        <div class="w-card">
-                            <div class="w-card__body">
-                                <w:form method="get" class="w-grid widget-admin-toolbar" data-align="end" style="--w-gap:var(--weline-space-2);">
-                                    <div style="--w-span-md:4;">
-                                        <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('关键字') ?></label>
-                                        <input type="text" class="w-input" name="search" placeholder="<?= __('搜索部件...') ?>" value="<?= htmlspecialchars($search) ?>">
-                                    </div>
-                                    <div style="--w-span-md:3;">
-                                        <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('模块') ?></label>
-                                        <select class="w-select" name="module">
-                                            <option value=""><?= __('所有模块') ?></option>
-                                            <?php foreach ($modules as $module): ?>
-                                                <option value="<?= htmlspecialchars($module) ?>" 
-                                                        <?= $moduleFilter === $module ? 'selected' : '' ?>>
-                                                    <?= htmlspecialchars($module) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div style="--w-span-md:3;">
-                                        <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('类型') ?></label>
-                                        <select class="w-select" name="type">
-                                            <option value=""><?= __('所有类型') ?></option>
-                                            <?php foreach ($allowedTypes as $type): ?>
-                                                <option value="<?= htmlspecialchars($type) ?>" 
-                                                        <?= $typeFilter === $type ? 'selected' : '' ?>>
-                                                    <?= htmlspecialchars(ucfirst($type)) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div class="w-cluster" style="--w-span-md:2;--w-gap:var(--weline-space-2);">
-                                        <button type="submit" class="w-button flex-fill" data-tone="primary">
-                                            <w:icon name="search" size="sm"></w:icon><?= __('筛选') ?>
-                                        </button>
-                                        <a href="@backend-url{'widget/backend/widget'}" class="w-button" title="<?= __('重置筛选') ?>" data-w-border="border" data-tone="neutral">
-                                            <w:icon name="refresh" size="sm"></w:icon>
-                                        </a>
-                                    </div>
-                                </w:form>
-                            </div>
-                        </div>
-                    </div>
+    <div class="w-card">
+        <div class="w-card__body">
+            <w:form method="get" class="w-grid widget-admin-toolbar" data-align="end" style="--w-gap:var(--weline-space-2);">
+                <div style="--w-span-md:4;">
+                    <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('关键字') ?></label>
+                    <input type="text" class="w-input" name="search" placeholder="<?= __('搜索名称、Code、类型或模块…') ?>" value="<?= htmlspecialchars((string)$search, ENT_QUOTES, 'UTF-8') ?>">
                 </div>
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('模块') ?></label>
+                    <select class="w-select" name="module">
+                        <option value=""><?= __('所有模块') ?></option>
+                        <?php foreach ($modules as $module): ?>
+                            <option value="<?= htmlspecialchars((string)$module, ENT_QUOTES, 'UTF-8') ?>"
+                                    <?= $moduleFilter === $module ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string)$module, ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label" style="--w-mb:var(--weline-space-1);"><?= __('类型') ?></label>
+                    <select class="w-select" name="type">
+                        <option value=""><?= __('所有类型') ?></option>
+                        <?php foreach ($allowedTypes as $type): ?>
+                            <option value="<?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?>"
+                                    <?= $typeFilter === $type ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="w-cluster" style="--w-span-md:2;--w-gap:var(--weline-space-2);">
+                    <button type="submit" class="w-button flex-fill" data-tone="primary">
+                        <w:icon name="search" size="sm"></w:icon><?= __('筛选') ?>
+                    </button>
+                    <a href="@backend-url{'widget/backend/widget'}" class="w-button" title="<?= __('重置筛选') ?>" data-w-border="border" data-tone="neutral">
+                        <w:icon name="refresh" size="sm"></w:icon>
+                    </a>
+                </div>
+            </w:form>
+        </div>
+    </div>
 
-                <!-- 部件列表 -->
-                <div class="w-grid">
-                    <div style="--w-span:12;">
-                        <div class="w-card">
-                            <div class="w-card__header">
-                                <h5 class="w-card__title" style="--w-mb:0;">
-                                    <?= __('部件列表') ?>
-                                    <span class="w-badge" data-w-background="primary"><?= (int)$totalWidgetCount ?></span>
-                                </h5>
-                            </div>
-                            <div class="w-card__body">
-                                <?php if (empty($widgets)): ?>
-                                    <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
-                                        <w:icon name="box" size="sm"></w:icon>
-                                        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);"><?= __('没有找到部件') ?></p>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="w-table-wrap">
-                                        <table class="w-table widget-admin-table" data-w-vertical="middle">
-                                            <thead>
-                                                <tr>
-                                                    <th style="width:60px;">#</th>
-                                                    <th><?= __('部件名称') ?></th>
-                                                    <th><?= __('类型') ?></th>
-                                                    <th><?= __('来源模块') ?></th>
-                                                    <th><?= __('描述') ?></th>
-                                                    <th><?= __('版本') ?></th>
-                                                    <th><?= __('操作') ?></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <?php $rowIndex = 1; ?>
-                                                <?php foreach ($widgets as $type => $typeWidgets): ?>
-                                                    <?php foreach ($typeWidgets as $name => $widget): ?>
-                                                        <tr>
-                                                            <td class="w-text" data-tone="muted"><?= $rowIndex++ ?></td>
-                                                            <td class="widget-admin-name">
-                                                                <strong><?= htmlspecialchars($widget['name'] ?? $name) ?></strong>
-                                                                <br>
-                                                                <small class="w-text" data-tone="muted"><?= htmlspecialchars($name) ?></small>
-                                                            </td>
-                                                            <td>
-                                                                <span class="w-badge" data-w-background="info"><?= htmlspecialchars(ucfirst($type)) ?></span>
-                                                            </td>
-                                                            <td><?= htmlspecialchars($widget['module'] ?? '') ?></td>
-                                                            <td><?= htmlspecialchars($widget['description'] ?? '') ?></td>
-                                                            <td><?= htmlspecialchars($widget['version'] ?? '1.0.0') ?></td>
-                                                            <td>
-                                                                <button type="button" class="w-button" data-widget-detail-trigger data-widget-type="<?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?>" data-widget-name="<?= htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
-                                                                    <w:icon name="eye" size="sm"></w:icon> <?= __('详情') ?>
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    <?php endforeach; ?>
-                                                <?php endforeach; ?>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
+    <div class="w-card">
+        <div class="w-card__header">
+            <h5 class="w-card__title" style="--w-mb:0;">
+                <?= __('部件列表') ?>
+                <span class="w-badge" data-w-background="primary"><?= (int)$filteredWidgetCount ?></span>
+                <?php if ($filteredWidgetCount !== $totalWidgetCount): ?>
+                    <span class="w-text" data-tone="muted" data-size="sm"><?= __('共 %{1} 个', [(int)$totalWidgetCount]) ?></span>
+                <?php endif; ?>
+            </h5>
+        </div>
+        <div class="w-card__body" style="--w-pt:var(--weline-space-3);--w-pb:var(--weline-space-3);">
+            <?php if (empty($widgets)): ?>
+                <div class="w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                    <w:icon name="box" size="sm"></w:icon>
+                    <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-4);"><?= __('没有找到部件') ?></p>
                 </div>
+            <?php else: ?>
+                <?php $groupIndex = 0; ?>
+                <?php foreach ($widgets as $type => $typeWidgets): ?>
+                    <?php
+                    $typeCount = is_array($typeWidgets) ? count($typeWidgets) : 0;
+                    if ($typeCount === 0) {
+                        continue;
+                    }
+                    $openByDefault = $groupIndex < 2 || $typeFilter !== '' || $search !== '';
+                    $groupIndex++;
+                    ?>
+                    <details class="widget-admin-group" <?= $openByDefault ? 'open' : '' ?> data-widget-type-group="<?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?>">
+                        <summary>
+                            <div class="widget-admin-group__title">
+                                <span class="w-badge" data-w-background="info" data-tone="info"><?= __('类型') ?></span>
+                                <strong><?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?></strong>
+                                <span class="w-badge" data-w-background="muted"><?= (int)$typeCount ?></span>
+                            </div>
+                            <span class="w-text" data-tone="muted" data-size="sm"><?= __('展开 / 收起') ?></span>
+                        </summary>
+                        <?php foreach ($typeWidgets as $name => $widget): ?>
+                            <?php
+                            $code = (string)($widget['code'] ?? $name);
+                            $displayName = (string)($widget['name'] ?? $name);
+                            $module = (string)($widget['module'] ?? '');
+                            $version = (string)($widget['version'] ?? '1.0.0');
+                            $description = (string)($widget['description'] ?? '');
+                            $ai = $isAiWidget(is_array($widget) ? $widget : []);
+                            ?>
+                            <div class="widget-admin-row" data-testid="widget-admin-row" data-widget-code="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                                <div class="widget-admin-identity">
+                                    <p class="widget-admin-identity__name"><?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?></p>
+                                    <div class="widget-admin-identity__meta">
+                                        <span class="widget-admin-code" title="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                                            <span class="widget-admin-code__label"><?= __('Code') ?></span>
+                                            <?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>
+                                        </span>
+                                        <?php if ($ai): ?>
+                                            <span class="w-badge" data-w-background="primary" data-tone="inverse"><?= __('AI生成') ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <div class="widget-admin-side">
+                                    <span class="widget-admin-side__label"><?= __('类型') ?></span>
+                                    <span class="w-badge" data-w-background="info"><?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?></span>
+                                    <span class="widget-admin-side__label" style="--w-mt:var(--weline-space-1);"><?= __('模块') ?> · <?= __('版本') ?></span>
+                                    <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-1);">
+                                        <span class="w-badge" data-w-background="muted"><?= htmlspecialchars($module, ENT_QUOTES, 'UTF-8') ?></span>
+                                        <span class="w-text" data-tone="muted" data-size="sm">v<?= htmlspecialchars($version, ENT_QUOTES, 'UTF-8') ?></span>
+                                    </div>
+                                </div>
+                                <div class="widget-admin-side">
+                                    <span class="widget-admin-side__label"><?= __('描述') ?></span>
+                                    <p class="widget-admin-desc" title="<?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($description !== '' ? $shortText($description, 80) : (string)__('暂无描述'), ENT_QUOTES, 'UTF-8') ?>
+                                    </p>
+                                </div>
+                                <div class="widget-admin-actions">
+                                    <button type="button"
+                                            class="w-button"
+                                            data-widget-detail-trigger
+                                            data-widget-type="<?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-widget-name="<?= htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-tone="primary"
+                                            data-variant="outline"
+                                            data-size="sm">
+                                        <w:icon name="eye" size="sm"></w:icon> <?= __('预览') ?>
+                                    </button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </details>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

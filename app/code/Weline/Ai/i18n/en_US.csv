@@ -772,6 +772,8 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 未命名智能体,"Untitled agent"
 该智能体尚未注册工具。,"This agent has no registered tools yet."
 "AI 智能体","AI Agents"
+当前运营站,当前运营站
+智能体目录为全局配置，不受站点筛选。,智能体目录为全局配置，不受站点筛选。
 管理已注册智能体、描述覆盖与工具启停。不能在后台新建智能体。,"Manage registered agents, description overrides, and tool enablement. Custom agents cannot be created in admin."
 智能体目录,"Agent Catalog"
 "代码 / 名称 / 模块 / 场景","Code / name / module / scenario"

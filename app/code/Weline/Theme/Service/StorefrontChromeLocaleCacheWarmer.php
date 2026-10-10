@@ -13,13 +13,18 @@ use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\ThemeApplicationContext;
+use Weline\Framework\View\Template;
 use Weline\Theme\Block\Partials;
 use Weline\Theme\Helper\HeaderCommerceData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\LayoutEntity\SolidifiedControllerTemplateResolver;
+use Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot;
 use Weline\Websites\Model\SalesChannel;
 use Weline\Websites\Model\Store;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteLanguage;
+use Weline\Websites\Service\ThemeApplicationContextProducer;
 
 /**
  * Seeds theme.storefront_chrome (+ head home/assets) per enabled website locale.
@@ -27,7 +32,16 @@ use Weline\Websites\Model\WebsiteLanguage;
  * Header chrome is guest-neutral (lang-only); search facade hydrates on serve.
  * Soft-clear / empty L2 otherwise makes first hit of a new locale pay chrome builder.
  * CLI/Clear must pin the acceptance public Host so environmentHash matches HTTP.
- * Fail-open; no empty burn; never strip chrome shells.
+ * MUST install the same homepage ThemeLayoutSourceSnapshot the storefront Index
+ * path installs (SolidifiedControllerTemplateResolver) so chrome partial bytes are
+ * captured for path-local digests (xscope A / chrome-partial-v22). Full layout
+ * snapshot fingerprint is no longer folded into header/footer HotCache keys.
+ * MUST install Website ThemeApplicationContext + homepage layout/colorMode on the
+ * Template theme bag — otherwise theme_id falls back to module default (1) while
+ * HTTP uses the published site theme (e.g. 3) and chrome L2 misses after soft-clear.
+ * Path A (T1 pass): layout dims neutralized in Partials — homepage seeds share keys
+ * with search/plp/blog/pdp. Path B (T1 fail) would expand layout families here; not
+ * active while A holds. Fail-open; no empty burn; never strip chrome shells.
  *
  * CLI default memory_limit (128M) OOMs while hydrating ~40 locale dictionaries;
  * raise to 512M for the warm window. Do not clear Phrase bags between locales.
@@ -106,7 +120,7 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
             RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
             $hostNote = $this->installAcceptancePublicHost();
             $notes[] = $hostNote;
-            $this->ensureFrontendThemeAssignedToTemplate();
+            $notes[] = $this->ensureFrontendThemeAssignedToTemplate();
 
             $locales = $this->resolveEnabledLocales();
             $notes[] = 'locales=' . \count($locales);
@@ -143,6 +157,12 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
                     $this->installHomeRequestUri($locale);
                     RequestContext::remove('framework.cache.storefront_key_context.v2');
                     Partials::clearOutputCache();
+                    $this->ensureFrontendThemeAssignedToTemplate();
+                    // Match storefront Index: chrome keys use snapshot.fingerprint.
+                    $snapNote = $this->installHomepageLayoutSourceSnapshot();
+                    if ($idx === 0) {
+                        $notes[] = $snapNote;
+                    }
 
                     if ($resolver instanceof StorefrontCacheKeyContextResolver) {
                         $ctx = $resolver->freezeCurrent();
@@ -587,14 +607,12 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
         RequestContext::installScopeIdentity($identity);
     }
 
-    private function ensureFrontendThemeAssignedToTemplate(): void
+    private function ensureFrontendThemeAssignedToTemplate(): string
     {
         try {
+            $this->installDefaultWebsiteThemeApplication();
             $template = \Weline\Framework\View\Template::getInstance();
             $existing = $template->getData('theme');
-            if (\is_array($existing) && isset($existing['theme']) && \is_object($existing['theme'])) {
-                return;
-            }
             /** @var ThemeContextService $context */
             $context = ObjectManager::getInstance(ThemeContextService::class);
             $theme = $context->resolveTheme('frontend', null, false);
@@ -602,13 +620,119 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
                 $theme = $context->resolveRegisteredDefaultTheme('frontend');
             }
             if (!$theme instanceof WelineTheme || (int)$theme->getId() <= 0) {
-                return;
+                return 'theme=none';
             }
             $base = \is_array($existing) ? $existing : [];
             $base['theme'] = $theme;
-            $base['area'] = $base['area'] ?? 'frontend';
+            $base['area'] = 'frontend';
+            // Match Index homepage chrome key dims (HTTP dump: layout+colorMode).
+            $base['layoutType'] = 'homepage';
+            $base['layoutOption'] = 'default';
+            if (!isset($base['colorMode']) || (string)$base['colorMode'] === '') {
+                $base['colorMode'] = 'default';
+            }
             $template->assign('theme', $base);
+            $app = ThemeApplicationContext::current('frontend', 'runtime');
+
+            return 'theme_id=' . (int)$theme->getId()
+                . ';layout=homepage;color=' . (string)$base['colorMode']
+                . ';app_theme=' . ($app instanceof ThemeApplicationContext ? (string)$app->themeId : '0');
+        } catch (\Throwable $e) {
+            return 'theme=error:' . $e->getMessage();
+        }
+    }
+
+    /**
+     * Storefront resolveTheme needs ThemeApplicationContext (published site theme).
+     * Without it CLI falls back to module default theme_id=1 and chrome L2 forks.
+     */
+    private function installDefaultWebsiteThemeApplication(): void
+    {
+        try {
+            $identity = RequestContext::scopeIdentity();
+            if (!$identity instanceof ScopeIdentity) {
+                $identity = ScopeIdentity::channel(
+                    Website::ID_DEFAULT,
+                    Website::CODE_DEFAULT,
+                    Store::CODE_DEFAULT,
+                    SalesChannel::CODE_DEFAULT,
+                    Store::MODE_NORMAL,
+                );
+            }
+            /** @var Website $website */
+            $website = ObjectManager::getInstance(Website::class);
+            $website = (clone $website)->load(Website::ID_DEFAULT, null, true);
+            $locale = \trim((string)$website->getDefaultLanguage());
+            if ($locale === '') {
+                $locale = 'zh_Hans_CN';
+            }
+            /** @var ThemeApplicationContextProducer $producer */
+            $producer = ObjectManager::getInstance(ThemeApplicationContextProducer::class);
+            $application = $producer->build(
+                identity: $identity,
+                storeMode: (string)($identity->storeMode ?? Store::MODE_NORMAL),
+                defaultLocale: $locale,
+                displayName: (string)$website->getName(),
+                purpose: 'runtime',
+            );
+            // Peer warmers / prior locales may have fixed a different application.
+            RequestContext::remove(ThemeApplicationContext::REQUEST_KEY_PREFIX . 'frontend.runtime');
+            $application->install();
         } catch (\Throwable) {
         }
     }
+
+    /**
+     * Install the published homepage source snapshot so chrome HotCache keys use
+     * the same snapshot.fingerprint as storefront Index (ControllerFetchFileBefore
+     * → SolidifiedControllerTemplateResolver). Clearing the snapshot made warmer
+     * seed mtime|size keys that quiet-cold HTTP never reads.
+     */
+    private function installHomepageLayoutSourceSnapshot(): string
+    {
+        try {
+            $themeId = 0;
+            $template = Template::getInstance();
+            $themeBag = $template->getData('theme');
+            if (\is_array($themeBag)) {
+                $theme = $themeBag['theme'] ?? null;
+                if ($theme instanceof WelineTheme) {
+                    $themeId = (int)$theme->getId();
+                }
+            }
+            if ($themeId <= 0) {
+                $app = ThemeApplicationContext::current('frontend', 'runtime');
+                if ($app instanceof ThemeApplicationContext) {
+                    $themeId = (int)$app->themeId;
+                }
+            }
+            if ($themeId <= 0) {
+                return 'snapshot=no_theme';
+            }
+
+            // Drop any peer-warmer / prior-locale snapshot before capture.
+            RequestContext::remove(ThemeLayoutSourceSnapshot::REQUEST_KEY);
+
+            /** @var SolidifiedControllerTemplateResolver $resolver */
+            $resolver = ObjectManager::getInstance(SolidifiedControllerTemplateResolver::class);
+            $resolver->resolveExecutableLayoutPath(
+                $themeId,
+                'homepage',
+                'default',
+                'frontend',
+                'global',
+                null,
+            );
+            $snapshot = ThemeLayoutSourceSnapshot::current();
+            if (!$snapshot instanceof ThemeLayoutSourceSnapshot) {
+                return 'snapshot=missing:theme_id=' . $themeId;
+            }
+
+            return 'snapshot_fp=' . \substr($snapshot->fingerprint(), 0, 16)
+                . ';theme_id=' . $themeId;
+        } catch (\Throwable $e) {
+            return 'snapshot=error:' . $e->getMessage();
+        }
+    }
+
 }

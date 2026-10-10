@@ -342,6 +342,30 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
     }
 
     /**
+     * Persist recomputed money snapshot + type_payload after admin amount adjustment.
+     *
+     * @param array<string,mixed> $money
+     * @param array<string,mixed> $typePayload
+     */
+    public function updateMoneyAndTypePayload(string $orderUuid, array $money, array $typePayload): void
+    {
+        $row = $this->order()
+            ->where(Order::schema_fields_ORDER_UUID, trim($orderUuid))
+            ->find()
+            ->fetch();
+        if (!$row instanceof Order || !$row->getId()) {
+            throw new \RuntimeException('order_money_type_payload_update_missing:' . $orderUuid);
+        }
+        $discountMinor = max(0, (int)($money['discount_amount_minor'] ?? 0));
+        $grandMinor = max(0, (int)($money['grand_total_minor'] ?? 0));
+        $row->setData(Order::schema_fields_MONEY_SNAPSHOT_JSON, $this->encode($money))
+            ->setData(Order::schema_fields_TYPE_PAYLOAD_JSON, $this->encode($typePayload))
+            ->setData(Order::schema_fields_DISCOUNT_AMOUNT, $this->minorToMajor($discountMinor))
+            ->setData(Order::schema_fields_GRAND_TOTAL, $this->minorToMajor($grandMinor))
+            ->save();
+    }
+
+    /**
      * Tob hang payable revision: update money snapshot grand_total + major grand_total.
      *
      * @param array<string,mixed> $audit

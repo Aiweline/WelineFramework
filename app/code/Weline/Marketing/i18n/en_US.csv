@@ -315,6 +315,7 @@ VIP等级,"VIP Level"
 输入优惠券代码,"Enter coupon code"
 注册领取见面礼,"Register for welcome gift"
 "配置遗弃时限并定时催付：未付订单、遗弃结账或购物车。事实面由 signals 提供，时限由本页决定。","Configure abandonment window and schedule reminders: unpaid orders, abandoned checkout or carts. Facts from signals; window set here."
+站点范围,站点范围
 ID,ID
 名称,Name
 状态,Status
@@ -337,7 +338,7 @@ ID,ID
 冷却（小时）,"Cooldown (hours)"
 "激励券规则 ID（step≥2；0=不发券）","Incentive coupon rule ID (step≥2; 0=no coupon)"
 "分群 ID（0=全部）","Segment ID (0=all)"
-"网站 ID（0=全部）","Website ID (0 = all websites)"
+"清空表示全部站点；选择具体站时含默认站 #0。","清空表示全部站点；选择具体站时含默认站 #0。"
 保存,Save
 返回,Back.
 新客,"New customer"
@@ -469,6 +470,7 @@ ID,ID
 按挽回活动配置的遗弃时限扫描过期结账报价并发送继续结账邮件,"Scan expired checkout quotes by win-back abandonment window and send continue-checkout emails"
 营销购物车遗弃挽回,"Marketing cart abandonment win-back"
 按挽回活动配置的遗弃时限扫描过期购物车并发送继续购物邮件,"Scan expired carts by win-back abandonment window and send continue-shopping emails"
+"网站 ID（0=全部）","Website ID (0 = all websites)"
 购物车优惠券槽默认部件迁移失败：%{1},"Cart coupon slot default widget migration failed: %{1}"
 应用中...,Applying...
 应用,Apply

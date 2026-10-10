@@ -213,11 +213,16 @@ final class OrderPayableResolver implements PayableResolverInterface
             }
         }
         if ($payableId !== '') {
-            $this->orderFacade->notifyOrderPaid($payableId, [
+            $paidMeta = [
                 'intent_code' => (string) $intent->getData(PaymentIntent::schema_fields_INTENT_CODE),
                 'amount_minor' => (int) $intent->getData(PaymentIntent::schema_fields_AMOUNT_MINOR),
                 'currency_code' => (string) $intent->getData(PaymentIntent::schema_fields_CURRENCY_CODE),
-            ]);
+            ];
+            if ($purpose === 'balance') {
+                $paidMeta['suppress_customer_paid_mail'] = true;
+                $paidMeta['hang_purpose'] = 'balance';
+            }
+            $this->orderFacade->notifyOrderPaid($payableId, $paidMeta);
         }
     }
 

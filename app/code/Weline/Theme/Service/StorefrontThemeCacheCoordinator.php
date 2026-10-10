@@ -155,6 +155,8 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             // Cross-scope cold dig 2026-10-09: currency in vary forced full header/footer SSR
             // per currency. Shell is now lang-only; currency-switcher islands hydrate live
             // (Partials::hydrateChromeCurrencyIslands) so selected currency never cross-bags.
+            // xscope A (2026-10-11): keep currency=false — do NOT expand currency vary first;
+            // EUR/GBP quiet samples still measured; miss → layout/host/contention first.
             vary: ['lang'],
             dependencies: ['catalog', 'config', 'global/i18n', 'theme'],
             freshTtlSeconds: max(1, $freshTtlSeconds),

@@ -288,10 +288,13 @@ final class PartialsChromeCachePolicyTest extends TestCase
     public function testChromePartialCacheSchemaPinsStateLangOverStorefrontCookie(): void
     {
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-        self::assertStringContainsString("'schema' => 'chrome-partial-v20-nested-content-hash'", $source);
+        self::assertStringContainsString("'schema' => 'chrome-partial-v22-layout-agnostic-shell'", $source);
+        self::assertStringContainsString("? 'shared'", $source);
+        self::assertStringContainsString('resolveStorefrontChromeSourceFingerprint', $source);
         self::assertStringContainsString('NestedChromeSourceFingerprint::compute()', $source);
         self::assertStringContainsString("'currency' => false", $source);
         self::assertStringContainsString('hydrateChromeCurrencyIslands', $source);
+        self::assertStringContainsString('hydrateChromeSearchFacadeIslands', $source);
         self::assertStringContainsString("return 'frontend-auth:0';", $source);
         self::assertStringContainsString('always guest-SSR', $source);
         self::assertStringContainsString("'i18n_switcher_markup'", $source);

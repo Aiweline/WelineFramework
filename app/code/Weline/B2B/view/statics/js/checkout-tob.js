@@ -629,6 +629,27 @@
             totals.appendChild(dd);
         }
         addTotalRow('商品合计', summary.goods_subtotal_minor, { testid: 'b2b-hang-goods-subtotal' });
+        var discountLines = Array.isArray(summary.discount_lines) ? summary.discount_lines : [];
+        discountLines.forEach(function (line, index) {
+            if (!line) {
+                return;
+            }
+            var abs = Math.max(0, Number(line.amount_minor_abs) || 0);
+            if (abs <= 0) {
+                return;
+            }
+            var label = String(line.label || '优惠').trim() || '优惠';
+            var testid = String(line.source_type || '') === 'admin_adjustment'
+                ? 'b2b-hang-admin-adjustment'
+                : ('b2b-hang-discount-' + index);
+            addTotalRow(label, abs, { testid: testid, prefix: '−' });
+        });
+        if (discountLines.length === 0) {
+            var discountAbs = Math.max(0, Number(summary.discount_amount_minor) || 0);
+            if (discountAbs > 0) {
+                addTotalRow('优惠', discountAbs, { testid: 'b2b-hang-discount-total', prefix: '−' });
+            }
+        }
         addTotalRow('已付定金', summary.deposit_amount_minor, { testid: 'b2b-hang-deposit-paid', prefix: '−' });
         var balanceLabel = String(summary.hang_status || '') === 'completed' ? '已付尾款' : '应付尾款';
         addTotalRow(

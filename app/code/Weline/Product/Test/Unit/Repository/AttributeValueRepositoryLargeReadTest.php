@@ -140,6 +140,53 @@ final class AttributeValueRepositoryLargeReadTest extends TestCase
         $repository->listExplicitRows(0, 'product', [83], [0], null, null, true);
     }
 
+    public function testListLocalizedTextMapStreamsScalarsSkipsJsonAndCleared(): void
+    {
+        [$repository, $ledger] = $this->fixtureRepository();
+
+        $map = $repository->listLocalizedTextMap(
+            0,
+            'product',
+            [83],
+            [0],
+            ['a00000', 'a00001', 'a00002', 'a00003', 'a00004', 'a00005', 'a00100'],
+            true,
+        );
+
+        self::assertArrayHasKey(83, $map);
+        // number 9.5 → "9.5"; boolean true → "1"; json array skipped; cleared skipped
+        self::assertSame('9.5', $map[83]['a00000'][''] ?? null);
+        self::assertSame('1', $map[83]['a00001']['en_US'] ?? null);
+        self::assertArrayNotHasKey('a00002', $map[83]);
+        self::assertArrayNotHasKey('a00003', $map[83]);
+        self::assertArrayNotHasKey('a00004', $map[83]);
+        self::assertSame('v5', $map[83]['a00005']['en_US'] ?? null);
+        self::assertSame('v100', $map[83]['a00100'][''] ?? null);
+
+        $sql = \implode("\n", $ledger->sql);
+        self::assertMatchesRegularExpression('/attribute_code/i', $sql);
+    }
+
+    public function testListLocalizedTextMapHardLimitThrows(): void
+    {
+        [$repository] = $this->fixtureRepository(rowCount: 20001);
+
+        $this->expectException(\Weline\Framework\App\Exception::class);
+        $this->expectExceptionMessage('listLocalizedTextMap materialize hard limit exceeded');
+        $codes = [];
+        for ($i = 0; $i < 20001; $i++) {
+            $codes[] = sprintf('a%05d', $i);
+        }
+        $repository->listLocalizedTextMap(0, 'product', [83], [0], $codes, true);
+    }
+
+    public function testBoundedEntityChunkSizeRespectsHardLimitEstimate(): void
+    {
+        self::assertSame(100, AttributeValueRepository::boundedEntityChunkSize(4, 50));
+        self::assertSame(256, AttributeValueRepository::boundedEntityChunkSize(1, 50));
+        self::assertSame(1, AttributeValueRepository::boundedEntityChunkSize(500, 50));
+    }
+
     /**
      * @return array{0: AttributeValueRepository, 1: stdClass}
      */

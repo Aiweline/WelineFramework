@@ -27,6 +27,10 @@ final class B2BHangPaymentOrderSummaryContractTest extends TestCase
         self::assertStringContainsString('hang_status_label', $src);
         self::assertStringContainsString('goods_subtotal_minor', $src);
         self::assertStringContainsString('payable_minor', $src);
+        self::assertStringContainsString('discount_lines', $src);
+        self::assertStringContainsString('presentDiscountLines', $src);
+        self::assertStringContainsString('admin_adjustment', $src);
+        self::assertStringContainsString("array_key_exists('balance_amount_minor', \$tp)", $src);
         self::assertStringContainsString('image_url', $src);
         self::assertStringContainsString('resolveProductImageUrls', $src);
         self::assertStringContainsString('presentStorefrontImageUrl', $src);

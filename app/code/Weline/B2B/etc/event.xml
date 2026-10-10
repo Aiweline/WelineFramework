@@ -34,4 +34,11 @@
                   shared="true"
                   sort="130"/>
     </event>
+    <event name="Weline_B2B::hang_status_changed">
+        <observer name="Weline_B2B::hang_status_changed_mail"
+                  instance="Weline\B2B\Observer\HangStatusChangedMailObserver"
+                  disabled="false"
+                  shared="false"
+                  sort="100"/>
+    </event>
 </config>

@@ -699,38 +699,20 @@ final class ProductSearchProjectionService
             return [];
         }
 
-        $attributeCodeSet = \array_fill_keys($attributeCodes, true);
         $texts = [];
-        // Keep all locales for search keywords, but chunk so each materialize stays under HARD_LIMIT
-        // (≈ entities × locales × codes). 48 × 50 locales × 4 codes ≈ 9600 < 20000.
-        foreach (\array_chunk($entityIds, 48) as $chunk) {
-            foreach ($this->attributes->listExplicitRows(
+        // All locales for search keywords; stream into text map (no flat typed-row bag).
+        // Chunk by HARD_LIMIT / (codes × ~50 locales); codes-bounded listExplicitRows does not auto-chunk.
+        $chunkSize = AttributeValueRepository::boundedEntityChunkSize(\count($attributeCodes));
+        foreach (\array_chunk($entityIds, $chunkSize) as $chunk) {
+            foreach ($this->attributes->listLocalizedTextMap(
                 $websiteId,
                 $entityType,
                 $chunk,
                 [AttributeValue::WEBSITE_STORE_ID],
-                null,
                 $attributeCodes,
                 true,
-            ) as $row) {
-                if (!empty($row['cleared'])) {
-                    continue;
-                }
-                $attributeCode = \trim((string)($row['attribute_code'] ?? ''));
-                // Defensive: SQL already filters attribute_codes; keep set check for safety.
-                if ($attributeCode === '' || !isset($attributeCodeSet[$attributeCode])) {
-                    continue;
-                }
-                $entityId = (int)($row['entity_id'] ?? 0);
-                if ($entityId <= 0) {
-                    continue;
-                }
-                $value = \trim((string)($row['value'] ?? ''));
-                if ($value === '') {
-                    continue;
-                }
-                $locale = \trim((string)($row['locale'] ?? ''));
-                $texts[$entityId][$attributeCode][$locale] = $value;
+            ) as $entityId => $byCode) {
+                $texts[(int)$entityId] = $byCode;
             }
         }
 

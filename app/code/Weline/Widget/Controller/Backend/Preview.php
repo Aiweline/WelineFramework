@@ -14,7 +14,6 @@ namespace Weline\Widget\Controller\Backend;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Widget\Service\WidgetData;
 use Weline\Widget\Service\WidgetPreviewService;
-use Weline\Widget\Taglib\Widget;
 
 /**
  * AJAX 预览控制器
@@ -42,6 +41,7 @@ class Preview extends BackendController
             $type = $this->request->getParam('type', '');
             $name = $this->request->getParam('name', '');
             $paramsJson = $this->request->getParam('params', '{}');
+            $areaParam = (string)$this->request->getParam('area', '');
 
             if (empty($type) || empty($name)) {
                 return $this->fetchJson([
@@ -50,7 +50,6 @@ class Preview extends BackendController
                 ]);
             }
 
-            // 解析参数
             $params = [];
             if (!empty($paramsJson)) {
                 $decoded = json_decode($paramsJson, true);
@@ -59,7 +58,6 @@ class Preview extends BackendController
                 }
             }
 
-            // 从注册表读取部件配置（运行时只读取，不扫描）
             $widget = $this->widgetData->getWidget($type, $name);
             if (!$widget) {
                 return $this->fetchJson([
@@ -68,12 +66,21 @@ class Preview extends BackendController
                 ]);
             }
 
-            // 使用反射调用私有方法渲染部件
-            $reflection = new \ReflectionClass(Widget::class);
-            $method = $reflection->getMethod('renderWidget');
-            $method->setAccessible(true);
-            $html = $method->invokeArgs(null, [$widget, $params]);
-            $html = $this->previewService->sanitizePreviewHtml(is_string($html) ? $html : '');
+            $module = (string)($widget['module'] ?? '');
+            $code = (string)($widget['code'] ?? $name);
+            if ($module === '' || $code === '') {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('部件不存在')
+                ]);
+            }
+
+            $area = $areaParam !== '' ? $areaParam : (string)($widget['area'] ?? 'frontend');
+            if ($area === '') {
+                $area = 'frontend';
+            }
+
+            $html = $this->previewService->render($module, $code, $params, $area);
 
             return $this->fetchJson([
                 'success' => true,
@@ -96,7 +103,7 @@ class Preview extends BackendController
     {
         try {
             $content = $this->request->getParam('content', '');
-            
+
             if (empty($content)) {
                 return $this->fetchJson([
                     'success' => false,
@@ -119,4 +126,3 @@ class Preview extends BackendController
         }
     }
 }
-

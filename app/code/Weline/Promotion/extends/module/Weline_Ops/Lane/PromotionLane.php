@@ -6,6 +6,7 @@ namespace Weline\Promotion\Extends\Module\Weline_Ops\Lane;
 
 use Weline\Framework\Http\Url;
 use Weline\Ops\Api\OpsLaneContributionInterface;
+use Weline\Ops\Service\OpsLaneDeepLink;
 
 final class PromotionLane implements OpsLaneContributionInterface
 {
@@ -40,13 +41,13 @@ final class PromotionLane implements OpsLaneContributionInterface
             [
                 'code' => 'promotion_desk',
                 'label' => (string)__('促销运营台'),
-                'url' => $this->url->getBackendUrl('promotion/backend/promotion/index'),
+                'url' => OpsLaneDeepLink::backend($this->url, 'promotion/backend/promotion/index', $websiteId),
                 'connected' => null,
             ],
             [
                 'code' => 'promotion_theme',
                 'label' => (string)__('活动主题'),
-                'url' => $this->url->getBackendUrl('promotion/backend/theme/index'),
+                'url' => OpsLaneDeepLink::backend($this->url, 'promotion/backend/theme/index', $websiteId),
                 'connected' => null,
             ],
         ];

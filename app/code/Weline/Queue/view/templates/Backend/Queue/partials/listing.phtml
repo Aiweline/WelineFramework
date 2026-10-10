@@ -4,7 +4,7 @@ use Weline\Theme\Service\Ui\IconRegistry;
 
 $queueListingIconRegistry = ObjectManager::getInstance(IconRegistry::class);
 $queueEsc = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$queueShortText = static function (mixed $value, int $length = 50): string {
+$queueShortText = static function (mixed $value, int $length = 36): string {
     $text = (string)$value;
     if (function_exists('mb_strlen') && function_exists('mb_substr')) {
         return mb_strlen($text, 'UTF-8') > $length ? mb_substr($text, 0, $length, 'UTF-8') . '…' : $text;
@@ -27,15 +27,12 @@ $queuePageUrl = static fn(int $page): string => '?' . http_build_query([
 ]);
 ?>
 <div class="w-table-wrap">
-    <table class="w-table w-queue-table" data-w-vertical="middle">
+    <table class="w-table w-queue-table w-queue-table--compact" data-w-vertical="middle" data-testid="queue-listing-table">
         <thead>
             <tr>
                 <th><input type="checkbox" data-w-queue-select-all aria-label="<?= $queueEsc(__('选择全部队列')) ?>"></th>
-                <th><lang>ID</lang></th>
-                <th><lang>队列信息</lang></th>
-                <th><lang>状态</lang></th>
-                <th><lang>进度/结果</lang></th>
-                <th><lang>时间</lang></th>
+                <th><lang>队列</lang></th>
+                <th><lang>状态与结果</lang></th>
                 <th><lang>操作</lang></th>
             </tr>
         </thead>
@@ -52,7 +49,7 @@ $queuePageUrl = static fn(int $page): string => '?' . http_build_query([
                 default => ['label' => __('等待中'), 'icon' => 'clock', 'tone' => 'neutral'],
             };
             $resultText = (string)($queue['result'] ?? '');
-            $longResult = (function_exists('mb_strlen') ? mb_strlen($resultText, 'UTF-8') : strlen($resultText)) > 50;
+            $longResult = (function_exists('mb_strlen') ? mb_strlen($resultText, 'UTF-8') : strlen($resultText)) > 36;
             if ($longResult) {
                 $dialogId = 'w-queue-result-' . max(0, $queueId);
                 $queueResultDialogs[$dialogId] = $resultText;
@@ -61,46 +58,44 @@ $queuePageUrl = static fn(int $page): string => '?' . http_build_query([
             <tr data-queue-id="<?= $queueId ?>" data-status="<?= $queueEsc($queueStatus) ?>">
                 <td><input type="checkbox" data-w-queue-select value="<?= $queueId ?>" aria-label="<?= $queueEsc(__('选择队列 #%{1}', $queueId)) ?>"></td>
                 <td>
-                    <div class="w-queue-table__identity">
-                        <strong>#<?= $queueId ?></strong>
-                        <?php if (!empty($queue['auto'])): ?><span class="w-badge" data-tone="info"><lang>自动</lang></span><?php endif; ?>
-                    </div>
-                </td>
-                <td>
-                    <div class="w-queue-table__info">
-                        <span class="w-queue-table__name" title="<?= $queueEsc($queue['name'] ?? '') ?>"><?= $queueEsc($queueShortText($queue['name'] ?? '', 36)) ?></span>
-                        <?php if (trim((string)($queue['biz_key'] ?? '')) !== ''): ?>
-                            <code class="w-queue-table__meta" title="<?= $queueEsc(__('业务键')) ?>"><?= $queueEsc($queue['biz_key']) ?></code>
-                        <?php endif; ?>
-                        <?php if (!empty($queue['pid'])): ?>
-                            <span class="w-queue-table__meta"><w:icon name="settings" size="xs" /> PID: <?= (int)$queue['pid'] ?></span>
-                        <?php endif; ?>
-                    </div>
-                </td>
-                <td>
-                    <span class="w-badge" data-tone="<?= $statusMeta['tone'] ?>">
-                        <?= $queueListingIconRegistry->render((string)$statusMeta['icon'], 'xs') ?> <?= $queueEsc($statusMeta['label']) ?>
-                    </span>
-                    <?php if (!empty($queue['finished'])): ?><span class="w-visually-hidden"><lang>已结束</lang></span><?php endif; ?>
-                </td>
-                <td>
-                    <div class="w-queue-table__result">
-                        <?php if ($queueStatus === 'pending'): ?>
-                            <span class="w-queue-table__result-state"><w:icon name="clock" size="xs" /><lang>等待执行…</lang></span>
-                        <?php elseif ($queueStatus === 'running'): ?>
-                            <span class="w-queue-table__result-state"><w:icon name="spinner" size="xs" /><lang>正在执行…</lang></span>
-                        <?php else: ?>
-                            <?= $queueEsc($queueShortText($resultText, 50)) ?>
-                            <?php if ($longResult): ?>
-                                <button type="button" class="w-button w-queue-table__view-more" data-size="sm" data-tone="quiet" data-w-action="dialog.open" data-w-target="#<?= $queueEsc($dialogId) ?>" aria-haspopup="dialog"><w:icon name="eye" size="xs" /> <lang>查看全部</lang></button>
+                    <div class="w-queue-table__main">
+                        <div class="w-queue-table__title-row">
+                            <strong class="w-queue-table__id">#<?= $queueId ?></strong>
+                            <span class="w-queue-table__name" title="<?= $queueEsc($queue['name'] ?? '') ?>"><?= $queueEsc($queueShortText($queue['name'] ?? '', 40)) ?></span>
+                            <?php if (!empty($queue['auto'])): ?><span class="w-badge" data-tone="info"><lang>自动</lang></span><?php endif; ?>
+                        </div>
+                        <div class="w-queue-table__meta-row">
+                            <?php if (trim((string)($queue['biz_key'] ?? '')) !== ''): ?>
+                                <code class="w-queue-table__meta" title="<?= $queueEsc(__('业务键')) ?>"><?= $queueEsc($queue['biz_key']) ?></code>
                             <?php endif; ?>
-                        <?php endif; ?>
+                            <?php if (!empty($queue['pid'])): ?>
+                                <span class="w-queue-table__meta"><w:icon name="settings" size="xs" /> PID: <?= (int)$queue['pid'] ?></span>
+                            <?php endif; ?>
+                            <span class="w-queue-table__meta"><w:icon name="plus" size="xs" /><?= $queueEsc($queue['create_time'] ?? '') ?></span>
+                            <?php if (!empty($queue['end_at'])): ?>
+                                <span class="w-queue-table__meta"><w:icon name="check" size="xs" /><?= $queueEsc($queue['end_at']) ?></span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </td>
                 <td>
-                    <div class="w-queue-table__time">
-                        <span><w:icon name="plus" size="xs" /><?= $queueEsc($queue['create_time'] ?? '') ?></span>
-                        <?php if (!empty($queue['end_at'])): ?><span><w:icon name="check" size="xs" /><?= $queueEsc($queue['end_at']) ?></span><?php endif; ?>
+                    <div class="w-queue-table__status-block">
+                        <span class="w-badge" data-tone="<?= $statusMeta['tone'] ?>">
+                            <?= $queueListingIconRegistry->render((string)$statusMeta['icon'], 'xs') ?> <?= $queueEsc($statusMeta['label']) ?>
+                        </span>
+                        <?php if (!empty($queue['finished'])): ?><span class="w-visually-hidden"><lang>已结束</lang></span><?php endif; ?>
+                        <div class="w-queue-table__result">
+                            <?php if ($queueStatus === 'pending'): ?>
+                                <span class="w-queue-table__result-state"><w:icon name="clock" size="xs" /><lang>等待执行…</lang></span>
+                            <?php elseif ($queueStatus === 'running'): ?>
+                                <span class="w-queue-table__result-state"><w:icon name="spinner" size="xs" /><lang>正在执行…</lang></span>
+                            <?php else: ?>
+                                <?= $queueEsc($queueShortText($resultText, 36)) ?>
+                                <?php if ($longResult): ?>
+                                    <button type="button" class="w-button w-queue-table__view-more" data-size="sm" data-tone="quiet" data-w-action="dialog.open" data-w-target="#<?= $queueEsc($dialogId) ?>" aria-haspopup="dialog"><w:icon name="eye" size="xs" /> <lang>查看全部</lang></button>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </td>
                 <td>
@@ -117,7 +112,7 @@ $queuePageUrl = static fn(int $page): string => '?' . http_build_query([
             </tr>
         <?php endforeach; ?>
         <?php if ($queueItems === []): ?>
-            <tr><td colspan="7"><div class="w-empty w-queue-table__empty"><w:icon name="box" size="lg" /><p><lang>暂无队列数据</lang></p></div></td></tr>
+            <tr><td colspan="4"><div class="w-empty w-queue-table__empty"><w:icon name="box" size="lg" /><p><lang>暂无队列数据</lang></p></div></td></tr>
         <?php endif; ?>
         </tbody>
     </table>

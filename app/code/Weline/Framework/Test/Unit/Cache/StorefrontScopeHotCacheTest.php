@@ -157,6 +157,39 @@ final class StorefrontScopeHotCacheTest extends TestCase
         self::assertNull($service->peekPolicy($policy, 'demo.key'));
     }
 
+    public function testPurgeProcessCacheForPolicyClearsPolicyKeyedL1(): void
+    {
+        $adapter = null;
+        $service = $this->policyService('unit_policy_purge', $adapter);
+        $policy = new \Weline\Framework\Cache\CachePolicy(
+            resource: 'unit.policy.purge',
+            pool: 'unit_policy_purge',
+            scope: 'global',
+            freshTtlSeconds: 60,
+            staleTtlSeconds: 120,
+        );
+
+        self::assertSame(
+            'seed',
+            $service->rememberPolicy($policy, 'theme.chrome.header.abc', static fn(): string => 'seed'),
+        );
+        // Logical-key substring purge must NOT clear pool|policy:resource:hash L1.
+        $service->purgeProcessCacheForLogicalKey('theme.chrome.header.abc');
+        self::assertSame(
+            'seed',
+            $service->peekPolicy($policy, 'theme.chrome.header.abc'),
+            'policy-keyed L1 survives logical-key substring purge',
+        );
+
+        self::assertInstanceOf(InMemoryAdapter::class, $adapter);
+        $adapter->clear();
+        $service->purgeProcessCacheForPolicy($policy, 'theme.chrome.header.abc');
+        self::assertNull(
+            $service->peekPolicy($policy, 'theme.chrome.header.abc'),
+            'purgeProcessCacheForPolicy must drop policy-keyed L1 so peek reads durable L2',
+        );
+    }
+
     public function testChromePoolByteBudgetCapsProcessL1(): void
     {
         $adapter = new InMemoryAdapter();

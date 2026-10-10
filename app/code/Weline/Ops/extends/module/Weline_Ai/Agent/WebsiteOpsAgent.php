@@ -31,7 +31,7 @@ class WebsiteOpsAgent implements AgentInterface
 
     public function getDescription(): string
     {
-        return (string)__('读取网站上下文生成画像，并受理运营配置后异步派发博客/社媒任务。');
+        return (string)__('读取站点证据包（分类/商品/政策/语种）生成画像，并受理运营配置后异步派发博客/社媒任务。');
     }
 
     public function getVersion(): string

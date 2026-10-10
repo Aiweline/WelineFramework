@@ -17,9 +17,39 @@ $kindLabels = [
           <?= __('薄分群：新客 / 老客 / N 天未购。活动可挂 segment_id。') ?>
         </p>
       </div>
-      <a class="w-button" data-tone="primary" data-size="sm" href="<?= $escape($this->getUrl('*/backend/segment/add')) ?>" data-testid="marketing-segment-create">
+      <?php
+        $createQuery = [];
+        $filterWebsiteId = $filter_website_id ?? $this->getData('filter_website_id');
+        if ($filterWebsiteId !== null && $filterWebsiteId !== '') {
+            $createQuery['website_id'] = (int)$filterWebsiteId;
+        }
+      ?>
+      <a class="w-button" data-tone="primary" data-size="sm" href="<?= $escape($this->getUrl('*/backend/segment/add', $createQuery)) ?>" data-testid="marketing-segment-create">
         <?= __('新建分群') ?>
       </a>
+    </div>
+    <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="marketing-segment-website-filter">
+      <div class="w-card__body">
+        <form method="get" id="marketing-segment-website-form" class="w-cluster" data-align="end" data-wrap="true" style="--w-gap:var(--weline-space-3);">
+          <div class="w-field" style="min-width:min(100%,18rem); flex:1 1 16rem;">
+            <label class="w-field__label" for="marketing-segment-website"><?= __('站点范围') ?></label>
+            <w:websites:website:select
+              id="marketing-segment-website"
+              name="website_id"
+              value="websiteSelectValue"
+              display="websiteSelectDisplay"
+              options="websiteSelectOptionsJson"
+              multiple="false"
+              allow-empty="true"
+              clearable="true"
+              empty-label="@lang(全部站点)"
+              placeholder="@lang(搜索站点名称或域名)"
+              auto-submit="true"
+              form="marketing-segment-website-form"
+            />
+          </div>
+        </form>
+      </div>
     </div>
     <?php if ($load_error !== ''): ?>
       <div class="w-alert" data-tone="danger"><?= $escape($load_error) ?></div>
@@ -32,25 +62,28 @@ $kindLabels = [
           <th><?= __('编码') ?></th>
           <th><?= __('名称') ?></th>
           <th><?= __('种类') ?></th>
+          <th><?= __('网站') ?></th>
           <th><?= __('状态') ?></th>
           <th><?= __('操作') ?></th>
         </tr>
         </thead>
         <tbody>
         <?php if ($segments === []): ?>
-          <tr><td colspan="6" class="w-text" data-align="center" data-tone="muted"><?= __('还没有分群') ?></td></tr>
+          <tr><td colspan="7" class="w-text" data-align="center" data-tone="muted"><?= __('还没有分群') ?></td></tr>
         <?php else: foreach ($segments as $row):
           $id = (int)(is_object($row) ? $row->getId() : ($row['id'] ?? 0));
           $code = (string)(is_object($row) ? $row->getData('code') : ($row['code'] ?? ''));
           $name = (string)(is_object($row) ? $row->getData('name') : ($row['name'] ?? ''));
           $kind = (string)(is_object($row) ? $row->getData('kind') : ($row['kind'] ?? ''));
           $status = (string)(is_object($row) ? $row->getData('status') : ($row['status'] ?? ''));
+          $websiteId = (int)(is_object($row) ? $row->getData('website_id') : ($row['website_id'] ?? -1));
         ?>
           <tr>
             <td><?= $id ?></td>
             <td><?= $escape($code) ?></td>
             <td><?= $escape($name) ?></td>
             <td><?= $escape($kindLabels[$kind] ?? $kind) ?></td>
+            <td><?= $websiteId < 0 ? __('全部') : ('#' . $websiteId) ?></td>
             <td><?= $escape($status === 'enabled' ? __('已启用') : __('已停用')) ?></td>
             <td><a class="w-button" data-tone="neutral" data-size="sm" href="<?= $escape($this->getUrl('*/backend/segment/edit', ['id' => $id])) ?>"><?= __('编辑') ?></a></td>
           </tr>

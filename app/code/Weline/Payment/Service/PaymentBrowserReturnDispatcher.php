@@ -369,12 +369,17 @@ final class PaymentBrowserReturnDispatcher
 
             /** @var OrderFacadeInterface $orders */
             $orders = $this->objectManager->getInstance(OrderFacadeInterface::class);
-            $orders->notifyOrderPaid($orderUuid, [
+            $paidMeta = [
                 'payment_method' => (string) $transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE),
                 'payment_transaction_id' => (int) $transaction->getId(),
                 'payment_transaction_no' => $transactionNo,
                 'purpose' => $purpose !== '' ? $purpose : 'full',
-            ]);
+            ];
+            if ($purpose === 'balance') {
+                $paidMeta['suppress_customer_paid_mail'] = true;
+                $paidMeta['hang_purpose'] = 'balance';
+            }
+            $orders->notifyOrderPaid($orderUuid, $paidMeta);
         } catch (\Throwable) {
             // Capture already succeeded; leave order for reconciliation rather than
             // failing the browser return path and risking a double-charge retry.
