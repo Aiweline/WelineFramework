@@ -91,8 +91,8 @@ class SocialManagementQueryProvider implements QueryProviderInterface
                 ['name' => 'getPlatform', 'description' => __('获取单个平台定义。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'graph' => true, 'params' => ['platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64]]],
                 ['name' => 'listAccounts', 'description' => __('列出已连接账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => []],
                 ['name' => 'getAccount', 'description' => __('获取社媒账户详情。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
-                ['name' => 'listWidgetAccounts', 'description' => __('列出可展示的社媒账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'graph' => true, 'params' => ['platforms' => ['type' => 'list', 'max_items' => 100], 'limit' => ['type' => 'int', 'min' => 1, 'max' => 100]]],
-                ['name' => 'startAuthorization', 'description' => __('生成平台授权地址。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64], 'redirect_uri' => ['type' => 'string', 'max_length' => 2048], 'state' => ['type' => 'string', 'max_length' => 128], 'account_context' => ['type' => 'map']]],
+                ['name' => 'listWidgetAccounts', 'description' => __('列出可展示的社媒账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'graph' => true, 'params' => ['platforms' => ['type' => 'list', 'max_items' => 100], 'limit' => ['type' => 'int', 'min' => 1, 'max' => 100], 'website_id' => ['type' => 'int', 'min' => 0]]],
+                ['name' => 'startAuthorization', 'description' => __('生成平台授权地址。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64], 'redirect_uri' => ['type' => 'string', 'max_length' => 2048], 'state' => ['type' => 'string', 'max_length' => 128], 'account_context' => ['type' => 'map'], 'website_id' => ['type' => 'int', 'min' => 0], 'scope_type' => ['type' => 'string', 'max_length' => 32], 'scope_id' => ['type' => 'int', 'min' => 0], 'child_scope_type' => ['type' => 'string', 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'scope_key' => ['type' => 'string', 'max_length' => 128], 'scope_code' => ['type' => 'string', 'max_length' => 64]]],
                 ['name' => 'completeAuthorization', 'description' => __('完成平台授权回调并保存账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['code' => ['type' => 'string', 'max_length' => 2048], 'state' => ['type' => 'string', 'required' => true, 'max_length' => 128], 'error' => ['type' => 'string', 'max_length' => 255], 'error_description' => ['type' => 'string', 'max_length' => 1024]]],
                 ['name' => 'saveCredentialAccount', 'description' => __('保存官方凭据账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['account_id' => ['type' => 'int', 'min' => 0], 'platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64], 'account_name' => ['type' => 'string', 'required' => true, 'max_length' => 150], 'auth_mode' => ['type' => 'string', 'max_length' => 64], 'profile_url' => ['type' => 'string', 'max_length' => 512], 'widget_enabled' => ['type' => 'bool'], 'publish_enabled' => ['type' => 'bool'], 'sort_order' => ['type' => 'int'], 'credentials' => ['type' => 'map'], 'scopes' => ['type' => 'list', 'max_items' => 50], 'token_expires_at' => ['type' => 'string', 'max_length' => 32], 'remote_account_id' => ['type' => 'string', 'max_length' => 150], 'remote_account_name' => ['type' => 'string', 'max_length' => 190]]],
                 ['name' => 'testAccount', 'description' => __('检测账户凭据。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
@@ -135,9 +135,16 @@ class SocialManagementQueryProvider implements QueryProviderInterface
      */
     private function startAuthorization(array $params): array
     {
+        $accountContext = \is_array($params['account_context'] ?? null) ? $params['account_context'] : [];
+        foreach (['website_id', 'scope_type', 'scope_id', 'child_scope_type', 'child_scope_id', 'scope_key', 'scope_code', 'website_code'] as $key) {
+            if (\array_key_exists($key, $params) && !\array_key_exists($key, $accountContext)) {
+                $accountContext[$key] = $params[$key];
+            }
+        }
+
         return $this->oauthService->start(
             \strtolower(\trim((string)($params['platform_code'] ?? $params['platform'] ?? ''))),
-            \is_array($params['account_context'] ?? null) ? $params['account_context'] : [],
+            $accountContext,
             isset($params['redirect_uri']) ? (string)$params['redirect_uri'] : null
         );
     }

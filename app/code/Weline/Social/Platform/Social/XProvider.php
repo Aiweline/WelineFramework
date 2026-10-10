@@ -56,7 +56,7 @@ class XProvider extends DocumentedSocialPlatformProvider
 
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
-        $clientId = $this->appConfig()->get('x', 'client_id');
+        $clientId = \trim((string)($this->resolveAppConfig('x', $accountContext)['client_id'] ?? ''));
         if ($clientId === '' || $redirectUri === '') {
             return null;
         }
@@ -83,7 +83,7 @@ class XProvider extends DocumentedSocialPlatformProvider
         $redirectUri = \trim((string)($context['redirect_uri'] ?? ''));
         $accountContext = \is_array($context['account_context'] ?? null) ? $context['account_context'] : [];
         $codeVerifier = \trim((string)($accountContext['code_verifier'] ?? $callbackData['code_verifier'] ?? ''));
-        $app = \is_array($context['app_config'] ?? null) ? $context['app_config'] : $this->appConfig()->getPlatformApp('x');
+        $app = $this->resolveAppConfig('x', \is_array($context['account_context'] ?? null) ? $context['account_context'] : [], $context);
         $clientId = \trim((string)($app['client_id'] ?? ''));
         $clientSecret = \trim((string)($app['client_secret'] ?? ''));
         if ($code === '' || $clientId === '' || $codeVerifier === '') {

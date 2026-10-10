@@ -15,6 +15,37 @@ class SocialPlatformAppConfig
     ) {
     }
 
+    public function scopeForWebsite(int $websiteId, string $websiteCode = ''): string
+    {
+        $websiteId = \max(0, $websiteId);
+        $code = \strtolower(\trim($websiteCode));
+        if ($websiteId === 0) {
+            $code = 'default';
+        } elseif ($code === '' || $code === 'default') {
+            $code = 'id-' . $websiteId;
+        }
+
+        return $this->configReader->normalizeScope($code . '.default.default');
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function scopeFromAccountContext(array $context): ?string
+    {
+        if (!\array_key_exists('website_id', $context)
+            && \trim((string)($context['scope_code'] ?? $context['website_code'] ?? '')) === ''
+            && \trim((string)($context['scope_type'] ?? '')) === ''
+        ) {
+            return null;
+        }
+
+        $websiteId = (int)($context['website_id'] ?? $context['scope_id'] ?? 0);
+        $websiteCode = \trim((string)($context['scope_code'] ?? $context['website_code'] ?? ''));
+
+        return $this->scopeForWebsite($websiteId, $websiteCode);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -57,6 +88,64 @@ class SocialPlatformAppConfig
         }
 
         return $app;
+    }
+
+    /**
+     * Website-scoped App credentials with explicit global fill for empty fields.
+     *
+     * @return array<string, string>
+     */
+    public function getPlatformAppForWebsite(string $platformCode, int $websiteId, string $websiteCode = ''): array
+    {
+        $websiteScope = $this->scopeForWebsite($websiteId, $websiteCode);
+        $globalScope = $this->configReader->normalizeScope('default.default.default');
+        $websiteApp = $this->getPlatformApp($platformCode, $websiteScope);
+        if ($websiteScope === $globalScope) {
+            return $websiteApp;
+        }
+
+        $globalApp = $this->getPlatformApp($platformCode, $globalScope);
+        foreach ($globalApp as $field => $value) {
+            $field = (string)$field;
+            if (\trim((string)($websiteApp[$field] ?? '')) === '' && \trim((string)$value) !== '') {
+                $websiteApp[$field] = \trim((string)$value);
+            }
+        }
+
+        if (($websiteApp['graph_version'] ?? '') === '') {
+            $websiteApp['graph_version'] = 'v21.0';
+        }
+
+        return $websiteApp;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, string>
+     */
+    public function getPlatformAppFromContext(string $platformCode, array $context = []): array
+    {
+        if (\is_array($context['app_config'] ?? null) && $context['app_config'] !== []) {
+            $app = [];
+            foreach ($context['app_config'] as $field => $value) {
+                $app[(string)$field] = \trim((string)$value);
+            }
+            if (($app['graph_version'] ?? '') === '') {
+                $app['graph_version'] = 'v21.0';
+            }
+
+            return $app;
+        }
+
+        $scope = $this->scopeFromAccountContext($context);
+        if ($scope === null) {
+            return $this->getPlatformApp($platformCode);
+        }
+
+        $websiteId = (int)($context['website_id'] ?? $context['scope_id'] ?? 0);
+        $websiteCode = \trim((string)($context['scope_code'] ?? $context['website_code'] ?? ''));
+
+        return $this->getPlatformAppForWebsite($platformCode, $websiteId, $websiteCode);
     }
 
     public function get(string $platformCode, string $field, string $default = '', ?string $scope = null): string

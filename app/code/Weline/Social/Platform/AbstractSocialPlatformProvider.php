@@ -181,6 +181,22 @@ abstract class AbstractSocialPlatformProvider implements SocialPlatformProviderI
     }
 
     /**
+     * Resolve platform App credentials from OAuth/publish context (website scope aware).
+     *
+     * @param array<string, mixed> $accountContext
+     * @param array<string, mixed> $context
+     * @return array<string, string>
+     */
+    protected function resolveAppConfig(string $platformCode, array $accountContext = [], array $context = []): array
+    {
+        if (\is_array($context['app_config'] ?? null) && $context['app_config'] !== []) {
+            return $this->appConfig()->getPlatformAppFromContext($platformCode, $context);
+        }
+
+        return $this->appConfig()->getPlatformAppFromContext($platformCode, $accountContext);
+    }
+
+    /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */

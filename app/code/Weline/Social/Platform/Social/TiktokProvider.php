@@ -54,7 +54,7 @@ class TiktokProvider extends DocumentedSocialPlatformProvider
 
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
-        $clientKey = $this->appConfig()->get('tiktok', 'client_key');
+        $clientKey = \trim((string)($this->resolveAppConfig('tiktok', $accountContext)['client_key'] ?? ''));
         if ($clientKey === '' || $redirectUri === '') {
             return null;
         }
@@ -72,7 +72,7 @@ class TiktokProvider extends DocumentedSocialPlatformProvider
     {
         $code = \trim((string)($callbackData['code'] ?? ''));
         $redirectUri = \trim((string)($context['redirect_uri'] ?? ''));
-        $app = \is_array($context['app_config'] ?? null) ? $context['app_config'] : $this->appConfig()->getPlatformApp('tiktok');
+        $app = $this->resolveAppConfig('tiktok', \is_array($context['account_context'] ?? null) ? $context['account_context'] : [], $context);
         $clientKey = \trim((string)($app['client_key'] ?? ''));
         $clientSecret = \trim((string)($app['client_secret'] ?? ''));
         if ($code === '' || $clientKey === '' || $clientSecret === '') {

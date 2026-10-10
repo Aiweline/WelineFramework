@@ -6,6 +6,7 @@ namespace Weline\Social\Extends\Module\Weline_Ops\Lane;
 
 use Weline\Framework\Http\Url;
 use Weline\Ops\Api\OpsLaneContributionInterface;
+use Weline\Ops\Service\OpsLaneDeepLink;
 
 final class SocialLane implements OpsLaneContributionInterface
 {
@@ -40,7 +41,7 @@ final class SocialLane implements OpsLaneContributionInterface
             [
                 'code' => 'social_accounts',
                 'label' => (string)__('社媒账户'),
-                'url' => $this->url->getBackendUrl('*/backend/social'),
+                'url' => OpsLaneDeepLink::socialAdmin($this->url, $websiteId),
                 'connected' => null,
             ],
         ];

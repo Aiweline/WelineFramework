@@ -53,7 +53,7 @@ class LinkedinProvider extends DocumentedSocialPlatformProvider
 
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
-        $clientId = $this->appConfig()->get('linkedin', 'client_id');
+        $clientId = \trim((string)($this->resolveAppConfig('linkedin', $accountContext)['client_id'] ?? ''));
         if ($clientId === '' || $redirectUri === '') {
             return null;
         }
@@ -71,7 +71,7 @@ class LinkedinProvider extends DocumentedSocialPlatformProvider
     {
         $code = \trim((string)($callbackData['code'] ?? ''));
         $redirectUri = \trim((string)($context['redirect_uri'] ?? ''));
-        $app = \is_array($context['app_config'] ?? null) ? $context['app_config'] : $this->appConfig()->getPlatformApp('linkedin');
+        $app = $this->resolveAppConfig('linkedin', \is_array($context['account_context'] ?? null) ? $context['account_context'] : [], $context);
         $clientId = \trim((string)($app['client_id'] ?? ''));
         $clientSecret = \trim((string)($app['client_secret'] ?? ''));
         if ($code === '' || $clientId === '' || $clientSecret === '') {

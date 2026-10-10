@@ -8,6 +8,7 @@ use Weline\Ai\Api\SecretStoreInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Social\Interface\SocialPlatformConfigTesterInterface;
 use Weline\Social\Model\SocialPlatformAccount;
+use Weline\Social\Model\SocialWebsiteAccount;
 
 class SocialAccountService
 {
@@ -233,18 +234,29 @@ class SocialAccountService
         )));
         $limit = (int)($filters['limit'] ?? 24);
         $limit = \max(1, \min(100, $limit));
+        $scopedAccountIds = null;
+        if (\array_key_exists('website_id', $filters)) {
+            $scopedAccountIds = $this->activeWidgetAccountIdsForWebsite((int)$filters['website_id']);
+            if ($scopedAccountIds === []) {
+                return [];
+            }
+        }
 
-        $rows = $this->newAccount()->reset()
+        $query = $this->newAccount()->reset()
             ->where(SocialPlatformAccount::schema_fields_STATUS, SocialPlatformAccount::STATUS_ACTIVE)
             ->where(SocialPlatformAccount::schema_fields_WIDGET_ENABLED, 1)
-            ->where(SocialPlatformAccount::schema_fields_PROFILE_URL, '', '!=')
+            ->where(SocialPlatformAccount::schema_fields_PROFILE_URL, '', '!=');
+        if ($scopedAccountIds !== null) {
+            $query->where(SocialPlatformAccount::schema_fields_ID, $scopedAccountIds, 'IN');
+        }
+        $rows = $query
             ->order(SocialPlatformAccount::schema_fields_SORT_ORDER, 'ASC')
             ->order(SocialPlatformAccount::schema_fields_ID, 'ASC')
             ->limit($limit)
             ->select()
             ->fetchArray();
 
-        $accounts = [];
+        $accountsById = [];
         foreach (\is_array($rows) ? $rows : [] as $row) {
             if (!\is_array($row)) {
                 continue;
@@ -263,10 +275,65 @@ class SocialAccountService
             }
             unset($row[SocialPlatformAccount::schema_fields_CREDENTIALS_ENCRYPTED]);
             $row[SocialPlatformAccount::schema_fields_PROFILE_URL] = $profileUrl;
-            $accounts[] = $this->enrichAccount($row);
+            $accountId = (int)($row[SocialPlatformAccount::schema_fields_ID] ?? 0);
+            $accountsById[$accountId] = $this->enrichAccount($row);
         }
 
-        return $accounts;
+        if ($scopedAccountIds === null) {
+            return \array_values($accountsById);
+        }
+
+        $ordered = [];
+        foreach ($scopedAccountIds as $accountId) {
+            if (isset($accountsById[$accountId])) {
+                $ordered[] = $accountsById[$accountId];
+            }
+            if (\count($ordered) >= $limit) {
+                break;
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function activeWidgetAccountIdsForWebsite(int $websiteId): array
+    {
+        $websiteId = \max(0, $websiteId);
+        try {
+            $rows = $this->newWebsiteRelation()->reset()
+                ->where(SocialWebsiteAccount::schema_fields_SCOPE_TYPE, SocialWebsiteAccount::SCOPE_TYPE_WEBSITE)
+                ->where(SocialWebsiteAccount::schema_fields_SCOPE_ID, $websiteId)
+                ->where(SocialWebsiteAccount::schema_fields_CHILD_SCOPE_TYPE, SocialWebsiteAccount::CHILD_SCOPE_TYPE_WEBSITE_DEFAULT)
+                ->where(SocialWebsiteAccount::schema_fields_CHILD_SCOPE_ID, 0)
+                ->where(SocialWebsiteAccount::schema_fields_STATUS, SocialWebsiteAccount::STATUS_ACTIVE)
+                ->order(SocialWebsiteAccount::schema_fields_SORT_ORDER, 'ASC')
+                ->order(SocialWebsiteAccount::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $ids = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $accountId = (int)($row[SocialWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
+            if ($accountId > 0) {
+                $ids[] = $accountId;
+            }
+        }
+
+        return \array_values(\array_unique($ids));
+    }
+
+    private function newWebsiteRelation(): SocialWebsiteAccount
+    {
+        return ($this->objectManager ?? ObjectManager::getInstance())->getInstance(SocialWebsiteAccount::class);
     }
 
     private function encryptCredentials(array $credentials): string

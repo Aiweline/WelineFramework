@@ -25,16 +25,17 @@ class Oauth extends BaseController
         if (!\is_array($params)) {
             $params = [];
         }
-        $returnUrl = $this->url->getBackendUrl('weline_social/backend/social');
+        $returnQuery = [];
 
         try {
             if (!empty($params['error'])) {
                 $message = (string)($params['error_description'] ?? $params['error'] ?? __('授权被拒绝。'));
                 $this->getMessageManager()->addError($message);
-                return $this->redirect($returnUrl);
+                return $this->redirect($this->socialReturnUrl($returnQuery));
             }
 
             $result = $this->oauthService->complete($params);
+            $returnQuery = \is_array($result['return_query'] ?? null) ? $result['return_query'] : [];
             if (!empty($result['success'])) {
                 $this->getMessageManager()->addSuccess((string)($result['message'] ?? __('授权完成。')));
             } else {
@@ -44,6 +45,24 @@ class Oauth extends BaseController
             $this->getMessageManager()->addError($throwable->getMessage());
         }
 
-        return $this->redirect($returnUrl);
+        return $this->redirect($this->socialReturnUrl($returnQuery));
+    }
+
+    /**
+     * @param array<string, mixed> $query
+     */
+    private function socialReturnUrl(array $query): string
+    {
+        $clean = [];
+        foreach ($query as $key => $value) {
+            $key = \trim((string)$key);
+            $value = \trim((string)$value);
+            if ($key === '' || $value === '') {
+                continue;
+            }
+            $clean[$key] = $value;
+        }
+
+        return $this->url->getBackendUrl('weline_social/backend/social', $clean);
     }
 }

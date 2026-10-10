@@ -130,8 +130,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 600;
 }
 
+/* Optional secondary code chip (e.g. website code). Never used for scope_type enums. */
 .weline-social-admin .social-choice-tag {
     display: inline-flex;
     align-items: center;
@@ -142,6 +144,12 @@
     color: var(--weline-theme-primary, var(--backend-theme-primary));
     font-size: 0.75rem;
     line-height: 1.4;
+}
+
+.weline-social-admin .social-choice-option-meta::before {
+    content: '·';
+    margin-inline-end: 0.35rem;
+    opacity: 0.7;
 }
 
 .weline-social-admin .social-choice-meta {
@@ -164,11 +172,12 @@
     z-index: 20;
 }
 
+/* Absolute only as pre-float fallback; portal/positioned uses --w-floating-* (Theme UI). */
 .weline-social-admin .social-choice-panel {
     position: absolute;
     top: calc(100% + 0.375rem);
     inset-inline-start: 0;
-    z-index: 1070;
+    z-index: var(--weline-z-menu, 1070);
     width: max(100%, 17.5rem);
     max-width: min(90vw, 26.25rem);
     max-height: min(26.25rem, calc(100vh - 1rem));
@@ -177,8 +186,36 @@
     padding: var(--weline-space-2);
     border: 1px solid var(--weline-theme-border, var(--backend-theme-border-color));
     border-radius: var(--weline-radius-lg, 0.625rem);
-    background: var(--weline-theme-surface, var(--backend-theme-surface));
+    background: var(--weline-theme-surface-raised, var(--weline-theme-surface, var(--backend-theme-surface)));
+    color: var(--weline-theme-text, var(--backend-theme-text-primary));
     box-shadow: var(--weline-theme-shadow-lg, var(--backend-card-shadow));
+}
+
+.weline-social-admin .social-choice-panel[data-w-floating-positioned],
+.weline-social-admin .social-choice-panel[data-w-floating-portal] {
+    position: fixed;
+    top: max(var(--w-floating-top, 0px), var(--w-floating-viewport-top, 0.5rem));
+    left: max(var(--w-floating-left, 0px), var(--w-floating-viewport-left, 0.5rem));
+    right: auto;
+    bottom: auto;
+    inset-inline-start: auto;
+    inset-inline-end: auto;
+    width: var(--w-floating-inline-size, max(100%, 17.5rem));
+    max-width: min(
+        26.25rem,
+        var(--w-floating-max-inline-size, calc(100dvw - 1rem))
+    );
+    max-height: min(
+        26.25rem,
+        var(--w-floating-max-block-size, calc(100dvh - 1rem))
+    );
+    z-index: var(--w-floating-z-index, var(--weline-z-menu, 1200));
+    transform-origin: var(--w-floating-transform-origin, top);
+}
+
+.weline-social-admin .scope-selector-grid,
+.weline-social-admin__section.w-card {
+    overflow: visible;
 }
 
 .weline-social-admin .social-choice-search {

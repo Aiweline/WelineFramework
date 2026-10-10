@@ -15,7 +15,7 @@
 - 账户连接：支持 OAuth、API Key、Webhook、Bot Token、Application Password、JWT Admin Token 等官方凭据模式。
 - 账户展示：账户可独立启用 `widget_enabled`，只用于前台社媒账户部件展示。
 - 发布控制：账户必须 `publish_enabled=1` 且官方凭据检测通过后才能进入发布批次。
-- 站点社媒：通过 `weline_social_website_account` 维护站点与社媒账户的默认关系，发布站点资讯时先选站点并自动带出该站点默认社媒账户，也支持全部站发布。
+- 网站范围配置（仅 `website`）：后台顶部先选网站（如长安汉服），账户添加/一键授权/范围社媒/发布都绑定该站。关系表 `weline_social_website_account`；OAuth 完成后会 merge 绑入当前站（不会冲掉已有绑定）；回调回跳带 `scope_key`。平台 App 凭据按 `{website_code}.default.default` 读取，缺字段回落全局。前台 `social-accounts` 部件只展示**当前站**已绑定且 `widget_enabled` 的账户，不回落默认站。账户池本身仍可全局复用（不做账户表 `website_id` 强归属）。
 - SVG 图标：平台定义自动按 `platform_code` 解析 SVG 图标，模板不硬编码平台图标。
 - AI 创意：通过 `Weline_Ai` 的公开 `AiRuntimeInterface` 生成统一稿件和平台变体。
 - 批量发布：创建 batch 和 target，单个平台失败不影响其他平台。

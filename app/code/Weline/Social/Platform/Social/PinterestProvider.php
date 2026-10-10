@@ -33,7 +33,7 @@ class PinterestProvider extends DocumentedSocialPlatformProvider
 
     public function buildAuthorizationUrl(array $accountContext, string $redirectUri, string $state): ?string
     {
-        $appId = $this->appConfig()->get('pinterest', 'app_id');
+        $appId = \trim((string)($this->resolveAppConfig('pinterest', $accountContext)['app_id'] ?? ''));
         if ($appId === '' || $redirectUri === '') {
             return null;
         }
@@ -51,7 +51,7 @@ class PinterestProvider extends DocumentedSocialPlatformProvider
     {
         $code = \trim((string)($callbackData['code'] ?? ''));
         $redirectUri = \trim((string)($context['redirect_uri'] ?? ''));
-        $app = \is_array($context['app_config'] ?? null) ? $context['app_config'] : $this->appConfig()->getPlatformApp('pinterest');
+        $app = $this->resolveAppConfig('pinterest', \is_array($context['account_context'] ?? null) ? $context['account_context'] : [], $context);
         $appId = \trim((string)($app['app_id'] ?? ''));
         $appSecret = \trim((string)($app['app_secret'] ?? ''));
         if ($code === '' || $appId === '' || $appSecret === '') {

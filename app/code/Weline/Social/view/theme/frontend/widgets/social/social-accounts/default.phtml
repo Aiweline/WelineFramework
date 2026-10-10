@@ -28,6 +28,7 @@
  */
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Social\Service\SocialAccountService;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -55,9 +56,12 @@ $limit = max(1, min(100, (int)($this->getData('limit') ?? 24)));
 
 /** @var SocialAccountService $accountService */
 $accountService = ObjectManager::getInstance(SocialAccountService::class);
+$websiteId = RequestContext::websiteId();
+$websiteId = $websiteId === null ? 0 : max(0, (int)$websiteId);
 $accounts = $accountService->listWidgetAccounts([
     'platforms' => $platforms,
     'limit' => $limit,
+    'website_id' => $websiteId,
 ]);
 
 if ($accounts === [] && !$isPreviewMode) {

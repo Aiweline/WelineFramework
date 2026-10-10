@@ -488,6 +488,51 @@ class SocialWebsiteAccountService
     }
 
     /**
+     * Merge-append one account into a website scope without disabling existing bindings.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    public function attachAccountToScope(array $params, int $accountId): array
+    {
+        $accountId = (int)$accountId;
+        if ($accountId <= 0) {
+            throw new \InvalidArgumentException((string)__('缺少社媒账户 ID。'));
+        }
+
+        $existing = $this->getScopeDefaultAccounts($params, false);
+        if (empty($existing['success'])) {
+            throw new \InvalidArgumentException((string)($existing['message'] ?? __('范围无效。')));
+        }
+
+        $ids = [];
+        foreach ((array)($existing['accounts'] ?? []) as $account) {
+            if (!\is_array($account)) {
+                continue;
+            }
+            $id = (int)($account['account_id'] ?? 0);
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+        if (!\in_array($accountId, $ids, true)) {
+            $ids[] = $accountId;
+        }
+
+        $scope = \is_array($existing['scope'] ?? null) ? $existing['scope'] : $this->normalizeScopeParams($params, true);
+        $payload = [
+            'scope_type' => (string)($scope['scope_type'] ?? SocialWebsiteAccount::SCOPE_TYPE_WEBSITE),
+            'scope_id' => (int)($scope['scope_id'] ?? $params['website_id'] ?? 0),
+            'child_scope_type' => (string)($scope['child_scope_type'] ?? SocialWebsiteAccount::CHILD_SCOPE_TYPE_WEBSITE_DEFAULT),
+            'child_scope_id' => (int)($scope['child_scope_id'] ?? 0),
+            'website_id' => (int)($scope['website_id'] ?? $scope['scope_id'] ?? $params['website_id'] ?? 0),
+            'account_ids' => $ids,
+        ];
+
+        return $this->saveScopeAccountDefaults($payload);
+    }
+
+    /**
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */

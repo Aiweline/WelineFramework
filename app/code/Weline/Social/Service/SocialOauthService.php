@@ -8,6 +8,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
 use Weline\Social\Interface\SocialPlatformProviderInterface;
+use Weline\Social\Model\SocialWebsiteAccount;
 
 class SocialOauthService
 {
@@ -18,6 +19,7 @@ class SocialOauthService
         private readonly SocialPlatformRegistry $registry,
         private readonly SocialAccountService $accountService,
         private readonly SocialPlatformAppConfig $appConfig,
+        private readonly SocialWebsiteAccountService $websiteAccountService,
         private readonly Url $url,
         private readonly ?ObjectManager $objectManager = null
     ) {
@@ -42,6 +44,9 @@ class SocialOauthService
                 'message' => (string)__('该平台不支持一键授权，请在账户表单中人工配置凭据。'),
             ];
         }
+
+        $accountContext = $this->normalizeAccountContext($accountContext);
+        $accountContext['app_config'] = $this->appConfig->getPlatformAppFromContext($platformCode, $accountContext);
 
         $redirectUri = \trim((string)($redirectUri ?: $this->defaultCallbackUrl()));
         $state = \bin2hex(\random_bytes(16));
@@ -92,10 +97,18 @@ class SocialOauthService
             throw new \InvalidArgumentException((string)__('未知社媒平台：%{1}', [$platformCode]));
         }
 
+        $context = $this->normalizeAccountContext(
+            \is_array($payload['account_context'] ?? null) ? $payload['account_context'] : []
+        );
+        $appConfig = \is_array($context['app_config'] ?? null) && $context['app_config'] !== []
+            ? $context['app_config']
+            : $this->appConfig->getPlatformAppFromContext($platformCode, $context);
+
         $result = $provider->handleAuthorizationCallback($callbackData, [
             'redirect_uri' => (string)($payload['redirect_uri'] ?? ''),
-            'account_context' => \is_array($payload['account_context'] ?? null) ? $payload['account_context'] : [],
-            'app_config' => $this->appConfig->getPlatformApp($platformCode),
+            'account_context' => $context,
+            'app_config' => $appConfig,
+            'website_id' => (int)($context['website_id'] ?? 0),
         ]);
 
         if (empty($result['success'])) {
@@ -103,10 +116,10 @@ class SocialOauthService
                 'success' => false,
                 'message' => (string)($result['message'] ?? __('授权失败。')),
                 'platform_code' => $platformCode,
+                'return_query' => $this->returnQueryFromContext($context),
             ];
         }
 
-        $context = \is_array($payload['account_context'] ?? null) ? $payload['account_context'] : [];
         $credentials = \is_array($result['credentials'] ?? null) ? $result['credentials'] : [];
         $save = $this->accountService->saveCredentialAccount([
             'account_id' => (int)($context['account_id'] ?? 0),
@@ -123,17 +136,86 @@ class SocialOauthService
             'remote_account_name' => (string)($result['remote_account_name'] ?? ''),
         ]);
 
+        $accountId = (int)(($save['account']['account_id'] ?? 0) ?: ($context['account_id'] ?? 0));
+        $bind = null;
+        if (!empty($save['success']) && $accountId > 0 && $this->hasWebsiteScope($context)) {
+            $bind = $this->websiteAccountService->attachAccountToScope($context, $accountId);
+        }
+
         return [
             'success' => !empty($save['success']),
             'message' => (string)($save['message'] ?? $result['message'] ?? __('授权完成。')),
             'platform_code' => $platformCode,
             'account' => $save['account'] ?? [],
+            'scope_bind' => $bind,
+            'return_query' => $this->returnQueryFromContext($context),
         ];
     }
 
     public function defaultCallbackUrl(): string
     {
         return $this->url->getBackendUrl('weline_social/backend/oauth/callback');
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function normalizeAccountContext(array $context): array
+    {
+        if (!\array_key_exists('website_id', $context) && \array_key_exists('scope_id', $context)) {
+            $context['website_id'] = (int)$context['scope_id'];
+        }
+        if (!\array_key_exists('scope_type', $context) && \array_key_exists('website_id', $context)) {
+            $context['scope_type'] = SocialWebsiteAccount::SCOPE_TYPE_WEBSITE;
+        }
+        if (!\array_key_exists('scope_id', $context) && \array_key_exists('website_id', $context)) {
+            $context['scope_id'] = (int)$context['website_id'];
+        }
+        if (!\array_key_exists('child_scope_type', $context) && $this->hasWebsiteScope($context)) {
+            $context['child_scope_type'] = SocialWebsiteAccount::CHILD_SCOPE_TYPE_WEBSITE_DEFAULT;
+            $context['child_scope_id'] = (int)($context['child_scope_id'] ?? 0);
+        }
+        if (!\array_key_exists('scope_key', $context) && $this->hasWebsiteScope($context)) {
+            $context['scope_key'] = \implode(':', [
+                (string)($context['scope_type'] ?? SocialWebsiteAccount::SCOPE_TYPE_WEBSITE),
+                (string)(int)($context['scope_id'] ?? $context['website_id'] ?? 0),
+                (string)($context['child_scope_type'] ?? SocialWebsiteAccount::CHILD_SCOPE_TYPE_WEBSITE_DEFAULT),
+                (string)(int)($context['child_scope_id'] ?? 0),
+            ]);
+        }
+
+        return $context;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function hasWebsiteScope(array $context): bool
+    {
+        return \array_key_exists('website_id', $context)
+            || \array_key_exists('scope_id', $context)
+            || \trim((string)($context['scope_key'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, string>
+     */
+    private function returnQueryFromContext(array $context): array
+    {
+        $query = [];
+        $scopeKey = \trim((string)($context['scope_key'] ?? ''));
+        if ($scopeKey !== '') {
+            $query['scope_key'] = $scopeKey;
+        }
+        $scopeCode = \trim((string)($context['scope_code'] ?? $context['website_code'] ?? ''));
+        if ($scopeCode !== '') {
+            $query['scope_code'] = $scopeCode;
+        }
+        $query['tab'] = 'accounts';
+
+        return $query;
     }
 
     private function supportsOneClick(SocialPlatformProviderInterface $provider): bool
