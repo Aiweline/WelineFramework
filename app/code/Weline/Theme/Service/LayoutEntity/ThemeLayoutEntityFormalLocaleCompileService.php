@@ -15,7 +15,6 @@ use Weline\Framework\View\TemplateCompileService;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeHeadChromeCssPack;
 use Weline\Theme\Service\ThemeHeadChromeJsPack;
 use Weline\Websites\Data\WebsiteData;
@@ -36,7 +35,6 @@ final class ThemeLayoutEntityFormalLocaleCompileService
 {
     public function __construct(
         private readonly ThemeLayoutEntityPaths $paths,
-        private readonly ThemeContextService $themeContext,
         private readonly TemplateCompileService $compiler,
         private readonly Printing $printing,
         private readonly ThemeHeadChromeCssPack $headCssPack,
@@ -60,9 +58,13 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         }
         $locales = $this->resolveDefaultWebsiteLocales();
         $currency = State::resolveWebsiteDefaultCurrency();
-        $theme = $this->themeContext->resolveTheme('frontend', null, false);
+        // Progress + diagnostics must follow the publish identity theme — never the
+        // process-global frontend Default (multi-bound-theme upgrade would all look like Default).
+        $theme = $this->loadThemeForIdentity($identity);
         if (!$theme instanceof WelineTheme) {
-            throw new \RuntimeException('theme_layout_formal_compile_theme_missing');
+            throw new \RuntimeException(
+                'theme_layout_formal_compile_theme_missing:theme_id=' . $identity->themeId
+            );
         }
 
         $nested = !empty($options['nested']) || $this->isNestedCompileEnv();
@@ -74,6 +76,13 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         $onProgress = is_callable($options['on_progress'] ?? null) ? $options['on_progress'] : null;
         // Bind a local map for the pinned closure (must be in use()-list; never pass null).
         $candidateMap = $candidates;
+        $themeLabel = $this->formatThemeProgressLabel($theme, $identity);
+        $pageTotal = count($pages);
+        $localeTotal = count($locales);
+        $localeOrdinal = [];
+        foreach (array_values($locales) as $idx => $code) {
+            $localeOrdinal[(string)$code] = $idx + 1;
+        }
 
         $this->runPinnedToIdentityWebsite($identity, function () use (
             $identity,
@@ -84,17 +93,29 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $localeConcurrency,
             $nested,
             $onProgress,
+            $themeLabel,
+            $pageTotal,
+            $localeTotal,
+            $localeOrdinal,
         ): void {
             $template = Template::getInstance();
-            if (!$nested && $localeConcurrency > 1 && count($locales) > 1) {
+            if (!$nested) {
+                // Put theme + stage first so CLI truncation keeps the readable prefix.
                 $this->printing->note(sprintf(
-                    '%s pool=%d locales=%d',
-                    (string)__('主题布局 Taglib 编译进程池'),
-                    $localeConcurrency,
-                    count($locales),
+                    '%s · 主题=%s · 范围=%s · 区域=%s · 阶段1/2 Taglib编译 · 布局%d页 · 语种%d%s',
+                    (string)__('主题布局发布'),
+                    $themeLabel,
+                    $identity->canonicalScope,
+                    $identity->area,
+                    $pageTotal,
+                    $localeTotal,
+                    (!$nested && $localeConcurrency > 1 && $localeTotal > 1)
+                        ? sprintf(' · %s=%d', (string)__('进程池'), $localeConcurrency)
+                        : '',
                 ));
             }
-            foreach ($pages as $page) {
+            foreach ($pages as $pageIndex => $page) {
+                $pageNo = $pageIndex + 1;
                 // Prefer promote-candidate bytes first (no OwnerLock). Pipeline compile
                 // otherwise contends with same-owner solidify WRITE via capture LOCK_SH.
                 $snapshot = $this->snapshotFromPublishedCandidates(
@@ -134,7 +155,16 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                         $locales,
                         $currency,
                         $widgets,
-                        function (int $done, int $total, string $locale, string $label) use ($page, $onProgress, $nested): void {
+                        function (int $done, int $total, string $locale, string $label) use (
+                            $page,
+                            $onProgress,
+                            $nested,
+                            $themeLabel,
+                            $pageNo,
+                            $pageTotal,
+                            $localeTotal,
+                            $localeOrdinal,
+                        ): void {
                             if ($onProgress !== null) {
                                 $onProgress($done, $total, $locale, $label, $page);
                                 return;
@@ -143,16 +173,40 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                             if ($nested) {
                                 return;
                             }
+                            $layoutKey = $page['layout_type'] . '/' . $page['layout_option'];
+                            if ($label === 'pool-done') {
+                                $detail = (string)__('整页完成');
+                            } elseif ($label === 'locale-done') {
+                                $ord = (int)($localeOrdinal[$locale] ?? 0);
+                                $detail = sprintf(
+                                    '%s %s %d/%d',
+                                    (string)__('语种完成'),
+                                    $locale !== '' ? $locale : '?',
+                                    max(1, $ord),
+                                    max(1, $localeTotal),
+                                );
+                            } else {
+                                $ord = (int)($localeOrdinal[$locale] ?? 0);
+                                $detail = sprintf(
+                                    '%s=%s %d/%d · %s',
+                                    (string)__('语种'),
+                                    $locale !== '' ? $locale : '?',
+                                    max(1, $ord),
+                                    max(1, $localeTotal),
+                                    $label,
+                                );
+                            }
+                            // Critical fields first: theme + page survive truncateCliText.
                             $this->printing->progressBar(
                                 $done,
                                 max(1, $total),
                                 sprintf(
-                                    '%s locale=%s · %s · %s/%s',
-                                    (string)__('主题布局 Taglib 编译'),
-                                    $locale,
-                                    $label,
-                                    $page['layout_type'],
-                                    $page['layout_option'],
+                                    'Taglib · 主题=%s · 页%d/%d %s · %s',
+                                    $themeLabel,
+                                    $pageNo,
+                                    max(1, $pageTotal),
+                                    $layoutKey,
+                                    $detail,
                                 ),
                                 24,
                             );
@@ -162,17 +216,20 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                 } catch (\Throwable $error) {
                     $this->printing->finishProgressLine();
                     $this->printing->error(sprintf(
-                        '%s locale_batch_failed layout=%s/%s: %s',
-                        (string)__('主题布局 Taglib 编译'),
+                        'Taglib · 主题=%s · 页%d/%d %s/%s · %s: %s',
+                        $themeLabel,
+                        $pageNo,
+                        max(1, $pageTotal),
                         $page['layout_type'],
                         $page['layout_option'],
+                        (string)__('编译失败'),
                         $error->getMessage(),
                     ));
                     throw $error;
                 }
             }
             // Post-com warm: bake theme-head packs so first request consumes artifacts (not hot-path merge).
-            $this->warmPublishedResourcePacks($identity->area);
+            $this->warmPublishedResourcePacks($identity->area, $themeLabel, $identity->canonicalScope);
         });
     }
 
@@ -214,19 +271,95 @@ final class ThemeLayoutEntityFormalLocaleCompileService
     }
 
     /** Explicit Formal post-com half: publish theme-head CSS/JS packs for the pinned website context. */
-    private function warmPublishedResourcePacks(string $area): void
-    {
+    private function warmPublishedResourcePacks(
+        string $area,
+        string $themeLabel = '',
+        string $canonicalScope = '',
+    ): void {
+        if ($themeLabel !== '') {
+            $this->printing->note(sprintf(
+                '%s · 主题=%s · 范围=%s · 区域=%s · 阶段2/2 资源合包预热',
+                (string)__('主题布局发布'),
+                $themeLabel,
+                $canonicalScope !== '' ? $canonicalScope : '-',
+                $area,
+            ));
+        }
         try {
             $this->headCssPack->warmAreaPacks($area);
             $this->headJsPack->warmAreaPacks($area);
-            $this->printing->note((string)__('主题布局资源合包已预热'));
+            $this->printing->success(sprintf(
+                '%s · 主题=%s · 阶段2/2 %s',
+                (string)__('主题布局发布'),
+                $themeLabel !== '' ? $themeLabel : '-',
+                (string)__('资源合包已预热'),
+            ));
         } catch (\Throwable $error) {
             $this->printing->error(sprintf(
-                '%s: %s',
-                (string)__('主题布局资源合包预热失败'),
+                '%s · 主题=%s · 阶段2/2 %s: %s',
+                (string)__('主题布局发布'),
+                $themeLabel !== '' ? $themeLabel : '-',
+                (string)__('资源合包预热失败'),
                 $error->getMessage(),
             ));
         }
+    }
+
+    private function loadThemeForIdentity(ThemeVersionIdentity $identity): ?WelineTheme
+    {
+        $themeId = (int)$identity->themeId;
+        if ($themeId < 1) {
+            return null;
+        }
+        /** @var WelineTheme $theme */
+        $theme = clone ObjectManager::getInstance(WelineTheme::class);
+        $theme->clearData()->clearQuery()->load($themeId);
+        if ((int)$theme->getId() !== $themeId) {
+            return null;
+        }
+
+        return $theme;
+    }
+
+    private function formatThemeProgressLabel(WelineTheme $theme, ThemeVersionIdentity $identity): string
+    {
+        $id = (int)$theme->getId();
+        $name = trim((string)$theme->getName());
+        $path = $this->shortThemePath((string)$theme->getPath());
+        $version = (int)$identity->themeVersionId;
+        $bits = ['theme#' . max(0, $id)];
+        if ($name !== '') {
+            $bits[] = $name;
+        }
+        if ($path !== '') {
+            $bits[] = '@' . $path;
+        }
+        if ($version > 0) {
+            $bits[] = 'V' . $version;
+        }
+
+        return implode(' ', $bits);
+    }
+
+    /** Prefer Vendor/theme relative path so CLI truncation keeps identity, not absolute BP. */
+    private function shortThemePath(string $path): string
+    {
+        $path = trim(str_replace('\\', '/', $path));
+        if ($path === '') {
+            return '';
+        }
+        foreach (['/app/design/', '/app/code/'] as $marker) {
+            $pos = strpos($path, $marker);
+            if ($pos !== false) {
+                return ltrim(substr($path, $pos + strlen($marker)), '/');
+            }
+        }
+        // Already relative (Vendor/Name) or module path fragment.
+        if (!str_starts_with($path, '/') && !preg_match('#^[A-Za-z]:/#', $path)) {
+            return $path;
+        }
+
+        return basename(rtrim($path, '/'));
     }
 
     /**

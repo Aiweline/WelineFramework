@@ -1829,10 +1829,6 @@ AI目录加载失败,"AI directory loading failed"
 "可解析版本的主题布局 PHTML 已生成。","可解析版本的主题布局 PHTML 已生成。"
 主题布局固化编译流水线,"Theme layout solidify/compile pipeline pools"
 主题布局流水线,"Theme layout solidify/compile pipeline"
-"主题布局 Taglib 编译进程池","Theme layout Taglib compile process pool"
-"主题布局 Taglib 编译","Compiling theme layout Taglib"
-主题布局资源合包已预热,主题布局资源合包已预热
-主题布局资源合包预热失败,主题布局资源合包预热失败
 "Theme 范围版本参数无效。","Theme scope version parameters are invalid."
 "Theme 范围发布版本无效。","Theme scope published version is invalid."
 "Theme 范围版本未持久化。","Theme scope version is not persisted."
@@ -4811,3 +4807,11 @@ Chiffon,Chiffon
 选择修订冲突，请刷新后再发布,"Selection revision conflict — refresh then publish"
 作用域结构冲突，请先重置或重新基线化后再发布,"Scope structural conflict — reset or re-baseline before publishing"
 发布主题失败,"Theme publish failed"
+主题布局发布,Theme layout publish
+进程池,process pool
+整页完成,page complete
+语种完成,locale complete
+语种,locale
+编译失败,compile failed
+资源合包已预热,resource packs warmed
+资源合包预热失败,resource pack warm failed
