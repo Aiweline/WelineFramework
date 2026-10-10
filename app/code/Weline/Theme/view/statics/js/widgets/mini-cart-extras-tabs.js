@@ -224,7 +224,22 @@
     }
 
     function boot() {
-        document.querySelectorAll('.mini-cart-drawer__extras, [data-cart-summary-extras="1"]').forEach(initExtras);
+        document.querySelectorAll('.mini-cart-drawer__extras, [data-cart-summary-extras="1"]').forEach(function (extras) {
+            // If a newly visible candidate sits outside the tab shell (e.g. tob
+            // credit unhidden after retail init), rebuild instead of no-op.
+            if (extras.getAttribute('data-extras-tabs-init') === '1') {
+                var shell = extras.querySelector('[data-mini-cart-extras-tabs]');
+                var orphans = Array.prototype.filter.call(extras.children, function (node) {
+                    return isExtrasTabCandidate(node)
+                        && !(shell && shell.contains(node));
+                });
+                if (orphans.length) {
+                    rebuildExtras(extras);
+                    return;
+                }
+            }
+            initExtras(extras);
+        });
     }
 
     if (document.readyState === 'loading') {

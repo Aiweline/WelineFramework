@@ -56,6 +56,11 @@ final class CartTypeSwitchDecoupleContractTest extends TestCase
         self::assertStringContainsString('localCartSummaryHasItems', $cartPage);
         self::assertStringContainsString('invalidateEmptyCachesClaimedBySiblings', $cartPage);
         self::assertStringContainsString('Empty typed cache cannot short-circuit', $cartPage);
+        // ToB money summary parity with checkout / mini-cart: 本单共计 via B2B adjust.
+        self::assertStringContainsString('adjustMoneySummaryDto', $cartPage);
+        self::assertStringContainsString('order_total_minor', $cartPage);
+        self::assertStringContainsString('本单共计', $cartPage);
+        self::assertStringContainsString("'orderTotal'", $cartPage);
 
         self::assertStringContainsString('WelineCart.requestCartType', $miniCart);
         self::assertStringContainsString('weline:cart-type-changed', $miniCart);

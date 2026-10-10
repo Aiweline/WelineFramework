@@ -155,5 +155,14 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
             '/\.w-storefront-money-summary\s*\{[^}]*border-top:\s*var\(--border-width-thin,\s*1px\)\s+solid/s',
             $css
         );
+        // Label left / amount right — full-width flex + amount auto margin.
+        self::assertMatchesRegularExpression(
+            '/\.w-storefront-money-summary__row\s*\{[^}]*width:\s*100%/s',
+            $css
+        );
+        self::assertStringContainsString('margin-inline-start: auto', $css);
+        // Note / muted lines pin paper secondary (#565959 chain), not inverse cream.
+        self::assertStringContainsString('--weline-chrome-body-text-secondary', $css);
+        self::assertStringContainsString('#565959', $css);
     }
 }

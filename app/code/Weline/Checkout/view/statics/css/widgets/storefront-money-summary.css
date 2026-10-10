@@ -23,6 +23,8 @@
     align-items: baseline;
     justify-content: space-between;
     gap: var(--weline-space-3);
+    width: 100%;
+    box-sizing: border-box;
     color: var(--weline-theme-color-text, var(--color-text));
     font-size: var(--weline-font-size-sm);
     line-height: 1.4;
@@ -33,15 +35,27 @@
 }
 
 .w-storefront-money-summary__row span:first-child {
-    color: var(--weline-theme-color-text-muted, var(--color-text-muted));
+    /* Paper secondary — never inherit inverse cream muted as “missing” ink. */
+    color: var(
+        --amz-drawer-muted,
+        var(--weline-chrome-body-text-secondary, var(--weline-theme-color-text-muted, var(--color-text-muted, #565959)))
+    );
+    flex: 1 1 auto;
     min-width: 0;
+    text-align: start;
 }
 
 .w-storefront-money-summary__row strong {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
     font-weight: 600;
     text-align: end;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    color: var(
+        --amz-drawer-text,
+        var(--weline-chrome-body-text, var(--weline-theme-color-text, var(--color-text, #0f1111)))
+    );
 }
 
 /* ToB: full-order total sits above「本次应付定金」so cash due is not abrupt. */
@@ -98,9 +112,18 @@
 
 .w-storefront-money-summary__note {
     margin: var(--weline-space-1) 0 0;
-    color: var(--weline-theme-color-text-muted, var(--color-text-muted));
+    /* Foundation secondary (#565959) — cream paper must stay readable (审图). */
+    color: var(
+        --amz-drawer-muted,
+        var(--weline-chrome-body-text-secondary, var(--weline-theme-color-text-muted, var(--color-text-muted, #565959)))
+    );
+    -webkit-text-fill-color: var(
+        --amz-drawer-muted,
+        var(--weline-chrome-body-text-secondary, var(--weline-theme-color-text-muted, var(--color-text-muted, #565959)))
+    );
     font-size: var(--weline-font-size-xs);
     line-height: 1.4;
+    opacity: 1;
 }
 
 .w-storefront-money-summary__note[hidden] {

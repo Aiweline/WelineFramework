@@ -32,6 +32,7 @@ $copy = [
     'tocCart' => (string)__('零售车'),
     'tobCart' => (string)__('批发车'),
     'depositPayable' => (string)__('本次应付定金'),
+    'orderTotal' => (string)__('本单共计'),
 ];
 ?>
 <link rel="stylesheet"
@@ -252,6 +253,13 @@ $copy = [
         }
         base.cart_type = 'tob';
         base.commerce_deposit_allowed = true;
+        const pinOrderTotal = () => {
+            const goods = Math.max(0, Number(base.goods_subtotal_minor) || 0);
+            const ship = Math.max(0, Number(base.shipping_minor) || 0);
+            base.order_total_minor = goods + ship;
+            base.order_total_label = text(copy.orderTotal || '本单共计');
+        };
+        pinOrderTotal();
         const tobApi = window.WelineB2BCheckoutTob;
         const displayCurrency = String(base.currency || '').trim().toUpperCase() || 'CNY';
         const detailCurrency = detail && detail.currency
@@ -274,6 +282,7 @@ $copy = [
         if (applyMinor <= 0) {
             base.deposit_minor = 0;
             base.credit_minor = 0;
+            pinOrderTotal();
             return base;
         }
         const goodsMajor = (Number(base.goods_subtotal_minor) || 0) / 100;
@@ -343,6 +352,11 @@ $copy = [
         base.credit_minor = applyMinor;
         base.payable_minor = cashMinor;
         base.payable_label = text(copy.depositPayable || '本次应付定金');
+        // Fallback when adjustMoneySummaryDto is unavailable: still expose order total.
+        const goodsFallback = Math.max(0, Number(base.goods_subtotal_minor) || 0);
+        const shipFallback = Math.max(0, Number(base.shipping_minor) || 0);
+        base.order_total_minor = goodsFallback + shipFallback;
+        base.order_total_label = text(copy.orderTotal || '本单共计');
         return base;
     }
 
@@ -354,19 +368,42 @@ $copy = [
             host = api.ensure(slot, { mode: 'cart' }) || host;
         }
         if (api && typeof api.paint === 'function' && host) {
-            const baseDto = Object.assign({ mode: 'cart', shipping_pending: true }, dto || {});
-            root.__welineLastCartMoneyDtoBase = Object.assign({}, baseDto);
+            let moneyDto = Object.assign({ mode: 'cart', shipping_pending: true }, dto || {});
+            root.__welineLastCartMoneyDtoBase = Object.assign({}, moneyDto);
             try {
                 const tobApi = window.WelineB2BCheckoutTob;
                 if (tobApi && typeof tobApi.ensureCreditQuote === 'function' && isTobCreditSurface(detail)) {
                     tobApi.ensureCreditQuote(root, {
                         cart_type: 'tob',
-                        currency: baseDto.currency,
-                        subtotal: (Number(baseDto.goods_subtotal_minor) || 0) / 100,
+                        currency: moneyDto.currency,
+                        subtotal: (Number(moneyDto.goods_subtotal_minor) || 0) / 100,
                     });
                 }
             } catch (eEnsure) {}
-            api.paint(host, mergeTobCreditIntoCartMoneyDto(baseDto, detail));
+            // Same B2B policy as checkout / mini-cart: 本单共计 + 本次应付定金.
+            const tobApi = window.WelineB2BCheckoutTob;
+            if (isTobCreditSurface(detail) && tobApi && typeof tobApi.adjustMoneySummaryDto === 'function') {
+                try {
+                    const adjusted = tobApi.adjustMoneySummaryDto(moneyDto, {
+                        cart_type: 'tob',
+                        mode: 'cart',
+                        shipping_pending: true,
+                        subtotal: (Number(moneyDto.goods_subtotal_minor) || 0) / 100,
+                        currency: moneyDto.currency || 'CNY',
+                        payable_label_deposit: text(copy.depositPayable || '本次应付定金'),
+                        order_total_label: text(copy.orderTotal || '本单共计'),
+                        note: moneyDto.note != null ? moneyDto.note : null,
+                    });
+                    if (adjusted && typeof adjusted === 'object') {
+                        moneyDto = adjusted;
+                    }
+                } catch (eAdj) {
+                    moneyDto = mergeTobCreditIntoCartMoneyDto(moneyDto, detail);
+                }
+            } else {
+                moneyDto = mergeTobCreditIntoCartMoneyDto(moneyDto, detail);
+            }
+            api.paint(host, moneyDto);
             return true;
         }
         return false;

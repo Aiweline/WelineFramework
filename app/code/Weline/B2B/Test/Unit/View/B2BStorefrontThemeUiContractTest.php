@@ -107,7 +107,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
 
         $modules = self::bp('app/code/Weline/B2B/view/statics/frontend/weline.modules.js');
         $modulesContent = (string)file_get_contents($modules);
-        self::assertStringContainsString('selling-mode.js?v=20261010-boot-idle1', $modulesContent);
+        self::assertStringContainsString('selling-mode.js?v=20261010-extras-rebuild1', $modulesContent);
+        self::assertStringContainsString('WelineMiniCartExtras.rebuild', $jsContent);
         self::assertStringContainsString('checkout-tob.js?v=20261010-tob-money-policy4', $modulesContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-toc', $jsContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-bound', $jsContent);
@@ -511,6 +512,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('adjustMoneySummaryDto', $checkoutTob);
         self::assertStringContainsString('order_total_minor', $checkoutTob);
         self::assertStringContainsString('本单共计', $checkoutTob);
+        // Cart / mini-cart share the same policy; shipping-pending must not force DAP note.
+        self::assertStringContainsString('shippingPending', $checkoutTob);
+        self::assertStringContainsString('mode === \'cart\' || mode === \'mini-cart\'', $checkoutTob);
         self::assertStringContainsString('data-payment-incentive', $checkoutTob);
         self::assertStringContainsString('dapTaxNoteText', $checkoutTob);
         self::assertStringContainsString('is-tob-unavailable', $checkoutTob);

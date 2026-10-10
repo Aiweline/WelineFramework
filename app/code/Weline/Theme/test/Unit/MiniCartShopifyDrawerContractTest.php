@@ -185,6 +185,9 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-cart-summary-extras', $source);
         self::assertStringNotContainsString("'Tab'", $source);
         self::assertStringContainsString('data-widget-name', $source);
+        // Tob credit unhide after retail init → orphan candidates force rebuild.
+        self::assertStringContainsString('orphans.length', $source);
+        self::assertStringContainsString('rebuildExtras(extras)', $source);
     }
 
     /**
@@ -367,9 +370,18 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-mini-cart-footer-compact-label', $source);
         self::assertStringContainsString('data-mini-cart-footer-compact-was', $source);
         self::assertStringContainsString('data-mini-cart-footer-compact-amount', $source);
+        // Critical: money-summary CSS must ride layout_source (not only deferred product-card pack).
+        self::assertStringContainsString(
+            'Weline_Checkout::css/widgets/storefront-money-summary.css',
+            $source
+        );
         self::assertStringContainsString('data-i18n-footer-collapse', $source);
         self::assertStringContainsString('data-i18n-footer-expand', $source);
         self::assertStringContainsString('data-i18n-deposit-payable', $source);
+        self::assertStringContainsString('data-i18n-order-total', $source);
+        self::assertStringContainsString('adjustMoneySummaryDto', $js);
+        self::assertStringContainsString('order_total_minor', $js);
+        self::assertStringContainsString('本单共计', $js);
         self::assertStringContainsString('weline:b2b-credit-changed', $js);
         self::assertStringContainsString('mergeTobCreditIntoMoneyDto', $js);
         self::assertStringContainsString('convertCreditMinorToDisplay', $js);

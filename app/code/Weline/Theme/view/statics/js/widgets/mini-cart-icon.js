@@ -1171,6 +1171,13 @@
         }
         base.cart_type = 'tob';
         base.commerce_deposit_allowed = true;
+        function pinOrderTotal() {
+            var goods = Math.max(0, Number(base.goods_subtotal_minor) || 0);
+            var ship = Math.max(0, Number(base.shipping_minor) || 0);
+            base.order_total_minor = goods + ship;
+            base.order_total_label = attr(root, 'data-i18n-order-total', '本单共计');
+        }
+        pinOrderTotal();
         var tobApi = window.WelineB2BCheckoutTob;
         if (!tobApi || typeof tobApi.readApplyMinor !== 'function') {
             return base;
@@ -1184,6 +1191,7 @@
         if (applyMinor <= 0) {
             base.deposit_minor = 0;
             base.credit_minor = 0;
+            pinOrderTotal();
             return base;
         }
         var goodsMajor = (Number(base.goods_subtotal_minor) || 0) / 100;
@@ -1242,6 +1250,7 @@
         base.credit_minor = applyMinor;
         base.payable_minor = cashMinor;
         base.payable_label = attr(root, 'data-i18n-deposit-payable', '本次应付定金');
+        pinOrderTotal();
         return base;
     }
 
@@ -1319,28 +1328,46 @@
         if (!host) {
             return false;
         }
-        var baseDto = Object.assign({ mode: 'mini-cart', shipping_pending: true }, dto || {});
-        root.__welineLastMoneyDtoBase = Object.assign({}, baseDto);
+        var moneyDto = Object.assign({ mode: 'mini-cart', shipping_pending: true }, dto || {});
+        root.__welineLastMoneyDtoBase = Object.assign({}, moneyDto);
         // Align credit.quote to the money-summary display currency before paint.
         try {
             var tobApi = window.WelineB2BCheckoutTob;
-            var paintCartType = normalizeCartType(
-                (root && root.getAttribute('data-cart-type'))
-                || baseDto.cart_type
-                || preferredCartType()
-            );
-            if (tobApi && typeof tobApi.ensureCreditQuote === 'function' && isTobCreditSurface(root, baseDto)) {
+            if (tobApi && typeof tobApi.ensureCreditQuote === 'function' && isTobCreditSurface(root, moneyDto)) {
                 tobApi.ensureCreditQuote(root, {
                     cart_type: 'tob',
-                    currency: baseDto.currency,
-                    subtotal: (Number(baseDto.goods_subtotal_minor) || 0) / 100,
+                    currency: moneyDto.currency,
+                    subtotal: (Number(moneyDto.goods_subtotal_minor) || 0) / 100,
                 });
             }
         } catch (eEnsure) {}
-        var merged = mergeTobCreditIntoMoneyDto(root, baseDto);
-        api.paint(host, merged);
+        // Same B2B policy as checkout / cart page: 本单共计 + 本次应付定金.
+        var tobApiPaint = window.WelineB2BCheckoutTob;
+        if (isTobCreditSurface(root, moneyDto) && tobApiPaint
+            && typeof tobApiPaint.adjustMoneySummaryDto === 'function') {
+            try {
+                var adjusted = tobApiPaint.adjustMoneySummaryDto(moneyDto, {
+                    cart_type: 'tob',
+                    mode: 'mini-cart',
+                    shipping_pending: true,
+                    subtotal: (Number(moneyDto.goods_subtotal_minor) || 0) / 100,
+                    currency: moneyDto.currency || 'CNY',
+                    payable_label_deposit: attr(root, 'data-i18n-deposit-payable', '本次应付定金'),
+                    order_total_label: attr(root, 'data-i18n-order-total', '本单共计'),
+                    note: moneyDto.note != null ? moneyDto.note : null,
+                });
+                if (adjusted && typeof adjusted === 'object') {
+                    moneyDto = adjusted;
+                }
+            } catch (eAdj) {
+                moneyDto = mergeTobCreditIntoMoneyDto(root, moneyDto);
+            }
+        } else {
+            moneyDto = mergeTobCreditIntoMoneyDto(root, moneyDto);
+        }
+        api.paint(host, moneyDto);
         // Collapsed bar must use the same payable as the expanded summary (incl. Tob credit).
-        syncFooterCompactFromMoneyDto(root, merged);
+        syncFooterCompactFromMoneyDto(root, moneyDto);
         return true;
     }
 

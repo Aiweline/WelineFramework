@@ -16,8 +16,8 @@
  * @widget.slot {user-area}
  * @widget.supports {["layout-header-actions","layout-global-header-actions"]}
  *
- * @widget.layout_source {Weline_Theme::css/widgets/mini-cart-drawer.css,Weline_Cart::css/mini-cart-drawer-qty-hit.css,Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css}
- * @widget.source {Weline_Theme::css/widgets/mini-cart-drawer.css,Weline_Cart::css/mini-cart-drawer-qty-hit.css,Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
+ * @widget.layout_source {Weline_Theme::css/widgets/mini-cart-drawer.css,Weline_Cart::css/mini-cart-drawer-qty-hit.css,Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css,Weline_Checkout::css/widgets/storefront-money-summary.css}
+ * @widget.source {Weline_Theme::css/widgets/mini-cart-drawer.css,Weline_Cart::css/mini-cart-drawer-qty-hit.css,Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js,Weline_Checkout::css/widgets/storefront-money-summary.css}
  * @param show_quantity {default=true,type="bool",label="显示数量"}
  * @param show_subtotal {default=true,type="bool",label="显示小计"}
  * @param icon_style {default="cart",type="select",label="图标样式",options={cart:"购物车",bag:"购物袋",basket:"购物篮"}}
@@ -268,6 +268,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-i18n-swatch-preview-close="<?= $esc(__('关闭')) ?>"
          data-i18n-goods-subtotal="<?= $esc(__('商品小计')) ?>"
          data-i18n-deposit-payable="<?= $esc(__('本次应付定金')) ?>"
+         data-i18n-order-total="<?= $esc(__('本单共计')) ?>"
          data-i18n-discount-coupon="<?= $esc(__('优惠券')) ?>"
          data-i18n-discount-stack="<?= $esc(__('叠加优惠')) ?>"
          data-i18n-discount-automatic="<?= $esc(__('自动优惠')) ?>"
@@ -362,9 +363,16 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                 <span class="mini-cart-drawer__footer-compact"
                       data-mini-cart-footer-compact
                       hidden>
-                    <span class="mini-cart-drawer__footer-compact-label"><?= __('小计') ?></span>
-                    <strong class="mini-cart-drawer__footer-compact-amount"
-                            data-cart-total-amount></strong>
+                    <span class="mini-cart-drawer__footer-compact-label"
+                          data-mini-cart-footer-compact-label><?= __('小计') ?></span>
+                    <span class="mini-cart-drawer__footer-compact-prices">
+                        <s class="mini-cart-drawer__footer-compact-was"
+                           data-mini-cart-footer-compact-was
+                           hidden></s>
+                        <strong class="mini-cart-drawer__footer-compact-amount"
+                                data-mini-cart-footer-compact-amount
+                                data-cart-total-amount></strong>
+                    </span>
                 </span>
                 <span class="mini-cart-drawer__footer-chevron" aria-hidden="true"></span>
             </button>

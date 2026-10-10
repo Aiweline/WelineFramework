@@ -907,16 +907,20 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
     border: 0;
     border-bottom: var(--border-width-medium) solid transparent;
     background: transparent;
-    color: var(--weline-theme-text-muted);
+    /* Paper secondary — inverse cream muted made「优惠券|订单留言|批发信用」像消失. */
+    color: var(--amz-drawer-muted, var(--weline-chrome-body-text-secondary, #565959));
+    -webkit-text-fill-color: var(--amz-drawer-muted, var(--weline-chrome-body-text-secondary, #565959));
     font: inherit;
     font-size: var(--weline-font-size-xs);
     line-height: 1.2;
     white-space: nowrap;
     cursor: pointer;
+    opacity: 1;
 }
 
 .header-cart .mini-cart-drawer__extras-tab.is-active {
-    color: var(--weline-theme-text);
+    color: var(--amz-drawer-text, var(--weline-chrome-body-text, #0f1111));
+    -webkit-text-fill-color: var(--amz-drawer-text, var(--weline-chrome-body-text, #0f1111));
     font-weight: 600;
     border-bottom-color: var(--amz-drawer-price);
 }

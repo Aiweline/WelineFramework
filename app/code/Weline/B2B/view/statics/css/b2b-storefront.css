@@ -948,10 +948,15 @@
 }
 
 .weline-checkout .w-b2b-checkout-credit__applied,
-.w-b2b-checkout-credit__applied {
+.w-b2b-checkout-credit__applied,
+.header-cart .w-b2b-checkout-credit__applied,
+.weline-cart-shell .w-b2b-checkout-credit__applied {
     margin: 0;
+    /* Success on cream paper — never inherit inverse/tertiary ghost ink. */
     color: var(--weline-theme-success, var(--color-success, #167a4d));
+    -webkit-text-fill-color: var(--weline-theme-success, var(--color-success, #167a4d));
     font-weight: var(--weline-font-weight-medium, 500);
+    opacity: 1;
 }
 
 .weline-checkout .w-b2b-checkout-credit__links,

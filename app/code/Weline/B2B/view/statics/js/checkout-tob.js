@@ -229,6 +229,9 @@
         var shippingMajor = Math.max(0, Number(out.shipping_minor) || 0) / 100;
         // Full order (goods + shipping); DAP tax stays out of deposit — disclose via note.
         var orderTotalMajor = Math.max(0, subtotal + shippingMajor);
+        var mode = String(ctx.mode || out.mode || '').toLowerCase();
+        var shippingPending = !!(ctx.shipping_pending || out.shipping_pending
+            || mode === 'cart' || mode === 'mini-cart');
         out.cart_type = 'tob';
         out.commerce_deposit_allowed = true;
         out.discount_minor = 0;
@@ -246,7 +249,12 @@
         out.order_total_label = String(ctx.order_total_label || out.order_total_label || '本单共计');
         out.payable_minor = Math.round(payableMajor * 100);
         out.payable_label = String(ctx.payable_label_deposit || out.payable_label || '本次应付定金');
-        out.note = dapTaxNoteText();
+        // Checkout: DAP note. Cart / mini-cart: keep caller shipping-pending note (paint default).
+        if (ctx.note != null) {
+            out.note = String(ctx.note);
+        } else if (!shippingPending) {
+            out.note = dapTaxNoteText();
+        }
         return out;
     }
 
