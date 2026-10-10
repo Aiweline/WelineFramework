@@ -1826,6 +1826,14 @@ function wlsServingManifestPlaintextRequestAction(
     ) {
         return 'misdirected';
     }
+    $requestTarget = (string)($frame['target'] ?? '/');
+    // Managed Nginx proves loopback with Host: 127.0.0.1 + /_wls/health before
+    // any site route exists for that Host. Local probes must stay HTTP 200.
+    if (\Weline\Server\Service\Edge\Nginx\PlaintextServingManifestAdmission::isLocalWorkerProbePath(
+        $requestTarget,
+    )) {
+        return 'allow';
+    }
     if (wlsServingManifestLoopbackRedirectHost(
         $rawHost,
         $publicTcpPort,
@@ -1850,7 +1858,7 @@ function wlsServingManifestPlaintextRequestAction(
     $certificateState = (string)($route['certificate_state'] ?? '');
     $isExactHttp01Challenge = wlsAcmeHttp01RequestToken(
         (string)($frame['method'] ?? ''),
-        (string)($frame['target'] ?? ''),
+        $requestTarget,
     ) !== null;
     if ($isExactHttp01Challenge
         && \in_array($certificateState, ['active', 'pending'], true)
@@ -1862,7 +1870,12 @@ function wlsServingManifestPlaintextRequestAction(
     }
 
     return match ($certificateState) {
+        // Gateway/Nginx: X-Forwarded-Proto=https means TLS already ended at the
+        // edge — keep the cleartext hop as-is. Pure WLS still redirects.
         'active' => ($route['force_https'] ?? true) === true
+            && !\Weline\Server\Service\Edge\Nginx\PlaintextServingManifestAdmission::hasGatewayTerminatedHttps(
+                $headers,
+            )
             ? 'redirect_https'
             : 'allow',
         'disabled' => 'allow',
@@ -9660,8 +9673,18 @@ function wlsSslAdvancePeekState(
                 ? wlsServingManifestNormalizeAuthority($_hostAuthority)
                 : null;
             if ($_requestLineValid && $_host !== null) {
+                $_preflightHeaders = ['host' => $_hostAuthority];
+                // Edge Nginx sets X-Forwarded-Proto=$scheme on the loopback hop.
+                // Preflight must see it or force_https will 301 the upstream.
+                if (\preg_match(
+                    '/(?:\A|\r\n)X-Forwarded-Proto:[ \t]*([^\r\n]*)/i',
+                    \substr($peeked, 0, (int)$_headerEnd),
+                    $_xfpMatch,
+                ) === 1) {
+                    $_preflightHeaders['x-forwarded-proto'] = \trim((string)($_xfpMatch[1] ?? ''));
+                }
                 $_preflightFrame = [
-                    'headers' => ['host' => $_hostAuthority],
+                    'headers' => $_preflightHeaders,
                     'method' => (string)$_requestLine[1],
                     'target' => (string)$_requestLine[2],
                 ];
