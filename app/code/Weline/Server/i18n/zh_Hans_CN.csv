@@ -223,6 +223,18 @@
 %{1}：%{2},%{1}：%{2}
 续签失败,续签失败
 "续签完成：成功 %{1} 个，失败 %{2} 个","续签完成：成功 %{1} 个，失败 %{2} 个"
+lock,lock
+"管理边缘 SSL 证书与 HTTPS","管理边缘 SSL 证书与 HTTPS"
+"查看 SSL 证书","查看 SSL 证书"
+"查看边缘 SSL 证书列表与详情","查看边缘 SSL 证书列表与详情"
+"列出 SSL 证书","列出 SSL 证书"
+"以 JSON 列出边缘 SSL 证书","以 JSON 列出边缘 SSL 证书"
+"管理 SSL 证书","管理 SSL 证书"
+"申请、切换、续签与删除边缘 SSL 证书","申请、切换、续签与删除边缘 SSL 证书"
+"查看 SSL 证书详情","查看 SSL 证书详情"
+"查看边缘 SSL 证书详情","查看边缘 SSL 证书详情"
+列出可签发域名,列出可签发域名
+列出边缘证书可签发域名,列出边缘证书可签发域名
 "WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。","WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。"
 请输入后端主机,请输入后端主机
 "端口必须在 1-65535 范围内","端口必须在 1-65535 范围内"
@@ -323,6 +335,12 @@ check,查看
 "命名空间清理失败，请检查 Memory Service 状态","命名空间清理失败，请检查 Memory Service 状态"
 命名空间或键名参数不合法,命名空间或键名参数不合法
 "内存服务垃圾回收执行失败，请检查 Memory Service 连接状态","内存服务垃圾回收执行失败，请检查 Memory Service 连接状态"
+微线服务器管理,微线服务器管理
+"管理 Weline Server 运行时实例与共享状态","管理 Weline Server 运行时实例与共享状态"
+查看服务器管理,查看服务器管理
+"查看 Weline Server 运行时状态","查看 Weline Server 运行时状态"
+"查看 Weline Server Session 管理页","查看 Weline Server Session 管理页"
+"查看 Weline Server 内存服务管理页","查看 Weline Server 内存服务管理页"
 "启动 Weline Server",启动Weline服务器
 play,玩
 "启动 Weline Server 实例","启动 Weline Server 实例"
@@ -3700,3 +3718,5 @@ Nginx-only,"仅限 Nginx"
 网关归属,网关归属
 "边缘 PID","边缘 PID"
 "删除证书（被站点引用时需 --confirm）","删除证书（被站点引用时需 --confirm）"
+"确认启用维护模式？前台与后台（含本页）都会被维护门禁拦截；退出请点「退出维护」，或本机执行 php bin/w maintenance:disable。","确认启用维护模式？前台与后台（含本页）都会被维护门禁拦截；退出请点「退出维护」，或本机执行 php bin/w maintenance:disable。"
+"确认退出维护模式？将恢复前台与后台正常访问。","确认退出维护模式？将恢复前台与后台正常访问。"

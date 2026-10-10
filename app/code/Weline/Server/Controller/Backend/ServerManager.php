@@ -28,6 +28,14 @@ use Weline\Server\Service\Control\SharedStateAdminService;
  * - 仅允许后台本地访问
  * - 需要后台登录验证
  */
+#[Acl(
+    'Weline_Server::server_manager',
+    '微线服务器管理',
+    'server',
+    '管理 Weline Server 运行时实例与共享状态',
+    'Weline_Backend::system_service_group',
+    accessMode: Acl::ACCESS_MODE_READ
+)]
 class ServerManager extends BackendController
 {
     /**
@@ -72,6 +80,14 @@ class ServerManager extends BackendController
     /**
      * 服务器管理首页（容器页面）
      */
+    #[Acl(
+        'Weline_Server::server_manager_view',
+        '查看服务器管理',
+        'server',
+        '查看 Weline Server 运行时状态',
+        'Weline_Server::server_manager',
+        accessMode: Acl::ACCESS_MODE_READ
+    )]
     public function getIndex(): string
     {
         // 后台控制器自动验证登录
@@ -80,6 +96,14 @@ class ServerManager extends BackendController
         return $this->fetch('index');
     }
 
+    #[Acl(
+        'Weline_Server::server_manager_view',
+        '查看服务器管理',
+        'server',
+        '查看 Weline Server Session 管理页',
+        'Weline_Server::server_manager',
+        accessMode: Acl::ACCESS_MODE_READ
+    )]
     public function getSession(): string
     {
         $this->assign('defaultTab', 'session');
@@ -87,6 +111,14 @@ class ServerManager extends BackendController
         return $this->fetch('index');
     }
 
+    #[Acl(
+        'Weline_Server::server_manager_view',
+        '查看服务器管理',
+        'server',
+        '查看 Weline Server 内存服务管理页',
+        'Weline_Server::server_manager',
+        accessMode: Acl::ACCESS_MODE_READ
+    )]
     public function getMemory(): string
     {
         $this->assign('defaultTab', 'memory');

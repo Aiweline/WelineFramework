@@ -114,7 +114,15 @@ class CacheManager implements CacheManagerInterface, ProcessSharedInterface
         'session' => ['ttl' => 7200, 'tip' => '会话缓存', 'jitter' => 0.0],
         'request' => ['ttl' => 300, 'tip' => '请求缓存', 'jitter' => 0.0],
         'object' => ['ttl' => 86400, 'permanent' => true, 'tip' => '对象缓存'],
-        'acl' => ['ttl' => 3600, 'tip' => '权限缓存'],
+        // Menu/ACL trees must stay coherent across CLI collectors and WLS workers.
+        // WLS file→wls_memory hijack left Shared Memory serving stale menu sources
+        // after menu:collect wrote only the FileAdapter generation/payload.
+        'acl' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '权限/菜单缓存（豁免 WLS 内存劫持；CLI 与 Worker 同读 FileAdapter）',
+        ],
         'currency' => [
             'ttl' => 3600,
             'hijack_exempt' => true,

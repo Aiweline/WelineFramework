@@ -156,8 +156,48 @@ class MenuCollector
         $this->queueDestinationFingerprints(
             $effectiveFilter !== [] ? $effectiveFilter : \array_keys($modules_xml_menus)
         );
+        $this->invalidateMenuCachesAfterCollect($diff);
 
         return [$modules_xml_menus, [], $modules_info, count($file_menus), $diff];
+    }
+
+    /**
+     * Drop process/shared ACL menu trees after DB menu rows change so WLS workers
+     * do not keep serving a pre-collect sidebar (e.g. missing newly added leaves).
+     *
+     * @param array{to_add?: string[], to_update?: array, to_delete?: string[], to_disable?: string[]} $diff
+     */
+    private function invalidateMenuCachesAfterCollect(array $diff): void
+    {
+        $changed = ($diff['to_add'] ?? []) !== []
+            || ($diff['to_update'] ?? []) !== []
+            || ($diff['to_delete'] ?? []) !== []
+            || ($diff['to_disable'] ?? []) !== [];
+        if (!$changed) {
+            return;
+        }
+
+        try {
+            \Weline\Acl\Service\AclCacheInvalidator::flushAfterRoleAccessChange(null);
+        } catch (\Throwable) {
+            try {
+                \Weline\Acl\Service\ResourceTreeService::invalidateBackendMenuTreeCache();
+            } catch (\Throwable) {
+            }
+            try {
+                \Weline\Backend\Service\MenuService::clearProcessCache();
+            } catch (\Throwable) {
+            }
+            try {
+                \Weline\Admin\Service\MenuRenderService::clearProcessCache();
+            } catch (\Throwable) {
+            }
+        }
+
+        try {
+            \Weline\Admin\Api\Controller\BaseController::clearRuntimeFullPageCache();
+        } catch (\Throwable) {
+        }
     }
 
     /**

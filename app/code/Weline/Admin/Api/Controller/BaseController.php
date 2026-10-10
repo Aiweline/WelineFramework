@@ -271,7 +271,7 @@ class BaseController extends BackendController
         ], ['full_request_uri' => false]);
 
         return \sha1((string)\json_encode([
-            'v' => 4,
+            'v' => 5,
             'controller' => static::class,
             'file' => $fileName,
             'route' => $routePath,
@@ -289,8 +289,24 @@ class BaseController extends BackendController
             'lang_local' => State::getLangLocal(),
             'currency' => State::getCurrency(),
             'theme_config_hash' => $this->resolveAdminThemeConfigHash(),
+            // menu:collect bumps this generation; include it so sidebar HTML cannot stick
+            // after ACL menu rows change while route/path stay the same.
+            'menu_tree_generation' => $this->resolveBackendMenuTreeGeneration(),
             'request_scope' => $requestScope,
         ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function resolveBackendMenuTreeGeneration(): string
+    {
+        try {
+            $cached = w_cache('acl')->get('backend_menu_tree_generation');
+            if ($cached !== false && $cached !== null && $cached !== '') {
+                return (string)$cached;
+            }
+        } catch (\Throwable) {
+        }
+
+        return '0';
     }
 
     private function resolveAdminThemeConfigHash(): string

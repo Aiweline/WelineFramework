@@ -10,10 +10,19 @@ declare(strict_types=1);
 
 namespace Weline\Server\Controller\Backend;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Server\Model\SslCertificate as CertModel;
 use Weline\Server\Service\SslCertificateService;
 
+#[Acl(
+    'Weline_Server::ssl_certificate',
+    'SSL 证书管理',
+    'lock',
+    '管理边缘 SSL 证书与 HTTPS',
+    'Weline_Backend::system_service_group',
+    accessMode: Acl::ACCESS_MODE_READ
+)]
 class SslCertificate extends BackendController
 {
     /**
@@ -37,6 +46,14 @@ class SslCertificate extends BackendController
     /**
      * 证书列表页
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_view',
+        '查看 SSL 证书',
+        'lock',
+        '查看边缘 SSL 证书列表与详情',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_READ
+    )]
     public function getIndex(): string
     {
         // 框架级收敛：页面加载时自动把本地证书目录同步到数据库，保证“正在使用的证书”可见。
@@ -101,6 +118,14 @@ class SslCertificate extends BackendController
     /**
      * 获取证书列表（AJAX）
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_list',
+        '列出 SSL 证书',
+        'lock',
+        '以 JSON 列出边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_READ
+    )]
     public function getList(): string
     {
         $this->sslService->syncCertificatesFromStorage();
@@ -117,6 +142,14 @@ class SslCertificate extends BackendController
     /**
      * 切换 HTTPS 状态
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_manage',
+        '管理 SSL 证书',
+        'lock',
+        '申请、切换、续签与删除边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postToggleHttps(): string
     {
         $domain = $this->request->getPost('domain');
@@ -139,6 +172,14 @@ class SslCertificate extends BackendController
     /**
      * 更新证书策略（force_https / force_root_to_www）
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_manage',
+        '管理 SSL 证书',
+        'lock',
+        '申请、切换、续签与删除边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postUpdatePolicy(): string
     {
         $certId = (int) $this->request->getPost('cert_id');
@@ -182,6 +223,14 @@ class SslCertificate extends BackendController
     /**
      * 申请证书（走统一入口 w_query，与定时任务、域名池申请逻辑一致）
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_manage',
+        '管理 SSL 证书',
+        'lock',
+        '申请、切换、续签与删除边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postRequest(): string
     {
         $domain = \trim((string) $this->request->getPost('domain', ''));
@@ -225,6 +274,14 @@ class SslCertificate extends BackendController
     /**
      * 续签证书
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_manage',
+        '管理 SSL 证书',
+        'lock',
+        '申请、切换、续签与删除边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postRenew(): string
     {
         $domain = $this->request->getPost('domain');
@@ -262,6 +319,14 @@ class SslCertificate extends BackendController
     /**
      * 删除证书
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_manage',
+        '管理 SSL 证书',
+        'lock',
+        '申请、切换、续签与删除边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postDelete(): string
     {
         $domain = \strtolower(\trim((string) $this->request->getPost('domain', '')));
@@ -288,6 +353,14 @@ class SslCertificate extends BackendController
     /**
      * 获取证书详情
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_detail',
+        '查看 SSL 证书详情',
+        'lock',
+        '查看边缘 SSL 证书详情',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_READ
+    )]
     public function getDetail(): string
     {
         $domain = $this->request->getGet('domain');
@@ -315,6 +388,14 @@ class SslCertificate extends BackendController
     /**
      * 同步网站域名（通过事件获取域名列表）
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_manage',
+        '管理 SSL 证书',
+        'lock',
+        '申请、切换、续签与删除边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postSync(): string
     {
         $email = $this->request->getPost('email', 'admin@localhost');
@@ -350,6 +431,14 @@ class SslCertificate extends BackendController
      * 
      * 用于证书签发时选择域名
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_domains',
+        '列出可签发域名',
+        'lock',
+        '列出边缘证书可签发域名',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_READ
+    )]
     public function getDomains(): string
     {
         $filter = [];
@@ -378,6 +467,14 @@ class SslCertificate extends BackendController
     /**
      * 为选定域名签发证书
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_manage',
+        '管理 SSL 证书',
+        'lock',
+        '申请、切换、续签与删除边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postIssueCertificate(): string
     {
         $domains = $this->request->getPost('domains', []);
@@ -443,6 +540,14 @@ class SslCertificate extends BackendController
     /**
      * 批量删除证书
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_manage',
+        '管理 SSL 证书',
+        'lock',
+        '申请、切换、续签与删除边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postBatchDelete(): string
     {
         $domains = $this->request->getPost('domains', []);
@@ -509,6 +614,14 @@ class SslCertificate extends BackendController
     /**
      * 批量续签证书
      */
+    #[Acl(
+        'Weline_Server::ssl_certificate_manage',
+        '管理 SSL 证书',
+        'lock',
+        '申请、切换、续签与删除边缘 SSL 证书',
+        'Weline_Server::ssl_certificate',
+        accessMode: Acl::ACCESS_MODE_EDIT
+    )]
     public function postBatchRenew(): string
     {
         $domains = $this->request->getPost('domains', []);
