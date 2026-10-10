@@ -32,6 +32,10 @@ final class ModelIndexScriptContractTest extends TestCase
         self::assertStringContainsString('window.testModelConnection', $html);
         self::assertStringContainsString("case 'test-provider':", $html);
         self::assertStringContainsString("apiRequest('modelTestConnection'", $html);
+        // 模型行连通必须直测点击的 model_code，禁止再弹供应商侧「选择测试模型」
+        self::assertStringNotContainsString("title: '选择测试模型'", $html);
+        self::assertStringNotContainsString('chooseProviderTestModel', $html);
+        self::assertStringContainsString("{model_code: modelCode}", $html);
     }
 
     public function test_model_index_script_forbids_line_comments_in_packed_iife(): void

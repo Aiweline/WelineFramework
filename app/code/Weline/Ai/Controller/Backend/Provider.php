@@ -9,6 +9,7 @@ use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Service\Provider\AccountService;
+use Weline\Ai\Service\Provider\ConnectionTestModelResolver;
 use Weline\Ai\Service\Provider\ModelListingProviderInterface;
 use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Framework\Acl\Acl;
@@ -399,6 +400,9 @@ class Provider extends BackendPageController
                 'max_tokens' => (int)($model['max_tokens'] ?? 0),
                 'context_window' => (int)($model['context_window'] ?? 0),
                 'primary_modality' => (string)($model['primary_modality'] ?? ''),
+                'is_default' => !empty($model['is_default']),
+                'created' => (int)($model['created'] ?? $model['created_at'] ?? 0),
+                'capabilities' => is_array($model['capabilities'] ?? null) ? $model['capabilities'] : [],
             ];
         }
         return $items;
@@ -409,21 +413,7 @@ class Provider extends BackendPageController
      */
     private function resolveDefaultModelCode(array $models, string $configuredDefault): string
     {
-        $configuredDefault = trim($configuredDefault);
-        $first = '';
-        foreach ($models as $model) {
-            $code = trim((string)($model['code'] ?? $model['value'] ?? ''));
-            if ($code === '') {
-                continue;
-            }
-            if ($first === '') {
-                $first = $code;
-            }
-            if ($configuredDefault !== '' && strcasecmp($code, $configuredDefault) === 0) {
-                return $code;
-            }
-        }
-        return $first;
+        return ConnectionTestModelResolver::resolveDefaultModelCode($models, $configuredDefault);
     }
 
     /**

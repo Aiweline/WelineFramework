@@ -491,10 +491,6 @@
             var providerCode = '<?= isset($account) ? addslashes((string)$account->getData('provider_code')) : '' ?>';
             var chooseModel = Promise.resolve('');
             if (accountId && providerCode) {
-                var modelUrl = '@backend-url{'*/backend/provider/getRemoteModelsForSelect'}';
-                var modelForm = new FormData();
-                modelForm.set('provider_code', providerCode);
-                modelForm.set('account_id', accountId);
                 chooseModel = window.Weline.Api.resource('ai').providerRemoteModelsForSelect({
                     provider_code: providerCode,
                     account_id: accountId
@@ -502,62 +498,25 @@
                     if (!data || !data.success || !Array.isArray(data.data) || !data.data.length) {
                         throw new Error((data && data.message) || 'models endpoint unavailable');
                     }
-                    var options = {};
                     window.__welineProviderTestModelMeta = {};
-                    var modalityShortMap = {
-                        'text2text': '文生文',
-                        'text2image': '文生图',
-                        'text2video': '文生视频',
-                        'image2text': '图生文',
-                        'embedding': '向量',
-                        'audio2text': '语音转写',
-                        'text2audio': '语音合成',
-                        'multimodal': '多模态'
-                    };
+                    var defaultModelCode = data.default_model_code || '';
                     data.data.forEach(function(model) {
                         var code = model.code || model.value || '';
                         if (!code) return;
-                        var label = model.label || model.name || code;
-                        var modality = String(model.primary_modality || '').toLowerCase();
-                        if (modality && label.indexOf('[') === -1) {
-                            label += '  ·  [' + (modalityShortMap[modality] || modality) + ']';
-                        }
-                        options[code] = label;
                         window.__welineProviderTestModelMeta[code] = model;
                     });
-                    return Weline.UI.dialog.request({
-                        title: '选择测试模型',
-                        cancelable: true,
-                        confirmLabel: '开始测试',
-                        cancelLabel: '取消',
-                        field: {
-                            type: 'select',
-                            choices: options,
-                            placeholder: '请选择模型',
-                            required: true
-                        },
-                        validate: function(value) {
-                            if (!value) return '请选择一个模型';
-                            return true;
-                        }
-                    }).then(function(result) {
-                        return result.confirmed ? (result.value || '') : null;
-                    });
+                    if (!defaultModelCode) {
+                        var keys = Object.keys(window.__welineProviderTestModelMeta);
+                        defaultModelCode = keys.length ? keys[0] : '';
+                    }
+                    return defaultModelCode;
                 }).catch(function(error) {
-                    return Weline.UI.dialog.request({
-                        tone: 'warning',
-                        title: '无法拉取模型列表',
-                        message: error.message || '该供应商不支持 models 接口。',
-                        cancelable: true,
-                        confirmLabel: '使用默认测试模型',
-                        cancelLabel: '取消'
-                    }).then(function(result) {
-                        return result.confirmed ? '' : null;
-                    });
+                    console.warn('[provider-edit-test] resolve model failed, fall back to vendor test_model', error);
+                    return '';
                 });
             }
 
-            chooseModel.then(function(modelCode) {
+                        chooseModel.then(function(modelCode) {
                 if (modelCode === null) {
                     btn.innerHTML = originalHtml;
                     btn.disabled = false;

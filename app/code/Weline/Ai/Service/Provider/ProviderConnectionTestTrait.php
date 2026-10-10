@@ -167,12 +167,23 @@ trait ProviderConnectionTestTrait
 
     protected function isVisionConnectionTestModel(AiModel $model): bool
     {
+        // 文生文主模态的连通性用纯文本即可；vision 只是附加能力时不应强制带图（DeepSeek Flash 等会拒 1x1 测图）。
+        if ($model->supportsPrimaryModality(AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT)) {
+            $modelCode = strtolower((string)$model->getModelCode());
+            foreach (['-vl', '_vl', '/vl', 'vision', 'image2text', 'image-to-text', 'qwen-vl', 'qwen2-vl', 'qwen2.5-vl', 'glm-4v'] as $needle) {
+                if (str_contains($modelCode, $needle)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         if ($model->hasCapability(AiModel::CAPABILITY_VISION)) {
             return true;
         }
 
         $modelCode = strtolower((string)$model->getModelCode());
-        foreach (['vision', 'multimodal', 'multi-modal', 'image-to-text', 'image2text', '-vl', '_vl', '/vl', 'qwen-vl', 'qwen2-vl', 'qwen2.5-vl', 'glm-4v', 'gpt-4o', 'gpt-4.1', 'claude-3', 'omni'] as $needle) {
+        foreach (['vision', 'multimodal', 'multi-modal', 'image-to-text', 'image2text', '-vl', '_vl', '/vl', 'qwen-vl', 'qwen2-vl', 'qwen2.5-vl', 'glm-4v'] as $needle) {
             if (str_contains($modelCode, $needle)) {
                 return true;
             }

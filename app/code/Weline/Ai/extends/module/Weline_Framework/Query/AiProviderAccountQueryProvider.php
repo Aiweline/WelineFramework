@@ -669,6 +669,9 @@ final class AiProviderAccountQueryProvider implements QueryProviderInterface
                 'max_tokens' => (int)($model['max_tokens'] ?? 0),
                 'context_window' => (int)($model['context_window'] ?? 0),
                 'primary_modality' => (string)($model['primary_modality'] ?? ''),
+                'is_default' => !empty($model['is_default']),
+                'created' => (int)($model['created'] ?? $model['created_at'] ?? 0),
+                'capabilities' => is_array($model['capabilities'] ?? null) ? $model['capabilities'] : [],
             ];
         }
         return $items;
@@ -676,21 +679,7 @@ final class AiProviderAccountQueryProvider implements QueryProviderInterface
 
     private function resolveDefaultModelCode(array $models, string $configuredDefault): string
     {
-        $configuredDefault = trim($configuredDefault);
-        $first = '';
-        foreach ($models as $model) {
-            $code = trim((string)($model['code'] ?? $model['value'] ?? ''));
-            if ($code === '') {
-                continue;
-            }
-            if ($first === '') {
-                $first = $code;
-            }
-            if ($configuredDefault !== '' && strcasecmp($code, $configuredDefault) === 0) {
-                return $code;
-            }
-        }
-        return $first;
+        return \Weline\Ai\Service\Provider\ConnectionTestModelResolver::resolveDefaultModelCode($models, $configuredDefault);
     }
 
     private function applyUsageFilters(UsageRecord $model, int $accountId, string $dateFrom, string $dateTo): void

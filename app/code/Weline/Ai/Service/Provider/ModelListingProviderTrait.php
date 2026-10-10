@@ -199,6 +199,8 @@ trait ModelListingProviderTrait
                 'code' => $id,
                 'name' => $name !== '' ? $name : $id,
                 'description' => $description,
+                'created' => (int)($item['created'] ?? $item['created_at'] ?? 0),
+                'is_default' => !empty($item['is_default']),
                 'context_window' => $contextKey !== '' ? (int)($item[$contextKey] ?? 0) : 0,
                 'max_tokens' => $maxTokensKey !== '' ? (int)($item[$maxTokensKey] ?? 0) : 0,
                 'capabilities' => $this->resolveRemoteModelCapabilities($item, $id, $name !== '' ? $name : $id, $description),
@@ -212,7 +214,13 @@ trait ModelListingProviderTrait
             ];
         }
 
-        usort($models, static fn(array $a, array $b): int => strcmp((string)$a['code'], (string)$b['code']));
+        usort($models, static function (array $a, array $b): int {
+            $createdCmp = ((int)($b['created'] ?? 0)) <=> ((int)($a['created'] ?? 0));
+            if ($createdCmp !== 0) {
+                return $createdCmp;
+            }
+            return strcmp((string)$a['code'], (string)$b['code']);
+        });
         return $models;
     }
 

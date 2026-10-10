@@ -52,4 +52,39 @@ final class ProviderIndexScriptContractTest extends TestCase
         self::assertStringContainsString('Weline.UI.dialog.open', $script);
         self::assertStringContainsString('providerTestBusyDialog', $script);
     }
+
+    public function test_provider_index_surfaces_connection_test_failure_details(): void
+    {
+        $script = $this->scriptSource();
+        self::assertStringContainsString("api.resource('ai')", $script);
+        self::assertStringContainsString('providerTestConnection', $script);
+        self::assertStringContainsString('keepBusinessResult: true', $script);
+        self::assertStringContainsString('formatProviderConnectionTestDetail', $script);
+        self::assertStringContainsString('extractProviderAccountFailurePayload', $script);
+        self::assertStringContainsString("__('请求地址')", $script);
+        self::assertStringContainsString("__('基础 URL')", $script);
+        self::assertStringContainsString("__('密钥尾号')", $script);
+        self::assertStringNotContainsString("__('测试失败: 网络错误')", $script);
+        self::assertStringNotContainsString('api.request(url, options)', $script);
+    }
+
+    public function test_provider_index_auto_picks_latest_test_model_without_select_dialog(): void
+    {
+        $script = $this->scriptSource();
+        self::assertStringContainsString('function resolveProviderTestModel', $script);
+        self::assertStringContainsString('default_model_code', $script);
+        self::assertStringContainsString('resolveProviderTestModel(getAccountById(id))', $script);
+        self::assertStringNotContainsString("title: '选择测试模型'", $script);
+        self::assertStringNotContainsString('function chooseProviderTestModel', $script);
+    }
+
+    public function test_provider_index_keeps_nested_payload_for_test_and_save(): void
+    {
+        $script = $this->scriptSource();
+        self::assertStringContainsString('function buildProviderAccountPayload', $script);
+        self::assertStringContainsString("return { payload: body };", $script);
+        self::assertStringContainsString('Unknown frontend worker param: id', $script);
+        // 禁止再把 payload 展平到顶层（旧逻辑：payload.payload || payload）
+        self::assertStringNotContainsString('payload.payload || payload', $script);
+    }
 }

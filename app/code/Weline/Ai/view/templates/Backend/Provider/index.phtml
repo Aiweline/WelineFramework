@@ -379,15 +379,16 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
     var currentProvider = '';
     var currentAccounts = [];
     var providerAccountApiPromise = null;
-    var providerAccountEndpoints = {
-        listAccounts: {url: "@backend-url{'*/backend/provider/list'}", method: "GET"},
-        getAccount: {url: "@backend-url{'*/backend/provider/account'}", method: "GET"},
-        saveAccount: {url: "@backend-url{'*/backend/provider/save'}", method: "POST"},
-        testConnection: {url: "@backend-url{'*/backend/provider/test-connection'}", method: "POST"},
-        remoteModelsForSelect: {url: "@backend-url{'*/backend/provider/remote-models-for-select'}", method: "GET"},
-        getUsageList: {url: "@backend-url{'*/backend/provider/usage-list'}", method: "GET"},
-        toggleActive: {url: "@backend-url{'*/backend/provider/toggle-active'}", method: "POST"},
-        deleteAccount: {url: "@backend-url{'*/backend/provider/delete'}", method: "POST"}
+    /* BinQuery resource('ai') operation names — direct Api.request(url) is disabled. */
+    var providerAccountOperations = {
+        listAccounts: 'providerListAccounts',
+        getAccount: 'providerGetAccount',
+        saveAccount: 'providerSaveAccount',
+        testConnection: 'providerTestConnection',
+        remoteModelsForSelect: 'providerRemoteModelsForSelect',
+        getUsageList: 'providerGetUsageList',
+        toggleActive: 'providerToggleActive',
+        deleteAccount: 'providerDeleteAccount'
     };
 
     function getProviderAccountApi() {
@@ -395,10 +396,28 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             return providerAccountApiPromise;
         }
         providerAccountApiPromise = waitForWelineApi().then(function(api) {
+            var resource = api.resource('ai');
             var client = {};
-            Object.keys(providerAccountEndpoints).forEach(function(operation) {
-                client[operation] = function(params) {
-                    return requestProviderAccount(api, operation, params || {});
+            Object.keys(providerAccountOperations).forEach(function(operation) {
+                var remoteOp = providerAccountOperations[operation];
+                client[operation] = function(params, options) {
+                    if (!resource || typeof resource[remoteOp] !== 'function') {
+                        return Promise.reject(new Error('AI provider account operation is unavailable: ' + operation));
+                    }
+                    var payload = buildProviderAccountPayload(operation, params || {});
+                    var callOptions = Object.assign({
+                        keepBusinessResult: true,
+                        silent: true
+                    }, options || {});
+                    return Promise.resolve(resource[remoteOp](payload, callOptions))
+                        .then(normalizeProviderAccountResponse)
+                        .catch(function(error) {
+                            var recovered = extractProviderAccountFailurePayload(error);
+                            if (recovered) {
+                                return recovered;
+                            }
+                            throw error;
+                        });
                 };
             });
             return client;
@@ -409,11 +428,11 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
     function waitForWelineApi(attemptsLeft) {
         attemptsLeft = typeof attemptsLeft === 'number' ? attemptsLeft : 80;
         var api = window.Weline && window.Weline.Api;
-        if (api && api.__fallback !== true && typeof api.request === 'function') {
+        if (api && api.__fallback !== true && typeof api.resource === 'function') {
             return Promise.resolve(api);
         }
         if (attemptsLeft <= 0) {
-            return Promise.reject(new Error('Weline.Api.request is unavailable.'));
+            return Promise.reject(new Error('Weline.Api.resource is unavailable.'));
         }
         return new Promise(function(resolve, reject) {
             window.setTimeout(function() {
@@ -423,37 +442,16 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
     }
 
     function buildProviderAccountPayload(operation, params) {
-        var payload = Object.assign({}, params || {});
+        var incoming = Object.assign({}, params || {});
         if (operation === 'saveAccount' || operation === 'testConnection') {
-            payload = Object.assign({}, payload.payload || payload);
+            /* BinQuery 描述只允许顶层 payload(map)；禁止把 id/model_code 展平到顶层（否则 Unknown frontend worker param: id） */
+            var body = (incoming.payload && typeof incoming.payload === 'object' && !Array.isArray(incoming.payload))
+                ? Object.assign({}, incoming.payload)
+                : Object.assign({}, incoming);
+            delete body.payload;
+            return { payload: body };
         }
-        return payload;
-    }
-
-    function buildQueryString(params) {
-        var query = new URLSearchParams();
-        Object.keys(params || {}).forEach(function(key) {
-            var value = params[key];
-            if (value === undefined || value === null) {
-                return;
-            }
-            if (Array.isArray(value)) {
-                value.forEach(function(item) {
-                    query.append(key + '[]', item === undefined || item === null ? '' : String(item));
-                });
-                return;
-            }
-            query.append(key, String(value));
-        });
-        return query.toString();
-    }
-
-    function appendQueryString(url, params) {
-        var query = buildQueryString(params);
-        if (!query) {
-            return url;
-        }
-        return url + (url.indexOf('?') === -1 ? '?' : '&') + query;
+        return incoming;
     }
 
     function normalizeProviderAccountResponse(response) {
@@ -482,46 +480,88 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             && data
             && typeof data === 'object'
             && !Array.isArray(data)
-            && data.success === true
+            && Object.prototype.hasOwnProperty.call(data, 'data')
             && data.data
             && typeof data.data === 'object'
             && !Array.isArray(data.data)
             && Object.prototype.hasOwnProperty.call(data.data, 'success')
+            && (data.success === true
+                || data.ok === true
+                || (!Object.prototype.hasOwnProperty.call(data, 'success') && !Object.prototype.hasOwnProperty.call(data, 'message')))
         ) {
             data = data.data;
         }
         return data || {};
     }
 
-    function requestProviderAccount(api, operation, params) {
-        var endpoint = providerAccountEndpoints[operation];
-        if (!endpoint || !endpoint.url) {
-            return Promise.reject(new Error('AI provider account operation is unavailable: ' + operation));
+    function extractProviderAccountFailurePayload(error) {
+        if (!error || typeof error !== 'object') {
+            return null;
         }
-
-        var payload = buildProviderAccountPayload(operation, params || {});
-        var method = String(endpoint.method || 'GET').toUpperCase();
-        var url = endpoint.url;
-        var options = { method: method };
-
-        if (method === 'GET') {
-            url = appendQueryString(url, payload);
-        } else if (operation === 'toggleActive' || operation === 'deleteAccount') {
-            options.body = new URLSearchParams(payload);
-        } else {
-            options.body = payload;
-        }
-
-        options.silent = true;
-        return api.request(url, options).then(normalizeProviderAccountResponse).catch(function(error) {
-            var responseData = error && error.response
-                ? normalizeProviderAccountResponse(error.response)
-                : null;
-            if (responseData && responseData.success === false) {
-                return responseData;
+        var candidates = [
+            error,
+            error.data,
+            error.response,
+            error.response && error.response.data,
+            error.response && error.response.data && error.response.data.data
+        ];
+        for (var i = 0; i < candidates.length; i++) {
+            var normalized = normalizeProviderAccountResponse(candidates[i]);
+            if (normalized && normalized.success === false) {
+                return normalized;
             }
-            throw error;
-        });
+        }
+        return null;
+    }
+
+    function formatProviderConnectionTestDetail(dataOrError, fallbackMessage) {
+        var data = extractProviderAccountFailurePayload(dataOrError) || normalizeProviderAccountResponse(dataOrError) || {};
+        if ((!data || typeof data !== 'object' || Array.isArray(data)) && dataOrError && typeof dataOrError === 'object') {
+            data = {};
+        }
+        var lines = [];
+        var primary = String(
+            (data && (data.message || data.connection_test_message || data.msg))
+            || (dataOrError && dataOrError.message)
+            || fallbackMessage
+            || '<?= __('未知错误') ?>'
+        ).trim();
+        if (primary) {
+            lines.push('<?= __('测试失败') ?>: ' + primary);
+        }
+        if (data && data.model_code) {
+            lines.push('<?= __('尝试使用的模型') ?>: ' + data.model_code);
+        }
+        if (data && data.primary_modality) {
+            lines.push('<?= __('模态') ?>: ' + data.primary_modality);
+        }
+        if (data && data.provider) {
+            lines.push('<?= __('供应商') ?>: ' + data.provider);
+        }
+        if (data && data.account_id) {
+            lines.push('<?= __('账户 ID') ?>: ' + data.account_id);
+        }
+        if (data && data.api_key_tail) {
+            lines.push('<?= __('密钥尾号') ?>: ' + data.api_key_tail);
+        }
+        if (data && data.base_url) {
+            lines.push('<?= __('基础 URL') ?>: ' + data.base_url);
+        }
+        if (data && data.request_url) {
+            lines.push('<?= __('请求地址') ?>: ' + data.request_url);
+        }
+        if (data && data.connection_status) {
+            lines.push('<?= __('连接状态') ?>: ' + data.connection_status);
+        }
+        if (
+            data
+            && data.connection_test_message
+            && String(data.connection_test_message).trim() !== ''
+            && String(data.connection_test_message).trim() !== primary
+        ) {
+            lines.push('<?= __('连接测试消息') ?>: ' + data.connection_test_message);
+        }
+        return lines.join('\n') || String(fallbackMessage || '<?= __('未知错误') ?>');
     }
 
     function providerAccountCall(operation, params) {
@@ -529,7 +569,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             if (!api || typeof api[operation] !== 'function') {
                 throw new Error('AI provider account operation is unavailable: ' + operation);
             }
-            return api[operation](params || {}, { keepBusinessResult: true });
+            return api[operation](params || {}, { keepBusinessResult: true, silent: true });
         });
     }
 
@@ -887,8 +927,8 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             } else {
                 // 测试失败，取消激活状态
                 activateCheckbox.checked = false;
-                showResultModal('error', '连接测试失败', 
-                    '连接测试失败，无法激活账户！\n\n错误信息: ' + data.message + '\n\n请检查API密钥和网络连接后重试。');
+                showResultModal('error', '连接测试失败',
+                    '<?= __('连接测试失败，无法激活账户') ?>!\n\n' + formatProviderConnectionTestDetail(data, '<?= __('未知错误') ?>'));
             }
         })
         .catch(function(error) {
@@ -899,8 +939,8 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             activateCheckbox.checked = false;
             
             console.error('Error:', error);
-            showResultModal('error', '连接测试失败', 
-                '连接测试失败，无法激活账户！\n\n网络错误，请检查网络连接后重试。');
+            showResultModal('error', '连接测试失败',
+                '<?= __('连接测试失败，无法激活账户') ?>!\n\n' + formatProviderConnectionTestDetail(error, '<?= __('网络错误，请检查网络连接后重试') ?>'));
         });
     }
 
@@ -1107,7 +1147,8 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
         return null;
     }
 
-    function chooseProviderTestModel(account) {
+    /* 供应商连通：自动用最新/默认可测模型，不再弹「选择测试模型」（模型列表行才直测点击的那条） */
+    function resolveProviderTestModel(account) {
         if (!account || !account.provider_code) {
             return Promise.resolve('');
         }
@@ -1124,67 +1165,21 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             if (!Array.isArray(data.data) || !data.data.length) {
                 throw new Error('models endpoint returned empty list');
             }
-            var options = {};
             window.__welineProviderTestModelMeta = {};
             var defaultModelCode = data.default_model_code || '';
-            var modalityShortMap = {
-                'text2text': '文生文',
-                'text2image': '文生图',
-                'text2video': '文生视频',
-                'image2text': '图生文',
-                'embedding': '向量',
-                'audio2text': '语音转写',
-                'text2audio': '语音合成',
-                'multimodal': '多模态'
-            };
             data.data.forEach(function(model) {
                 var code = model.code || model.value || '';
                 if (!code) return;
-                var label = model.label || model.name || code;
-                var modality = String(model.primary_modality || '').toLowerCase();
-                if (modality && label.indexOf('[') === -1) {
-                    var human = modalityShortMap[modality] || modality;
-                    label += '  ·  [' + human + ']';
-                }
-                options[code] = label;
                 window.__welineProviderTestModelMeta[code] = model;
             });
             if (!defaultModelCode) {
-                var optionKeys = Object.keys(options);
+                var optionKeys = Object.keys(window.__welineProviderTestModelMeta);
                 defaultModelCode = optionKeys.length ? optionKeys[0] : '';
             }
-            var subtitle = data.source === 'preset'
-                ? '远程 models 暂不可用，已使用供应商预置模型。' + (data.warning ? '\n原因: ' + data.warning : '')
-                : '';
-            return Weline.UI.dialog.request({
-                title: '选择测试模型',
-                message: subtitle,
-                cancelable: true,
-                confirmLabel: '开始测试',
-                cancelLabel: '取消',
-                field: {
-                    type: 'select',
-                    choices: options,
-                    value: defaultModelCode,
-                    placeholder: '请选择模型',
-                    required: true
-                },
-                validate: function(value) {
-                    if (!value) return '请选择一个模型';
-                    return true;
-                }
-            }).then(function(result) {
-                return result.confirmed ? (result.value || '') : null;
-            });
+            return defaultModelCode;
         }).catch(function(error) {
-            return Weline.UI.dialog.request({
-                tone: 'warning',
-                title: '无法拉取模型列表',
-                message: error.message || '该供应商不支持 models 接口。',
-                confirmLabel: '确定'
-            }).then(function(result) {
-                return null;
-            });
+            console.warn('[provider-test] resolve model failed, fall back to vendor test_model', error);
+            return '';
         });
     }
 
@@ -1217,15 +1212,17 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
                 if (data.duration) lines.push('<?= __('耗时') ?>: ' + data.duration + ' ms');
                 if (data.response) lines.push('<?= __('响应') ?>: ' + String(data.response).slice(0, 500));
                 if (data.request_url) lines.push('<?= __('请求地址') ?>: ' + data.request_url);
+                if (data.base_url) lines.push('<?= __('基础 URL') ?>: ' + data.base_url);
                 showResultModal('success', '<?= __('连接测试成功') ?>', lines.join('\n'), images);
                 loadAccounts(currentPage);
             } else {
-                var lines2 = ['<?= __('测试失败') ?>: ' + ((data && data.message) || '<?= __('未知错误') ?>')];
-                if (data && data.model_code) lines2.push('<?= __('尝试使用的模型') ?>: ' + data.model_code);
-                if (data && data.primary_modality) lines2.push('<?= __('模态') ?>: ' + data.primary_modality);
-                if (data && data.request_url) lines2.push('<?= __('请求地址') ?>: ' + data.request_url);
-                if (data && data.base_url) lines2.push('<?= __('基础 URL') ?>: ' + data.base_url);
-                showResultModal('error', '<?= __('连接测试失败') ?>', lines2.join('\n'), []);
+                showResultModal(
+                    'error',
+                    '<?= __('连接测试失败') ?>',
+                    formatProviderConnectionTestDetail(data, '<?= __('未知错误') ?>'),
+                    []
+                );
+                loadAccounts(currentPage);
             }
         }).catch(function(error) {
             btn.innerHTML = originalHtml;
@@ -1233,7 +1230,13 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             btn.removeAttribute('aria-busy');
             closeProviderBusyDialog(testModal);
             console.error('Error:', error);
-            showResultModal('error', '<?= __('连接测试失败') ?>', '<?= __('测试失败: 网络错误') ?>', []);
+            showResultModal(
+                'error',
+                '<?= __('连接测试失败') ?>',
+                formatProviderConnectionTestDetail(error, '<?= __('网络错误，请检查网络连接后重试') ?>'),
+                []
+            );
+            loadAccounts(currentPage);
         });
     }
 
@@ -1250,8 +1253,8 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
         btn.setAttribute('aria-busy', 'true');
         btn.innerHTML = '<w:icon name="circle" size="sm"></w:icon>';
         btn.disabled = true;
-        var picking = openProviderBusyDialog('<?= __('正在准备连通测试...') ?>', '<?= __('请稍候，正在拉取可测模型') ?>');
-        chooseProviderTestModel(getAccountById(id)).then(function(modelCode) {
+        var picking = openProviderBusyDialog('<?= __('正在准备连通测试...') ?>', '<?= __('请稍候，正在使用最新可测模型') ?>');
+        resolveProviderTestModel(getAccountById(id)).then(function(modelCode) {
             closeProviderBusyDialog(picking);
             btn.innerHTML = originalHtml;
             btn.disabled = false;
@@ -1263,7 +1266,12 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             btn.innerHTML = originalHtml;
             btn.disabled = false;
             btn.removeAttribute('aria-busy');
-            showResultModal('error', '<?= __('连接测试失败') ?>', (error && error.message) || '<?= __('测试失败，请重试') ?>', []);
+            showResultModal(
+                'error',
+                '<?= __('连接测试失败') ?>',
+                formatProviderConnectionTestDetail(error, '<?= __('测试失败，请重试') ?>'),
+                []
+            );
         });
     };
 
@@ -1363,7 +1371,10 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
         dialog.className = 'w-dialog weline-ai-provider-result-dialog';
         dialog.dataset.wComponent = 'dialog';
         dialog.dataset.state = 'closed';
-        dialog.dataset.size = (Array.isArray(images) && images.length) ? 'lg' : 'sm';
+        dialog.dataset.size = (Array.isArray(images) && images.length)
+            || (String(message || '').length > 180)
+            ? 'lg'
+            : 'sm';
         dialog.dataset.tone = type === 'success' ? 'success' : 'danger';
 
         var toneIconHtml = type === 'success'
