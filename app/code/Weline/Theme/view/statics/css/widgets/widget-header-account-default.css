@@ -146,27 +146,42 @@
     /* Visual gap only; ::before keeps :hover while the pointer crosses it. */
     margin-top: var(--weline-space-3);
     /*
-     * Paper ink on raised panel. Parent header [data-surface=inverse] remaps
-     * --weline-theme-text / --_inverse-* to on-dark (WO-UI-CONTRAST-INVERSE);
-     * without local rebind, menu links paint white-on-white.
-     * Same ink pair as mini-cart --amz-drawer-text / --amz-drawer-muted.
+     * Paper ink on raised panel (WO-UI-CONTRAST-INVERSE).
+     * Parent header [data-surface=inverse] remaps --color-text* / body-text to
+     * on-dark cream; without a local nail, menu links paint cream-on-cream.
+     * Same contract as mini-cart-drawer / delivery-panel / header-search:
+     * pin foundation literals HERE first, then bind --amz-drawer-text from
+     * --weline-chrome-body-text. Never seed from var(--color-text-primary) —
+     * under inverse that token is already cream (theme_inverse_raised_paper_ink_pin).
+     * Design themes inherit this widget CSS; they must not need private
+     * account-dropdown ink overrides for contrast to work.
      */
-    --amz-drawer-text: var(--color-text-primary);
-    --amz-drawer-muted: var(--color-text-gray);
-    --_inverse-text: var(--amz-drawer-text);
-    --_inverse-muted: var(--amz-drawer-muted);
-    --weline-theme-text: var(--amz-drawer-text);
-    --weline-theme-text-secondary: var(--amz-drawer-muted);
-    --weline-theme-text-muted: var(--amz-drawer-muted);
-    --weline-theme-body-text: var(--amz-drawer-text);
-    --weline-theme-body-text-secondary: var(--amz-drawer-muted);
-    --weline-theme-body-text-muted: var(--amz-drawer-muted);
-    --color-text: var(--amz-drawer-text);
-    --color-text-primary: var(--amz-drawer-text);
-    --color-text-secondary: var(--amz-drawer-muted);
-    --w-surface-fg: var(--amz-drawer-text);
-    --w-surface-fg-muted: var(--amz-drawer-muted);
-    color: var(--amz-drawer-text);
+    --weline-chrome-body-text: #0f1111;
+    --weline-chrome-body-text-secondary: #565959;
+    --weline-chrome-body-text-muted: #666666;
+    --weline-chrome-body-text-heading: #0f1111;
+    --amz-drawer-text: var(--weline-chrome-body-text);
+    --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
+    --_paper-text: var(--amz-drawer-text);
+    --_paper-muted: var(--amz-drawer-muted);
+    --_inverse-text: var(--_paper-text);
+    --_inverse-muted: var(--_paper-muted);
+    --weline-theme-text: var(--_paper-text);
+    --weline-theme-text-secondary: var(--_paper-muted);
+    --weline-theme-text-muted: var(--_paper-muted);
+    --weline-theme-body-text: var(--_paper-text);
+    --weline-theme-body-text-secondary: var(--_paper-muted);
+    --weline-theme-body-text-muted: var(--_paper-muted);
+    --weline-theme-body-text-heading: var(--_paper-text);
+    --color-text: var(--_paper-text);
+    --color-text-primary: var(--_paper-text);
+    --color-text-secondary: var(--_paper-muted);
+    --color-text-muted: var(--_paper-muted);
+    --w-surface-fg: var(--_paper-text);
+    --w-surface-fg-muted: var(--_paper-muted);
+    --w-surface-fg-subtle: var(--_paper-muted);
+    color: var(--_paper-text);
+    color-scheme: light;
 }
 
 /* Invisible hit bridge across margin-top so the menu does not dismiss mid-move. */
