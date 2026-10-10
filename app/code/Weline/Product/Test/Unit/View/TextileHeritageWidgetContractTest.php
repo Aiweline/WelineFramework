@@ -12,9 +12,19 @@ final class TextileHeritageWidgetContractTest extends TestCase
 {
     public function testProductRegistryNoLongerOwnsTextileHeritageWidget(): void
     {
-        $widgets = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Product/widget.php';
-
-        self::assertArrayNotHasKey('textile-heritage', $widgets);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Product/widget.php';
+        self::assertFalse(
+            \Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+                $widgetPhp,
+                'Weline_Product::templates/frontend/widgets/textile-heritage.phtml'
+            )
+        );
+        self::assertFalse(
+            \Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+                $widgetPhp,
+                'Weline_Theme::theme/frontend/widgets/content/textile-heritage/default.phtml'
+            )
+        );
     }
 
     public function testLegacyCatalogDelegatesToThemeOwnedRealAssets(): void

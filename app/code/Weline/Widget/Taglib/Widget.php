@@ -175,7 +175,11 @@ class Widget implements TaglibInterface
                     'block_class' => (string)$blockClass,
                     'template' => (string)$template,
                     'widget_id' => (string)$widgetId,
+                    'cache' => \Weline\Widget\Cache\WidgetOutputCache::normalizeTtl($attributes['cache'] ?? null),
                 ];
+                if (\array_key_exists('share', $attributes)) {
+                    $spec['share'] = \Weline\Widget\Cache\WidgetOutputCache::normalizeShare($attributes['share']);
+                }
 
                 return '<?= \\Weline\\Widget\\Taglib\\Widget::renderRuntimeInline('
                     . var_export($spec, true)
@@ -198,103 +202,43 @@ class Widget implements TaglibInterface
      */
     private static function renderWidget(array $widget, array $params, string $blockClass = '', string $template = ''): string
     {
-        // 生成缓存键（仅对模板渲染使用缓存，Block 类可能有动态内容）
-        $cacheKey = null;
-        $useCache = empty($blockClass) && empty($widget['block_class'] ?? '');
-        
-        if ($useCache) {
-            $type = $widget['type'] ?? '';
-            $name = $widget['code'] ?? $widget['name'] ?? '';
-            $templatePath = $template ?: ($widget['template'] ?? '');
-            if (empty($templatePath) && !empty($widget['template_content'])) {
-                $templatePath = 'content:' . md5((string)$widget['template_content']);
-            }
-            if (empty($templatePath) && !empty($widget['path'])) {
-                $module = $widget['module'] ?? '';
-                $templatePath = $module . '::widgets/' . $type . '/' . $name . '.phtml';
-            }
-            $cacheKey = md5($type . '|' . $name . '|' . $templatePath . '|' . serialize($params));
-            
-            // form_key / challenge_token 随请求变化，不可复用缓存 HTML
-            $renderCache = self::renderCache();
-            if (isset($renderCache[$cacheKey])) {
-                $cached = $renderCache[$cacheKey];
-                if (self::isCacheableWidgetHtml($cached)) {
-                    return $cached;
-                }
-            }
-        }
-        
-        // 优先使用覆盖的 Block 类
         if (!empty($blockClass)) {
             return self::renderBlock($blockClass, $params);
         }
 
-        // 使用部件配置中的 Block 类
         $widgetBlockClass = $widget['block_class'] ?? '';
         if (!empty($widgetBlockClass)) {
             return self::renderBlock($widgetBlockClass, $params);
         }
 
-        // 使用覆盖的模板
         if (!empty($template)) {
-            $result = self::renderTemplate($template, $params);
-            if ($cacheKey !== null && self::isCacheableWidgetHtml($result)) {
-                self::cacheRender($cacheKey, $result);
-            }
-            return $result;
+            return self::renderTemplate($template, $params);
         }
 
-        // 使用部件配置中的模板
         $widgetTemplate = $widget['template'] ?? '';
         if (!empty($widgetTemplate)) {
-            $result = self::renderTemplate($widgetTemplate, $params);
-            if ($cacheKey !== null && self::isCacheableWidgetHtml($result)) {
-                self::cacheRender($cacheKey, $result);
-            }
-            return $result;
+            return self::renderTemplate($widgetTemplate, $params);
         }
 
-        // 尝试查找默认模板
         $widgetTemplateContent = (string)($widget['template_content'] ?? '');
         if ($widgetTemplateContent !== '') {
-            $result = self::renderRuntimeTemplateContent($widgetTemplateContent, $params);
-            if ($cacheKey !== null && self::isCacheableWidgetHtml($result)) {
-                self::cacheRender($cacheKey, $result);
-            }
-            return $result;
+            return self::renderRuntimeTemplateContent($widgetTemplateContent, $params);
         }
 
         $widgetPath = $widget['path'] ?? '';
         if (!empty($widgetPath)) {
             $defaultTemplate = $widgetPath . DIRECTORY_SEPARATOR . 'template.phtml';
             if (file_exists($defaultTemplate)) {
-                // 构建模板路径
                 $module = $widget['module'] ?? '';
                 $type = $widget['type'] ?? '';
                 $name = $widget['code'] ?? '';
                 $templatePath = $module . '::widgets/' . $type . '/' . $name . '.phtml';
-                $result = self::renderTemplate($templatePath, $params);
-                if ($cacheKey !== null && self::isCacheableWidgetHtml($result)) {
-                    self::cacheRender($cacheKey, $result);
-                }
-                return $result;
+
+                return self::renderTemplate($templatePath, $params);
             }
         }
 
         return '<!-- Widget 错误: 未找到模板或 Block 类 -->';
-    }
-
-    private static function isCacheableWidgetHtml(string $html): bool
-    {
-        return !str_contains($html, 'name="form_key"')
-            && !str_contains($html, 'name="challenge_token"')
-            && !str_contains($html, 'data-w-challenge-token')
-            && !str_contains($html, 'name="redirect_url"')
-            && !str_contains($html, 'data-social-quick')
-            && !str_contains($html, 'data-w-auth-return')
-            && !str_contains($html, 'data-product-id=')
-            && !str_contains($html, 'product-native-detail');
     }
 
     /**
@@ -310,7 +254,8 @@ class Widget implements TaglibInterface
      *   template_ref?:string,
      *   block_class?:string,
      *   template?:string,
-     *   widget_id?:string
+     *   widget_id?:string,
+     *   cache?:int
      * } $spec
      */
     public static function renderRuntimeInline(array $spec): string
@@ -350,20 +295,46 @@ class Widget implements TaglibInterface
 
             $blockClass = (string)($spec['block_class'] ?? '');
             $template = (string)($spec['template'] ?? '');
-            $renderWidget = static function () use ($widget, $params, $blockClass, $template): string {
-                return self::renderWidget($widget, $params, $blockClass, $template);
+            $instanceTtl = \Weline\Widget\Cache\WidgetOutputCache::normalizeTtl($spec['cache'] ?? null);
+            $metaTtl = \Weline\Widget\Cache\WidgetOutputCache::normalizeTtl($widget['cache'] ?? null);
+            $ttl = $instanceTtl > 0 ? $instanceTtl : $metaTtl;
+            $share = \array_key_exists('share', $spec)
+                ? \Weline\Widget\Cache\WidgetOutputCache::normalizeShare($spec['share'])
+                : \Weline\Widget\Cache\WidgetOutputCache::normalizeShare($widget['share'] ?? null);
+            $templatePath = $template !== '' ? $template : (string)($widget['template'] ?? '');
+            $module = trim((string)($spec['module'] ?? ($widget['module'] ?? '')));
+            $identity = $module . '::' . $type . '::' . ($code !== '' ? $code : $name);
+
+            $renderCore = static function () use ($widget, $params, $blockClass, $template, $code, $name): string {
+                $renderWidget = static function () use ($widget, $params, $blockClass, $template): string {
+                    return self::renderWidget($widget, $params, $blockClass, $template);
+                };
+                $phase = null;
+                if (\class_exists(\Weline\Theme\Service\ThemePdpBudgetPhases::class)) {
+                    $phase = \Weline\Theme\Service\ThemePdpBudgetPhases::forWidgetCode($code !== '' ? $code : $name);
+                }
+
+                return $phase !== null
+                    ? (string)\Weline\Theme\Service\ThemePdpBudgetPhases::measure(
+                        $phase,
+                        $renderWidget,
+                        ['widget_code' => $code !== '' ? $code : $name, 'branch' => 'runtime_inline'],
+                    )
+                    : $renderWidget();
             };
-            $phase = null;
-            if (\class_exists(\Weline\Theme\Service\ThemePdpBudgetPhases::class)) {
-                $phase = \Weline\Theme\Service\ThemePdpBudgetPhases::forWidgetCode($code !== '' ? $code : $name);
-            }
-            $html = $phase !== null
-                ? (string)\Weline\Theme\Service\ThemePdpBudgetPhases::measure(
-                    $phase,
-                    $renderWidget,
-                    ['widget_code' => $code !== '' ? $code : $name, 'branch' => 'runtime_inline'],
-                )
-                : $renderWidget();
+
+            $html = \Weline\Widget\Cache\WidgetOutputCache::remember(
+                $ttl,
+                $ttl > 0 ? \Weline\Widget\Cache\WidgetOutputCache::buildKey([
+                    'identity' => $identity,
+                    'template_path' => $templatePath,
+                    'node_uid' => (string)($spec['widget_id'] ?? $spec['template_ref'] ?? ''),
+                    'layout_name' => \Weline\Widget\Cache\WidgetOutputCache::resolveLayoutName([], $params),
+                    'share' => $share,
+                    'ttl' => $ttl,
+                ], $params) : '',
+                $renderCore,
+            );
             $assetRenderer = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class);
             $html = $assetRenderer->wrap($html, $assetRenderer->render($widget, $params, $template));
 
@@ -372,7 +343,6 @@ class Widget implements TaglibInterface
                 $html = self::wrapWidgetContainer($html, $widgetId, $type, $name, $params);
             }
 
-            $module = trim((string)($spec['module'] ?? ($widget['module'] ?? '')));
             $templateRef = trim((string)($spec['template_ref'] ?? ''));
             if ($templateRef === '') {
                 $templateRef = self::buildTemplateRef($type, $code !== '' ? $code : $name, $module, $params);
@@ -509,22 +479,8 @@ class Widget implements TaglibInterface
         RequestContext::remove(self::REQUEST_STATE_KEY);
     }
 
-    /** @return array<string, string> */
-    private static function renderCache(): array
-    {
-        return self::requestState()['render_cache'];
-    }
-
-    private static function cacheRender(string $cacheKey, string $html): void
-    {
-        $state = self::requestState();
-        $state['render_cache'][$cacheKey] = $html;
-        self::storeRequestState($state);
-    }
-
     /**
      * @return array{
-     *     render_cache: array<string, string>,
      *     render_depth: int,
      *     rendering_templates: array<string, bool>
      * }
@@ -537,7 +493,6 @@ class Widget implements TaglibInterface
         }
 
         return [
-            'render_cache' => is_array($state['render_cache'] ?? null) ? $state['render_cache'] : [],
             'render_depth' => max(0, (int)($state['render_depth'] ?? 0)),
             'rendering_templates' => is_array($state['rendering_templates'] ?? null)
                 ? $state['rendering_templates']

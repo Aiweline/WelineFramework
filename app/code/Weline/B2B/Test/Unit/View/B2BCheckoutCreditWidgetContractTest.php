@@ -13,31 +13,15 @@ final class B2BCheckoutCreditWidgetContractTest extends TestCase
 {
     public function testWidgetDeclaresCheckoutSummaryCreditInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_B2B/widget.php';
-        self::assertFileExists($widgetFile);
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('b2b-checkout-credit', $widgets);
-        $widget = $widgets['b2b-checkout-credit'];
-        self::assertSame(
-            'Weline_B2B::templates/frontend/widgets/checkout-tob-deposit-note.phtml',
-            $widget['template'] ?? null
-        );
-        $injections = $widget['default_injections'] ?? [];
-        self::assertCount(3, $injections);
-        $byLayout = [];
-        foreach ($injections as $row) {
-            $byLayout[(string)($row['layout_type'] ?? '')] = $row;
-        }
-        self::assertSame('checkout-summary-credit', $byLayout['checkout']['slot'] ?? null);
-        self::assertTrue((bool)($byLayout['checkout']['required'] ?? false));
-        self::assertSame('footer-extras', $byLayout['mini-cart']['slot'] ?? null);
-        self::assertTrue((bool)($byLayout['mini-cart']['required'] ?? false));
-        self::assertSame('cart-summary-credit', $byLayout['cart']['slot'] ?? null);
-        self::assertTrue((bool)($byLayout['cart']['required'] ?? false));
-        self::assertContains('footer-extras', $widget['supports'] ?? []);
-        self::assertContains('cart-summary-credit', $widget['supports'] ?? []);
-        self::assertContains('mini-cart', $widget['page_layouts'] ?? []);
-        self::assertContains('cart', $widget['page_layouts'] ?? []);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_B2B/widget.php';
+        $tpl = 'Weline_B2B::templates/frontend/widgets/checkout-tob-deposit-note.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-tob-deposit-note.phtml');
+        self::assertStringContainsString('@widget.code {b2b-checkout-credit}', $src);
+        self::assertStringContainsString('@widget.slot {checkout-summary-credit}', $src);
+        self::assertStringContainsString('"slot":"checkout-summary-credit"', $src);
+        self::assertStringContainsString('"layout_type":"checkout"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testCreditTemplateGatesOnEnabledAndSupportsSurfaces(): void

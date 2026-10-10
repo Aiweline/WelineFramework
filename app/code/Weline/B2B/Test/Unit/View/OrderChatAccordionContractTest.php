@@ -34,17 +34,14 @@ final class OrderChatAccordionContractTest extends TestCase
 
     public function testBackendOrderChatUsesWidgetDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_B2B/widget.php';
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('b2b-backend-order-chat', $widgets);
-        $widget = $widgets['b2b-backend-order-chat'];
-        self::assertSame('backend-order-b2b-chat', $widget['slot'] ?? null);
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('backend-order-view', $injection['layout_type'] ?? null);
-        self::assertSame('backend-order-b2b-chat', $injection['slot'] ?? null);
-
-        $tpl = dirname(__DIR__, 3) . '/view/templates/Backend/widgets/backend-order-chat.phtml';
-        $src = (string) file_get_contents($tpl);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_B2B/widget.php';
+        $tpl = 'Weline_B2B::templates/Backend/widgets/backend-order-chat.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/widgets/backend-order-chat.phtml');
+        self::assertStringContainsString('@widget.code {b2b-backend-order-chat}', $src);
+        self::assertStringContainsString('@widget.slot {backend-order-b2b-chat}', $src);
+        self::assertStringContainsString('"layout_type":"backend-order-view"', $src);
+        self::assertStringContainsString('"slot":"backend-order-b2b-chat"', $src);
         self::assertStringContainsString("chatRole = 'merchant'", $src);
         self::assertStringContainsString('order-chat-accordion.phtml', $src);
         self::assertStringContainsString('data-testid="b2b-backend-order-chat-card"', $src);

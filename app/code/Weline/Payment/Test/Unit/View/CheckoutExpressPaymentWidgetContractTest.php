@@ -10,27 +10,17 @@ final class CheckoutExpressPaymentWidgetContractTest extends TestCase
 {
     public function testExpressPaymentRegistersRequiredDefaultInjectionWithVisibilityToggle(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
-        self::assertFileExists($widgetFile);
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('checkout-express-payment', $widgets);
-        $widget = $widgets['checkout-express-payment'];
-        self::assertSame('checkout-express-payment', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Payment::templates/Frontend/widgets/checkout-express-payment.phtml',
-            $widget['template'] ?? null
-        );
-        self::assertTrue((bool)($widget['params']['enabled']['default'] ?? false));
-        self::assertSame('bool', $widget['params']['enabled']['type'] ?? null);
-        self::assertSame('media_image', $widget['params']['logo']['type'] ?? null);
-        self::assertFalse((bool)($widget['params']['logo']['i18n'] ?? true));
-
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('checkout', $injection['layout_type'] ?? null);
-        self::assertSame('checkout-express-payment', $injection['slot'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
-        self::assertTrue((bool)($injection['config']['enabled'] ?? false));
-        self::assertSame('paypal', $injection['config']['method_code'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
+        $tpl = 'Weline_Payment::templates/Frontend/widgets/checkout-express-payment.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/checkout-express-payment.phtml');
+        self::assertStringContainsString('@widget.code {checkout-express-payment}', $src);
+        self::assertStringContainsString('@widget.slot {checkout-express-payment}', $src);
+        self::assertStringContainsString('"layout_type":"checkout"', $src);
+        self::assertStringContainsString('"slot":"checkout-express-payment"', $src);
+        self::assertStringContainsString('"required":true', $src);
+        self::assertStringContainsString('"enabled":true', $src);
+        self::assertStringContainsString('@param enabled {default=true', $src);
     }
 
     public function testExpressPaymentTemplateIsShopifyLayoutAmazonStyledAndToggleAware(): void

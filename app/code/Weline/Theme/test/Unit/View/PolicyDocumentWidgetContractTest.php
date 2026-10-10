@@ -110,18 +110,15 @@ final class PolicyDocumentWidgetContractTest extends TestCase
 
     public function testWidgetLibraryRegistersLayoutXor(): void
     {
-        $src = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Theme/widget.php'
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
+        $tpl = 'Weline_Theme::theme/frontend/widgets/content/policy-document/default.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/view/theme/frontend/widgets/content/policy-document/default.phtml'
         );
-        self::assertStringContainsString('policy-document/default.phtml', $src);
-        self::assertMatchesRegularExpression(
-            "/policy-document\\/default\\.phtml'[\\s\\S]{0,200}'placement'\\s*=>\\s*'layout'/",
-            $src
-        );
-        self::assertMatchesRegularExpression(
-            "/policy-document\\/default\\.phtml'[\\s\\S]{0,280}'default_injections'\\s*=>\\s*\\[\\]/",
-            $src
-        );
+        self::assertStringContainsString('@widget.code {policy-document}', $src);
+        self::assertStringContainsString('@widget.placement {layout}', $src);
+        self::assertStringContainsString('@widget.default_injections {[]}', $src);
     }
 
     public function testHydrateParamsFillsEmptySectionsForEditorConfig(): void

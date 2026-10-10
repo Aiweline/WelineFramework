@@ -10,22 +10,14 @@ final class FooterPromoteLinkWidgetContractTest extends TestCase
 {
     public function testFooterPromoteLinkRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Affiliate/widget.php';
-        self::assertFileExists($widgetFile);
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('footer-promote-link', $widgets);
-        $widget = $widgets['footer-promote-link'];
-        self::assertSame('footer-partner-links', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Affiliate::templates/frontend/widgets/footer-promote-link.phtml',
-            $widget['template'] ?? null
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('*', $injection['layout_type'] ?? null);
-        self::assertSame('footer-partner-links', $injection['slot'] ?? null);
-        self::assertSame('footer', $injection['area'] ?? null);
-        self::assertSame(10, (int)($injection['sort_order'] ?? -1));
-        self::assertSame('我要推广', $injection['config']['label'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Affiliate/widget.php';
+        $tpl = 'Weline_Affiliate::templates/frontend/widgets/footer-promote-link.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/footer-promote-link.phtml');
+        self::assertStringContainsString('@widget.code {footer-promote-link}', $src);
+        self::assertStringContainsString('@widget.slot {footer-partner-links}', $src);
+        self::assertStringContainsString('"slot":"footer-partner-links"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testFooterPromoteLinkTemplatePointsToAffiliate(): void

@@ -10,9 +10,11 @@ final class CartHelpPaySlotContractTest extends TestCase
 {
     public function testCartDeclaresHelpPaySlotWithoutHardcodedWidget(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Cart/widget.php';
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('cart-summary-help-pay', $widgets['cart-storefront-slots']['slots']);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Cart/widget.php';
+        $catalogTpl = 'Weline_Cart::templates/frontend/widgets/cart-storefront-slots.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $catalogTpl));
+        $catalog = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/cart-storefront-slots.phtml');
+        self::assertStringContainsString('"cart-summary-help-pay"', $catalog);
 
         $tpl = (string) file_get_contents(
             dirname(__DIR__, 3) . '/view/templates/frontend/cart/index.phtml'

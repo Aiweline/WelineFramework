@@ -7,6 +7,8 @@
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {footer-container}
+ * @widget.cache {3600}
+ * @widget.share {true}
  * @widget.name {全局页脚}
  * @widget.description {独立站全局页脚：品牌、服务、法律、社交与语言货币；标准四列保留业务扩展槽。独占底部区域。}
  * @widget.type {footer}
@@ -34,6 +36,9 @@
  * @param legal_links {default=[],type="footer_legal_links",label="法律与政策链接"}
  * @param copyright_text {default="",type="string",label="版权文字",description="留空使用主题默认；可用 year 占位符"}
  * @param site_logo_text {default="",type="string",label="页脚 Logo 文字",description="留空使用当前网站名称；框架占位 Weline/韦林 同样回落到网站名称"}
+ *
+ * @widget.default_injections {[]}
+ * @widget.placement {layout}
  */
 
 use Weline\Framework\Manager\ObjectManager;

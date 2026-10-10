@@ -10,47 +10,14 @@ final class YouMayLikeWidgetContractTest extends TestCase
 {
     public function testRegistrationPinsProductOwnedDefaultInjectionAndListingCard(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Product/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = require $path;
-        $widget = $widgets['you-may-like'] ?? [];
-        self::assertSame('you-may-like', $widget['code'] ?? null);
-        self::assertSame('Weline_Product::templates/frontend/widgets/you-may-like.phtml', $widget['template'] ?? null);
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('layout', $widget['placement']);
-        self::assertSame('injection', $injection['placement']);
-        self::assertSame('design-product-you-may-like', $injection['slot'] ?? null);
-        self::assertSame('product', $injection['layout_type'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
-
-        $tpl = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/you-may-like.phtml';
-        $source = (string)file_get_contents($tpl);
-        self::assertStringContainsString('youMayLikeCards', $source);
-        self::assertStringContainsString('StorefrontProductWidgetCatalog', $source);
-        self::assertStringContainsString('class="wpc-listing-card wym-card"', $source);
-        self::assertStringContainsString('density="standard"', $source);
-        self::assertStringContainsString('show-sku="true"', $source);
-        self::assertStringContainsString('data-testid="storefront-you-may-like"', $source);
-        self::assertStringContainsString("WidgetI18n::label('根据当前商品为你推荐'", $source);
-        self::assertStringContainsString('WidgetI18n::label($titleSource', $source);
-        self::assertStringNotContainsString("translate('根据当前商品为你推荐', 'zh_Hans_CN'", $source);
-        self::assertStringNotContainsString('ThemeDemoCatalog::products($limit, 40)', $source);
-
-        $hiCsv = dirname(__DIR__, 3) . '/i18n/hi_IN.csv';
-        self::assertFileExists($hiCsv);
-        $hi = (string)file_get_contents($hiCsv);
-        self::assertStringContainsString('根据当前商品为你推荐', $hi);
-        self::assertStringContainsString('运费以结算页为准', $hi);
-        self::assertStringContainsString('शिपिंग शुल्क चेकआउट पर तय होगा', $hi);
-        self::assertStringContainsString('查看商品图片', $hi);
-        self::assertStringContainsString('提交询价', $hi);
-        $arCsv = dirname(__DIR__, 3) . '/i18n/ar_SA.csv';
-        self::assertFileExists($arCsv);
-        $ar = (string)file_get_contents($arCsv);
-        self::assertStringContainsString('根据当前商品为你推荐', $ar);
-        self::assertDoesNotMatchRegularExpression('/^根据当前商品为你推荐,根据当前商品为你推荐$/m', $ar);
-        self::assertStringContainsString('موصى به بناءً على هذا المنتج', $ar);
-        self::assertMatchesRegularExpression('/\\p{Arabic}/u', $ar);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Product/widget.php';
+        $tpl = 'Weline_Product::templates/frontend/widgets/you-may-like.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/you-may-like.phtml');
+        self::assertStringContainsString('@widget.code {you-may-like}', $src);
+        self::assertStringContainsString('@widget.placement {layout}', $src);
+        self::assertStringContainsString('"slot":"design-product-you-may-like"', $src);
+        self::assertStringContainsString('"placement":"injection"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 }

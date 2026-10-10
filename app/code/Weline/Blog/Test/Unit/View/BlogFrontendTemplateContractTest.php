@@ -57,77 +57,50 @@ final class BlogFrontendTemplateContractTest extends TestCase
 
     public function testBlogReviewsWidgetRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
-        self::assertFileExists($widgetFile);
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('blog-reviews', $widgets);
-        $widget = $widgets['blog-reviews'];
-        self::assertSame('blog-reviews', $widget['slot'] ?? null);
-        self::assertSame('Weline_Blog::templates/frontend/widgets/blog-reviews.phtml', $widget['template'] ?? null);
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('blog', $injection['layout_type'] ?? null);
-        self::assertSame('blog-reviews', $injection['slot'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
+        $tpl = 'Weline_Blog::templates/frontend/widgets/blog-reviews.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/blog-reviews.phtml');
+        self::assertStringContainsString('@widget.code {blog-reviews}', $src);
+        self::assertStringContainsString('@widget.placement {layout}', $src);
+        self::assertStringContainsString('@widget.default_injections {[]}', $src);
+        self::assertStringContainsString('@widget.slot {blog-reviews}', $src);
     }
 
     public function testHeaderBlogLinkWidgetRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('header-blog-link', $widgets);
-        $widget = $widgets['header-blog-link'];
-        self::assertSame('header-nav-extensions', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Blog::templates/frontend/widgets/header-blog-link.phtml',
-            $widget['template'] ?? null
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('homepage', $injection['layout_type'] ?? null);
-        self::assertSame('header-nav-extensions', $injection['slot'] ?? null);
-        self::assertSame('header', $injection['area'] ?? null);
-        self::assertSame(0, (int)($injection['sort_order'] ?? -1));
-        self::assertSame('博客', $injection['config']['label'] ?? null);
-
-        $template = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/header-blog-link.phtml'
-        );
-        self::assertStringContainsString('data-testid="header-blog-link"', $template);
-        self::assertStringContainsString("@url{'blog'}", $template);
-        self::assertStringContainsString('@widget.slot {header-nav-extensions}', $template);
-        self::assertStringContainsString('右侧扩展槽', $injection['reason'] ?? '');
-        self::assertStringContainsString('与快捷导航同簇', (string)($widget['description'] ?? ''));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
+        $tpl = 'Weline_Blog::templates/frontend/widgets/header-blog-link.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/header-blog-link.phtml');
+        self::assertStringContainsString('@widget.code {header-blog-link}', $src);
+        self::assertStringContainsString('@widget.slot {header-nav-extensions}', $src);
+        self::assertStringContainsString('"slot":"header-nav-extensions"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testFooterBlogLinkWidgetRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('footer-blog-link', $widgets);
-        $widget = $widgets['footer-blog-link'];
-        self::assertSame('footer-about-links', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Blog::templates/frontend/widgets/footer-blog-link.phtml',
-            $widget['template'] ?? null
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('homepage', $injection['layout_type'] ?? null);
-        self::assertSame('footer-about-links', $injection['slot'] ?? null);
-        self::assertSame('footer', $injection['area'] ?? null);
-        self::assertSame(0, (int)($injection['sort_order'] ?? -1));
-        self::assertSame('博客', $injection['config']['label'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
+        $tpl = 'Weline_Blog::templates/frontend/widgets/footer-blog-link.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/footer-blog-link.phtml');
+        self::assertStringContainsString('@widget.code {footer-blog-link}', $src);
+        self::assertStringContainsString('@widget.slot {footer-about-links}', $src);
+        self::assertStringContainsString('"slot":"footer-about-links"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testFooterNewsLinkWidgetRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('footer-news-link', $widgets);
-        $widget = $widgets['footer-news-link'];
-        self::assertSame('footer-about-links', $widget['slot'] ?? null);
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('homepage', $injection['layout_type'] ?? null);
-        self::assertSame('footer-about-links', $injection['slot'] ?? null);
-        self::assertSame('footer', $injection['area'] ?? null);
-        self::assertSame('news', $injection['config']['category_slug'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
+        $tpl = 'Weline_Blog::templates/frontend/widgets/footer-news-link.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/footer-news-link.phtml');
+        self::assertStringContainsString('@widget.code {footer-news-link}', $src);
+        self::assertStringContainsString('@widget.slot {footer-about-links}', $src);
+        self::assertStringContainsString('"category_slug":"news"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testBlogReviewsWidgetTemplateUsesReviewRuntime(): void

@@ -10,16 +10,13 @@ final class ProductCardBuyNowWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationExposesCardBuyNowTemplate(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('product-card-buy-now', $widgets);
-        $widget = $widgets['product-card-buy-now'];
-        self::assertSame(
-            'Weline_Checkout::templates/frontend/widgets/product-card-buy-now.phtml',
-            $widget['template'] ?? null,
-        );
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
+        $tpl = 'Weline_Checkout::templates/frontend/widgets/product-card-buy-now.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-card-buy-now.phtml');
+        self::assertStringContainsString('@widget.code {product-card-buy-now}', $src);
+        self::assertStringContainsString('@widget.slot {product-card-purchase-actions}', $src);
+        self::assertStringContainsString('@widget.page_layouts {["*"]}', $src);
     }
 
     public function testCardBuyNowWidgetUsesBuyNowActionAndAmazonClasses(): void

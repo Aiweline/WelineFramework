@@ -68,7 +68,7 @@ final class MiniCartFooterExtrasNativeOwnerBakeContractTest extends TestCase
         $notice = [
             'node_uid' => 'notice',
             'widget_module' => 'Weline_Order',
-            'widget_type' => 'form',
+            'widget_type' => 'content',
             'widget_code' => 'order-notice',
             'slot_id' => 'footer-extras',
             'source' => 'default_injection',

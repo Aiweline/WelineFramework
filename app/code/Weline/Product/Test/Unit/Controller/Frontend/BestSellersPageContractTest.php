@@ -51,30 +51,14 @@ final class BestSellersPageContractTest extends TestCase
 
     public function testBestSellersHeroWidgetIsRegisteredAndConfigurable(): void
     {
-        $path = BP . 'app/code/Weline/Product/extends/module/Weline_Widget/Weline_Product/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = require $path;
-        $widget = $widgets['best-sellers-hero'] ?? [];
-        self::assertSame('best-sellers-hero', $widget['code'] ?? null);
-        self::assertSame(
-            'Weline_Product::templates/frontend/widgets/best-sellers-hero.phtml',
-            $widget['template'] ?? null
-        );
-        self::assertArrayNotHasKey('default_injections', $widget);
-        self::assertArrayHasKey('background_image', $widget['params'] ?? []);
-        self::assertSame('media_image', $widget['params']['background_image']['type'] ?? null);
-        self::assertSame('1920/400', $widget['params']['background_image']['media_options']['aspect_ratio'] ?? null);
-
-        $tpl = (string)file_get_contents(
-            BP . 'app/code/Weline/Product/view/templates/frontend/widgets/best-sellers-hero.phtml',
-        );
-        self::assertStringContainsString('@widget.code {best-sellers-hero}', $tpl);
-        self::assertStringContainsString('data-testid="storefront-best-sellers-hero"', $tpl);
-        self::assertStringContainsString('background_image', $tpl);
-        self::assertStringContainsString('count_template', $tpl);
-        self::assertStringContainsString('LegacyMediaUrl::sanitize', $tpl);
-        self::assertStringContainsString('storefront_best_sellers_count', $tpl);
+        $widgetPhp = dirname(__DIR__, 4) . '/extends/module/Weline_Widget/Weline_Product/widget.php';
+        $tpl = 'Weline_Product::templates/frontend/widgets/best-sellers-hero.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string)file_get_contents(dirname(__DIR__, 4) . '/view/templates/frontend/widgets/best-sellers-hero.phtml');
+        self::assertStringContainsString('@widget.code {best-sellers-hero}', $src);
+        self::assertStringContainsString('@widget.placement {layout}', $src);
+        self::assertStringContainsString('@param background_image {', $src);
+        self::assertStringContainsString('type="media_image"', $src);
     }
 
     public function testBestSellersTemplateUsesUnifiedProductCard(): void

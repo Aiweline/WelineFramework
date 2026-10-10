@@ -52,7 +52,7 @@ final class ThemeLayoutEntityMaterializer
         $dependencyResolver = new ThemeLayoutTemplateDependencies();
         $dependencies = $dependencyResolver->moduleSources($source, $theme, $identity->area);
         $nodes = $this->selectNodes($contentNodes, false);
-        $nodes = $this->resolvedNodes($nodes, $pageConfigByUid, $identity, $layoutOption, $targetType, $targetId);
+        $nodes = $this->resolvedNodes($nodes, $pageConfigByUid, $identity, $layoutOption, $targetType, $targetId, $layoutType);
         $source = (new LayoutRelationCompiler(null, $theme))->compile($source, $nodes, [], $localeOverrides, $identity);
         $localeMeta = [];
         foreach ($localeOverrides as $locale => $configs) {
@@ -74,7 +74,7 @@ final class ThemeLayoutEntityMaterializer
             $visited[$logical] = true;
             $original = $this->readSource($dependency['origin']);
             $dependencies += $dependencyResolver->moduleSources($original, $theme, $identity->area);
-            $body = (new LayoutRelationCompiler(null, $theme))->compile($original, $nodes, [], $localeOverrides, $identity);
+            $body = (new LayoutRelationCompiler(null, $theme))->compile($original, $nodes, [], $localeOverrides, $identity); // nodes already stamped with layout_type/option
             $dependencyPath = $this->paths->pageSourcePhtml($identity, $layoutType, $layoutOption, $logical, $targetType, $targetId);
             $candidates[$dependencyPath] = $this->metadata($body, [
                 'origin' => $dependency['origin'], 'identity' => $identity->toArray(),
@@ -210,10 +210,13 @@ final class ThemeLayoutEntityMaterializer
         return $configs;
     }
 
-    private function resolvedNodes(array $nodes, array $configs, ThemeVersionIdentity $identity, string $option = 'default', string $targetType = 'global', ?int $targetId = null): array
+    private function resolvedNodes(array $nodes, array $configs, ThemeVersionIdentity $identity, string $option = 'default', string $targetType = 'global', ?int $targetId = null, string $layoutType = ''): array
     {
         $registry = ObjectManager::getInstance(ThemePlaceableRegistry::class);
         $theme = $this->loadTheme($identity);
+        $layoutType = \trim($layoutType);
+        $option = \trim($option) !== '' ? \trim($option) : 'default';
+        $layoutName = $layoutType !== '' ? ($layoutType . '.' . $option) : $option;
         foreach ($nodes as $uid => &$node) {
             $node['node_uid'] = (string)($node['node_uid'] ?? $uid);
             $stored = $configs[$node['node_uid']] ?? $node;
@@ -235,6 +238,10 @@ final class ThemeLayoutEntityMaterializer
                 if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) { $node['config'][$name] = $decoded; }
             }
             $node['layout_option'] = $option;
+            if ($layoutType !== '') {
+                $node['layout_type'] = $layoutType;
+            }
+            $node['layout_name'] = $layoutName;
             $node['scope'] = $identity->canonicalScope;
             $node['target_type'] = $targetType;
             $node['target_id'] = $targetId;

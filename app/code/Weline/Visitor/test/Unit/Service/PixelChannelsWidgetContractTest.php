@@ -18,20 +18,15 @@ final class PixelChannelsWidgetContractTest extends TestCase
 {
     public function testWidgetPhpRegistersPixelChannels(): void
     {
-        $root = dirname(__DIR__, 3);
-        $widgetFile = $root . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
-        self::assertFileExists($widgetFile);
-
-        /** @var array<string, array<string, mixed>> $widgets */
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('pixel_channels', $widgets);
-        $widget = $widgets['pixel_channels'];
-        self::assertSame('pixel_channels', $widget['code']);
-        self::assertSame('table', $widget['type']);
-        self::assertStringContainsString('pixel-channels.phtml', (string)$widget['template']);
-        self::assertSame('dashboard-detail', $widget['slot']);
-        self::assertSame('weline_visitor_event_statistics', $widget['default_injections'][0]['default_view']);
-        self::assertFalse((bool)($widget['default_injections'][0]['required'] ?? true));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
+        $tpl = 'Weline_Visitor::templates/dashboard/widgets/pixel-channels.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/dashboard/widgets/pixel-channels.phtml');
+        self::assertStringContainsString('@widget.code {pixel_channels}', $src);
+        self::assertStringContainsString('@widget.type {table}', $src);
+        self::assertStringContainsString('@widget.slot {dashboard-detail}', $src);
+        self::assertStringContainsString('"default_view":"weline_visitor_event_statistics"', $src);
+        self::assertStringContainsString('"required":false', $src);
     }
 
     public function testWidgetCodeMatchesReportCatalog(): void

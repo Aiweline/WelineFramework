@@ -5,6 +5,20 @@
  * Theme chrome: data-w-component="menu" + floating (same as language/currency).
  *
  * @widget.source {Weline_Websites::css/widgets/scope-switcher.css}
+ *
+ * @widget.code {scope-switcher}
+ * @widget.cache {3600}
+ * @widget.share {true}
+ * @widget.name {范围切换}
+ * @widget.description {前台网站/店铺/渠道范围切换；仅存在非 default 店或渠时显示。}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {scope-switcher}
+ * @widget.supports {["scope-switcher","layout-header-scope-switcher"]}
+ *
+ * @widget.default_injections {[{"layout_type":"homepage","slot":"scope-switcher","area":"header","sort_order":35,"required":true,"reason":"Header chrome 默认提供范围切换入口","config":[]}]}
  */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;

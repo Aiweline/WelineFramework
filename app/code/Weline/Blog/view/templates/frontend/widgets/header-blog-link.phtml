@@ -5,6 +5,8 @@
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {header-blog-link}
+ * @widget.cache {3600}
+ * @widget.share {true}
  * @widget.name {页头博客链接}
  * @widget.description {页头右侧导航扩展槽：博客列表入口；默认注入 header-nav-extensions（与快捷导航同簇）。}
  * @widget.type {navigation}
@@ -13,7 +15,7 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {header-nav-extensions}
  * @widget.supports {["header-blog-link","header-nav-link","layout-header-nav-extensions"]}
- * @widget.default_injections {[{ "layout_type":"homepage", "slot":"header-nav-extensions", "area":"header", "sort_order":0, "required":true, "reason":"页头右侧扩展槽默认展示博客入口（与今日特价等同簇）", "config":{"label":"博客"} }]}
+ * @widget.default_injections {[{"layout_type":"homepage","slot":"header-nav-extensions","area":"header","sort_order":0,"required":true,"reason":"页头右侧扩展槽默认展示博客入口（与今日特价等同簇）","config":{"label":"博客"}}]}
  *
  * @param label {default="博客",type="string",label="链接文字"}
  */

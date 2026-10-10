@@ -18,24 +18,27 @@ final class PixelPaidWidgetContractTest extends TestCase
 {
     public function testWidgetPhpRegistersPixelPaid(): void
     {
-        $root = dirname(__DIR__, 3);
-        $widgetFile = $root . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
-        self::assertFileExists($widgetFile);
-
-        /** @var array<string, array<string, mixed>> $widgets */
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('pixel_paid', $widgets);
-        $widget = $widgets['pixel_paid'];
-        self::assertSame('pixel_paid', $widget['code']);
-        self::assertSame('table', $widget['type']);
-        self::assertStringContainsString('pixel-paid.phtml', (string)$widget['template']);
-        self::assertSame('dashboard-detail', $widget['slot']);
-        self::assertSame('weline_visitor_event_statistics', $widget['default_injections'][0]['default_view']);
-        self::assertFalse((bool)($widget['default_injections'][0]['required'] ?? true));
-        // 与前序部件并存
-        self::assertArrayHasKey('pixel_channels', $widgets);
-        self::assertArrayHasKey('pixel_traffic_type', $widgets);
-        self::assertArrayHasKey('pixel_social', $widgets);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
+        $tpl = 'Weline_Visitor::templates/dashboard/widgets/pixel-paid.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Visitor::templates/dashboard/widgets/pixel-channels.phtml'
+        ));
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Visitor::templates/dashboard/widgets/pixel-traffic-type.phtml'
+        ));
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Visitor::templates/dashboard/widgets/pixel-social.phtml'
+        ));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/dashboard/widgets/pixel-paid.phtml');
+        self::assertStringContainsString('@widget.code {pixel_paid}', $src);
+        self::assertStringContainsString('@widget.type {table}', $src);
+        self::assertStringContainsString('@widget.slot {dashboard-detail}', $src);
+        self::assertStringContainsString('"default_view":"weline_visitor_event_statistics"', $src);
+        self::assertStringContainsString('"required":false', $src);
     }
 
     public function testWidgetCodeMatchesReportCatalogWithPaidFilter(): void

@@ -236,7 +236,8 @@ class Partials extends Block
                 if ($cached['status'] === 'stale') {
                     $this->queuePartialOutputRefresh($cacheKey, $fileName, $dictionary, $policy['ttl']);
                 }
-                return (string)$cached['html'];
+
+                return $this->finalizeStorefrontChromeHtml($type, (string)$cached['html']);
             }
         }
 
@@ -244,11 +245,11 @@ class Partials extends Block
         // Backend chrome stays process-local; historical theme_runtime IPC was too
         // expensive under pool pressure, so shared writes stay on the storefront path only.
         // Head uses storefrontHeadPolicy + theme.head.* keys (page-scoped via seo_fp).
-        // wave9-9s2 P1: solidified complete shell must not re-enter theme.storefront_chrome
-        // Policy builder for header/footer (布局再生回潮). Head assets Policy stays (9s).
-        if ($this->shouldUseSharedStorefrontChromeCache($area, $type)
-            && !$this->shouldBypassStorefrontChromePolicyForSolidifiedShell($type)
-        ) {
+        // wave9-9s2 P1: solidified complete shell must not dogpile-rebuild chrome via
+        // singleflight when a warm L2 exists (布局再生回潮). Head assets Policy stays (9s).
+        // Cold-locale after_ms dig (2026-10-09): full bypass→直渲 made sticky fail across
+        // workers; solidified path now peekPolicy first, rememberPolicy only on miss.
+        if ($this->shouldUseSharedStorefrontChromeCache($area, $type)) {
             try {
                 /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache */
                 $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
@@ -263,9 +264,19 @@ class Partials extends Block
                         $this->partialOutputStaleTtl(),
                     );
                 $logicalPrefix = $typeLc === 'head' ? 'theme.head.' : 'theme.chrome.';
+                $logicalKey = $logicalPrefix . $typeLc . '.' . $cacheKey;
+                $solidifiedPeekFirst = $this->shouldBypassStorefrontChromePolicyForSolidifiedShell($type);
+                if ($solidifiedPeekFirst) {
+                    $peeked = $hotCache->peekPolicy($sharedPolicy, $logicalKey);
+                    if (\is_string($peeked) && !$this->isEmptyPartialHtml($peeked)) {
+                        $this->rememberPartialOutput($cacheKey, $peeked, 'fresh', $policy['ttl']);
+
+                        return $this->finalizeStorefrontChromeHtml($type, $peeked);
+                    }
+                }
                 $html = $hotCache->rememberPolicy(
                     $sharedPolicy,
-                    $logicalPrefix . $typeLc . '.' . $cacheKey,
+                    $logicalKey,
                     $typeLc === 'head'
                         ? fn(): string => $this->renderStorefrontHeadComposedOrMonolithic(
                             $fileName,
@@ -273,11 +284,15 @@ class Partials extends Block
                             $area,
                             \max(60, (int)$policy['ttl']),
                         )
-                        : fn(): string => $this->renderCompiledPartial($fileName, $dictionary),
+                        : fn(): string => $this->renderStorefrontChromeShellForSharedBag(
+                            $fileName,
+                            $dictionary,
+                        ),
                 );
                 if (\is_string($html) && !$this->isEmptyPartialHtml($html)) {
                     $this->rememberPartialOutput($cacheKey, $html, 'fresh', $policy['ttl']);
-                    return $html;
+
+                    return $this->finalizeStorefrontChromeHtml($type, $html);
                 }
             } catch (\Throwable $e) {
                 $this->logPartialCacheDiagnostic('shared_chrome_fallback', [
@@ -288,18 +303,244 @@ class Partials extends Block
             }
         }
 
-        $html = $this->renderCompiledPartial($fileName, $dictionary);
+        $html = $this->renderStorefrontChromeShellForSharedBag($fileName, $dictionary);
         if ($this->isEmptyPartialHtml($html)) {
             $this->logPartialCacheDiagnostic('skip_empty_partial_output_store', [
                 'file' => $fileName,
                 'type' => $type,
                 'cache_key' => $cacheKey,
             ]);
-            return $html;
+
+            return $this->finalizeStorefrontChromeHtml($type, $html);
         }
         $this->rememberPartialOutput($cacheKey, $html, 'fresh', $policy['ttl']);
 
+        return $this->finalizeStorefrontChromeHtml($type, $html);
+    }
+
+    /**
+     * Header/footer shared bag stores lang-only shell HTML: currency-switcher islands
+     * are stripped so the bag can be reused across currencies.
+     *
+     * @param array<string, mixed> $dictionary
+     */
+    private function renderStorefrontChromeShellForSharedBag(string $fileName, array $dictionary): string
+    {
+        return $this->stripChromeCurrencyIslands(
+            $this->renderCompiledPartial($fileName, $dictionary),
+        );
+    }
+
+    /** Serve path: fill currency-switcher islands with the active request currency. */
+    private function finalizeStorefrontChromeHtml(string $type, string $html): string
+    {
+        $typeLc = \strtolower(\trim($type));
+        if ($typeLc !== 'header' && $typeLc !== 'footer') {
+            return $html;
+        }
+
+        return $this->hydrateChromeCurrencyIslands($html);
+    }
+
+    private function stripChromeCurrencyIslands(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        if (\str_contains($html, 'data-weline-chrome-island="currency-switcher"')) {
+            $replaced = \preg_replace(
+                '#(<weline-chrome-island\b[^>]*\bdata-weline-chrome-island="currency-switcher"[^>]*>).*?(</weline-chrome-island>)#is',
+                '$1<!--weline-chrome-island-pending:currency-switcher-->$2',
+                $html,
+            );
+            $html = \is_string($replaced) ? $replaced : $html;
+        }
+
+        // Published-slot / pre-island bags: wrap+clear each switcher root so lang-shell
+        // never bakes a selected currency into the shared header.
+        if (\str_contains($html, 'data-currency-switcher')) {
+            $html = $this->rewriteCurrencySwitcherRoots(
+                $html,
+                '<!--weline-chrome-island-pending:currency-switcher-->',
+            );
+        }
+
         return $html;
+    }
+
+    private function hydrateChromeCurrencyIslands(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        $needsIsland = \str_contains($html, 'data-weline-chrome-island="currency-switcher"')
+            || \str_contains($html, 'data-currency-switcher')
+            || \str_contains($html, '<!--weline-chrome-island-pending:currency-switcher-->');
+        if (!$needsIsland) {
+            return $html;
+        }
+
+        try {
+            $live = $this->renderCurrencySwitcherIslandHtml();
+        } catch (\Throwable $e) {
+            $this->logPartialCacheDiagnostic('chrome_currency_island_hydrate_failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $html;
+        }
+
+        if ($live === '') {
+            return $html;
+        }
+
+        // Live hook already wraps itself in the island; unwrap to avoid nested islands.
+        $liveInner = $live;
+        if (\preg_match(
+            '#^\\s*<weline-chrome-island\\b[^>]*\\bdata-weline-chrome-island="currency-switcher"[^>]*>(.*)</weline-chrome-island>\\s*$#is',
+            $live,
+            $unwrap,
+        )) {
+            $liveInner = $unwrap[1];
+        }
+
+        if (\str_contains($html, 'data-weline-chrome-island="currency-switcher"')) {
+            $replaced = \preg_replace_callback(
+                '#(<weline-chrome-island\b[^>]*\bdata-weline-chrome-island="currency-switcher"[^>]*>).*?(</weline-chrome-island>)#is',
+                static fn(array $m): string => $m[1] . $liveInner . $m[2],
+                $html,
+            );
+            $html = \is_string($replaced) ? $replaced : $html;
+        }
+
+        // Legacy bag without islands (and not already pending): replace baked roots.
+        // Skip when islands already present — rewrite would only re-walk live roots.
+        if (\str_contains($html, 'data-currency-switcher')
+            && !\str_contains($html, 'data-weline-chrome-island="currency-switcher"')
+            && !\str_contains($html, '<!--weline-chrome-island-pending:currency-switcher-->')
+        ) {
+            $html = $this->rewriteCurrencySwitcherRoots($html, $liveInner);
+        }
+
+        return $html;
+    }
+
+    /**
+     * Replace each data-currency-switcher root with an island wrapping $innerHtml.
+     * Skips roots already inside a currency-switcher island.
+     */
+    private function rewriteCurrencySwitcherRoots(string $html, string $innerHtml): string
+    {
+        $needle = 'data-currency-switcher';
+        $offset = 0;
+        $out = '';
+        $len = \strlen($html);
+        while (($pos = \strpos($html, $needle, $offset)) !== false) {
+            $openStart = \strrpos(\substr($html, 0, $pos), '<');
+            if ($openStart === false) {
+                $out .= \substr($html, $offset, $pos - $offset + \strlen($needle));
+                $offset = $pos + \strlen($needle);
+                continue;
+            }
+
+            // Already inside an island — leave as-is (pending or live).
+            // Advance past this needle; stepping by 1 re-hits the same root forever.
+            $lookBehind = \substr($html, \max(0, $openStart - 220), \min(220, $openStart));
+            if (\str_contains($lookBehind, 'data-weline-chrome-island="currency-switcher"')
+                && !\str_contains($lookBehind, '</weline-chrome-island>')
+            ) {
+                $out .= \substr($html, $offset, ($pos + \strlen($needle)) - $offset);
+                $offset = $pos + \strlen($needle);
+                continue;
+            }
+
+            $range = $this->findHtmlElementRange($html, $openStart);
+            if ($range === null) {
+                $out .= \substr($html, $offset, $pos - $offset + \strlen($needle));
+                $offset = $pos + \strlen($needle);
+                continue;
+            }
+
+            [$start, $end] = $range;
+            $out .= \substr($html, $offset, $start - $offset);
+            $out .= '<weline-chrome-island data-weline-chrome-island="currency-switcher" style="display:contents">'
+                . $innerHtml
+                . '</weline-chrome-island>';
+            $offset = $end;
+        }
+        $out .= \substr($html, $offset);
+
+        return $out;
+    }
+
+    /**
+     * @return array{0:int,1:int}|null [start, endExclusive]
+     */
+    private function findHtmlElementRange(string $html, int $openStart): ?array
+    {
+        if (!\preg_match('/\\G<([a-zA-Z][a-zA-Z0-9:-]*)\\b[^>]*>/s', $html, $m, 0, $openStart)) {
+            return null;
+        }
+        $tag = $m[1];
+        $openEnd = $openStart + \strlen($m[0]);
+        $trimmedOpen = \rtrim(\substr($m[0], 0, -1));
+        if (\str_ends_with($trimmedOpen, '/')) {
+            return [$openStart, $openEnd];
+        }
+
+        $depth = 1;
+        $i = $openEnd;
+        $len = \strlen($html);
+        $openNeedle = '<' . $tag;
+        $closeNeedle = '</' . $tag;
+        while ($i < $len && $depth > 0) {
+            $nextOpen = \stripos($html, $openNeedle, $i);
+            $nextClose = \stripos($html, $closeNeedle, $i);
+            if ($nextClose === false) {
+                return null;
+            }
+            if ($nextOpen !== false && $nextOpen < $nextClose) {
+                $after = $nextOpen + \strlen($openNeedle);
+                $ch = $html[$after] ?? '';
+                if ($ch === '>' || $ch === ' ' || $ch === "\n" || $ch === "\t" || $ch === '/' || $ch === "\r") {
+                    if (!\preg_match('/\\G<([a-zA-Z][a-zA-Z0-9:-]*)\\b[^>]*>/s', $html, $om, 0, $nextOpen)) {
+                        return null;
+                    }
+                    $depth++;
+                    $i = $nextOpen + \strlen($om[0]);
+                    continue;
+                }
+                $i = $after;
+                continue;
+            }
+            if (!\preg_match('/\\G<\\/([a-zA-Z][a-zA-Z0-9:-]*)\\s*>/s', $html, $cm, 0, $nextClose)) {
+                return null;
+            }
+            $depth--;
+            $i = $nextClose + \strlen($cm[0]);
+        }
+
+        return $depth === 0 ? [$openStart, $i] : null;
+    }
+
+    private function renderCurrencySwitcherIslandHtml(): string
+    {
+        try {
+            /** @var \Weline\Framework\View\Template $template */
+            $template = ObjectManager::getInstance(\Weline\Framework\View\Template::class);
+            if (\method_exists($template, 'getHook')) {
+                $html = (string)$template->getHook('header-currency-switcher', true);
+                if (\trim($html) !== '') {
+                    return $html;
+                }
+            }
+        } catch (\Throwable) {
+            // Fall through to empty island rather than fail the whole chrome shell.
+        }
+
+        return '';
     }
 
     private function shouldUseSharedStorefrontChromeCache(string $area, string $type): bool
@@ -312,10 +553,11 @@ class Partials extends Block
     }
 
     /**
-     * wave9-9s2 P1: when PublishedSlotHost already solidified (CTX_USE_REACTIVE=false)
-     * and the request is not in the incomplete-shell safety-net window, skip
-     * storefrontChromePolicy remember for header/footer so theme.storefront_chrome
-     * builder does not reappear as layout regeneration. Head keeps website Policy.
+     * wave9-9s2 P1 (+ cold after_ms): when PublishedSlotHost already solidified
+     * (CTX_USE_REACTIVE=false), header/footer use peek-first against
+     * theme.storefront_chrome — HIT skips singleflight builder (no layout
+     * regeneration dogpile); MISS still rememberPolicy to warm L2 for stickiness.
+     * Head keeps website Policy (never peek-first gated here).
      */
     private function shouldBypassStorefrontChromePolicyForSolidifiedShell(string $type): bool
     {
@@ -330,9 +572,8 @@ class Partials extends Block
             if ($reactive !== false) {
                 return false;
             }
-            // Safety-net window still needs live Partial render (may be incomplete).
-            // Do not bypass Policy solely on reactive=false when fragments miss chrome —
-            // process L1 / direct render is enough to avoid shared chrome builder tax.
+            // Safety-net / incomplete shells still peek-first; miss falls through to
+            // rememberPolicy so L2 warms without abandoning shared chrome entirely.
             return true;
         } catch (\Throwable) {
             return false;
@@ -756,8 +997,10 @@ class Partials extends Block
                 // v15：frontend head 升格页级 Policy（request_path+seo_fp）；禁跨 URL 串 SEO。
                 // v16：guest header 键去掉 cart_count/total（种袋 0 vs 探针车导致 846ms miss）。
                 // v17：head Policy website + 瘦键 + assets 片段复用（wave9-9s）。
+                // v18：chrome 大壳 lang-only；货币开关器岛后注水（跨货币共享 shell）。
+                // v19：I18n hook 自带岛标记；无岛旧袋按 data-currency-switcher 回退剥离（防错显币种）。
                 // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v17-head-website-slim',
+                'schema' => 'chrome-partial-v19-currency-island-hook',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',
@@ -797,8 +1040,10 @@ class Partials extends Block
                 // Reuse chrome across routes, but retain KeyBuilder's existing
                 // website_url/host/base_url dimensions: rendered HTML contains
                 // absolute links and cannot cross the actual URL origin.
+                // currency=false: shell bag is lang-only; switcher islands hydrate live.
                 'area' => false,
                 'area_route' => false,
+                'currency' => false,
             ]);
         } catch (\Throwable) {
             return null;
@@ -1211,7 +1456,8 @@ class Partials extends Block
 
         $ttl ??= $this->partialOutputCacheTtl();
         PostResponseTaskQueue::enqueue('theme-partial-output:' . $cacheKey, function () use ($cacheKey, $fileName, $dictionary, $ttl): void {
-            $html = $this->renderCompiledPartial($fileName, $dictionary);
+            // Store lang-shell HTML only; currency islands hydrate on serve.
+            $html = $this->renderStorefrontChromeShellForSharedBag($fileName, $dictionary);
             if (!\is_string($html) || $this->isEmptyPartialHtml($html)) {
                 $this->logPartialCacheDiagnostic('skip_empty_partial_output_refresh', [
                     'cache_key' => $cacheKey,

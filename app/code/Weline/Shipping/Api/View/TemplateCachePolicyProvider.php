@@ -10,6 +10,7 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
 {
     public function policies(): array
     {
+        // Widget HTML uses @widget.cache {seconds} only — do not re-register widget templates here.
         return [
             'output_files' => [
                 'Weline_Shipping::hooks/header-account-links.phtml' => ['context' => 'static'],

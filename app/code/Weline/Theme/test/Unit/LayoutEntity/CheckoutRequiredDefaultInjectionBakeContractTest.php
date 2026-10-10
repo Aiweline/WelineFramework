@@ -58,7 +58,7 @@ final class CheckoutRequiredDefaultInjectionBakeContractTest extends TestCase
                 'node_uid' => 'note',
                 'widget_module' => 'Weline_Order',
                 'widget_code' => 'order-notice',
-                'widget_type' => 'form',
+                'widget_type' => 'content',
                 'is_active' => true,
                 'slot_id' => 'checkout-summary-note',
                 'config' => ['title' => '订单留言'],

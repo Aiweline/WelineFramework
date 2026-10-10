@@ -191,11 +191,17 @@ HTML;
         }
         self::assertFileExists($music);
         self::assertFileExists($cs);
-        $musicInj = (require $music)['store-music']['default_injections'][0] ?? [];
-        $csInj = (require $cs)['customer-service-float']['default_injections'][0] ?? [];
-        self::assertSame('*', $musicInj['layout_type'] ?? null);
-        self::assertSame('*', $csInj['layout_type'] ?? null);
-        self::assertTrue((bool)($musicInj['required'] ?? false));
-        self::assertTrue((bool)($csInj['required'] ?? false));
+        $musicTpl = 'Weline_StoreMusic::templates/frontend/widgets/store-music.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($music, $musicTpl));
+        $musicSrc = (string) file_get_contents(\Weline\Widget\Test\Support\SlimWidgetPhpListing::resolveViewPath($musicTpl));
+        self::assertStringContainsString('"layout_type":"*"', $musicSrc);
+        self::assertStringContainsString('"required":true', $musicSrc);
+
+        $csTpl = 'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($cs, $csTpl));
+        $csView = \Weline\Widget\Test\Support\SlimWidgetPhpListing::resolveViewPath($csTpl);
+        $csSrc = (string) file_get_contents($csView);
+        self::assertStringContainsString('"layout_type":"*"', $csSrc);
+        self::assertStringContainsString('"required":true', $csSrc);
     }
 }

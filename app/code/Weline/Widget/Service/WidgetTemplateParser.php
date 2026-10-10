@@ -23,6 +23,7 @@ use Weline\Framework\View\Template;
  * @widget.slot {search}
  * @widget.supports {["search","layout-header-search"]}
  * @widget.exclusive {true}
+ * @widget.cache {300}
  * 
  * @param placeholder {default="搜索商品...",type="string",label="占位符文字"}
  * @param show_hot_words {default=true,type="bool",label="显示热搜词"}
@@ -212,7 +213,35 @@ class WidgetTemplateParser
             $offset = $i + 1;
         }
 
-        return $result;
+        return $this->normalizeCacheMeta($result);
+    }
+
+    /**
+     * Cache knobs: {@see @widget.cache} TTL seconds; {@see @widget.share} cross-layout bag.
+     * Absent / 0 / off / legacy static|on|true → no output cache. Positive int → enable.
+     * share default false (layout-scoped keys).
+     *
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    private function normalizeCacheMeta(array $meta): array
+    {
+        unset($meta['cache_ttl'], $meta['cache_share']);
+        $share = \Weline\Widget\Cache\WidgetOutputCache::normalizeShare($meta['share'] ?? null);
+        if ($share) {
+            $meta['share'] = true;
+        } else {
+            unset($meta['share']);
+        }
+        $ttl = \Weline\Widget\Cache\WidgetOutputCache::normalizeTtl($meta['cache'] ?? null);
+        if ($ttl < 1) {
+            unset($meta['cache']);
+
+            return $meta;
+        }
+        $meta['cache'] = $ttl;
+
+        return $meta;
     }
 
     /**

@@ -13,35 +13,26 @@ final class CheckoutStorefrontSlotsCatalogContractTest extends TestCase
 {
     public function testCheckoutDeclaresStorefrontSlotCatalogForInjectionDiscovery(): void
     {
-        $widgets = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
-        self::assertIsArray($widgets);
-        self::assertArrayHasKey('checkout-storefront-slots', $widgets);
-
-        $catalog = $widgets['checkout-storefront-slots'];
-        self::assertTrue((bool)($catalog['is_container'] ?? false));
-        self::assertSame('container', $catalog['type'] ?? null);
-        self::assertSame(
-            'Weline_Checkout::templates/frontend/widgets/checkout-storefront-slots.phtml',
-            $catalog['template'] ?? null
-        );
-
-        $slots = $catalog['slots'] ?? [];
-        self::assertIsArray($slots);
-        self::assertArrayHasKey('checkout-express-payment', $slots);
-        self::assertArrayHasKey('checkout-shipping-address', $slots);
-        self::assertArrayHasKey('checkout-tax-identity', $slots);
-        self::assertArrayHasKey('checkout-summary-discount', $slots);
-        self::assertArrayHasKey('checkout-summary-note', $slots);
-        self::assertArrayHasKey('checkout-summary-credit', $slots);
-        self::assertContains('checkout-express-payment', $slots['checkout-express-payment']['accepts'] ?? []);
-        self::assertContains('express-checkout', $slots['checkout-express-payment']['accepts'] ?? []);
-        self::assertContains('checkout-shipping-address', $slots['checkout-shipping-address']['accepts'] ?? []);
-        self::assertContains('checkout-coupon', $slots['checkout-summary-discount']['accepts'] ?? []);
-        self::assertContains('order-notice', $slots['checkout-summary-note']['accepts'] ?? []);
-        self::assertContains('b2b-checkout-credit', $slots['checkout-summary-credit']['accepts'] ?? []);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
+        $tpl = 'Weline_Checkout::templates/frontend/widgets/checkout-storefront-slots.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
 
         $template = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-storefront-slots.phtml';
         self::assertFileExists($template);
-        self::assertStringContainsString('discovery-only', (string)file_get_contents($template));
+        $src = (string)file_get_contents($template);
+        self::assertStringContainsString('discovery-only', $src);
+        self::assertStringContainsString('@widget.code {checkout-storefront-slots}', $src);
+        self::assertStringContainsString('@widget.type {container}', $src);
+        self::assertStringContainsString('@widget.is_container {true}', $src);
+        self::assertStringContainsString('"checkout-express-payment"', $src);
+        self::assertStringContainsString('"checkout-shipping-address"', $src);
+        self::assertStringContainsString('"checkout-tax-identity"', $src);
+        self::assertStringContainsString('"checkout-summary-discount"', $src);
+        self::assertStringContainsString('"checkout-summary-note"', $src);
+        self::assertStringContainsString('"checkout-summary-credit"', $src);
+        self::assertStringContainsString('express-checkout', $src);
+        self::assertStringContainsString('checkout-coupon', $src);
+        self::assertStringContainsString('order-notice', $src);
+        self::assertStringContainsString('b2b-checkout-credit', $src);
     }
 }

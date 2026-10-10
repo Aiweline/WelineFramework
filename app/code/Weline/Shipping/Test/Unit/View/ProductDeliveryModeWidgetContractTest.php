@@ -10,23 +10,15 @@ final class ProductDeliveryModeWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsProductDeliveryModeSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('product-delivery-mode', $widgets);
-        $widget = $widgets['product-delivery-mode'];
-        self::assertSame('product', $widget['type'] ?? null);
-        self::assertSame('product-delivery-mode', $widget['slot'] ?? null);
-        self::assertSame('injection', $widget['placement'] ?? null);
-        self::assertSame(
-            'Weline_Shipping::templates/frontend/widgets/product-delivery-mode.phtml',
-            $widget['template'] ?? null,
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('product-delivery-mode', $injection['slot'] ?? null);
-        self::assertSame('product', $injection['layout_type'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
+        $tpl = 'Weline_Shipping::templates/frontend/widgets/product-delivery-mode.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-delivery-mode.phtml');
+        self::assertStringContainsString('@widget.code {product-delivery-mode}', $src);
+        self::assertStringContainsString('@widget.slot {product-delivery-mode}', $src);
+        self::assertStringContainsString('"layout_type":"product"', $src);
+        self::assertStringContainsString('"slot":"product-delivery-mode"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testWidgetShellIsJsDrivenWithoutBackendBadgeText(): void

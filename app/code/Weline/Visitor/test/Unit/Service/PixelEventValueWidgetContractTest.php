@@ -18,22 +18,23 @@ final class PixelEventValueWidgetContractTest extends TestCase
 {
     public function testWidgetPhpRegistersPixelEventValue(): void
     {
-        $root = dirname(__DIR__, 3);
-        $widgetFile = $root . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
-        self::assertFileExists($widgetFile);
-
-        /** @var array<string, array<string, mixed>> $widgets */
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('pixel_event_value', $widgets);
-        $widget = $widgets['pixel_event_value'];
-        self::assertSame('pixel_event_value', $widget['code']);
-        self::assertSame('table', $widget['type']);
-        self::assertStringContainsString('pixel-event-value.phtml', (string)$widget['template']);
-        self::assertSame('dashboard-detail', $widget['slot']);
-        self::assertSame('weline_visitor_event_statistics', $widget['default_injections'][0]['default_view']);
-        self::assertFalse((bool)($widget['default_injections'][0]['required'] ?? true));
-        self::assertArrayHasKey('pixel_social', $widgets);
-        self::assertArrayHasKey('pixel_value_by_channel', $widgets);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
+        $tpl = 'Weline_Visitor::templates/dashboard/widgets/pixel-event-value.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Visitor::templates/dashboard/widgets/pixel-social.phtml'
+        ));
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Visitor::templates/dashboard/widgets/pixel-value-by-channel.phtml'
+        ));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/dashboard/widgets/pixel-event-value.phtml');
+        self::assertStringContainsString('@widget.code {pixel_event_value}', $src);
+        self::assertStringContainsString('@widget.type {table}', $src);
+        self::assertStringContainsString('@widget.slot {dashboard-detail}', $src);
+        self::assertStringContainsString('"default_view":"weline_visitor_event_statistics"', $src);
+        self::assertStringContainsString('"required":false', $src);
     }
 
     public function testWidgetCodeMatchesReportCatalog(): void

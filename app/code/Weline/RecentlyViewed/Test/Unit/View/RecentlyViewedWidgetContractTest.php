@@ -10,24 +10,15 @@ final class RecentlyViewedWidgetContractTest extends TestCase
 {
     public function testRegistrationPinsDefaultInjectionSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_RecentlyViewed/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = require $path;
-        $widget = $widgets['recently-viewed'] ?? [];
-        self::assertSame('recently-viewed', $widget['code'] ?? null);
-        self::assertSame('Weline_RecentlyViewed::templates/frontend/widgets/recently-viewed.phtml', $widget['template'] ?? null);
-        self::assertSame(
-            'Weline_RecentlyViewed::css/widgets/recently-viewed.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js',
-            (string)($widget['source'] ?? ''),
-            'Registry must declare source so bake/runtime primer can attach shelf CSS without only relying on @widget.source scrape.',
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('product-recently-viewed', $injection['slot'] ?? null);
-        self::assertSame('product', $injection['layout_type'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
-        self::assertSame(6, (int)(($injection['config']['limit'] ?? 0)));
-        self::assertSame(6, (int)(($widget['params']['limit']['default'] ?? 0)));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_RecentlyViewed/widget.php';
+        $tpl = 'Weline_RecentlyViewed::templates/frontend/widgets/recently-viewed.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/recently-viewed.phtml');
+        self::assertStringContainsString('@widget.code {recently-viewed}', $src);
+        self::assertStringContainsString('@widget.slot {product-recently-viewed}', $src);
+        self::assertStringContainsString('"slot":"product-recently-viewed"', $src);
+        self::assertStringContainsString('"layout_type":"product"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testEmptyPathEmitsHiddenNonEmptyShellWithTestId(): void

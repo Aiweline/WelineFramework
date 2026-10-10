@@ -35,7 +35,7 @@
 | 布局 identity 的结构语义（slot → widget 挂载、未译 config） | 否 | Custom / Policy，`vary=[]`，排除 lang/currency/request_id |
 | RESOURCE_I18N / 词典后贴、可译字段 | 是 | 后贴或另键，**保留 locale/lang** |
 | 类型化 file-image 的 usage locale | 媒体边界 | 不进结构身份 |
-| 前台输出 HTML（FPC / chrome partial） | 是 | 普通环境维或 FPC 向量，保留 lang |
+| 前台输出 HTML（FPC / chrome partial） | 是 | 普通环境维或 FPC 向量，保留 lang；chrome 大壳 `theme.storefront_chrome` 仅 `vary=['lang']`，货币开关器岛后注水 |
 
 ## 实现收口
 

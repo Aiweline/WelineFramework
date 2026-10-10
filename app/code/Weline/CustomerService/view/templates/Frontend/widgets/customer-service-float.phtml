@@ -4,6 +4,8 @@
  * 店面悬浮客服浮层：默认注入 footer chrome 槽 storefront-float-end。
  *
  * @widget.code {customer-service-float}
+ * @widget.cache {3600}
+ * @widget.share {true}
  * @widget.name {悬浮客服}
  * @widget.description {右下角客服聊天浮层；默认注入 storefront-float-end；账号页跳过。}
  * @widget.type {content}
@@ -12,7 +14,7 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {storefront-float-end}
  * @widget.supports {["customer-service-float","layout-storefront-float-end","content"]}
- * @widget.default_injections {[{ "layout_type":"homepage", "slot":"storefront-float-end", "area":"footer", "sort_order":100, "required":true, "reason":"店面默认右侧悬浮客服；恢复原始布局后 required 回填", "config":{} }]}
+ * @widget.default_injections {[{"layout_type":"*","slot":"storefront-float-end","area":"footer","sort_order":100,"required":true,"reason":"店面任意布局默认右侧悬浮客服；主题重写布局仍注入，仅可视化卸载可省略","config":[]}]}
  *
  * @var \Weline\Framework\View\Template $this
  */

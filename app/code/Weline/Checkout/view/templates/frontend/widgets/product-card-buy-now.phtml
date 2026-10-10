@@ -4,6 +4,19 @@
  * Checkout-owned buy-now control for product cards.
  *
  * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {product-card-buy-now}
+ * @widget.name {商品卡立即购买}
+ * @widget.description {商品卡片购买操作槽：Cart 加购后跳转结账页。}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {product-card-purchase-actions}
+ * @widget.supports {["product-card-purchase-actions","product-card-buy-now","buy-now"]}
+ *
+ * @widget.cache {3600}
+ * @widget.share {true}
  */
 
 use Weline\Product\Helper\StorefrontOfferResolver;

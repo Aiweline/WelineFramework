@@ -73,7 +73,7 @@ final class LayoutRelationCompiler
             $node = $indexed[$uid];
             if ((array_key_exists('is_active', $node) && !$node['is_active']) || !empty($node['config']['template_deleted']) || ($node['source'] ?? '') === 'user_deleted') { return "''"; }
             $ancestors[$uid] = true;
-            $entry = array_intersect_key($node, array_flip(['node_uid','widget_module','widget_type','widget_code','config','is_active','slot_id','layout_option','scope','target_type','target_id','layout_source','source','source_position']));
+            $entry = array_intersect_key($node, array_flip(['node_uid','widget_module','widget_type','widget_code','config','is_active','slot_id','layout_option','layout_type','layout_name','scope','target_type','target_id','layout_source','source','source_position','cache','share']));
             $sourceParams = json_decode((string)($sourceAttributes['params'] ?? '{}'), true);
             $sourceParams = is_array($sourceParams) ? $sourceParams : [];
             if ($sourceAttributes !== []) {
@@ -85,6 +85,12 @@ final class LayoutRelationCompiler
                 }
                 if (isset($sourceAttributes['source-postion']) || isset($sourceAttributes['source-position'])) {
                     $entry['source_position'] = $sourceAttributes['source-postion'] ?? $sourceAttributes['source-position'];
+                }
+                if (isset($sourceAttributes['cache'])) {
+                    $entry['cache'] = \Weline\Widget\Cache\WidgetOutputCache::normalizeTtl($sourceAttributes['cache']);
+                }
+                if (isset($sourceAttributes['share'])) {
+                    $entry['share'] = \Weline\Widget\Cache\WidgetOutputCache::normalizeShare($sourceAttributes['share']);
                 }
                 if (isset($sourceAttributes['id'])) { $entry['config']['widget_id'] = $sourceAttributes['id']; }
             }

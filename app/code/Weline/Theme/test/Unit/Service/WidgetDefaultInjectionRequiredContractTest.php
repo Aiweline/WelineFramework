@@ -98,9 +98,12 @@ final class WidgetDefaultInjectionRequiredContractTest extends TestCase
     public function testFooterCustomerDeclarationsAreRequired(): void
     {
         $widgetPhp = dirname(__DIR__, 4) . '/Customer/extends/module/Weline_Widget/Weline_Customer/widget.php';
-        self::assertFileExists($widgetPhp);
-        $src = (string)file_get_contents($widgetPhp);
-        self::assertStringContainsString("'required' => true", $src);
-        self::assertStringContainsString('footer-my-account-link', $src);
+        $tpl = 'Weline_Customer::templates/frontend/widgets/footer-my-account-link.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/Customer/view/templates/frontend/widgets/footer-my-account-link.phtml'
+        );
+        self::assertStringContainsString('@widget.code {footer-my-account-link}', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 }

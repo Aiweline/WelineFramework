@@ -5,6 +5,8 @@
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {footer-faq-link}
+ * @widget.cache {3600}
+ * @widget.share {true}
  * @widget.name {页脚 FAQ 链接}
  * @widget.description {页脚帮助扩展槽：跳转 Theme /faq FAQ 布局；默认注入 footer-help-links。}
  * @widget.type {footer}
@@ -15,6 +17,9 @@
  * @widget.supports {["footer-faq-link","layout-footer-help-links"]}
  *
  * @param label {default="FAQ/常见问题",type="string",label="链接文字"}
+ *
+ * @widget.default_injections {[]}
+ * @widget.placement {layout}
  */
 
 use Weline\Theme\Helper\WidgetI18n;

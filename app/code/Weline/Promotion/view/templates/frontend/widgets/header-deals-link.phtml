@@ -5,6 +5,8 @@
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {header-deals-link}
+ * @widget.cache {3600}
+ * @widget.share {true}
  * @widget.name {页头今日特价链接}
  * @widget.description {页头右侧导航扩展槽：今日特价入口（/promotion/deals）；默认注入 header-nav-extensions。}
  * @widget.type {navigation}
@@ -13,7 +15,7 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {header-nav-extensions}
  * @widget.supports {["header-deals-link","header-nav-link","layout-header-nav-extensions"]}
- * @widget.default_injections {[{ "layout_type":"homepage", "slot":"header-nav-extensions", "area":"header", "sort_order":10, "required":true, "reason":"页头右侧扩展槽默认展示今日特价（活动模块）", "config":{"label":"今日特价"} }]}
+ * @widget.default_injections {[{"layout_type":"homepage","slot":"header-nav-extensions","area":"header","sort_order":10,"required":true,"reason":"页头右侧扩展槽默认展示今日特价（活动模块）","config":{"label":"今日特价"}}]}
  *
  * @param label {default="今日特价",type="string",label="链接文字"}
  */

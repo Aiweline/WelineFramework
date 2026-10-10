@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Affiliate',
-    'version' => '1.0.26',
+    'version' => '1.0.30',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Backend' => '*',
@@ -23,5 +23,8 @@ return [
         'Weline_Review' => '*',
         'Weline_Widget' => '*',
         'Weline_Theme' => '*',
+    ],
+    'provides' => [
+        'template_cache_policy.Weline_Affiliate' => \Weline\Affiliate\Api\View\TemplateCachePolicyProvider::class,
     ],
 ];

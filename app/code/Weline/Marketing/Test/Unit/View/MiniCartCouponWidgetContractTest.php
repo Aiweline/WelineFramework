@@ -10,17 +10,16 @@ final class MiniCartCouponWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsMiniCartFooterExtrasSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Marketing/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('mini-cart-coupon', $widgets);
-        $widget = $widgets['mini-cart-coupon'];
-        self::assertSame('footer-extras', $widget['slot'] ?? null);
-        self::assertSame('mini-cart', $widget['page_layouts'][0] ?? null);
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('mini-cart', $injection['layout_type'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Marketing/widget.php';
+        $tpl = 'Weline_Marketing::templates/frontend/widgets/mini-cart-coupon.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/mini-cart-coupon.phtml');
+        self::assertStringContainsString('@widget.code {mini-cart-coupon}', $src);
+        self::assertStringContainsString('@widget.slot {footer-extras}', $src);
+        self::assertStringContainsString('@widget.page_layouts {["mini-cart"]}', $src);
+        self::assertStringContainsString('"layout_type":"mini-cart"', $src);
+        self::assertStringContainsString('"slot":"footer-extras"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testMiniCartCouponTemplateExists(): void

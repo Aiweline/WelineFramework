@@ -13,26 +13,23 @@ final class CartStorefrontSlotsCatalogContractTest extends TestCase
 {
     public function testCartDeclaresStorefrontSlotCatalogForInjectionDiscovery(): void
     {
-        $widgets = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Cart/widget.php';
-        self::assertIsArray($widgets);
-        self::assertArrayHasKey('cart-storefront-slots', $widgets);
-
-        $catalog = $widgets['cart-storefront-slots'];
-        self::assertTrue((bool)($catalog['is_container'] ?? false));
-        self::assertSame('container', $catalog['type'] ?? null);
-
-        $slots = $catalog['slots'] ?? [];
-        self::assertArrayHasKey('cart-summary-discount', $slots);
-        self::assertArrayHasKey('cart-summary-note', $slots);
-        self::assertArrayHasKey('cart-summary-credit', $slots);
-        self::assertContains('cart-coupon', $slots['cart-summary-discount']['accepts'] ?? []);
-        self::assertContains('order-notice', $slots['cart-summary-note']['accepts'] ?? []);
-        self::assertContains('b2b-checkout-credit', $slots['cart-summary-credit']['accepts'] ?? []);
-        self::assertContains('b2b', $slots['cart-summary-credit']['accepts'] ?? []);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Cart/widget.php';
+        $tpl = 'Weline_Cart::templates/frontend/widgets/cart-storefront-slots.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
 
         $template = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/cart-storefront-slots.phtml';
         self::assertFileExists($template);
-        self::assertStringContainsString('discovery-only', (string)file_get_contents($template));
+        $src = (string)file_get_contents($template);
+        self::assertStringContainsString('discovery-only', $src);
+        self::assertStringContainsString('@widget.code {cart-storefront-slots}', $src);
+        self::assertStringContainsString('@widget.type {container}', $src);
+        self::assertStringContainsString('@widget.is_container {true}', $src);
+        self::assertStringContainsString('"cart-summary-discount"', $src);
+        self::assertStringContainsString('"cart-summary-note"', $src);
+        self::assertStringContainsString('"cart-summary-credit"', $src);
+        self::assertStringContainsString('cart-coupon', $src);
+        self::assertStringContainsString('order-notice', $src);
+        self::assertStringContainsString('b2b-checkout-credit', $src);
     }
 
     public function testCartPageSummaryDeclaresCouponAndNoteSlots(): void

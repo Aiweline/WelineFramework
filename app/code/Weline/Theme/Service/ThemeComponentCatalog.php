@@ -90,6 +90,31 @@ class ThemeComponentCatalog
     }
 
     /**
+     * Resolve by module+code when published layout entities still carry a stale widget_type
+     * (e.g. order-notice used to be form, registry is now content).
+     */
+    public function findByModuleCode(
+        string $module,
+        string $code,
+        string $area = 'frontend',
+        ?WelineTheme $theme = null,
+    ): ?ThemeComponentDefinition {
+        $module = trim($module);
+        $code = trim($code);
+        if ($module === '' || $code === '') {
+            return null;
+        }
+        $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
+        foreach ($this->getDefinitions($area, $theme) as $definition) {
+            if ($definition->module === $module && $definition->code === $code) {
+                return $definition;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Resolve slots owned by placeable container components, including external module widgets.
      *
      * @return array<string,mixed>|null

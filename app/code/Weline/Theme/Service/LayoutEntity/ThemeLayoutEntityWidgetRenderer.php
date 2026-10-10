@@ -43,6 +43,15 @@ final class ThemeLayoutEntityWidgetRenderer
         $area = $identity?->area ?? 'frontend';
         $theme = $identity !== null ? $this->themeForRequest($identity->themeId) : null;
         $definition = $this->placeableRegistry->find($module, $type, $code, $theme, $area);
+        if ($definition === null && $module !== '' && $code !== '') {
+            // Published entities may keep a stale widget_type after @widget.type moves
+            // (order-notice: form → content). Fall back by module+code so note/coupon/credit
+            // slots do not collapse to empty HTML comments.
+            $definition = $this->placeableRegistry->findByModuleCode($module, $code, $theme, $area);
+            if ($definition !== null) {
+                $type = (string)$definition->type;
+            }
+        }
         if ($definition === null) {
             return '<!-- theme-layout-entity:unknown-widget:' . \htmlspecialchars($module . '::' . $code, \ENT_QUOTES) . ' -->';
         }
@@ -65,8 +74,50 @@ final class ThemeLayoutEntityWidgetRenderer
         $config['_widget_type'] = $type;
         $config['_widget_code'] = $code;
         $config['_widget_area'] = $area;
+        $layoutOption = \trim((string)($entry['layout_option'] ?? 'default'));
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+        $layoutType = \trim((string)($entry['layout_type'] ?? $entry['page_type'] ?? ''));
+        $layoutName = \Weline\Widget\Cache\WidgetOutputCache::resolveLayoutName([
+            'layout_type' => $layoutType,
+            'layout_option' => $layoutOption,
+            'layout_name' => (string)($entry['layout_name'] ?? ''),
+        ], $config);
+        $config['_layout_option'] = $config['layout_option'] = $layoutOption;
+        if ($layoutType !== '') {
+            $config['_layout_type'] = $config['layout_type'] = $layoutType;
+        }
+        if ($layoutName !== '') {
+            $config['_layout_name'] = $config['layout_name'] = $layoutName;
+        }
         $config['children'] = ResolvedLayoutSlots::legacyChildren($slots);
-        $context = ['area' => $area, 'block_class' => (string)($entry['block_class'] ?? ''), 'template_path' => (string)($entry['template_path'] ?? '')];
+        $instanceTtl = \Weline\Widget\Cache\WidgetOutputCache::normalizeTtl(
+            $entry['cache'] ?? $config['_cache'] ?? $config['cache'] ?? null,
+        );
+        if ($instanceTtl > 0) {
+            $config['_cache'] = $instanceTtl;
+        }
+        $share = null;
+        if (\array_key_exists('share', $entry)) {
+            $share = \Weline\Widget\Cache\WidgetOutputCache::normalizeShare($entry['share']);
+        } elseif (\array_key_exists('share', $config) || \array_key_exists('_share', $config) || \array_key_exists('_cache_share', $config)) {
+            $share = \Weline\Widget\Cache\WidgetOutputCache::normalizeShare(
+                $config['_cache_share'] ?? $config['_share'] ?? $config['share'] ?? false,
+            );
+        } elseif (\Weline\Widget\Cache\WidgetOutputCache::normalizeShare($definition->meta['share'] ?? null)) {
+            $share = true;
+        }
+        if ($share === true) {
+            $config['_share'] = $config['share'] = true;
+        }
+        $context = [
+            'area' => $area,
+            'block_class' => (string)($entry['block_class'] ?? ''),
+            'template_path' => (string)($entry['template_path'] ?? ''),
+            'cache' => $instanceTtl,
+            'share' => $share,
+        ];
         $html = ResolvedLayoutSlots::with($slots, fn(): string => $this->componentRenderer->renderResolved($definition, $config, $theme, $context));
         $attributes = [
             'data-node-uid' => $uid,

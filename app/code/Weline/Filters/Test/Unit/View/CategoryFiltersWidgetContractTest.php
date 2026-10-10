@@ -10,16 +10,14 @@ final class CategoryFiltersWidgetContractTest extends TestCase
 {
     public function testWidgetDeclaresDefaultInjectionsIntoCategoryFiltersSlot(): void
     {
-        $widget = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Filters/widget.php';
-        $cfg = $widget['category-filters'] ?? [];
-
-        self::assertSame('category-filters', $cfg['code'] ?? null);
-        self::assertSame('Weline_Filters::templates/frontend/widgets/category-filters.phtml', $cfg['template'] ?? null);
-        $injections = $cfg['default_injections'] ?? [];
-        self::assertNotEmpty($injections);
-        $slots = array_column($injections, 'slot');
-        self::assertContains('category-filters', $slots);
-        self::assertTrue((bool)($injections[0]['required'] ?? false));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Filters/widget.php';
+        $tpl = 'Weline_Filters::templates/frontend/widgets/category-filters.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/category-filters.phtml');
+        self::assertStringContainsString('@widget.code {category-filters}', $src);
+        self::assertStringContainsString('@widget.default_injections', $src);
+        self::assertStringContainsString('"slot":"category-filters"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testWidgetCssPadsFilterPanelAwayFromSidebarEdge(): void

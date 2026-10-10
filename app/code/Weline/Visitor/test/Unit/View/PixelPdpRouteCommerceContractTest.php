@@ -57,17 +57,13 @@ final class PixelPdpRouteCommerceContractTest extends TestCase
 
     public function testStorefrontPixelBootstrapInjectsProductLayout(): void
     {
-        /** @var array<string, mixed> $widgets */
-        $widgets = require \dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
-        $injections = $widgets['storefront-pixel-bootstrap']['default_injections'] ?? [];
-        $types = [];
-        foreach ($injections as $row) {
-            if (\is_array($row) && !empty($row['layout_type'])) {
-                $types[] = (string) $row['layout_type'];
-            }
-        }
-        self::assertContains('homepage', $types);
-        self::assertContains('product', $types);
-        self::assertContains('checkout', $types);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
+        $tpl = 'Weline_Visitor::templates/frontend/widgets/storefront-pixel-bootstrap.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/storefront-pixel-bootstrap.phtml');
+        self::assertStringContainsString('@widget.code {storefront-pixel-bootstrap}', $src);
+        self::assertStringContainsString('"layout_type":"homepage"', $src);
+        self::assertStringContainsString('"layout_type":"product"', $src);
+        self::assertStringContainsString('"layout_type":"checkout"', $src);
     }
 }

@@ -67,6 +67,15 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
         return $this->componentCatalog->find($module, $type, $code, $area, $theme);
     }
 
+    public function findByModuleCode(
+        string $module,
+        string $code,
+        ?WelineTheme $theme = null,
+        string $area = 'frontend',
+    ): ?ThemeComponentDefinition {
+        return $this->componentCatalog->findByModuleCode($module, $code, $area, $theme);
+    }
+
     public function getParamDefinitions(string $module, string $type, string $code, ?WelineTheme $theme = null, string $area = 'frontend'): array
     {
         $definition = $this->find($module, $type, $code, $theme, $area);

@@ -10,22 +10,15 @@ final class BackendOrderPaymentRecordsWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsOrderPaymentRecordsSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('backend-order-payment-records', $widgets);
-        $widget = $widgets['backend-order-payment-records'];
-        self::assertSame('backend', $widget['area'] ?? null);
-        self::assertSame('backend-order-payment-records', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Payment::templates/Backend/widgets/backend-order-payment-records.phtml',
-            $widget['template'] ?? null,
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('backend-order-payment-records', $injection['slot'] ?? null);
-        self::assertSame('backend-order-view', $injection['layout_type'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
+        $tpl = 'Weline_Payment::templates/Backend/widgets/backend-order-payment-records.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/widgets/backend-order-payment-records.phtml');
+        self::assertStringContainsString('@widget.code {backend-order-payment-records}', $src);
+        self::assertStringContainsString('@widget.slot {backend-order-payment-records}', $src);
+        self::assertStringContainsString('"layout_type":"backend-order-view"', $src);
+        self::assertStringContainsString('"slot":"backend-order-payment-records"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testHookTemplateDelegatesToPaymentWidget(): void
@@ -67,6 +60,9 @@ final class BackendOrderPaymentRecordsWidgetContractTest extends TestCase
         self::assertStringContainsString('payment-record-status-chip', $source);
         self::assertStringContainsString('method_icon_url', $source);
         self::assertStringContainsString('method_label', $source);
+        self::assertStringContainsString('payment-record-entry', $source);
+        self::assertStringContainsString('payment_entry_label', $source);
+        self::assertStringContainsString('data-payment-entry=', $source);
         self::assertStringNotContainsString(
             'data-w-background="success"><?= $esc((string)($payment[\'status\'] ?? \'\'))',
             $source

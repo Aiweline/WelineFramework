@@ -87,19 +87,21 @@ final class RequiredDefaultInjectionRuntimeSafetyNetContractTest extends TestCas
             $music = dirname(__DIR__, 5) . '/StoreMusic/extends/module/Weline_Widget/Weline_StoreMusic/widget.php';
         }
         self::assertFileExists($music);
-        $musicWidgets = require $music;
-        $inj = $musicWidgets['store-music']['default_injections'][0] ?? [];
-        self::assertSame('*', $inj['layout_type'] ?? null);
-        self::assertTrue((bool)($inj['required'] ?? false));
+        $musicTpl = 'Weline_StoreMusic::templates/frontend/widgets/store-music.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($music, $musicTpl));
+        $musicSrc = (string) file_get_contents(\Weline\Widget\Test\Support\SlimWidgetPhpListing::resolveViewPath($musicTpl));
+        self::assertStringContainsString('"layout_type":"*"', $musicSrc);
+        self::assertStringContainsString('"required":true', $musicSrc);
 
         $cs = dirname(__DIR__, 4) . '/CustomerService/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
         if (!is_file($cs)) {
             $cs = dirname(__DIR__, 5) . '/CustomerService/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
         }
         self::assertFileExists($cs);
-        $csWidgets = require $cs;
-        $csInj = $csWidgets['customer-service-float']['default_injections'][0] ?? [];
-        self::assertSame('*', $csInj['layout_type'] ?? null);
-        self::assertTrue((bool)($csInj['required'] ?? false));
+        $csTpl = 'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($cs, $csTpl));
+        $csSrc = (string) file_get_contents(\Weline\Widget\Test\Support\SlimWidgetPhpListing::resolveViewPath($csTpl));
+        self::assertStringContainsString('"layout_type":"*"', $csSrc);
+        self::assertStringContainsString('"required":true', $csSrc);
     }
 }

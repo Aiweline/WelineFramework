@@ -10,17 +10,15 @@ final class CartCouponWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsCartSummaryDiscountSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Marketing/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('cart-coupon', $widgets);
-        $widget = $widgets['cart-coupon'];
-        self::assertSame('cart-summary-discount', $widget['slot'] ?? null);
-        self::assertSame('cart', $widget['page_layouts'][0] ?? null);
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('cart', $injection['layout_type'] ?? null);
-        self::assertSame('cart-summary-discount', $injection['slot'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Marketing/widget.php';
+        $tpl = 'Weline_Marketing::templates/frontend/widgets/cart-coupon.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/cart-coupon.phtml');
+        self::assertStringContainsString('@widget.code {cart-coupon}', $src);
+        self::assertStringContainsString('@widget.slot {cart-summary-discount}', $src);
+        self::assertStringContainsString('@widget.page_layouts {["cart"]}', $src);
+        self::assertStringContainsString('"slot":"cart-summary-discount"', $src);
+        self::assertStringContainsString('"layout_type":"cart"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 }

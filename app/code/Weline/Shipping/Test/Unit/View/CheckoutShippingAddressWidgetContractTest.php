@@ -10,22 +10,15 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsCheckoutShippingAddressSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('checkout-shipping-address', $widgets);
-        $widget = $widgets['checkout-shipping-address'];
-        self::assertSame('content', $widget['type'] ?? null);
-        self::assertSame('checkout-shipping-address', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Shipping::templates/frontend/widgets/checkout-shipping-address.phtml',
-            $widget['template'] ?? null,
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('checkout-shipping-address', $injection['slot'] ?? null);
-        self::assertSame('checkout', $injection['layout_type'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
+        $tpl = 'Weline_Shipping::templates/frontend/widgets/checkout-shipping-address.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-shipping-address.phtml');
+        self::assertStringContainsString('@widget.code {checkout-shipping-address}', $src);
+        self::assertStringContainsString('@widget.slot {checkout-shipping-address}', $src);
+        self::assertStringContainsString('"layout_type":"checkout"', $src);
+        self::assertStringContainsString('"slot":"checkout-shipping-address"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testCheckoutShippingAddressWidgetUsesThemeAddressTag(): void

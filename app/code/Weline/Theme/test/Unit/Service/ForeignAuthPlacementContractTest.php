@@ -13,18 +13,16 @@ final class ForeignAuthPlacementContractTest extends TestCase
 {
     public function testNativeAuthWidgetsHaveNoRequiredForeignInjections(): void
     {
-        $entries = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
         foreach (['login', 'register', 'challenge'] as $form) {
-            $matched = false;
-            foreach ($entries as $entry) {
-                if (!is_array($entry) || ($entry['template'] ?? '') !== 'Weline_Theme::theme/frontend/widgets/form/account-' . $form . '/default.phtml') {
-                    continue;
-                }
-                $matched = true;
-                self::assertSame('layout', $entry['placement'] ?? null);
-                self::assertSame([], $entry['default_injections'] ?? null, $form . ' must not required-inject foreign auth slots');
-            }
-            self::assertTrue($matched, $form);
+            $tpl = 'Weline_Theme::theme/frontend/widgets/form/account-' . $form . '/default.phtml';
+            self::assertTrue(
+                \Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl),
+                $form
+            );
+            $src = (string) file_get_contents(\Weline\Widget\Test\Support\SlimWidgetPhpListing::resolveViewPath($tpl));
+            self::assertStringContainsString('@widget.placement {layout}', $src, $form);
+            self::assertStringContainsString('@widget.default_injections {[]}', $src, $form . ' must not required-inject foreign auth slots');
         }
     }
 }

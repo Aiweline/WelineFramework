@@ -10,20 +10,15 @@ final class ProductBuyNowWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsPurchaseActionsSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('product-buy-now', $widgets);
-        $widget = $widgets['product-buy-now'];
-        self::assertSame('product-purchase-actions', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Checkout::templates/frontend/widgets/product-buy-now.phtml',
-            $widget['template'] ?? null,
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('product-purchase-actions', $injection['slot'] ?? null);
-        self::assertSame('product', $injection['layout_type'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
+        $tpl = 'Weline_Checkout::templates/frontend/widgets/product-buy-now.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-buy-now.phtml');
+        self::assertStringContainsString('@widget.code {product-buy-now}', $src);
+        self::assertStringContainsString('@widget.slot {product-purchase-actions}', $src);
+        self::assertStringContainsString('"layout_type":"product"', $src);
+        self::assertStringContainsString('"slot":"product-purchase-actions"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testWidgetTemplateRedirectsToCheckoutAfterCartAdd(): void

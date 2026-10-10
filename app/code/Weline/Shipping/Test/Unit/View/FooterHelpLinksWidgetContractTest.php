@@ -10,28 +10,26 @@ final class FooterHelpLinksWidgetContractTest extends TestCase
 {
     public function testFooterShippingInfoLinkRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
-        self::assertFileExists($widgetFile);
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('footer-shipping-info-link', $widgets);
-        $widget = $widgets['footer-shipping-info-link'];
-        self::assertSame('footer-help-links', $widget['slot'] ?? null);
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('homepage', $injection['layout_type'] ?? null);
-        self::assertSame('footer-help-links', $injection['slot'] ?? null);
-        self::assertSame(20, (int)($injection['sort_order'] ?? -1));
-        self::assertSame('配送说明', $injection['config']['label'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
+        $tpl = 'Weline_Shipping::templates/frontend/widgets/footer-shipping-info-link.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/footer-shipping-info-link.phtml');
+        self::assertStringContainsString('@widget.code {footer-shipping-info-link}', $src);
+        self::assertStringContainsString('@widget.slot {footer-help-links}', $src);
+        self::assertStringContainsString('"slot":"footer-help-links"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testFooterReturnsPolicyLinkRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('footer-returns-policy-link', $widgets);
-        $widget = $widgets['footer-returns-policy-link'];
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame(30, (int)($injection['sort_order'] ?? -1));
-        self::assertSame('退换政策', $injection['config']['label'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
+        $tpl = 'Weline_Shipping::templates/frontend/widgets/footer-returns-policy-link.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/footer-returns-policy-link.phtml');
+        self::assertStringContainsString('@widget.code {footer-returns-policy-link}', $src);
+        self::assertStringContainsString('@widget.slot {footer-help-links}', $src);
+        self::assertStringContainsString('"slot":"footer-help-links"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testFooterHelpLinkTemplatesPointToGuidePages(): void

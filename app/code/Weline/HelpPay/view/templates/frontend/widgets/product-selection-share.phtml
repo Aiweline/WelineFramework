@@ -1,5 +1,21 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {product-selection-share}
+ * @widget.name {商品纯分享}
+ * @widget.description {PDP 纯分享（selection_share）：预选规格分享给朋友灌入对方购物车。}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product"]}
+ * @widget.slot {product-purchase-actions}
+ * @widget.supports {["product-purchase-actions","selection-share","helppay"]}
+ * @param enabled {default=true,type="bool",label="展示纯分享"}
+ *
+ * @widget.cache {3600}
+ * @widget.share {true}
+ * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-purchase-actions","area":"content","sort_order":40,"required":true,"reason":"商品页默认提供纯分享入口（可关）","config":{"enabled":true}}]}
+ */
 use Weline\Product\Helper\StorefrontOfferResolver;
 
 $enabled = filter_var($this->getData('enabled') ?? true, FILTER_VALIDATE_BOOLEAN);

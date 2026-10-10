@@ -63,11 +63,11 @@ final class CustomerServiceSettingsContractTest extends TestCase
             $moduleRoot . '/view/hooks/Weline_Theme/frontend/layouts/base/float-slot-end.phtml'
         );
 
-        $registry = require $moduleRoot . '/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
-        self::assertArrayHasKey('customer-service-float', $registry);
-        $injection = $registry['customer-service-float']['default_injections'][0] ?? [];
-        self::assertSame('storefront-float-end', $injection['slot'] ?? null);
-        self::assertSame('footer', $injection['area'] ?? null);
-        self::assertTrue(!empty($injection['required']));
+        $widgetPhp = $moduleRoot . '/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
+        $tpl = 'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        self::assertStringContainsString('"slot":"storefront-float-end"', $widget);
+        self::assertStringContainsString('"area":"footer"', $widget);
+        self::assertStringContainsString('"required":true', $widget);
     }
 }

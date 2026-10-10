@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Widget\Cache\WidgetOutputCache;
 use Weline\Framework\View\Template;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Helper\ThemeData;
@@ -103,13 +104,90 @@ class ThemeComponentRenderer
             return '';
         }
 
-        if (is_file($templatePath)) {
-            return $this->wrapWidgetAssets($this->runtimeTemplateMaterializer->renderFile($templatePath, $dictionary), $assets);
+        $ttl = $this->resolveWidgetOutputCacheTtl($definition, $dictionary, $context);
+        $html = WidgetOutputCache::remember(
+            $ttl,
+            $ttl > 0 ? $this->buildWidgetOutputCacheKey($definition, $templatePath, $dictionary, $ttl, $context) : '',
+            function () use ($templatePath, $dictionary): string {
+                if (is_file($templatePath)) {
+                    return (string)$this->runtimeTemplateMaterializer->renderFile($templatePath, $dictionary);
+                }
+                $fetched = $this->template->fetchHtml($templatePath, $dictionary);
+
+                return \is_string($fetched) ? $fetched : '';
+            },
+        );
+
+        return $this->wrapWidgetAssets($html, $assets);
+    }
+
+    /**
+     * Instance cache TTL wins over @widget.cache meta. No template-policy registry fallback for widgets.
+     *
+     * @param array<string, mixed> $dictionary
+     * @param array<string, mixed> $context
+     */
+    private function resolveWidgetOutputCacheTtl(
+        ThemeComponentDefinition $definition,
+        array $dictionary,
+        array $context,
+    ): int {
+        if (!empty($context['preview_mode']) || !empty($context['editor_mode'])) {
+            return 0;
+        }
+        $instance = WidgetOutputCache::normalizeTtl(
+            $context['cache'] ?? $dictionary['_cache'] ?? $dictionary['cache'] ?? null,
+        );
+        if ($instance > 0) {
+            return $instance;
         }
 
-        $html = $this->template->fetchHtml($templatePath, $dictionary);
+        return WidgetOutputCache::normalizeTtl($definition->meta['cache'] ?? 0);
+    }
 
-        return $this->wrapWidgetAssets(is_string($html) ? $html : '', $assets);
+    /**
+     * @param array<string, mixed> $dictionary
+     * @param array<string, mixed> $context
+     */
+    private function buildWidgetOutputCacheKey(
+        ThemeComponentDefinition $definition,
+        string $templatePath,
+        array $dictionary,
+        int $ttl,
+        array $context = [],
+    ): string {
+        $productId = 0;
+        $offerId = 0;
+        if (\class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
+            try {
+                $offer = \Weline\Product\Helper\StorefrontOfferResolver::currentOffer();
+                $productId = max(0, (int)($offer['product_id'] ?? 0));
+                $offerId = max(0, (int)($offer['offer_id'] ?? $offer['product_offer_id'] ?? 0));
+            } catch (\Throwable) {
+            }
+        }
+        if ($productId <= 0) {
+            $productId = max(0, (int)($dictionary['card_product_id'] ?? $dictionary['product_id'] ?? 0));
+        }
+
+        $share = WidgetOutputCache::resolveShare(
+            ['share' => $context['share'] ?? null],
+            \array_merge(
+                \is_array($definition->meta ?? null) ? $definition->meta : [],
+                $dictionary,
+            ),
+        );
+
+        return WidgetOutputCache::buildKey([
+            'identity' => $definition->getIdentity(),
+            'template_path' => $templatePath,
+            'node_uid' => (string)($dictionary['node_uid'] ?? $dictionary['_node_uid'] ?? $dictionary['_widget_instance_key'] ?? ''),
+            'product_id' => $productId,
+            'offer_id' => $offerId,
+            'layout_name' => WidgetOutputCache::resolveLayoutName([], $dictionary),
+            'share' => $share,
+            'ttl' => $ttl,
+        ], $dictionary);
     }
 
     private function wrapWidgetAssets(string $html, string $assets): string

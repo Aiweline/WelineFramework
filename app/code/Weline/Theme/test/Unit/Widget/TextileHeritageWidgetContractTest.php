@@ -12,14 +12,17 @@ final class TextileHeritageWidgetContractTest extends TestCase
 {
     public function testThemeOwnsReusableWidgetWithoutHomepageDefaultInjection(): void
     {
-        $widgets = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
-        $widget = $widgets['textile-heritage'] ?? [];
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
+        $tpl = 'Weline_Theme::theme/frontend/widgets/content/textile-heritage/default.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
 
-        self::assertSame('textile-heritage', $widget['code'] ?? null);
-        self::assertSame('Weline_Theme::theme/frontend/widgets/content/textile-heritage/default.phtml', $widget['template'] ?? null);
-        self::assertSame(['homepage', 'cms_page'], $widget['page_layouts'] ?? null);
-        self::assertSame('manual', $widget['placement'] ?? null);
-        self::assertArrayNotHasKey('default_injections', $widget);
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/theme/frontend/widgets/content/textile-heritage/default.phtml'
+        );
+        self::assertStringContainsString('@widget.code {textile-heritage}', $src);
+        self::assertStringContainsString('@widget.page_layouts {["homepage", "cms_page"]}', $src);
+        self::assertStringContainsString('@widget.placement {manual}', $src);
+        self::assertStringNotContainsString('@widget.default_injections', $src);
     }
 
     public function testCatalogMapsExactlySixRealRasterAssetsWithProvenance(): void

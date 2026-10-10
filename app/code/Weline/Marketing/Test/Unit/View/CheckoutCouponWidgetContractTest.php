@@ -10,21 +10,16 @@ final class CheckoutCouponWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsCheckoutSummaryDiscountSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Marketing/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('checkout-coupon', $widgets);
-        $widget = $widgets['checkout-coupon'];
-        self::assertSame('content', $widget['type'] ?? null);
-        self::assertSame('checkout-summary-discount', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Marketing::templates/frontend/widgets/checkout-coupon.phtml',
-            $widget['template'] ?? null,
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('checkout-summary-discount', $injection['slot'] ?? null);
-        self::assertSame('checkout', $injection['layout_type'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Marketing/widget.php';
+        $tpl = 'Weline_Marketing::templates/frontend/widgets/checkout-coupon.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-coupon.phtml');
+        self::assertStringContainsString('@widget.code {checkout-coupon}', $src);
+        self::assertStringContainsString('@widget.type {content}', $src);
+        self::assertStringContainsString('@widget.slot {checkout-summary-discount}', $src);
+        self::assertStringContainsString('"slot":"checkout-summary-discount"', $src);
+        self::assertStringContainsString('"layout_type":"checkout"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testCheckoutCouponWidgetUsesAmazonLayoutClasses(): void

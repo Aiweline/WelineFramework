@@ -10,21 +10,14 @@ final class FooterCurrencyRatesLinkWidgetContractTest extends TestCase
 {
     public function testFooterCurrencyRatesLinkRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Currency/widget.php';
-        self::assertFileExists($widgetFile);
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('footer-currency-rates-link', $widgets);
-        $widget = $widgets['footer-currency-rates-link'];
-        self::assertSame('footer-payment-account-links', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Currency::templates/Frontend/widgets/footer-currency-rates-link.phtml',
-            $widget['template'] ?? null
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('*', $injection['layout_type'] ?? null);
-        self::assertSame('footer-payment-account-links', $injection['slot'] ?? null);
-        self::assertSame(20, (int)($injection['sort_order'] ?? -1));
-        self::assertSame('货币与汇率', $injection['config']['label'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Currency/widget.php';
+        $tpl = 'Weline_Currency::templates/Frontend/widgets/footer-currency-rates-link.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/footer-currency-rates-link.phtml');
+        self::assertStringContainsString('@widget.code {footer-currency-rates-link}', $src);
+        self::assertStringContainsString('@widget.slot {footer-payment-account-links}', $src);
+        self::assertStringContainsString('"slot":"footer-payment-account-links"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testFooterCurrencyRatesLinkTemplatePointsToCurrency(): void

@@ -18,23 +18,19 @@ final class PixelTrafficTypeWidgetContractTest extends TestCase
 {
     public function testWidgetPhpRegistersPixelTrafficType(): void
     {
-        $root = dirname(__DIR__, 3);
-        $widgetFile = $root . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
-        self::assertFileExists($widgetFile);
-
-        /** @var array<string, array<string, mixed>> $widgets */
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('pixel_traffic_type', $widgets);
-        $widget = $widgets['pixel_traffic_type'];
-        self::assertSame('pixel_traffic_type', $widget['code']);
-        self::assertSame('table', $widget['type']);
-        self::assertStringContainsString('pixel-traffic-type.phtml', (string)$widget['template']);
-        self::assertSame('dashboard-detail', $widget['slot']);
-        self::assertSame('weline_visitor_event_statistics', $widget['default_injections'][0]['default_view']);
-        // E02 注入保持可选；种子布局由 E05 写入 Installer
-        self::assertFalse((bool)($widget['default_injections'][0]['required'] ?? true));
-        // 与 E01 并存，互不覆盖
-        self::assertArrayHasKey('pixel_channels', $widgets);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
+        $tpl = 'Weline_Visitor::templates/dashboard/widgets/pixel-traffic-type.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Visitor::templates/dashboard/widgets/pixel-channels.phtml'
+        ));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/dashboard/widgets/pixel-traffic-type.phtml');
+        self::assertStringContainsString('@widget.code {pixel_traffic_type}', $src);
+        self::assertStringContainsString('@widget.type {table}', $src);
+        self::assertStringContainsString('@widget.slot {dashboard-detail}', $src);
+        self::assertStringContainsString('"default_view":"weline_visitor_event_statistics"', $src);
+        self::assertStringContainsString('"required":false', $src);
     }
 
     public function testWidgetCodeMatchesReportCatalog(): void

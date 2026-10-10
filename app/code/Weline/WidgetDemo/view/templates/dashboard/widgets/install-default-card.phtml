@@ -1,5 +1,18 @@
 <?php
-/** @widget.source {Weline_WidgetDemo::css/widgets/widget-install-default-card.css} */
+/** @widget.source {Weline_WidgetDemo::css/widgets/widget-install-default-card.css}
+ *
+ * @widget.code {install_default_card}
+ * @widget.name {Widget Demo Install Card}
+ * @widget.description {Demo widget used by E2E to verify first DB registration default injection.}
+ * @widget.type {stats}
+ * @widget.area {backend}
+ * @widget.position {["dashboard-side"]}
+ * @widget.page_layouts {["dashboard"]}
+ * @widget.slot {dashboard-side}
+ * @widget.supports {["dashboard-widget","dashboard-slot-side","widget-demo-install"]}
+ *
+ * @widget.default_injections {[{"layout_type":"dashboard","layout_option":"default","target_type":"website","slot":"dashboard-side","area":"content","sort_order":15,"required":true,"reason":"Demo widget should be installed into Dashboard side slot on first DB registration","config":{"demo_label":"first-db-registration","dashboard_layout":{"colSpan":3,"rowSpan":1,"sortOrder":15}}}]}
+ */
 $label = (string)($this->getData('demo_label') ?: 'first-db-registration');
 ?>
 <section class="dashboard-widget widget-demo-install-card" data-widget-demo-install-card>

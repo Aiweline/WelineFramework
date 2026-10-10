@@ -10,14 +10,15 @@ final class CheckoutTaxIdentityWidgetContractTest extends TestCase
 {
     public function testWidgetInjectsCheckoutTaxIdentitySlot(): void
     {
-        $widgets = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Tax/widget.php';
-        self::assertArrayHasKey('checkout-tax-identity', $widgets);
-        $w = $widgets['checkout-tax-identity'];
-        self::assertSame('checkout-tax-identity', $w['slot'] ?? null);
-        $inj = $w['default_injections'][0] ?? [];
-        self::assertSame('checkout', $inj['layout_type'] ?? null);
-        self::assertSame('checkout-tax-identity', $inj['slot'] ?? null);
-        self::assertTrue((bool)($inj['required'] ?? false));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Tax/widget.php';
+        $tpl = 'Weline_Tax::templates/frontend/widgets/checkout-tax-identity.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-tax-identity.phtml');
+        self::assertStringContainsString('@widget.code {checkout-tax-identity}', $src);
+        self::assertStringContainsString('@widget.slot {checkout-tax-identity}', $src);
+        self::assertStringContainsString('"layout_type":"checkout"', $src);
+        self::assertStringContainsString('"slot":"checkout-tax-identity"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testTemplateIsCollapsedDisclosure(): void

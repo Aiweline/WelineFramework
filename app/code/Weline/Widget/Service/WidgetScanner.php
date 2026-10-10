@@ -752,6 +752,7 @@ class WidgetScanner
                 'source' => \is_string($widgetConfig['source'] ?? null)
                     ? \trim((string)$widgetConfig['source'])
                     : '',
+                'cache' => max(0, (int)($widgetConfig['cache'] ?? 0)),
                 'config' => $widgetConfig
             ];
 

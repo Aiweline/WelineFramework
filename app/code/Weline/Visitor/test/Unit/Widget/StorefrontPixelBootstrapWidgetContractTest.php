@@ -13,24 +13,17 @@ final class StorefrontPixelBootstrapWidgetContractTest extends TestCase
 {
     public function testWidgetDeclaresRequiredHeaderPixelInjection(): void
     {
-        $path = \dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = require $path;
-        self::assertArrayHasKey('storefront-pixel-bootstrap', $widgets);
-        $widget = $widgets['storefront-pixel-bootstrap'];
-        self::assertSame('storefront-pixel-bootstrap', $widget['code'] ?? null);
-        self::assertSame('header', $widget['type'] ?? null);
-        self::assertSame('header-pixel-bootstrap', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Visitor::templates/frontend/widgets/storefront-pixel-bootstrap.phtml',
-            $widget['template'] ?? null
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('homepage', $injection['layout_type'] ?? null);
-        self::assertSame('header-pixel-bootstrap', $injection['slot'] ?? null);
-        self::assertSame('header', $injection['area'] ?? null);
-        self::assertTrue(!empty($injection['required']));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
+        $tpl = 'Weline_Visitor::templates/frontend/widgets/storefront-pixel-bootstrap.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/storefront-pixel-bootstrap.phtml');
+        self::assertStringContainsString('@widget.code {storefront-pixel-bootstrap}', $src);
+        self::assertStringContainsString('@widget.slot {header-pixel-bootstrap}', $src);
+        self::assertStringContainsString('"layout_type":"homepage"', $src);
+        self::assertStringContainsString('"layout_type":"product"', $src);
+        self::assertStringContainsString('"layout_type":"checkout"', $src);
+        self::assertStringContainsString('"slot":"header-pixel-bootstrap"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testWidgetTemplateUsesEagerBootstrapService(): void

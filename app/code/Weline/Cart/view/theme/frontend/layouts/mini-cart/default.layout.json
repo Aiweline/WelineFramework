@@ -19,7 +19,7 @@
       "slot_id": "footer-extras",
       "widget_code": "order-notice",
       "widget_module": "Weline_Order",
-      "widget_type": "form",
+      "widget_type": "content",
       "config": {
         "title": "订单留言",
         "placeholder": "如有特殊要求请留言"

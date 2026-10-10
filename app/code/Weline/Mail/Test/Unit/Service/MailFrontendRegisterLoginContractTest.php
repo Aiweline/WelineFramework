@@ -44,19 +44,16 @@ final class MailFrontendRegisterLoginContractTest extends TestCase
 
     public function testWidgetDefaultInjectionsRegisterOnly(): void
     {
-        $widgets = include BP . 'app/code/Weline/Mail/extends/module/Weline_Widget/Weline_Mail/widget.php';
-        self::assertArrayHasKey('account-mail-register', $widgets);
-        self::assertArrayNotHasKey('account-mail-login', $widgets);
-        self::assertSame('account-mail-register-panel', $widgets['account-mail-register']['slot'] ?? null);
-        self::assertSame('injection', $widgets['account-mail-register']['placement']);
-        $injections = $widgets['account-mail-register']['default_injections'];
-        self::assertSame(['account/register', 'account'], array_column($injections, 'layout_type'));
-        self::assertSame(['default', 'auth'], array_column($injections, 'layout_option'));
-        foreach ($injections as $injection) {
-            self::assertSame('account-mail-register-panel', $injection['slot']);
-            self::assertTrue($injection['required']);
-            self::assertSame('panel', $injection['config']['mail_register_variant']);
-        }
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Mail/widget.php';
+        $tpl = 'Weline_Mail::templates/frontend/widgets/account-mail-register.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/account-mail-register.phtml');
+        self::assertStringContainsString('@widget.code {account-mail-register}', $src);
+        self::assertStringContainsString('@widget.slot {account-mail-register-panel}', $src);
+        self::assertStringContainsString('@widget.placement {injection}', $src);
+        self::assertStringContainsString('"layout_type":"account/register"', $src);
+        self::assertStringContainsString('"slot":"account-mail-register-panel"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testFeatureConfigKeysAndDefaults(): void

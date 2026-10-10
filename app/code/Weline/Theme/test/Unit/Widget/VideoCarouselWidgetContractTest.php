@@ -70,19 +70,20 @@ final class VideoCarouselWidgetContractTest extends TestCase
 
     public function testWidgetPhpRegistersVideoCarouselTemplate(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
-        self::assertFileExists($path);
-        $source = (string)file_get_contents($path);
-
-        self::assertStringContainsString(
-            'Weline_Theme::theme/frontend/widgets/video/video-carousel/default.phtml',
-            $source
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Theme::theme/frontend/widgets/video/video-carousel/default.phtml'
+        ));
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Theme::theme/frontend/widgets/video/video-player/default.phtml'
+        ));
+        $src = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/view/theme/frontend/widgets/video/video-carousel/default.phtml'
         );
-        self::assertStringContainsString("'type' => 'video_carousel_items'", $source);
-        self::assertStringContainsString(
-            'Weline_Theme::theme/frontend/widgets/video/video-player/default.phtml',
-            $source
-        );
+        self::assertStringContainsString('@widget.code {video-carousel}', $src);
+        self::assertStringContainsString('type="video_carousel_items"', $src);
     }
 
     public function testHomepageLayoutsDefaultToVideoCarousel(): void

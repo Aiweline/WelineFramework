@@ -20,6 +20,8 @@
  * @param title {default="快捷支付",type="string",label="标题"}
  * @param method_code {default="paypal",type="string",label="支付方式代码"}
  * @param logo {default="",type="media_image",label="快捷支付 Logo",description="从媒体库选择 Logo；留空用支付方式默认图",i18n=false}
+ *
+ * @widget.cache {300}
  */
 
 use Weline\Framework\Manager\ObjectManager;
@@ -27,6 +29,7 @@ use Weline\Payment\Api\PaymentExpressFacadeInterface;
 use Weline\Payment\Service\ExpressCheckoutOrchestrator;
 use Weline\Payment\Service\PaymentMethodIconResolver;
 use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Product\Helper\StorefrontPdpBuyBoxBag;
 use Weline\SystemConfig\Api\ConfigStore;
 use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\WidgetI18n;
@@ -87,14 +90,19 @@ $logoRaw = LegacyMediaUrl::sanitize($this->getData('logo') ?? '');
 $iconResolver = ObjectManager::getInstance(PaymentMethodIconResolver::class);
 
 $expressMethods = [];
-try {
-    $facade = ObjectManager::getInstance(PaymentExpressFacadeInterface::class);
-    if (!$facade instanceof PaymentExpressFacadeInterface) {
-        $facade = new ExpressCheckoutOrchestrator();
+if (class_exists(StorefrontPdpBuyBoxBag::class) && StorefrontPdpBuyBoxBag::hasKey('express_methods')) {
+    $fromBag = StorefrontPdpBuyBoxBag::get('express_methods', []);
+    $expressMethods = is_array($fromBag) ? array_values(array_filter($fromBag, 'is_array')) : [];
+} else {
+    try {
+        $facade = ObjectManager::getInstance(PaymentExpressFacadeInterface::class);
+        if (!$facade instanceof PaymentExpressFacadeInterface) {
+            $facade = new ExpressCheckoutOrchestrator();
+        }
+        $expressMethods = $facade->listExpressMethods([]);
+    } catch (\Throwable) {
+        $expressMethods = [];
     }
-    $expressMethods = $facade->listExpressMethods([]);
-} catch (\Throwable) {
-    $expressMethods = [];
 }
 // Keep a visible slot shell when required injection is present but no method is ready.
 // Empty early-return made the whole express region vanish (looked like widget loss).

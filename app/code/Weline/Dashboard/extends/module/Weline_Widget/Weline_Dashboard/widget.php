@@ -2,125 +2,13 @@
 
 declare(strict_types=1);
 
+/**
+ * 部件清单：只登记模板路径；元数据 / @param / default_injections 一律写在各模板 @widget.*。
+ * 模块：Weline_Dashboard
+ */
 return [
-    'overview_kpi' => [
-        'name' => '后台统计',
-        'description' => '后台 Dashboard 默认统计部件，展示侧栏收敛、面板部件、视图和站点概览。',
-        'type' => 'stats',
-        'code' => 'overview_kpi',
-        'area' => 'backend',
-        'template' => 'Weline_Dashboard::templates/dashboard/widgets/overview-kpi.phtml',
-        'page_layouts' => ['dashboard'],
-        'position' => ['dashboard-summary'],
-        'slot' => 'dashboard-summary',
-        'supports' => ['dashboard-widget', 'dashboard-slot-summary', 'dashboard-stat', 'dashboard-kpi'],
-        'default_injections' => [[
-            'layout_type' => 'dashboard',
-            'layout_option' => 'default',
-            'default_view' => 'default',
-            'target_type' => 'website',
-            'slot' => 'dashboard-summary',
-            'area' => 'content',
-            'sort_order' => 10,
-            'required' => true,
-            'reason' => 'Dashboard 默认面板需要后台统计概览',
-            'config' => [
-                'dashboard_layout' => [
-                    'colSpan' => 4,
-                    'rowSpan' => 1,
-                    'sortOrder' => 10,
-                ],
-            ],
-        ]],
-    ],
-    'activity_trend' => [
-        'name' => '活跃趋势',
-        'description' => '后台 Dashboard 默认趋势图部件。',
-        'type' => 'chart',
-        'code' => 'activity_trend',
-        'area' => 'backend',
-        'template' => 'Weline_Dashboard::templates/dashboard/widgets/activity-trend.phtml',
-        'page_layouts' => ['dashboard'],
-        'position' => ['dashboard-analysis'],
-        'slot' => 'dashboard-analysis',
-        'supports' => ['dashboard-widget', 'dashboard-slot-analysis', 'dashboard-chart', 'dashboard-trend'],
-        'default_injections' => [[
-            'layout_type' => 'dashboard',
-            'layout_option' => 'default',
-            'default_view' => 'default',
-            'target_type' => 'website',
-            'slot' => 'dashboard-analysis',
-            'area' => 'content',
-            'sort_order' => 20,
-            'required' => true,
-            'reason' => 'Dashboard 默认面板需要展示活跃趋势',
-            'config' => [
-                'dashboard_layout' => [
-                    'colSpan' => 5,
-                    'rowSpan' => 2,
-                    'sortOrder' => 20,
-                ],
-            ],
-        ]],
-    ],
-    'system_status' => [
-        'name' => '系统状态',
-        'description' => '后台 Dashboard 默认系统状态表格。',
-        'type' => 'table',
-        'code' => 'system_status',
-        'area' => 'backend',
-        'template' => 'Weline_Dashboard::templates/dashboard/widgets/system-status.phtml',
-        'page_layouts' => ['dashboard'],
-        'position' => ['dashboard-side', 'dashboard-detail'],
-        'slot' => 'dashboard-side',
-        'supports' => ['dashboard-widget', 'dashboard-slot-side', 'dashboard-status', 'dashboard-table'],
-        'default_injections' => [[
-            'layout_type' => 'dashboard',
-            'layout_option' => 'default',
-            'default_view' => 'default',
-            'target_type' => 'website',
-            'slot' => 'dashboard-side',
-            'area' => 'content',
-            'sort_order' => 30,
-            'required' => true,
-            'reason' => 'Dashboard 默认面板需要系统状态监控',
-            'config' => [
-                'dashboard_layout' => [
-                    'colSpan' => 3,
-                    'rowSpan' => 2,
-                    'sortOrder' => 30,
-                ],
-            ],
-        ]],
-    ],
-    'detail_snapshot' => [
-        'name' => '默认明细',
-        'description' => '后台 Dashboard 默认明细表格。',
-        'type' => 'table',
-        'code' => 'detail_snapshot',
-        'area' => 'backend',
-        'template' => 'Weline_Dashboard::templates/dashboard/widgets/detail-snapshot.phtml',
-        'page_layouts' => ['dashboard'],
-        'position' => ['dashboard-detail'],
-        'slot' => 'dashboard-detail',
-        'supports' => ['dashboard-widget', 'dashboard-slot-detail', 'dashboard-table', 'dashboard-list'],
-        'default_injections' => [[
-            'layout_type' => 'dashboard',
-            'layout_option' => 'default',
-            'default_view' => 'default',
-            'target_type' => 'website',
-            'slot' => 'dashboard-detail',
-            'area' => 'content',
-            'sort_order' => 40,
-            'required' => true,
-            'reason' => 'Dashboard 默认面板需要明细快照',
-            'config' => [
-                'dashboard_layout' => [
-                    'colSpan' => 9,
-                    'rowSpan' => 1,
-                    'sortOrder' => 40,
-                ],
-            ],
-        ]],
-    ],
+    'Weline_Dashboard::templates/dashboard/widgets/overview-kpi.phtml',
+    'Weline_Dashboard::templates/dashboard/widgets/activity-trend.phtml',
+    'Weline_Dashboard::templates/dashboard/widgets/system-status.phtml',
+    'Weline_Dashboard::templates/dashboard/widgets/detail-snapshot.phtml',
 ];

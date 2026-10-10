@@ -13,42 +13,36 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
 {
     public function testWidgetPhpRegistersFooterPopupWithRequiredInjections(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Newsletter/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = require $path;
-
-        $footer = $widgets['footer-newsletter'] ?? [];
-        self::assertSame('footer-newsletter', $footer['code'] ?? null);
-        self::assertSame(
-            'Weline_Newsletter::templates/frontend/widgets/footer-newsletter/default.phtml',
-            $footer['template'] ?? null
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Newsletter/widget.php';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Newsletter::templates/frontend/widgets/footer-newsletter/default.phtml'
+        ));
+        $footer = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/footer-newsletter/default.phtml'
         );
-        self::assertSame('footer-above', $footer['slot'] ?? null);
-        self::assertFalse((bool)($footer['exclusive'] ?? true));
-        self::assertContains('layout-footer-above', $footer['supports'] ?? []);
-        self::assertContains('layout-footer-newsletter', $footer['supports'] ?? []);
-        $finj = $footer['default_injections'][0] ?? [];
-        self::assertSame('homepage', $finj['layout_type'] ?? null);
-        self::assertSame('footer-above', $finj['slot'] ?? null);
-        self::assertSame('content', $finj['area'] ?? null);
-        self::assertTrue((bool)($finj['required'] ?? false));
-        self::assertTrue((bool)(($finj['config']['enable_popup'] ?? false)));
-        self::assertSame('deferred', (string)(($finj['config']['popup_trigger'] ?? '')));
-        self::assertTrue((bool)(($footer['params']['enable_popup']['default'] ?? false)));
+        self::assertStringContainsString('@widget.code {footer-newsletter}', $footer);
+        self::assertStringContainsString('@widget.default_injections', $footer);
+        self::assertStringContainsString('"required":true', $footer);
 
-        $popup = $widgets['newsletter-popup'] ?? [];
-        self::assertSame('newsletter-popup', $popup['code'] ?? null);
-        self::assertSame(['*'], $popup['page_layouts'] ?? null);
-        self::assertSame(14, (int)(($popup['params']['cookie_days']['default'] ?? 0)));
-        self::assertSame('deferred', (string)(($popup['params']['trigger']['default'] ?? '')));
-        self::assertSame(15, (int)(($popup['params']['delay_seconds']['default'] ?? 0)));
-        self::assertSame(40, (int)(($popup['params']['scroll_percent']['default'] ?? 0)));
-        self::assertSame(3, (int)(($popup['params']['min_open_seconds']['default'] ?? 0)));
-        // XOR：弹窗由 footer-newsletter enable_popup 内嵌，禁止再 required 注入 content。
-        self::assertSame([], $popup['default_injections'] ?? null);
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Newsletter::templates/frontend/widgets/newsletter-popup/default.phtml'
+        ));
+        $popup = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/newsletter-popup/default.phtml'
+        );
+        self::assertStringContainsString('@widget.code {newsletter-popup}', $popup);
+        self::assertStringContainsString('@widget.default_injections {[]}', $popup);
 
-        self::assertArrayHasKey('sidebar-newsletter', $widgets);
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate(
+            $widgetPhp,
+            'Weline_Newsletter::templates/frontend/widgets/sidebar-newsletter/default.phtml'
+        ));
+        $sidebar = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/sidebar-newsletter/default.phtml'
+        );
+        self::assertStringContainsString('@widget.code {sidebar-newsletter}', $sidebar);
     }
 
     public function testTemplatesExposeStableTestIdsAndTopicsDefaultChecked(): void

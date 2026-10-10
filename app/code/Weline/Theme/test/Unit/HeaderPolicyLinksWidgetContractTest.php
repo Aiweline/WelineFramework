@@ -68,21 +68,9 @@ final class HeaderPolicyLinksWidgetContractTest extends TestCase
 
     public function testWidgetPhpRegistersHeaderPolicyLinksTemplate(): void
     {
-        $widgetFile = dirname(__DIR__, 2) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
-        self::assertFileExists($widgetFile);
-        $widgets = require $widgetFile;
-        $haystack = '';
-        foreach ($widgets as $key => $entry) {
-            if (is_string($entry)) {
-                $haystack .= $entry . "\n";
-            } elseif (is_array($entry)) {
-                $haystack .= (string)($entry['template'] ?? '') . "\n";
-            }
-            if (is_string($key)) {
-                $haystack .= $key . "\n";
-            }
-        }
-        self::assertStringContainsString('header-policy-links/default.phtml', $haystack);
+        $widgetPhp = dirname(__DIR__, 2) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
+        $tpl = 'Weline_Theme::theme/frontend/widgets/header/header-policy-links/default.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
     }
 
     public function testPolicyLinksCssMatchesCategoryNavItemSpacing(): void

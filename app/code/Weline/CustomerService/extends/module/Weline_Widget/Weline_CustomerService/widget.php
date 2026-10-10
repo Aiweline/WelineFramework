@@ -3,101 +3,11 @@
 declare(strict_types=1);
 
 /**
- * CustomerService 前台部件：悬浮客服 + 页脚帮助「联系客服」+ 页头右侧「客户服务」。
- * Theme layouts/partials 禁止内嵌本模块 <w:widget>；靠 default_injections / 拖入补空槽。
+ * 部件清单：只登记模板路径；元数据 / @param / default_injections 一律写在各模板 @widget.*。
+ * 模块：Weline_CustomerService
  */
 return [
-    'customer-service-float' => [
-        'name' => '悬浮客服',
-        'description' => '右下角客服聊天浮层；默认注入 storefront-float-end；账号页跳过。',
-        'type' => 'content',
-        'code' => 'customer-service-float',
-        'area' => 'frontend',
-        'template' => 'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml',
-        'page_layouts' => ['*'],
-        'position' => ['footer'],
-        'slot' => 'storefront-float-end',
-        'supports' => [
-            'customer-service-float',
-            'layout-storefront-float-end',
-            'content',
-        ],
-        'default_injections' => [[
-            'layout_type' => '*',
-            'slot' => 'storefront-float-end',
-            'area' => 'footer',
-            'sort_order' => 100,
-            'required' => true,
-            'reason' => '店面任意布局默认右侧悬浮客服；主题重写布局仍注入，仅可视化卸载可省略',
-            'config' => [],
-        ]],
-        'params' => [],
-    ],
-    'footer-contact-service-link' => [
-        'name' => '页脚联系客服链接',
-        'description' => '页脚帮助中心扩展槽：联系客服入口；点击打开悬浮客服聊天；默认注入 footer-help-links。',
-        'type' => 'footer',
-        'code' => 'footer-contact-service-link',
-        'area' => 'frontend',
-        'template' => 'Weline_CustomerService::templates/Frontend/widgets/footer-contact-service-link.phtml',
-        'page_layouts' => ['*'],
-        'position' => ['footer'],
-        'slot' => 'footer-help-links',
-        'supports' => [
-            'footer-contact-service-link',
-            'layout-footer-help-links',
-        ],
-        'default_injections' => [[
-            'layout_type' => 'homepage',
-            'slot' => 'footer-help-links',
-            'area' => 'footer',
-            'sort_order' => 50,
-            'required' => true,
-            'reason' => '页脚帮助中心默认展示联系客服（打开悬浮聊天）',
-            'config' => [
-                'label' => '联系客服',
-            ],
-        ]],
-        'params' => [
-            'label' => [
-                'default' => '联系客服',
-                'type' => 'string',
-                'label' => '链接文字',
-            ],
-        ],
-    ],
-    'header-contact-service-link' => [
-        'name' => '页头客户服务链接',
-        'description' => '页头右侧导航扩展槽：客户服务入口；点击打开悬浮客服聊天；默认注入 header-nav-extensions。',
-        'type' => 'navigation',
-        'code' => 'header-contact-service-link',
-        'area' => 'frontend',
-        'template' => 'Weline_CustomerService::templates/Frontend/widgets/header-contact-service-link.phtml',
-        'page_layouts' => ['*'],
-        'position' => ['header'],
-        'slot' => 'header-nav-extensions',
-        'supports' => [
-            'header-contact-service-link',
-            'header-nav-link',
-            'layout-header-nav-extensions',
-        ],
-        'default_injections' => [[
-            'layout_type' => 'homepage',
-            'slot' => 'header-nav-extensions',
-            'area' => 'header',
-            'sort_order' => 20,
-            'required' => true,
-            'reason' => '页头右侧扩展槽默认展示客户服务（客服模块打开悬浮聊天）',
-            'config' => [
-                'label' => '客户服务',
-            ],
-        ]],
-        'params' => [
-            'label' => [
-                'default' => '客户服务',
-                'type' => 'string',
-                'label' => '链接文字',
-            ],
-        ],
-    ],
+    'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml',
+    'Weline_CustomerService::templates/Frontend/widgets/footer-contact-service-link.phtml',
+    'Weline_CustomerService::templates/Frontend/widgets/header-contact-service-link.phtml',
 ];

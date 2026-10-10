@@ -14,11 +14,16 @@
  * @widget.description {页头注入 Weline Pixel 引导（eager）；默认安装到 header-pixel-bootstrap}
  * @widget.type {header}
  * @widget.code {storefront-pixel-bootstrap}
+ * @widget.cache {3600}
+ * @widget.share {true}
  * @widget.area {frontend}
  * @widget.page_layouts {["*"]}
  * @widget.position {["header"]}
  * @widget.slot {header-pixel-bootstrap}
  * @widget.supports {["storefront-pixel-bootstrap","layout-header-pixel-bootstrap","pixel-bootstrap"]}
+ *
+ * @widget.default_injections {[{"layout_type":"homepage","slot":"header-pixel-bootstrap","area":"header","sort_order":0,"required":true,"reason":"店面顶栏默认安装像素引导，首屏即可 track，避免结账确认丢事件","config":[]},{"layout_type":"product","slot":"header-pixel-bootstrap","area":"header","sort_order":0,"required":true,"reason":"PDP 顶栏 eager 像素引导：稳定 view_item / add_to_cart，避免 body-end 懒载竞态丢加购","config":[]},{"layout_type":"products","slot":"header-pixel-bootstrap","area":"header","sort_order":0,"required":true,"reason":"商品列表顶栏默认 eager 像素引导","config":[]},{"layout_type":"category","slot":"header-pixel-bootstrap","area":"header","sort_order":0,"required":true,"reason":"分类页顶栏默认 eager 像素引导","config":[]},{"layout_type":"cart","slot":"header-pixel-bootstrap","area":"header","sort_order":0,"required":true,"reason":"购物车顶栏默认 eager 像素引导","config":[]},{"layout_type":"checkout","slot":"header-pixel-bootstrap","area":"header","sort_order":0,"required":true,"reason":"结账顶栏默认 eager 像素引导，避免确认事件静默丢","config":[]}]}
+ * @widget.placement {injection}
  */
 
 use Weline\Framework\Manager\ObjectManager;

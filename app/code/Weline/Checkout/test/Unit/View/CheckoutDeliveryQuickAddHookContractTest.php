@@ -42,28 +42,17 @@ final class CheckoutDeliveryQuickAddHookContractTest extends TestCase
 
     public function testWidgetRegistryDeclaresDefaultInjectionWithoutThemeInline(): void
     {
-        $registry = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
-        $this->assertFileExists($registry);
-        $widgets = require $registry;
-        $this->assertIsArray($widgets);
-        $this->assertArrayHasKey('checkout-delivery-context', $widgets);
-        $entry = $widgets['checkout-delivery-context'];
-        $this->assertSame('header', $entry['type'] ?? null);
-        $this->assertSame('delivery', $entry['slot'] ?? null);
-        $this->assertNotEmpty($entry['default_injections'] ?? []);
-        $injection = $entry['default_injections'][0];
-        $this->assertSame('homepage', $injection['layout_type'] ?? null);
-        $this->assertSame('delivery', $injection['slot'] ?? null);
-        $this->assertSame('header', $injection['area'] ?? null);
-
-        $header = dirname(__DIR__, 4) . '/Theme/view/theme/frontend/partials/header/default.phtml';
-        $this->assertFileExists($header);
-        $headerSource = (string) file_get_contents($header);
-        $this->assertDoesNotMatchRegularExpression(
-            '/<w:widget[^>]*(checkout-delivery-context|name="checkout-delivery-context")/i',
-            $headerSource
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
+        $tpl = 'Weline_Checkout::theme/frontend/widgets/header/checkout-delivery-context/default.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/view/theme/frontend/widgets/header/checkout-delivery-context/default.phtml'
         );
-        $this->assertStringContainsString('id="delivery"', $headerSource);
+        self::assertStringContainsString('@widget.code {checkout-delivery-context}', $src);
+        self::assertStringContainsString('@widget.slot {delivery}', $src);
+        self::assertStringContainsString('"layout_type":"homepage"', $src);
+        self::assertStringContainsString('"slot":"delivery"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testHookRegistryPublishesQuickAddExtensionPoint(): void

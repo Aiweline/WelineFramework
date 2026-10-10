@@ -10,22 +10,18 @@ final class OrderNoticeWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsMiniCartFooterExtrasSlot(): void
     {
-        $path = dirname(__DIR__, 2) . '/extends/module/Weline_Widget/Weline_Order/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('order-notice', $widgets);
-        $widget = $widgets['order-notice'];
-        self::assertSame('footer-extras', $widget['slot'] ?? null);
-        self::assertContains('mini-cart', $widget['page_layouts'] ?? []);
-        self::assertContains('cart', $widget['page_layouts'] ?? []);
-        self::assertContains('checkout', $widget['page_layouts'] ?? []);
-        $injections = $widget['default_injections'] ?? [];
-        self::assertCount(3, $injections);
-        $slots = array_map(static fn(array $row): string => (string)($row['slot'] ?? ''), $injections);
-        self::assertContains('footer-extras', $slots);
-        self::assertContains('cart-summary-note', $slots);
-        self::assertContains('checkout-summary-note', $slots);
+        $widgetPhp = dirname(__DIR__, 2) . '/extends/module/Weline_Widget/Weline_Order/widget.php';
+        $tpl = 'Weline_Order::templates/frontend/widgets/order-notice.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/view/templates/frontend/widgets/order-notice.phtml');
+        self::assertStringContainsString('@widget.code {order-notice}', $src);
+        self::assertStringContainsString('@widget.slot {footer-extras}', $src);
+        self::assertStringContainsString('@widget.page_layouts {["mini-cart","cart","checkout"]}', $src);
+        self::assertStringContainsString('"layout_type":"mini-cart"', $src);
+        self::assertStringContainsString('"layout_type":"cart"', $src);
+        self::assertStringContainsString('"layout_type":"checkout"', $src);
+        self::assertStringContainsString('"slot":"footer-extras"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testOrderNoticeTemplateExists(): void

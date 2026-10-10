@@ -36,6 +36,17 @@ final class SolidifiedControllerTemplateResolver
         if ($selection === null) { return null; }
         [$identity, $layoutIdentity, $authorizedPreview] = $selection;
         RequestContext::set(LayoutIdentity::REQUEST_CONTEXT_KEY, $layoutIdentity);
+        $layoutType = \trim($layoutType);
+        $layoutOption = \trim((string)$layoutIdentity->layoutOption);
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+        if ($layoutType !== '') {
+            RequestContext::set(
+                \Weline\Widget\Cache\WidgetOutputCache::REQUEST_LAYOUT_NAME_KEY,
+                $layoutType . '.' . $layoutOption,
+            );
+        }
         $path = $this->resolveForIdentity($identity, $layoutType, $layoutIdentity->layoutOption, $layoutIdentity->targetType, $layoutIdentity->targetId);
         if ($path !== null) { return $path; }
         // Ordinary storefront requests select existing sources only. Keep the

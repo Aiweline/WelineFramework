@@ -10,26 +10,17 @@ final class FooterHelpCenterLinkWidgetContractTest extends TestCase
 {
     public function testFooterFaqLinkRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 2) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
-        self::assertFileExists($widgetFile);
-        $widgets = require $widgetFile;
-        $found = null;
-        foreach ($widgets as $entry) {
-            if (!is_array($entry)) {
-                continue;
-            }
-            if (($entry['code'] ?? '') === 'footer-faq-link') {
-                $found = $entry;
-                break;
-            }
-        }
-        self::assertNotNull($found);
-        self::assertSame('footer-help-links', $found['slot'] ?? null);
-        $injection = $found['default_injections'][0] ?? [];
-        self::assertSame('homepage', $injection['layout_type'] ?? null);
-        self::assertSame('footer-help-links', $injection['slot'] ?? null);
-        self::assertSame(40, (int)($injection['sort_order'] ?? -1));
-        self::assertSame('FAQ/常见问题', $injection['config']['label'] ?? null);
+        $widgetPhp = dirname(__DIR__, 2) . '/extends/module/Weline_Widget/Weline_Theme/widget.php';
+        $tpl = 'Weline_Theme::theme/frontend/widgets/footer/footer-faq-link/default.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/view/theme/frontend/widgets/footer/footer-faq-link/default.phtml'
+        );
+        self::assertStringContainsString('@widget.code {footer-faq-link}', $src);
+        self::assertStringContainsString('@widget.slot {footer-help-links}', $src);
+        self::assertStringContainsString('@widget.placement {layout}', $src);
+        self::assertStringContainsString('@widget.default_injections {[]}', $src);
+        self::assertStringContainsString('@param label {default="FAQ/常见问题"', $src);
     }
 
     public function testFooterFaqLinkTemplatePointsToThemeFaq(): void

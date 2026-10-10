@@ -1,5 +1,21 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {cart-summary-help-pay}
+ * @widget.name {购物车帮我付}
+ * @widget.description {购物车摘要旁帮我付 CTA；placement.cart 可关；空车隐藏。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["cart"]}
+ * @widget.slot {cart-summary-help-pay}
+ * @widget.supports {["cart-summary-help-pay","help-pay","helppay"]}
+ * @param enabled {default=true,type="bool",label="展示购物车帮我付"}
+ *
+ * @widget.cache {3600}
+ * @widget.share {true}
+ * @widget.default_injections {[{"layout_type":"cart","layout_option":"default","slot":"cart-summary-help-pay","area":"content","sort_order":20,"required":true,"reason":"购物车摘要默认由 HelpPay 注入帮我付（可关）","config":{"enabled":true,"placement":"cart"}}]}
+ */
 $enabled = filter_var($this->getData('enabled') ?? true, FILTER_VALIDATE_BOOLEAN);
 $escape = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 if (!$enabled) {

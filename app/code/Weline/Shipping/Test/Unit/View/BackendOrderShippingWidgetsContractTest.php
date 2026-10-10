@@ -10,30 +10,16 @@ final class BackendOrderShippingWidgetsContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsOrderShipmentSlots(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-
-        self::assertArrayHasKey('backend-order-shipments', $widgets);
-        $detail = $widgets['backend-order-shipments'];
-        self::assertSame('backend', $detail['area'] ?? null);
-        self::assertSame('backend-order-shipments', $detail['slot'] ?? null);
-        self::assertSame(
-            'Weline_Shipping::templates/Backend/widgets/backend-order-shipments.phtml',
-            $detail['template'] ?? null,
-        );
-        $detailInjection = $detail['default_injections'][0] ?? [];
-        self::assertSame('backend-order-shipments', $detailInjection['slot'] ?? null);
-        self::assertSame('backend-order-view', $detailInjection['layout_type'] ?? null);
-        self::assertTrue((bool)($detailInjection['required'] ?? false));
-
-        self::assertArrayHasKey('backend-order-list-shipping', $widgets);
-        $list = $widgets['backend-order-list-shipping'];
-        self::assertSame('backend-order-list-shipping', $list['slot'] ?? null);
-        $listInjection = $list['default_injections'][0] ?? [];
-        self::assertSame('backend-order-list', $listInjection['layout_type'] ?? null);
-        self::assertTrue((bool)($listInjection['required'] ?? false));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
+        $shipmentsTpl = 'Weline_Shipping::templates/Backend/widgets/backend-order-shipments.phtml';
+        $listTpl = 'Weline_Shipping::templates/Backend/widgets/backend-order-list-shipping.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $shipmentsTpl));
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $listTpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/widgets/backend-order-shipments.phtml');
+        self::assertStringContainsString('@widget.code {backend-order-shipments}', $src);
+        self::assertStringContainsString('"required":true', $src);
+        $listSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/widgets/backend-order-list-shipping.phtml');
+        self::assertStringContainsString('@widget.code {backend-order-list-shipping}', $listSrc);
     }
 
     public function testHookTemplatesDelegateToShippingWidgets(): void

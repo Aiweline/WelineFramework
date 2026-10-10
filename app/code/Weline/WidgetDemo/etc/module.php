@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_WidgetDemo',
-    "version" => '1.0.1',
+    "version" => '1.0.2',
     "requires" => [
         'Weline_Dashboard' => '*',
         'Weline_Theme' => '*',

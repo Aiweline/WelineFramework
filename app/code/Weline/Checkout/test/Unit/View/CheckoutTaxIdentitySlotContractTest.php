@@ -30,10 +30,12 @@ final class CheckoutTaxIdentitySlotContractTest extends TestCase
 
     public function testCatalogListsTaxIdentitySlot(): void
     {
-        $widgets = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
-        $slots = $widgets['checkout-storefront-slots']['slots'] ?? [];
-        self::assertArrayHasKey('checkout-tax-identity', $slots);
-        self::assertContains('tax-identity', $slots['checkout-tax-identity']['accepts'] ?? []);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
+        $tpl = 'Weline_Checkout::templates/frontend/widgets/checkout-storefront-slots.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $catalog = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-storefront-slots.phtml');
+        self::assertStringContainsString('"checkout-tax-identity"', $catalog);
+        self::assertStringContainsString('tax-identity', $catalog);
     }
 
     public function testCheckoutPagesForbidSoftFallbackFetchOfShippingAndTaxWidgets(): void

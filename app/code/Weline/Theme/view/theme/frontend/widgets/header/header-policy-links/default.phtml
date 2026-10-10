@@ -6,6 +6,8 @@
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {header-policy-links}
+ * @widget.cache {3600}
+ * @widget.share {true}
  * @widget.name {政策与关于链接}
  * @widget.description {Header 左侧分类后：关于我们直链 + 购物政策下拉（法律与隐私 / 配送与售后）；可关闭单项并新增自定义链接。}
  * @widget.type {header}
@@ -19,6 +21,9 @@
  * @param links {default=[],type="header_policy_links",label="政策与关于链接",description="空则使用 Theme 默认；group=about 顶栏直出，其余进下拉细分分组；名称支持翻译"}
  * @param menu_label {default="购物政策",type="string",label="政策菜单标题"}
  * @param aria_label {default="政策与关于",type="string",label="无障碍标题"}
+ *
+ * @widget.default_injections {[]}
+ * @widget.placement {layout}
  */
 
 use Weline\Theme\Helper\FooterDefaultLinksHelper;

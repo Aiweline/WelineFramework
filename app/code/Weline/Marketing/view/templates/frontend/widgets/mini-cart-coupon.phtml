@@ -1,11 +1,22 @@
 <?php
 /**
+ * @var \Weline\Framework\View\Template $this
+ *
  * @widget.code {mini-cart-coupon}
  * @widget.name {迷你购物车优惠券}
+ * @widget.description {迷你购物车底部优惠券输入，会话绑定后在结账报价时生效。}
  * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["mini-cart"]}
+ * @widget.slot {footer-extras}
+ * @widget.cache {3600}
+ * @widget.supports {["layout-mini-cart-footer-extras","mini-cart-coupon","mini-cart-footer-extras","marketing"]}
+ * @widget.default_injections {[{"layout_type":"mini-cart","layout_option":"default","slot":"footer-extras","area":"footer","sort_order":10,"required":true,"reason":"迷你购物车默认提供优惠券输入","config":{"title":"优惠券","compact":true}}]}
  * @widget.source {Weline_Marketing::css/widgets/checkout-coupon.css,Weline_Marketing::css/widgets/mini-cart-coupon.css}
  *
- * @var \Weline\Framework\View\Template $this
+ * @param title {default="优惠券",type="string",label="标题"}
+ * @param compact {default=true,type="bool",label="紧凑样式"}
  */
 $rawTitle = trim((string)($this->getData('title') ?? ''));
 $title = $rawTitle !== '' ? (string)__($rawTitle) : (string)__('优惠券');

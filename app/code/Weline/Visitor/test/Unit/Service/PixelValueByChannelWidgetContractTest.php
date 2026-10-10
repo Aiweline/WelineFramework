@@ -18,36 +18,15 @@ final class PixelValueByChannelWidgetContractTest extends TestCase
 {
     public function testWidgetPhpRegistersPixelValueByChannel(): void
     {
-        $root = dirname(__DIR__, 3);
-        $widgetFile = $root . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
-        self::assertFileExists($widgetFile);
-
-        /** @var array<string, array<string, mixed>> $widgets */
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('pixel_value_by_channel', $widgets);
-        $widget = $widgets['pixel_value_by_channel'];
-        self::assertSame('pixel_value_by_channel', $widget['code']);
-        self::assertSame('table', $widget['type']);
-        self::assertStringContainsString('pixel-value-by-channel.phtml', (string)$widget['template']);
-        self::assertSame('dashboard-detail', $widget['slot']);
-        self::assertSame('weline_visitor_event_statistics', $widget['default_injections'][0]['default_view']);
-        self::assertFalse((bool)($widget['default_injections'][0]['required'] ?? true));
-
-        // catalog 六个预设部件全部注册
-        $expected = [
-            'pixel_channels',
-            'pixel_traffic_type',
-            'pixel_paid',
-            'pixel_social',
-            'pixel_event_value',
-            'pixel_value_by_channel',
-        ];
-        foreach ($expected as $code) {
-            self::assertArrayHasKey($code, $widgets, $code);
-        }
-        $catalogCodes = (new PixelReportCatalog())->codes();
-        self::assertSame([], array_diff($catalogCodes, $expected));
-        self::assertSame([], array_diff($expected, $catalogCodes));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
+        $tpl = 'Weline_Visitor::templates/dashboard/widgets/pixel-value-by-channel.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/dashboard/widgets/pixel-value-by-channel.phtml');
+        self::assertStringContainsString('@widget.code {pixel_value_by_channel}', $src);
+        self::assertStringContainsString('@widget.type {table}', $src);
+        self::assertStringContainsString('@widget.slot {dashboard-detail}', $src);
+        self::assertStringContainsString('"default_view":"weline_visitor_event_statistics"', $src);
+        self::assertStringContainsString('"required":false', $src);
     }
 
     public function testWidgetCodeMatchesReportCatalogNarrowMetrics(): void

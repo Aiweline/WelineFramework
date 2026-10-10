@@ -7,6 +7,7 @@
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {account-login}
+ * @widget.cache {3600}
  * @widget.name {客户登录}
  * @widget.description {全宽登录舞台：背景铺满，左侧品牌文案，右侧悬浮登录表单}
  * @widget.type {form}
@@ -26,6 +27,9 @@
  * @param promo_trust {default="安全登录 · 订单与优惠同步",type="string",label="舞台信任文案"}
  * @param title {default="登录",type="string",label="表单标题"}
  * @param subtitle {default="使用您的账户继续购物",type="string",label="表单副标题"}
+ *
+ * @widget.default_injections {[]}
+ * @widget.placement {layout}
  */
 
 use Weline\Theme\Helper\LegacyMediaUrl;

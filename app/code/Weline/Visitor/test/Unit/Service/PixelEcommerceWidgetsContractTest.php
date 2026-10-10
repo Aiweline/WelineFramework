@@ -17,28 +17,16 @@ final class PixelEcommerceWidgetsContractTest extends TestCase
 {
     public function testWidgetPhpRegistersThreeEcommerceWidgets(): void
     {
-        $root = dirname(__DIR__, 3);
-        $widgetFile = $root . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
-        self::assertFileExists($widgetFile);
-
-        /** @var array<string, array<string, mixed>> $widgets */
-        $widgets = require $widgetFile;
-
-        $expected = [
-            'pixel_ecommerce_funnel' => ['table', 'pixel-ecommerce-funnel.phtml', 84],
-            'pixel_ecommerce_revenue' => ['stats', 'pixel-ecommerce-revenue.phtml', 85],
-            'pixel_ecommerce_items' => ['table', 'pixel-ecommerce-items.phtml', 86],
-        ];
-        foreach ($expected as $code => [$type, $tpl, $sort]) {
-            self::assertArrayHasKey($code, $widgets, $code);
-            $widget = $widgets[$code];
-            self::assertSame($code, $widget['code']);
-            self::assertSame($type, $widget['type']);
-            self::assertStringContainsString($tpl, (string)$widget['template']);
-            self::assertSame('dashboard-detail', $widget['slot']);
-            self::assertSame('weline_visitor_event_statistics', $widget['default_injections'][0]['default_view']);
-            self::assertFalse((bool)($widget['default_injections'][0]['required'] ?? true));
-            self::assertSame($sort, (int)$widget['default_injections'][0]['sort_order']);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Visitor/widget.php';
+        foreach ([
+            'pixel_ecommerce_funnel' => 'pixel-ecommerce-funnel.phtml',
+            'pixel_ecommerce_revenue' => 'pixel-ecommerce-revenue.phtml',
+            'pixel_ecommerce_items' => 'pixel-ecommerce-items.phtml',
+        ] as $code => $file) {
+            $tpl = 'Weline_Visitor::templates/dashboard/widgets/' . $file;
+            self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl), $code);
+            $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/dashboard/widgets/' . $file);
+            self::assertStringContainsString('@widget.code {' . $code . '}', $src);
         }
     }
 

@@ -106,21 +106,17 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
 
     public function testWidgetPhpRegistersCartMiniCartAndCheckoutInjections(): void
     {
-        $registry = require $this->moduleRoot() . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
-        self::assertArrayHasKey('storefront-money-summary', $registry);
-        $widget = $registry['storefront-money-summary'];
-        self::assertSame(
-            'Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml',
-            $widget['template']
+        $widgetPhp = $this->moduleRoot() . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
+        $tpl = 'Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string)file_get_contents(
+            $this->moduleRoot() . '/view/templates/frontend/widgets/storefront-money-summary/default.phtml'
         );
-        self::assertStringContainsString(
-            'storefront-money-summary.css',
-            (string) ($widget['source'] ?? '')
-        );
-        $slots = array_column($widget['default_injections'], 'slot');
-        self::assertContains('money-summary', $slots);
-        self::assertNotContains('cart-money-summary', $slots);
-        self::assertNotContains('checkout-money-summary', $slots);
+        self::assertStringContainsString('@widget.code {storefront-money-summary}', $src);
+        self::assertStringContainsString('storefront-money-summary.css', $src);
+        self::assertStringContainsString('"slot":"money-summary"', $src);
+        self::assertStringNotContainsString('"slot":"cart-money-summary"', $src);
+        self::assertStringNotContainsString('"slot":"checkout-money-summary"', $src);
     }
 
     public function testMiniCartCssBeatsInverseChromeInkForSubtotalContrast(): void

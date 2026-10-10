@@ -12,12 +12,18 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["product"]}
  * @widget.supports {["layout-product-delivery-mode","product-delivery-mode","shipping-delivery-mode"]}
- * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-delivery-mode","area":"content","sort_order":10,"required":true,"reason":"产品买盒配送徽章由 Shipping 提供","config":{}}]}
+ * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-delivery-mode","area":"content","sort_order":10,"required":true,"reason":"产品买盒配送徽章由 Shipping 提供","config":[]}]}
  * @widget.source {Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Shipping::css/widgets/product-delivery-mode.css,Weline_Shipping::js/widgets/widget-product-delivery-mode-1.js}
+ *
+ * @widget.slot {product-delivery-mode}
+ *
+ * @widget.cache {300}
+ * @widget.placement {injection}
  */
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Product\Helper\StorefrontPdpBuyBoxBag;
 use Weline\Shipping\Service\StorefrontOfferOriginCountryService;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
@@ -50,13 +56,17 @@ if (!$showShell) {
     return;
 }
 
-$offerId = max(0, (int)($offer['offer_id'] ?? $offer['product_offer_id'] ?? 0));
 $originCountry = '';
-try {
-    $originCountry = ObjectManager::getInstance(StorefrontOfferOriginCountryService::class)
-        ->resolveForOffer($offerId);
-} catch (\Throwable) {
-    $originCountry = '';
+if (class_exists(StorefrontPdpBuyBoxBag::class) && StorefrontPdpBuyBoxBag::hasKey('origin_country')) {
+    $originCountry = trim((string)StorefrontPdpBuyBoxBag::get('origin_country', ''));
+} else {
+    // Guest-safe SSR: default warehouse only — never planPackages / resolveForOffer.
+    try {
+        $originCountry = ObjectManager::getInstance(StorefrontOfferOriginCountryService::class)
+            ->resolveDefaultOriginCountry();
+    } catch (\Throwable) {
+        $originCountry = '';
+    }
 }
 
 $labels = [

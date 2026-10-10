@@ -6,6 +6,8 @@
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {all-menu}
+ * @widget.cache {3600}
+ * @widget.share {true}
  * @widget.name {全部菜单}
  * @widget.description {Header「全部」按钮与抽屉导航树；默认可在横向分类条前置「全部商品」入口（可关）。}
  * @widget.type {navigation}
@@ -21,6 +23,9 @@
  * @param all_products_label {default="全部商品",type="string",label="全部商品文案"}
  * @param all_products_url {default="/products",type="string",label="全部商品链接"}
  * @param menu_tree {default=[],type="all_menu_tree",label="导航树"}
+ *
+ * @widget.default_injections {[]}
+ * @widget.placement {layout}
  */
 
 use Weline\Theme\Helper\WidgetI18n;

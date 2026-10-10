@@ -10,29 +10,15 @@ final class ProductReviewsWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsDefaultInjectionSlot(): void
     {
-        $path = dirname(__DIR__, 5) . '/extends/module/Weline_Widget/Weline_Review/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertIsArray($widgets);
-        self::assertArrayHasKey('product-reviews', $widgets);
-        $widget = $widgets['product-reviews'];
-        $widgetSource = (string)file_get_contents($path);
-        self::assertSame('product-reviews', $widget['slot'] ?? null);
-        self::assertSame('comment', $widget['type'] ?? null);
-        self::assertSame('Weline_Review::templates/frontend/widgets/product-reviews.phtml', $widget['template'] ?? null);
-        self::assertStringContainsString("'placement' => 'injection'", $widgetSource);
-        self::assertSame('injection', $widgets['product-reviews']['placement'] ?? null);
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('product-reviews', $injection['slot'] ?? null);
-        self::assertSame('product', $injection['layout_type'] ?? null);
-        self::assertTrue((bool)($injection['required'] ?? false));
-
-        $hook = (string)file_get_contents(
-            dirname(__DIR__, 5) . '/view/hooks/Weline_Review/frontend/layouts/product-reviews/content.phtml'
-        );
-        self::assertStringNotContainsString('fetch(', $hook);
-        self::assertStringContainsString('placement=injection', $hook);
+        $widgetPhp = dirname(__DIR__, 5) . '/extends/module/Weline_Widget/Weline_Review/widget.php';
+        $tpl = 'Weline_Review::templates/frontend/widgets/product-reviews.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 5) . '/view/templates/frontend/widgets/product-reviews.phtml');
+        self::assertStringContainsString('@widget.code {product-reviews}', $src);
+        self::assertStringContainsString('@widget.slot {product-reviews}', $src);
+        self::assertStringContainsString('"slot":"product-reviews"', $src);
+        self::assertStringContainsString('"layout_type":"product"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testWidgetTemplateUsesThemeTokensExternalAssetsAndNoInlineScript(): void
@@ -67,20 +53,34 @@ final class ProductReviewsWidgetContractTest extends TestCase
         self::assertStringContainsString('w-review-media__dialog-body', $css);
         self::assertStringNotContainsString('#0b0d0f', $css);
         self::assertStringNotContainsString('#df2029', $css);
+        // @media 条件禁止 var(--breakpoint-*)（浏览器忽略整条规则）
+        self::assertStringNotContainsString('@media (max-width: var(', $css);
+        self::assertStringContainsString('@media (max-width: 768px)', $css);
+        self::assertStringContainsString('@media (max-width: 1024px)', $css);
+        self::assertStringContainsString('repeat(auto-fit, minmax(min(100%, var(--token-size-12rem)), 1fr))', $css);
+        self::assertStringContainsString('writing-mode: horizontal-tb', $css);
+        self::assertStringContainsString(
+            ".weline-review__write-toggle {\n        justify-self: stretch;\n        width: 100%;",
+            $css
+        );
+        // 窄屏能力条去边框/底，避免部件内再套一层盒
+        self::assertStringContainsString(
+            ".weline-review__media-capabilities span {\n        min-height: 0;\n        padding: var(--spacing-1) 0;\n        border: 0;\n        border-radius: 0;\n        background: transparent;",
+            $css
+        );
     }
 
     public function testWidgetRegistrationExposesLayoutConfigParams(): void
     {
-        $path = dirname(__DIR__, 5) . '/extends/module/Weline_Widget/Weline_Review/widget.php';
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        $params = $widgets['product-reviews']['params'] ?? [];
-        self::assertSame('stack', $params['layout_mode']['default'] ?? null);
-        self::assertSame('right', $params['form_position']['default'] ?? null);
-        self::assertSame('1', $params['form_collapsed']['default'] ?? null);
-        $config = $widgets['product-reviews']['default_injections'][0]['config'] ?? [];
-        self::assertSame('stack', $config['layout_mode'] ?? null);
-        self::assertSame('1', $config['form_collapsed'] ?? null);
+        $widgetPhp = dirname(__DIR__, 5) . '/extends/module/Weline_Widget/Weline_Review/widget.php';
+        $tpl = 'Weline_Review::templates/frontend/widgets/product-reviews.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 5) . '/view/templates/frontend/widgets/product-reviews.phtml');
+        self::assertStringContainsString('@param layout_mode {default="stack"', $src);
+        self::assertStringContainsString('@param form_position {default="right"', $src);
+        self::assertStringContainsString('@param form_collapsed {default="1"', $src);
+        self::assertStringContainsString('"layout_mode":"stack"', $src);
+        self::assertStringContainsString('"form_collapsed":"1"', $src);
     }
 
     public function testJsBuildsNativeRatingStarsFromSchema(): void
@@ -123,7 +123,7 @@ final class ProductReviewsWidgetContractTest extends TestCase
         self::assertStringContainsString("'nextPage'", $tpl);
         self::assertStringContainsString("'pageLabelPrefix'", $tpl);
         self::assertStringContainsString('data-review-pager', $tpl);
-        self::assertStringContainsString('20260915-review-compact1', $tpl);
+        self::assertStringContainsString('Weline_Review::css/widgets/product-reviews.css', $tpl);
         self::assertStringNotContainsString("'scrollForMore'", $tpl);
 
         $modules = (string)file_get_contents(dirname(__DIR__, 5) . '/view/statics/frontend/weline.modules.js');

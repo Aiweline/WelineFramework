@@ -10,18 +10,18 @@ final class ProductExpressPaymentWidgetContractTest extends TestCase
 {
     public function testProductExpressRegistersDefaultInjection(): void
     {
-        $widgets = require dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
-        self::assertArrayHasKey('product-express-payment', $widgets);
-        $widget = $widgets['product-express-payment'];
-        self::assertSame('product-express-payment', $widget['slot'] ?? null);
-        self::assertTrue((bool) ($widget['params']['enabled']['default'] ?? false));
-        self::assertSame('media_image', $widget['params']['logo']['type'] ?? null);
-        self::assertFalse((bool) ($widget['params']['logo']['i18n'] ?? true));
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('product', $injection['layout_type'] ?? null);
-        self::assertSame('product-express-payment', $injection['slot'] ?? null);
-        self::assertTrue((bool) ($injection['required'] ?? false));
-        self::assertTrue((bool) ($injection['config']['enabled'] ?? false));
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
+        $tpl = 'Weline_Payment::templates/Frontend/widgets/product-express-payment.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/product-express-payment.phtml');
+        self::assertStringContainsString('@widget.code {product-express-payment}', $src);
+        self::assertStringContainsString('@widget.slot {product-express-payment}', $src);
+        self::assertStringContainsString('"layout_type":"product"', $src);
+        self::assertStringContainsString('"slot":"product-express-payment"', $src);
+        self::assertStringContainsString('"required":true', $src);
+        self::assertStringContainsString('"enabled":true', $src);
+        self::assertStringContainsString('@param enabled', $src);
+        self::assertStringContainsString('@param logo', $src);
     }
 
     public function testProductExpressTemplateUsesShellAndPdpBridge(): void
@@ -61,13 +61,11 @@ final class ProductExpressPaymentWidgetContractTest extends TestCase
 
     public function testProductInfoDeclaresExpressSlot(): void
     {
-        $info = (string) file_get_contents(
-            dirname(__DIR__, 4) . '/Product/view/templates/frontend/widgets/product-info.phtml'
-        );
-        self::assertStringContainsString('id="product-express-payment"', $info);
-        self::assertStringContainsString('product-native-detail__express', $info);
-        $catalog = require dirname(__DIR__, 4) . '/Product/extends/module/Weline_Widget/Weline_Product/widget.php';
-        self::assertArrayHasKey('product-express-payment', $catalog['product-info']['slots'] ?? []);
+        $widgetPhp = dirname(__DIR__, 4) . '/Product/extends/module/Weline_Widget/Weline_Product/widget.php';
+        $tpl = 'Weline_Product::templates/frontend/widgets/product-info.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 4) . '/Product/view/templates/frontend/widgets/product-info.phtml');
+        self::assertStringContainsString('"product-express-payment"', $src);
     }
 
     public function testModulesRegistryListsProductExpressPay(): void

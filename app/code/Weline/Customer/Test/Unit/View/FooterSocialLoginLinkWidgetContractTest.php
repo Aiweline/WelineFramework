@@ -10,22 +10,14 @@ final class FooterSocialLoginLinkWidgetContractTest extends TestCase
 {
     public function testFooterSocialLoginLinkRegistersDefaultInjection(): void
     {
-        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Customer/widget.php';
-        self::assertFileExists($widgetFile);
-        $widgets = require $widgetFile;
-        self::assertArrayHasKey('footer-social-login-link', $widgets);
-        $widget = $widgets['footer-social-login-link'];
-        self::assertSame('footer-payment-account-links', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Customer::templates/frontend/widgets/footer-social-login-link.phtml',
-            $widget['template'] ?? null
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('homepage', $injection['layout_type'] ?? null);
-        self::assertSame('footer-payment-account-links', $injection['slot'] ?? null);
-        self::assertSame('footer', $injection['area'] ?? null);
-        self::assertSame(5, (int)($injection['sort_order'] ?? -1));
-        self::assertSame('社媒登录', $injection['config']['label'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Customer/widget.php';
+        $tpl = 'Weline_Customer::templates/frontend/widgets/footer-social-login-link.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/footer-social-login-link.phtml');
+        self::assertStringContainsString('@widget.code {footer-social-login-link}', $src);
+        self::assertStringContainsString('@widget.slot {footer-payment-account-links}', $src);
+        self::assertStringContainsString('"slot":"footer-payment-account-links"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testFooterSocialLoginLinkTemplatePointsToGuide(): void
