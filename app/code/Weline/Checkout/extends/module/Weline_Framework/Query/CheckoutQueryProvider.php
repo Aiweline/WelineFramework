@@ -1172,9 +1172,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
         $taxEstimate['sales_tax_amount_minor'] = $salesTaxMinor;
         $taxEstimate['tax_amount_minor'] = $salesTaxMinor + $dutyChargedMinor;
 
-        return $this->ok(
-            $checkoutBlocked ? $blockingMessage : (string)__('结账信息已加载'),
-            [
+        $payload = [
             'quote_token' => $quoteToken,
             'currency' => $currency,
             'identity' => [
@@ -1235,7 +1233,35 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ),
             'checkout_blocked' => $checkoutBlocked,
             'blocking_message' => $blockingMessage,
-        ]);
+        ];
+        $payload = $this->applyMoneySummaryPolicy($payload);
+
+        return $this->ok(
+            $checkoutBlocked ? $blockingMessage : (string)__('结账信息已加载'),
+            $payload
+        );
+    }
+
+    /**
+     * Optional commerce policy (B2B ToB etc.). Missing provider → retail payload unchanged.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function applyMoneySummaryPolicy(array $payload): array
+    {
+        try {
+            $policy = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Checkout\Api\StorefrontMoneySummaryPolicyInterface::class
+            );
+            if ($policy instanceof \Weline\Checkout\Api\StorefrontMoneySummaryPolicyInterface) {
+                return $policy->adjustSsrPayload($payload);
+            }
+        } catch (\Throwable) {
+            // B2B optional — retail getData continues.
+        }
+
+        return $payload;
     }
 
     /**

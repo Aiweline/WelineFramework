@@ -108,7 +108,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $modules = self::bp('app/code/Weline/B2B/view/statics/frontend/weline.modules.js');
         $modulesContent = (string)file_get_contents($modules);
         self::assertStringContainsString('selling-mode.js?v=20261010-boot-idle1', $modulesContent);
-        self::assertStringContainsString('checkout-tob.js?v=20261010-tob-money-policy1', $modulesContent);
+        self::assertStringContainsString('checkout-tob.js?v=20261010-tob-money-policy4', $modulesContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-toc', $jsContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-bound', $jsContent);
         self::assertStringContainsString('function switchToRetailCart', $jsContent);
@@ -509,6 +509,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('syncCheckoutCouponAvailability', $checkoutTob);
         self::assertStringContainsString('syncPaymentIncentiveAvailability', $checkoutTob);
         self::assertStringContainsString('adjustMoneySummaryDto', $checkoutTob);
+        self::assertStringContainsString('order_total_minor', $checkoutTob);
+        self::assertStringContainsString('本单共计', $checkoutTob);
         self::assertStringContainsString('data-payment-incentive', $checkoutTob);
         self::assertStringContainsString('dapTaxNoteText', $checkoutTob);
         self::assertStringContainsString('is-tob-unavailable', $checkoutTob);
@@ -522,7 +524,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('weline-cart-shell__credit-slot', $checkoutTob);
         self::assertStringNotContainsString('常显；零售灰化', $checkoutTob);
         self::assertStringContainsString('MutationObserver', $checkoutTob);
-        // Observer must only sync coupon unavailability — never re-enter applyCartType/ensureCreditQuote.
+        // Observer re-hides payment badges + coupon unavailability — never re-enter applyCartType/ensureCreditQuote.
+        self::assertStringContainsString('syncPaymentIncentiveAvailability(root, \'tob\')', $checkoutTob);
+        self::assertStringContainsString('data-b2b-incentive-text', $checkoutTob);
         self::assertStringContainsString('syncCheckoutCouponAvailability(root, \'tob\')', $checkoutTob);
         self::assertStringContainsString('opts.ensureQuote === true', $checkoutTob);
         self::assertStringContainsString('Keep any settled quote (including quote_failed)', $checkoutTob);
@@ -538,6 +542,12 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('data-i18n-fx-same', $depositNote);
         self::assertStringContainsString('data-i18n-dap-tax-note', $depositNote);
         self::assertStringContainsString('data-i18n-cash-goods', $depositNote);
+        // Cold-chaos: batch-prefetch WidgetI18n before per-string label() (chrome inject).
+        $prefetch = strpos($depositNote, 'WidgetI18n::prefetchLabels');
+        $labelFn = strpos($depositNote, '$t = static fn');
+        self::assertNotFalse($prefetch);
+        self::assertNotFalse($labelFn);
+        self::assertLessThan($labelFn, $prefetch);
         self::assertStringContainsString('禁止无汇率 1:1 直扣', $checkoutTob);
         self::assertStringContainsString('Always re-resolve live display currency', $checkoutTob);
         self::assertStringContainsString('data-b2b-credit-currency', $checkoutTob);

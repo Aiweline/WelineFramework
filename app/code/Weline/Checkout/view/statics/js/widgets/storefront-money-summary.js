@@ -206,6 +206,8 @@
 
     var mode = modeOf(root, dto);
     root.setAttribute('data-money-summary-mode', mode);
+    // Older SSR shells may omit new rows (order_total); insert before reading nodes.
+    ensurePaintRows(root, mode);
 
     var currency = text(dto.currency || 'CNY').toUpperCase().trim() || 'CNY';
     var style = moneyStyle(mode, dto);
@@ -366,6 +368,25 @@
       setText(qs(root, '[data-money-summary-incentive]'), formatMoney(0, currency, style));
     }
 
+    // Optional full-order total (ToB): paint only when commerce sets order_total_minor.
+    var orderTotalMinor = toMinor(dto.order_total_minor);
+    var orderTotalRow = qs(root, '[data-money-summary-row="order_total"]');
+    var orderTotalLabel = text(dto.order_total_label).trim();
+    var orderTotalLabelEl = qs(root, '[data-money-summary-order-total-label]');
+    if (orderTotalLabelEl && orderTotalLabel) {
+      setText(orderTotalLabelEl, orderTotalLabel);
+    }
+    if (orderTotalMinor > 0) {
+      setHidden(orderTotalRow, false);
+      setText(
+        qs(root, '[data-money-summary-order-total]'),
+        formatMoney(majorFromMinor(orderTotalMinor), currency, style)
+      );
+    } else {
+      setHidden(orderTotalRow, true);
+      setText(qs(root, '[data-money-summary-order-total]'), formatMoney(0, currency, style));
+    }
+
     var shippingRow = qs(root, '[data-money-summary-row="shipping"]');
     if (shippingPending) {
       setHidden(shippingRow, true);
@@ -514,6 +535,17 @@
         + '</div>'
       );
     }
+    if (!qs(root, '[data-money-summary-row="order_total"]')) {
+      insertRowBeforePayable(
+        root,
+        '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--order-total"'
+        + ' role="listitem" data-money-summary-row="order_total"'
+        + ' data-checkout-order-total-row data-testid="checkout-order-total-row" hidden>'
+        + '<span data-money-summary-order-total-label>本单共计</span>'
+        + '<strong data-money-summary-order-total data-order-total-amount="">0.00</strong>'
+        + '</div>'
+      );
+    }
   }
 
   /**
@@ -593,6 +625,10 @@
       '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--incentive" role="listitem" data-money-summary-row="incentive" data-checkout-payment-incentive-row data-testid="checkout-payment-incentive-row" hidden>' +
       '<span>支付方式优惠</span>' +
       '<strong data-money-summary-incentive data-payment-incentive-amount="">0.00</strong>' +
+      '</div>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--order-total" role="listitem" data-money-summary-row="order_total" data-checkout-order-total-row data-testid="checkout-order-total-row" hidden>' +
+      '<span data-money-summary-order-total-label>本单共计</span>' +
+      '<strong data-money-summary-order-total data-order-total-amount="">0.00</strong>' +
       '</div>' +
       '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable" role="listitem" data-money-summary-row="payable">' +
       '<span data-money-summary-payable-label data-grand-total-label data-cart-subtotal-label>' + payableLabel + '</span>' +

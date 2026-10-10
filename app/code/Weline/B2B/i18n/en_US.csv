@@ -802,3 +802,4 @@ SKU,SKU
 "本期定金 %{1}；抵扣后现金 %{2}%{3}；尾款另付","Deposit this period %{1}; cash after credit %{2}%{3}; balance paid later"
 "本期定金 %{1}（批发首期 30%；尾款结账时再付）%{2}","Deposit this period %{1} (wholesale first 30%; balance paid at checkout)%{2}"
 "；现金至少保留定金的 %{1}%","; cash must keep at least %{1}% of deposit"
+本单共计,"Order total"

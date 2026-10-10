@@ -43,8 +43,45 @@ if (!$creditEnabled) {
 $minCashPercent = max(0, min(100, (int)$minCashPercent));
 $maxCreditPercent = max(0, 100 - $minCashPercent);
 
-$t = static fn (string $source): string => WidgetI18n::label($source);
 $rawTitle = trim((string)($this->getData('title') ?? ''));
+// Batch-prefetch before per-string label() — avoids N× Dictionary::getEntry when
+// this note is injected into storefront chrome (cold-chaos: ~30q on ar_SA PLP).
+$creditLabelSources = [
+    '批发信用',
+    '当前是零售结账，批发信用只能在「批发车」使用。请先到购物车切换到批发车，再回来结账。',
+    '暂时无法获取批发信用报价，请刷新后重试',
+    '正在获取批发信用报价…',
+    '站点未开启批发信用额度',
+    '额度不够：暂无可用批发信用余额',
+    '暂无汇率，无法使用批发信用',
+    '暂无法估算本期定金，无法用批发信用抵扣',
+    '请先登录后再使用批发信用',
+    '额度不够：本单可抵扣额度为 0',
+    '关税与进口税费未计入本次定金，到港由买家另付',
+    '基准货币（钱包）%{1} 可用 %{2}；结账币同为 %{3}；本单最多可抵 %{4} %{3}',
+    '基准货币（钱包）%{1} 可用 %{2}；汇率 %{3}；折合结账币 %{4} %{5}；本单最多可抵 %{6} %{4}（按汇率换算，禁止无汇率 1:1 直扣）',
+    '基准货币（钱包）%{1} 可用 %{2}；折合结账币 %{3} %{4}；本单最多可抵 %{5} %{3}（按汇率换算，禁止无汇率 1:1 直扣）',
+    '。定金至少保留现金 %{1} %{2}',
+    '本期定金 %{1}（商品小计 %{2} × 30%）；抵扣后现金 %{3}%{4}；尾款另付',
+    '本期定金 %{1}（商品小计 %{2} × 30%；尾款结账时再付）%{3}',
+    '本期定金 %{1}；抵扣后现金 %{2}%{3}；尾款另付',
+    '本期定金 %{1}（批发首期 30%；尾款结账时再付）%{2}',
+    '；现金至少保留定金的 %{1}%',
+    '只抵本期定金（约商品小计 30%），不抵尾款。现金定金须保留至少',
+    '（信用最多可抵定金的',
+    '）。额度用完同档不自动回补。',
+    '使用批发信用抵扣本期定金',
+    '批发信用说明',
+    '抵扣额度',
+    '已计入下方小计',
+    '去购物车切换批发车',
+    '了解批发信用规则',
+];
+if ($rawTitle !== '') {
+    $creditLabelSources[] = $rawTitle;
+}
+WidgetI18n::prefetchLabels($creditLabelSources);
+$t = static fn (string $source): string => WidgetI18n::label($source);
 $title = $rawTitle !== '' ? $t($rawTitle) : $t('批发信用');
 $surfaceRaw = strtolower(trim((string)($this->getData('surface') ?? 'checkout')));
 $surface = in_array($surfaceRaw, ['checkout', 'mini-cart', 'cart'], true) ? $surfaceRaw : 'checkout';

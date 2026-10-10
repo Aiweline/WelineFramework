@@ -8,6 +8,15 @@ use PHPUnit\Framework\TestCase;
 
 final class CheckoutPaymentEntryContractTest extends TestCase
 {
+    public function testGetDataAppliesMoneySummaryPolicyHook(): void
+    {
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php'
+        );
+        self::assertStringContainsString('applyMoneySummaryPolicy', $src);
+        self::assertStringContainsString('StorefrontMoneySummaryPolicyInterface', $src);
+    }
+
     public function testResumePaymentStampsContinuePayEntry(): void
     {
         $src = (string)file_get_contents(

@@ -7,7 +7,7 @@ window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 Object.assign(window.WelineModulesConfig.modules, {
     b2bSellingMode: {
         paths: [
-            'Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy1',
+            'Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy4',
             'Weline_B2B::js/selling-mode.js?v=20261010-boot-idle1'
         ],
         globalVar: 'WelineB2BSellingMode',
@@ -15,7 +15,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     b2bCheckoutTob: {
         paths: [
-            'Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy1'
+            'Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy4'
         ],
         globalVar: 'WelineB2BCheckoutTob',
         description: 'B2B wholesale credit + checkout deposit note for tob carts'

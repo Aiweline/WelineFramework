@@ -58,6 +58,8 @@ if ($salesTaxLabelOverride !== '') {
 }
 $labelCod = (string) __('货到付款手续费');
 $labelIncentive = (string) __('支付方式优惠');
+// Optional ToB climax row (B2B paint sets order_total_*); retail keeps hidden.
+$labelOrderTotal = (string) __('本单共计');
 $labelPayable = (string) __('应付合计');
 if ($mode === 'cart' || $mode === 'mini-cart') {
     $labelPayable = (string) __('小计');
@@ -216,6 +218,15 @@ if ($payableText === '') {
          hidden>
         <span><?= $escape($labelIncentive) ?></span>
         <strong data-money-summary-incentive data-payment-incentive-amount="">0.00</strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--order-total"
+         role="listitem"
+         data-money-summary-row="order_total"
+         data-checkout-order-total-row
+         data-testid="checkout-order-total-row"
+         hidden>
+        <span data-money-summary-order-total-label><?= $escape($labelOrderTotal) ?></span>
+        <strong data-money-summary-order-total data-order-total-amount="">0.00</strong>
     </div>
     <div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable"
          role="listitem"

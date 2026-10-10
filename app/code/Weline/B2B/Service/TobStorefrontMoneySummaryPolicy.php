@@ -62,6 +62,10 @@ final class TobStorefrontMoneySummaryPolicy implements StorefrontMoneySummaryPol
         $dto['tax_minor'] = 0;
         $dto['cod_fee_minor'] = 0;
         $dto['note'] = $this->phrase('关税与进口税费未计入本次定金，到港由买家另付');
+        $goodsMinor = max(0, (int)($dto['goods_subtotal_minor'] ?? 0));
+        $shippingMinor = max(0, (int)($dto['shipping_minor'] ?? 0));
+        $dto['order_total_minor'] = $goodsMinor + $shippingMinor;
+        $dto['order_total_label'] = $this->phrase('本单共计');
         if (isset($ctx['deposit_minor'])) {
             $dto['deposit_minor'] = max(0, (int)$ctx['deposit_minor']);
         }

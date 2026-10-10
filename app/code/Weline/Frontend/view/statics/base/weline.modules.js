@@ -298,21 +298,21 @@
             description: "快捷支付回头确认页：摘要/缺口/确认收款"
         },
         storefrontMoneySummary: {
-            origin_paths: ["app/code/Weline/Checkout/view/statics/js/widgets/storefront-money-summary.js?v=20261010-tob-retail-gate1"],
-            paths: ["Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261010-tob-retail-gate1"],
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/widgets/storefront-money-summary.js?v=20261010-tob-order-total1"],
+            paths: ["Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261010-tob-order-total1"],
             globalVar: "WelineStorefrontMoneySummary",
             load: "eager",
             description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"
         },
         b2bSellingMode: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-tob-money-policy1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261010-boot-idle1"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy1", "Weline_B2B::js/selling-mode.js?v=20261010-boot-idle1"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-tob-money-policy4", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261010-boot-idle1"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy4", "Weline_B2B::js/selling-mode.js?v=20261010-boot-idle1"],
             globalVar: "WelineB2BSellingMode",
             description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
         },
         b2bCheckoutTob: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-tob-money-policy1"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy1"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-tob-money-policy4"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-tob-money-policy4"],
             globalVar: "WelineB2BCheckoutTob",
             description: "B2B wholesale credit + checkout deposit note for tob carts"
         },

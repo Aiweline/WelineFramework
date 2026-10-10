@@ -67,6 +67,8 @@ final class TobStorefrontMoneySummaryPolicyTest extends TestCase
         $policy = new TobStorefrontMoneySummaryPolicy();
         $dto = [
             'cart_type' => 'tob',
+            'goods_subtotal_minor' => 39485,
+            'shipping_minor' => 12477,
             'discount_minor' => 100,
             'payment_incentive_minor' => 500,
             'sales_tax_minor' => 200,
@@ -90,6 +92,8 @@ final class TobStorefrontMoneySummaryPolicyTest extends TestCase
         self::assertSame(11845, (int)$out['deposit_minor']);
         self::assertSame(900, (int)$out['credit_minor']);
         self::assertSame(10945, (int)$out['payable_minor']);
+        self::assertSame(51962, (int)$out['order_total_minor']);
+        self::assertSame('本单共计', $out['order_total_label']);
         self::assertSame('本次应付定金', $out['payable_label']);
         self::assertStringContainsString('到港由买家另付', (string)$out['note']);
     }

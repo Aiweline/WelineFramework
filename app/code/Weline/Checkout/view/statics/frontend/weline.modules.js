@@ -24,7 +24,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     storefrontMoneySummary: {
         paths: [
-            "Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261010-tob-retail-gate1"
+            "Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261010-tob-order-total1"
         ],
         globalVar: "WelineStorefrontMoneySummary",
         load: "eager",

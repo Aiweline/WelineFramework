@@ -109,14 +109,32 @@
             if (tob) {
                 if (!badge.hasAttribute('data-b2b-incentive-stash')) {
                     badge.setAttribute('data-b2b-incentive-stash', '1');
+                    badge.setAttribute(
+                        'data-b2b-incentive-text',
+                        String(badge.textContent || '').trim()
+                    );
                 }
+                // Detach from DOM so accessible name cannot still say「减 $x」
+                // after getData re-injects payment HTML (display:none is not enough for some a11y trees).
+                badge.textContent = '';
                 badge.hidden = true;
                 badge.setAttribute('hidden', '');
                 badge.setAttribute('aria-hidden', 'true');
+                badge.style.display = 'none';
+                if (badge.parentNode) {
+                    badge.parentNode.removeChild(badge);
+                }
             } else if (badge.getAttribute('data-b2b-incentive-stash') === '1') {
+                var restored = badge.getAttribute('data-b2b-incentive-text') || '';
+                if (restored !== '') {
+                    badge.textContent = restored;
+                }
                 badge.hidden = false;
                 badge.removeAttribute('hidden');
                 badge.removeAttribute('aria-hidden');
+                badge.style.display = '';
+                badge.removeAttribute('data-b2b-incentive-stash');
+                badge.removeAttribute('data-b2b-incentive-text');
             }
         });
         root.querySelectorAll('.weline-checkout__option--payment').forEach(function (opt) {
@@ -208,6 +226,9 @@
             cashDepositMajor = Math.max(0, depositMajor - creditApplyMajor);
         }
         var payableMajor = Math.max(0, cashDepositMajor == null ? depositMajor : cashDepositMajor);
+        var shippingMajor = Math.max(0, Number(out.shipping_minor) || 0) / 100;
+        // Full order (goods + shipping); DAP tax stays out of deposit — disclose via note.
+        var orderTotalMajor = Math.max(0, subtotal + shippingMajor);
         out.cart_type = 'tob';
         out.commerce_deposit_allowed = true;
         out.discount_minor = 0;
@@ -221,6 +242,8 @@
         out.cod_fee_minor = 0;
         out.deposit_minor = Math.round(depositMajor * 100);
         out.credit_minor = Math.round(creditApplyMajor * 100);
+        out.order_total_minor = Math.round(orderTotalMajor * 100);
+        out.order_total_label = String(ctx.order_total_label || out.order_total_label || '本单共计');
         out.payable_minor = Math.round(payableMajor * 100);
         out.payable_label = String(ctx.payable_label_deposit || out.payable_label || '本次应付定金');
         out.note = dapTaxNoteText();
@@ -2390,7 +2413,8 @@
                 applyCartType(root, type, { ensureQuote: type === 'tob' });
             });
         });
-        // 优惠券部件可能晚于本脚本挂到 slot，观察后仅补同步「批发不可用」，禁止再走 ensureCreditQuote。
+        // Coupon / payment HTML may arrive after this script (getData applyServerHtml).
+        // Re-sync ToB chrome only — never re-enter applyCartType / ensureCreditQuote.
         if (global.MutationObserver) {
             var pending = null;
             var observer = new MutationObserver(function () {
@@ -2403,6 +2427,8 @@
                         return;
                     }
                     document.querySelectorAll('[data-weline-checkout], .weline-checkout').forEach(function (root) {
+                        // Payment badges must re-hide even when coupon is already marked unavailable.
+                        syncPaymentIncentiveAvailability(root, 'tob');
                         var coupon = root.querySelector('[data-marketing-checkout-coupon], .w-marketing-checkout-coupon');
                         if (!coupon) {
                             return;

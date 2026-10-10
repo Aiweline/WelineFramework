@@ -3335,6 +3335,12 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 }
             } catch (eAdj) {}
         }
+        // Optional B2B: after getData re-injects payment HTML, keep「减 $x」hidden on ToB.
+        if (tobApi && typeof tobApi.syncPaymentIncentiveAvailability === 'function') {
+            try {
+                tobApi.syncPaymentIncentiveAvailability(root, cartType);
+            } catch (eSyncInc) {}
+        }
         const payable = Math.max(0, Number(moneyDto.payable_minor || 0) / 100);
         const painted = paintCheckoutMoneySummary(moneyDto);
         if (!painted) {

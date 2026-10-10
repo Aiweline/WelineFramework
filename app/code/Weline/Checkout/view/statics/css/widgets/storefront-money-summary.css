@@ -44,6 +44,21 @@
     white-space: nowrap;
 }
 
+/* ToB: full-order total sits above「本次应付定金」so cash due is not abrupt. */
+.w-storefront-money-summary__row--order-total {
+    margin-top: var(--weline-space-1);
+    padding-top: var(--weline-space-2);
+    border-top: var(--border-width-thin, 1px) solid var(
+        --weline-theme-border,
+        var(--weline-theme-color-border, var(--color-border))
+    );
+}
+
+.w-storefront-money-summary__row--order-total span:first-child {
+    color: var(--weline-theme-color-text, var(--color-text));
+    font-weight: 600;
+}
+
 .w-storefront-money-summary__row--payable {
     margin-top: var(--weline-space-1);
     padding-top: var(--weline-space-2);
@@ -52,6 +67,14 @@
         var(--weline-theme-color-border, var(--color-border))
     );
     font-size: var(--weline-font-size-md);
+}
+
+/* Avoid double rule when order-total already opened the climax block. */
+.w-storefront-money-summary__row--order-total:not([hidden])
+    + .w-storefront-money-summary__row--payable {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
 }
 
 .w-storefront-money-summary__row--payable span:first-child {

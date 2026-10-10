@@ -31,6 +31,8 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertStringContainsString('data-money-summary-row="import_tax"', $template);
         self::assertStringContainsString('data-money-summary-row="cod"', $template);
         self::assertStringContainsString('data-money-summary-row="incentive"', $template);
+        self::assertStringContainsString('data-money-summary-row="order_total"', $template);
+        self::assertStringContainsString('本单共计', $template);
         self::assertStringContainsString('data-money-summary-row="payable"', $template);
 
         self::assertStringContainsString('data-subtotal=""', $template);
@@ -65,8 +67,12 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
             strpos($template, 'data-money-summary-row="customs_duty"')
         );
         self::assertLessThan(
-            strpos($template, 'data-money-summary-row="payable"'),
+            strpos($template, 'data-money-summary-row="order_total"'),
             strpos($template, 'data-money-summary-row="import_tax"')
+        );
+        self::assertLessThan(
+            strpos($template, 'data-money-summary-row="payable"'),
+            strpos($template, 'data-money-summary-row="order_total"')
         );
     }
 
@@ -86,6 +92,7 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertStringContainsString('function paint', $js);
         self::assertStringContainsString('function ensure', $js);
         self::assertStringContainsString('ensurePaintRows', $js);
+        self::assertStringContainsString('Older SSR shells may omit new rows', $js);
         self::assertStringContainsString('data-money-summary-row="deposit"', $js);
         self::assertStringContainsString('commerce_deposit_allowed', $js);
         self::assertStringContainsString('depositAllowed', $js);
@@ -100,6 +107,8 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertStringContainsString('data-money-summary-row="sales_tax"', $js);
         self::assertStringContainsString('data-money-summary-row="customs_duty"', $js);
         self::assertStringContainsString('data-money-summary-row="import_tax"', $js);
+        self::assertStringContainsString('order_total_minor', $js);
+        self::assertStringContainsString('data-money-summary-row="order_total"', $js);
         self::assertStringContainsString('storefrontMoneySummary', $modules);
         self::assertStringContainsString('storefront-money-summary.js', $modules);
     }
