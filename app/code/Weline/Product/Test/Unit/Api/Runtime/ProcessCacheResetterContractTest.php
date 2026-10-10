@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Weline\Product\Test\Unit\Api\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Runtime\ProcessCacheResetContext;
+use Weline\Product\Api\Runtime\ProcessCacheResetter;
+use Weline\Product\Service\StorefrontProductMediaUrlResolver;
 
 final class ProcessCacheResetterContractTest extends TestCase
 {
@@ -34,5 +37,29 @@ final class ProcessCacheResetterContractTest extends TestCase
         ] as $needle) {
             self::assertStringContainsString($needle, $src);
         }
+    }
+
+    public function testSoftMemoryPressureClearsMediaRefOnly(): void
+    {
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Api/Runtime/ProcessCacheResetter.php'
+        );
+        self::assertStringContainsString('isSoftContent()', $src);
+        self::assertMatchesRegularExpression(
+            '/isSoftContent\(\)[\s\S]*?clearProcessReferenceCache\(\)[\s\S]*?return 1;/',
+            $src,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/isSoftContent\(\)[\s\S]*?clearProcessSnapshotCache\(\)[\s\S]*?return 1;/',
+            $src,
+        );
+
+        $resetter = new ProcessCacheResetter();
+        $cleared = $resetter->resetProcessCaches(new ProcessCacheResetContext(
+            ProcessCacheResetContext::REASON_MEMORY_PRESSURE,
+            false,
+        ));
+        self::assertSame(1, $cleared);
+        self::assertSame(0, StorefrontProductMediaUrlResolver::processReferenceCacheCount());
     }
 }

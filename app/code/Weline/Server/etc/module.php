@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Server',
-    "version" => '2.0.159',
+    "version" => '2.0.162',
     "requires" => [
         'Weline_Framework' => '*',
         'Weline_Backend' => '*',
@@ -28,5 +28,7 @@ return [
         \Weline\Framework\Log\RuntimeLoggerProviderInterface::class => \Weline\Server\Api\Log\RuntimeLoggerProvider::class,
         \Weline\Framework\Cache\Contract\SharedCacheStateInterface::class => \Weline\Server\Service\MemoryStateFacade::class,
         \Weline\Framework\Session\Storage\SharedSessionStateInterface::class => \Weline\Server\Service\SessionStateFacade::class,
+        'process_cache_resetter.Weline_Server'
+            => \Weline\Server\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

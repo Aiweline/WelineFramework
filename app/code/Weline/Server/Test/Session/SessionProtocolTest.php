@@ -186,7 +186,7 @@ class SessionProtocolTest extends TestCase
 
     public function testExtractMessagesDropsOversizedFrameAndKeepsFollowingValidFrame(): void
     {
-        $buffer = \str_repeat('x', 1_048_577) . "\n{\"cmd\":\"ping\"}\n";
+        $buffer = \str_repeat('x', SessionProtocol::maxFrameBytes() + 1) . "\n{\"cmd\":\"ping\"}\n";
 
         $messages = SessionProtocol::extractMessages($buffer);
 
@@ -197,11 +197,27 @@ class SessionProtocolTest extends TestCase
 
     public function testExtractMessagesClearsOversizedUnterminatedBuffer(): void
     {
-        $buffer = \str_repeat('x', 16_777_217);
+        $buffer = \str_repeat('x', SessionProtocol::MAX_BUFFER_BYTES + 1);
 
         $messages = SessionProtocol::extractMessages($buffer);
 
         $this->assertSame([], $messages);
         $this->assertEquals('', $buffer);
+    }
+
+    public function testEncodeRequestRejectsOversizedFrameBeforeSend(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('frame_too_large');
+
+        SessionProtocol::encodeRequest('set', [
+            'key' => 'huge',
+            'val' => \str_repeat('a', SessionProtocol::maxFrameBytes()),
+        ]);
+    }
+
+    public function testMaxFrameBytesCoversFormerEightMebibyteRejectBand(): void
+    {
+        $this->assertGreaterThanOrEqual(10_966_547, SessionProtocol::maxFrameBytes());
     }
 }

@@ -156,6 +156,33 @@ final class NodePool
     }
 
     /**
+     * Soft memory pressure: drop roughly half of pooled nodes + interned strings.
+     * Matches overflow half-slice policy without wiping the whole pool each soft cycle.
+     */
+    public static function trimForMemoryPressure(): void
+    {
+        $textCount = \count(self::$textNodes);
+        if ($textCount > 0) {
+            self::$textNodes = \array_slice(
+                self::$textNodes,
+                (int)\ceil($textCount / 2),
+                null,
+                true
+            );
+        }
+        $phpCount = \count(self::$phpNodes);
+        if ($phpCount > 0) {
+            self::$phpNodes = \array_slice(
+                self::$phpNodes,
+                (int)\ceil($phpCount / 2),
+                null,
+                true
+            );
+        }
+        StringInterner::trimForMemoryPressure();
+    }
+
+    /**
      * 重置所有缓存池
      */
     public static function reset(): void

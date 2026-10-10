@@ -95,6 +95,23 @@ final class StringInterner
     }
 
     /**
+     * Soft memory pressure: drop roughly half of interned strings.
+     */
+    public static function trimForMemoryPressure(): void
+    {
+        $count = \count(self::$strings);
+        if ($count <= 0) {
+            return;
+        }
+        self::$strings = \array_slice(
+            self::$strings,
+            (int)\ceil($count / 2),
+            null,
+            true
+        );
+    }
+
+    /**
      * 清空缓存
      */
     public static function reset(): void

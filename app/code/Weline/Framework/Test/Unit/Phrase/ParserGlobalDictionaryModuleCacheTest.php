@@ -45,6 +45,7 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
     protected function tearDown(): void
     {
         Parser::clearWorkerCaches();
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::resetProcessPoolHandle();
         RequestContext::cleanup();
         Runtime::resetModeCache();
         ini_set('memory_limit', $this->memoryLimit);
@@ -94,34 +95,35 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
         self::assertSame('Late module translation', $translate->invoke(null, 'Late source', $moduleLayers));
     }
 
-    public function testPeersReuseIndependentModuleMapsAcrossDifferentGrowthOrders(): void
+    public function testSameProcessReusesModuleMapsAcrossGrowthOrders(): void
     {
-        $first = new ModuleDictionaryProviderFixture();
-        $this->startWorker($first);
+        $provider = new ModuleDictionaryProviderFixture();
+        $this->startWorker($provider);
         self::assertSame(['A word' => 'A translation', 'B word' => 'B translation'], $this->load(['Weline_A', 'Weline_B']));
-        $peer = new ModuleDictionaryProviderFixture();
-        $this->startWorker($peer);
-        self::assertSame(['A word' => 'A translation'], $this->load(['Weline_A']));
+        // Subset after union: locale snapshot already holds A+B; must not refetch provider.
+        self::assertSame(['A word' => 'A translation', 'B word' => 'B translation'], $this->load(['Weline_A']));
         self::assertSame(['A word' => 'A translation', 'B word' => 'B translation'], $this->load(['Weline_A', 'Weline_B']));
-        self::assertSame([['en_US', ['Weline_A', 'Weline_B']]], $first->batchCalls);
-        self::assertSame([], $peer->batchCalls);
-        self::assertSame([], $first->legacyCalls);
-        self::assertSame([], $peer->legacyCalls);
-        self::assertCount(2, $this->storage);
+        $null = ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY;
+        self::assertSame([['en_US', ['Weline_A', 'Weline_B', $null]]], $provider->batchCalls);
+        self::assertSame([], $provider->legacyCalls);
+        // Whole bags must not land in phrase Shared Memory mock storage.
+        self::assertSame([], $this->storage);
     }
 
-    public function testConfirmedEmptyModuleMapIsSharedAndLocaleRemainsSeparate(): void
+    public function testConfirmedEmptyModuleMapStaysInProcessAndLocaleRemainsSeparate(): void
     {
-        $first = new ModuleDictionaryProviderFixture();
-        $this->startWorker($first);
+        $provider = new ModuleDictionaryProviderFixture();
+        $this->startWorker($provider);
+        $null = ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY;
         self::assertSame([], $this->load(['Weline_Empty']));
-        $peer = new ModuleDictionaryProviderFixture();
-        $this->startWorker($peer);
         self::assertSame([], $this->load(['Weline_Empty']));
-        self::assertSame([], $peer->batchCalls);
+        self::assertCount(1, $provider->batchCalls);
         self::assertSame(['A word' => 'FR A'], $this->load(['Weline_A'], 'fr_FR'));
-        self::assertSame([['fr_FR', ['Weline_A']]], $peer->batchCalls);
-        self::assertCount(2, $this->storage);
+        self::assertSame(
+            [['en_US', ['Weline_Empty', $null]], ['fr_FR', ['Weline_A', $null]]],
+            $provider->batchCalls,
+        );
+        self::assertSame([], $this->storage);
     }
 
     public function testFailedModuleBatchDoesNotFreezeTheOuterLocaleCache(): void
@@ -130,7 +132,7 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
         $provider->failures = 1;
         $this->startWorker($provider);
         self::assertSame([], $this->load(['Weline_A'], 'en_US', 'loadGlobalDictionaryScopeWords'));
-        self::assertSame([], array_filter($this->storage, 'is_array'));
+        self::assertSame([], $this->storage);
         self::assertSame(['A word' => 'A translation'], $this->load(['Weline_A'], 'en_US', 'loadGlobalDictionaryScopeWords'));
         self::assertCount(2, $provider->batchCalls);
     }
@@ -181,25 +183,28 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
         }
     }
 
-    public function testSingleFlightOwnerRechecksAfterAConcurrentBatchHasPublished(): void
+    public function testProcessBagHitSkipsProviderAfterWarmLoad(): void
     {
         $provider = new ModuleDictionaryProviderFixture();
         $this->startWorker($provider);
-        $pool = $this->createMock(ModuleDictionaryCacheFixtureInterface::class);
-        $reads = 0;
-        $pool->method('getMultiple')->willReturnCallback(static function (array $keys) use (&$reads): array {
-            if (++$reads === 1) { return []; }
-            return array_combine($keys, [['A word' => 'A translation'], ['B word' => 'B translation']]);
-        });
-        $pool->expects(self::once())->method('remember')->willReturnCallback(static function ($key, $ttl, $builder, $options): mixed {
-            self::assertTrue($options->singleFlight);
-            self::assertFalse($options->computeOnSingleFlightTimeout);
-            return $builder();
-        });
-        $pool->expects(self::never())->method('setMultiple');
-        (new ReflectionProperty(Parser::class, 'sharedPhraseCachePool'))->setValue(null, $pool);
+        self::assertSame(['A word' => 'A translation', 'B word' => 'B translation'], $this->load(['Weline_A', 'Weline_B']));
+        self::assertCount(1, $provider->batchCalls);
+        // clearWorkerCaches drops process bags; without that, warm bags skip provider.
+        Parser::clearWorkerCaches();
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::setPoolOverrideForTests($this->pool);
+        (new ReflectionProperty(Parser::class, 'globalDictionaryProviderInstance'))->setValue(null, $provider);
+        $provider->batchCalls = [];
+        // Re-seed process bags without going through shared pool.
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::put('en_US', 'Weline_A', ['A word' => 'A translation']);
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::put('en_US', 'Weline_B', ['B word' => 'B translation']);
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::put(
+            'en_US',
+            ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY,
+            [],
+        );
         self::assertSame(['A word' => 'A translation', 'B word' => 'B translation'], $this->load(['Weline_A', 'Weline_B']));
         self::assertSame([], $provider->batchCalls);
+        self::assertSame([], $this->storage);
     }
 
     public function testInterleavedModulePublicationDoesNotOverwriteTheOtherFiberSnapshot(): void
@@ -217,7 +222,8 @@ final class ParserGlobalDictionaryModuleCacheTest extends TestCase
     private function startWorker(GlobalDictionaryProviderInterface $provider): void
     {
         Parser::clearWorkerCaches();
-        (new ReflectionProperty(Parser::class, 'sharedPhraseCachePool'))->setValue(null, $this->pool);
+        // Phrase Shared Memory mock only covers word-level exact keys; bags use process memory.
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::setPoolOverrideForTests($this->pool);
         (new ReflectionProperty(Parser::class, 'globalDictionaryProviderInstance'))->setValue(null, $provider);
     }
 

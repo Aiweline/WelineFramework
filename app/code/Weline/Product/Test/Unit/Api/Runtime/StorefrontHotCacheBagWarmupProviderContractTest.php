@@ -43,6 +43,8 @@ final class StorefrontHotCacheBagWarmupProviderContractTest extends TestCase
         self::assertStringContainsString("'currency_bag_prime' => 'light_only'", $source);
         self::assertStringContainsString('homepageFeaturedCards', $source);
         self::assertStringContainsString('product.homepage_shelf_id_plan', $source);
+        self::assertStringContainsString('primeSearchProjectionScope', $source);
+        self::assertStringContainsString('product.search_projection_scope', $source);
         self::assertStringContainsString('SchedulerSystem::yield', $source);
         self::assertStringContainsString('SchedulerSystem::yieldDelay(15)', $source);
         self::assertStringContainsString('wls.storefront_hot_cache_bag_prime.stage', $source);

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Product',
-    'version' => '1.0.382',
+    'version' => '1.0.389',
     'requires' => [
         'Weline_Catalog' => '*',
         'Weline_DataTable' => '*',
@@ -38,6 +38,10 @@ return [
             => \Weline\Product\Api\View\ViewWarmupContributionProvider::class,
         'storefront_hot_cache_bag_warmup.Weline_Product'
             => \Weline\Product\Api\Runtime\StorefrontHotCacheBagWarmupProvider::class,
+        'cache.warmer.product.search_projection_scope'
+            => \Weline\Product\Service\SearchProjectionScopeCacheWarmer::class,
+        'cache.warmer.product.homepage_shelf_offers_locale'
+            => \Weline\Product\Service\HomepageShelfOffersLocaleCacheWarmer::class,
         'process_cache_resetter.Weline_Product'
             => \Weline\Product\Api\Runtime\ProcessCacheResetter::class,
         \Weline\Product\Api\ProductAdminCommandInterface::class

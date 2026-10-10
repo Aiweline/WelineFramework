@@ -17,17 +17,16 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
         WidgetData::clearCache();
         $cleared++;
 
-        // Aggressive keep-warm: drop in-process registry snapshot (~0.6MB static bag).
-        if ($context->aggressive || $context->isExplicitCacheClear()) {
+        if ($context->allowsRegistryClear()) {
             WidgetRegistry::clearRuntimeCache();
             $cleared++;
         }
 
         return $cleared;
     }
+
     public function diagCounts(): array
     {
         return [];
     }
-
 }

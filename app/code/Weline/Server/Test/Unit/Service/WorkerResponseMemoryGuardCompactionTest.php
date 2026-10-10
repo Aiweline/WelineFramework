@@ -190,6 +190,38 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
         self::assertIsArray($result);
     }
 
+    public function testCompactForNewRequestHeadroomRunsWithPeerFibersAndDoesNotDrain(): void
+    {
+        WlsConcurrency::setOtherSuspendedFiberCountProvider(static fn (): int => 3);
+        WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
+
+        // force=true: loop-layer shed must run even with peers; do not lower ini
+        // (loading Phrase/HotCache under a synthetic tiny limit OOMs the suite).
+        $result = WorkerResponseMemoryGuard::compactForNewRequestHeadroom(true);
+
+        self::assertTrue($result['triggered']);
+        self::assertGreaterThan(0, WlsConcurrency::getOtherSuspendedRequestFiberCount());
+        self::assertFalse(WorkerResponseMemoryGuard::hasDrainAfterResponseRequest());
+        self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
+        WlsConcurrency::setOtherSuspendedFiberCountProvider(null);
+    }
+
+    public function testCompactForNewRequestHeadroomTriggersOnAbsoluteHeadroom(): void
+    {
+        WlsConcurrency::setOtherSuspendedFiberCountProvider(static fn (): int => 2);
+        WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
+        // Tiny pressure denominator → absolute headroom < 64MiB while ratio stays low.
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(48 * 1024 * 1024);
+
+        $result = WorkerResponseMemoryGuard::compactForNewRequestHeadroom(false);
+
+        self::assertTrue($result['triggered']);
+        self::assertArrayHasKey('allocator_trimmed_bytes', $result);
+        self::assertFalse(WorkerResponseMemoryGuard::hasDrainAfterResponseRequest());
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(0);
+        WlsConcurrency::setOtherSuspendedFiberCountProvider(null);
+    }
+
     public function testForceAggressiveClearsRebuildableProcessCaches(): void
     {
         $this->seedProbeCaches();
@@ -209,19 +241,28 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
     public function testShouldDrainForZendRatchetWithConfiguredPressureAndCandidate(): void
     {
         WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * 1024 * 1024);
+        // shell=10MiB < 48 → no shell drain; baseline overrun but ratio 80/256 < soft → false
         self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
             80 * 1024 * 1024,
             70 * 1024 * 1024,
             64 * 1024 * 1024,
             true
         ));
-        // soft default 0.70 → need ≥179.2MiB of 256MiB budget before ratchet drain is eligible
+        // shell=92MiB ≥ 48 → true even when real/limit (0.75) would have been the old gate
         self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
             192 * 1024 * 1024,
             100 * 1024 * 1024,
             64 * 1024 * 1024,
             true
         ));
+        // Cold-scan shape: real below soft ratio, shell ≥ 48MiB → true
+        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
+            158 * 1024 * 1024,
+            30 * 1024 * 1024,
+            null,
+            true
+        ));
+        // shell=20MiB < 48; baseline overrun 120≥64+32 but ratio 120/256 < soft → false
         self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
             120 * 1024 * 1024,
             100 * 1024 * 1024,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Api\Localization;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\BatchGlobalDictionaryProviderInterface;
 use Weline\Framework\Phrase\GlobalDictionaryModuleBagCache;
@@ -110,12 +111,21 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
         } catch (\Throwable) {
         }
 
-        // Cross-request / cross-worker: same Phrase shared bag key as Parser module maps.
-        $shared = GlobalDictionaryModuleBagCache::getNullSource($locale);
-        if (\is_array($shared)) {
-            $this->rememberNullSourceMemo($memoKey, $shared);
+        // Worker process bag only (never Shared Memory whole-locale bags).
+        $process = GlobalDictionaryModuleBagCache::getNullSource($locale);
+        if (\is_array($process)) {
+            $this->rememberNullSourceMemo($memoKey, $process);
 
-            return $shared;
+            return $process;
+        }
+
+        // Authoritative deploy artifact: generated/language/{locale}.php
+        $fromFile = $this->loadLocaleFileWords($locale);
+        if ($fromFile !== null) {
+            GlobalDictionaryModuleBagCache::putNullSource($locale, $fromFile);
+            $this->rememberNullSourceMemo($memoKey, $fromFile);
+
+            return $fromFile;
         }
 
         $pdoWords = [];
@@ -145,11 +155,38 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
             // Fall through to empty — module-scoped path still works.
         }
 
-        // set（非 remember）：避免与 Parser::loadGlobalDictionaryModuleMaps 同键 nested single-flight。
+        // Process bag only — never phrase Shared Memory (frame_too_large on 8–11MiB locales).
         GlobalDictionaryModuleBagCache::putNullSource($locale, $pdoWords);
         $this->rememberNullSourceMemo($memoKey, $pdoWords);
 
         return $pdoWords;
+    }
+
+    /**
+     * @return array<string, string>|null null when locale file missing/unreadable
+     */
+    private function loadLocaleFileWords(string $locale): ?array
+    {
+        $path = Env::path_TRANSLATE_FILES_PATH . $locale . '.php';
+        if (!\is_file($path)) {
+            return null;
+        }
+        try {
+            if (\function_exists('opcache_invalidate')) {
+                @\opcache_invalidate($path, true);
+            }
+            $raw = (array)include $path;
+        } catch (\Throwable) {
+            return null;
+        }
+        $words = [];
+        foreach ($raw as $word => $translate) {
+            if (\is_string($word) && \is_string($translate) && $word !== '' && $translate !== '') {
+                $words[$word] = $translate;
+            }
+        }
+
+        return $words;
     }
 
     /** @param array<string, string> $words */

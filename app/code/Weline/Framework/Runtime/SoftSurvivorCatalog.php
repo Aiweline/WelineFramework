@@ -1,0 +1,42 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Framework\Runtime;
+
+/**
+ * Soft pressure roles: CONTENT may drop; REGISTRY must survive soft.
+ */
+final class SoftSurvivorCatalog
+{
+    public const ROLE_CONTENT = 'content';
+    public const ROLE_REGISTRY = 'registry';
+
+    /**
+     * @return array<string, string> symbol => role
+     */
+    public static function matrix(): array
+    {
+        return [
+            'Weline\\Framework\\Phrase\\DictionaryCacheNamespace::$bagRefs' => self::ROLE_CONTENT,
+            'Weline\\Framework\\View\\Taglib\\Ast\\NodePool::$textNodes' => self::ROLE_CONTENT,
+            'Weline\\Framework\\View\\TemplateCacheManager' => self::ROLE_CONTENT,
+            'Weline\\Framework\\Router\\FullPageCacheCoordinator::$processFpcPayloadCache' => self::ROLE_REGISTRY,
+            'Weline\\Framework\\Service\\Query\\QueryProviderRegistry::$processCompiledRegistry' => self::ROLE_REGISTRY,
+            'Weline\\Widget\\Service\\WidgetRegistry::$staticCachedRegistry' => self::ROLE_REGISTRY,
+            'Weline\\Framework\\Event\\EventRegistry::$runtimeRegistryCache' => self::ROLE_REGISTRY,
+            'Weline\\Framework\\Extends\\ExtendsData::$cachedRegistry' => self::ROLE_REGISTRY,
+            'Weline\\Framework\\Compilation\\CompiledExtensionRegistry::$registries' => self::ROLE_REGISTRY,
+        ];
+    }
+
+    public static function roleFor(string $symbol): ?string
+    {
+        return self::matrix()[$symbol] ?? null;
+    }
+
+    public static function isRegistrySoftSurvivor(string $symbol): bool
+    {
+        return self::roleFor($symbol) === self::ROLE_REGISTRY;
+    }
+}

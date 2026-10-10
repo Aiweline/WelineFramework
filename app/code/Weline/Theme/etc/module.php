@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Theme',
-    "version" => '2.2.959',
+    "version" => '2.2.969',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '>=2.5.0',
@@ -37,6 +37,8 @@ return [
         \Weline\Framework\Runtime\ThemeContextProviderInterface::class => \Weline\Theme\Service\ThemeContextService::class,
         \Weline\Framework\Runtime\FpcWarmupProviderInterface::class => \Weline\Theme\Api\Runtime\FpcWarmupProvider::class,
         'cache.warmer.theme.storefront_fpc' => \Weline\Theme\Service\StorefrontFpcWarmer::class,
+        'cache.warmer.theme.widget_asset_sources' => \Weline\Theme\Service\WidgetAssetSourceCacheWarmer::class,
+        'cache.warmer.theme.storefront_chrome_locales' => \Weline\Theme\Service\StorefrontChromeLocaleCacheWarmer::class,
         'storefront.page_prefetch.Weline_Theme'
             => \Weline\Theme\Api\Runtime\StorefrontPagePrefetchContribution::class,
         'storefront_hot_cache_bag_warmup.Weline_Theme'

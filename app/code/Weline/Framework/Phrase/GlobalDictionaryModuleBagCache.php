@@ -10,12 +10,24 @@ use Weline\Framework\Cache\Pool\NamespaceScopedCachePool;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * Phrase 模块词典袋（含 NULL source_module）共享键与 phrase 池入口。
- * Parser 与 I18n GlobalDictionaryProvider 必须共用，禁止两处手写键串。
+ * Phrase 模块/语种词典袋：Worker 进程内存态（非 Shared Memory）。
+ *
+ * 权威在本地文件（generated/language/{locale}.php、模块 i18n CSV）；
+ * 读取顺序：进程袋 → 调用方加载文件/DB → put 回进程袋。
+ * 禁止把整语种/整袋词典写入 phrase Shared Memory（会触发 frame_too_large）。
+ *
+ * 驻留与压力：put/get 走 DictionaryCacheNamespace locale LRU；
+ * Worker soft 预警（WorkerResponseMemoryGuard）回收时卸载冷语种袋。
  */
 final class GlobalDictionaryModuleBagCache
 {
+    /** @deprecated Bags no longer use Shared Memory TTL; retained for callers/tests. */
     public const SHARED_TTL_SECONDS = 3600;
+
+    /** @var array<string, array<string, string>> */
+    private static array $processBags = [];
+
+    private static bool $boundToDictionaryNamespace = false;
 
     private static ?CachePoolInterface $sharedPhraseCachePool = null;
     /** @var CachePoolInterface|null Unit-test override (do not use in production). */
@@ -31,12 +43,23 @@ final class GlobalDictionaryModuleBagCache
         return self::sharedKey($locale, ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY);
     }
 
+    /** Bind process bags so locale-bucket eviction / soft reclaim can purge them. */
+    public static function bindProcessBag(): void
+    {
+        DictionaryCacheNamespace::bindProcessBag('globalDictionaryModuleBags', self::$processBags);
+        self::$boundToDictionaryNamespace = true;
+    }
+
     /** @internal tests only */
     public static function setPoolOverrideForTests(?CachePoolInterface $pool): void
     {
         self::$poolOverrideForTests = $pool;
     }
 
+    /**
+     * Phrase pool handle for non-bag phrase traffic (word-level exact keys, etc.).
+     * Dictionary bags must not use this pool for get/set of whole locale/module maps.
+     */
     public static function pool(array $locales): ?CachePoolInterface
     {
         // Test override bypasses generation fingerprint (unit fixtures have no NamespaceGeneration).
@@ -69,42 +92,42 @@ final class GlobalDictionaryModuleBagCache
     }
 
     /**
-     * @return array<string, string>|null null = miss / pool unavailable
+     * @return array<string, string>|null null = miss
      */
     public static function get(string $locale, string $module): ?array
     {
-        $pool = self::pool([$locale]);
-        if ($pool === null) {
+        self::ensureBound();
+        $locale = LocaleFallbackChain::normalize(\trim($locale));
+        if ($locale === '') {
             return null;
         }
-        try {
-            $value = $pool->get(self::sharedKey($locale, $module));
-        } catch (\Throwable) {
-            return null;
+        $key = self::sharedKey($locale, $module);
+        $hit = self::$processBags[$key] ?? null;
+        if (\is_array($hit)) {
+            // Keep actively read locales warm under soft reclaim LRU.
+            DictionaryCacheNamespace::touchLocaleBucket($locale);
         }
 
-        return \is_array($value) ? $value : null;
+        return $hit;
     }
 
     /**
-     * Persist a module dictionary bag to the shared phrase pool.
-     * Returns false when the adapter refuses the write (e.g. former WLS
-     * wls_memory hijack); callers must not treat silence as success.
+     * Persist a module/locale dictionary bag in the current Worker process only.
      *
      * @param array<string, string> $words
      */
     public static function put(string $locale, string $module, array $words): bool
     {
-        $pool = self::pool([$locale]);
-        if ($pool === null) {
+        self::ensureBound();
+        $locale = LocaleFallbackChain::normalize(\trim($locale));
+        if ($locale === '') {
             return false;
         }
-        try {
-            return (bool)$pool->set(self::sharedKey($locale, $module), $words, self::SHARED_TTL_SECONDS);
-        } catch (\Throwable) {
-            // Callers still keep request memo / process L1.
-            return false;
-        }
+        self::$processBags[self::sharedKey($locale, $module)] = $words;
+        // Join heavy-locale LRU + store marker so soft pressure can drop cold locales.
+        DictionaryCacheNamespace::touchLocaleBucket($locale);
+
+        return true;
     }
 
     /**
@@ -123,10 +146,34 @@ final class GlobalDictionaryModuleBagCache
         return self::put($locale, ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY, $words);
     }
 
-    /** Test / reclaim hook — drops process-held pool handle only. */
+    /** Drop one locale's module bags (pressure / LRU). */
+    public static function evictLocale(string $locale): void
+    {
+        $locale = LocaleFallbackChain::normalize(\trim($locale));
+        if ($locale === '') {
+            return;
+        }
+        $prefix = 'global_dictionary_module_words|' . $locale . '|';
+        foreach (\array_keys(self::$processBags) as $key) {
+            if (\str_starts_with((string)$key, $prefix)) {
+                unset(self::$processBags[$key]);
+            }
+        }
+    }
+
+    /** Test / reclaim hook — drops process bags and pool handle. */
     public static function resetProcessPoolHandle(): void
     {
+        self::$processBags = [];
+        self::$boundToDictionaryNamespace = false;
         self::$sharedPhraseCachePool = null;
         self::$poolOverrideForTests = null;
+    }
+
+    private static function ensureBound(): void
+    {
+        if (!self::$boundToDictionaryNamespace) {
+            self::bindProcessBag();
+        }
     }
 }

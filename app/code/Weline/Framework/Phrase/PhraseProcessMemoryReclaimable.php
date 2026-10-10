@@ -10,6 +10,7 @@ use Weline\Framework\Runtime\WlsConcurrency;
 
 /**
  * Phrase 进程袋压力回收：优先整清最冷（未 pin）locale 桶，再回扫袋键。
+ * 候选 = LRU ∪ 袋内语种；Store 空但袋仍有键的语种也可驱逐。
  */
 final class PhraseProcessMemoryReclaimable implements MemoryReclaimableInterface
 {
@@ -45,16 +46,16 @@ final class PhraseProcessMemoryReclaimable implements MemoryReclaimableInterface
             return ['freed_bytes' => 0, 'skipped' => true, 'name' => $this->getName()];
         }
         $before = $this->store->estimateBytes();
-        $unpinned = $this->unpinnedLocales(DictionaryCacheNamespace::localeBucketResidents());
+        $candidates = DictionaryCacheNamespace::reclaimCandidateLocales();
+        $unpinned = $this->unpinnedLocales($candidates);
         if ($unpinned !== []) {
             $drop = \max(1, (int)\ceil(\count($unpinned) / 2));
             for ($i = 0; $i < $drop; $i++) {
                 DictionaryCacheNamespace::evictLocaleBucket($unpinned[$i]);
             }
         } else {
-            $locales = DictionaryCacheNamespace::localeBucketResidents();
             $this->inner->compact();
-            DictionaryCacheNamespace::reconcileAfterStoreEviction($locales);
+            DictionaryCacheNamespace::reconcileAfterStoreEviction($candidates);
         }
         $after = $this->store->estimateBytes();
 
@@ -71,7 +72,7 @@ final class PhraseProcessMemoryReclaimable implements MemoryReclaimableInterface
             return ['freed_bytes' => 0, 'skipped' => true, 'name' => $this->getName()];
         }
         $before = $this->store->estimateBytes();
-        $locales = DictionaryCacheNamespace::localeBucketResidents();
+        $locales = DictionaryCacheNamespace::reclaimCandidateLocales();
         foreach ($this->unpinnedLocales($locales) as $locale) {
             if (($before - $this->store->estimateBytes()) >= $targetBytes) {
                 break;
@@ -93,7 +94,7 @@ final class PhraseProcessMemoryReclaimable implements MemoryReclaimableInterface
     }
 
     /**
-     * @param list<string> $locales oldest → newest
+     * @param list<string> $locales oldest → newest (then bag-only)
      * @return list<string>
      */
     private function unpinnedLocales(array $locales): array
@@ -106,7 +107,9 @@ final class PhraseProcessMemoryReclaimable implements MemoryReclaimableInterface
             if (DictionaryCacheNamespace::isLocaleBucketPinned($locale)) {
                 continue;
             }
-            if ($this->store->keysInBucket($locale) === []) {
+            $hasStore = $this->store->keysInBucket($locale) !== [];
+            $hasBag = DictionaryCacheNamespace::localeHasBoundBagKeys($locale);
+            if (!$hasStore && !$hasBag) {
                 continue;
             }
             $out[] = $locale;

@@ -868,17 +868,14 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         if (\is_string($payload)) {
             return \strlen($payload) + 64;
         }
-        if (\is_array($payload) || \is_object($payload)) {
-            try {
-                $json = \json_encode(
-                    $payload,
-                    \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR,
-                );
+        // Never json_encode large payloads for metering — that itself OOMs near ceiling.
+        if (\is_array($payload)) {
+            $n = \count($payload);
 
-                return (\is_string($json) ? \strlen($json) : 1024) + 64;
-            } catch (\Throwable) {
-                return 1024;
-            }
+            return \min(self::PROCESS_CACHE_MAX_BYTES, ($n * 256) + 256);
+        }
+        if (\is_object($payload)) {
+            return 4096;
         }
         if ($payload === null) {
             return 64;

@@ -19,7 +19,13 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 {
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
-        if (!$context->isExplicitCacheClear() && !$context->aggressive) {
+        if ($context->isSoftContent()) {
+            StorefrontProductMediaUrlResolver::clearProcessReferenceCache();
+
+            return 1;
+        }
+
+        if (!$context->allowsRegistryClear() && !$context->isExplicitCacheClear()) {
             return 0;
         }
 

@@ -29,12 +29,19 @@ final class SessionProtocol
     /** 当前序列化器 */
     private static string $serializer = self::SERIALIZER_JSON;
 
-    // Memory FPC 使用同一原子 NDJSON 协议；8 MiB 覆盖大页面，同时保持严格有界。
-    private const MAX_FRAME_BYTES = 8_388_608;
-    public const MAX_BUFFER_BYTES = 16_777_216;
+    // Memory FPC 使用同一原子 NDJSON 协议。
+    // 2026-10-10 临时：生产实测 frame_too_large 集中在 8.4–10.9 MiB（旧上限 8 MiB），
+    // 上调到 12 MiB 止血；写侧仍严格拒收超限帧，避免 Memory 服务被灌爆。
+    private const MAX_FRAME_BYTES = 12_582_912;
+    public const MAX_BUFFER_BYTES = 25_165_824;
     private const MAX_MESSAGES_PER_EXTRACT = 1024;
     private const MAX_TLS_FRAME_BYTES = 524_288;
     private const MAX_TLS_BUFFER_BYTES = 1_048_576;
+
+    public static function maxFrameBytes(): int
+    {
+        return self::MAX_FRAME_BYTES;
+    }
     
     /**
      * 设置序列化器
@@ -168,7 +175,18 @@ final class SessionProtocol
     public static function encodeRequest(string $cmd, array $params = []): string
     {
         $message = ['cmd' => $cmd] + $params;
-        return self::serialize($message) . "\n";
+        $body = self::serialize($message);
+        // +1 for the trailing NDJSON newline that extractMessages counts in lineLength.
+        if (\strlen($body) + 1 > self::MAX_FRAME_BYTES) {
+            throw new \RuntimeException(
+                'WLS SessionProtocol frame_too_large: encoded request exceeds max_frame_bytes='
+                . self::MAX_FRAME_BYTES
+                . ' cmd=' . $cmd
+                . ' bytes=' . (\strlen($body) + 1)
+            );
+        }
+
+        return $body . "\n";
     }
     
     /**

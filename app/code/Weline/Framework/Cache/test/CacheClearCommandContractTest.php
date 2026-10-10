@@ -46,6 +46,28 @@ final class CacheClearCommandContractTest extends TestCase
         self::assertStringNotContainsString('StorefrontFpcWarmer', $source);
         self::assertStringContainsString('warmUp(\'fpc\')', $source);
         self::assertStringContainsString('warmUp(\'website\')', $source);
+        self::assertStringContainsString(
+            "warmUp('weline_theme_layout_entity_published_projection')",
+            $source,
+        );
+        self::assertStringContainsString("warmUp('product')", $source);
+        self::assertStringNotContainsString('SearchProjectionScopeCacheWarmer', $source);
+        self::assertStringNotContainsString('HomepageShelfOffersLocaleCacheWarmer', $source);
+        self::assertStringContainsString(
+            "warmUp('weline_theme_storefront_chrome')",
+            $source,
+        );
+        self::assertStringNotContainsString('StorefrontChromeLocaleCacheWarmer', $source);
+        // Multi-warmer pools must print Registry details (not one aggregate count).
+        self::assertStringContainsString('function reportWarmUpDetails', $source);
+        self::assertStringContainsString("\$result['details']", $source);
+        self::assertStringContainsString('warmed_l2_hit', $source);
+        self::assertStringContainsString('缓存预热 %{1} warmed=%{2}', $source);
+        // Partial Clear warm must not be printed as unqualified success.
+        self::assertStringContainsString('warm_partial=1', $source);
+        self::assertStringContainsString('host=unresolved', $source);
+        self::assertStringContainsString('gate_miss:', $source);
+        self::assertStringContainsString('->warning($line)', $source);
     }
 
     public function testForceClearsPermanentPools(): void

@@ -2256,6 +2256,14 @@ while (true) {
         }
     }
 
+    // Loop-layer memory autonomy (same as worker_ssl): shed while peers may be busy.
+    if (($workerLoopCount % 8) === 0) {
+        try {
+            \Weline\Server\Service\WorkerResponseMemoryGuard::compactForNewRequestHeadroom(false);
+        } catch (\Throwable) {
+        }
+    }
+
     // 定期刷新日志缓冲区（避免日志堆积）
     WlsLogger::flush_(false);
     $workerTelemetryReporter->tick($ipcClient);

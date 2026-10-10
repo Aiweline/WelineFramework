@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Framework',
-        "version" => '2.5.323',
+        "version" => '2.5.335',
     "requires" => [
     ],
     "optional" => [
@@ -28,5 +28,7 @@ return [
             => \Weline\Framework\Event\Async\AsyncEventDeliveryMaintenance::class,
         \Weline\Framework\Http\UrlInterface::class
             => \Weline\Framework\Http\Url::class,
+        'process_cache_resetter.Weline_Framework'
+            => \Weline\Framework\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

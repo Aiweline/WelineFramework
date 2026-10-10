@@ -6,6 +6,7 @@ namespace Weline\Server\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ModuleProcessCacheResetterRegistry;
 use Weline\Framework\Runtime\ProcessCacheResetContext;
+use Weline\Framework\Runtime\ProcessMemoryReclaimFacade;
 use Weline\Framework\Runtime\WlsConcurrency;
 
 final class WorkerResponseMemoryGuard
@@ -24,13 +25,19 @@ final class WorkerResponseMemoryGuard
     private const SOFT_HEAP_FORCE_BYTES = 48 * 1024 * 1024;
     /** 未知内存上限时，保留绝对量触发的 aggressive 回收。 */
     private const LARGE_HEAP_FORCE_AGGRESSIVE_BYTES = 64 * 1024 * 1024;
-    /** 回收后 shell 达此量是 ratchet 候选；有限预算下还须达到 soft 压力。 */
+    /** 回收后 shell 达此量即 ratchet 候选（不过 soft 比）。 */
     private const ZEND_SHELL_DRAIN_BYTES = 48 * 1024 * 1024;
     /** real may exceed captured warm baseline by this much before drain. */
     private const ZEND_REAL_OVER_BASELINE_DRAIN_BYTES = 32 * 1024 * 1024;
     /** Capture warm baseline only when shell is small enough to look like framework floor. */
     private const ZEND_WARM_BASELINE_MAX_SHELL_BYTES = 24 * 1024 * 1024;
     private const ZEND_WARM_BASELINE_MAX_USED_BYTES = 96 * 1024 * 1024;
+    /** Absolute Zend-real headroom below this → loop shed even under soft ratio. */
+    private const LOOP_HEADROOM_SHED_BYTES = 64 * 1024 * 1024;
+    /** Zend shell (real−used) above this → gc_mem_caches without wiping bags. */
+    private const LOOP_SHELL_TRIM_BYTES = 24 * 1024 * 1024;
+    /** used above this → soft rebuildable process-cache reclaim (busy-safe OM when peers). */
+    private const LOOP_USED_SOFT_RECLAIM_BYTES = 96 * 1024 * 1024;
 
     private static ?array $runtimeCacheThresholds = null;
     /** Pressure denominator from Worker `--memory-limit` (ignore DevTool-inflated ini). */
@@ -172,7 +179,11 @@ final class WorkerResponseMemoryGuard
         self::$pressureLimitBytes = $bytes > 0 ? $bytes : null;
     }
 
-    /** 仅在回收后仍有预算压力且符合 ratchet 候选时，请求安全退役。 */
+    /**
+     * 回收后请求安全退役。
+     * shell≥ZEND_SHELL_DRAIN：不过 soft 比（used↓ 后 ratio 常跌破 soft）。
+     * baseline 超标路径仍要求 real/limit ≥ soft（limit≤0 时仅看 baseline）。
+     */
     public static function shouldDrainForZendRatchet(
         int $realBytes,
         int $usedBytes,
@@ -180,10 +191,6 @@ final class WorkerResponseMemoryGuard
         bool $afterForcedReclaim
     ): bool {
         if (!$afterForcedReclaim || $realBytes <= 0) {
-            return false;
-        }
-        $limitBytes = self::getMemoryLimitBytes();
-        if ($limitBytes > 0 && $realBytes / $limitBytes < self::getRuntimeCacheThresholds()['soft']) {
             return false;
         }
         $shell = \max(0, $realBytes - \max(0, $usedBytes));
@@ -194,7 +201,12 @@ final class WorkerResponseMemoryGuard
             && $warmRealBaselineBytes > 0
             && $realBytes >= ($warmRealBaselineBytes + self::ZEND_REAL_OVER_BASELINE_DRAIN_BYTES)
         ) {
-            return true;
+            $limitBytes = self::getMemoryLimitBytes();
+            if ($limitBytes <= 0) {
+                return true;
+            }
+
+            return ($realBytes / $limitBytes) >= self::getRuntimeCacheThresholds()['soft'];
         }
 
         return false;
@@ -458,9 +470,7 @@ final class WorkerResponseMemoryGuard
 
     /**
      * 清理长生命周期 Worker 中可安全重建的热点缓存。
-     *
-     * `aggressive=true` 时会额外清理部分进程级注册表/路由热点缓存，
-     * 优先避免高压下继续膨胀导致 OOM。
+     * 只编排：OM → ProcessMemoryReclaimFacade → ModuleProcessCacheResetterRegistry。
      *
      * @return array{memory_store_clears:int, metadata_entries_cleared:int, cleared_process_caches:int}
      */
@@ -472,10 +482,6 @@ final class WorkerResponseMemoryGuard
             'cleared_process_caches' => 0,
         ];
 
-        // ObjectManager MemoryStore and process registries are shared by all
-        // request Fibers. A peer may still be rendering from those objects, so
-        // only the worker-owned WlsConcurrency fact source may authorize a
-        // process-cache compaction window.
         if (!WlsConcurrency::canCompactProcessCaches()) {
             return $compactions;
         }
@@ -486,111 +492,229 @@ final class WorkerResponseMemoryGuard
             $compactions['metadata_entries_cleared'] = (int) ($objectManagerCompaction['metadata_entries_cleared'] ?? 0);
         }
 
-        if (\class_exists(\Weline\Framework\View\TemplateCacheManager::class, false)) {
-            \Weline\Framework\View\TemplateCacheManager::clearProcessMemoryCache();
-            $compactions['cleared_process_caches']++;
-        }
-
-        // AST intern pools: soft half-trim; hard/aggressive full reset.
-        if (\class_exists(\Weline\Framework\View\Taglib\Ast\NodePool::class, false)
-            || \class_exists(\Weline\Framework\View\Taglib\Ast\NodePool::class, true)
-        ) {
-            if ($aggressive) {
-                \Weline\Framework\View\Taglib\Ast\NodePool::reset();
-            } else {
-                \Weline\Framework\View\Taglib\Ast\NodePool::trimForMemoryPressure();
+        $registry = ProcessMemoryReclaimFacade::registry();
+        if ($aggressive) {
+            $evict = $registry->evictBytes(ProcessMemoryReclaimFacade::HARD_EVICT_BYTES, true);
+            // Ensure FPC last-resort even when estimate was zero (critical parity).
+            $fpc = $registry->evictBytes(1, true);
+            $compactions['cleared_process_caches'] += \count($evict['details'] ?? []) + \count($fpc['details'] ?? []);
+            $compactions['phrase_freed_bytes'] = self::phraseFreedFromDetails(
+                \array_merge($evict['details'] ?? [], $fpc['details'] ?? [])
+            );
+            if (((int)($fpc['freed_bytes'] ?? 0)) > 0 || ((int)($evict['freed_bytes'] ?? 0)) > 0) {
+                $compactions['fpc_process_cache_cleared'] = 1;
             }
-            $compactions['cleared_process_caches']++;
-        }
-
-        // Phrase: soft = locale-bucket reclaim; hard/aggressive = full worker bag clear.
-        if (\class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class, false)
-            || \class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class, true)
-        ) {
-            if ($aggressive) {
-                if (\class_exists(\Weline\Framework\Phrase\Parser::class, false)
-                    || \class_exists(\Weline\Framework\Phrase\Parser::class, true)
-                ) {
-                    \Weline\Framework\Phrase\Parser::clearWorkerCaches();
-                    $compactions['cleared_process_caches']++;
-                }
-            } else {
-                $phraseReclaim = \Weline\Framework\Phrase\DictionaryCacheNamespace::processMemoryReclaimable()
-                    ->compact();
-                if (empty($phraseReclaim['skipped'])) {
-                    $compactions['cleared_process_caches']++;
-                    $compactions['phrase_freed_bytes'] = (int)($phraseReclaim['freed_bytes'] ?? 0);
-                }
-            }
-        } elseif (\class_exists(\Weline\Framework\Phrase\Parser::class, false)
-            || \class_exists(\Weline\Framework\Phrase\Parser::class, true)
-        ) {
-            \Weline\Framework\Phrase\Parser::clearWorkerCaches();
-            $compactions['cleared_process_caches']++;
+        } else {
+            // Request soft: compactAll (Phrase half-locale / NodePool trim) — not evictBytes(8MiB).
+            $compact = $registry->compactAll();
+            $compactions['cleared_process_caches'] += \count($compact['details'] ?? []);
+            $compactions['phrase_freed_bytes'] = self::phraseFreedFromDetails($compact['details'] ?? []);
         }
 
         try {
+            $context = $aggressive
+                ? new ProcessCacheResetContext(
+                    ProcessCacheResetContext::REASON_MEMORY_PRESSURE,
+                    true,
+                    ProcessCacheResetContext::SURFACE_ALL,
+                    ProcessCacheResetContext::TIER_HARD,
+                )
+                : new ProcessCacheResetContext(
+                    ProcessCacheResetContext::REASON_MEMORY_PRESSURE,
+                    false,
+                    ProcessCacheResetContext::SURFACE_CONTENT,
+                    ProcessCacheResetContext::TIER_SOFT,
+                );
             $compactions['cleared_process_caches'] += ObjectManager::getInstance(
                 ModuleProcessCacheResetterRegistry::class,
-            )->reset(new ProcessCacheResetContext(
-                ProcessCacheResetContext::REASON_MEMORY_PRESSURE,
-                $aggressive,
-            ));
+            )->reset($context);
         } catch (\Throwable) {
             // Incomplete bootstrap (no BP / cache adapters) must not abort reclaim.
         }
 
-        if ($aggressive && \class_exists(\Weline\Framework\Event\EventData::class, false)) {
-            \Weline\Framework\Event\EventData::clearCache();
-            $compactions['cleared_process_caches']++;
-        }
-
-        if ($aggressive && \class_exists(\Weline\Framework\Event\EventRegistry::class, false)
-            && \method_exists(\Weline\Framework\Event\EventRegistry::class, 'clearRuntimeCache')
-        ) {
-            \Weline\Framework\Event\EventRegistry::clearRuntimeCache();
-            $compactions['cleared_process_caches']++;
-        }
-
-        if ($aggressive && \class_exists(\Weline\Framework\Extends\ExtendsData::class, false)) {
-            \Weline\Framework\Extends\ExtendsData::clearCache();
-            $compactions['cleared_process_caches']++;
-        }
-
-        if ($aggressive && \class_exists(\Weline\Framework\Router\Core::class, false)) {
-            \Weline\Framework\Router\Core::resetGeneratedRouterFileCache();
-            $compactions['cleared_process_caches']++;
-        }
-
-        if ($aggressive && \class_exists(\Weline\Server\Service\MemoryCacheService::class, false)) {
-            \Weline\Server\Service\MemoryCacheService::purgeAll();
-            \Weline\Server\Service\MemoryCacheService::resetStats();
-            $compactions['cleared_process_caches']++;
-        }
-
-        if ($aggressive && \class_exists(\Weline\Framework\Support\Php84::class, false)) {
-            \Weline\Framework\Support\Php84::clearCache();
-            $compactions['cleared_process_caches']++;
-        }
-
-        if ($aggressive && \class_exists(\Weline\Framework\System\Process\Processer::class, false)) {
-            \Weline\Framework\System\Process\Processer::clearTrustedPidCache();
-            \Weline\Framework\System\Process\Processer::clearPortCache();
-            \Weline\Framework\System\Process\Processer::clearLogEnabledCache();
-            $compactions['cleared_process_caches']++;
-        }
-
-        // D14: FPC process L1 is last-resort reclaimable under hard pressure only.
-        if ($aggressive
-            && (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class, false)
-                || \class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class, true))
-        ) {
-            \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
-            $compactions['cleared_process_caches']++;
-            $compactions['fpc_process_cache_cleared'] = 1;
-        }
-
         return $compactions;
+    }
+
+    /**
+     * Worker event-loop shed: free headroom for *new* requests while peer Fibers
+     * may still be running. Does NOT require {@see WlsConcurrency::canCompactProcessCaches()}.
+     * Does NOT request Worker suicide/drain — slow miss is OK; OOM is not.
+     *
+     * @return array{
+     *   triggered:bool,
+     *   pressure:float,
+     *   locales_evicted:list<string>,
+     *   hotcache_trimmed_bytes:int,
+     *   allocator_trimmed_bytes:int,
+     *   used_before:int,
+     *   used_after:int
+     * }
+     */
+    public static function compactForNewRequestHeadroom(bool $force = false): array
+    {
+        $pressure = self::getMemoryPressure();
+        self::$lastPressure = $pressure;
+        $thresholds = self::getRuntimeCacheThresholds();
+        $usedBefore = \memory_get_usage(false);
+        $realBefore = \memory_get_usage(true);
+        $shellBefore = \max(0, $realBefore - $usedBefore);
+        $limitBytes = self::getMemoryLimitBytes();
+        $absoluteHeadroom = $limitBytes > 0 ? \max(0, $limitBytes - $realBefore) : \PHP_INT_MAX;
+        $lowHeadroom = $absoluteHeadroom < self::LOOP_HEADROOM_SHED_BYTES;
+        $shellHigh = $shellBefore >= self::LOOP_SHELL_TRIM_BYTES;
+        $usedHigh = $usedBefore >= self::LOOP_USED_SOFT_RECLAIM_BYTES;
+        $empty = [
+            'triggered' => false,
+            'pressure' => $pressure,
+            'locales_evicted' => [],
+            'hotcache_trimmed_bytes' => 0,
+            'allocator_trimmed_bytes' => 0,
+            'process_caches_cleared' => 0,
+            'used_before' => $usedBefore,
+            'used_after' => $usedBefore,
+        ];
+        // Soft ratio, absolute headroom, Zend shell creep, or used climb.
+        if (!$force && $pressure < $thresholds['soft'] && !$lowHeadroom && !$shellHigh && !$usedHigh) {
+            return $empty;
+        }
+
+        $shedBags = $force || $lowHeadroom || $pressure >= $thresholds['soft']
+            || $usedBefore >= self::LOOP_USED_SOFT_RECLAIM_BYTES;
+        $localesEvicted = [];
+        $hotTrimmed = 0;
+        $processCachesCleared = 0;
+        if ($shedBags) {
+            $keepWarmLocales = ($pressure >= $thresholds['hard'] || $absoluteHeadroom < (48 * 1024 * 1024))
+                ? 0
+                : 1;
+
+            if (\class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class, false)
+                || \class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class)
+            ) {
+                $shed = \Weline\Framework\Phrase\DictionaryCacheNamespace::shedColdLocalesForHeadroom(
+                    $keepWarmLocales
+                );
+                $localesEvicted = $shed['evicted'];
+            }
+
+            if (\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class, false)
+                || \class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)
+            ) {
+                $budget = ($pressure >= $thresholds['hard'] || $keepWarmLocales === 0)
+                    ? (512 * 1024)
+                    : (1536 * 1024);
+                $hotTrimmed = (int)\Weline\Framework\Cache\Service\StorefrontScopeHotCache::trimProcessCacheToBudget($budget);
+            }
+
+            // Rebuildable reclaim when used climbs (no drain). Near ceiling + idle → hard;
+            // peers → OM soft only; otherwise soft Facade + Resetter.
+            if ($usedBefore >= self::LOOP_USED_SOFT_RECLAIM_BYTES || $pressure >= $thresholds['soft'] || $lowHeadroom) {
+                $aggressive = $lowHeadroom && $absoluteHeadroom < (56 * 1024 * 1024);
+                if (WlsConcurrency::canCompactProcessCaches()) {
+                    $runtime = self::compactRuntimeCaches($aggressive);
+                    $processCachesCleared = (int)($runtime['cleared_process_caches'] ?? 0);
+                } elseif (\class_exists(ObjectManager::class, false)
+                    || \class_exists(ObjectManager::class)
+                ) {
+                    $om = ObjectManager::relieveMemoryPressure($aggressive);
+                    $processCachesCleared = (int)(($om['memory_store_clears'] ?? 0) + ($om['memory_store_evictions'] ?? 0));
+                }
+            }
+        }
+
+        // Allocator freelist trim — primary fix for 256M shell balloon; no bag wipe, no drain.
+        \gc_collect_cycles();
+        $allocatorTrimmed = 0;
+        if (\function_exists('gc_mem_caches')) {
+            $allocatorTrimmed = \max(0, (int)\gc_mem_caches());
+            $allocatorTrimmed += \max(0, (int)\gc_mem_caches());
+        }
+
+        if ($localesEvicted !== [] || $hotTrimmed > 0 || $allocatorTrimmed > 0 || $processCachesCleared > 0) {
+            self::$compactSoftCount++;
+        }
+
+        $usedAfter = \memory_get_usage(false);
+        if (\class_exists(\Weline\Framework\Runtime\MemDiag::class, false)
+            || \class_exists(\Weline\Framework\Runtime\MemDiag::class)
+        ) {
+            \Weline\Framework\Runtime\MemDiag::event('worker_loop_headroom_shed', [
+                'pressure' => $pressure,
+                'locales_evicted' => $localesEvicted,
+                'hotcache_trimmed_bytes' => $hotTrimmed,
+                'allocator_trimmed_bytes' => $allocatorTrimmed,
+                'process_caches_cleared' => $processCachesCleared,
+                'shell_before' => $shellBefore,
+                'peers' => WlsConcurrency::getOtherSuspendedRequestFiberCount(),
+                'delta_used' => $usedBefore - $usedAfter,
+            ]);
+        }
+
+        return [
+            'triggered' => true,
+            'pressure' => $pressure,
+            'locales_evicted' => $localesEvicted,
+            'hotcache_trimmed_bytes' => $hotTrimmed,
+            'allocator_trimmed_bytes' => $allocatorTrimmed,
+            'process_caches_cleared' => $processCachesCleared,
+            'used_before' => $usedBefore,
+            'used_after' => $usedAfter,
+        ];
+    }
+
+    /**
+     * Host pressure levels → single Guard entry (no private Applier Registry).
+     * yellow=soft compactAll; red=evictBytes(8MiB)+soft; critical=hard+FPC.
+     *
+     * @return array{freed_bytes:int, skipped:int, runtime_cache_compactions?:array}
+     */
+    public static function compactForHostLevel(string $level): array
+    {
+        $level = \strtolower(\trim($level));
+        if ($level === 'green' || $level === '') {
+            return ['freed_bytes' => 0, 'skipped' => 0];
+        }
+        if (!WlsConcurrency::canCompactProcessCaches()) {
+            return ['freed_bytes' => 0, 'skipped' => 1];
+        }
+
+        $before = \memory_get_usage(true);
+        $result = ['freed_bytes' => 0, 'skipped' => 0];
+
+        if ($level === 'red') {
+            $evict = ProcessMemoryReclaimFacade::registry()->evictBytes(
+                ProcessMemoryReclaimFacade::SOFT_EVICT_BYTES,
+                false
+            );
+            $result['freed_bytes'] = (int)($evict['freed_bytes'] ?? 0);
+            $result['skipped'] = (int)($evict['skipped'] ?? 0);
+            $runtime = self::compactRuntimeCaches(false);
+        } elseif ($level === 'critical') {
+            $runtime = self::compactRuntimeCaches(true);
+        } else { // yellow
+            $runtime = self::compactRuntimeCaches(false);
+        }
+
+        $after = \memory_get_usage(true);
+        $observed = \max(0, $before - $after);
+        $result['freed_bytes'] = \max((int)($result['freed_bytes'] ?? 0), $observed);
+        $result['runtime_cache_compactions'] = $runtime;
+
+        return $result;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $details
+     */
+    private static function phraseFreedFromDetails(array $details): int
+    {
+        foreach ($details as $row) {
+            if (($row['name'] ?? '') === 'phrase_dictionary_process_store') {
+                return (int)($row['freed_bytes'] ?? 0);
+            }
+        }
+
+        return 0;
     }
 
     private static function getMemoryPressure(): float

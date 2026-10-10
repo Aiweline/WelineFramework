@@ -68,6 +68,27 @@ final class StorefrontHotCacheBagSeeder
             $errors[] = 'catalog_offers_summary:' . $e->getMessage();
         }
 
+        // Channel-scoped search projection (not lang-vary): peek then one seed.
+        // Cold-chaos 2026-10-10: empty bag nested under search.query_result ~0.5–1.2s.
+        // Allowed on light stages — single bag, not full×locales / publishedOffers(1000).
+        if ($stage === 'locale_bag_prime'
+            || $stage === 'currency_bag_prime'
+            || $stage === 'peer_hydrate'
+            || $stage === 'critical'
+            || $stage === 'post_critical_heavy'
+            || $stage === ''
+        ) {
+            $proj = $this->primeSearchProjectionScope();
+            $seeded += (int)($proj['seeded'] ?? 0);
+            $peeked += (int)($proj['peeked'] ?? 0);
+            foreach (\is_array($proj['bags'] ?? null) ? $proj['bags'] : [] as $bag) {
+                $bags[] = (string)$bag;
+            }
+            foreach (\is_array($proj['errors'] ?? null) ? $proj['errors'] : [] as $error) {
+                $errors[] = (string)$error;
+            }
+        }
+
         // locale/currency_bag_prime allowlist: homepage featured shelf (summary/targeted).
         // Never publishedOffers(1000) here — resolveHeavyMode keeps light_only.
         // currency_bag_prime fills product_card_html for non-default currencies (vary).
@@ -202,6 +223,61 @@ final class StorefrontHotCacheBagSeeder
             'errors' => $errors,
             'deferred' => $deferred,
         ];
+    }
+
+    /**
+     * @return array{seeded:int,peeked:int,bags:list<string>,errors:list<string>}
+     */
+    private function primeSearchProjectionScope(): array
+    {
+        $seeded = 0;
+        $peeked = 0;
+        $bags = [];
+        $errors = [];
+
+        try {
+            $websiteId = $this->resolveWebsiteId();
+            $storeId = 0;
+            $channelId = 0;
+            try {
+                $storeId = \max(0, (int)RequestContext::getWelineStoreId());
+                $channelId = \max(0, (int)RequestContext::getWelineChannelId());
+            } catch (\Throwable) {
+            }
+
+            /** @var ProductSearchProjectionService $projection */
+            $projection = ObjectManager::getInstance(ProductSearchProjectionService::class);
+            $watermark = $projection->currentWatermark($websiteId);
+            $logicalKey = StorefrontCatalogCacheCoordinator::searchProjectionScopeLogicalKey(
+                $websiteId,
+                $storeId,
+                $channelId,
+                $watermark,
+            );
+
+            /** @var StorefrontScopeHotCache $hotCache */
+            $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+            $payload = $hotCache->peekPolicy(
+                StorefrontCatalogCacheCoordinator::searchProjectionScopePolicy(),
+                $logicalKey,
+            );
+            if (\is_array($payload) && $payload !== []) {
+                $peeked++;
+                $bags[] = 'product.search_projection_scope';
+
+                return compact('seeded', 'peeked', 'bags', 'errors');
+            }
+
+            $snapshot = $projection->snapshotScope($websiteId, $storeId, $channelId);
+            if (\is_array($snapshot) && $snapshot !== []) {
+                $seeded++;
+                $bags[] = 'product.search_projection_scope';
+            }
+        } catch (\Throwable $e) {
+            $errors[] = 'search_projection_scope:' . $e->getMessage();
+        }
+
+        return compact('seeded', 'peeked', 'bags', 'errors');
     }
 
     /**

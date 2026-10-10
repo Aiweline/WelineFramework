@@ -128,10 +128,10 @@ class Clear implements \Weline\Framework\Console\CommandInterface
 
         // 向 WLS 发送缓存清理命令（进程内缓存失效，不重启 Worker）
         if ($this->sendWlsCacheClearCommand()) {
-            // 即将整树删除编译物时预热无意义，且易与删除竞态。
-            if (!$skipViewCompile) {
-                $this->warmStorefrontFpcAfterClear();
-            }
+            // Soft-clear (--pools-only) must warm after flush so quiet-cold HTTP
+            // sees chrome/shelf L2. Full clear warms after view/tpl delete.
+            // Skip only when WLS clear itself failed (caller already returned).
+            $this->warmStorefrontFpcAfterClear();
         }
     }
 
@@ -152,13 +152,90 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note(__('店面 FPC 预热未命中可暖路径（WLS 未就绪或主机不可达）'));
             }
             // Website pool: store/channel catalog HotCache (soft-clear cold hit1 tax).
-            $scopeResult = $registry->warmUp('website');
-            $scopeWarmed = (int)($scopeResult['warmed'] ?? 0);
-            if ($scopeWarmed > 0) {
-                $this->printing->successIcon(__('网站范围目录已预热 %{1} 条', [$scopeWarmed]));
-            }
+            $this->reportWarmUpDetails(
+                $registry->warmUp('website'),
+                '网站范围目录已预热 %{1} 条',
+            );
+            // Layout-entity projection pool (Theme warmer provides; no Theme FQCN soft-pull).
+            $this->reportWarmUpDetails(
+                $registry->warmUp('weline_theme_layout_entity_published_projection'),
+                '部件静态源袋已预热 %{1} 条',
+            );
+            // Product pool: search projection + shelf/offers locale warmers (Registry details).
+            $this->reportWarmUpDetails(
+                $registry->warmUp('product'),
+                '商品池缓存已预热 %{1} 条',
+            );
+            // Chrome pool: enabled-locale header/footer HotCache (Theme warmer provides).
+            $this->reportWarmUpDetails(
+                $registry->warmUp('weline_theme_storefront_chrome'),
+                '店面 chrome 语种袋已预热 %{1} 条',
+            );
         } catch (\Throwable $e) {
             $this->printing->note(__('店面 FPC 预热跳过：%{1}', [$e->getMessage()]));
+        }
+    }
+
+    /**
+     * Print each warmer detail line so multi-warmer pools (e.g. product) do not
+     * collapse into one aggregate count that hides shelf/offers messages.
+     *
+     * @param array<string, mixed> $result CacheWarmerRegistry::warmUp result
+     */
+    private function reportWarmUpDetails(array $result, string $aggregateFallbackTemplate): void
+    {
+        $details = \is_array($result['details'] ?? null) ? $result['details'] : [];
+        if ($details === []) {
+            $warmed = (int)($result['warmed'] ?? 0);
+            if ($warmed > 0) {
+                $this->printing->successIcon(__($aggregateFallbackTemplate, [$warmed]));
+            }
+
+            return;
+        }
+
+        foreach ($details as $detail) {
+            if (!\is_array($detail)) {
+                continue;
+            }
+            $name = (string)($detail['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $status = (string)($detail['status'] ?? '');
+            $warmed = (int)($detail['warmed'] ?? 0);
+            $message = \trim((string)($detail['message'] ?? ''));
+
+            if ($status === 'error') {
+                $this->printing->note(__('缓存预热失败 %{1}：%{2}', [$name, $message !== '' ? $message : 'error']));
+                continue;
+            }
+            if ($status === 'skipped') {
+                $this->printing->note(__('缓存预热跳过 %{1}：%{2}', [$name, $message !== '' ? $message : 'skipped']));
+                continue;
+            }
+
+            // Always surface ok lines that carry L2 / remaining evidence — even warmed=0 peek_hit.
+            $line = $message !== ''
+                ? __('缓存预热 %{1} warmed=%{2} %{3}', [$name, $warmed, $message])
+                : __('缓存预热 %{1} warmed=%{2}', [$name, $warmed]);
+            $partial = $message !== '' && (
+                \str_contains($message, 'remaining=')
+                || \str_contains($message, 'warm_partial=1')
+                || \str_contains($message, 'host=unresolved')
+                || \str_contains($message, 'gate_miss:')
+            );
+            $hasL2Evidence = \str_contains($message, 'warmed_l2_hit')
+                || \str_contains($message, 'peek_hit')
+                || \str_contains($message, 'shelf_l2');
+            if ($partial) {
+                // Budget cut / host miss / gate miss — never green as full L2 PASS.
+                $this->printing->warning($line);
+            } elseif ($warmed > 0 || $hasL2Evidence) {
+                $this->printing->successIcon($line);
+            } else {
+                $this->printing->note($line);
+            }
         }
     }
 

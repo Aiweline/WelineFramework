@@ -5190,6 +5190,16 @@ while (true) {
         WlsLogger::info_("[Worker SSL] 循环未被阻塞 #{$workerLoopCount} #{$workerLoopCount}");
         }
     }
+
+    // Loop-layer memory autonomy: shed cold bags even while peer Fibers are busy.
+    // Miss after shed is slow OK; waiting for peers==0 before compact is how Workers OOM.
+    if (($workerLoopCount % 8) === 0) {
+        try {
+            \Weline\Server\Service\WorkerResponseMemoryGuard::compactForNewRequestHeadroom(false);
+        } catch (\Throwable) {
+            // Never let reclaim kill the event loop.
+        }
+    }
     
     // 定期刷新日志缓冲区（避免日志堆积）
     WlsLogger::flush_(false);

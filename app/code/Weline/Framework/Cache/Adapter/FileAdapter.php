@@ -47,12 +47,52 @@ class FileAdapter implements CacheAdapterInterface
         }
     }
 
+    /** Skip whole-file IO that would push a near-full Worker over memory_limit. */
+    private const NEAR_LIMIT_REFUSE_FILE_BYTES = 8 * 1024 * 1024;
+    private const NEAR_LIMIT_HEADROOM_BYTES = 48 * 1024 * 1024;
+
+    private function memoryLimitBytes(): int
+    {
+        $limit = \ini_get('memory_limit');
+        if (!\is_string($limit) || $limit === '' || $limit === '-1') {
+            return 0;
+        }
+        $unit = \strtolower(\substr($limit, -1));
+        $value = (float)$limit;
+
+        return match ($unit) {
+            'g' => (int)($value * 1024 * 1024 * 1024),
+            'm' => (int)($value * 1024 * 1024),
+            'k' => (int)($value * 1024),
+            default => (int)$value,
+        };
+    }
+
+    /** Remaining bytes before memory_limit (0 = unknown / unlimited). */
+    private function memoryHeadroomBytes(): int
+    {
+        $limitBytes = $this->memoryLimitBytes();
+        if ($limitBytes <= 0) {
+            return PHP_INT_MAX;
+        }
+
+        return \max(0, $limitBytes - \memory_get_usage(true));
+    }
+
     public function get(string $key): mixed
     {
         $file = $this->getFilePath($key);
         
         if (!file_exists($file)) {
             return null;
+        }
+
+        $size = @\filesize($file);
+        if (\is_int($size) && $size > self::NEAR_LIMIT_REFUSE_FILE_BYTES) {
+            if ($this->memoryHeadroomBytes() < ($size + self::NEAR_LIMIT_HEADROOM_BYTES)) {
+                // Miss → slow rebuild; never OOM the Worker for one cache blob.
+                return null;
+            }
         }
 
         $content = @file_get_contents($file);
@@ -75,6 +115,11 @@ class FileAdapter implements CacheAdapterInterface
 
     public function set(string $key, mixed $value, int $ttl = 0): bool
     {
+        // Near ceiling: refuse serialize/write (miss next time) instead of OOM.
+        if ($this->memoryHeadroomBytes() < self::NEAR_LIMIT_HEADROOM_BYTES) {
+            return false;
+        }
+
         $file = $this->getFilePath($key);
         $dir = dirname($file);
         
@@ -88,7 +133,21 @@ class FileAdapter implements CacheAdapterInterface
             'created' => time(),
         ];
 
-        return file_put_contents($file, serialize($data), LOCK_EX) !== false;
+        try {
+            $payload = \serialize($data);
+        } catch (\Throwable) {
+            return false;
+        }
+        if (!\is_string($payload)) {
+            return false;
+        }
+        if (\strlen($payload) > self::NEAR_LIMIT_REFUSE_FILE_BYTES
+            && $this->memoryHeadroomBytes() < (\strlen($payload) + self::NEAR_LIMIT_HEADROOM_BYTES)
+        ) {
+            return false;
+        }
+
+        return file_put_contents($file, $payload, LOCK_EX) !== false;
     }
 
     public function delete(string $key): bool

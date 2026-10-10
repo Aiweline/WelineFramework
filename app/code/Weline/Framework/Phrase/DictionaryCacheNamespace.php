@@ -230,6 +230,118 @@ final class DictionaryCacheNamespace
         return self::$localeLru;
     }
 
+    /**
+     * Locales that still have keys in bound Phrase bags (Parser / GlobalDictionary).
+     * May include locales absent from {@see localeBucketResidents()} when bags were
+     * filled via {@see localCache()} without {@see touchLocaleBucket()}.
+     *
+     * @return list<string>
+     */
+    public static function localesPresentInBoundBags(): array
+    {
+        $found = [];
+        foreach (self::$bagRefs as &$bag) {
+            if (!\is_array($bag)) {
+                continue;
+            }
+            foreach (\array_keys($bag) as $key) {
+                foreach (self::extractLocalesFromCacheKey((string)$key) as $locale) {
+                    $found[$locale] = true;
+                }
+            }
+        }
+        unset($bag);
+
+        return \array_keys($found);
+    }
+
+    /**
+     * Soft reclaim candidates: LRU (oldest → newest) ∪ bag-only locales.
+     *
+     * @return list<string>
+     */
+    public static function reclaimCandidateLocales(): array
+    {
+        $seen = [];
+        $out = [];
+        foreach (self::$localeLru as $locale) {
+            if (!\is_string($locale) || $locale === '' || isset($seen[$locale])) {
+                continue;
+            }
+            $seen[$locale] = true;
+            $out[] = $locale;
+        }
+        foreach (self::localesPresentInBoundBags() as $locale) {
+            if (isset($seen[$locale])) {
+                continue;
+            }
+            $seen[$locale] = true;
+            $out[] = $locale;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Busy-safe shed for Worker loop: drop oldest unpinned locale bags so new
+     * requests get headroom. Safe while peer Fibers exist (pinned buckets kept).
+     * Miss after shed = slow rebuild; never OOM for warm cache.
+     *
+     * @return array{evicted:list<string>, count:int}
+     */
+    public static function shedColdLocalesForHeadroom(int $maxDrop = 0): array
+    {
+        $candidates = self::reclaimCandidateLocales();
+        $unpinned = [];
+        foreach ($candidates as $locale) {
+            if (self::isLocaleBucketPinned($locale)) {
+                continue;
+            }
+            if (!self::localeHasBoundBagKeys($locale) && (self::$store === null || self::$store->keysInBucket($locale) === [])) {
+                continue;
+            }
+            $unpinned[] = $locale;
+        }
+        if ($unpinned === []) {
+            return ['evicted' => [], 'count' => 0];
+        }
+        $drop = $maxDrop > 0
+            ? \min($maxDrop, \count($unpinned))
+            : \max(1, (int)\ceil(\count($unpinned) / 2));
+        $evicted = [];
+        for ($i = 0; $i < $drop; $i++) {
+            $locale = $unpinned[$i];
+            self::evictLocaleBucket($locale, false);
+            $evicted[] = $locale;
+        }
+
+        return ['evicted' => $evicted, 'count' => \count($evicted)];
+    }
+
+    /** True when any bound bag still holds keys for this locale. */
+    public static function localeHasBoundBagKeys(string $locale): bool
+    {
+        $locale = LocaleFallbackChain::normalize(\trim($locale));
+        if ($locale === '') {
+            return false;
+        }
+        foreach (self::$bagRefs as &$bag) {
+            if (!\is_array($bag)) {
+                continue;
+            }
+            foreach (\array_keys($bag) as $key) {
+                if (self::cacheKeyBelongsToLocale((string)$key, $locale)) {
+                    unset($bag);
+
+                    return true;
+                }
+            }
+        }
+        unset($bag);
+
+        return false;
+    }
+
     public static function heavyLocaleResidentMax(): int
     {
         try {
@@ -313,6 +425,12 @@ final class DictionaryCacheNamespace
             self::$store->clear($locale);
         }
         self::purgeBoundBagsForLocale($locale);
+        // File-backed whole-locale bags live outside Store keys; drop explicitly.
+        if (\class_exists(GlobalDictionaryModuleBagCache::class, false)
+            || \class_exists(GlobalDictionaryModuleBagCache::class)
+        ) {
+            GlobalDictionaryModuleBagCache::evictLocale($locale);
+        }
         self::$localeLru = \array_values(\array_filter(
             self::$localeLru,
             static fn(string $resident): bool => $resident !== $locale,
@@ -452,6 +570,25 @@ final class DictionaryCacheNamespace
         }
 
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function extractLocalesFromCacheKey(string $key): array
+    {
+        $out = [];
+        foreach (\explode('|', $key) as $part) {
+            $normalized = LocaleFallbackChain::normalize(\trim($part));
+            if ($normalized === '') {
+                continue;
+            }
+            if (\preg_match('/^[a-z]{2,3}(?:_[A-Z][a-z]{3})?(?:_(?:[A-Z]{2}|[0-9]{3}))?$/D', $normalized)) {
+                $out[$normalized] = true;
+            }
+        }
+
+        return \array_keys($out);
     }
 
     private static function resolveGenerationFingerprint(array $namespaces): string

@@ -92,17 +92,20 @@ final class WorkerResponseMemoryGuardConfiguredBudgetTest extends TestCase
     public function testRatchetSamplesRespectConfiguredLimitWithoutLosingEitherCandidate(): void
     {
         WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * self::MIB);
-        // 真实运行sample数值注入生产决策函数；不声称这里发生真实allocator退役。
+        // shell≥48MiB → drain true（不再被 soft 比短路）
         foreach ([[98, 20.8], [80, 23.6], [86, 34]] as [$real, $used]) {
-            self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet((int) ($real * self::MIB), (int) ($used * self::MIB), null, true));
+            self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet((int) ($real * self::MIB), (int) ($used * self::MIB), null, true));
         }
         self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(150 * self::MIB, 80 * self::MIB, null, true));
+        // shell=15 < 48; baseline overrun；本测 soft=0.55 → 150/256≥0.55 → true
         self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(150 * self::MIB, 135 * self::MIB, 100 * self::MIB, true));
+        // shell=10 < 48; baseline overrun but ratio 130/256 < soft(0.55) → false
+        self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(130 * self::MIB, 120 * self::MIB, 100 * self::MIB, true));
+        // shell=10 < 48, no baseline → false
         self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(200 * self::MIB, 190 * self::MIB, null, true));
         self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(200 * self::MIB, 140 * self::MIB, null, false));
-        $boundary = (int) \ceil(256 * self::MIB * .55);
-        self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet($boundary - 1, 60 * self::MIB, null, true));
-        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet($boundary, 60 * self::MIB, null, true));
+        // shell=60 ≥ 48 → true（与 soft 比无关）
+        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(200 * self::MIB, 140 * self::MIB, null, true));
 
         \ini_set('memory_limit', '1G');
         self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(200 * self::MIB, 140 * self::MIB, null, true));

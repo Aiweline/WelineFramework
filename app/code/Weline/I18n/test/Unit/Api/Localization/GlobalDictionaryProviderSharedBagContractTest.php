@@ -30,7 +30,8 @@ final class GlobalDictionaryProviderSharedBagContractTest extends TestCase
         $manager->setValue(null, (new ReflectionClass(ObjectManager::class))->newInstanceWithoutConstructor());
         $this->db = (object)['pdo' => new PDO('sqlite::memory:'), 'reads' => []];
         $this->db->pdo->exec('CREATE TABLE dictionary (word TEXT, translate TEXT, locale_code TEXT, source_module TEXT)');
-        $this->db->pdo->exec("INSERT INTO dictionary VALUES ('Duty','Shipping excludes duties and taxes','en_US',NULL), ('Duty','Duty FR','fr_FR','')");
+        // Use a locale without generated/language/{locale}.php so the test exercises the DB path.
+        $this->db->pdo->exec("INSERT INTO dictionary VALUES ('Duty','Shipping excludes duties and taxes','zz_UT',NULL), ('Duty','Duty FR','zy_UT','')");
         $model = new class($this->db) {
             private array $filters = [];
             public function __construct(private readonly object $db) {}
@@ -85,12 +86,12 @@ final class GlobalDictionaryProviderSharedBagContractTest extends TestCase
     {
         $provider = new GlobalDictionaryProvider();
         $key = ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY;
-        $first = $provider->wordsByModule('en_US', [$key])[$key];
+        $first = $provider->wordsByModule('zz_UT', [$key])[$key];
         self::assertSame(['Duty' => 'Shipping excludes duties and taxes'], $first);
         $globalReads = \count(\array_filter($this->db->reads, static fn(array $r): bool => !empty($r['global'])));
         self::assertSame(1, $globalReads);
 
-        $second = $provider->wordsByModule('en_US', [$key])[$key];
+        $second = $provider->wordsByModule('zz_UT', [$key])[$key];
         self::assertSame($first, $second);
         $globalReadsAfter = \count(\array_filter($this->db->reads, static fn(array $r): bool => !empty($r['global'])));
         self::assertSame(1, $globalReadsAfter);
@@ -104,6 +105,8 @@ final class GlobalDictionaryProviderSharedBagContractTest extends TestCase
         self::assertIsString($source);
         self::assertStringContainsString('GlobalDictionaryModuleBagCache::getNullSource', $source);
         self::assertStringContainsString('GlobalDictionaryModuleBagCache::putNullSource', $source);
+        self::assertStringContainsString('loadLocaleFileWords', $source);
+        self::assertStringContainsString('path_TRANSLATE_FILES_PATH', $source);
         self::assertSame(
             GlobalDictionaryModuleBagCache::sharedKey('lt_LT', ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY),
             GlobalDictionaryModuleBagCache::nullSourceSharedKey('lt_LT'),
