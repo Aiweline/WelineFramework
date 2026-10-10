@@ -1068,6 +1068,7 @@ Canonical,典范
 "IndexNow Key 必须为 8-128 位字母、数字或连字符","IndexNow Key 必须为 8-128 位字母、数字或连字符"
 "IndexNow Key 文件 URL 无效","IndexNow Key 文件 URL 无效"
 "IndexNow Key 文件必须与已配置站点同主机","IndexNow Key 文件必须与已配置站点同主机"
+因系统升级意图提前结束计划任务。,因系统升级意图提前结束计划任务。
 "Sitemap 提交提示","Sitemap 提交提示"
 "以下站点未绑定 SEO 账户，无法自动提交 sitemap：","以下站点未绑定 SEO 账户，无法自动提交 sitemap："
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。"
@@ -1276,3 +1277,4 @@ SEO账户,SEO账户
 "# channels why-hint 1.2.88","# channels why-hint 1.2.88"
 "# dashboard overview 1.2.89","# dashboard overview 1.2.89"
 请选择要绑定的站点,请选择要绑定的站点
+（因系统升级意图提前结束）,（因系统升级意图提前结束）

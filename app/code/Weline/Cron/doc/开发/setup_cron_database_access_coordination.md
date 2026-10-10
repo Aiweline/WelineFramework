@@ -16,7 +16,10 @@
 - 门禁必须在任何 Model、Cache、Event、Phrase Parser、PID 探测或派生进程之前判定。
 - 提示只通过 `DatabaseFreeTranslator` 读取 `env.php` 文本和模块 i18n CSV；未持锁分支禁止调用 `__()` 或任何可能触发数据库的服务。
 - Setup EX 忙时，Cron 自动调度返回 0 表示本轮安全跳过；显式 `-process` / `-force` / 后台手动运行返回临时失败码 75。
-- Cron SH 忙时，Setup 返回 75。顶层早期返回不启动应用、Cli 后处理、PHP_CS 或任务子进程。
+- Cron SH 忙时，Setup **默认不再立刻 75**：先发布 `setup_upgrade_intent.json`，轮询等待 SH 排空后取 EX（默认最长约 900s，超时仍 75）。意图 owner 死进程必须自清，禁止永久挡派发。
+- Setup 带 `-f/--force`：**不等待**；向占用本项目数据库访问锁的 `cron:task:run` 进程 TERM→短等→必要时 KILL，约 5s 内抢 EX。
+- 调度父进程在每次 `claimTaskLaunch` 前（**含 force**）若 `SetupUpgradeIntent::isActive()` 则跳过派发、不启子进程。
+- 已 RUNNING 子进程应在批次边界调用 `SetupUpgradeIntent::shouldYield()` 自愿早退并释放 SH（首波：站点运维/健康检查、SEO URL push、CDN 预热）。
 - `CronTask` 不得由 `Run` 构造器注入，只能在持有 SH 且受管子进程获得 GO 之后延迟解析。
 
 ## 调度父子协议

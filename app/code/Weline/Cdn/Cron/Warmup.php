@@ -51,9 +51,12 @@ class Warmup implements CronTaskInterface
     public function execute(): string
     {
         $collect = $this->collectService->collectAllProviders();
+        if (\Weline\Framework\Setup\Lock\SetupUpgradeIntent::shouldYield()) {
+            return (string)__('因系统升级意图提前结束计划任务。');
+        }
         $result = $this->warmupRunner->run(50);
 
-        return sprintf(
+        $summary = sprintf(
             'CDN预热完成: providers=%d inserted=%d updated=%d filtered=%d processed=%d success=%d fail=%d skipped=%d',
             $collect['providers'],
             $collect['inserted'],
@@ -64,6 +67,11 @@ class Warmup implements CronTaskInterface
             $result['fail'],
             $result['skipped']
         );
+        if (!empty($result['yielded_for_upgrade'])) {
+            $summary .= ' ' . (string)__('因系统升级意图提前结束计划任务。');
+        }
+
+        return $summary;
     }
 
     public function unlock_timeout(int $minute = 30): int

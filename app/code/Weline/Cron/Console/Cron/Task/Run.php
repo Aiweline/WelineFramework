@@ -27,6 +27,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Phrase\DatabaseFreeTranslator;
 use Weline\Framework\Setup\Lock\SetupDatabaseAccessLock;
+use Weline\Framework\Setup\Lock\SetupUpgradeIntent;
 use Weline\Framework\System\OS\Win;
 use Weline\SystemConfig\Model\SystemConfig;
 
@@ -229,6 +230,7 @@ class Run implements CommandInterface
         }
 
         # 进程信息管理
+        $upgradeIntentSkipNoted = false;
         /**@var CronTask $taskModel */
         foreach ($tasks as $key => $taskModel) {
                 $forceTask = (bool)$force;
@@ -401,6 +403,17 @@ class Run implements CommandInterface
                 }
                 if ($forceTask || $cron->isDue($task_run_date)) {
                     if ($forceTask || ($taskModel->getData($taskModel::schema_fields_STATUS) !== CronStatus::BLOCK->value)) {
+                        // Upgrade priority: stop claiming (including -force) while setup intent is live.
+                        if (SetupUpgradeIntent::isActive()) {
+                            if (!$upgradeIntentSkipNoted) {
+                                $upgradeIntentSkipNoted = true;
+                                $this->printing->note(DatabaseFreeTranslator::translate(
+                                    '系统升级意图活跃，本次跳过派发计划任务且未启动子进程。',
+                                    'Weline_Cron',
+                                ));
+                            }
+                            continue;
+                        }
                         $runStart = sprintf('%.6F', microtime(true));
                         $handoffToken = SetupDatabaseAccessLock::newSharedHandoffToken();
                         if (!$this->claimTaskLaunch(

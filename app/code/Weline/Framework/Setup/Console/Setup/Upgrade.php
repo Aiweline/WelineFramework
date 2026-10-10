@@ -138,7 +138,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         '--stage',
         '--hot',
         '--skip-env-check, -s',
-        '--force, -f',
+        '--force, -f', // 强制菜单重收集 + 跳过环境检测；门禁侧：不等待 cron，强制收回 setup DB 锁
         '--skip-reflection-compile, --skip-reflect',
         '--skip-framework-compile',
         '--background-optimize',
@@ -690,15 +690,27 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $releaseTransferred = false;
         $exitCode = 0;
         try {
-            if (SetupDatabaseAccessLock::borrowCliBootstrapExclusiveLease() === null
-                && !$databaseAccessLock->acquireExclusive()
-            ) {
-                $message = DatabaseFreeTranslator::translate(
-                    '系统升级文件门禁正由计划任务持有，本次升级未启动、未访问数据库；当前数据库驱动配置未被切换，请稍后再试。',
-                    'Weline_Framework',
+            if (SetupDatabaseAccessLock::borrowCliBootstrapExclusiveLease() === null) {
+                // Entrypoint normally retains EX already. Direct callers still need
+                // upgrade-priority wait semantics (intent + drain), not a single NB fail.
+                $gateExit = \Weline\Framework\Console\EarlyDatabaseAccessGate::prepare(
+                    ['bin/w', 'setup:upgrade'],
                 );
-                $this->printing->warning($message);
-                return CommandResult::shortCircuit(75);
+                if ($gateExit !== null) {
+                    return CommandResult::shortCircuit($gateExit);
+                }
+                $databaseAccessLock = SetupDatabaseAccessLock::borrowCliBootstrapExclusiveLease()
+                    ?? $databaseAccessLock;
+                if (SetupDatabaseAccessLock::borrowCliBootstrapExclusiveLease() === null
+                    && !$databaseAccessLock->acquireExclusive()
+                ) {
+                    $message = DatabaseFreeTranslator::translate(
+                        '系统升级文件门禁等待计划任务释放超时，本次升级未启动、未访问数据库；当前数据库驱动配置未被切换，请稍后再试。',
+                        'Weline_Framework',
+                    );
+                    $this->printing->warning($message);
+                    return CommandResult::shortCircuit(75);
+                }
             }
 
             /** @var SetupOperationContext $operationContext */

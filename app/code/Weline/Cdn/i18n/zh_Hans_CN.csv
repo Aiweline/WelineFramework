@@ -782,6 +782,7 @@ JSON格式错误,JSON格式错误
 保存成功,保存成功
 "WarmupProvider 不存在","WarmupProvider 不存在"
 "不是有效的 WarmupProvider","不是有效的 WarmupProvider"
+因系统升级意图提前结束计划任务。,因系统升级意图提前结束计划任务。
 "域名不能为空，请使用 --domain=域名ID或名称","域名不能为空，请使用 --domain=域名ID或名称"
 "清理模式不能为空，请使用 --mode=everything|urls|hosts|tags|cache_keys","清理模式不能为空，请使用 --mode=everything|urls|hosts|tags|cache_keys"
 无效的清理模式：%{1}，支持的模式：%{2},无效的清理模式：%{1}，支持的模式：%{2}
@@ -1155,3 +1156,4 @@ zone.read dns.write offline_access cache.purge cache-settings.write
 "仅热度 Top N，非全量 catalog","仅热度 Top N，非全量 catalog"
 "含 Blog/FAQ/政策等；覆盖站点已启用语种；不含商品通配","含 Blog/FAQ/政策等；覆盖站点已启用语种；不含商品通配"
 "热度 Top N × 站点已启用语种，非全量 catalog","热度 Top N × 站点已启用语种，非全量 catalog"
+（因系统升级意图提前结束）,（因系统升级意图提前结束）

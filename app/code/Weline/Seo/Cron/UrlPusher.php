@@ -6,6 +6,7 @@ namespace Weline\Seo\Cron;
 
 use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Setup\Lock\SetupUpgradeIntent;
 use Weline\Seo\Model\SeoTask;
 use Weline\Seo\Service\TaskProcessor;
 
@@ -54,8 +55,14 @@ class UrlPusher implements CronTaskInterface
 
             $successCount = 0;
             $errorCount = 0;
+            $yielded = false;
 
             foreach ($tasks as $taskData) {
+                if (SetupUpgradeIntent::shouldYield()) {
+                    $yielded = true;
+                    break;
+                }
+
                 $task = $taskModel->reset()->load($taskData['task_id']);
 
                 if (!$task->getId() || !$task->isPending()) {
@@ -72,12 +79,17 @@ class UrlPusher implements CronTaskInterface
                 }
             }
 
-            return sprintf(
+            $summary = sprintf(
                 'SEO URL push tasks processed: success=%d, failed=%d, total=%d.',
                 $successCount,
                 $errorCount,
                 count($tasks)
             );
+            if ($yielded) {
+                $summary .= ' ' . (string)__('因系统升级意图提前结束计划任务。');
+            }
+
+            return $summary;
         } catch (\Exception $e) {
             return 'SEO URL push task consumer failed: ' . $e->getMessage();
         }

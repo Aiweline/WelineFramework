@@ -137,7 +137,16 @@ class HealthCheckService
         $infraSync = ObjectManager::getInstance(HealthCheckInfrastructureSyncService::class);
         $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
 
+        $domainIndex = 0;
         foreach ($domains as $domainData) {
+            if (($domainIndex % 5) === 0
+                && \class_exists(\Weline\Framework\Setup\Lock\SetupUpgradeIntent::class)
+                && \Weline\Framework\Setup\Lock\SetupUpgradeIntent::shouldYield()
+            ) {
+                $results['yielded_for_upgrade'] = true;
+                break;
+            }
+            $domainIndex++;
             $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN];
             $rootFqdn = \strtolower(\trim((string) ($domainData[WebsiteDomain::schema_fields_ROOT_DOMAIN] ?? '')));
             if ($rootFqdn === '') {

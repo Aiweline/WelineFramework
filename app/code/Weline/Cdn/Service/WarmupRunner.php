@@ -15,6 +15,7 @@ use Weline\Cdn\Model\Domain;
 use Weline\Cdn\Model\WarmupUrl;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Setup\Lock\SetupUpgradeIntent;
 
 /**
  * 预热执行器
@@ -31,7 +32,7 @@ class WarmupRunner
     }
 
     /**
-     * @return array{processed:int,success:int,fail:int,skipped:int}
+     * @return array{processed:int,success:int,fail:int,skipped:int,yielded_for_upgrade?:bool}
      */
     public function run(
         int $limit = 50,
@@ -43,6 +44,7 @@ class WarmupRunner
         $success = 0;
         $fail = 0;
         $skipped = 0;
+        $yieldedForUpgrade = false;
 
         /** @var WarmupUrl $warmupUrlModel */
         $warmupUrlModel = $this->objectManager->getInstance(WarmupUrl::class);
@@ -83,6 +85,10 @@ class WarmupRunner
         }
 
         foreach ($urls as $warmupUrl) {
+            if (SetupUpgradeIntent::shouldYield()) {
+                $yieldedForUpgrade = true;
+                break;
+            }
             try {
                 $outcome = $this->warmupUrl($warmupUrl);
                 if ($outcome === 'skipped') {
@@ -102,12 +108,17 @@ class WarmupRunner
             }
         }
 
-        return [
+        $out = [
             'processed' => $processed,
             'success' => $success,
             'fail' => $fail,
             'skipped' => $skipped,
         ];
+        if ($yieldedForUpgrade) {
+            $out['yielded_for_upgrade'] = true;
+        }
+
+        return $out;
     }
 
     /**

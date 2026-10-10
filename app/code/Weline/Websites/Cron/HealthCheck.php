@@ -55,6 +55,9 @@ class HealthCheck
             if (($results['skipped_cron_lock'] ?? 0) > 0) {
                 $message .= ' ' . __('（建站锁定跳过 %{1} 个）', [(string) (int) $results['skipped_cron_lock']]);
             }
+            if (!empty($results['yielded_for_upgrade'])) {
+                $message .= ' ' . __('（因系统升级意图提前结束）');
+            }
             
             // 记录日志
             if ($results['unhealthy'] > 0) {

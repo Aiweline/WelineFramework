@@ -220,3 +220,4 @@ ID,ID
 "%{1} 程序ID:%{2} 已运行完毕!","%{1} Program ID:%{2} Completed!"
 进程创建失败！请检查进程状态！,"Process creation failed! Please check the process status!"
 计划任务,"Scheduled tasks"
+系统升级意图活跃，本次跳过派发计划任务且未启动子进程。,"Setup upgrade intent is active; skipped claiming cron tasks and did not spawn children."

@@ -13,6 +13,7 @@ namespace Weline\Websites\Cron;
 
 use Weline\Framework\Cron\Attribute\CronTestHelp;
 use Weline\Framework\Cron\CronTaskInterface;
+use Weline\Framework\Setup\Lock\SetupUpgradeIntent;
 use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
@@ -66,11 +67,19 @@ class WebsitesOperationsMaintenance implements CronTaskInterface
             $parts[] = '[1] ' . $e->getMessage();
             w_log_error('[websites_operations_maintenance] dns_cdn: ' . $e->getMessage(), [], 'websites_operations_maintenance');
         }
+        if (SetupUpgradeIntent::shouldYield()) {
+            $parts[] = (string)__('因系统升级意图提前结束计划任务。');
+            return \implode("\n---\n", $parts);
+        }
         try {
             $parts[] = '[2] ' . __('健康检查') . ': ' . (new HealthCheck())->execute();
         } catch (\Throwable $e) {
             $parts[] = '[2] ' . $e->getMessage();
             w_log_error('[websites_operations_maintenance] health: ' . $e->getMessage(), [], 'websites_operations_maintenance');
+        }
+        if (SetupUpgradeIntent::shouldYield()) {
+            $parts[] = (string)__('因系统升级意图提前结束计划任务。');
+            return \implode("\n---\n", $parts);
         }
         $minute = (int) \date('i');
         if ($minute === 0 || WebsitesCronTestContext::forceHourlyAddons()) {
@@ -79,6 +88,10 @@ class WebsitesOperationsMaintenance implements CronTaskInterface
             } catch (\Throwable $e) {
                 $parts[] = '[3] ' . $e->getMessage();
                 w_log_error('[websites_operations_maintenance] ns: ' . $e->getMessage(), [], 'websites_operations_maintenance');
+            }
+            if (SetupUpgradeIntent::shouldYield()) {
+                $parts[] = (string)__('因系统升级意图提前结束计划任务。');
+                return \implode("\n---\n", $parts);
             }
             try {
                 $parts[] = '[4] HTTPS: ' . (new HttpsSync())->execute();
