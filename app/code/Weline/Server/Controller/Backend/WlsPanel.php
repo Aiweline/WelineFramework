@@ -34,6 +34,25 @@ class WlsPanel extends BackendController
         return $this->renderPanel('dashboard', (string)__('WLS 面板'));
     }
 
+    #[Acl(
+        'Weline_Server::wls_panel_host',
+        'WLS 面板内嵌宿主',
+        'grid',
+        '在后台壳内嵌访问 WLS 面板',
+        'Weline_Server::wls_panel',
+        accessMode: Acl::ACCESS_MODE_READ
+    )]
+    public function getHost(): string
+    {
+        $urlBuilder = $this->request->getUrlBuilder();
+        $standaloneUrl = $urlBuilder->getBackendUrl('*/backend/wls-panel');
+        $frameUrl = $urlBuilder->getBackendUrl('*/backend/wls-panel', ['embedded' => '1']);
+        $this->assign('title', __('WLS 面板'));
+        $this->assign('wlsPanelHostFrameUrl', $frameUrl);
+        $this->assign('wlsPanelHostStandaloneUrl', $standaloneUrl);
+        return $this->fetch('host');
+    }
+
     #[Acl('Weline_Server::wls_panel_projects', '查看 WLS 面板项目', 'server', '查看 WLS 面板托管项目', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
     public function getProjects(): string
     {
@@ -361,6 +380,7 @@ class WlsPanel extends BackendController
     private function renderPanel(string $activePage, string $title): string
     {
         $this->useStandaloneLayout();
+        $this->assign('panelEmbedded', $this->isEmbeddedPanelRequest());
         /** @var WlsPanelPluginDiscoveryService $pluginDiscovery */
         $pluginDiscovery = ObjectManager::getInstance(WlsPanelPluginDiscoveryService::class);
         $pluginState = $pluginDiscovery->getInstalledPlugins();
@@ -847,6 +867,13 @@ class WlsPanel extends BackendController
         $this->assign('meta', $meta);
         $this->assign('layoutShowPageHeader', false);
         $this->assign('layoutShowMessages', false);
+    }
+
+    private function isEmbeddedPanelRequest(): bool
+    {
+        $value = \strtolower(\trim((string)$this->request->getGet('embedded', '')));
+
+        return \in_array($value, ['1', 'true', 'yes', 'on'], true);
     }
 
     /**

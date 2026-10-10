@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!-- WLS Panel：后台壳内嵌宿主（iframe）；并列挂同组，侧栏不展开子菜单。 -->
     <menu source="Weline_Server::wls_panel"
           name="wls_panel"
           title="WLS Panel"
           parent="Weline_Backend::system_service_group"
-          action="*/backend/wls-panel"
+          action="*/backend/wls-panel/host"
           icon="grid"
           order="10"/>
 </menus>

@@ -551,9 +551,11 @@ $quickActions = [
 $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapabilityItems), $panelPluginMenuCount);
 ?>
 
-<div class="wls-standalone-shell"
+<?php $panelEmbedded = !empty($this->getData('panelEmbedded')); ?>
+<div class="wls-standalone-shell<?= $panelEmbedded ? ' is-embedded' : '' ?>"
      data-wls-shell="standalone"
      data-wls-theme="light"
+     data-wls-embedded="<?= $panelEmbedded ? '1' : '0' ?>"
      data-wls-auto-refresh="<?= htmlspecialchars($panelAutoRefresh, ENT_QUOTES, 'UTF-8') ?>">
     <aside id="wls-shell-sidebar"
            class="wls-shell-sidebar"
@@ -3688,16 +3690,65 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                 </script>
             </section>
         <?php elseif ($activePage === 'nginx'): ?>
-            <section class="wls-section" id="nginx-public-edge">
+            <section class="wls-section" id="nginx-public-edge" aria-labelledby="wls-nginx-edge-title">
                 <div class="wls-section-head">
                     <div>
                         <span class="wls-shell-kicker"><?= __('公网协议') ?></span>
-                        <h2><?= __('Nginx 公网入口') ?></h2>
+                        <h2 id="wls-nginx-edge-title"><?= __('Nginx 公网入口') ?></h2>
+                    </div>
+                    <div class="wls-section-actions">
+                        <span class="wls-status-pill is-on"><?= __('固定拓扑') ?></span>
+                        <span class="wls-status-pill"><?= __('面板只读说明') ?></span>
                     </div>
                 </div>
-                <div class="wls-empty-state">
+                <section class="wls-metric-grid wls-nginx-topology-grid" aria-label="<?= __('公网拓扑摘要') ?>">
+                    <article>
+                        <span><?= __('公网协议所有者') ?></span>
+                        <strong>Nginx</strong>
+                        <small><?= __('TLS / HTTP/2 在边缘终结') ?></small>
+                    </article>
+                    <article>
+                        <span><?= __('WLS 回源') ?></span>
+                        <strong>127.0.0.1</strong>
+                        <small><?= __('仅明文 HTTP/1.1，不暴露公网') ?></small>
+                    </article>
+                    <article>
+                        <span><?= __('WLS 运行时') ?></span>
+                        <strong><?= (int)$runtimeRunningInstances ?>/<?= (int)$runtimeInstances ?></strong>
+                        <small><?= __('%{1} 个工作进程', [(int)$runtimeWorkers]) ?></small>
+                    </article>
+                    <article>
+                        <span><?= __('托管项目') ?></span>
+                        <strong><?= (int)$managedProjectCount ?></strong>
+                        <small><?= __('项目隔离 Nginx 各自承载公网入口') ?></small>
+                    </article>
+                </section>
+                <div class="wls-inline-success" role="note">
                     <strong><?= __('Nginx 是唯一公网边缘，不能跳过其启动。') ?></strong>
                     <span><?= __('公网入口固定为项目隔离 Nginx；WLS 仅提供 127.0.0.1 明文 HTTP/1.1 回源') ?></span>
+                    <span><?= __('此页不提供可开关的公网网关配置；启停与证书请走下方运维入口。') ?></span>
+                </div>
+                <div class="wls-action-grid" aria-label="<?= __('相关运维入口') ?>">
+                    <a class="wls-action-card tone-green" href="@backend-url{$projectsPath}">
+                        <span><?= __('项目隔离入口') ?></span>
+                        <strong><?= __('托管项目') ?></strong>
+                        <small><?= __('查看各项目路径、就绪状态与 Nginx 公网入口上下文') ?></small>
+                    </a>
+                    <a class="wls-action-card tone-violet" href="@backend-url{$sslPath}">
+                        <span><?= __('边缘证书') ?></span>
+                        <strong><?= __('SSL 证书') ?></strong>
+                        <small><?= __('管理 Nginx 公网入口使用的证书与域名绑定') ?></small>
+                    </a>
+                    <a class="wls-action-card tone-blue" href="@backend-url{$serverManagerPath}">
+                        <span><?= __('%{1} 个运行中，%{2} 个工作进程', [$runtimeRunningInstances, $runtimeWorkers]) ?></span>
+                        <strong><?= __('WLS 运行时') ?></strong>
+                        <small><?= __('工作进程、会话、内存服务与实例启停') ?></small>
+                    </a>
+                    <a class="wls-action-card tone-amber" href="@backend-url{$securityPath}">
+                        <span><?= __('7 天内拦截 %{1} 次', [$blockedSecurityEvents]) ?></span>
+                        <strong><?= __('安全') ?></strong>
+                        <small><?= __('攻击规则、项目策略与防护日志') ?></small>
+                    </a>
                 </div>
             </section>
         <?php elseif ($activePage === 'projects'): ?>
@@ -4261,6 +4312,48 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
     max-width: none;
     isolation: isolate;
 }
+/* 后台宿主 iframe（embedded=1）：占满 iframe 视口；滚动落在 .wls-shell-main，禁止 body 双滚 */
+.wls-standalone-shell.is-embedded {
+    min-height: 100%;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    /* 单行 1fr + minmax(0,…)：否则 auto 行随内容撑高，主列拿不到可滚视口 */
+    grid-template-rows: minmax(0, 1fr);
+}
+html:has(.wls-standalone-shell.is-embedded),
+body:has(.wls-standalone-shell.is-embedded) {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+/* fullscreen.default 实际壳是 .w-backend-standalone > #main-content.w-backend-page（非 .backend-main-content） */
+body:has(.wls-standalone-shell.is-embedded) .w-backend-standalone,
+body:has(.wls-standalone-shell.is-embedded) .w-backend-page,
+body:has(.wls-standalone-shell.is-embedded) #main-content,
+body:has(.wls-standalone-shell.is-embedded) .backend-layout-fullscreen.wls-panel-fullscreen,
+body:has(.wls-standalone-shell.is-embedded) .backend-main-content {
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box;
+}
+.wls-standalone-shell.is-embedded .wls-shell-sidebar {
+    max-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+.wls-standalone-shell.is-embedded .wls-shell-main {
+    /* 覆盖默认 min-height:100vh，否则首屏内容高于 iframe 且无滚动容器 */
+    min-height: 0 !important;
+    height: 100%;
+    max-height: 100%;
+    overflow-x: clip;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
 .wls-standalone-shell,
 .wls-standalone-shell * {
     box-sizing: border-box;
@@ -4683,6 +4776,21 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-metric-grid strong {
     font-size: 30px;
     line-height: 1;
+}
+.wls-metric-grid small,
+.wls-nginx-topology-grid small {
+    color: var(--wls-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+.wls-nginx-topology-grid {
+    margin: 0 0 18px;
+}
+#nginx-public-edge .wls-inline-success {
+    margin-bottom: 18px;
+}
+#nginx-public-edge .wls-action-grid {
+    margin: 0;
 }
 .wls-section {
     padding: 22px;
