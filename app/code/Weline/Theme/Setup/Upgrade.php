@@ -12,6 +12,8 @@ use Weline\Backend\Setup\Ui\IconDataMigrator;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\Layout\LayoutIdentityHasher;
+use Weline\SystemConfig\Api\Scope\ScopeContext;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
@@ -130,7 +132,9 @@ class Upgrade implements UpgradeInterface
             $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
             /** @var SharedChromeService $chrome */
             $chrome = ObjectManager::getInstance(SharedChromeService::class);
-            $scope = $scopes->contextFromIdentity(ScopeIdentity::global());
+            $scope = $this->themeContentScopeFromSystem(
+                $scopes->contextFromIdentity(ScopeIdentity::global()),
+            );
 
             foreach ($items as $theme) {
                 $themeId = 0;
@@ -511,7 +515,9 @@ class Upgrade implements UpgradeInterface
         }
 
         foreach (\array_keys($forceInheritThemes) as $themeId) {
-            $scope = $scopes->contextFromIdentity(ScopeIdentity::global());
+            $scope = $this->themeContentScopeFromSystem(
+                $scopes->contextFromIdentity(ScopeIdentity::global()),
+            );
             $context = new ThemeEditorContext(
                 scope: $scope,
                 area: 'frontend',
@@ -671,7 +677,9 @@ class Upgrade implements UpgradeInterface
         /** @var ThemeScopeVersionService $scopeVersions */
         $scopeVersions = ObjectManager::getInstance(ThemeScopeVersionService::class);
 
-        $scopeCtx = $scopes->contextFromIdentity(ScopeIdentity::global());
+        $scopeCtx = $this->themeContentScopeFromSystem(
+            $scopes->contextFromIdentity(ScopeIdentity::global()),
+        );
         $identity = [
             'layout_option' => 'default',
             'scope' => 'default.default.default',
@@ -823,7 +831,7 @@ class Upgrade implements UpgradeInterface
             }
 
             return new ThemeEditorContext(
-                scope: $scopes->contextFromIdentity($identity),
+                scope: $this->themeContentScopeFromSystem($scopes->contextFromIdentity($identity)),
                 area: (string)($data[ThemeScopeWorkspace::schema_fields_AREA] ?? 'frontend'),
                 resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
                 themeId: (int)($data[ThemeScopeWorkspace::schema_fields_THEME_ID] ?? 0),
@@ -836,6 +844,15 @@ class Upgrade implements UpgradeInterface
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function themeContentScopeFromSystem(ScopeContext $scope): ThemeContentScope
+    {
+        return ThemeContentScope::fromStoredOwner(
+            $scope->storageScope,
+            $scope->storeMode,
+            'default',
+        );
     }
 
     /**
