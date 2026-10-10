@@ -10,7 +10,6 @@ use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Framework\View\Template;
 use Weline\Theme\Api\DefaultThemeInterface;
-use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\WelineTheme;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
@@ -215,6 +214,9 @@ final class SolidifiedControllerTemplateResolver
      * Inherit ancestor published solidification only for layouts the child does
      * not override in its own design tree — otherwise parent bake would clobber
      * brand homepage/content (e.g. grocery promo → Hanfu promo-banner).
+     *
+     * Own published alone is not enough: a child with a sealed version still
+     * reads parent identity for layouts it does not override (no sibling/shared disk write).
      */
     private function resolvePublishedVersionAlongThemeChain(
         int $themeId,
@@ -225,11 +227,8 @@ final class SolidifiedControllerTemplateResolver
         string $layoutOption,
     ): ?ThemeScopeVersion {
         $own = $this->scopeVersions->getPublished($themeId, $scope, $storeMode, $area);
-        if ($own instanceof ThemeScopeVersion && $own->getVersionId() > 0) {
-            return $own;
-        }
         if ($this->themeProvidesLayoutOverride($themeId, $layoutType, $layoutOption, $area)) {
-            return null;
+            return ($own instanceof ThemeScopeVersion && $own->getVersionId() > 0) ? $own : null;
         }
         $seen = [$themeId => true];
         $candidateId = $themeId;
@@ -247,7 +246,7 @@ final class SolidifiedControllerTemplateResolver
             }
         }
 
-        return null;
+        return ($own instanceof ThemeScopeVersion && $own->getVersionId() > 0) ? $own : null;
     }
 
     /** True when the active theme's design layer supplies this layout option. */
@@ -257,33 +256,6 @@ final class SolidifiedControllerTemplateResolver
         string $layoutOption,
         string $area,
     ): bool {
-        if ($themeId < 1 || trim($layoutType) === '') {
-            return false;
-        }
-        try {
-            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($themeId);
-            if ((int)$theme->getId() !== $themeId) {
-                return false;
-            }
-            $themePath = rtrim((string)$theme->getPath(), "/\\");
-            $options = LayoutScanner::scanLayouts($theme, $area)[$layoutType] ?? [];
-            foreach ($options as $option) {
-                if (!\is_array($option) || (string)($option['value'] ?? '') !== $layoutOption) {
-                    continue;
-                }
-                $layerKey = (string)($option['layer_key'] ?? '');
-                if ($layerKey === 'theme:' . $themeId) {
-                    return true;
-                }
-                $path = (string)($option['path'] ?? '');
-                if ($themePath !== '' && $path !== '' && str_starts_with($path, $themePath . DIRECTORY_SEPARATOR)) {
-                    return true;
-                }
-            }
-        } catch (\Throwable) {
-            return false;
-        }
-
-        return false;
+        return ThemeLayoutDesignOverride::provides($themeId, $layoutType, $layoutOption, $area);
     }
 }

@@ -82,5 +82,17 @@ final class ThemeLayoutEntityLocaleComPrewarmContractTest extends TestCase
             '/runPinnedToIdentityWebsite\s*\(\s*\$identity\s*,/',
             $service
         );
+        // Theme namespace isolation: Formal compile+warm must pin identity.themeId (not Default).
+        self::assertStringContainsString('ThemeData::setCurrentTheme', $service);
+        self::assertStringContainsString('sourceContextKey', $service);
+        self::assertStringNotContainsString(
+            "'context_key' => \$snapshot->fingerprint()",
+            $service,
+            'context_key must be per-source (stable across pages), not whole-snapshot fingerprint',
+        );
+        self::assertMatchesRegularExpression(
+            '/warmPublishedResourcePacks\s*\(\s*\$identity->area\s*,\s*\$theme\s*,/',
+            $service
+        );
     }
 }

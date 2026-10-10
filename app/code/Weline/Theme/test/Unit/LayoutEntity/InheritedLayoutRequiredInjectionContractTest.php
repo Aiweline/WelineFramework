@@ -42,7 +42,7 @@ final class InheritedLayoutRequiredInjectionContractTest extends TestCase
             'Inherit ancestor published solidification only for layouts the child does',
             $src,
         );
-        // Order: own published → else if child override stop → else walk parents
+        // Order: load own → if child override use own → else walk parents → fallback own
         $ownPos = strpos($src, 'getPublished($themeId, $scope, $storeMode, $area)');
         $overridePos = strpos($src, 'themeProvidesLayoutOverride($themeId, $layoutType, $layoutOption, $area)');
         $parentWalkPos = strpos($src, 'getParentId()');
@@ -51,6 +51,12 @@ final class InheritedLayoutRequiredInjectionContractTest extends TestCase
         self::assertNotFalse($parentWalkPos);
         self::assertLessThan($overridePos, $ownPos);
         self::assertLessThan($parentWalkPos, $overridePos);
+        self::assertStringContainsString(
+            'Own published alone is not enough',
+            $src,
+            'Child sealed version must still inherit parent identity for non-override layouts',
+        );
+        self::assertStringContainsString('ThemeLayoutDesignOverride::provides', $src);
     }
 
     public function testStarLayoutInjectionsApplyOnInheritedNonHomepageLayouts(): void

@@ -14,6 +14,7 @@ use Weline\Framework\View\Template;
 use Weline\Framework\View\TemplateCompileService;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
+use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeHeadChromeCssPack;
 use Weline\Theme\Service\ThemeHeadChromeJsPack;
@@ -84,6 +85,13 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $localeOrdinal[(string)$code] = $idx + 1;
         }
 
+        // Pin ThemeData for the whole Formal compile+warm so theme-head / widget-assets
+        // never land under process-global Default (or a sibling theme) during multi-theme upgrade.
+        $previousTheme = ThemeData::getCurrentTheme();
+        $previousArea = ThemeData::getCurrentArea();
+        ThemeData::setCurrentTheme($theme);
+        ThemeData::setCurrentArea($identity->area);
+        try {
         $this->runPinnedToIdentityWebsite($identity, function () use (
             $identity,
             $candidateMap,
@@ -94,6 +102,7 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $nested,
             $onProgress,
             $themeLabel,
+            $theme,
             $pageTotal,
             $localeTotal,
             $localeOrdinal,
@@ -114,6 +123,7 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                         : '',
                 ));
             }
+            $compiledSourcePaths = [];
             foreach ($pages as $pageIndex => $page) {
                 $pageNo = $pageIndex + 1;
                 // Prefer promote-candidate bytes first (no OwnerLock). Pipeline compile
@@ -144,7 +154,7 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                     );
                 }
                 $snapshot->install($template);
-                $pinned = $this->buildPinnedCompileSet($snapshot, $pagePath);
+                $pinned = $this->buildPinnedCompileSet($snapshot, $pagePath, $identity, $compiledSourcePaths);
                 $pageSource = $snapshot->source($pagePath);
                 $widgets = $pageSource !== null
                     ? $this->resolveInlineWidgetTemplates((string)$pageSource['bytes'], $identity->area)
@@ -229,8 +239,12 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                 }
             }
             // Post-com warm: bake theme-head packs so first request consumes artifacts (not hot-path merge).
-            $this->warmPublishedResourcePacks($identity->area, $themeLabel, $identity->canonicalScope);
+            $this->warmPublishedResourcePacks($identity->area, $theme, $themeLabel, $identity->canonicalScope);
         });
+        } finally {
+            ThemeData::setCurrentTheme($previousTheme);
+            ThemeData::setCurrentArea($previousArea);
+        }
     }
 
     /**
@@ -270,12 +284,22 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         return $flag !== '' && $flag !== '0' && strtolower($flag) !== 'false';
     }
 
-    /** Explicit Formal post-com half: publish theme-head CSS/JS packs for the pinned website context. */
+    /**
+     * Explicit Formal post-com half: publish theme-head CSS/JS packs under identity.themeId.
+     * ThemeData must already be pinned to $theme (caller); Gateway resolves namespace from current theme.
+     */
     private function warmPublishedResourcePacks(
         string $area,
+        WelineTheme $theme,
         string $themeLabel = '',
         string $canonicalScope = '',
     ): void {
+        if ((int)$theme->getId() < 1) {
+            throw new \RuntimeException('theme_layout_formal_warm_theme_missing');
+        }
+        // Re-pin inside warm so nested helpers that re-resolve Default cannot drift.
+        ThemeData::setCurrentTheme($theme);
+        ThemeData::setCurrentArea($area);
         if ($themeLabel !== '') {
             $this->printing->note(sprintf(
                 '%s · 主题=%s · 范围=%s · 区域=%s · 阶段2/2 资源合包预热',
@@ -517,10 +541,18 @@ final class ThemeLayoutEntityFormalLocaleCompileService
     }
 
     /**
+     * Per-source context_key (theme-scoped) so header/footer compile_id stays stable across pages.
+     * Whole-snapshot fingerprint caused false com_* rewrites every page in the same identity.
+     *
+     * @param array<string, true> $compiledSourcePaths paths already compiled in this Formal run
      * @return array<string, array{bytes:string, origin:string, context_key:string, label:string}>
      */
-    private function buildPinnedCompileSet(ThemeLayoutSourceSnapshot $snapshot, string $pagePath): array
-    {
+    private function buildPinnedCompileSet(
+        ThemeLayoutSourceSnapshot $snapshot,
+        string $pagePath,
+        ThemeVersionIdentity $identity,
+        array &$compiledSourcePaths,
+    ): array {
         $pinned = [];
         $pageSource = $snapshot->source($pagePath);
         if ($pageSource === null) {
@@ -529,12 +561,13 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         $pinned[$pagePath] = [
             'bytes' => $pageSource['bytes'],
             'origin' => $pageSource['origin'],
-            'context_key' => $snapshot->fingerprint(),
+            'context_key' => $this->sourceContextKey($identity, $pageSource),
             'label' => 'page:' . basename($pagePath),
         ];
+        $compiledSourcePaths[$pagePath] = true;
         foreach (['header', 'footer'] as $partialType) {
             $partialPath = $snapshot->selectedPartialPath($partialType);
-            if ($partialPath === null) {
+            if ($partialPath === null || isset($compiledSourcePaths[$partialPath])) {
                 continue;
             }
             $partialSource = $snapshot->source($partialPath);
@@ -544,12 +577,25 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $pinned[$partialPath] = [
                 'bytes' => $partialSource['bytes'],
                 'origin' => $partialSource['origin'],
-                'context_key' => $snapshot->fingerprint(),
+                'context_key' => $this->sourceContextKey($identity, $partialSource),
                 'label' => 'partial:' . $partialType,
             ];
+            $compiledSourcePaths[$partialPath] = true;
         }
 
         return $pinned;
+    }
+
+    /** @param array{bytes:string, origin:string} $source */
+    private function sourceContextKey(ThemeVersionIdentity $identity, array $source): string
+    {
+        return hash(
+            'sha256',
+            (string)$identity->themeId . "\0"
+            . $identity->area . "\0"
+            . (string)($source['origin'] ?? '') . "\0"
+            . hash('sha256', (string)$source['bytes']),
+        );
     }
 
     /**

@@ -72,7 +72,9 @@ moduleDescribe(test, MODULE, '多范围购物结账通路', () => {
       await ensureCheckoutAddress(page, guestEmail);
       const couponRes = await applyCouponViaUi(page, COUPON);
       assertStep(couponOk(couponRes), 'guest.coupon', couponRes);
-      await expect(page.locator('[data-testid="checkout-coupon"]')).toBeVisible();
+      await expect(
+        page.locator('[data-testid="checkout-form-page"] [data-testid="checkout-coupon"]'),
+      ).toBeVisible();
 
       const note = await fillOrderNoteViaUi(page, NOTE_TEXT);
       assertStep(note.saved.includes(NOTE_TEXT) || note.saved === NOTE_TEXT, 'guest.note', note);
@@ -117,7 +119,9 @@ moduleDescribe(test, MODULE, '多范围购物结账通路', () => {
         'login.note',
         note
       );
-      await expect(page.locator('[data-testid="checkout-coupon"]')).toBeVisible();
+      await expect(
+        page.locator('[data-testid="checkout-form-page"] [data-testid="checkout-coupon"]'),
+      ).toBeVisible();
 
       const evidence = await submitCheckoutCaptureEvidence(page, {
         scope: 'login',

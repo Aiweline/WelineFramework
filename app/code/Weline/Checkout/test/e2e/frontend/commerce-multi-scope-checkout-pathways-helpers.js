@@ -154,6 +154,35 @@ async function openCheckout(page, gotoFrontend) {
 }
 
 async function revealCouponWidget(page) {
+  // Prefer the checkout-form coupon surface. Mini-cart also embeds checkout-coupon
+  // (often hidden), and .first() was binding that invisible input → false timeout.
+  const formScoped = page.locator(
+    '[data-testid="checkout-form-page"] [data-testid="checkout-coupon"],'
+    + ' [data-testid="checkout-form-page"] [data-widget-code="checkout-coupon"],'
+    + ' [data-weline-checkout] [data-testid="checkout-coupon"],'
+    + ' [data-weline-checkout] [data-widget-code="checkout-coupon"]',
+  ).first();
+  if (await formScoped.count()) {
+    await formScoped.waitFor({ state: 'attached', timeout: 30000 });
+    await formScoped.evaluate((el) => {
+      el.hidden = false;
+      el.style.display = 'block';
+      el.style.visibility = 'visible';
+      el.removeAttribute('hidden');
+      const entry = el.querySelector('[data-marketing-coupon-entry]');
+      if (entry) {
+        entry.hidden = false;
+        entry.style.display = '';
+      }
+    }).catch(() => {});
+    const formInput = formScoped.locator(
+      '[data-testid="checkout-coupon-input"], [data-marketing-coupon-input]',
+    ).first();
+    if (await formInput.isVisible().catch(() => false)) {
+      return formScoped;
+    }
+  }
+
   const couponTab = page.locator(
     '[data-mini-cart-tab], [data-extras-tab], [role="tab"], button'
   ).filter({ hasText: /优惠券|Coupon/i }).first();

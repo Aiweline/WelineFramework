@@ -16,7 +16,14 @@ use Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService;
 /** Save-time projection: database intent + current defaults -> ordinary PHTML. */
 final class ThemeLayoutEntityBakeCoordinator
 {
-    private array $lastRebakeReport = ['migrated' => 0, 'skipped' => 0, 'unmapped' => [], 'chrome_bootstrapped' => 0];
+    private array $lastRebakeReport = [
+        'migrated' => 0,
+        'skipped' => 0,
+        'skipped_unchanged' => 0,
+        'skipped_inherit' => 0,
+        'unmapped' => [],
+        'chrome_bootstrapped' => 0,
+    ];
 
     public function __construct(
         private readonly ThemeScopeVersionService $scopeVersions,
@@ -585,7 +592,14 @@ final class ThemeLayoutEntityBakeCoordinator
         bool $includeSelectedDraft = true,
         array $options = [],
     ): int {
-        $this->lastRebakeReport = ['migrated' => 0, 'skipped' => 0, 'unmapped' => [], 'chrome_bootstrapped' => 0];
+        $this->lastRebakeReport = [
+            'migrated' => 0,
+            'skipped' => 0,
+            'skipped_unchanged' => 0,
+            'skipped_inherit' => 0,
+            'unmapped' => [],
+            'chrome_bootstrapped' => 0,
+        ];
         $workItems = [];
         foreach ($themeIds as $themeId) {
             if ($themeId !== null && (int)$themeId < 1) {
@@ -693,7 +707,13 @@ final class ThemeLayoutEntityBakeCoordinator
             );
             $completed = $result['completed'];
             $rollbackPlan = $result['rollback_plan'];
-            $migrated = count($candidates);
+            // Count only real published bytes (skip null "no derived" placeholders + chrome reuse keys).
+            $migrated = 0;
+            foreach ($candidates as $bytes) {
+                if (is_string($bytes) && $bytes !== '') {
+                    ++$migrated;
+                }
+            }
             // Pipeline solidify must refresh chrome_payload (homepage + mini-cart footer-extras)
             // so storefront fillEmptyNestedChromeSlots can heal empty coupon/留言 shells.
             $this->persistChromePayload($identity);
@@ -816,8 +836,25 @@ final class ThemeLayoutEntityBakeCoordinator
                 }
                 $targetType = (string)($key['target_type'] ?? 'global');
                 $targetId = (int)($key['target_id'] ?? 0);
+                // No design override + no editor intent → read parent identity; do not rewrite child disk.
+                if (!$this->layoutNeedsOwnSolidify($identity, $type, $option, $targetType, $targetId)) {
+                    $this->lastRebakeReport['skipped_inherit']++;
+                    $this->lastRebakeReport['skipped']++;
+                    continue;
+                }
+                // Design override alone is not enough: pageCandidates may return null (chrome-only
+                // injections / no page content). Never re-queue those forever.
+                // When $changes is non-empty, keep pending so chromeCandidates still refresh.
+                if ($changes === []
+                    && $this->pageDerivedWouldBeEmpty($identity, $type, $option, $targetType, $targetId, $changes)
+                ) {
+                    $this->lastRebakeReport['skipped_unchanged']++;
+                    $this->lastRebakeReport['skipped']++;
+                    continue;
+                }
                 try {
                     if ($this->generatedPageMatchesInputs($identity, $type, $option, $targetType, $targetId, $changes, $planDigest)) {
+                        $this->lastRebakeReport['skipped_unchanged']++;
                         $this->lastRebakeReport['skipped']++;
                         continue;
                     }
@@ -1167,6 +1204,118 @@ final class ThemeLayoutEntityBakeCoordinator
             $declarations = [];
         }
         return hash('sha256', json_encode($declarations, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * Child must solidify only when it owns the layout (design override or editor intent).
+     * Otherwise storefront reads parent theme identity — upgrade must not rewrite child disk.
+     */
+    private function layoutNeedsOwnSolidify(
+        ThemeVersionIdentity $identity,
+        string $layoutType,
+        string $layoutOption,
+        string $targetType,
+        int $targetId,
+    ): bool {
+        if (ThemeLayoutDesignOverride::provides(
+            $identity->themeId,
+            $layoutType,
+            $layoutOption,
+            $identity->area,
+        )) {
+            return true;
+        }
+
+        return $this->layoutHasEditorIntent($identity, $layoutType, $layoutOption, $targetType, $targetId);
+    }
+
+    private function layoutHasEditorIntent(
+        ThemeVersionIdentity $identity,
+        string $layoutType,
+        string $layoutOption,
+        string $targetType,
+        int $targetId,
+    ): bool {
+        foreach ($this->snapshotService()->resources($identity) as $resource) {
+            if (($resource['resource_type'] ?? '') !== 'layout') {
+                continue;
+            }
+            $key = json_decode((string)($resource['resource_key_json'] ?? '{}'), true);
+            if (!is_array($key) || empty($key['has_intent'])) {
+                continue;
+            }
+            if ((string)($key['layout_type'] ?? '') !== $layoutType) {
+                continue;
+            }
+            if ((string)($key['layout_option'] ?? 'default') !== $layoutOption) {
+                continue;
+            }
+            if ((string)($key['target_type'] ?? 'global') !== $targetType) {
+                continue;
+            }
+            if ((int)($key['target_id'] ?? 0) !== $targetId) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Mirror pageCandidates null gate: no intent / page-level defaults / params ⇒ no page PHTML.
+     * Chrome-only injections still bake via dedicated chrome paths, not catalog page pending.
+     *
+     * @param array<int|string, mixed> $changes
+     */
+    private function pageDerivedWouldBeEmpty(
+        ThemeVersionIdentity $identity,
+        string $layoutType,
+        string $layoutOption,
+        string $targetType,
+        int $targetId,
+        array $changes,
+    ): bool {
+        if ($this->layoutHasEditorIntent($identity, $layoutType, $layoutOption, $targetType, $targetId)) {
+            return false;
+        }
+        $context = $this->context($identity, $layoutType, $layoutOption, $targetType, $targetId ?: null);
+        try {
+            $snapshot = $this->snapshotService()->read($identity, $context);
+            $meta = $this->snapshotService()->read($identity, $context->withResource(ThemeEditorContext::RESOURCE_META));
+        } catch (\Throwable) {
+            return true;
+        }
+        if (!empty($snapshot['has_intent']) || !empty($meta['has_intent'])) {
+            return false;
+        }
+        if (empty($snapshot['resolved']) || empty($meta['resolved'])) {
+            return true;
+        }
+        $configuration = $this->configuration($identity);
+        $params = array_replace(
+            (array)($configuration['params']['layouts.' . $layoutType . '.' . $layoutOption] ?? []),
+            (array)($meta['payload']['values'] ?? []),
+        );
+        if ($params !== []) {
+            return false;
+        }
+        $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
+        $defaults = $this->contentNodesForLayout(
+            $layoutType,
+            $merger->mergeIntoNodes(
+                [],
+                $identity->themeId,
+                $layoutType,
+                $identity->themeVersionId,
+                $changes,
+                $this->frozenOmissions($identity, $layoutType),
+                $layoutOption,
+            ),
+        );
+
+        return $defaults === [];
     }
 
     private function generatedPageMatchesInputs(

@@ -613,6 +613,11 @@ function p2e002_atomic_failure(array $fixture): array
         {
             return $this->delegate->reviseTobHangPayable($orderUuid, $revision);
         }
+
+        public function appendAdminAdjustmentLine(string $orderUuid, array $line): array
+        {
+            return $this->delegate->appendAdminAdjustmentLine($orderUuid, $line);
+        }
     };
     $inventory = ObjectManager::getInstance(InventoryService::class);
     $sessions = ObjectManager::getInstance(OrmCheckoutSessionStore::class);

@@ -137,6 +137,11 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertStringContainsString('page_dependency', $source);
         self::assertStringContainsString('$expandCatalog = false', $source);
         self::assertStringContainsString('function generatedPageMatchesInputs', $source);
+        self::assertStringContainsString('function layoutNeedsOwnSolidify', $source);
+        self::assertStringContainsString('function pageDerivedWouldBeEmpty', $source);
+        self::assertStringContainsString('skipped_inherit', $source);
+        self::assertStringContainsString('skipped_unchanged', $source);
+        self::assertStringContainsString('ThemeLayoutDesignOverride::provides', $source);
         self::assertStringContainsString('function scopeOwnsSolidify', $source);
         self::assertStringContainsString('function hasOwnThemeApplication', $source);
         self::assertStringContainsString('$includeSelectedDraft = true', $source);
