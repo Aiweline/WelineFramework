@@ -633,8 +633,8 @@ class Upgrade implements UpgradeInterface
     }
 
     /**
-     * One-time layout seed helper: pick themes marked is_active / is_active_frontend
-     * as migration candidates only（正式店面权威已改为 websites_theme_application → Default）.
+     * One-time layout seed helper: seed all registered themes（is_active* 列已退役，
+     * 正式店面权威为 websites_theme_application → Default；不可再 where is_active*）.
      * Missing products page entities leave the Filters default_injection as a sidebar placeholder.
      * Apply required defaults for homepage+category+product+products, then publish.
      */
@@ -643,22 +643,17 @@ class Upgrade implements UpgradeInterface
         /** @var WelineTheme $themeModel */
         $themeModel = ObjectManager::getInstance(WelineTheme::class);
         $themes = [];
-        foreach (['is_active', 'is_active_frontend'] as $flag) {
-            $query = clone $themeModel;
-            $query->clearData()->clearQuery()
-                ->where($flag, 1)
-                ->select()
-                ->fetch();
-            foreach ($this->iterateRows($query) as $theme) {
-                $themeId = 0;
-                if (\is_object($theme) && \method_exists($theme, 'getId')) {
-                    $themeId = (int)$theme->getId();
-                } elseif (\is_array($theme)) {
-                    $themeId = (int)($theme['theme_id'] ?? $theme['id'] ?? 0);
-                }
-                if ($themeId > 0) {
-                    $themes[$themeId] = $theme;
-                }
+        $query = clone $themeModel;
+        $query->clearData()->clearQuery()->select()->fetch();
+        foreach ($this->iterateRows($query) as $theme) {
+            $themeId = 0;
+            if (\is_object($theme) && \method_exists($theme, 'getId')) {
+                $themeId = (int)$theme->getId();
+            } elseif (\is_array($theme)) {
+                $themeId = (int)($theme['theme_id'] ?? $theme['id'] ?? 0);
+            }
+            if ($themeId > 0) {
+                $themes[$themeId] = $theme;
             }
         }
         if ($themes === []) {
