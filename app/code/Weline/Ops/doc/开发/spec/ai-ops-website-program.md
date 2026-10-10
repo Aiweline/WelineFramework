@@ -23,6 +23,20 @@ Visitor 事件摘要 + Seo/GSC（可选）+ Social（可选）；缺外部源可
 
 - UC-enable-site / UC-persona / UC-connections / UC-task-create|close
 
+## 画像证据包（1.3.0）
+
+| 阶段 | 源 | 说明 |
+|------|----|------|
+| site | Website name/description | 描述为低可信口述 |
+| catalog | StorefrontCategoryTreeIndex | 顶级+子类摘要 |
+| products | Product shard published sample | 标题/可选价格带 |
+| policy | Cms Page + Theme PolicyDocumentDefaults + Faq | 履约边界 hints |
+| market | WebsiteLanguage codes | 启用语种 |
+| ai | AiRuntime 云端文本模型 | `ops_persona_ai_v4`；禁 Ollama 默认 |
+| persist | OpsPersona / OpsRunLog | 结构化记忆 |
+
+Desk：`GET …/refresh-persona-stream?website_id=&sse=1` + `<w:theme:sse-progress id=ops-persona-progress>`。
+
 ## 分析分发任务队列（原 P2/P3 合并）
 
 见 [`ops-async-agent-dispatch.md`](./ops-async-agent-dispatch.md)（Session + Queue + ops_analyst/blog_publish/social_ops + 调度任务管理页 + 审批闸门）。
