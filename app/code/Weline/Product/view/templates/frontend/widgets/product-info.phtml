@@ -794,16 +794,10 @@ if ($productBreadcrumbs === []) {
                         class="product-native-detail__selling-mode"
                         weline-code="product.frontend.detail.selling_mode">
                     <?php
-                    // Fail-soft: optional B2B module template. Prefer slot widget injection when registered.
+                    // XOR：b2b-selling-mode-switcher 仅 B2B default_injections → 本空槽。
+                    // 禁止槽内 / after-price / 布局 fetch 同部件（架构级单注册，禁运行时去重）。
                     $b2bModules = \Weline\Framework\App\Env::getInstance()->getModuleList();
                     $b2bInstalled = isset($b2bModules['Weline_B2B']);
-                    $b2bSellingMode = BP . 'app/code/Weline/B2B/view/templates/frontend/widgets/selling-mode-switcher.phtml';
-                    if ($b2bInstalled && is_file($b2bSellingMode)) {
-                        // fetch so @static/<lang> process; raw include leaves tags unresolved
-                        echo $this->fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml');
-                    } else {
-                        echo $this->getHook('Weline_Product::frontend::product::detail::after-price');
-                    }
                     $b2bTiers = BP . 'app/code/Weline/B2B/view/templates/frontend/partials/qty-tiers.phtml';
                     if ($b2bInstalled && is_file($b2bTiers)) {
                         echo $this->fetch('Weline_B2B::templates/frontend/partials/qty-tiers.phtml');

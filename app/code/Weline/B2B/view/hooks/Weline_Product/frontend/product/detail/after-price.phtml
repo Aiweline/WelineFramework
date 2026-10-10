@@ -1,14 +1,14 @@
 <?php
 /**
- * Inject ToC/ToB selling mode switcher after PDP price.
- *
  * Hook: Weline_Product::frontend::product::detail::after-price
+ *
+ * Architecture XOR（theme_layout_widget_owner）：售卖模式切换器
+ * `b2b-selling-mode-switcher` 只允许 B2B `@widget.default_injections` →
+ * `product-selling-mode` 空槽注入。禁止本 Hook / 布局 / product-info 槽旁 fetch。
+ *
+ * 本文件保留为空实现，避免历史 Hook 路径再叠渲；勿在此 echo fetch/include。
  *
  * @hook-priority 170
  * @hook-sort-order 10
  * @hook-solo false
  */
-$path = BP . 'app/code/Weline/B2B/view/templates/frontend/widgets/selling-mode-switcher.phtml';
-if (is_file($path)) {
-    echo $this->fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml');
-}

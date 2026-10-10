@@ -73,6 +73,10 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringNotContainsString('data-testid="b2b-apply-guest-login"', $switcherContent);
         self::assertStringNotContainsString("<?= __('购买方式') ?>", $switcherContent);
 
+        // Architecture XOR：单注册 default_injections；禁止运行时 RequestContext 去重补丁。
+        self::assertStringNotContainsString('selling_mode_switcher_rendered', $switcherContent);
+        self::assertStringContainsString('@widget.default_injections', $switcherContent);
+        self::assertStringContainsString('product-selling-mode', $switcherContent);
         self::assertStringContainsString('data-b2b-retail-only-hint="1"', $switcherContent);
         self::assertStringContainsString('data-testid="b2b-retail-only-tob-hint"', $switcherContent);
         self::assertStringContainsString('本商品不支持批发', $switcherContent);
@@ -278,13 +282,19 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('<lang>支付尾款</lang>', $hangContent);
 
         $afterPriceContent = (string)file_get_contents($afterPriceHook);
-        self::assertStringContainsString("fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml')", $afterPriceContent);
+        // XOR：after-price 空实现；切换器不得再 Hook/fetch（仅 default_injections）。
+        self::assertStringNotContainsString("fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml')", $afterPriceContent);
         self::assertStringNotContainsString('include $path', $afterPriceContent);
+        self::assertStringContainsString('default_injections', $afterPriceContent);
+        self::assertDoesNotMatchRegularExpression('/^\s*echo\b/m', $afterPriceContent);
 
         $productInfoContent = (string)file_get_contents($productInfo);
         self::assertStringContainsString('product-selling-mode', $productInfoContent);
-        self::assertStringContainsString('selling-mode-switcher.phtml', $productInfoContent);
-        self::assertStringContainsString("fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml')", $productInfoContent);
+        // XOR：槽内禁止 sibling fetch 切换器（仅 B2B default_injections）；qty-tiers 仍可旁路。
+        self::assertStringNotContainsString("fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml')", $productInfoContent);
+        self::assertStringContainsString('qty-tiers.phtml', $productInfoContent);
+        self::assertStringNotContainsString("getHook('Weline_Product::frontend::product::detail::after-price')", $productInfoContent);
+        self::assertStringContainsString('架构级单注册', $productInfoContent);
         self::assertStringContainsString('data-tob-moq', $productInfoContent);
         self::assertStringContainsString('data-tob-qty-step', $productInfoContent);
         $variantPos = strpos($productInfoContent, 'data-testid="product-variant-axes"');
