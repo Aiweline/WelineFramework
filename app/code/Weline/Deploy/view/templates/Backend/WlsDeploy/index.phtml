@@ -269,9 +269,17 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
         min-height: auto;
         padding: 0;
     }
+    /* 嵌入 WLS Panel 时外壳已占 page title，内页禁止再出同名 H1 */
     .wls-deploy-shell.is-embedded .wdep-kicker,
+    .wls-deploy-shell.is-embedded .wdep-title,
     .wls-deploy-shell.is-embedded .wdep-actions {
         display: none;
+    }
+    .wls-deploy-shell.is-embedded .wdep-topbar {
+        margin-bottom: 14px;
+    }
+    .wls-deploy-shell.is-embedded .wdep-subtitle {
+        margin-top: 0;
     }
     .wdep-topbar {
         display: flex;
@@ -987,8 +995,10 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
     <main class="wdep-main">
         <header class="wdep-topbar" id="overview">
             <div>
-                <p class="wdep-kicker"><?= $escapeHtml(__('WLS 独立插件')) ?></p>
-                <h1 class="wdep-title"><?= $escapeHtml(__('WLS 部署发布')) ?></h1>
+                <?php if (!$embedded): ?>
+                    <p class="wdep-kicker"><?= $escapeHtml(__('WLS 独立插件')) ?></p>
+                    <h1 class="wdep-title"><?= $escapeHtml(__('WLS 部署发布')) ?></h1>
+                <?php endif; ?>
                 <p class="wdep-subtitle">
                     <?= $escapeHtml(__('集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。')) ?>
                 </p>
