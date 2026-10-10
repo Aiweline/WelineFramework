@@ -19,6 +19,10 @@ final class BackendCompactLayoutContractTest extends TestCase
         self::assertStringContainsString('@media (max-width: 63.99rem)', $theme);
         self::assertStringContainsString('grid-template-columns: minmax(0, 1fr)', $theme);
         self::assertStringContainsString('.w-backend-sidebar { position: fixed;', $theme);
+        self::assertStringContainsString('.w-backend-sidebar[data-state="open"]', $theme);
+        $critical = (string)file_get_contents($root . '/app/code/Weline/Theme/view/ui/css/layout-critical-backend.css');
+        self::assertStringContainsString('.w-backend-sidebar[data-state="open"]', $critical);
+        self::assertStringContainsString('--weline-z-overlay', $critical);
         self::assertStringContainsString('--backend-layout-inline: var(--weline-space-4)', $theme);
         self::assertStringContainsString('--backend-layout-block: var(--weline-space-4)', $theme);
         self::assertStringContainsString('@media (max-width: 47.99rem)', $theme);

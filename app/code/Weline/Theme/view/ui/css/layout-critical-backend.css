@@ -53,14 +53,25 @@ body {
         grid-template-columns: minmax(0, 1fr);
         grid-template-areas: "topbar" "main";
     }
+    /*
+     * Unlayered FOUC critical beats @layer layout in backend.css. Must mirror BOTH
+     * the off-canvas closed rail AND [data-state=open] slide-in, or hamburger
+     * drawer.open only paints .w-overlay while the nav stays translate:-100%/hidden.
+     * z-index must sit on --weline-z-overlay (≥ overlay scrim which is overlay-1).
+     */
     .w-backend-sidebar {
         position: fixed;
         inset-block: 0;
         inset-inline-start: 0;
-        z-index: 40;
+        z-index: var(--weline-z-overlay, 900);
         width: min(var(--backend-theme-sidebar-width, 16rem), 88vw);
         translate: -100% 0;
         visibility: hidden;
+        transition: translate var(--weline-motion-normal, 180ms ease), visibility var(--weline-motion-normal, 180ms ease);
+    }
+    .w-backend-sidebar[data-state="open"] {
+        translate: 0;
+        visibility: visible;
     }
 }
 

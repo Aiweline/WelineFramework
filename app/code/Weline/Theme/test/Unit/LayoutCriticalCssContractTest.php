@@ -34,6 +34,9 @@ final class LayoutCriticalCssContractTest extends TestCase
         self::assertStringContainsString('@media (max-width: 63.99rem)', $html);
         self::assertStringContainsString('grid-template-columns: minmax(0, 1fr)', $html);
         self::assertStringContainsString('grid-template-areas: "topbar" "main"', $html);
+        // Unlayered critical must open with drawer data-state (cannot rely on @layer alone).
+        self::assertStringContainsString('.w-backend-sidebar[data-state="open"]', $html);
+        self::assertStringContainsString('--weline-z-overlay', $html);
         self::assertStringContainsString('@media (max-width: 47.99rem)', $html);
         self::assertStringContainsString('.w-backend-topbar__center', $html);
         self::assertStringContainsString('.w-language-switcher__current', $html);
