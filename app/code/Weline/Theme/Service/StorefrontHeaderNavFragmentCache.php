@@ -321,7 +321,7 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
         $menuSlug = \preg_replace('/[^a-z0-9_-]+/i', '-', \strtolower($menuId)) ?: 'menu';
 
         return \sprintf(
-            'theme.header.search_type_dropdown.v2.%s.%s.%s.%s',
+            'theme.header.search_type_dropdown.v3.%s.%s.%s.%s',
             $this->storefrontLocaleSegment(),
             $this->requestOriginSegment(),
             $menuSlug,

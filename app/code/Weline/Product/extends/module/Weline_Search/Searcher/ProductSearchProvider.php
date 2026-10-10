@@ -32,7 +32,9 @@ final class ProductSearchProvider extends AbstractSearchProvider implements Sear
 
     public function label(): string
     {
-        return (string)__('商品');
+        // Stable Chinese source — storefront WidgetI18n / type-filter translate at render.
+        // Do not __() here: listTypes is hot-cached and must not bake a locale into the payload.
+        return '商品';
     }
 
     public function sortOrder(): int

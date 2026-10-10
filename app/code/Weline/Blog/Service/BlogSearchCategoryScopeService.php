@@ -22,13 +22,6 @@ final class BlogSearchCategoryScopeService
     public function listForSearch(?int $websiteId = null, string $locale = ''): array
     {
         $websiteId = $websiteId ?? max(0, (int)(RequestContext::websiteId() ?? 0));
-        @file_put_contents(
-            BP . 'dev/tmp/blog-search-scope.log',
-            date('c') . ' websiteId=' . $websiteId
-                . ' code=' . (string)RequestContext::getWelineWebsiteCode()
-                . "\n",
-            FILE_APPEND
-        );
         $fromDb = $this->listFromDatabase($websiteId, $locale);
         if ($fromDb !== []) {
             return $fromDb;

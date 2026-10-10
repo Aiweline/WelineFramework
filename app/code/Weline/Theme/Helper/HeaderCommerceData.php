@@ -699,14 +699,15 @@ final class HeaderCommerceData
                 return [
                     [
                         'code' => 'all',
-                        'label' => (string)__('全部'),
+                        // Stable Chinese source — type-dropdown WidgetI18n translates at render.
+                        'label' => '全部',
                         'children' => [],
                     ],
                 ];
             },
             StorefrontThemeCacheCoordinator::headerSearchTypesPolicy(),
-            // v4: website code in logical key — prevent cross-brand blog taxonomy bleed via shared header cache.
-            'theme.header.search_types.v4.' . ($websiteCode !== '' ? $websiteCode : 'w' . $websiteId),
+            // v6: website code in key + Chinese label sources (FAQ→常问问题).
+            'theme.header.search_types.v6.' . ($websiteCode !== '' ? $websiteCode : 'w' . $websiteId),
         );
     }
 

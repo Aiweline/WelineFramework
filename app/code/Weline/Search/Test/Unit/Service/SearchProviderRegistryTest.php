@@ -127,7 +127,14 @@ final class SearchProviderRegistryTest extends TestCase
     {
         $policy = (new \ReflectionMethod(SearchProviderRegistry::class, 'typesPolicy'))->invoke(null);
         $identity = \Weline\Framework\Runtime\ScopeIdentity::channel(0, 'default', 'default', 'default', \Weline\Framework\Runtime\ScopeIdentity::MODE_NORMAL);
-        self::assertContains('global/i18n', $policy->namespacePaths($identity));
+        // Policy still declares global/i18n (scope child labels / future dictionary bust);
+        // CachePolicy expands it to global/i18n/content (or locale leaves when lang vary is filled).
+        self::assertContains('global/i18n', $policy->toArray()['dependencies']);
+        $paths = $policy->namespacePaths($identity);
+        self::assertNotEmpty(array_filter(
+            $paths,
+            static fn (string $path): bool => str_starts_with($path, 'global/i18n'),
+        ));
     }
 
     public function testAreaReadsReuseUnfilteredProvidersWithoutLosingOtherAreas(): void

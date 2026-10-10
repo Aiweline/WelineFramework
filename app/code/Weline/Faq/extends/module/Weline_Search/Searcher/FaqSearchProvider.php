@@ -26,8 +26,9 @@ final class FaqSearchProvider extends AbstractSearchProvider
 
     public function label(): string
     {
-        // Stable source key — translate at storefront render (WidgetI18n / type-filter).
-        return 'FAQ';
+        // Stable Chinese source — storefront WidgetI18n / type-filter translate at render.
+        // Prefer 常问问题 over bare FAQ: el_GR+ packs translate the Chinese key; FAQ often sticks English.
+        return '常问问题';
     }
 
     public function sortOrder(): int

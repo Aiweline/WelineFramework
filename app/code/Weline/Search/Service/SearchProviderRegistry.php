@@ -96,7 +96,8 @@ class SearchProviderRegistry implements ProcessSharedInterface
     public function listTypes(bool $withScopes = true, ?string $area = null): array
     {
         $websiteId = max(0, (int)(RequestContext::websiteId() ?? 0));
-        $logicalKey = 'search.provider_types.v3.'
+        // v5: FAQ source key 常问问题 (was bare FAQ); labels stay Chinese sources.
+        $logicalKey = 'search.provider_types.v5.'
             . ($withScopes ? 'scoped' : 'flat')
             . '.'
             . ($area !== null && trim($area) !== '' ? strtolower(trim($area)) : 'all')
@@ -137,7 +138,8 @@ class SearchProviderRegistry implements ProcessSharedInterface
         $out = [
             [
                 'code' => 'all',
-                'label' => (string)__('全部'),
+                // Stable Chinese source — Theme WidgetI18n translates at storefront render.
+                'label' => '全部',
                 'children' => [],
             ],
         ];
@@ -243,8 +245,8 @@ class SearchProviderRegistry implements ProcessSharedInterface
         }
 
         return match ($code) {
-            'all' => (string)__('全部'),
-            'product' => (string)__('商品'),
+            'all' => '全部',
+            'product' => '商品',
             default => $code,
         };
     }

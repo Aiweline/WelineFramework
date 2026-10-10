@@ -29,7 +29,9 @@ final class BlogSearchProvider extends AbstractSearchProvider implements SearchS
 
     public function label(): string
     {
-        return (string)__('博客');
+        // Stable Chinese source — storefront WidgetI18n / type-filter translate at render.
+        // Do not __() here: listTypes is hot-cached and must not bake a locale into the payload.
+        return '博客';
     }
 
     public function sortOrder(): int

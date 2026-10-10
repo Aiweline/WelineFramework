@@ -20,6 +20,9 @@ final class BlogSearchCategoryScopeNoCrossBrandLeakContractTest extends TestCase
         self::assertStringContainsString('treeOwnedOnly', $scopeSource);
         self::assertStringContainsString('if ($websiteId > 0)', $scopeSource);
         self::assertStringContainsString('return [];', $scopeSource);
+        // Hot path must not append debug logs (was writing multi-MB blog-search-scope.log).
+        self::assertStringNotContainsString('file_put_contents', $scopeSource);
+        self::assertStringNotContainsString('blog-search-scope.log', $scopeSource);
 
         $adminSource = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/BlogCategoryAdminService.php'

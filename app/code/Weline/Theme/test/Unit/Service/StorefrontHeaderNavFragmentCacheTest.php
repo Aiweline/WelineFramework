@@ -213,10 +213,10 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
             ]],
         ];
         $key = $service->searchTypeDropdownLogicalKey('header-search-panel-type-menu', $types);
-        self::assertStringStartsWith('theme.header.search_type_dropdown.v2.', $key);
+        self::assertStringStartsWith('theme.header.search_type_dropdown.v3.', $key);
         // v2: locale + origin + menuSlug + fingerprint — origin may contain dots/ports.
         self::assertMatchesRegularExpression(
-            '/^theme\.header\.search_type_dropdown\.v2\..+\.[a-f0-9]{16}$/',
+            '/^theme\.header\.search_type_dropdown\.v3\..+\.[a-f0-9]{16}$/',
             $key,
         );
         self::assertStringNotContainsString('.v1.', $key);
@@ -235,7 +235,7 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
         $cacheSrc = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/StorefrontHeaderNavFragmentCache.php');
         self::assertStringContainsString('function rememberSearchTypeDropdown', $cacheSrc);
         self::assertStringContainsString('headerSearchTypesPolicy()', $cacheSrc);
-        self::assertStringContainsString('search_type_dropdown.v2.', $cacheSrc);
+        self::assertStringContainsString('search_type_dropdown.v3.', $cacheSrc);
         self::assertStringContainsString('SEARCH_DROPDOWN_REQUEST_MEMO_PREFIX', $cacheSrc);
         $helperSrc = (string)file_get_contents(dirname(__DIR__, 3) . '/Helper/HeaderNavFragment.php');
         self::assertStringContainsString('stable_fragment', $helperSrc);

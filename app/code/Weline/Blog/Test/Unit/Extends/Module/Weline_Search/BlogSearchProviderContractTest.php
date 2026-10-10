@@ -14,6 +14,8 @@ final class BlogSearchProviderContractTest extends TestCase
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString("return 'blog';", $source);
+        self::assertStringContainsString("return '博客';", $source);
+        self::assertStringNotContainsString("__('博客')", $source);
         self::assertStringContainsString('Weline_Blog::templates/frontend/search/hit.phtml', $source);
         self::assertStringContainsString('SearchProviderIndexService', $source);
         self::assertStringContainsString('documentsForIndex', $source);
