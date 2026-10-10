@@ -36,6 +36,7 @@ final class McpSkillCatalog
         'weline-performance-check' => GuidanceWorkflowCatalog::SURFACE_PERFORMANCE_CHECK,
         'weline-prompt-optimization' => GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION,
         'weline-translation-engineer' => GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER,
+        'weline-documentation-engineer' => GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER,
     ];
 
     /**
@@ -154,7 +155,7 @@ final class McpSkillCatalog
                 'dual_track' => true,
                 'review_lanes' => 'per_triggered_seat',
                 'core_roster' => [
-                    '项目经理', '需求分析', '领域探查', '架构师', '后端', '前端', 'UI', '原型', '测试', '安全', '文档',
+                    '项目经理', '需求分析', '领域探查', '架构师', '后端', '前端', 'UI', '原型', '测试', '安全', '文档工程师',
                 ],
                 'framework_seats' => [
                     '扩展点', '事件', '数据分析', '查询', 'Taglib', 'Hook', 'Provider', '翻译工程师', 'ACL', 'Setup', '电商顾问', 'API', '部件开发工程师', '主题开发工程师', '支付开发工程师', '性能检查工程师', '提示词优化工程师',
@@ -164,6 +165,7 @@ final class McpSkillCatalog
                     'specialty_reviews_pass',
                     'ui_and_prototype_review_pass',
                     'tester_execution_pass',
+                    'documentation_review_pass',
                     'pm_huishen_pass',
                     'user_report_allowed',
                 ],
@@ -538,6 +540,27 @@ final class McpSkillCatalog
         $perf = GuidanceWorkflowCatalog::SURFACE_PERFORMANCE_CHECK;
         $promptOpt = GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION;
         $translation = GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER;
+        $documentation = GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER;
+
+        $documentationSeat = [
+            'kind' => 'core',
+            'mcp_skill_ids' => [$documentation],
+            'host_skills' => ['weline-documentation-engineer'],
+            'authoritative_docs' => [
+                'dev/ai-command/ai/文档工程师.md',
+                'dev/ai-command/ai/工程团队.md',
+                'app/code/Weline/Ai/doc/AI工程交付流程.md',
+                'app/code/Weline/Ai/doc/AI硬规则索引.md',
+            ],
+            'must_query_scope' => '统一执笔模块耐久文档；收各席 doc_debt；实现变→描述同变；documentation_review_pass；禁他席私改 doc/',
+            'prompt_increment' => '你是文档工程师（Team:文档工程师:；一代别名键 文档）——本职是**统一编写/改写**归属模块耐久文档：实现一变则描述必须同变；**其它开发席禁止私自改 app/code/*/doc/ 耐久正文**，只交 doc_debt 由 PM 安排本席执笔。不是旁听、不是 SESSION 记账、不是业务码施工席。\n'
+                . 'HARD：开工前 get_skill(documentation_engineer|weline-documentation-engineer)，并 Read 文档工程师.md + 工程团队.md（流程位与统一执笔）+ AI工程交付流程.md 收口节。禁止整段粘贴技能正文。\n'
+                . '统一执笔（硬 · documentation_engineer_owns_durable_docs）：三文档/README/指南/API·架构文档/耐久 spec 更新只由本席落盘；收到各席 doc_debt + 测试证据后统一编写；可 peer 原施工席核对技术细节，但禁止让对方代写模块 doc/。\n'
+                . '流程位（硬）：tester_execution_pass 之后、pm_huishen_pass 之前执行 documentation_review_pass；或 PM 因 doc_debt 提前安排本席；无 meetings/文档-review.md=pass（或合法 N/A≥24 字）禁止汇审完成。\n'
+                . '对照源（硬）：paths_changed/实现 diff + 测试已过证据 + contracts/UC + 各席 doc_debt；改写需求.md/功能现状.md/开发日志.md 及触及 README/指南/API/耐久 spec。\n'
+                . '边界：禁止 SESSION/team/排查进模块 doc/；禁止借改文档改生产码；例外=需求分析首次澄清落盘 spec、提示词优化席改指令/镜、非模块耐久的 meetings/SESSION。\n'
+                . '双轨：统一执笔施工 + 契约复审（meetings/文档-review.md）。无法闭环 → escalate + @项目经理：请立刻组队解决。',
+        ];
 
         $translationSeat = [
             'kind' => 'framework',
@@ -584,7 +607,8 @@ final class McpSkillCatalog
                     'prompt_increment' => '你是项目经理：SESSION 唯一记账人 + 计划生命周期主人 + 交换机。职责：审规划缺口→派人→监控→收交付做 DoD/契约/证据/范围检查→等测试过关→再复检→返工记 SESSION 再拉人→全部计划项 closed + 汇审通过才汇报。禁止扮演其它席位写码/签收；禁止替代架构/专席合规/代码级复审。拉起子智能体时必须粘贴通用骨架 + 该席 seat_skill_mirrors 增量；登记 roster agent_id。\n'
                         . 'HARD（requirement_session_dashboard）：立项即维护 dev/session/{slug}.md（模板 requirement-session.md；禁止写入模块 doc/）；仅本席可改 SESSION；未完成清单非「无」禁止宣称完成。\n'
                         . 'HARD（pm_plan_lifecycle / notify_pm）：席位每次 closed|escalate|waiting_peer|waiting_acceptance 必通知本席；同回合 DoD 检查并更新 SESSION（计划项/交付通知日志）；发现 escalate 必须开 SESSION 子 plan_id（登记 issuer_seat + issuer_acceptance=pending），未测试+复检+发起方签收禁止 closed；deps 已满足席可并行，记账不全球串行。\n'
-                        . 'HARD（ui_prototype_gate_before_test · acceptance_gate_order）：UI in_scope 时硬顺序 specialty_reviews_pass → ui_and_prototype_review_pass → tester_execution_pass → pm_huishen_pass → user_report_allowed；禁止测试与 UI/原型并行抢跑；UI/原型 fail 须 resume 开发子智能体再审；测试 pass 后本席汇审通过才可向用户汇报。\n'
+                        . 'HARD（ui_prototype_gate_before_test · acceptance_gate_order）：UI in_scope 时硬顺序 specialty_reviews_pass → ui_and_prototype_review_pass → tester_execution_pass → documentation_review_pass → pm_huishen_pass → user_report_allowed；禁止测试与 UI/原型并行抢跑；UI/原型 fail 须 resume 开发子智能体再审；测试 pass 后必须拉起/resume 文档工程师完成文档↔实现对齐（meetings/文档-review.md=pass 或合法 N/A），再本席汇审通过才可向用户汇报。\n'
+                        . 'HARD（documentation_engineer_for_docs_work / documentation_engineer_owns_durable_docs）：行为/契约变更复杂 team 测试 pass 后禁止跳过文档工程师；实现变→耐久文档描述必须同变；任一席交 doc_debt 或需要更新模块耐久文档时本席必须同回合安排/resume 文档工程师统一编写；禁止开发席私改 app/code/*/doc/；禁止口头「文档 OK」代签。\n'
                         . 'HARD（findings_wake_pm）：收到专席 escalate（含电商顾问「要开发什么」dev_ask）后同回合立刻开 channel、拉起/resume 相关席位开会并安排施工解决——不用 Issue 任务列表积压；必须落 SESSION 计划项；禁止只转述发现却不组队。'
                         . '若 escalate 来自电商顾问领域决策：同回合组队做技术怎么开发讨论（需求分析∥架构∥已触发施工专席；顾问只审业务/运营不跑偏）。\n'
                         . 'HARD（requirement_issuer_owns_acceptance）：进度节点（施工 closed/测试 pass/汇审前/每回合监控仍 open）必须写可读进度 + @发起席：请验收进度 + resume 发起席；关 plan_id / 汇审前须 issuer_acceptance=pass；禁止甩手场景漏叫醒。\n'
@@ -738,16 +762,8 @@ final class McpSkillCatalog
                     'must_query_scope' => 'ACL/凭据/输入校验/跨站；只审不改架构',
                     'prompt_increment' => '复审波只审：凭据、ACL、输入校验、CSP/响应头、跨站边界。禁止借审查改架构；fail 写 findings+rework_owner。',
                 ],
-                '文档' => [
-                    'kind' => 'core',
-                    'mcp_skill_ids' => [],
-                    'host_skills' => [],
-                    'authoritative_docs' => [
-                        'app/code/Weline/Ai/doc/AI工程交付流程.md',
-                    ],
-                    'must_query_scope' => '模块 doc 三文档契约对齐',
-                    'prompt_increment' => '只对齐 owning-module doc/（README/需求/功能现状/开发日志）；禁止改生产实现骗绿。',
-                ],
+                '文档工程师' => $documentationSeat,
+                '文档' => $documentationSeat,
                 '扩展点' => [
                     'kind' => 'framework',
                     'mcp_skill_ids' => [$team],

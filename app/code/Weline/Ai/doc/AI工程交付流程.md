@@ -25,11 +25,11 @@
 1c 宿主计划模式    Agent 自行 Plan Mode；**简单可 skip**（仍须验收）
 2 扩展点选型       扩展点选型.md → 文档索引 / doc/event / Query / Hook
 3 计划拆解         会话计划笔记（仍在 Plan Mode）→ 自审通过后切 Agent 开发
-3b 工程团队        非简单：一席一智能体；席间 channel+resume 互聊；SESSION 总控+PM 计划生命周期；框架优先；全专席双轨；对齐冻结(UC+contracts+deps)；依赖唤醒流水线；组件协商；UI+原型先审过签才测→测试→项目经理汇审才汇报；停工等确认
+3b 工程团队        非简单：一席一智能体；席间 channel+resume 互聊；SESSION 总控+PM 计划生命周期；框架优先；全专席双轨；对齐冻结(UC+contracts+deps)；依赖唤醒流水线；组件协商；UI+原型先审过签才测→测试→文档工程师(实现变→文档同变)→项目经理汇审才汇报；停工等确认
 4 实现             计划自审通过后切回 Agent；宿主原生编辑 + TDD
 5 复审             架构/缺陷/安全 + 每触发专席合规复审（fail→返工）
-6 分层测试         单测 → 运行时 → WebUI；涉 UI 须 UI+原型过签后测试执行，再经项目经理汇审才可交出
-7 收口             文档对齐（README/需求/开发日志）+ 门禁表 + 交付证据
+6 分层测试         单测 → 运行时 → WebUI；涉 UI 须 UI+原型过签后测试执行 → 文档工程师 documentation_review_pass → 项目经理汇审才可交出
+7 收口             文档工程师对齐（README/需求/功能现状/开发日志）+ 门禁表 + 交付证据
 ```
 
 ### 0. 会话引导（索引 / 规则 / 技能）
@@ -96,7 +96,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **全专席双轨**：凡触发专席（扩展点 / 事件 / 数据分析 / Taglib / UI / i18n…）= 施工轨 + 合规复审轨；复审 fail → 返工，禁止带病进验收。
 - **流水线流动（`team_flow_on_contracts`）**：立项会后开 **对齐冻结会**（测试主持）——先钉可执行 UC + `contracts.md` + `deps.md`，再技术方案定稿与施工。施工按依赖**唤醒并发**；验收只执行已冻用例。禁止「开发完才补主路径用例」或全员空等终点。
 - **组件协商（UI in_scope）**：优先复用 `w-*` / Taglib / Widget；不足须 **原型 ∥ UI**（±主题）**真实子智能体通道互聊**写入 `component-negotiate.md` 后再扩展。
-- **验收实质签收 + 先审后测（UI in_scope · `ui_prototype_gate_before_test`）**：**UI** 写 `acceptance-ui.md`、**原型** 写 `acceptance-prototype.md` 亲自对照活页审查开发成果（有否决权）；fail → 项目经理 resume 开发子智能体再审；**两席都 pass 后**测试席才执行验收 e2e/WB；测试 pass → 项目经理汇审 → 才可向用户汇报。e2e 全绿不能代替 UI/原型门禁或项目经理汇审。
+- **验收实质签收 + 先审后测（UI in_scope · `ui_prototype_gate_before_test`）**：**UI** 写 `acceptance-ui.md`、**原型** 写 `acceptance-prototype.md` 亲自对照活页审查开发成果（有否决权）；fail → 项目经理 resume 开发子智能体再审；**两席都 pass 后**测试席才执行验收 e2e/WB；测试 pass → **文档工程师** `documentation_review_pass`（实现变→耐久文档描述同变；`meetings/文档-review.md`）→ 项目经理汇审 → 才可向用户汇报。e2e 全绿不能代替 UI/原型/文档门禁或项目经理汇审。硬规则 `documentation_engineer_for_docs_work`；指令 [文档工程师](../../../../../dev/ai-command/ai/文档工程师.md)。
 - **免除**：内容运营（产品优化 / 详情优化 / 翻译优化 / 主图优化 / 新建文章 / 规格修复）两种前缀都不用。
 - **本机测试账号（`local_dev_test_accounts_self_serve`）**：开发环境后台默认 **admin / admin**；前台自建测试顾客。禁止向用户索要账号密码或「请你登录验证」。
 - **并发**：仅 team 模式，且文件或扩展点不重叠、**contracts + UC 已冻结**、本席依赖已满足，才多个子智能体。
@@ -202,7 +202,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **Browser 自测（硬门槛，含 Web 时）**：按约定用例用**当前宿主可用的真实 Browser**跑完操作员路径；**每次打开/导航前禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）；未跑或宿主无 Browser 只能报「代码已改，WebUI 验收未完成」，禁止宣称完成。见 [WebUI浏览器验收与交付地址门禁.md](../../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
 - **交付后关闭 Browser（硬门槛，`browser_release_after_delivery`）**：面向用户写出「交付地址」小节之后，**立即关闭**本回合打开的全部验收 Browser 标签/webview（Cursor：`unlock` 后 `browser_tabs` close；其它宿主结束操作员会话）。禁止留下空转 Renderer。仅当用户明确要求保留时可例外并注明。从未打开过 Browser 记 `N/A`。
 - **卡住即 fail-closed（硬门槛，`browser_operator_fail_closed_release`）**：打开前 `curl --max-time ≤15` 探活；Browser 工具超时/无 tab/锁死时**立即** unlock+关闭本回合验收标签（可选 `php bin/w e2e:cleanup-browsers`），导航重试≤2；禁止无限等待或跨长 shell 持 lock，以免冻住宿主会话。
-- **文档对齐（硬门槛）**：打开归属模块 `doc/README.md`、`doc/需求.md`、`doc/开发日志.md` 及本次触及的专题文档，对照刚交付行为；有差异则改文档或回改代码，二者必须一致。
+- **文档对齐（硬门槛，`docs_reconcile_on_closeout` + `documentation_engineer_for_docs_work`）**：复杂 team 由 **文档工程师统一执笔**——测试 pass 后、汇审前对照已验证实现 + 各席 `doc_debt` 改写归属模块 `doc/README.md`、`doc/需求.md`、`doc/功能现状.md`、`doc/开发日志.md` 及本次触及的专题文档——**实现变则文档描述必须同变**；写 `meetings/文档-review.md`。其它开发席**禁止**私改模块耐久 `doc/`，须交 `doc_debt` 由 PM 安排文档工程师。监工模式由父会话兼任同义务。有差异则改文档或 escalate 回改代码，二者必须一致。
 - **交付地址清单（硬门槛）**：在面向用户的交付汇报**末尾**列出本功能涉及的全部入口，按表面分组：
   - **前台 / 后台主验收**：每行一条**可直接打开的 http(s) Markdown 链接**，格式 `[名称](http(s)://完整URL)`；链接文字用页面名（如「愿望清单」），**禁止**把 `command:simpleBrowser.api.open` 等宿主私有伪协议当作**唯一/主链**；禁止仅写不可点的「打开」变色字。
   - **本机默认 Host（硬）**：`{project_hash}.test.weline.com`（例：`http://p05113ef3.test.weline.com:9555/...`）。**禁止**把 `*.weline.test`（例：`p05113ef3.weline.test`）当作主验收 Host（即使 `/etc/hosts` 也解析）；仅当不存在可用的 `*.test.weline.com` 时才用 `127.0.0.1`。本机常为 http，勿伪造 https。权威：`WebUI浏览器验收与交付地址门禁.md`；MCP：`feature_delivery_urls.default_local_host` / `forbidden_primary_hosts`、`closeout_delivery_reminder`。

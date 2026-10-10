@@ -158,6 +158,9 @@ skillCheck(str_contains((string) ($teamBundle['session_template'] ?? ''), 'requi
 skillCheck(in_array('closeout_related_web_urls', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle closeout_related_web_urls');
 skillCheck(in_array('ui_and_prototype_review_pass', is_array($teamBundle['acceptance_gate_order'] ?? null) ? $teamBundle['acceptance_gate_order'] : [], true), 'engineering team acceptance_gate_order includes ui_and_prototype_review_pass');
 skillCheck(in_array('tester_execution_pass', is_array($teamBundle['acceptance_gate_order'] ?? null) ? $teamBundle['acceptance_gate_order'] : [], true), 'engineering team acceptance_gate_order includes tester_execution_pass');
+skillCheck(in_array('documentation_review_pass', is_array($teamBundle['acceptance_gate_order'] ?? null) ? $teamBundle['acceptance_gate_order'] : [], true), 'engineering team acceptance_gate_order includes documentation_review_pass');
+skillCheck(in_array('文档工程师', is_array($teamBundle['core_roster'] ?? null) ? $teamBundle['core_roster'] : [], true), 'engineering team core roster includes 文档工程师');
+skillCheck(!in_array('文档', is_array($teamBundle['core_roster'] ?? null) ? $teamBundle['core_roster'] : [], true), 'engineering team core roster uses 文档工程师 full name not thin 文档');
 skillCheck(in_array('pm_huishen_pass', is_array($teamBundle['acceptance_gate_order'] ?? null) ? $teamBundle['acceptance_gate_order'] : [], true), 'engineering team acceptance_gate_order includes pm_huishen_pass');
 skillCheck(in_array('原型', is_array($teamBundle['acceptance_signoff'] ?? null) ? $teamBundle['acceptance_signoff'] : [], true), 'engineering team acceptance_signoff includes 原型');
 skillCheck(in_array('meetings/acceptance-ui.md', is_array($teamBundle['minutes_extra'] ?? null) ? $teamBundle['minutes_extra'] : [], true), 'engineering team minutes_extra acceptance-ui');
@@ -387,6 +390,19 @@ skillCheck(!str_contains($i18nPrompt, '默认先不做') && !str_contains($i18nP
 skillCheck(str_contains($i18nPrompt, '巡检') || str_contains($i18nPrompt, 'locale'), '翻译工程师 prompt covers site locale audit');
 skillCheck(str_contains($i18nPrompt, '商品翻译') || str_contains($i18nPrompt, '翻译优化'), '翻译工程师 prompt boundaries content-ops product i18n');
 skillCheck(($i18nAliasSeat['prompt_increment'] ?? null) === ($i18nSeat['prompt_increment'] ?? false), 'i18n alias seat shares 翻译工程师 prompt_increment');
+$docSeat = is_array($seatMap['文档工程师'] ?? null) ? $seatMap['文档工程师'] : [];
+$docAliasSeat = is_array($seatMap['文档'] ?? null) ? $seatMap['文档'] : [];
+skillCheck($docSeat !== [], 'seat_skill_mirrors has 文档工程师');
+skillCheck($docAliasSeat !== [], 'seat_skill_mirrors keeps 文档 alias key');
+skillCheck(in_array(GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER, is_array($docSeat['mcp_skill_ids'] ?? null) ? $docSeat['mcp_skill_ids'] : [], true), '文档工程师 mirror includes documentation_engineer');
+$docDocs = is_array($docSeat['authoritative_docs'] ?? null) ? $docSeat['authoritative_docs'] : [];
+skillCheck(in_array('dev/ai-command/ai/文档工程师.md', $docDocs, true), '文档工程师 docs include 文档工程师 command');
+$docPrompt = (string) ($docSeat['prompt_increment'] ?? '');
+skillCheck(str_contains($docPrompt, '实现变') || str_contains($docPrompt, '同变'), '文档工程师 prompt mandates docs follow implementation');
+skillCheck(str_contains($docPrompt, '统一') || str_contains($docPrompt, 'doc_debt') || str_contains($docPrompt, '执笔'), '文档工程师 prompt mandates unified authorship / doc_debt');
+skillCheck(str_contains($docPrompt, 'documentation_review_pass') || str_contains($docPrompt, '汇审前'), '文档工程师 prompt covers gate after tester before huishen');
+skillCheck(str_contains($docPrompt, '文档-review.md'), '文档工程师 prompt requires review artifact');
+skillCheck(($docAliasSeat['prompt_increment'] ?? null) === ($docSeat['prompt_increment'] ?? false), '文档 alias seat shares 文档工程师 prompt_increment');
 $advisorSeat = is_array($seatMap['电商顾问'] ?? null) ? $seatMap['电商顾问'] : [];
 $advisorPrompt = (string) ($advisorSeat['prompt_increment'] ?? '');
 skillCheck(str_contains($advisorPrompt, 'FAQ') || str_contains($advisorPrompt, 'FaqHub'), '电商顾问 prompt includes FAQ Hub compliance surface');
@@ -487,6 +503,9 @@ skillCheck(str_contains($teamCmd, '提示词优化工程师') && str_contains($t
 skillCheck(str_contains($teamCmd, 'prompt_engineer_for_skill_prompt_work') || str_contains($teamCmd, '技能引用'), 'engineering team command mentions prompt hard rule or 技能引用');
 skillCheck(str_contains($teamCmd, '翻译工程师') && str_contains($teamCmd, 'translation_engineer'), 'engineering team command mirrors translation engineer');
 skillCheck(str_contains($teamCmd, 'translation_engineer_for_i18n_work') || str_contains($teamCmd, 'i18n:collect'), 'engineering team command mentions translation hard rule or collect');
+skillCheck(str_contains($teamCmd, '文档工程师') && str_contains($teamCmd, 'documentation_review_pass'), 'engineering team command mirrors documentation engineer gate');
+skillCheck(str_contains($teamCmd, 'documentation_engineer_for_docs_work') || str_contains($teamCmd, '实现变'), 'engineering team command mentions documentation hard rule or docs-follow-code');
+skillCheck(str_contains($teamCmd, 'doc_debt') && (str_contains($teamCmd, '统一执笔') || str_contains($teamCmd, 'documentation_engineer_owns_durable_docs')), 'engineering team command requires doc_debt handoff / unified authorship');
 skillCheck(!preg_match('/^\| 合规 \|/m', $teamCmd), 'engineering team command retired standalone 合规 seat row');
 
 $paymentCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/支付开发.md';

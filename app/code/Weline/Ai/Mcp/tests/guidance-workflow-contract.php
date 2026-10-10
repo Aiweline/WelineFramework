@@ -100,6 +100,9 @@ $promptOptimizationSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE
 $translationEngineerSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER] ?? null)
     ? $surfaces[GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER]
     : [];
+$documentationEngineerSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER] ?? null)
+    ? $surfaces[GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER]
+    : [];
 $visitorAnalyticsSurface = is_array($surfaces[GuidanceWorkflowCatalog::SURFACE_VISITOR_DATA_ANALYTICS] ?? null)
     ? $surfaces[GuidanceWorkflowCatalog::SURFACE_VISITOR_DATA_ANALYTICS]
     : [];
@@ -110,6 +113,7 @@ $activeEcommerceAdvisorIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('�
 $activePerformanceCheckIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('性能检查工程师 HotCache N+1 慢请求');
 $activePromptOptimizationIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('提示词优化工程师 技能压缩 seat_skill_mirrors');
 $activeTranslationEngineerIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('翻译工程师 漏译 i18n:collect');
+$activeDocumentationEngineerIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('文档工程师 文档同步 documentation_review_pass');
 $activeVisitorAnalyticsIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('数据分析 像素事件 WelinePixel Visitor');
 $engineeringTeamBundle = McpSkillCatalog::policy()['engineering_team_bundle'] ?? [];
 
@@ -1393,6 +1397,13 @@ $checks = [
     ),
     'translation_engineer surface exists' => ($translationEngineerSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER
         && str_contains((string) ($translationEngineerSurface['authoritative_doc'] ?? ''), '翻译工程师'),
+    'resolveActiveSurfaceIds matches documentation engineer task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER,
+        $activeDocumentationEngineerIds,
+        true,
+    ),
+    'documentation_engineer surface exists' => ($documentationEngineerSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER
+        && str_contains((string) ($documentationEngineerSurface['authoritative_doc'] ?? ''), '文档工程师'),
     'resolveActiveSurfaceIds matches visitor analytics task' => in_array(
         GuidanceWorkflowCatalog::SURFACE_VISITOR_DATA_ANALYTICS,
         $activeVisitorAnalyticsIds,
@@ -1466,6 +1477,22 @@ $checks = [
     )
         && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['翻译工程师'])
         && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['i18n']),
+    'engineering_team_bundle includes 文档工程师 seat' => in_array(
+        '文档工程师',
+        is_array($engineeringTeamBundle['core_roster'] ?? null)
+            ? $engineeringTeamBundle['core_roster']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['文档工程师'])
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['文档'])
+        && in_array(
+            'documentation_review_pass',
+            is_array($engineeringTeamBundle['acceptance_gate_order'] ?? null)
+                ? $engineeringTeamBundle['acceptance_gate_order']
+                : [],
+            true,
+        ),
     'hard_constraints include payment_engineer_for_payment_work' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -1604,6 +1631,24 @@ $checks = [
             && !str_contains((string) ($rule['summary'] ?? ''), 'default skip')
             && (str_contains((string) ($rule['summary'] ?? ''), 'system dictionary')
                 || str_contains((string) ($rule['summary'] ?? ''), 'FORMAT BOUNDARY'))),
+        false,
+    ),
+    'hard_constraints include documentation_engineer_for_docs_work' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'documentation_engineer_for_docs_work'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:文档工程师:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'documentation_review_pass')
+            && str_contains((string) ($rule['summary'] ?? ''), 'documentation_engineer')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'doc_debt')
+                || str_contains((string) ($rule['summary'] ?? ''), 'UNIFIED AUTHORSHIP')
+                || str_contains((string) ($rule['summary'] ?? ''), 'ONLY 文档工程师'))),
+        false,
+    ),
+    'documentation_engineer surface requires unified authorship' => array_reduce(
+        is_array($documentationEngineerSurface['norms'] ?? null) ? $documentationEngineerSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'docs_unified_authorship'),
         false,
     ),
     'translation_engineer surface forbids skip-other-locales wording' => !str_contains((string) ($translationEngineerSurface['description'] ?? ''), '默认先不做')

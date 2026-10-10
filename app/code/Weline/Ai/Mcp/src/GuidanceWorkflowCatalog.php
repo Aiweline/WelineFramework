@@ -50,6 +50,8 @@ final class GuidanceWorkflowCatalog
 
     public const SURFACE_TRANSLATION_ENGINEER = 'translation_engineer';
 
+    public const SURFACE_DOCUMENTATION_ENGINEER = 'documentation_engineer';
+
     /** @return list<string> Repository-relative pinned doc paths. */
     public static function pinnedDocumentPaths(): array
     {
@@ -81,6 +83,7 @@ final class GuidanceWorkflowCatalog
             'dev/ai-command/ai/性能检查.md',
             'dev/ai-command/ai/提示词优化.md',
             'dev/ai-command/ai/翻译工程师.md',
+            'dev/ai-command/ai/文档工程师.md',
         ];
     }
 
@@ -403,7 +406,7 @@ final class GuidanceWorkflowCatalog
                     'Parent is 项目经理: SESSION bookkeeper + plan-lifecycle owner + switchboard (DoD check; NOT code-review substitute). Framework first + dual_track_all: each triggered specialty seat has 施工 + 合规复审 (事件/扩展点/Taglib/UI/i18n…). Fail → rework before acceptance.',
                     'SESSION (requirement_session_dashboard + pm_plan_lifecycle): create dev/session/{slug}.md (template requirement-session.md) at kickoff—FORBID module doc/session (module_doc_forbids_ephemeral_work_artifacts); ONLY PM edits; seat deliveries require notify_pm→PM DoD check→update SESSION; deps-satisfied seats may parallel; findings open plan_ids until test+PM recheck; gaps non-empty forbid claiming done.',
                     'FLOW (team_flow_on_contracts): after 立项会, 对齐冻结会 (测试主持) freezes executable UC + contracts.md + deps.md before tech finalization/build. Wake-on-deps concurrency. Forbid designing main-path use cases after development. Acceptance EXECUTES frozen UC only.',
-                    'UI in_scope HARD ORDER (ui_prototype_gate_before_test): staff 原型+前端+主题+UI; components.md; insufficient → 原型∥UI real peer talk → component-negotiate.md. After specialty review: UI+原型 review development (acceptance-ui/acceptance-prototype) with reject→PM resume development subagent; BOTH pass BEFORE Tester e2e/WB execution; Tester pass → PM 汇审 → only then user report—e2e green does not waive.',
+                    'UI in_scope HARD ORDER (ui_prototype_gate_before_test): staff 原型+前端+主题+UI; components.md; insufficient → 原型∥UI real peer talk → component-negotiate.md. After specialty review: UI+原型 review development (acceptance-ui/acceptance-prototype) with reject→PM resume development subagent; BOTH pass BEFORE Tester e2e/WB execution; Tester pass → 文档工程师 documentation_review_pass (实现变→耐久文档描述同变; meetings/文档-review.md) → PM 汇审 → only then user report—e2e green does not waive.',
                     'Parallel subagents only when files/extension points do not overlap and contracts+UC are frozen; start only seats whose deps are satisfied.',
                     'Cross-track findings escalate to a meeting via channel + resume (同意/异议/否决). If nobody can decide, or a major architecture contradiction: 停工汇报 and wait for user confirm—forbid PHP/phtml/CSS.',
                     'FINDINGS WAKE PM (findings_wake_pm): specialty seats that FIND problems MUST immediately escalate to 项目经理 (@项目经理：请立刻组队解决 + notify_pm)—NO Issue task list. 项目经理 MUST same-turn open channel, resume/staff seats, open SESSION plan_id, meet and resolve. FORBID backlog lists or user-only essays without escalate.',
@@ -847,6 +850,7 @@ final class GuidanceWorkflowCatalog
             self::SURFACE_PERFORMANCE_CHECK => self::performanceCheckSurface(),
             self::SURFACE_PROMPT_OPTIMIZATION => self::promptOptimizationSurface(),
             self::SURFACE_TRANSLATION_ENGINEER => self::translationEngineerSurface(),
+            self::SURFACE_DOCUMENTATION_ENGINEER => self::documentationEngineerSurface(),
         ];
     }
 
@@ -1320,6 +1324,7 @@ final class GuidanceWorkflowCatalog
                 '性能检查工程师', '性能检查', '性能优化', 'HotCache', 'N+1',
                 '提示词优化工程师', '提示词优化', '技能压缩', '技能引用优化', '优化题词',
                 '翻译工程师', '漏译', 'locale leak', '界面文案翻译',
+                '文档工程师', '文档同步', '文档漂移', '三文档对齐', 'documentation_review_pass',
             ],
             'authoritative_skill' => 'weline-engineering-team',
             'authoritative_doc' => 'dev/ai-command/ai/工程团队.md',
@@ -1331,6 +1336,7 @@ final class GuidanceWorkflowCatalog
                 'dev/ai-command/ai/性能检查.md',
                 'dev/ai-command/ai/提示词优化.md',
                 'dev/ai-command/ai/翻译工程师.md',
+                'dev/ai-command/ai/文档工程师.md',
                 'app/code/Weline/Ai/doc/AI工程交付流程.md',
                 'app/code/Weline/Ai/doc/AI硬规则索引.md',
                 'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
@@ -1347,12 +1353,14 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'peer_talk_via_channel', 'summary' => '席间经 channel/{thread}.md + resume 对端子智能体互聊；项目经理只做交换机'],
                 ['id' => 'parent_is_pm', 'summary' => '父会话是项目经理；席位按波次上场，不全员同时开工；roster 登记 agent_id'],
                 ['id' => 'framework_first', 'summary' => '需求/设计/施工/复审先映射框架机制与组件，再谈业务补丁'],
-                ['id' => 'dual_track_all_specialty_seats', 'summary' => '凡触发专席一律施工轨+合规复审轨（电商顾问=顾问轨运营策划/领域决策+政策合规复审，禁止写码；性能检查=设计检查+实现复审；提示词优化=压缩施工+语义复审；翻译工程师=巡检译修+CSV/collect复审）；fail→返工，禁止带病进验收'],
+                ['id' => 'dual_track_all_specialty_seats', 'summary' => '凡触发专席一律施工轨+合规复审轨（电商顾问=顾问轨运营策划/领域决策+政策合规复审，禁止写码；性能检查=设计检查+实现复审；提示词优化=压缩施工+语义复审；翻译工程师=巡检译修+CSV/collect复审；文档工程师=统一执笔+契约复审）；fail→返工，禁止带病进验收'],
                 ['id' => 'framework_seats_by_trigger', 'summary' => '扩展点/事件/数据分析/查询/Taglib/Hook/Provider/翻译工程师(别名i18n)/ACL/Setup/电商顾问/API/部件开发工程师/主题开发工程师/支付开发工程师/性能检查工程师/提示词优化工程师按触发矩阵上场'],
                 ['id' => 'ecommerce_advisor_required_for_commerce', 'summary' => '触及商品/目录/购物车/结账/订单/支付政策面/运费/站店渠/首页落地页运营设计/获客投放活动策划时必须 Team:电商顾问: 参与需求讨论与对齐冻结/技术方案会；运营策划禁写码；领域决策定稿后 escalate 通知 PM；须联网检索现行政策与运营要点'],
                 ['id' => 'performance_engineer_required_for_hot_path', 'summary' => '触及热路径/缓存/列表目录搜索/N+1/慢请求时必须 Team:性能检查工程师: 参与需求讨论与对齐冻结/技术方案会，并在开发后复审；建议须落在框架缓存与批量约束内'],
                 ['id' => 'prompt_engineer_required_for_skill_prompt', 'summary' => '触及技能引用/提示词骨架/席位镜/MCP skill·surface 文案或用户明示提示词优化时必须 Team:提示词优化工程师:；引用指针化+重复压缩+语义复审；禁削弱硬规则'],
                 ['id' => 'translation_engineer_required_for_i18n', 'summary' => '新文案/改用户可见文案/i18n in_scope/漏译/界面流程翻译时必须 Team:翻译工程师:（别名 i18n）；模块 CSV 仅中英格式边界；其它已选 locale→词典/实体；禁「其它语种默认不做」'],
+                ['id' => 'documentation_engineer_required_on_behavior_change', 'summary' => '行为/契约变更复杂 team：测试 pass 后必须 Team:文档工程师:（别名 文档）执行 documentation_review_pass；实现变→耐久文档描述同变；无 meetings/文档-review.md=pass 禁汇审'],
+                ['id' => 'documentation_engineer_owns_durable_docs', 'summary' => '模块耐久文档只由文档工程师统一编写；其它开发席禁私改 app/code/*/doc/，须交 doc_debt+notify PM 安排上场'],
                 ['id' => 'api_rest_in_owning_module', 'summary' => 'REST 必须落在资源归属 Vendor_Module（Website API→Weline_Websites；词典/翻译 API→Weline_I18n）；禁止跨模块代写 Rest'],
                 ['id' => 'widget_work_assigns_widget_engineer', 'summary' => '凡部件/default_injections/布局内嵌vs注入/placement 相关施工必须分配部件开发工程师（双轨）；禁止前端/主题开发工程师席代写外国部件注入'],
                 ['id' => 'theme_work_assigns_theme_engineer', 'summary' => '凡 Theme Token/layout壳/预览三态/app/design/Weline_Theme 自有相关施工必须分配主题开发工程师（双轨）；须声明 work_mode∈{default_theme,design_theme,theme_module_runtime}；禁止只派前端/UI 代写'],
@@ -1361,8 +1369,9 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'seat_skill_mirrors_required', 'summary' => '每席必须粘贴 seat_skill_mirrors 专项提示并 get_skill/Read 本席技能与权威文档；禁止只靠通用骨架'],
                 ['id' => 'component_reuse_or_negotiate', 'summary' => 'UI优先复用组件；不足须原型∥UI（±主题开发工程师）真实互聊写入 component-negotiate.md'],
                 ['id' => 'surfaces_md_required', 'summary' => '复杂 team 强制 surfaces.md；UI in_scope 强制 components.md'],
-                ['id' => 'acceptance_ui_and_prototype_signoff', 'summary' => '涉UI验收（ui_prototype_gate_before_test）：UI写acceptance-ui.md、原型写acceptance-prototype.md实质审查（可打回）；双 pass 前禁止测试执行；测试 pass→PM汇审才汇报；e2e绿不能代替'],
-                ['id' => 'ui_prototype_gate_before_test', 'summary' => 'UI in_scope 时硬顺序：specialty_reviews_pass → ui_and_prototype_review_pass → tester_execution_pass → pm_huishen_pass → user_report_allowed；禁止测试与 UI/原型并行抢跑'],
+                ['id' => 'acceptance_ui_and_prototype_signoff', 'summary' => '涉UI验收（ui_prototype_gate_before_test）：UI写acceptance-ui.md、原型写acceptance-prototype.md实质审查（可打回）；双 pass 前禁止测试执行；测试 pass→文档工程师 documentation_review_pass→PM汇审才汇报；e2e绿不能代替'],
+                ['id' => 'ui_prototype_gate_before_test', 'summary' => 'UI in_scope 时硬顺序：specialty_reviews_pass → ui_and_prototype_review_pass → tester_execution_pass → documentation_review_pass → pm_huishen_pass → user_report_allowed；禁止测试与 UI/原型并行抢跑'],
+                ['id' => 'documentation_review_before_huishen', 'summary' => '测试 pass 后文档工程师对齐耐久文档与已验证实现；meetings/文档-review.md=pass（或合法 N/A）后才允许 pm_huishen_pass'],
                 ['id' => 'parallel_only_when_disjoint', 'summary' => '仅文件/扩展点不重叠且接口已冻结时并行子智能体'],
                 ['id' => 'escalate_then_meet', 'summary' => '跨轨或硬规则问题 result=escalate，专题会经通道互聊表态同意/异议/否决'],
                 ['id' => 'findings_wake_pm', 'summary' => '发现问题立刻 escalate 拉起项目经理当场组队解决并落 SESSION 计划项；不用 Issue 任务列表积压'],
@@ -1376,6 +1385,7 @@ final class GuidanceWorkflowCatalog
             ],
             'verification_commands' => [
                 'test -f dev/ai-command/ai/工程团队.md',
+                'test -f dev/ai-command/ai/文档工程师.md',
                 'test -f dev/ai-command/ai/templates/requirement-session.md',
                 'test -f dev/ai-command/ai/支付开发.md',
                 'test -f dev/ai-command/ai/主题开发.md',
@@ -1397,7 +1407,7 @@ final class GuidanceWorkflowCatalog
                 'rg -n "widget_work_assigns_widget_engineer|部件开发工程师" app/code/Weline/Ai/Mcp/src/GuidanceWorkflowCatalog.php',
                 'rg -n "theme_work_assigns_theme_engineer|主题开发工程师" app/code/Weline/Ai/Mcp/src/GuidanceWorkflowCatalog.php',
                 'rg -n "visitor_work_assigns_data_analytics|数据分析" app/code/Weline/Ai/Mcp/src/GuidanceWorkflowCatalog.php',
-                'rg -n "one_seat_one_agent|peer_talk_via_channel|dual_track_all|acceptance-ui|ui_prototype_gate_before_test|component-negotiate|framework_first|seat_skill_mirrors|findings_wake_pm|requirement_issuer_owns_acceptance|waiting_acceptance|requirement_session_dashboard|pm_plan_lifecycle|notify_pm|API|部件开发工程师|主题开发工程师|支付开发工程师|电商顾问|数据分析|性能检查工程师|提示词优化工程师" dev/ai-command/ai/工程团队.md',
+                'rg -n "one_seat_one_agent|peer_talk_via_channel|dual_track_all|acceptance-ui|ui_prototype_gate_before_test|component-negotiate|framework_first|seat_skill_mirrors|findings_wake_pm|requirement_issuer_owns_acceptance|waiting_acceptance|requirement_session_dashboard|pm_plan_lifecycle|notify_pm|API|部件开发工程师|主题开发工程师|支付开发工程师|电商顾问|数据分析|性能检查工程师|提示词优化工程师|文档工程师|documentation_review_pass" dev/ai-command/ai/工程团队.md',
                 'rg -n "ui_prototype_gate_before_test" app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php',
             ],
             'template_surface_rules' => [
@@ -2097,6 +2107,65 @@ final class GuidanceWorkflowCatalog
                     'Write meetings/提示词优化-design.md (with evidence) and meetings/提示词优化-review.md with pass/fail + regression checklist; fail on omit-meaning or invent-rules',
                     'On semantic-regression / compression conflicts: escalate + @项目经理：请立刻组队解决; business code to owning seats',
                     'Keep host thin mirrors pointer-only; MCP/docs win',
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function documentationEngineerSurface(): array
+    {
+        return [
+            'id' => self::SURFACE_DOCUMENTATION_ENGINEER,
+            'label' => '文档工程师（统一执笔 · 实现变→文档同变）',
+            'description' => '工程团队核心席「文档工程师」（一代别名 文档）：统一编写/改写归属模块耐久文档。其它开发席禁止私改 app/code/*/doc/，只交 doc_debt 由 PM 安排本席执笔。实现一变则文档描述必须同变。流程位 documentation_review_pass（测试后、汇审前）。对照 paths_changed+测试证据+contracts/UC+doc_debt；写 meetings/文档-review.md。禁止临时资料进模块 doc/；禁止借改文档改生产码。',
+            'triggers' => [
+                '文档工程师', 'Team:文档工程师', 'Team:文档',
+                '文档同步', '文档漂移', '三文档对齐',
+                'docs reconcile', 'documentation engineer',
+                'docs_reconcile_on_closeout', 'documentation_review_pass',
+            ],
+            'authoritative_skill' => 'weline-documentation-engineer',
+            'authoritative_doc' => 'dev/ai-command/ai/文档工程师.md',
+            'authoritative_docs' => [
+                'dev/ai-command/ai/文档工程师.md',
+                'dev/ai-command/ai/工程团队.md',
+                'app/code/Weline/Ai/doc/AI工程交付流程.md',
+                'app/code/Weline/Ai/doc/AI硬规则索引.md',
+            ],
+            'norms' => [
+                ['id' => 'docs_must_follow_implementation', 'summary' => '本职：实现变→耐久文档描述必须同变；禁止代码已改仍保留旧行为/接口/配置描述却 pass'],
+                ['id' => 'docs_unified_authorship', 'summary' => '统一执笔：模块耐久文档只由本席编写；其它开发席只交 doc_debt，禁止私改 app/code/*/doc/'],
+                ['id' => 'docs_gate_after_tester_before_huishen', 'summary' => '流程位 documentation_review_pass：tester_execution_pass 之后、pm_huishen_pass 之前；不堵施工；无 review pass（或合法 N/A）禁汇审'],
+                ['id' => 'docs_evidence_sources', 'summary' => '对照源：paths_changed/实现 diff + 测试已过证据 + contracts/UC + 各席 doc_debt；写的是已验证实现不是愿望'],
+                ['id' => 'docs_three_doc_and_touched_guides', 'summary' => '对齐需求.md/功能现状.md/开发日志.md 及触及 README/指南/API/耐久 spec'],
+                ['id' => 'docs_no_ephemeral_in_module_doc', 'summary' => '禁止 SESSION/team/排查/一次性修复笔记进模块 doc/（module_doc_forbids_ephemeral_work_artifacts）'],
+                ['id' => 'docs_dual_track', 'summary' => '统一执笔施工轨 + 契约复审轨；meetings/文档-review.md pass|fail'],
+                ['id' => 'docs_mandatory_on_behavior_change', 'summary' => '行为/契约变更或任一耐久文档更新诉求 → 必须 Team:文档工程师:（别名 文档）上场统一编写'],
+                ['id' => 'docs_not_rewrite_production_code', 'summary' => '禁止借改文档改生产码骗绿；行为冲突 escalate PM'],
+                ['id' => 'docs_wake_pm_when_blocked', 'summary' => '无法闭环 → escalate @项目经理：请立刻组队解决'],
+                ['id' => 'docs_companion_skill', 'summary' => '开工前 get_skill(documentation_engineer|weline-documentation-engineer)+Read 文档工程师.md'],
+            ],
+            'verification_commands' => [
+                'test -f dev/ai-command/ai/文档工程师.md',
+                'rg -n "documentation_engineer_for_docs_work|文档工程师" app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php',
+                'rg -n "文档工程师|documentation_review_pass|doc_debt|统一执笔" dev/ai-command/ai/工程团队.md',
+            ],
+            'template_surface_rules' => [
+                'forbidden' => [
+                    'Claiming closeout with code behavior changed but owning-module durable docs still describing old behavior',
+                    'Skipping Team:文档工程师: (alias 文档) on behavior/contract-change complex team after tester pass',
+                    'Construction/specialty seats privately editing app/code/*/doc/ durable body instead of doc_debt handoff',
+                    'Using verbal 「文档 OK」 instead of meetings/文档-review.md',
+                    'Writing SESSION/team/investigation scratch into module doc/',
+                    'Rewriting production PHP/phtml/CSS under the guise of documentation sync',
+                    'Entering pm_huishen_pass without documentation_review_pass (or legal N/A≥24 chars)',
+                ],
+                'required' => [
+                    'get_skill(documentation_engineer|weline-documentation-engineer); Read 文档工程师.md + 工程团队.md gate order',
+                    'Staff Team:文档工程师: as sole durable-doc author; other seats submit doc_debt + PM arranges',
+                    'Reconcile 需求.md/功能现状.md/开发日志.md and touched durable guides against verified implementation evidence + doc_debt',
+                    'Write meetings/文档-review.md with pass/fail + diff list; notify_pm; escalate when blocked',
                 ],
             ],
         ];
