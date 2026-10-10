@@ -37,7 +37,7 @@ $(function () {
                     data[i_data_field] = $(tds[i]).text()
                 }
             }
-            showLoading();
+            if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.show();
             $.ajax({
                 url: window.site.buildUrl('system/menus/save'),
                 type: 'post',
@@ -49,7 +49,7 @@ $(function () {
                     console.log(res)
                 }
             })
-            hideLoading();
+            if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide();
         },
         cancel: function (values) {
             $(".edit i", this)

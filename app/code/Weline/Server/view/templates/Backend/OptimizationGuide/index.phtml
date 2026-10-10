@@ -116,7 +116,7 @@ function handleGuideClick(event) {
 }
 
 async function loadGuideData() {
-    showLoading();
+    showPageLoadingState();
     
     try {
         const response = await Weline.adminRequest('server', API_URL, {
@@ -147,7 +147,7 @@ async function loadGuideData() {
     }
 }
 
-function showLoading() {
+function showPageLoadingState() {
     document.getElementById('loading-state').classList.remove('d-none');
     document.getElementById('error-state').classList.add('d-none');
     document.getElementById('content-container').classList.add('d-none');

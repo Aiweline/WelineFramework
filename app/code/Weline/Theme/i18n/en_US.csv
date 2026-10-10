@@ -1180,6 +1180,7 @@ Logo,Logo
 下一张,Next
 第%d张,"Slide %d"
 剩余,Remaining
+加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1894,7 +1895,6 @@ AI目录加载失败,"AI directory loading failed"
 "未检测到闭包根类 .%{1}","Missing closed-root class .%{1}"
 "部件根结构疑似被拆散（缺少 .%{1}）","Widget root structure looks shredded (missing .%{1})"
 示例商品名称,"Example Product Name"
-全部,All
 官方商城帮助与客户服务,"Official mall help and customer service"
 精选优质商品与可靠服务，覆盖日常选购与礼赠场景。,精选优质商品与可靠服务，覆盖日常选购与礼赠场景。
 保留所有权利,"All rights reserved."
@@ -2304,6 +2304,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+全部,All
 "店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","Configure the storefront theme under Website Info → Storefront Theme; otherwise it falls back to the registered Theme Default. Backend skin is set in System Config."
 各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,"Storefront themes are configured in Website Info; this list only shows installed themes and bindings."
 所选主题版本不属于当前网站范围,"Selected theme version does not belong to this website scope"
@@ -3842,7 +3843,6 @@ Global（全部网站和店铺）,"Global (all websites, stores and channels)"
 搜索部件,"Search widgets"
 搜索部件…,"Search for parts…"
 草稿版本,"draft version"
-加载中,loading
 主题布局预览,"Theme layout preview"
 当前上下文,"current context"
 "主题 ID","Topic ID"

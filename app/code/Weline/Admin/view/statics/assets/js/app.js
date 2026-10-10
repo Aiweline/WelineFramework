@@ -901,10 +901,20 @@ File: Main Js File
         }
     }
 
-    async function setThemeConfig(layout, reload = true) {
-        if (typeof showLoading === 'function') {
-            showLoading();
+    function themeLoadingShow() {
+        if (window.Weline && Weline.UI && Weline.UI.loading && typeof Weline.UI.loading.show === 'function') {
+            Weline.UI.loading.show();
         }
+    }
+
+    function themeLoadingHide() {
+        if (window.Weline && Weline.UI && Weline.UI.loading && typeof Weline.UI.loading.hide === 'function') {
+            Weline.UI.loading.hide();
+        }
+    }
+
+    async function setThemeConfig(layout, reload = true) {
+        themeLoadingShow();
 
         const themeModeConfig = resolveThemeModeConfig(layout);
         if (themeModeConfig && typeof window.fetch === 'function') {
@@ -948,9 +958,7 @@ File: Main Js File
                 }
             } finally {
                 endBackendThemePersistence();
-                if (typeof hideLoading === 'function') {
-                    hideLoading();
-                }
+                themeLoadingHide();
             }
             return;
         }
@@ -991,16 +999,12 @@ File: Main Js File
                     BackendToast.error(error && error.message ? error.message : 'Theme config save failed.');
                 }
             } finally {
-                if (typeof hideLoading === 'function') {
-                    hideLoading();
-                }
+                themeLoadingHide();
             }
             return;
         }
 
-        if (typeof hideLoading === 'function') {
-            hideLoading();
-        }
+        themeLoadingHide();
     }
 
     // 将 setThemeConfig 暴露到全局作用域，供 right-sidebar.phtml 使用

@@ -20,6 +20,16 @@
         const provider = String(target.attr('data-provider') || target.data('provider') || '').trim()
         const operation = String(target.attr('data-operation') || target.data('operation') || '').trim()
         const legacyAction = String(target.attr('w-ajax') || '').trim()
+        const themeLoadingShow = function () {
+            if (window.Weline && Weline.UI && Weline.UI.loading && typeof Weline.UI.loading.show === 'function') {
+                Weline.UI.loading.show()
+            }
+        }
+        const themeLoadingHide = function () {
+            if (window.Weline && Weline.UI && Weline.UI.loading && typeof Weline.UI.loading.hide === 'function') {
+                Weline.UI.loading.hide()
+            }
+        }
         // Compat window for legacy action URL: remove_by=2026-08-08
         if ((!provider || !operation) && legacyAction && legacyAction !== 'true' && legacyAction !== '1') {
             console.warn('[w-ajax] deprecated action URL; use data-provider + data-operation. remove_by=2026-08-08', target.get(0))
@@ -77,7 +87,7 @@
                 cancelButtonText: cancel??'@lang{算了}'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    showLoading();
+                    themeLoadingShow();
                     requestAction().then((res) => {
                         const ok = !res || res.success !== false
                         if (!ok) {
@@ -101,9 +111,9 @@
                         if (reload) {
                             location.reload()
                         }
-                        hideLoading();
+                        themeLoadingHide();
                     }).catch(function (err) {
-                        hideLoading();
+                        themeLoadingHide();
                         const errText = (window.Weline && window.Weline.ApiBusiness)
                             ? window.Weline.ApiBusiness.formatApiError(err)
                             : (err && err.message ? err.message : String(err))
@@ -117,13 +127,13 @@
                 }
             })
         } else {
-            showLoading();
+            themeLoadingShow();
             requestAction().then(function (res) {
-                hideLoading();
+                themeLoadingHide();
                 if (reload) location.reload()
                 return res
             }).catch(function (err) {
-                hideLoading();
+                themeLoadingHide();
                 console.error(err)
             })
         }

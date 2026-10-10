@@ -931,7 +931,7 @@
                                         }, window.location.origin);
                                         return;
                                     }
-                                    showLoading();
+                                    if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.show();
                                     window.parent.location.reload();
                                 }
                             });

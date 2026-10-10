@@ -108,9 +108,13 @@
     /**
      * Shared admin resource request helper for Backend/Frontend pages.
      * resource: QueryProvider resource name (e.g. admin, backend_admin, websites).
+     * options.loading: opt-in Theme global overlay via Weline.UI.loading (default false).
+     * options.silent is NOT a loading switch (reserved for caller/toast semantics elsewhere).
      */
     function adminRequest(resource, url, options) {
         options = options || {};
+        var useLoading = options.loading === true;
+        var loadingMessage = typeof options.loadingMessage === 'string' ? options.loadingMessage : '';
         var body = options.body;
         if (body && typeof FormData !== 'undefined' && body instanceof FormData) {
             var params = new URLSearchParams();
@@ -137,10 +141,20 @@
                 body: body || ''
             });
         };
+        var loadingApi = global.Weline && global.Weline.UI && global.Weline.UI.loading
+            ? global.Weline.UI.loading
+            : null;
+        if (useLoading && loadingApi && typeof loadingApi.show === 'function') {
+            loadingApi.show(loadingMessage || undefined);
+        }
         var promise = (global.Weline && global.Weline.load)
             ? global.Weline.load('api').then(run)
             : Promise.resolve(run(global.Weline.Api));
-        return promise.then(wrapAdminBridgeResult);
+        return promise.then(wrapAdminBridgeResult).finally(function () {
+            if (useLoading && loadingApi && typeof loadingApi.hide === 'function') {
+                loadingApi.hide();
+            }
+        });
     }
 
     var api = {

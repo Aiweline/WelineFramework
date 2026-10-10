@@ -2387,6 +2387,120 @@ function setBusy(target, busy = true, options = {}) {
     return true;
 }
 
+/**
+ * Global full-screen loading overlay with reference counting.
+ * Use for page-level async work (admin save / w-ajax). Prefer setBusy for section-local busy.
+ *
+ * API: Weline.UI.loading.show / hide / with — do not expose legacy global loaders.
+ */
+let globalLoadingDepth = 0;
+
+function normalizeLoadingOptions(options) {
+    if (typeof options === 'string') {
+        return { message: options };
+    }
+    return (options && typeof options === 'object') ? options : {};
+}
+
+function ensureGlobalLoadingHost() {
+    let host = document.querySelector('[data-w-component="loading"][data-w-scope="global"]');
+    if (host instanceof HTMLElement) {
+        return host;
+    }
+    if (!(document.body instanceof HTMLElement)) {
+        return null;
+    }
+    host = document.createElement('section');
+    host.id = 'weline-global-loading';
+    host.className = 'w-loading';
+    host.dataset.wComponent = 'loading';
+    host.dataset.wScope = 'global';
+    host.dataset.state = 'closed';
+    host.setAttribute('role', 'status');
+    host.setAttribute('aria-live', 'polite');
+    host.setAttribute('aria-hidden', 'true');
+    host.hidden = true;
+    host.innerHTML = '<span class="w-loading__backdrop" aria-hidden="true"></span>'
+        + '<span class="w-loading__content">'
+        + '<span class="w-spinner" aria-hidden="true"></span>'
+        + '<span data-w-loading-message></span>'
+        + '</span>';
+    document.body.append(host);
+    return host;
+}
+
+function applyGlobalLoadingState(host, open, message) {
+    if (!(host instanceof HTMLElement)) {
+        return false;
+    }
+    const trimmed = String(message || '').trim();
+    const messageElement = host.querySelector('[data-w-loading-message]');
+    if (messageElement instanceof HTMLElement && trimmed !== '') {
+        messageElement.textContent = trimmed;
+    }
+    host.dataset.state = open ? 'open' : 'closed';
+    host.hidden = !open;
+    host.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (document.documentElement instanceof HTMLElement) {
+        if (open) {
+            document.documentElement.setAttribute('aria-busy', 'true');
+            document.documentElement.dataset.wGlobalLoading = 'true';
+        } else {
+            document.documentElement.removeAttribute('aria-busy');
+            delete document.documentElement.dataset.wGlobalLoading;
+        }
+    }
+    return true;
+}
+
+function showGlobalLoading(options = {}) {
+    const opts = normalizeLoadingOptions(options);
+    const message = String(opts.message || '').trim();
+    globalLoadingDepth += 1;
+    const host = ensureGlobalLoadingHost();
+    if (!(host instanceof HTMLElement)) {
+        globalLoadingDepth = Math.max(0, globalLoadingDepth - 1);
+        return false;
+    }
+    return applyGlobalLoadingState(host, true, message);
+}
+
+function hideGlobalLoading() {
+    globalLoadingDepth = Math.max(0, globalLoadingDepth - 1);
+    if (globalLoadingDepth > 0) {
+        return true;
+    }
+    const host = document.querySelector('[data-w-component="loading"][data-w-scope="global"]');
+    if (host instanceof HTMLElement) {
+        return applyGlobalLoadingState(host, false, '');
+    }
+    if (document.documentElement instanceof HTMLElement) {
+        document.documentElement.removeAttribute('aria-busy');
+        delete document.documentElement.dataset.wGlobalLoading;
+    }
+    return true;
+}
+
+function withGlobalLoading(task, options = {}) {
+    showGlobalLoading(options);
+    let result;
+    try {
+        result = typeof task === 'function' ? task() : task;
+    } catch (error) {
+        hideGlobalLoading();
+        return Promise.reject(error);
+    }
+    return Promise.resolve(result).finally(() => {
+        hideGlobalLoading();
+    });
+}
+
+const loadingApi = {
+    show: showGlobalLoading,
+    hide: hideGlobalLoading,
+    with: withGlobalLoading,
+};
+
 function registerNavFilter() {
     define('nav-filter', ({ element, listen, emit: emitLocal }) => {
         const input = element.querySelector('[data-w-nav-filter-input]');
@@ -4042,6 +4156,8 @@ const createdUI = {
         set: setBusy,
         clear(target) { return setBusy(target, false); },
     },
+    /** Global full-screen loading (refcount). Prefer setBusy for local containers. */
+    loading: loadingApi,
 };
 const UI = existingRuntime || createdUI;
 if (typeof UI.setBusy !== 'function') {
@@ -4052,6 +4168,9 @@ if (!UI.busy || typeof UI.busy.set !== 'function') {
         set: setBusy,
         clear(target) { return setBusy(target, false); },
     };
+}
+if (!UI.loading || typeof UI.loading.show !== 'function') {
+    UI.loading = loadingApi;
 }
 
 function start() {

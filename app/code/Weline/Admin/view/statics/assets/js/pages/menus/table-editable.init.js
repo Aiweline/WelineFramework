@@ -37,7 +37,7 @@ $(function () {
                     data[i_data_field] = $(tds[i]).text()
                 }
             }
-            showLoading();
+            if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.show();
             var url = typeof window.url === 'function' ? window.url('system/menus/save') : '/admin/system/menus/save';
             var req = window.Weline.Api.request(url, {
                 method: 'POST',
@@ -60,7 +60,7 @@ $(function () {
                 }
             })
             .finally(function() {
-                hideLoading();
+                if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide();
             });
         },
         cancel: function (values) {

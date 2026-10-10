@@ -2,23 +2,33 @@
 /**
  * 片段：Backend Loading - 默认风格
  *
- * 后端管理界面的加载中组件
+ * 后端管理界面的全局加载 host（Theme 自管，不再桥接 Admin）。
  * 字段
- * @meta.name {default="Backend Loading加载中组件",name="Loading加载中组件片段",description="Loading加载中组件片段，用于描述片段的名称"}
- * @meta.description {default="后端管理界面的页面加载中动画组件",name="加载中组件",description="后端管理界面的页面加载中动画组件，用于描述片段的用途"}
+ * @meta.name {default="Backend Loading加载中组件",name="Loading加载中组件片段",description="Loading加载中组件片段"}
+ * @meta.description {default="后端管理界面的页面加载中动画组件",name="加载中组件",description="后端全局 loading host"}
  * @meta.cache.mode {default="chrome",name="缓存模式"}
  * @meta.cache.auth {default="role",name="鉴权维度"}
- * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置额外CSS类"}
- *
- * 参数配置说明：
- * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
- * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
+ * @param.class {default="",name="额外CSS类",description="额外CSS类"}
+ * @param.enabled {default=true,name="是否启用",description="为 false 时不输出 host"}
+ * @param.text {default="加载中",name="加载文字提示",description="默认加载文案"}
+ * @param.overlay {default=true,name="是否显示遮罩层",description="是否显示遮罩层"}
+ * @param.autoHideOnLoad {default=true,name="首屏自动关闭",description="页面 load 后确保 closed"}
  */
 /** @var \Weline\Framework\View\Template $this */
-$meta = $this->getData('meta') ?? [];
-$layout = $this->getData('layout') ?? [];
-$class = $meta['class'] ?? '';
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$enabled = ($meta['enabled'] ?? true) !== false;
+if (!$enabled) {
+    return;
+}
 ?>
 <!-- ========== Loading Start ========== -->
-<w:template>Weline_Admin::common/page/loading.phtml</w:template>
+<?= $this->fetch('Weline_Theme::theme/backend/components/loading.phtml', [
+    'id' => $meta['id'] ?? 'weline-global-loading',
+    'class' => $meta['class'] ?? '',
+    'text' => $meta['text'] ?? __('加载中'),
+    'overlay' => ($meta['overlay'] ?? true) !== false,
+    'enabled' => true,
+    'autoHideOnLoad' => ($meta['autoHideOnLoad'] ?? true) !== false,
+    'meta' => $meta,
+]) ?>
 <!-- ========== Loading End ========== -->

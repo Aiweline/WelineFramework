@@ -6,6 +6,7 @@
  * @param.showSidebar {default=true,name="显示侧栏"}
  * @param.showFooter {default=true,name="显示页脚"}
  * @param.showRightSidebar {default=true,name="显示设置抽屉"}
+ * @param.showGlobalLoading {default=true,name="显示全局Loading",description="挂载 Theme 全屏 loading host（Weline.UI.loading）"}
  * @param.class {default="",name="额外 Weline CSS 类"}
  *
  * @var \Weline\Framework\View\Template $this
@@ -18,6 +19,7 @@ $showHeader = ($meta['showHeader'] ?? true) !== false;
 $showSidebar = ($meta['showSidebar'] ?? true) !== false;
 $showFooter = ($meta['showFooter'] ?? true) !== false;
 $showRightSidebar = ($meta['showRightSidebar'] ?? true) !== false;
+$showGlobalLoading = ($meta['showGlobalLoading'] ?? true) !== false;
 $extraClasses = array_values(array_filter(
     preg_split('/\s+/', trim((string)($meta['class'] ?? ''))) ?: [],
     static fn(string $class): bool => preg_match('/^w-[a-z0-9_-]+$/', $class) === 1
@@ -36,7 +38,9 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
 <body>
     <w:hook>Weline_Theme::backend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::backend::layouts::dashboard::body-start</w:hook>
-    <w:block class="Weline\Theme\Block\Partials" area="backend" type="loading" default-option="default"/>
+    <?php if ($showGlobalLoading): ?>
+        <w:block class="Weline\Theme\Block\Partials" area="backend" type="loading" default-option="default"/>
+    <?php endif; ?>
 
     <div class="w-backend-shell w-dashboard-shell" data-w-component="backend-sidebar-collapse">
         <?php if ($showHeader): ?>

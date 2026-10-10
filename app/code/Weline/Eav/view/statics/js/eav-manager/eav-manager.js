@@ -197,7 +197,7 @@ const EavManager = (function() {
      */
     function loadTree(search = '', preserveExpanded = true, onLoaded) {
         state.loading = true;
-        showLoading();
+        showTreeLoading();
         var url = config.apiBase + '/tree' + (search ? '?search=' + encodeURIComponent(search) : '');
         bqAdmin['eav_admin'](url, { silent: true })
         .then(function(response) {
@@ -219,7 +219,7 @@ const EavManager = (function() {
     /**
      * 显示加载中
      */
-    function showLoading() {
+    function showTreeLoading() {
         $(config.treeContainer).html(`
             <div class="tree-loading">
                 <i class="mdi mdi-loading mdi-spin me-2"></i>

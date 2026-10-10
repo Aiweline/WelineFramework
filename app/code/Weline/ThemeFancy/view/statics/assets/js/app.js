@@ -200,6 +200,18 @@ File: Main Js File
             updateThemeSetting(e.target.id);
         });
 
+        
+    function themeLoadingShow() {
+        if (window.Weline && Weline.UI && Weline.UI.loading && typeof Weline.UI.loading.show === 'function') {
+            Weline.UI.loading.show();
+        }
+    }
+    function themeLoadingHide() {
+        if (window.Weline && Weline.UI && Weline.UI.loading && typeof Weline.UI.loading.hide === 'function') {
+            Weline.UI.loading.hide();
+        }
+    }
+
         // 菜单布局
         // 1、明亮
         let light_sidebar = $('#light-sidebar')
@@ -207,13 +219,13 @@ File: Main Js File
             light_sidebar.prop('checked', true);
         }
         light_sidebar.on("change", function (e) {
-            showLoading()
+            themeLoadingShow()
             let layout = {layouts: {'data-topbar': "dark", 'data-sidebar': 'dark'}, 'light-sidebar': false}
             if ($(e.target).prop('checked')) {
                 layout = {layouts: {'data-topbar': "colored", 'data-sidebar': 'light'}, 'light-sidebar': true};
             }
             setThemeConfig(layout)
-            hideLoading()
+            themeLoadingHide()
         });
         // 2、图标菜单
         let icon_sidebar = $('#icon-sidebar')
@@ -221,13 +233,13 @@ File: Main Js File
             icon_sidebar.prop('checked', true);
         }
         icon_sidebar.on("change", function (e) {
-            showLoading()
+            themeLoadingShow()
             let layout = {layouts: {'data-keep-enlarged': "false", class: ""}, 'icon-sidebar': false}
             if ($(e.target).prop('checked')) {
                 layout = {layouts: {'data-keep-enlarged': "true", class: "vertical-collpsed"}, 'icon-sidebar': true};
             }
             setThemeConfig(layout)
-            hideLoading()
+            themeLoadingHide()
         });
         // 3、图文菜单
         let layouts_compact_sidebar = $('#layouts-compact-sidebar')
@@ -235,13 +247,13 @@ File: Main Js File
             layouts_compact_sidebar.prop('checked', true);
         }
         layouts_compact_sidebar.on("change", function (e) {
-            showLoading()
+            themeLoadingShow()
             let layout = {layouts: {'data-sidebar-size': ""}, 'layouts-compact-sidebar': false};
             if ($(e.target).prop('checked')) {
                 layout = {layouts: {'data-sidebar-size': "small"}, 'layouts-compact-sidebar': true}
             }
             setThemeConfig(layout)
-            hideLoading()
+            themeLoadingHide()
         });
         // 布局
         // 1、水平布局
@@ -250,13 +262,13 @@ File: Main Js File
             layouts_horizontal.prop('checked', true);
         }
         layouts_horizontal.on("change", function (e) {
-            showLoading()
+            themeLoadingShow()
             let layout = {layouts: {'data-layout': ""}, 'layouts-horizontal': false};
             if ($(e.target).prop('checked')) {
                 layout = {layouts: {'data-layout': "horizontal"}, 'layouts-horizontal': true}
             }
             setThemeConfig(layout)
-            hideLoading()
+            themeLoadingHide()
         });
         // 2、水平顶黑
         let layouts_hori_topbar_dark = $('#layouts-hori-topbar-dark')
@@ -264,7 +276,7 @@ File: Main Js File
             layouts_hori_topbar_dark.prop('checked', true);
         }
         layouts_hori_topbar_dark.on("change", function (e) {
-            showLoading()
+            themeLoadingShow()
             let layout = {layouts: {'data-layout': ""}, 'layouts-hori-topbar-dark': false};
             if ($(e.target).prop('checked')) {
                 layout = {
@@ -273,7 +285,7 @@ File: Main Js File
                 }
             }
             setThemeConfig(layout)
-            hideLoading()
+            themeLoadingHide()
         });
         // 3、水平盒子
         let layouts_hori_boxed_width = $('#layouts-hori-boxed-width')
@@ -281,7 +293,7 @@ File: Main Js File
             layouts_hori_boxed_width.prop('checked', true);
         }
         layouts_hori_boxed_width.on("change", function (e) {
-            showLoading()
+            themeLoadingShow()
             let layout = {layouts: {'data-layout': "", 'data-layout-size': ""}, 'layouts-hori-boxed-width': false};
             if ($(e.target).prop('checked')) {
                 layout = {
@@ -290,7 +302,7 @@ File: Main Js File
                 }
             }
             setThemeConfig(layout)
-            hideLoading()
+            themeLoadingHide()
         });
     }
 
@@ -309,7 +321,7 @@ File: Main Js File
     function updateThemeSetting(id) {
         // ajax请求设置主题模式
         if ($("#light-mode-switch").prop("checked") === true && id === "light-mode-switch") {
-            showLoading()
+            themeLoadingShow()
             setThemeConfig({
                 layouts: {
                     'data-topbar': 'light',
@@ -320,7 +332,7 @@ File: Main Js File
                 'rtl-mode-switch': false,
             })
         } else if ($("#dark-mode-switch").prop("checked") === true && id === "dark-mode-switch") {
-            showLoading()
+            themeLoadingShow()
             setThemeConfig({
                 layouts: {
                     'data-topbar': 'dark',
@@ -331,7 +343,7 @@ File: Main Js File
                 'rtl-mode-switch': false,
             })
         } else if ($("#rtl-mode-switch").prop("checked") === true && id === "rtl-mode-switch") {
-            showLoading()
+            themeLoadingShow()
             setThemeConfig({
                 'light-mode-switch': false,
                 'dark-mode-switch': false,

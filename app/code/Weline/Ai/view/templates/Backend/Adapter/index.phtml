@@ -565,13 +565,13 @@ foreach ($adapters as $a) {
         modelOptionsByModality: <?= $modelOptionsJson ?>,
 
         _showLoading: function() {
-            if (typeof window.showLoading === 'function') {
-                window.showLoading();
+            if (window.Weline && Weline.UI && Weline.UI.loading && typeof Weline.UI.loading.show === 'function') {
+                Weline.UI.loading.show();
             }
         },
         _hideLoading: function() {
-            if (typeof window.hideLoading === 'function') {
-                window.hideLoading();
+            if (window.Weline && Weline.UI && Weline.UI.loading && typeof Weline.UI.loading.hide === 'function') {
+                Weline.UI.loading.hide();
             }
         },
 

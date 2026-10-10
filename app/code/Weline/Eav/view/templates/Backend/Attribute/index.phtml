@@ -275,7 +275,7 @@ $this->assign('attributes', $attributes);
     'use strict';
 
     $('#optionConfig').on('show.bs.modal', function (event) {
-        showLoading();
+        if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.show();
         var button = event.relatedTarget;
         var attribute_code = button.getAttribute('data-code');
         var eav_entity_id = button.getAttribute('data-eav_entity_id');
@@ -292,7 +292,7 @@ $this->assign('attributes', $attributes);
                     attributeOption.append('');
                 }
             }
-        }).catch(function() {}).finally(function() { hideLoading(); });
+        }).catch(function() {}).finally(function() { if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide(); });
     });
 
     $('.ajax-delete').on('click', function (e) {
@@ -309,7 +309,7 @@ $this->assign('attributes', $attributes);
             reverseButtons: true
         }).then(function(result) {
             if (result.isConfirmed) {
-                showLoading();
+                if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.show();
                 var delUrl = $(self).data('href');
                 var req = bqAdmin['eav_admin'](delUrl, { silent: true });
                 req.then(function(res) {
@@ -319,7 +319,7 @@ $this->assign('attributes', $attributes);
                             Swal.fire({ title: '<lang>删除成功</lang>', icon: 'success', timer: 2000, confirmButtonColor: '#3085d6', confirmButtonText: '<lang>确认</lang>' }).then(function() { location.reload(); });
                         } else { location.reload(); }
                     }
-                }).catch(function() {}).finally(function() { hideLoading(); });
+                }).catch(function() {}).finally(function() { if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide(); });
             }
         });
     });

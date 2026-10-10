@@ -73,7 +73,7 @@ $(document).ready(function () {
                 const formData = form.serialize();
                 const url = form.attr('action') + '?isAjax=true';
                 const opts1 = { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: formData };
-                showLoading();
+                if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.show();
                 var req = bqAdmin['eav_admin'](url, opts1);
                 req.then(function(res) {
                     var response = (res && res.data) || res;
@@ -86,7 +86,7 @@ $(document).ready(function () {
                             var req2 = bqAdmin['eav_admin'](url, opts2);
                             req2.then(function(res2) {
                                 var resp2 = (res2 && res2.data) || res2;
-                                hideLoading();
+                                if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide();
                                 if (resp2 && resp2['code'] === 1) {
                                     Swal.fire({ title: __('温馨提示！'), text: resp2['msg'], icon: 'success', dangerMode: true, confirmButtonText: __('好的') }).then(function(result) {
                                         if (result.isConfirmed) window.parent.location.reload();
@@ -95,19 +95,19 @@ $(document).ready(function () {
                                     Swal.fire({ title: __('错误！'), text: (resp2 && resp2['msg']) || __('未知错误'), icon: 'error', dangerMode: true, confirmButtonText: __('好的') });
                                 }
                             }).catch(function() {
-                                hideLoading();
+                                if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide();
                                 Swal.fire({ title: __('未知错误！'), text: __('请求失败'), icon: 'error', dangerMode: true, confirmButtonText: __('好的') });
                             });
                         } else {
-                            hideLoading();
+                            if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide();
                             $('#progress-wizard').bootstrapWizard('next');
                         }
                     } else {
-                        hideLoading();
+                        if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide();
                         Swal.fire({ title: __('错误！'), text: (response && response['msg']) || __('未知错误'), icon: 'error', dangerMode: true, confirmButtonText: __('好的') });
                     }
                 }).catch(function() {
-                    hideLoading();
+                    if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide();
                     Swal.fire({ title: __('未知错误！'), text: __('请求失败'), icon: 'error', dangerMode: true, confirmButtonText: __('好的') });
                 });
                 return false;

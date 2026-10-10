@@ -392,7 +392,7 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
         }
 
         // 显示加载中
-        function showLoading(elementId) {
+        function showPanelLoading(elementId) {
             const resultDiv = document.getElementById(elementId);
             resultDiv.style.display = 'block';
             resultDiv.className = 'result';
@@ -415,7 +415,7 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
             const startDate = document.getElementById('business-startDate').value;
             const endDate = document.getElementById('business-endDate').value;
 
-            showLoading('business-result');
+            showPanelLoading('business-result');
 
             const params = {
                 websiteId: websiteId || undefined,
@@ -438,7 +438,7 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
             const interval = document.getElementById('dashboard-interval').value;
             const hours = document.getElementById('dashboard-hours').value;
 
-            showLoading('dashboard-result');
+            showPanelLoading('dashboard-result');
 
             const params = {
                 websiteId: websiteId || undefined,
@@ -460,7 +460,7 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
             const interval = document.getElementById('change-interval').value;
             const hours = document.getElementById('change-hours').value;
 
-            showLoading('change-result');
+            showPanelLoading('change-result');
 
             const params = {
                 websiteId: websiteId || undefined,
@@ -481,7 +481,7 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
             const websiteId = document.getElementById('daily-websiteId_value').value;
             const days = document.getElementById('daily-days').value;
 
-            showLoading('daily-result');
+            showPanelLoading('daily-result');
 
             const params = {
                 websiteId: websiteId || undefined,
@@ -512,7 +512,7 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
                 return;
             }
 
-            showLoading('abtest-result');
+            showPanelLoading('abtest-result');
 
             const params = {
                 websiteId: websiteId || undefined,
