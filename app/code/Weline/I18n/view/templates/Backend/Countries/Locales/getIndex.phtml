@@ -148,7 +148,7 @@ if ($search !== '') {
                             <td class="w-text" data-align="center">
                                 <div class="w-cluster" data-wrap="true" data-justify="center" style="--w-gap:var(--weline-space-2);">
                                     <?php if ($isInstall && $isActive): ?>
-                                        <a class="w-button" href="@backend-url('*/backend/countries/locale/words')?code=<?= urlencode($code) ?>&country_code=<?= urlencode($localeCountryCode) ?>" data-tone="info" data-variant="outline" data-size="sm">
+                                        <a class="w-button" href="@backend-url('*/backend/dictionary')?locale_code=<?= urlencode($code) ?>&country_code=<?= urlencode($localeCountryCode) ?>" data-tone="info" data-variant="outline" data-size="sm">
                                             <?= __('词典管理') ?>
                                         </a>
                                     <?php endif; ?>

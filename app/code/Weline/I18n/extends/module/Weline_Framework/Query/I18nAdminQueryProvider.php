@@ -43,12 +43,6 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
         'localization-batch-activate' => 'Weline_I18n::i18n_localization',
         'localization-batch-deactivate' => 'Weline_I18n::i18n_localization',
         'localization-batch-uninstall' => 'Weline_I18n::i18n_localization',
-        'word-collect' => 'Weline_I18n::i18n_dictionaries',
-        'word-translate' => 'Weline_I18n::i18n_dictionaries',
-        'word-restore' => 'Weline_I18n::i18n_dictionaries',
-        'word-push' => 'Weline_I18n::i18n_dictionaries',
-        'word-enable' => 'Weline_I18n::i18n_dictionaries',
-        'word-disable' => 'Weline_I18n::i18n_dictionaries',
         'dictionary-delete' => 'Weline_I18n::i18n_dictionaries',
         'dictionary-import' => 'Weline_I18n::i18n_dictionaries',
         'dictionary-clear-locale' => 'Weline_I18n::i18n_dictionaries',
@@ -347,21 +341,6 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             return [
                 \Weline\I18n\Controller\Backend\Localization::class,
                 ...$localizationActions[$action],
-            ];
-        }
-
-        $wordActions = [
-            'word-collect' => ['collect', 'GET', null],
-            'word-translate' => ['translate', 'POST', null],
-            'word-restore' => ['postRestore', 'POST', null],
-            'word-push' => ['push', 'POST', null],
-            'word-enable' => ['enable', 'POST', null],
-            'word-disable' => ['disable', 'POST', null],
-        ];
-        if (isset($wordActions[$action])) {
-            return [
-                \Weline\I18n\Controller\Backend\Countries\Locale\Words::class,
-                ...$wordActions[$action],
             ];
         }
 

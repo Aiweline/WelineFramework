@@ -157,7 +157,6 @@ final class I18nResourceChangePublisher
             'dictionary-clear-locale',
             'dictionary-clear-all',
             'dictionary-collect',
-            'word-push',
             'ai-export-modules',
             'dictionary-file-publish',
         ], true)) {

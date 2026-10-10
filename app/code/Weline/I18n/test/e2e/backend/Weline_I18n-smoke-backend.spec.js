@@ -24,7 +24,7 @@ const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Ca
 const CONTENT_SHELL = 'main#main-content, main.backend-main-content';
 const CONTENT = CONTENT_SHELL;
 // 候选后台路由（来自模块 Controller/Backend 的 index/get* 动作 + 兜底猜测），按序探测
-const CANDIDATE_ROUTES = ["aiTranslation","aitranslation","ai_translation","localization","countries/asyncUpdate","countries/asyncupdate","countries/async_update","countries/locale/words","countries/testUpdate","countries/testupdate","countries/test_update","countries/locales","countries/installAll","countries/installall","countries/install_all","countries","dictionary/exportTranslations","taglib/local/get","words/get","i18n","index","config","dashboard"];
+const CANDIDATE_ROUTES = ["aiTranslation","aitranslation","ai_translation","localization","countries/asyncUpdate","countries/asyncupdate","countries/async_update","countries/testUpdate","countries/testupdate","countries/test_update","countries/locales","countries/installAll","countries/installall","countries/install_all","countries","dictionary","dictionary/exportTranslations","taglib/local/get","words/get","i18n","index","config","dashboard"];
 
 // 返回 { route, fatal }：
 //  - route!=null：命中真正渲染后台内容区的入口；

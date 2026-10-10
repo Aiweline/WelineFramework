@@ -1,7 +1,7 @@
 (function (window, document) {
     'use strict';
 
-    var I18N_ADMIN_UI_VERSION = '20261010-locales-panel';
+    var I18N_ADMIN_UI_VERSION = '20261010-locales-panel-cards';
     if (window.I18nAdminUI && window.I18nAdminUI.version === I18N_ADMIN_UI_VERSION) {
         return;
     }

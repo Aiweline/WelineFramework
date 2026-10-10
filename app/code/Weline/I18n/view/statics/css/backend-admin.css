@@ -489,19 +489,132 @@ body .weline-language-select-dropdown[id^="dictionary_"] {
 
 /* 国家列表 → 区域管理异步弹窗 */
 .i18n-locales-panel-dialog .i18n-locales-panel-dialog__surface {
-    width: min(56rem, calc(100vw - 2 * var(--weline-space-4, 1rem)));
-    max-width: min(56rem, calc(100vw - 2 * var(--weline-space-4, 1rem)));
+    display: flex;
+    flex-direction: column;
+    width: min(40rem, calc(100vw - 2 * var(--weline-space-4, 1rem)));
+    max-width: min(40rem, calc(100vw - 2 * var(--weline-space-4, 1rem)));
     max-height: min(90vh, 48rem);
+    min-height: min(70vh, 28rem);
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .i18n-locales-panel-dialog .i18n-locales-panel-dialog__body {
-    max-height: min(70vh, 36rem);
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: min(40vh, 18rem);
     overflow: auto;
     overscroll-behavior: contain;
+    box-sizing: border-box;
+}
+
+.i18n-locales-panel__search {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--weline-space-2, 0.5rem);
+    min-width: 0;
+    max-width: 100%;
 }
 
 .i18n-locales-panel__search .w-field {
-    min-width: 12rem;
-    flex: 1 1 14rem;
+    min-width: 0;
+    flex: 1 1 12rem;
+    max-width: 100%;
+}
+
+.i18n-locales-panel__search-actions,
+.i18n-locales-panel__search .w-cluster {
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    max-width: 100%;
+}
+
+.i18n-locales-panel__search-field {
+    min-width: 0;
+    flex: 1 1 100%;
+}
+
+@media (min-width: 36rem) {
+    .i18n-locales-panel__search-field {
+        flex: 1 1 12rem;
+    }
+}
+
+/* 弹窗列表：每条地区一张卡片（多行一列），禁止宽表横向挤压裁切 */
+.i18n-locales-panel {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+
+.i18n-locales-panel__intro,
+.i18n-locales-panel__card-name {
+    min-width: 0;
+    max-width: 100%;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    line-height: 1.45;
+}
+
+.i18n-locales-panel__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--weline-space-3, 0.75rem);
+    min-width: 0;
+}
+
+.i18n-locales-panel__card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--weline-space-2, 0.5rem);
+    min-width: 0;
+    max-width: 100%;
+    padding: var(--weline-space-4, 1rem);
+    border: 1px solid var(--i18n-border, rgba(148, 163, 184, 0.22));
+    border-radius: var(--weline-radius-md, 0.5rem);
+    background: var(--i18n-surface-strong, var(--color-surface, #ffffff));
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.i18n-locales-panel__card-codes,
+.i18n-locales-panel__card-states {
+    min-width: 0;
+}
+
+/* 操作：按内容变窄；窄宽不够则换行，禁止拉满整卡 */
+.i18n-locales-panel .i18n-locales-panel__actions {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--weline-space-2, 0.5rem);
+    max-width: 100%;
+    min-width: 0;
+}
+
+.i18n-locales-panel .i18n-locales-panel__actions > form,
+.i18n-locales-panel .i18n-locales-panel__actions > a.w-button {
+    display: inline-flex;
+    width: auto;
+    max-width: 100%;
+    margin: 0;
+    flex: 0 1 auto;
+}
+
+.i18n-locales-panel .i18n-locales-panel__actions > form .w-button,
+.i18n-locales-panel .i18n-locales-panel__actions > a.w-button,
+.i18n-locales-panel .i18n-locales-panel__actions .w-button {
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
+    flex: 0 1 auto;
+    justify-content: center;
+    white-space: nowrap;
 }
 
