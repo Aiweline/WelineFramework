@@ -217,4 +217,23 @@ final class WorkerRuntimeArgumentBuilder
             ? \Weline\Server\Service\Edge\PureWlsPublicOrigin::normalize($origin)
             : ManagedNginxPublicOrigin::normalize($origin);
     }
+
+    /**
+     * Discrete argv so every Worker (plaintext + TLS) can gate public-origin
+     * bounce / getBaseHost without reading instance JSON.
+     */
+    public static function edgeAdapter(ServiceContext $context): string
+    {
+        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
+            ->resolve($context->envConfig)
+            ->name();
+        if (!\in_array($edgeAdapter, [
+            \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
+            \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS,
+        ], true)) {
+            throw new \RuntimeException('Worker edge adapter must be nginx or wls.');
+        }
+
+        return '--wls-edge-adapter=' . $edgeAdapter;
+    }
 }

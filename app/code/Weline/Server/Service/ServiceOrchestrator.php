@@ -66,6 +66,8 @@ use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\WorkerRestartBatchPlanner;
 use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Service\Runtime\WindowsListenerHandoff;
+use Weline\Server\Service\Capacity\CapacityIntent;
+use Weline\Server\Service\Capacity\CapacityScaleApplier;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 
 /**
@@ -320,6 +322,10 @@ class ServiceOrchestrator
     private float $memoryPressureShrinkFenceUntil = 0.0;
     private float $lastMemoryPressureTickAt = 0.0;
     private float $lastCapacityAdviseTickAt = 0.0;
+    private float $lastCapacityScaleUpAt = 0.0;
+    private float $capacityIdleSince = 0.0;
+    /** @var array<string, mixed>|null */
+    private ?array $lastCapacityIntent = null;
     private float $lastMemoryPressureHostCoordinationInitAt = -1e12;
     private bool $workerReloadCapacityTransitionInProgress = false;
     private float $lastMemoryPressureTransitionDeferralAt = 0.0;
@@ -12200,8 +12206,8 @@ class ServiceOrchestrator
         $workerCount = \count($orderedInstanceIds);
         $minThree = (int) ($this->context?->getConfig(
             'wls.orchestrator.worker_three_batch_min_count',
-            7
-        ) ?? 7);
+            4
+        ) ?? 4);
         $batchCount = (int) ($this->context?->getConfig(
             'wls.orchestrator.worker_reload_batch_count',
             3
@@ -20750,8 +20756,15 @@ class ServiceOrchestrator
                     return;
                 }
                 WlsLogger::warning_(
-                    '[Orchestrator][PlannedRecycle] new-first unavailable; drain-first worker#'
+                    '[Orchestrator][PlannedRecycle] new-first unavailable; explicit drain-first degradation worker#'
                     . $workerId
+                );
+            } else {
+                // Direct reuseport/shared_fd new-first off (worker_ports / shrink fence / …):
+                // drain-first is an explicit degradation, not a silent pressure default.
+                WlsLogger::warning_(
+                    '[Orchestrator][PlannedRecycle] phase=drain_first_grant'
+                    . ' reason=new_first_disabled worker#' . $workerId
                 );
             }
 
@@ -26546,7 +26559,8 @@ class ServiceOrchestrator
         $this->desiredState[ControlMessage::ROLE_WORKER] = $target;
         $this->persistServicesInfo($this->context);
         try {
-            (new ServerInstanceManager())->updateDesiredWorkerCount(
+            // Manual scale adjusts runtime Desired only — never wipe baseline (G8).
+            (new ServerInstanceManager())->updateRuntimeDesiredWorkerCount(
                 (string)$this->context->instanceName,
                 $target,
             );
@@ -33521,11 +33535,13 @@ class ServiceOrchestrator
     }
 
     /**
-     * Read-only capacity advice + sample row. Never scales workers.
+     * Capacity advice → CapacityIntent → CapacityScaleApplier (sole Desired writer).
+     * Runner itself never mutates Desired.
      */
     private function tickCapacityAdvise(): void
     {
         $reports = [];
+        $activeSum = 0;
         foreach ($this->registry->getAllInstances() as $instance) {
             if ($instance->role !== ControlMessage::ROLE_WORKER) {
                 continue;
@@ -33534,16 +33550,64 @@ class ServiceOrchestrator
             if (!\is_array($report)) {
                 $report = [];
             }
+            $activeSum += (int)($report['active_requests'] ?? 0);
             $reports[] = [
                 'report' => $report,
                 'at' => (float)$instance->getMeta('last_status_report_at', 0),
             ];
         }
 
+        $instanceName = $this->resolveCapacityInstanceName();
+        $baseline = $this->resolveBaselineWorkerCount();
+        $envelope = CapacityScaleApplier::resolveEnvelope($baseline);
+        $current = \max(1, (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? $baseline));
+        $now = \microtime(true);
+        if ($activeSum <= 0) {
+            if ($this->capacityIdleSince <= 0.0) {
+                $this->capacityIdleSince = $now;
+            }
+        } else {
+            $this->capacityIdleSince = 0.0;
+        }
+
+        $hostPressure = $this->memoryPressureController?->getLastPressureRatio();
+        $hostAvailable = $this->memoryPressureController?->getLastAvailableRatio();
+        $runner = new \Weline\Server\Service\Capacity\CapacityAdviseRunner();
+        $tick = $runner->tick($instanceName, $reports, $hostPressure, $hostAvailable, [
+            'current_desired' => $current,
+            'baseline' => $baseline,
+            'max_workers' => $envelope['max_workers'],
+            'last_scale_up_at' => $this->lastCapacityScaleUpAt,
+            'scale_down_cooldown_sec' => (float)($this->readEnvConfigSafe('wls.scaling.cooldown_down_sec', 60) ?? 60),
+            'idle_since' => $this->capacityIdleSince,
+            't_down_sec' => (float)($this->readEnvConfigSafe('wls.scaling.T_down', 120) ?? 120),
+            'idle_active_max' => 0,
+            'idle_pressure_max' => 0.35,
+            'auto_scale_enabled' => (bool)($this->readEnvConfigSafe('wls.capacity_advisor.auto_scale_enabled', true) ?? true),
+        ]);
+        $intent = $tick['intent_object'] ?? null;
+        if (!$intent instanceof CapacityIntent) {
+            return;
+        }
+        $this->lastCapacityIntent = $intent->toArray();
+        if (!$intent->isScale()) {
+            return;
+        }
+        $result = $this->applyCapacityIntent($intent, allowBelowBaseline: false);
+        if (!empty($result['applied']) && ($result['to'] ?? 0) > ($result['from'] ?? 0)) {
+            $this->lastCapacityScaleUpAt = $now;
+        }
+    }
+
+    private function resolveCapacityInstanceName(): string
+    {
         $instanceName = 'default';
         try {
             if ($this->context !== null) {
                 $name = \trim((string)$this->context->getConfig('wls.instance', ''));
+                if ($name === '') {
+                    $name = \trim((string)$this->context->instanceName);
+                }
                 if ($name === '') {
                     $name = \trim((string)$this->context->getConfig('instance', ''));
                 }
@@ -33554,10 +33618,254 @@ class ServiceOrchestrator
         } catch (\Throwable) {
         }
 
-        $hostPressure = $this->memoryPressureController?->getLastPressureRatio();
-        $hostAvailable = $this->memoryPressureController?->getLastAvailableRatio();
-        $runner = new \Weline\Server\Service\Capacity\CapacityAdviseRunner();
-        $runner->tick($instanceName, $reports, $hostPressure, $hostAvailable);
+        return $instanceName;
+    }
+
+    private function resolveBaselineWorkerCount(): int
+    {
+        $startup = $this->memoryPressureController?->getStartupExplicitCount() ?? 0;
+        if ($startup > 0) {
+            return \max(1, $startup);
+        }
+        try {
+            if ($this->context !== null) {
+                $requested = $this->context->getConfig('wls.worker_count_requested', null);
+                if (\is_numeric($requested) && (int)$requested > 0) {
+                    return \max(1, (int)$requested);
+                }
+                // Do NOT fall back to runtime worker_count / desiredState — that would
+                // freeze the current water level as baseline and block scale-down (G8).
+            }
+        } catch (\Throwable) {
+        }
+
+        return 1;
+    }
+
+    /**
+     * Single Desired transaction entry for advisor + pressure (G13).
+     *
+     * @return array{applied:bool, reason:string, from:int, to:int, intent:array<string,mixed>}
+     */
+    private function applyCapacityIntent(
+        CapacityIntent $intent,
+        bool $allowBelowBaseline,
+        bool $pressurePath = false,
+        ?int $maxWorkersOverride = null,
+    ): array {
+        $instanceName = $this->resolveCapacityInstanceName();
+        $baseline = $this->resolveBaselineWorkerCount();
+        $envelope = CapacityScaleApplier::resolveEnvelope($baseline);
+        $current = \max(0, (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0));
+        $opsMutex = $this->rollingRestartInProgress
+            || $this->workerReloadCapacityTransitionInProgress
+            || $this->isStopFlowActive();
+        if (!$pressurePath) {
+            $opsMutex = $opsMutex || $this->maintenanceMode;
+        }
+        $env = $this->readFullEnvConfigSafe();
+        $maxWorkers = $maxWorkersOverride !== null
+            ? \max(1, $maxWorkersOverride)
+            : $envelope['max_workers'];
+
+        $applier = new CapacityScaleApplier();
+        return $applier->apply($intent, [
+            'instance' => $instanceName,
+            'current_desired' => $current,
+            'baseline' => $baseline,
+            'max_workers' => $maxWorkers,
+            'min_workers' => $envelope['min_workers'],
+            'ops_mutex' => $opsMutex,
+            'batch_in_progress' => $this->rollingRestartInProgress || $this->workerReloadCapacityTransitionInProgress,
+            'allow_below_baseline' => $allowBelowBaseline,
+            // Pressure recover restores reclaim capacity; do not fail-closed on unknown PG.
+            'skip_budget_gate' => $pressurePath && (
+                $intent->reason === 'pressure_recover' || $intent->reason === 'pressure_reclaim'
+                || $intent->reason === 'pressure_reclaim_emergency'
+            ),
+            'env' => $env,
+            'publish_route_table' => function (string $phase): void {
+                $this->publishCapacityScaleRouteFence($phase);
+            },
+            'set_desired' => function (int $target): void {
+                $this->desiredState[ControlMessage::ROLE_WORKER] = $target;
+            },
+            'persist_runtime' => function (int $target): void {
+                $this->persistRuntimeDesiredWorkerCount($target);
+            },
+            'execute' => function (int $from, int $to, CapacityIntent $appliedIntent): bool {
+                return $this->executeCapacityDesiredChange($from, $to, $appliedIntent);
+            },
+        ]);
+    }
+
+    private function persistRuntimeDesiredWorkerCount(int $target): void
+    {
+        if ($this->context === null) {
+            return;
+        }
+        if (!\defined('BP') || !\defined('DS')) {
+            return;
+        }
+        try {
+            (new ServerInstanceManager())->updateRuntimeDesiredWorkerCount(
+                (string)$this->context->instanceName,
+                $target,
+            );
+        } catch (\Throwable $persistError) {
+            WlsLogger::warning_(
+                '[Orchestrator] Failed to persist runtime desired worker count=' . $target
+                . ': ' . $persistError->getMessage()
+            );
+        }
+        try {
+            $this->persistServicesInfo($this->context);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function readEnvConfigSafe(string $key, mixed $default = null): mixed
+    {
+        if (!\defined('BP') || !\defined('DS')) {
+            return $default;
+        }
+        try {
+            return Env::get($key, $default);
+        } catch (\Throwable) {
+            return $default;
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function readFullEnvConfigSafe(): array
+    {
+        if (!\defined('BP') || !\defined('DS')) {
+            return [];
+        }
+        try {
+            $env = Env::getInstance()->getConfig() ?: [];
+            return \is_array($env) ? $env : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Topology fence around capacity batches: Dispatcher SET_ROUTE_TABLE; Direct is N/A here
+     * (reconcile / planned-recycle owns new-first listen handoff).
+     */
+    private function publishCapacityScaleRouteFence(string $phase): void
+    {
+        if ($this->controlServer === null) {
+            return;
+        }
+        $dispatchers = $this->registry->getInstancesByRole('dispatcher');
+        if ($dispatchers === []) {
+            return;
+        }
+        try {
+            $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0);
+            if ($phase === 'before_scale_down' && $desired > 0) {
+                foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $instanceId => $_instance) {
+                    if ((int)$instanceId > $desired) {
+                        $this->workerRoutePublishSuppressedInstanceIds[(int)$instanceId] = true;
+                    }
+                }
+            }
+            if ($phase === 'after_scale_down_abort') {
+                // Restore full READY pool after aborted shrink.
+                $this->workerRoutePublishSuppressedInstanceIds = [];
+            } elseif ($phase === 'after_scale_down' || $phase === 'after_scale_up') {
+                foreach (\array_keys($this->workerRoutePublishSuppressedInstanceIds) as $instanceId) {
+                    $inst = $this->registry->getInstance(ControlMessage::ROLE_WORKER, (int)$instanceId);
+                    if ($inst === null
+                        || \in_array($inst->state, [
+                            ServiceInstance::STATE_STOPPED,
+                            ServiceInstance::STATE_FAILED,
+                        ], true)
+                    ) {
+                        unset($this->workerRoutePublishSuppressedInstanceIds[(int)$instanceId]);
+                    }
+                }
+            }
+            // READY-only ports (suppressed / non-READY excluded). Force publish for barrier.
+            $this->syncDispatcherFullWorkerPoolFromRegistry(true);
+            WlsLogger::info_('[Orchestrator][CapacityScale] SET_ROUTE_TABLE fence phase=' . $phase);
+        } catch (\Throwable $e) {
+            WlsLogger::warning_(
+                '[Orchestrator][CapacityScale] SET_ROUTE_TABLE fence failed phase=' . $phase
+                . ': ' . $e->getMessage()
+            );
+        }
+    }
+
+    private function executeCapacityDesiredChange(int $from, int $to, CapacityIntent $intent): bool
+    {
+        if ($to === $from) {
+            return true;
+        }
+        if ($to > $from) {
+            if ($intent->reason === 'pressure_recover') {
+                $this->queueMemoryPressureRecoveredWorkerSlot($to);
+            }
+            if ($this->haMode) {
+                $this->reconcileDesiredState();
+            } else {
+                $this->reconcileWorkerSlotsWithoutHa();
+            }
+            return true;
+        }
+
+        // Scale-down: drain highest eligible Worker (pressure path tags); advisor uses same drain.
+        $target = null;
+        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $instanceId => $instance) {
+            if ($instanceId <= $to) {
+                continue;
+            }
+            if ($this->isDirectReloadSurgeWorker($instance)) {
+                continue;
+            }
+            if (\in_array($instance->state, [
+                ServiceInstance::STATE_DRAINING,
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+                ServiceInstance::STATE_FAILED,
+            ], true)) {
+                continue;
+            }
+            if ($target === null || $instanceId > $target->instanceId) {
+                $target = $instance;
+            }
+        }
+        if ($target === null) {
+            return false;
+        }
+        $drainDeadline = 45.0;
+        $mp = $this->readEnvConfigSafe('wls.memory_pressure', []);
+        if (\is_array($mp) && isset($mp['drain_deadline_sec']) && \is_numeric($mp['drain_deadline_sec'])) {
+            $drainDeadline = \max(5.0, (float)$mp['drain_deadline_sec']);
+        }
+        if ($intent->reason === 'pressure_reclaim' || $intent->reason === 'pressure_reclaim_emergency') {
+            $target->setMeta('memory_pressure_scale_down', true);
+            $target->setMeta('memory_pressure_scale_down_at', self::monotonicSeconds());
+            $target->setMeta('memory_pressure_scale_down_from_desired', $from);
+            $target->setMeta('memory_pressure_scale_down_to_desired', $to);
+            $this->registry->updateInstance($target);
+        }
+        if (!$this->sendDrainToInstance($target, $drainDeadline)) {
+            foreach ([
+                'memory_pressure_scale_down',
+                'memory_pressure_scale_down_at',
+                'memory_pressure_scale_down_from_desired',
+                'memory_pressure_scale_down_to_desired',
+            ] as $key) {
+                $target->setMeta($key, null);
+            }
+            $this->registry->updateInstance($target);
+            return false;
+        }
+
+        return true;
     }
 
     private function ensureHostMemoryPressureCoordination(
@@ -33618,13 +33926,14 @@ class ServiceOrchestrator
             return false;
         }
         $minWorkers = 1;
-        $scaling = Env::get('wls.scaling', []);
+        $scaling = $this->readEnvConfigSafe('wls.scaling', []);
         if (\is_array($scaling) && isset($scaling['min_workers']) && \is_numeric($scaling['min_workers'])) {
             $minWorkers = \max(1, (int)$scaling['min_workers']);
         }
         $startupExplicit = $controller->getStartupExplicitCount();
         $serveFloor = \max(1, $minWorkers);
-        if ($startupExplicit > 0 && !$controller->allowsEmergencyScaleBelowStartupExplicit()) {
+        $allowBelow = $controller->allowsEmergencyScaleBelowStartupExplicit();
+        if ($startupExplicit > 0 && !$allowBelow) {
             $serveFloor = \max($serveFloor, $startupExplicit);
         }
         $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0);
@@ -33642,7 +33951,7 @@ class ServiceOrchestrator
             return false;
         }
         $exitStagger = 20.0;
-        $mp = Env::get('wls.memory_pressure', []);
+        $mp = $this->readEnvConfigSafe('wls.memory_pressure', []);
         if (\is_array($mp) && isset($mp['exit_stagger_sec']) && \is_numeric($mp['exit_stagger_sec'])) {
             $exitStagger = \max(1.0, (float)$mp['exit_stagger_sec']);
         }
@@ -33655,16 +33964,13 @@ class ServiceOrchestrator
         }
 
         $newDesired = $desired - 1;
-
-        $target = null;
+        // Keep wave1 early-exit: no eligible drain target → do not touch Desired / host claim.
+        $eligible = null;
         foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $instanceId => $instance) {
             if ($instanceId <= $newDesired) {
                 continue;
             }
             if ($this->isDirectReloadSurgeWorker($instance)) {
-                // Temporary surge capacity belongs to the reload cleanup
-                // transaction and must never become the canonical slot chosen
-                // for a desired-state memory shrink.
                 continue;
             }
             if (\in_array($instance->state, [
@@ -33675,11 +33981,11 @@ class ServiceOrchestrator
             ], true)) {
                 continue;
             }
-            if ($target === null || $instanceId > $target->instanceId) {
-                $target = $instance;
+            if ($eligible === null || $instanceId > $eligible->instanceId) {
+                $eligible = $instance;
             }
         }
-        if ($target === null) {
+        if ($eligible === null) {
             $controller->setShrinkInProgress(false);
             return false;
         }
@@ -33693,52 +33999,50 @@ class ServiceOrchestrator
             return false;
         }
 
-        $this->desiredState[ControlMessage::ROLE_WORKER] = $newDesired;
-        $controller->setShrinkInProgress(true);
-        $drainDeadline = 45.0;
-        if (\is_array($mp) && isset($mp['drain_deadline_sec']) && \is_numeric($mp['drain_deadline_sec'])) {
-            $drainDeadline = \max(5.0, (float)$mp['drain_deadline_sec']);
-        }
-        $target->setMeta('memory_pressure_scale_down', true);
-        $target->setMeta('memory_pressure_scale_down_at', $now);
-        $target->setMeta('memory_pressure_scale_down_from_desired', $desired);
-        $target->setMeta('memory_pressure_scale_down_to_desired', $newDesired);
-        $this->registry->updateInstance($target);
-        WlsLogger::warning_(
-            '[Orchestrator][MemoryPressure] scale_down desired=' . $desired
-            . '->' . $newDesired
-            . ' drain worker#' . $target->instanceId
-            . ' deadline=' . $drainDeadline . 's'
+        $baseline = $this->resolveBaselineWorkerCount();
+        $reason = ($newDesired < $baseline && $allowBelow)
+            ? 'pressure_reclaim_emergency'
+            : 'pressure_reclaim';
+        $intent = CapacityIntent::scaleTo(
+            $this->resolveCapacityInstanceName(),
+            $newDesired,
+            $reason,
+            priority: CapacityScaleApplier::PRIORITY_PRESSURE_RECLAIM,
         );
-        if (!$this->sendDrainToInstance($target, $drainDeadline)) {
-            $this->desiredState[ControlMessage::ROLE_WORKER] = $desired;
+        $controller->setShrinkInProgress(true);
+        $result = $this->applyCapacityIntent(
+            $intent,
+            allowBelowBaseline: $allowBelow,
+            pressurePath: true,
+        );
+        if (empty($result['applied'])) {
             $controller->setShrinkInProgress(false);
             $controller->releaseHostCapacityMutation($hostClaim);
-            foreach ([
-                'memory_pressure_scale_down',
-                'memory_pressure_scale_down_at',
-                'memory_pressure_scale_down_from_desired',
-                'memory_pressure_scale_down_to_desired',
-            ] as $key) {
-                $target->setMeta($key, null);
-            }
-            $this->registry->updateInstance($target);
             WlsLogger::warning_(
-                '[Orchestrator][MemoryPressure] scale_down aborted: DRAIN delivery failed'
-                . ', desired restored=' . $desired
-                . ', worker#' . $target->instanceId
+                '[Orchestrator][MemoryPressure] scale_down via Applier noop reason='
+                . (string)($result['reason'] ?? 'unknown')
             );
 
             return false;
         }
+
+        WlsLogger::warning_(
+            '[Orchestrator][MemoryPressure] scale_down desired=' . $desired
+            . '->' . $newDesired
+            . ' via CapacityScaleApplier reason=' . $reason
+        );
         $this->lastMemoryPressureExitAt = $now;
         $controller->getStateMachine()->markPlannedExit($now);
+        $drainDeadline = 45.0;
+        if (\is_array($mp) && isset($mp['drain_deadline_sec']) && \is_numeric($mp['drain_deadline_sec'])) {
+            $drainDeadline = \max(5.0, (float)$mp['drain_deadline_sec']);
+        }
         $hardDrain = 120.0;
         if (\is_array($mp) && isset($mp['hard_drain_sec']) && \is_numeric($mp['hard_drain_sec'])) {
             $hardDrain = \max($drainDeadline, (float)$mp['hard_drain_sec']);
         }
         $this->memoryPressureShrinkFenceUntil = $now + $hardDrain;
-        // Fence clears on next tick after hardDrain; shrinkInProgress also cleared then.
+
         return true;
     }
 
@@ -33763,7 +34067,7 @@ class ServiceOrchestrator
             return false;
         }
         $recoverStagger = 20.0;
-        $mp = Env::get('wls.memory_pressure', []);
+        $mp = $this->readEnvConfigSafe('wls.memory_pressure', []);
         if (\is_array($mp) && isset($mp['exit_stagger_sec']) && \is_numeric($mp['exit_stagger_sec'])) {
             $recoverStagger = \max(1.0, (float)$mp['exit_stagger_sec']);
         }
@@ -33776,19 +34080,29 @@ class ServiceOrchestrator
             return false;
         }
         $newDesired = $desired + 1;
-        $this->desiredState[ControlMessage::ROLE_WORKER] = $newDesired;
+        $intent = CapacityIntent::scaleTo(
+            $this->resolveCapacityInstanceName(),
+            $newDesired,
+            'pressure_recover',
+            priority: CapacityScaleApplier::PRIORITY_PRESSURE_RECOVER,
+        );
+        $result = $this->applyCapacityIntent(
+            $intent,
+            allowBelowBaseline: false,
+            pressurePath: true,
+            maxWorkersOverride: $ceiling,
+        );
+        if (empty($result['applied'])) {
+            $controller->releaseHostCapacityMutation($hostClaim);
+            return false;
+        }
         WlsLogger::info_(
             '[Orchestrator][MemoryPressure] scale_up desired=' . $desired
             . '->' . $newDesired
             . ' ceiling=' . $ceiling
+            . ' via CapacityScaleApplier'
         );
-        $this->queueMemoryPressureRecoveredWorkerSlot($newDesired);
-        // Let reconcile / non-HA slot fill start the missing slot.
-        if ($this->haMode) {
-            $this->reconcileDesiredState();
-        } else {
-            $this->reconcileWorkerSlotsWithoutHa();
-        }
+        $this->lastCapacityScaleUpAt = \microtime(true);
 
         return true;
     }

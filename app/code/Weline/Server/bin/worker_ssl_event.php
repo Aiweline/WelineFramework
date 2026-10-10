@@ -70,6 +70,7 @@ $wlsRuntimeTopology = '';
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
+$wlsEdgeAdapter = '';
 
 $positionalArgs = [];
 foreach ($argv as $i => $arg) {
@@ -128,6 +129,8 @@ foreach ($argv as $arg) {
         $wlsRuntimeTopology = \strtolower(\trim((string)\substr($arg, 23)));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
+    } elseif (\str_starts_with($arg, '--wls-edge-adapter=')) {
+        $wlsEdgeAdapter = \strtolower(\trim((string)\substr($arg, 19)));
     }
 }
 if (!\in_array($wlsRuntimeTopology, ['direct', 'dispatcher'], true)) {
@@ -204,6 +207,11 @@ if ($publicOrigin !== '') {
     $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     @\putenv('WLS_PUBLIC_ORIGIN=' . $publicOrigin);
+}
+if (\in_array($wlsEdgeAdapter, ['nginx', 'wls'], true)) {
+    $_SERVER['WLS_EDGE_ADAPTER'] = $wlsEdgeAdapter;
+    $_ENV['WLS_EDGE_ADAPTER'] = $wlsEdgeAdapter;
+    @\putenv('WLS_EDGE_ADAPTER=' . $wlsEdgeAdapter);
 }
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
     \define('WLS_FRONTEND_MODE', true);

@@ -16,7 +16,7 @@ final class FiberAdmissionQueueContractTest extends TestCase
     {
         $cfg = wlsResolveFiberAdmissionConfig([]);
         self::assertSame(12, $cfg['max_active']);
-        self::assertSame(10000, $cfg['queue_wait_ms']);
+        self::assertSame(20000, $cfg['queue_wait_ms']);
         self::assertSame(12, $cfg['queue_depth']);
         self::assertSame(25, $cfg['queue_slice_ms']);
     }
@@ -58,9 +58,82 @@ final class FiberAdmissionQueueContractTest extends TestCase
         $full = wlsFiberAdmissionUnavailableResponse('queue_full');
         self::assertStringContainsString('X-WLS-Admission: queue_full', $full);
         self::assertStringContainsString('Retry-After: 1', $full);
+
+        $memory = wlsFiberAdmissionUnavailableResponse('memory_pressure');
+        self::assertStringContainsString('503 Service Unavailable', $memory);
+        self::assertStringContainsString('X-WLS-Admission: memory_pressure', $memory);
+        self::assertStringContainsString('Retry-After: 2', $memory);
     }
 
-    public function testWaitMsIsBoundedToTenSeconds(): void
+    public function testAwaitRejectsEarlyWhenHardFloorCritical(): void
+    {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::resetThresholdCache();
+        // Tiny pressure denominator → headroom always below 16MiB hard floor (critical).
+        \Weline\Server\Service\WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(8 * 1024 * 1024);
+
+        $active = [
+            'waiting' => ['is_sse_protocol' => false],
+        ];
+        $waiters = ['waiting' => true];
+        $rejectReason = null;
+        $started = \microtime(true);
+        $result = wlsAwaitFiberAdmissionSlot(
+            $active,
+            $waiters,
+            'waiting',
+            1,
+            500,
+            5,
+            null,
+            5000,
+            $rejectReason,
+        );
+        $elapsedMs = (\microtime(true) - $started) * 1000.0;
+
+        self::assertFalse($result);
+        self::assertSame('memory_pressure', $rejectReason);
+        self::assertSame([], $waiters);
+        // Critical fail-closed must not burn the full soft-delay budget.
+        self::assertLessThan(200.0, $elapsedMs);
+
+        \Weline\Server\Service\WorkerResponseMemoryGuard::resetThresholdCache();
+    }
+
+    public function testAwaitSoftMemoryMissWaitsUntilDeadline(): void
+    {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::resetThresholdCache();
+        // Soft threshold high, hard floor tiny → defer (not critical) until wait ends.
+        \Weline\Server\Service\WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * 1024 * 1024);
+        \Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHeadroomBytes(250 * 1024 * 1024);
+        \Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHardFloorBytes(1024);
+
+        $active = [
+            'waiting' => ['is_sse_protocol' => false],
+        ];
+        $waiters = ['waiting' => true];
+        $rejectReason = null;
+        $started = \microtime(true);
+        $result = wlsAwaitFiberAdmissionSlot(
+            $active,
+            $waiters,
+            'waiting',
+            1,
+            80,
+            5,
+            null,
+            5000,
+            $rejectReason,
+        );
+        $elapsedMs = (\microtime(true) - $started) * 1000.0;
+
+        self::assertFalse($result);
+        self::assertSame('memory_pressure', $rejectReason);
+        self::assertGreaterThanOrEqual(60.0, $elapsedMs);
+
+        \Weline\Server\Service\WorkerResponseMemoryGuard::resetThresholdCache();
+    }
+
+    public function testWaitMsDefaultTwentySecondsAndCapThirty(): void
     {
         $configured = wlsResolveFiberAdmissionConfig([
             'fiber' => ['admission_queue_wait_ms' => 5000],
@@ -70,10 +143,10 @@ final class FiberAdmissionQueueContractTest extends TestCase
         $cfg = wlsResolveFiberAdmissionConfig([
             'fiber' => ['admission_queue_wait_ms' => 45000],
         ]);
-        self::assertSame(10000, $cfg['queue_wait_ms']);
+        self::assertSame(30000, $cfg['queue_wait_ms']);
 
         $moduleEnv = require \dirname(__DIR__, 3) . '/etc/env.php';
-        self::assertSame(10000, $moduleEnv['wls']['fiber']['admission_queue_wait_ms']);
+        self::assertSame(20000, $moduleEnv['wls']['fiber']['admission_queue_wait_ms']);
     }
 
     public function testWaitingRequestCanFinishFromCacheBeforeAdmissionSlotOpens(): void
@@ -163,7 +236,7 @@ final class FiberAdmissionQueueContractTest extends TestCase
 
             $cfg = wlsResolveFiberAdmissionConfigFromEnvironment($path, 'soak');
             self::assertSame(12, $cfg['max_active']);
-            self::assertSame(10000, $cfg['queue_wait_ms']);
+            self::assertSame(30000, $cfg['queue_wait_ms']);
             self::assertSame(256, $cfg['queue_depth']);
         } finally {
             @unlink($path);

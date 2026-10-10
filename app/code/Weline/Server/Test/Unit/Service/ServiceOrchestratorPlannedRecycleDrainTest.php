@@ -355,4 +355,94 @@ final class ServiceOrchestratorPlannedRecycleDrainTest extends TestCase
         self::assertSame(272, $sent[1][0]);
         self::assertSame(ControlMessage::TYPE_DRAIN, $sent[1][1]['type'] ?? null);
     }
+
+    public function testNewFirstPlannedRecycleDrainsOnlyAfterSurgeReady(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $orchestrator->getRegistry()->registerProvider(new WorkerProvider());
+        $sent = [];
+        $control = $this->createMock(ControlPlaneServerInterface::class);
+        $control->method('sendTo')->willReturnCallback(
+            static function (int $clientId, string $message) use (&$sent): bool {
+                $sent[] = [$clientId, \json_decode($message, true)];
+                return true;
+            }
+        );
+        (new \ReflectionProperty(ServiceOrchestrator::class, 'controlServer'))->setValue($orchestrator, $control);
+
+        $retiring = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: 1,
+            launchId: 'ready-before-drain-retiring',
+            pid: 98765001,
+            port: 19986,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 401,
+        );
+        $surge = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 100,
+            epoch: 1,
+            launchId: 'ready-before-drain-surge',
+            pid: 98765002,
+            port: 19986,
+            state: ServiceInstance::STATE_STARTING,
+            ipcClientId: 402,
+        );
+        $surge->setMeta('planned_recycle_surge', true);
+        $surge->setMeta('planned_recycle_surge_retain', true);
+        $surge->setMeta('planned_recycle_retiring_id', 1);
+        $orchestrator->getRegistry()->addInstance($retiring);
+        $orchestrator->getRegistry()->addInstance($surge);
+        (new \ReflectionProperty(ServiceOrchestrator::class, 'desiredState'))->setValue(
+            $orchestrator,
+            [ControlMessage::ROLE_WORKER => 1],
+        );
+        (new \ReflectionProperty(ServiceOrchestrator::class, 'activePlannedWorkerRecycle'))->setValue(
+            $orchestrator,
+            [
+                'instance_id' => 1,
+                'pid' => 98765001,
+                'phase' => 'waiting_surge',
+                'surge_id' => 100,
+                'started_at' => \microtime(true),
+            ],
+        );
+
+        // READY-before-DRAIN: while surge is not READY, no TYPE_DRAIN.
+        self::assertSame([], $sent);
+
+        $surge->state = ServiceInstance::STATE_READY;
+        $orchestrator->getRegistry()->updateInstance($surge);
+        (new \ReflectionMethod(ServiceOrchestrator::class, 'advancePlannedWorkerRecycleAfterReady'))
+            ->invoke($orchestrator, $surge);
+
+        self::assertCount(1, $sent);
+        self::assertSame(401, $sent[0][0]);
+        self::assertSame(ControlMessage::TYPE_DRAIN, $sent[0][1]['type'] ?? null);
+        $active = (new \ReflectionProperty(ServiceOrchestrator::class, 'activePlannedWorkerRecycle'))
+            ->getValue($orchestrator);
+        self::assertSame('draining', $active['phase'] ?? null);
+        self::assertSame(100, (int)($active['surge_id'] ?? 0));
+    }
+
+    public function testNewFirstGrantSourceOrdersWaitingSurgeBeforeDrain(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/ServiceOrchestrator.php',
+        );
+        self::assertStringContainsString("phase' => 'waiting_surge'", $source);
+        self::assertStringContainsString("sendDrainForActivePlannedRecycle('surge_ready')", $source);
+        self::assertStringContainsString('old_admission=unchanged', $source);
+        self::assertStringContainsString('explicit drain-first degradation', $source);
+        self::assertStringContainsString('phase=drain_first_grant', $source);
+        // Pressure shrink fence must not silently become the only path: new-first
+        // grant must park on waiting_surge before any drain_first fallback.
+        $waitingPos = \strpos($source, "phase' => 'waiting_surge'");
+        $drainFirstPos = \strpos($source, "sendDrainForActivePlannedRecycle('drain_first')");
+        self::assertNotFalse($waitingPos);
+        self::assertNotFalse($drainFirstPos);
+        self::assertLessThan($drainFirstPos, $waitingPos);
+    }
 }

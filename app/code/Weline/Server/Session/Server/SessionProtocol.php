@@ -42,6 +42,18 @@ final class SessionProtocol
     {
         return self::MAX_FRAME_BYTES;
     }
+
+    /**
+     * Preflight: would encodeRequest throw frame_too_large for this cmd/params?
+     * Used by SharedMemoryService mset to split or reject before transport.
+     */
+    public static function encodedRequestExceedsMaxFrame(string $cmd, array $params = []): bool
+    {
+        $message = ['cmd' => $cmd] + $params;
+        $body = self::serialize($message);
+
+        return \strlen($body) + 1 > self::MAX_FRAME_BYTES;
+    }
     
     /**
      * 设置序列化器

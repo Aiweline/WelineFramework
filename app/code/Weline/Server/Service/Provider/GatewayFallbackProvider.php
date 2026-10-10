@@ -128,6 +128,7 @@ final class GatewayFallbackProvider extends AbstractServiceProvider
             '--wls-runtime-topology=direct',
             '--wls-listener-mode=' . ($this->inheritedListener ? 'shared_fd' : 'single'),
             '--public-origin=' . $publicOrigin,
+            '--wls-edge-adapter=wls',
             '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver,
             '--gateway-fallback',
             '--gateway-host-lease-id=' . $this->hostLeaseId,

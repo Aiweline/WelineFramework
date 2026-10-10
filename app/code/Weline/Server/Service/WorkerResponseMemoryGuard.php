@@ -34,6 +34,11 @@ final class WorkerResponseMemoryGuard
     private const ZEND_WARM_BASELINE_MAX_USED_BYTES = 96 * 1024 * 1024;
     /** Absolute Zend-real headroom below this → loop shed even under soft ratio. */
     private const LOOP_HEADROOM_SHED_BYTES = 64 * 1024 * 1024;
+    /**
+     * Hard floor for Fiber admission fail-closed: only here (or after full queue wait)
+     * do we 503. Soft headroom below {@see LOOP_HEADROOM_SHED_BYTES} prefers delay.
+     */
+    private const ADMISSION_MEMORY_HARD_FLOOR_BYTES = 16 * 1024 * 1024;
     /** Zend shell (real−used) above this → gc_mem_caches without wiping bags. */
     private const LOOP_SHELL_TRIM_BYTES = 24 * 1024 * 1024;
     /** used above this → soft rebuildable process-cache reclaim (busy-safe OM when peers). */
@@ -42,6 +47,13 @@ final class WorkerResponseMemoryGuard
     private static ?array $runtimeCacheThresholds = null;
     /** Pressure denominator from Worker `--memory-limit` (ignore DevTool-inflated ini). */
     private static ?int $pressureLimitBytes = null;
+    /**
+     * Optional override for Fiber admission absolute headroom (bytes).
+     * Null → {@see LOOP_HEADROOM_SHED_BYTES} or env `wls.fiber.admission_memory_headroom_bytes`.
+     */
+    private static ?int $admissionMemoryHeadroomBytes = null;
+    /** Optional override for hard fail-closed floor (bytes). Null → {@see ADMISSION_MEMORY_HARD_FLOOR_BYTES}. */
+    private static ?int $admissionMemoryHardFloorBytes = null;
     /** Lowest clean Zend-real seen after reclaim (framework warm floor). */
     private static ?int $warmRealBaselineBytes = null;
     private static ?string $drainAfterResponseReason = null;
@@ -51,6 +63,8 @@ final class WorkerResponseMemoryGuard
     private static int $compactHardCount = 0;
     private static int $drainRequestCount = 0;
     private static float $lastPressure = 0.0;
+    private static int $admissionMemoryRejects = 0;
+    private static int $lastAbsoluteHeadroomBytes = 0;
 
     /** Consecutive incomplete Fiber cancels before Worker quarantine. */
     public const INCOMPLETE_REQUEST_FIBER_CANCEL_QUARANTINE_STREAK = 3;
@@ -180,6 +194,147 @@ final class WorkerResponseMemoryGuard
     }
 
     /**
+     * Optional absolute headroom threshold for Fiber admission (bytes).
+     * Pass 0 to clear and fall back to {@see LOOP_HEADROOM_SHED_BYTES} / env.
+     */
+    public static function setAdmissionMemoryHeadroomBytes(int $bytes): void
+    {
+        self::$admissionMemoryHeadroomBytes = $bytes > 0 ? $bytes : null;
+    }
+
+    /**
+     * Absolute Zend-real headroom: memory_limit − memory_get_usage(true).
+     * Unknown / unlimited limit → {@see \PHP_INT_MAX}.
+     */
+    public static function absoluteHeadroomBytes(): int
+    {
+        $limitBytes = self::getMemoryLimitBytes();
+        $realBytes = \memory_get_usage(true);
+        $headroom = $limitBytes > 0 ? \max(0, $limitBytes - $realBytes) : \PHP_INT_MAX;
+        self::$lastAbsoluteHeadroomBytes = $headroom;
+
+        return $headroom;
+    }
+
+    /**
+     * Cheap probe (+ optional critical shed) before admitting a short-request Fiber.
+     * Does not emit HTTP, drain, or exit. Healthy path skips compact.
+     *
+     * Policy: soft headroom miss → prefer queue/delay (`admit=false`, `critical=false`);
+     * hard floor miss → fail-closed (`critical=true`). Callers MUST wait when not critical.
+     *
+     * @return array{
+     *   admit:bool,
+     *   critical:bool,
+     *   absolute_headroom_bytes:int,
+     *   pressure:float,
+     *   compacted:bool,
+     *   reason:?string
+     * }
+     */
+    public static function evaluateAdmissionMemoryGate(bool $compactIfNeeded = true): array
+    {
+        $thresholds = self::getRuntimeCacheThresholds();
+        $pressure = self::getMemoryPressure();
+        self::$lastPressure = $pressure;
+        $headroom = self::absoluteHeadroomBytes();
+        $threshold = self::admissionMemoryHeadroomThresholdBytes();
+        $hardFloor = self::admissionMemoryHardFloorBytes();
+        $compacted = false;
+
+        // Healthy: enough absolute headroom and below soft ratio → admit without shed.
+        if ($headroom >= $threshold && $pressure < $thresholds['soft']) {
+            return [
+                'admit' => true,
+                'critical' => false,
+                'absolute_headroom_bytes' => $headroom,
+                'pressure' => $pressure,
+                'compacted' => false,
+                'reason' => null,
+            ];
+        }
+
+        if ($compactIfNeeded) {
+            self::compactForNewRequestHeadroom(false);
+            $compacted = true;
+            $pressure = self::getMemoryPressure();
+            self::$lastPressure = $pressure;
+            $headroom = self::absoluteHeadroomBytes();
+        }
+
+        $admit = $headroom >= $threshold;
+        $critical = !$admit && $headroom < $hardFloor;
+
+        return [
+            'admit' => $admit,
+            'critical' => $critical,
+            'absolute_headroom_bytes' => $headroom,
+            'pressure' => $pressure,
+            'compacted' => $compacted,
+            'reason' => $admit ? null : 'memory_pressure',
+        ];
+    }
+
+    /**
+     * Optional hard-floor override (bytes). Pass 0 to clear.
+     */
+    public static function setAdmissionMemoryHardFloorBytes(int $bytes): void
+    {
+        self::$admissionMemoryHardFloorBytes = $bytes > 0 ? $bytes : null;
+    }
+
+    public static function noteAdmissionMemoryReject(): void
+    {
+        self::$admissionMemoryRejects++;
+    }
+
+    /**
+     * Default aligns with {@see LOOP_HEADROOM_SHED_BYTES}; optional env
+     * `wls.fiber.admission_memory_headroom_bytes` or {@see setAdmissionMemoryHeadroomBytes()}.
+     */
+    public static function admissionMemoryHeadroomThresholdBytes(): int
+    {
+        if (self::$admissionMemoryHeadroomBytes !== null && self::$admissionMemoryHeadroomBytes > 0) {
+            return self::$admissionMemoryHeadroomBytes;
+        }
+
+        $envRaw = $_ENV['wls.fiber.admission_memory_headroom_bytes']
+            ?? $_SERVER['wls.fiber.admission_memory_headroom_bytes']
+            ?? \getenv('wls.fiber.admission_memory_headroom_bytes');
+        if (\is_string($envRaw) && $envRaw !== '' && \ctype_digit($envRaw)) {
+            $parsed = (int)$envRaw;
+            if ($parsed > 0) {
+                return $parsed;
+            }
+        }
+
+        return self::LOOP_HEADROOM_SHED_BYTES;
+    }
+
+    /**
+     * Hard fail-closed floor. Soft misses prefer delay; only below this (or after
+     * full admission wait) should callers emit memory_pressure 503.
+     */
+    public static function admissionMemoryHardFloorBytes(): int
+    {
+        if (self::$admissionMemoryHardFloorBytes !== null && self::$admissionMemoryHardFloorBytes > 0) {
+            return self::$admissionMemoryHardFloorBytes;
+        }
+
+        $envRaw = $_ENV['wls.fiber.admission_memory_hard_floor_bytes']
+            ?? $_SERVER['wls.fiber.admission_memory_hard_floor_bytes']
+            ?? \getenv('wls.fiber.admission_memory_hard_floor_bytes');
+        if (\is_string($envRaw) && $envRaw !== '' && \ctype_digit($envRaw)) {
+            $parsed = (int)$envRaw;
+            if ($parsed > 0) {
+                return $parsed;
+            }
+        }
+
+        return self::ADMISSION_MEMORY_HARD_FLOOR_BYTES;
+    }
+
+    /**
      * 回收后请求安全退役。
      * shell≥ZEND_SHELL_DRAIN：不过 soft 比（used↓ 后 ratio 常跌破 soft）。
      * baseline 超标路径仍要求 real/limit ≥ soft（limit≤0 时仅看 baseline）。
@@ -271,13 +426,16 @@ final class WorkerResponseMemoryGuard
      *   compact_soft_count:int,
      *   compact_hard_count:int,
      *   drain_request_count:int,
-     *   last_pressure:float
+     *   last_pressure:float,
+     *   admission_memory_rejects:int,
+     *   absolute_headroom_bytes:int
      * }
      */
     public static function capacityStatusScalars(): array
     {
         try {
             self::$lastPressure = self::getMemoryPressure();
+            self::absoluteHeadroomBytes();
         } catch (\Throwable) {
         }
 
@@ -286,6 +444,8 @@ final class WorkerResponseMemoryGuard
             'compact_hard_count' => self::$compactHardCount,
             'drain_request_count' => self::$drainRequestCount,
             'last_pressure' => self::$lastPressure,
+            'admission_memory_rejects' => self::$admissionMemoryRejects,
+            'absolute_headroom_bytes' => self::$lastAbsoluteHeadroomBytes,
         ];
     }
 
@@ -803,7 +963,12 @@ final class WorkerResponseMemoryGuard
     {
         self::$runtimeCacheThresholds = null;
         self::$pressureLimitBytes = null;
+        self::$admissionMemoryHeadroomBytes = null;
+        self::$admissionMemoryHardFloorBytes = null;
         self::$warmRealBaselineBytes = null;
+        self::$admissionMemoryRejects = 0;
+        self::$lastAbsoluteHeadroomBytes = 0;
+        self::$lastPressure = 0.0;
     }
 
     private static function parseMemoryLimit(string $limit): int

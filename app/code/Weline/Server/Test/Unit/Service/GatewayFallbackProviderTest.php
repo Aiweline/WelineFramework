@@ -223,6 +223,7 @@ final class GatewayFallbackProviderTest extends TestCase
             '--public-origin=https://shop.example.test:24570',
             $command->arguments,
         );
+        self::assertContains('--wls-edge-adapter=wls', $command->arguments);
         self::assertNotContains('--public-origin=https://[::]:24570', $command->arguments);
         self::assertContains(
             '--gateway-host-lease-id=' . self::HOST_LEASE_ID,

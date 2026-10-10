@@ -5,11 +5,133 @@ namespace Weline\Server\Service\Capacity;
 
 /**
  * Pure Master-side capacity rules. Never mutates Desired / scale / env.
+ * Produces advice strings and CapacityIntent; CapacityScaleApplier executes.
  */
 final class CapacityAdvisor
 {
     /** @var array<string, list<array{t:float, pressure:float, compact_total:int}>> */
     private static array $rings = [];
+
+    /**
+     * @param list<array{report:array<string,mixed>, at:float|int}> $workerReports
+     * @param array<string, mixed> $config
+     * @param array{
+     *   current_desired?:int,
+     *   baseline?:int,
+     *   max_workers?:int,
+     *   auto_scale_enabled?:bool,
+     *   idle_active_max?:int,
+     *   idle_pressure_max?:float,
+     *   last_scale_up_at?:float,
+     *   scale_down_cooldown_sec?:float,
+     *   idle_since?:float,
+     *   t_down_sec?:float
+     * } $scaleContext
+     */
+    public function evaluateIntent(
+        string $instance,
+        array $workerReports,
+        float $hostPressure,
+        ?float $hostAvailableRatio,
+        array $config,
+        float $now,
+        array $scaleContext = [],
+    ): CapacityIntent {
+        $evaluated = $this->evaluate(
+            $instance,
+            $workerReports,
+            $hostPressure,
+            $hostAvailableRatio,
+            $config,
+            $now,
+        );
+        $ringKey = $instance !== '' ? $instance : 'default';
+        $advice = $evaluated['advice'];
+        $reasonCodes = $evaluated['reason_codes'];
+        $sample = $evaluated['sample'];
+        $current = \max(1, (int)($scaleContext['current_desired'] ?? 1));
+        $baseline = \max(1, (int)($scaleContext['baseline'] ?? $current));
+        $maxWorkers = \max($baseline, (int)($scaleContext['max_workers'] ?? $baseline));
+        $autoScale = \array_key_exists('auto_scale_enabled', $scaleContext)
+            ? (bool)$scaleContext['auto_scale_enabled']
+            : (bool)($config['auto_scale_enabled'] ?? true);
+
+        if (empty($config['enabled'])) {
+            return CapacityIntent::noop($ringKey, 'disabled', $advice, $reasonCodes, $sample);
+        }
+        if (!$autoScale) {
+            return CapacityIntent::noop($ringKey, 'disabled', $advice, $reasonCodes, $sample, CapacityScaleApplier::PRIORITY_ADVISOR);
+        }
+
+        $hostTight = \in_array('host_tight', $reasonCodes, true);
+        $wantsRaise = \in_array('raise_worker_count', $advice, true);
+
+        if ($wantsRaise && $hostTight) {
+            return CapacityIntent::noop(
+                $ringKey,
+                'host_pressure',
+                $advice,
+                $reasonCodes,
+                $sample,
+                CapacityScaleApplier::PRIORITY_ADVISOR,
+            );
+        }
+
+        if ($wantsRaise && !$hostTight) {
+            if ($current >= $maxWorkers) {
+                return CapacityIntent::noop($ringKey, 'at_max_workers', $advice, $reasonCodes, $sample, CapacityScaleApplier::PRIORITY_ADVISOR);
+            }
+            $lastUp = (float)($scaleContext['last_scale_up_at'] ?? 0.0);
+            $cooldown = (float)($scaleContext['scale_down_cooldown_sec'] ?? 60.0);
+            // Scale-up itself is not blocked by down-cooldown; only thrash guard after recent up uses separate path.
+            return CapacityIntent::scaleTo(
+                $ringKey,
+                $current + 1,
+                'workers_busy_host_headroom',
+                $advice,
+                $reasonCodes,
+                $sample,
+                CapacityScaleApplier::PRIORITY_ADVISOR,
+            );
+        }
+
+        // Idle revert toward baseline (slow shrink, step -1).
+        $idleActiveMax = (int)($scaleContext['idle_active_max'] ?? 0);
+        $idlePressureMax = (float)($scaleContext['idle_pressure_max'] ?? 0.35);
+        $activeSum = (int)($sample['active_requests_sum'] ?? 0);
+        $avgPressure = (float)($sample['worker_pressure_avg'] ?? 0.0);
+        $idleSince = (float)($scaleContext['idle_since'] ?? 0.0);
+        $tDown = (float)($scaleContext['t_down_sec'] ?? 120.0);
+        $lastUp = (float)($scaleContext['last_scale_up_at'] ?? 0.0);
+        $downCooldown = (float)($scaleContext['scale_down_cooldown_sec'] ?? 60.0);
+
+        if ($current > $baseline
+            && $activeSum <= $idleActiveMax
+            && $avgPressure <= $idlePressureMax
+            && !$hostTight
+        ) {
+            if ($lastUp > 0.0 && ($now - $lastUp) < $downCooldown) {
+                return CapacityIntent::noop($ringKey, 'cooldown', $advice, $reasonCodes, $sample, CapacityScaleApplier::PRIORITY_ADVISOR);
+            }
+            if ($idleSince > 0.0 && ($now - $idleSince) >= $tDown) {
+                return CapacityIntent::scaleTo(
+                    $ringKey,
+                    \max($baseline, $current - 1),
+                    'idle_revert_baseline',
+                    $advice,
+                    $reasonCodes,
+                    $sample,
+                    CapacityScaleApplier::PRIORITY_ADVISOR,
+                );
+            }
+        }
+
+        if ($current <= $baseline) {
+            return CapacityIntent::noop($ringKey, 'at_baseline', $advice, $reasonCodes, $sample, CapacityScaleApplier::PRIORITY_ADVISOR);
+        }
+
+        return CapacityIntent::noop($ringKey, 'noop', $advice, $reasonCodes, $sample, CapacityScaleApplier::PRIORITY_ADVISOR);
+    }
 
     /**
      * @param list<array{report:array<string,mixed>, at:float|int}> $workerReports

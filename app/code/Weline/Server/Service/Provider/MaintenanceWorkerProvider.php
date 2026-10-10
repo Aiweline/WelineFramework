@@ -116,6 +116,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             . $context->runtimeSelection->effectiveTopology->value;
         $arguments[] = '--wls-listener-mode=single';
         $arguments[] = '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context);
+        $arguments[] = WorkerRuntimeArgumentBuilder::edgeAdapter($context);
 
         $gatewayBackend = \strtolower(\trim((string)$context->getConfig(
             'wls.edge.mode',

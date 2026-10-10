@@ -117,6 +117,7 @@ class WorkerProvider extends AbstractServiceProvider
         // READY 首页预热使用启动时固化的对外 origin，避免 Windows 替换 instance.json 时的短暂空窗。
         // 保持为离散 argv，不使用 environment，以便 Windows 继续走快速批量启动路径。
         $arguments[] = '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context);
+        $arguments[] = WorkerRuntimeArgumentBuilder::edgeAdapter($context);
         if ($gatewayBackend) {
             $arguments[] = '--gateway-backend-token-file='
                 . GatewayBackendIngressTokenStore::ensureTokenFile($context->instanceName);

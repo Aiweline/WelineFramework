@@ -474,7 +474,7 @@ class Reload extends CommandAbstract
     protected function estimateWaitTimeout(int $totalWorkers, bool $forceSingleBatch = false): int
     {
         $workerCount = \max(1, $totalWorkers);
-        $minThree = (int) (Env::get('wls.orchestrator.worker_three_batch_min_count', 7) ?? 7);
+        $minThree = (int) (Env::get('wls.orchestrator.worker_three_batch_min_count', 4) ?? 4);
         $configuredBatchCount = (int) (Env::get('wls.orchestrator.worker_reload_batch_count', 3) ?? 3);
         $configuredMinReady = Env::get('wls.orchestrator.worker_reload_min_ready', null);
         $workerIds = \range(1, $workerCount);

@@ -27,6 +27,12 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
         if (!\defined('IS_WIN')) {
             \define('IS_WIN', \PHP_OS_FAMILY === 'Windows');
         }
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('BP')) {
+            \define('BP', \getcwd() . \DIRECTORY_SEPARATOR);
+        }
         WlsLogger::reset();
         WlsLogger::getInstance()
             ->setStdoutEnabled(false)

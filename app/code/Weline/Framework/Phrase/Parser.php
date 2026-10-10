@@ -1950,7 +1950,7 @@ class Parser
                         $missing[] = $word;
                     }
                 }
-                foreach (\array_chunk($missing, 200) as $chunk) {
+                foreach (\array_chunk($missing, MsWriteBudget::WORD_BATCH_MAX_ITEMS) as $chunk) {
                     $keys = [];
                     foreach ($chunk as $word) {
                         $keys[$word] = self::globalDictionaryWordCacheKey($candidateLocale, $word);
@@ -2007,10 +2007,13 @@ class Parser
                         $writeRecords[$keys[$word]] = ['found' => $translation !== null, 'translation' => $translation ?? ''];
                     }
                     if ($cachePool !== null) {
-                        try {
-                            $cachePool->setMultiple($writeRecords, self::GLOBAL_DICTIONARY_WORD_SHARED_TTL_SECONDS);
-                        } catch (\Throwable) {
-                            // 已查明的数据库结果仍保留在本 Worker 的既有 L1 中。
+                        // UC-W3-01: word-level / bounded chunks only; never whole-locale bags.
+                        foreach (MsWriteBudget::partitionWordRecords($writeRecords) as $batch) {
+                            try {
+                                $cachePool->setMultiple($batch, self::GLOBAL_DICTIONARY_WORD_SHARED_TTL_SECONDS);
+                            } catch (\Throwable) {
+                                // 已查明的数据库结果仍保留在本 Worker 的既有 L1 中。
+                            }
                         }
                     }
                 }

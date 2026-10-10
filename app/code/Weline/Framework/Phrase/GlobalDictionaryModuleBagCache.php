@@ -15,6 +15,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 权威在本地文件（generated/language/{locale}.php、模块 i18n CSV）；
  * 读取顺序：进程袋 → 调用方加载文件/DB → put 回进程袋。
  * 禁止把整语种/整袋词典写入 phrase Shared Memory（会触发 frame_too_large）。
+ * 波3（UC-W3-01）：MS 仅单词级/有界 chunk；整袋只留进程 L1，miss 走文件/DB。
  *
  * 驻留与压力：put/get 走 DictionaryCacheNamespace locale LRU；
  * Worker soft 预警（WorkerResponseMemoryGuard）回收时卸载冷语种袋。
@@ -54,6 +55,15 @@ final class GlobalDictionaryModuleBagCache
     public static function setPoolOverrideForTests(?CachePoolInterface $pool): void
     {
         self::$poolOverrideForTests = $pool;
+    }
+
+    /**
+     * True when a phrase Shared Memory write would smuggle a whole locale/module bag.
+     * Callers must refuse such writes (ACC-W3-MS-CHUNK).
+     */
+    public static function wouldWriteForbiddenBagToSharedMemory(string $key, mixed $value): bool
+    {
+        return MsWriteBudget::isForbiddenBagWrite($key, $value);
     }
 
     /**

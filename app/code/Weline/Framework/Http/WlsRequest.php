@@ -1265,6 +1265,10 @@ class WlsRequest extends Request
                         $resolvedPort = $currentPort;
                     }
                 }
+                // Pure-WLS only. nginx edge never keeps the Worker listen port.
+                if (WlsPublicOriginPort::keepNonDefaultListenPort($currentPort)) {
+                    $resolvedPort = $currentPort;
+                }
                 $isNonStandardPort = !(
                     ($websiteScheme === 'https' && $resolvedPort === '443')
                     || ($websiteScheme === 'http' && $resolvedPort === '80')
@@ -1276,12 +1280,14 @@ class WlsRequest extends Request
             }
         }
 
-        // No website_url yet: still never emit the Worker listen port as public.
+        // No website_url yet: strip Worker listen port unless pure-WLS self-decides.
         $wlsPortRaw = \w_env('server.wls_port', \getenv('WLS_PORT') ?: '');
         $wlsPort = (\is_int($wlsPortRaw) || (\is_string($wlsPortRaw) && $wlsPortRaw !== '' && \ctype_digit($wlsPortRaw)))
             ? (string)(int)$wlsPortRaw
             : '';
-        if ($wlsPort !== '' && $currentPort === $wlsPort) {
+        if ($wlsPort !== '' && $currentPort === $wlsPort
+            && !WlsPublicOriginPort::keepNonDefaultListenPort($currentPort)
+        ) {
             $currentPort = $currentScheme === 'https' ? '443' : '80';
         }
 

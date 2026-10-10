@@ -46,6 +46,7 @@ $wlsRuntimeTopology = '';
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
+$wlsEdgeAdapter = '';
 $gatewayBackendTokenFile = '';
 $gatewayProjectUuid = '';
 $gatewayInstanceGeneration = 0;
@@ -103,6 +104,8 @@ foreach ($argv as $arg) {
         $wlsRuntimeTopology = \strtolower(\trim((string)\substr($arg, 23)));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
+    } elseif (\str_starts_with($arg, '--wls-edge-adapter=')) {
+        $wlsEdgeAdapter = \strtolower(\trim((string)\substr($arg, 19)));
     } elseif (\str_starts_with($arg, '--gateway-backend-token-file=')) {
         $candidate = \trim((string)\substr(
             $arg,
@@ -560,6 +563,11 @@ if ($publicOrigin !== '') {
     $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     @\putenv('WLS_PUBLIC_ORIGIN=' . $publicOrigin);
+}
+if (\in_array($wlsEdgeAdapter, ['nginx', 'wls'], true)) {
+    $_SERVER['WLS_EDGE_ADAPTER'] = $wlsEdgeAdapter;
+    $_ENV['WLS_EDGE_ADAPTER'] = $wlsEdgeAdapter;
+    @\putenv('WLS_EDGE_ADAPTER=' . $wlsEdgeAdapter);
 }
 if ($gatewayBackendTokenFile !== '') {
     $_SERVER['WLS_GATEWAY_BACKEND_TOKEN_FILE'] = $gatewayBackendTokenFile;
@@ -1934,6 +1942,7 @@ $fiberAdmissionConfig = wlsResolveFiberAdmissionConfig(
     \is_array($wls ?? null) ? $wls : [],
     \is_array($wlsInstance ?? null) ? $wlsInstance : []
 );
+wlsFiberAdmissionApplyMemoryHeadroomConfig($fiberAdmissionConfig);
 $fiberMaxActive = (int)$fiberAdmissionConfig['max_active']; // 活跃渲染上限；0=不限制
 $fiberAdmissionQueueWaitMs = (int)$fiberAdmissionConfig['queue_wait_ms'];
 $fiberAdmissionQueueDepth = (int)$fiberAdmissionConfig['queue_depth'];
@@ -4481,6 +4490,10 @@ function wlsHttpBounceTlsClientHelloToPublicOriginIfNeeded(
     if (!\Weline\Server\Service\Edge\Nginx\PlaintextWorkerTlsPublicOriginBounce::isTlsHandshakePrefix($peek)) {
         return false;
     }
+    // Pure-WLS owns https://host:workerPort — only managed Nginx bounces TLS-on-plaintext.
+    if (!\Weline\Server\Service\Edge\Nginx\PlaintextWorkerPublicHttpsRedirect::isManagedNginxEdge()) {
+        return false;
+    }
 
     $publicOrigin = \trim((string)($_SERVER['WLS_PUBLIC_ORIGIN'] ?? ''));
     $sni = \Weline\Server\Service\Edge\Nginx\PlaintextWorkerTlsPublicOriginBounce::sniFromClientHelloPeek($peek);
@@ -4616,6 +4629,7 @@ function wlsHttpBounceTlsClientHelloToPublicOriginIfNeeded(
         $workerListenPort,
         $publicOrigin,
         $target,
+        (string)($_SERVER['WLS_EDGE_ADAPTER'] ?? ''),
     );
     if ($location === null && $publicOrigin !== '') {
         try {
@@ -5028,6 +5042,7 @@ function wlsDispatchRequestFiberStep(
             $port,
             (string)($_SERVER['WLS_PUBLIC_ORIGIN'] ?? ''),
             (string)$policyDecision->target,
+            (string)($_SERVER['WLS_EDGE_ADAPTER'] ?? ''),
         );
         if ($publicHttpsRedirect !== null) {
             $handleDuration = \round((wlsWorkerMonotonicNow() - $staticFastPathStartedAt) * 1000, 2);
@@ -5229,8 +5244,42 @@ function wlsDispatchRequestFiberStep(
             );
             return;
         }
-        // Reserve waiter slot before Fiber start so depth accounting closes races.
-        $fiberAdmissionWaiters[$connId] = true;
+    }
+    // Memory Gate after queue_full: soft miss prefers delay; hard floor / full wait → 503.
+    // Queued Fibers re-check inside wlsAwaitFiberAdmissionSlot.
+    if (!$isSseProtocolRequest) {
+        if ($fiberMaxActive <= 0) {
+            $memoryGate = wlsFiberAdmissionWaitForMemoryOrReject(
+                $fiberAdmissionQueueWaitMs,
+                $fiberAdmissionQueueSliceMs
+            );
+            if (($memoryGate['admit'] ?? false) !== true) {
+                $activeRequests--;
+                \Weline\Server\Service\WorkerResponseMemoryGuard::noteAdmissionMemoryReject();
+                $resp = wlsFiberAdmissionUnavailableResponse('memory_pressure');
+                @\fwrite($conn, $resp);
+                @\fclose($conn);
+                unset(
+                    $connections[$connId],
+                    $requestBuffers[$connId],
+                    $connectionLastActivity[$connId],
+                    $requestLogged[$connId],
+                    $writeBuffers[$connId],
+                    $writableConnections[$connId],
+                    $pendingClose[$connId]
+                );
+                WlsLogger::warning_(
+                    'Fiber 准入内存门闩拒绝 (unlimited, headroom='
+                    . (int)($memoryGate['absolute_headroom_bytes'] ?? 0)
+                    . ', critical=' . ((($memoryGate['critical'] ?? false) === true) ? '1' : '0')
+                    . ', connId: ' . $connId . ')'
+                );
+                return;
+            }
+        } else {
+            // Reserve waiter slot before Fiber start so depth accounting closes races.
+            $fiberAdmissionWaiters[$connId] = true;
+        }
     }
 
     // 长连分层：见 SseMatcher / ProtocolResolver；protocol===sse 时与 worker_ssl 一样走写队列 + SseContext 回调。
@@ -5336,20 +5385,41 @@ function wlsDispatchRequestFiberStep(
         try {
             wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
             if (!$isSseProtocolRequest && $fiberMaxActive > 0) {
+                $admissionRejectReason = null;
                 $admitted = wlsAwaitFiberAdmissionSlot(
                     $activeFibers,
                     $fiberAdmissionWaiters,
                     $fiberConnId,
                     $fiberMaxActive,
                     $fiberAdmissionQueueWaitMs,
-                    $fiberAdmissionQueueSliceMs
+                    $fiberAdmissionQueueSliceMs,
+                    null,
+                    5000,
+                    $admissionRejectReason
                 );
                 if (!$admitted) {
+                    $reason = ($admissionRejectReason === 'memory_pressure')
+                        ? 'memory_pressure'
+                        : 'timeout';
+                    if ($reason === 'memory_pressure') {
+                        \Weline\Server\Service\WorkerResponseMemoryGuard::noteAdmissionMemoryReject();
+                    }
                     WlsLogger::warning_(
-                        "Fiber 准入排队超时 (max_active={$fiberMaxActive}, wait_ms={$fiberAdmissionQueueWaitMs}, "
-                        . "connId: {$fiberConnId})"
+                        "Fiber 准入排队拒绝 reason={$reason} (max_active={$fiberMaxActive}, "
+                        . "wait_ms={$fiberAdmissionQueueWaitMs}, connId: {$fiberConnId})"
                     );
-                    return wlsFiberAdmissionUnavailableResponse('timeout');
+                    return wlsFiberAdmissionUnavailableResponse($reason);
+                }
+            } elseif (!$isSseProtocolRequest) {
+                unset($fiberAdmissionWaiters[$fiberConnId]);
+                // Unlimited path already waited at accept; final soft re-check only.
+                $memoryGate = wlsFiberAdmissionMemoryGateEvaluate(true);
+                if (($memoryGate['admit'] ?? false) !== true) {
+                    \Weline\Server\Service\WorkerResponseMemoryGuard::noteAdmissionMemoryReject();
+                    WlsLogger::warning_(
+                        'Fiber 准入内存门闩拒绝 (unlimited max_active recheck, connId: ' . $fiberConnId . ')'
+                    );
+                    return wlsFiberAdmissionUnavailableResponse('memory_pressure');
                 }
             } else {
                 unset($fiberAdmissionWaiters[$fiberConnId]);

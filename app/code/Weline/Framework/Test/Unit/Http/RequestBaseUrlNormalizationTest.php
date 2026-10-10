@@ -93,6 +93,8 @@ final class RequestBaseUrlNormalizationTest extends TestCase
 
     public function testBaseHostStripsConfiguredRestFrontendPrefixFromWebsiteUrl(): void
     {
+        // Pure-WLS listen :9502 (9xxx band) keeps the port only when edge=wls
+        // + PUBLIC_ORIGIN agree; still strip polluted /api123 path prefix.
         $server = [
             'REQUEST_URI' => '/',
             'REQUEST_METHOD' => 'GET',
@@ -100,6 +102,9 @@ final class RequestBaseUrlNormalizationTest extends TestCase
             'HTTP_HOST' => '127.0.0.1:9502',
             'SERVER_NAME' => '127.0.0.1',
             'SERVER_PORT' => '9502',
+            'WLS_PORT' => '9502',
+            'WLS_EDGE_ADAPTER' => 'wls',
+            'WLS_PUBLIC_ORIGIN' => 'http://127.0.0.1:9502',
             'WELINE_WEBSITE_URL' => 'http://127.0.0.1:9502/api123',
         ];
         $_SERVER = $server;
@@ -226,5 +231,53 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         };
 
         self::assertSame('https://pf14955e2.test.weline.com', $request->getBaseHost());
+    }
+
+    public function testBaseHostKeepsPureWlsPublicOriginPortWhenWebsiteUrlOmitsPort(): void
+    {
+        $server = [
+            'REQUEST_URI' => '/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/widget/backend/widget',
+            'REQUEST_METHOD' => 'GET',
+            'REQUEST_SCHEME' => 'https',
+            'HTTPS' => 'on',
+            'HTTP_HOST' => 'p05113ef3.test.weline.com:9555',
+            'SERVER_NAME' => 'p05113ef3.test.weline.com',
+            'SERVER_PORT' => '9555',
+            'WLS_PORT' => '9555',
+            'WLS_EDGE_ADAPTER' => 'wls',
+            'WLS_PUBLIC_ORIGIN' => 'https://p05113ef3.test.weline.com:9555',
+            'WELINE_WEBSITE_URL' => 'https://p05113ef3.test.weline.com',
+        ];
+        $_SERVER = $server;
+        WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
+
+        $request = new class extends RequestAbstract {
+        };
+
+        self::assertSame('https://p05113ef3.test.weline.com:9555', $request->getBaseHost());
+    }
+
+    public function testBaseHostStripsWorkerPortWhenManagedNginxEdgeEvenIfPublicOriginMisconfigured(): void
+    {
+        $server = [
+            'REQUEST_URI' => '/',
+            'REQUEST_METHOD' => 'GET',
+            'REQUEST_SCHEME' => 'https',
+            'HTTPS' => 'on',
+            'HTTP_HOST' => 'p05113ef3.test.weline.com:9555',
+            'SERVER_NAME' => 'p05113ef3.test.weline.com',
+            'SERVER_PORT' => '9555',
+            'WLS_PORT' => '9555',
+            'WLS_EDGE_ADAPTER' => 'nginx',
+            'WLS_PUBLIC_ORIGIN' => 'https://p05113ef3.test.weline.com:9555',
+            'WELINE_WEBSITE_URL' => 'https://p05113ef3.test.weline.com',
+        ];
+        $_SERVER = $server;
+        WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
+
+        $request = new class extends RequestAbstract {
+        };
+
+        self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
     }
 }

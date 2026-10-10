@@ -131,6 +131,7 @@ final class GatewayJoinBackendProvider extends AbstractServiceProvider
             '--wls-runtime-topology=direct',
             '--wls-listener-mode=' . $listenerMode,
             '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context),
+            WorkerRuntimeArgumentBuilder::edgeAdapter($context),
             '--gateway-backend-token-file='
                 . GatewayBackendIngressTokenStore::ensureTokenFile($context->instanceName),
             '--gateway-project-uuid=' . $projectUuid,

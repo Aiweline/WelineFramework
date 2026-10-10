@@ -321,12 +321,13 @@ if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
 /**
  * Resolve fiber admission defaults.
  *
- * Defaults (when keys omitted): max_active=12, queue_wait_ms=10000 (hard cap), queue_depth=max_active.
- * Explicit max_active=0 keeps unlimited concurrency (no queue).
+ * Defaults (when keys omitted): max_active=12, queue_wait_ms=20000 (hard cap 30s),
+ * queue_depth=max_active. Prefer delay over early 503 so Master can scale.
+ * Explicit max_active=0 keeps unlimited concurrency (memory path still waits).
  *
  * @param array<string, mixed> $wls
  * @param array<string, mixed> $wlsInstance
- * @return array{max_active:int,queue_wait_ms:int,queue_depth:int,queue_slice_ms:int}
+ * @return array{max_active:int,queue_wait_ms:int,queue_depth:int,queue_slice_ms:int,admission_memory_headroom_bytes:int}
  */
 if (!\function_exists('wlsResolveFiberAdmissionConfig')) {
 function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): array
@@ -339,11 +340,12 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
         ? \max(0, (int)$fiber['max_active'])
         : 12;
 
-    $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 10000);
+    // Prefer a short delay for Master scale / peer finish; 503 only after wait.
+    $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 20000);
     if ($waitMs < 0) {
         $waitMs = 0;
-    } elseif ($waitMs > 10000) {
-        $waitMs = 10000;
+    } elseif ($waitMs > 30000) {
+        $waitMs = 30000;
     }
 
     $depth = (int)($fiber['admission_queue_depth'] ?? 0);
@@ -359,11 +361,14 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
         $sliceMs = 200;
     }
 
+    $admissionMemoryHeadroom = (int)($fiber['admission_memory_headroom_bytes'] ?? 0);
+
     return [
         'max_active' => $maxActive,
         'queue_wait_ms' => $waitMs,
         'queue_depth' => $depth,
         'queue_slice_ms' => $sliceMs,
+        'admission_memory_headroom_bytes' => $admissionMemoryHeadroom > 0 ? $admissionMemoryHeadroom : 0,
     ];
 }
 }
@@ -443,7 +448,8 @@ function wlsFiberAdmissionQueueHasRoom(int $waitingCount, int $queueDepth, int $
 }
 
 /**
- * Build a 503 for admission queue full / wait timeout (after queueing, not instant reject).
+ * Build a 503 for admission queue full / wait timeout / memory pressure
+ * (after queueing, not instant reject — except memory with no queue).
  */
 if (!\function_exists('wlsFiberAdmissionUnavailableResponse')) {
 function wlsFiberAdmissionUnavailableResponse(string $reason = 'timeout'): string
@@ -458,6 +464,87 @@ function wlsFiberAdmissionUnavailableResponse(string $reason = 'timeout'): strin
         . 'Content-Length: ' . \strlen($body) . "\r\n"
         . 'Connection: close' . "\r\n\r\n"
         . $body;
+}
+}
+
+/**
+ * Thin wrapper around WorkerResponseMemoryGuard::evaluateAdmissionMemoryGate.
+ *
+ * @return array{
+ *   admit:bool,
+ *   absolute_headroom_bytes:int,
+ *   pressure:float,
+ *   compacted:bool,
+ *   reason:?string
+ * }
+ */
+if (!\function_exists('wlsFiberAdmissionMemoryGateEvaluate')) {
+function wlsFiberAdmissionMemoryGateEvaluate(bool $compactIfNeeded = true): array
+{
+    if (!\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class, false)
+        && !\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class)
+    ) {
+        return [
+            'admit' => true,
+            'critical' => false,
+            'absolute_headroom_bytes' => \PHP_INT_MAX,
+            'pressure' => 0.0,
+            'compacted' => false,
+            'reason' => null,
+        ];
+    }
+
+    return \Weline\Server\Service\WorkerResponseMemoryGuard::evaluateAdmissionMemoryGate($compactIfNeeded);
+}
+}
+
+/**
+ * Unlimited max_active path: delay/recompact before memory_pressure 503.
+ * Soft miss waits; hard-floor critical may fail-closed early.
+ */
+if (!\function_exists('wlsFiberAdmissionWaitForMemoryOrReject')) {
+function wlsFiberAdmissionWaitForMemoryOrReject(int $waitMs, int $sliceMs = 25): array
+{
+    $waitMs = \max(0, $waitMs);
+    $sliceMs = \max(5, \min(200, $sliceMs));
+    $deadline = wlsWorkerMonotonicNow() + ($waitMs / 1000.0);
+    $nextCompactAt = 0.0;
+    while (true) {
+        $now = wlsWorkerMonotonicNow();
+        $compact = $now >= $nextCompactAt;
+        if ($compact) {
+            $nextCompactAt = $now + 2.0;
+        }
+        $gate = wlsFiberAdmissionMemoryGateEvaluate($compact);
+        if (($gate['admit'] ?? false) === true) {
+            return $gate;
+        }
+        if (($gate['critical'] ?? false) === true) {
+            return $gate;
+        }
+        if ($now >= $deadline) {
+            return $gate;
+        }
+        \Weline\Framework\Runtime\SchedulerSystem::yieldDelay($sliceMs);
+    }
+}
+}
+
+/**
+ * Apply optional wls.fiber.admission_memory_headroom_bytes from resolved admission config.
+ *
+ * @param array{admission_memory_headroom_bytes?:int} $fiberAdmissionConfig
+ */
+if (!\function_exists('wlsFiberAdmissionApplyMemoryHeadroomConfig')) {
+function wlsFiberAdmissionApplyMemoryHeadroomConfig(array $fiberAdmissionConfig): void
+{
+    if (!\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class, false)
+        && !\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class)
+    ) {
+        return;
+    }
+    $bytes = (int)($fiberAdmissionConfig['admission_memory_headroom_bytes'] ?? 0);
+    \Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHeadroomBytes($bytes);
 }
 }
 
@@ -494,6 +581,7 @@ function wlsTryFiberAdmissionCacheProbe(callable $probe): bool
  *
  * @param array<int|string, array<string, mixed>> $activeFibers
  * @param array<int|string, mixed> $admissionWaiters
+ * @param-out string|null $rejectReason timeout|memory_pressure when returning false
  */
 if (!\function_exists('wlsAwaitFiberAdmissionSlot')) {
 function wlsAwaitFiberAdmissionSlot(
@@ -505,7 +593,9 @@ function wlsAwaitFiberAdmissionSlot(
     int $sliceMs = 25,
     ?callable $earlyResponseReady = null,
     int $probeIntervalMs = 5000,
+    ?string &$rejectReason = null,
 ): ?bool {
+    $rejectReason = null;
     if ($maxActive <= 0) {
         unset($admissionWaiters[$fiberKey]);
         if (isset($activeFibers[$fiberKey]) && \is_array($activeFibers[$fiberKey])) {
@@ -523,8 +613,10 @@ function wlsAwaitFiberAdmissionSlot(
     $now = wlsWorkerMonotonicNow();
     $deadline = $now + ($waitMs / 1000.0);
     $nextProbeAt = $now + (\max(1, $probeIntervalMs) / 1000.0);
+    // Periodic compact while delaying for soft memory pressure (prefer wait over 503).
+    $nextMemoryCompactAt = 0.0;
     try {
-        while (wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters) >= $maxActive) {
+        while (true) {
             $now = wlsWorkerMonotonicNow();
             if ($earlyResponseReady !== null && $now >= $nextProbeAt) {
                 $nextProbeAt = $now + (\max(1, $probeIntervalMs) / 1000.0);
@@ -532,7 +624,31 @@ function wlsAwaitFiberAdmissionSlot(
                     return null;
                 }
             }
+
+            $slotFree = wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters) < $maxActive;
+            if ($slotFree) {
+                $compactNow = $now >= $nextMemoryCompactAt;
+                if ($compactNow) {
+                    $nextMemoryCompactAt = $now + 2.0;
+                }
+                $gate = wlsFiberAdmissionMemoryGateEvaluate($compactNow);
+                if (($gate['admit'] ?? false) === true) {
+                    return true;
+                }
+                // Hard floor: fail-closed early (system near collapse). Soft miss → keep waiting.
+                if (($gate['critical'] ?? false) === true) {
+                    $rejectReason = 'memory_pressure';
+
+                    return false;
+                }
+            }
+
             if ($now >= $deadline) {
+                $gate = wlsFiberAdmissionMemoryGateEvaluate(false);
+                $rejectReason = (($gate['admit'] ?? false) !== true)
+                    ? 'memory_pressure'
+                    : 'timeout';
+
                 return false;
             }
             if (isset($activeFibers[$fiberKey]) && \is_array($activeFibers[$fiberKey])) {
@@ -540,8 +656,6 @@ function wlsAwaitFiberAdmissionSlot(
             }
             \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(\max(5, $sliceMs));
         }
-
-        return true;
     } finally {
         unset($admissionWaiters[$fiberKey]);
         if (isset($activeFibers[$fiberKey]) && \is_array($activeFibers[$fiberKey])) {

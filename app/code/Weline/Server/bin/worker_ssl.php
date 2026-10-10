@@ -311,6 +311,14 @@ foreach ($argv as $arg) {
         $wlsHttpPolicySha256 = \strtolower(\trim((string)\substr($arg, \strlen('--wls-http-policy-sha256='))));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
+    } elseif (\str_starts_with($arg, '--wls-edge-adapter=')) {
+        // Optional discrete argv; immutable http-policy edge_adapter remains authoritative when present.
+        $wlsEdgeAdapterArg = \strtolower(\trim((string)\substr($arg, 19)));
+        if (\in_array($wlsEdgeAdapterArg, ['nginx', 'wls'], true)) {
+            $_SERVER['WLS_EDGE_ADAPTER'] = $wlsEdgeAdapterArg;
+            $_ENV['WLS_EDGE_ADAPTER'] = $wlsEdgeAdapterArg;
+            @\putenv('WLS_EDGE_ADAPTER=' . $wlsEdgeAdapterArg);
+        }
     } elseif (\str_starts_with($arg, '--windows-listener-handoff=')) {
         $windowsListenerHandoffPath = (string)\substr(
             $arg,
@@ -687,6 +695,11 @@ if ($publicOrigin !== '') {
     $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     @\putenv('WLS_PUBLIC_ORIGIN=' . $publicOrigin);
+}
+if (\in_array($wlsEndpointEdge, ['nginx', 'wls'], true)) {
+    $_SERVER['WLS_EDGE_ADAPTER'] = $wlsEndpointEdge;
+    $_ENV['WLS_EDGE_ADAPTER'] = $wlsEndpointEdge;
+    @\putenv('WLS_EDGE_ADAPTER=' . $wlsEndpointEdge);
 }
 
 // 将相对路径转换为绝对路径
@@ -2323,6 +2336,7 @@ $fiberAdmissionConfig = wlsResolveFiberAdmissionConfigFromEnvironment(
     BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php',
     $instanceName,
 );
+wlsFiberAdmissionApplyMemoryHeadroomConfig($fiberAdmissionConfig);
 $fiberMaxActive = (int)$fiberAdmissionConfig['max_active'];
 $fiberAdmissionQueueWaitMs = (int)$fiberAdmissionConfig['queue_wait_ms'];
 $fiberAdmissionQueueDepth = (int)$fiberAdmissionConfig['queue_depth'];
@@ -6459,6 +6473,24 @@ while (true) {
                         );
                         continue;
                     }
+                    $nginxPublicBounce = \Weline\Server\Service\Edge\Nginx\PlaintextWorkerPublicHttpsRedirect::responseOrNull(
+                        (string)($policyDecision->headers['host'] ?? ''),
+                        (int)$port,
+                        (string)($_SERVER['WLS_PUBLIC_ORIGIN'] ?? ''),
+                        (string)$policyDecision->target,
+                        (string)($_SERVER['WLS_EDGE_ADAPTER'] ?? ''),
+                    );
+                    if ($nginxPublicBounce !== null) {
+                        wlsHttp3SubmitResponse(
+                            $http3Runtime,
+                            $http3Token,
+                            $rawRequest,
+                            $nginxPublicBounce,
+                            $policyStartedAt,
+                            $activeRequests,
+                        );
+                        continue;
+                    }
 
                     $uri = $policyDecision->path;
                     $method = $policyDecision->method;
@@ -6599,7 +6631,6 @@ while (true) {
                             $fiberMaxActive
                         )
                     ) {
-                        $body = 'Service Unavailable';
                         wlsHttp3SubmitResponse(
                             $http3Runtime,
                             $http3Token,
@@ -6609,6 +6640,25 @@ while (true) {
                             $activeRequests,
                         );
                         continue;
+                    }
+
+                    if ($fiberMaxActive <= 0) {
+                        $http3MemoryGate = wlsFiberAdmissionWaitForMemoryOrReject(
+                            $fiberAdmissionQueueWaitMs,
+                            $fiberAdmissionQueueSliceMs
+                        );
+                        if (($http3MemoryGate['admit'] ?? false) !== true) {
+                            \Weline\Server\Service\WorkerResponseMemoryGuard::noteAdmissionMemoryReject();
+                            wlsHttp3SubmitResponse(
+                                $http3Runtime,
+                                $http3Token,
+                                $rawRequest,
+                                wlsFiberAdmissionUnavailableResponse('memory_pressure'),
+                                $policyStartedAt,
+                                $activeRequests,
+                            );
+                            continue;
+                        }
                     }
 
                     $http3FiberKey = 'h3:' . $http3ConnectionId . ':' . $http3StreamId;
@@ -6648,23 +6698,38 @@ while (true) {
                         wlsFiberRequestContextEnter(null, $http3FiberKey);
                         try {
                             if ($fiberMaxActive > 0) {
+                                $admissionRejectReason = null;
                                 $admitted = wlsAwaitFiberAdmissionSlot(
                                     $activeFibers,
                                     $fiberAdmissionWaiters,
                                     $http3FiberKey,
                                     $fiberMaxActive,
                                     $fiberAdmissionQueueWaitMs,
-                                    $fiberAdmissionQueueSliceMs
+                                    $fiberAdmissionQueueSliceMs,
+                                    null,
+                                    5000,
+                                    $admissionRejectReason
                                 );
                                 if (!$admitted) {
+                                    $reason = ($admissionRejectReason === 'memory_pressure')
+                                        ? 'memory_pressure'
+                                        : 'timeout';
+                                    if ($reason === 'memory_pressure') {
+                                        \Weline\Server\Service\WorkerResponseMemoryGuard::noteAdmissionMemoryReject();
+                                    }
                                     WlsLogger::warning_(
-                                        "Fiber 准入排队超时 (max_active={$fiberMaxActive}, wait_ms={$fiberAdmissionQueueWaitMs}, "
-                                        . "fiberKey: {$http3FiberKey})"
+                                        "Fiber 准入排队拒绝 reason={$reason} (max_active={$fiberMaxActive}, "
+                                        . "wait_ms={$fiberAdmissionQueueWaitMs}, fiberKey: {$http3FiberKey})"
                                     );
-                                    return wlsFiberAdmissionUnavailableResponse('timeout');
+                                    return wlsFiberAdmissionUnavailableResponse($reason);
                                 }
                             } else {
                                 unset($fiberAdmissionWaiters[$http3FiberKey]);
+                                $memoryGate = wlsFiberAdmissionMemoryGateEvaluate(true);
+                                if (($memoryGate['admit'] ?? false) !== true) {
+                                    \Weline\Server\Service\WorkerResponseMemoryGuard::noteAdmissionMemoryReject();
+                                    return wlsFiberAdmissionUnavailableResponse('memory_pressure');
+                                }
                             }
                             return handleRequest(
                                 $rawRequest,
@@ -8200,6 +8265,42 @@ while (true) {
             );
             continue;
         }
+        $nginxPublicBounce = \Weline\Server\Service\Edge\Nginx\PlaintextWorkerPublicHttpsRedirect::responseOrNull(
+            (string)($policyDecision->headers['host'] ?? ''),
+            (int)$port,
+            (string)($_SERVER['WLS_PUBLIC_ORIGIN'] ?? ''),
+            (string)$policyDecision->target,
+            (string)($_SERVER['WLS_EDGE_ADAPTER'] ?? ''),
+        );
+        if ($nginxPublicBounce !== null) {
+            sslFinalizeHttpResponseAfterHandle(
+                $conn,
+                $connId,
+                $rawRequest,
+                $nginxPublicBounce,
+                $policyStartedAt,
+                false,
+                $ipcDraining,
+                $connections,
+                $requestBuffers,
+                $connectionLastActivity,
+                $requestLogged,
+                $writeBuffers,
+                $writableConnections,
+                $pendingClose,
+                $longLivedConnections,
+                $ipcClient,
+                $instanceName,
+                $activeRequests,
+                true,
+                null,
+                null,
+                false,
+                $http2ResponseAdapter,
+                $http2ResponseStreamId,
+            );
+            continue;
+        }
 
         // ACME HTTP-01 is a transport-owned response. Resolve it after the
         // mandatory request policy and exact cleartext Host/route fence,
@@ -8783,7 +8884,76 @@ while (true) {
                 );
                 continue;
             }
-            $fiberAdmissionWaiters[$fiberKey] = true;
+        }
+        if (!$isSseProtocolRequest) {
+            if ($fiberMaxActive <= 0) {
+                $memoryGate = wlsFiberAdmissionWaitForMemoryOrReject(
+                    $fiberAdmissionQueueWaitMs,
+                    $fiberAdmissionQueueSliceMs
+                );
+                if (($memoryGate['admit'] ?? false) !== true) {
+                    \Weline\Server\Service\WorkerResponseMemoryGuard::noteAdmissionMemoryReject();
+                    $resp = wlsFiberAdmissionUnavailableResponse('memory_pressure');
+                    if ($http2ResponseStreamId > 0
+                        && $http2ResponseAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+                    ) {
+                        sslFinalizeHttpResponseAfterHandle(
+                            $conn,
+                            $connId,
+                            $rawRequest,
+                            $resp,
+                            $policyStartedAt,
+                            false,
+                            $ipcDraining,
+                            $connections,
+                            $requestBuffers,
+                            $connectionLastActivity,
+                            $requestLogged,
+                            $writeBuffers,
+                            $writableConnections,
+                            $pendingClose,
+                            $longLivedConnections,
+                            $ipcClient,
+                            $instanceName,
+                            $activeRequests,
+                            true,
+                            null,
+                            true,
+                            false,
+                            $http2ResponseAdapter,
+                            $http2ResponseStreamId,
+                        );
+                        WlsLogger::warning_(
+                            'Fiber 准入内存门闩拒绝 HTTP/2 stream (unlimited, headroom='
+                            . (int)($memoryGate['absolute_headroom_bytes'] ?? 0)
+                            . ", connId: {$connId}, streamId: {$http2ResponseStreamId})"
+                        );
+                        continue;
+                    }
+                    $activeRequests--;
+                    @\fwrite($conn, $resp);
+                    @\fclose($conn);
+                    unset(
+                        $connections[$connId],
+                        $requestBuffers[$connId],
+                        $connectionLastActivity[$connId],
+                        $requestLogged[$connId],
+                        $writeBuffers[$connId],
+                        $writableConnections[$connId]
+                    );
+                    if (isset($longLivedConnections[$connId])) {
+                        unset($longLivedConnections[$connId]);
+                    }
+                    WlsLogger::warning_(
+                        'Fiber 准入内存门闩拒绝 (unlimited, headroom='
+                        . (int)($memoryGate['absolute_headroom_bytes'] ?? 0)
+                        . ", connId: {$connId})"
+                    );
+                    continue;
+                }
+            } else {
+                $fiberAdmissionWaiters[$fiberKey] = true;
+            }
         }
 
         $requestFiber = new \Fiber(function () use (
@@ -8852,6 +9022,7 @@ while (true) {
                             return true;
                         };
                     }
+                    $admissionRejectReason = null;
                     $admitted = wlsAwaitFiberAdmissionSlot(
                         $activeFibers,
                         $fiberAdmissionWaiters,
@@ -8859,7 +9030,9 @@ while (true) {
                         $fiberMaxActive,
                         $fiberAdmissionQueueWaitMs,
                         $fiberAdmissionQueueSliceMs,
-                        $cacheReadyProbe
+                        $cacheReadyProbe,
+                        5000,
+                        $admissionRejectReason
                     );
                     if ($admitted === null && $lateHitResponse !== null) {
                         return $lateHitResponse;
@@ -8876,11 +9049,24 @@ while (true) {
                                 return (string)$lateHit['response'];
                             }
                         }
+                        $reason = ($admissionRejectReason === 'memory_pressure')
+                            ? 'memory_pressure'
+                            : 'timeout';
+                        if ($reason === 'memory_pressure') {
+                            \Weline\Server\Service\WorkerResponseMemoryGuard::noteAdmissionMemoryReject();
+                        }
                         WlsLogger::warning_(
-                            "Fiber 准入排队超时 (max_active={$fiberMaxActive}, wait_ms={$fiberAdmissionQueueWaitMs}, "
-                            . "fiberKey: {$fiberKey})"
+                            "Fiber 准入排队拒绝 reason={$reason} (max_active={$fiberMaxActive}, "
+                            . "wait_ms={$fiberAdmissionQueueWaitMs}, fiberKey: {$fiberKey})"
                         );
-                        return wlsFiberAdmissionUnavailableResponse('timeout');
+                        return wlsFiberAdmissionUnavailableResponse($reason);
+                    }
+                } elseif (!$isSseProtocolRequest) {
+                    unset($fiberAdmissionWaiters[$fiberKey]);
+                    $memoryGate = wlsFiberAdmissionMemoryGateEvaluate(true);
+                    if (($memoryGate['admit'] ?? false) !== true) {
+                        \Weline\Server\Service\WorkerResponseMemoryGuard::noteAdmissionMemoryReject();
+                        return wlsFiberAdmissionUnavailableResponse('memory_pressure');
                     }
                 } else {
                     unset($fiberAdmissionWaiters[$fiberKey]);

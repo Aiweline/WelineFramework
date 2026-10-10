@@ -20,6 +20,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Http\WlsPublicOriginPort;
 use Weline\Framework\Manager\ObjectManager;
 
 abstract class RequestAbstract extends RequestFilter
@@ -792,6 +793,11 @@ abstract class RequestAbstract extends RequestFilter
                     if (!$isWorkerListenPort && !$looksLikePrivateWorkerPort) {
                         $resolvedPort = $currentPort;
                     }
+                }
+                // Pure-WLS only: keep public listen port. Managed Nginx edge
+                // always strips Worker ports (ng is the browser authority).
+                if (WlsPublicOriginPort::keepNonDefaultListenPort($currentPort)) {
+                    $resolvedPort = $currentPort;
                 }
                 $isNonStandardPort = !(
                     ($websiteScheme === 'https' && $resolvedPort === '443')

@@ -66,13 +66,18 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
 
     public function set(string $ns, string $key, mixed $value, int $ttl = 0): bool
     {
-        $resp = $this->client->request(SessionProtocol::CMD_SET, [
+        $params = [
             'ns' => $ns,
             'sid' => $this->sid($ns),
             'key' => $key,
             'val' => $value,
             'ttl' => $this->ttl($ttl),
-        ]);
+        ];
+        // 拒大帧：单键超 SessionProtocol 上限直接失败（禁止 OOM/断连重试整袋）。
+        if (SessionProtocol::encodedRequestExceedsMaxFrame(SessionProtocol::CMD_SET, $params)) {
+            return false;
+        }
+        $resp = $this->client->request(SessionProtocol::CMD_SET, $params);
         return \is_array($resp) && SessionProtocol::isSuccess($resp);
     }
 
@@ -128,12 +133,31 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
 
     public function mset(string $ns, array $kv, int $ttl = 0): bool
     {
-        $resp = $this->client->request(SessionProtocol::CMD_MSET, [
+        if ($kv === []) {
+            return true;
+        }
+        $params = [
             'ns' => $ns,
             'sid' => $this->sid($ns),
             'data' => $kv,
             'ttl' => $this->ttl($ttl),
-        ]);
+        ];
+        // UC-W3-01 / 拒大帧：超 SessionProtocol 上限时二分；单键仍超则 fail-closed（不抬进程袋）。
+        if (SessionProtocol::encodedRequestExceedsMaxFrame(SessionProtocol::CMD_MSET, $params)) {
+            if (\count($kv) <= 1) {
+                return false;
+            }
+            $half = (int)\max(1, (int)\ceil(\count($kv) / 2));
+            $ok = true;
+            foreach (\array_chunk($kv, $half, true) as $chunk) {
+                if (!$this->mset($ns, $chunk, $ttl)) {
+                    $ok = false;
+                }
+            }
+
+            return $ok;
+        }
+        $resp = $this->client->request(SessionProtocol::CMD_MSET, $params);
         return \is_array($resp) && SessionProtocol::isSuccess($resp);
     }
 

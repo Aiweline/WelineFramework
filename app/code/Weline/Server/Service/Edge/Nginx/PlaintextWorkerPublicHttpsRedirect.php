@@ -5,27 +5,30 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Edge\Nginx;
 
 /**
- * Bounce browsers that hit the plaintext Worker listen port straight back to
- * the managed Nginx public HTTPS origin.
+ * Bounce browsers that hit the Worker listen port straight back to the managed
+ * Nginx public HTTPS origin.
  *
- * Nginx backends keep Host without the Worker port (and set X-Forwarded-Proto),
- * so they are unaffected. Direct `http://{public_host}:{workerPort}/…` traffic
- * is the failure mode that makes Scope Kernel mode=on report
- * scope_token_https_required inside Theme Editor / QueryBin.
+ * Only when edge_adapter=nginx. Pure-WLS (edge=wls) owns its listen port and
+ * must not bounce. Nginx backends keep Host without the Worker port, so they
+ * are unaffected.
  */
 final class PlaintextWorkerPublicHttpsRedirect
 {
     /**
      * @return non-empty-string|null Absolute https Location, or null when the
-     *         request must stay on the plaintext Worker.
+     *         request must stay on the Worker.
      */
     public static function locationOrNull(
         string $rawHost,
         int $workerListenPort,
         string $publicOrigin,
         string $requestTarget,
+        string $edgeAdapter = '',
     ): ?string {
         if ($workerListenPort < 1 || $workerListenPort > 65535) {
+            return null;
+        }
+        if (!self::isManagedNginxEdge($edgeAdapter)) {
             return null;
         }
 
@@ -87,8 +90,15 @@ final class PlaintextWorkerPublicHttpsRedirect
         int $workerListenPort,
         string $publicOrigin,
         string $requestTarget,
+        string $edgeAdapter = '',
     ): ?string {
-        $location = self::locationOrNull($rawHost, $workerListenPort, $publicOrigin, $requestTarget);
+        $location = self::locationOrNull(
+            $rawHost,
+            $workerListenPort,
+            $publicOrigin,
+            $requestTarget,
+            $edgeAdapter,
+        );
         if ($location === null) {
             return null;
         }
@@ -97,6 +107,21 @@ final class PlaintextWorkerPublicHttpsRedirect
             . 'Location: ' . $location . "\r\n"
             . "Content-Length: 0\r\n"
             . "Connection: close\r\n\r\n";
+    }
+
+    public static function isManagedNginxEdge(string $edgeAdapter = ''): bool
+    {
+        $edge = \strtolower(\trim($edgeAdapter));
+        if ($edge === '') {
+            $edge = \strtolower(\trim((string)(
+                $_SERVER['WLS_EDGE_ADAPTER']
+                ?? $_ENV['WLS_EDGE_ADAPTER']
+                ?? \getenv('WLS_EDGE_ADAPTER')
+                ?: ''
+            )));
+        }
+
+        return $edge === 'nginx';
     }
 
     /**

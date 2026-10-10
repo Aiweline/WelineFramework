@@ -1401,13 +1401,12 @@ class ServerInstanceManager
     }
 
     /**
-     * Persist the desired Worker capacity after server:scale (or equivalent control-plane resize).
+     * Persist runtime Desired Worker count only (endpoint `count` + saved `worker_count`).
      *
-     * The endpoint `count` drives status, stop/cleanup managed-process discovery, and the next
-     * start generation. Saved instance config `worker_count` must stay aligned so a later
-     * `server:start` without `-c` does not silently shrink back to the pre-scale size.
+     * Never touches `worker_count_requested` (user baseline). Auto-scale / pressure Applier
+     * and temporary `server:scale` water-level changes MUST use this path (G8 / UC-W2-07).
      */
-    public function updateDesiredWorkerCount(
+    public function updateRuntimeDesiredWorkerCount(
         string $instanceName,
         int $workerCount,
         ?string $savedConfigDirectory = null,
@@ -1421,7 +1420,7 @@ class ServerInstanceManager
                 return $this->filterEndpointRecord($data);
             });
             if (!$updated) {
-                throw new \RuntimeException('Failed to atomically publish WLS desired worker count.');
+                throw new \RuntimeException('Failed to atomically publish WLS runtime desired worker count.');
             }
         }
 
@@ -1433,7 +1432,13 @@ class ServerInstanceManager
                 $instanceName,
                 static function (array $config) use ($workerCount): array {
                     $config['worker_count'] = $workerCount;
-                    $config['worker_count_requested'] = $workerCount;
+                    // Freeze baseline on first wave2 write if missing.
+                    if (!\array_key_exists('worker_count_requested', $config)
+                        || $config['worker_count_requested'] === null
+                        || $config['worker_count_requested'] === ''
+                    ) {
+                        $config['worker_count_requested'] = $workerCount;
+                    }
                     $config['saved_at'] = \date('Y-m-d H:i:s');
                     return [$config, true];
                 },
@@ -1445,6 +1450,56 @@ class ServerInstanceManager
                 throw $e;
             }
         }
+    }
+
+    /**
+     * Persist user baseline Worker count only (`worker_count_requested`).
+     * Explicit ops path — never used by auto-scale.
+     */
+    public function updateBaselineWorkerCount(
+        string $instanceName,
+        int $baselineCount,
+        ?string $savedConfigDirectory = null,
+        bool $alignRuntime = false,
+    ): void {
+        $baselineCount = \max(1, $baselineCount);
+        $configDir = $savedConfigDirectory
+            ?? (Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'config');
+        $store = new \Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore($configDir);
+        try {
+            $store->update(
+                $instanceName,
+                static function (array $config) use ($baselineCount, $alignRuntime): array {
+                    $config['worker_count_requested'] = $baselineCount;
+                    if ($alignRuntime) {
+                        $config['worker_count'] = $baselineCount;
+                    }
+                    $config['saved_at'] = \date('Y-m-d H:i:s');
+                    return [$config, true];
+                },
+                requireExisting: true,
+            );
+        } catch (\Throwable $e) {
+            if (!\str_contains($e->getMessage(), 'missing')) {
+                throw $e;
+            }
+        }
+        if ($alignRuntime) {
+            $this->updateRuntimeDesiredWorkerCount($instanceName, $baselineCount, $savedConfigDirectory);
+        }
+    }
+
+    /**
+     * @deprecated Use updateRuntimeDesiredWorkerCount for temporary/runtime Desired, or
+     *             updateBaselineWorkerCount for explicit baseline changes. Kept as a thin
+     *             alias of runtime-only persist so callers cannot wipe baseline (G8).
+     */
+    public function updateDesiredWorkerCount(
+        string $instanceName,
+        int $workerCount,
+        ?string $savedConfigDirectory = null,
+    ): void {
+        $this->updateRuntimeDesiredWorkerCount($instanceName, $workerCount, $savedConfigDirectory);
     }
 
     /**

@@ -18,7 +18,7 @@ final class WorkerRestartBatchPlanner
     public static function plan(
         array $orderedInstanceIds,
         bool $forceSingleBatch = false,
-        int $threeBatchMinCount = 7,
+        int $threeBatchMinCount = 4,
         int $configuredBatchCount = 3,
         ?int $minReady = null
     ): array {
@@ -31,7 +31,8 @@ final class WorkerRestartBatchPlanner
             return [$ids];
         }
 
-        $threeBatchMinCount = $threeBatchMinCount >= 4 ? $threeBatchMinCount : 7;
+        // Illegal / typo thresholds clamp to the safe wave2 default (4), not the legacy 7.
+        $threeBatchMinCount = $threeBatchMinCount >= 4 ? $threeBatchMinCount : 4;
         $configuredBatchCount = $configuredBatchCount >= 1 ? $configuredBatchCount : 3;
         $minReady ??= self::resolveMinReady($workerCount);
         $minReady = \max(0, \min($workerCount - 1, $minReady));

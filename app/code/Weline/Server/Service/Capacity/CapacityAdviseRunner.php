@@ -24,7 +24,22 @@ final class CapacityAdviseRunner
     }
 
     /**
+     * Evaluate → sample → optional notify → CapacityIntent.
+     * Must never call scale / mutate Desired (Applier owns that).
+     *
      * @param list<array{report:array<string,mixed>, at:float|int}> $workerReports
+     * @param array{
+     *   current_desired?:int,
+     *   baseline?:int,
+     *   max_workers?:int,
+     *   auto_scale_enabled?:bool,
+     *   idle_active_max?:int,
+     *   idle_pressure_max?:float,
+     *   last_scale_up_at?:float,
+     *   scale_down_cooldown_sec?:float,
+     *   idle_since?:float,
+     *   t_down_sec?:float
+     * } $scaleContext
      * @return array<string, mixed>
      */
     public function tick(
@@ -32,10 +47,18 @@ final class CapacityAdviseRunner
         array $workerReports,
         ?float $hostPressureRatio = null,
         ?float $hostAvailableRatio = null,
+        array $scaleContext = [],
     ): array {
         $config = $this->configService->getCached();
         if (empty($config['enabled'])) {
-            return ['skipped' => true, 'reason' => 'disabled'];
+            $noop = CapacityIntent::noop($instance !== '' ? $instance : 'default', 'disabled');
+
+            return [
+                'skipped' => true,
+                'reason' => 'disabled',
+                'intent' => $noop->toArray(),
+                'intent_object' => $noop,
+            ];
         }
 
         $now = \microtime(true);
@@ -49,17 +72,32 @@ final class CapacityAdviseRunner
             }
         }
 
-        $result = $this->advisor->evaluate(
+        // evaluateIntent calls evaluate once (ring append); do not double-evaluate.
+        $intent = $this->advisor->evaluateIntent(
             $instance,
             $workerReports,
             (float)$hostPressureRatio,
             $hostAvailableRatio,
             $config,
             $now,
+            $scaleContext,
         );
+        $sample = $intent->sample;
+        $reasonCodes = $intent->reasonCodes;
+        $advice = $intent->advice;
+        $triggered = $reasonCodes !== [];
+        $summary = [
+            'instance' => $instance !== '' ? $instance : 'default',
+            'avg_pressure' => (float)($sample['worker_pressure_avg'] ?? 0.0),
+            'max_pressure' => (float)($sample['worker_pressure_max'] ?? 0.0),
+            'host_pressure' => (float)($sample['host_pressure'] ?? 0.0),
+            'intent_action' => $intent->action,
+            'intent_reason' => $intent->reason,
+            'intent_target' => $intent->target,
+        ];
 
         try {
-            $this->sampleStore->persist($instance !== '' ? $instance : 'default', $result['sample']);
+            $this->sampleStore->persist($instance !== '' ? $instance : 'default', $sample);
         } catch (\Throwable $e) {
             WlsLogger::warning_('[CapacityAdvisor] sample persist failed: ' . $e->getMessage());
         }
@@ -76,10 +114,10 @@ final class CapacityAdviseRunner
         try {
             $notified = $this->notifier->notifyIfNeeded(
                 (bool)$config['notify_enabled'],
-                (bool)$result['triggered'],
-                $result['reason_codes'],
-                $result['advice'],
-                $result['summary'],
+                $triggered,
+                $reasonCodes,
+                $advice,
+                $summary,
             );
         } catch (\Throwable $e) {
             WlsLogger::warning_('[CapacityAdvisor] notify failed: ' . $e->getMessage());
@@ -87,11 +125,13 @@ final class CapacityAdviseRunner
 
         return [
             'skipped' => false,
-            'triggered' => (bool)$result['triggered'],
-            'reason_codes' => $result['reason_codes'],
-            'advice' => $result['advice'],
+            'triggered' => $triggered,
+            'reason_codes' => $reasonCodes,
+            'advice' => $advice,
             'notified' => $notified,
-            'summary' => $result['summary'],
+            'summary' => $summary,
+            'intent' => $intent->toArray(),
+            'intent_object' => $intent,
         ];
     }
 

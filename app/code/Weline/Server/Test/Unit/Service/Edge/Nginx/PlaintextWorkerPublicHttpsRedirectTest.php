@@ -16,12 +16,46 @@ final class PlaintextWorkerPublicHttpsRedirectTest extends TestCase
             9555,
             'https://p05113ef3.test.weline.com',
             '/jRax/theme/backend/theme-editor/index?theme_id=3',
+            'nginx',
         );
 
         self::assertSame(
             'https://p05113ef3.test.weline.com/jRax/theme/backend/theme-editor/index?theme_id=3',
             $location,
         );
+    }
+
+    public function testPureWlsEdgeDoesNotBounceWorkerListenPort(): void
+    {
+        self::assertNull(PlaintextWorkerPublicHttpsRedirect::locationOrNull(
+            'p05113ef3.test.weline.com:9555',
+            9555,
+            'https://p05113ef3.test.weline.com:9555',
+            '/',
+            'wls',
+        ));
+    }
+
+    public function testMissingEdgeAdapterDoesNotBounce(): void
+    {
+        $prev = $_SERVER['WLS_EDGE_ADAPTER'] ?? null;
+        unset($_SERVER['WLS_EDGE_ADAPTER'], $_ENV['WLS_EDGE_ADAPTER']);
+        @\putenv('WLS_EDGE_ADAPTER');
+        try {
+            self::assertNull(PlaintextWorkerPublicHttpsRedirect::locationOrNull(
+                'p05113ef3.test.weline.com:9555',
+                9555,
+                'https://p05113ef3.test.weline.com',
+                '/',
+                '',
+            ));
+        } finally {
+            if ($prev === null) {
+                unset($_SERVER['WLS_EDGE_ADAPTER']);
+            } else {
+                $_SERVER['WLS_EDGE_ADAPTER'] = $prev;
+            }
+        }
     }
 
     public function testNginxBackendHostWithoutWorkerPortIsNotRedirected(): void
@@ -31,6 +65,7 @@ final class PlaintextWorkerPublicHttpsRedirectTest extends TestCase
             9555,
             'https://p05113ef3.test.weline.com',
             '/api/framework/query-bin',
+            'nginx',
         ));
     }
 
@@ -41,6 +76,7 @@ final class PlaintextWorkerPublicHttpsRedirectTest extends TestCase
             9555,
             'https://p05113ef3.test.weline.com',
             '/_wls/health',
+            'nginx',
         ));
     }
 
@@ -51,6 +87,7 @@ final class PlaintextWorkerPublicHttpsRedirectTest extends TestCase
             9555,
             'https://p05113ef3.test.weline.com',
             '/_wls/health',
+            'nginx',
         ));
     }
 
@@ -61,6 +98,7 @@ final class PlaintextWorkerPublicHttpsRedirectTest extends TestCase
             9555,
             'https://p05113ef3.test.weline.com',
             '/',
+            'nginx',
         );
 
         self::assertIsString($response);
@@ -78,6 +116,7 @@ final class PlaintextWorkerPublicHttpsRedirectTest extends TestCase
             9555,
             'https://p05113ef3.test.weline.com',
             '/',
+            'nginx',
         ));
     }
 
@@ -90,6 +129,7 @@ final class PlaintextWorkerPublicHttpsRedirectTest extends TestCase
                 9555,
                 '',
                 '/theme/backend/theme-editor',
+                'nginx',
             ),
         );
     }

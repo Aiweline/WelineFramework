@@ -76,35 +76,15 @@ class ScalingController
     /**
      * 自动扩缩容（定期调用）
      *
+     * Wave2: dual-brain disabled. Automatic Desired changes go through
+     * CapacityAdvisor intent → CapacityScaleApplier only. Manual handleScaleCommand remains.
+     *
      * @return array|null 扩缩容结果，null 表示不需要扩缩容
      */
     public function autoScale(): ?array
     {
-        // 未启用自动扩缩容
-        if (!$this->decider->isEnabled()) {
-            return null;
-        }
-
-        // 获取负载指标
-        $metrics = $this->loadMonitor->getAggregatedMetrics();
-        $currentWorkers = $this->scaler->getCurrentWorkerCount();
-
-        // 决策目标 Worker 数
-        $targetWorkers = $this->decider->decide($metrics, $currentWorkers);
-        if ($targetWorkers === null) {
-            return null;
-        }
-
-        // 尝试获取锁（非阻塞）
-        if (!$this->acquireLock(false)) {
-            return null;
-        }
-
-        try {
-            return $this->doScale($targetWorkers);
-        } finally {
-            $this->releaseLock();
-        }
+        // Forbidden second decision brain (G13 / architecture-align-wave2).
+        return null;
     }
 
     /**
