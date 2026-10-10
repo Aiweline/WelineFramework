@@ -1,0 +1,275 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$escape = static fn ($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$filters = is_array($this->getData('filters')) ? $this->getData('filters') : [];
+$tasks = is_array($this->getData('tasks')) ? $this->getData('tasks') : [];
+$logs = is_array($this->getData('logs')) ? $this->getData('logs') : [];
+$statuses = is_array($this->getData('statuses')) ? $this->getData('statuses') : [];
+$assignees = is_array($this->getData('assignees')) ? $this->getData('assignees') : [];
+$actions = is_array($this->getData('actions')) ? $this->getData('actions') : [];
+$activeTab = (string)($this->getData('active_tab') ?? 'tasks');
+if (!in_array($activeTab, ['tasks', 'logs'], true)) {
+    $activeTab = 'tasks';
+}
+
+$statusMeta = static function (string $status): array {
+    return match ($status) {
+        'queued' => ['label' => (string)__('排队中'), 'tone' => 'neutral'],
+        'running' => ['label' => (string)__('执行中'), 'tone' => 'info'],
+        'awaiting_approval' => ['label' => (string)__('待审批'), 'tone' => 'warning'],
+        'done' => ['label' => (string)__('已完成'), 'tone' => 'success'],
+        'failed' => ['label' => (string)__('失败'), 'tone' => 'danger'],
+        'cancelled' => ['label' => (string)__('已取消'), 'tone' => 'muted'],
+        default => ['label' => $status !== '' ? $status : '—', 'tone' => 'neutral'],
+    };
+};
+$agentLabel = static function (string $agent): string {
+    return match ($agent) {
+        'ops_analyst' => (string)__('分析智能体'),
+        'blog_publish' => (string)__('博客智能体'),
+        'social_ops' => (string)__('社媒智能体'),
+        default => $agent !== '' ? $agent : '—',
+    };
+};
+$shortSession = static function (string $sessionId) use ($escape): string {
+    $sessionId = trim($sessionId);
+    if ($sessionId === '') {
+        return '—';
+    }
+    if (strlen($sessionId) <= 12) {
+        return $escape($sessionId);
+    }
+
+    return $escape(substr($sessionId, 0, 8) . '…');
+};
+$filterQuery = static function (array $extra = []) use ($filters): string {
+    $params = array_merge([
+        'website_id' => (string)($filters['website_id'] ?? ''),
+        'status' => (string)($filters['status'] ?? ''),
+        'assignee_agent' => (string)($filters['assignee_agent'] ?? ''),
+        'session_id' => (string)($filters['session_id'] ?? ''),
+        'dispatch_only' => (string)($filters['dispatch_only'] ?? '1'),
+    ], $extra);
+    $pairs = [];
+    foreach ($params as $key => $value) {
+        if ($value === '' || $value === null) {
+            continue;
+        }
+        $pairs[] = rawurlencode((string)$key) . '=' . rawurlencode((string)$value);
+    }
+
+    return $pairs === [] ? '' : ('?' . implode('&', $pairs));
+};
+$logTone = static function (string $status): string {
+    return match ($status) {
+        'ok', 'success', 'done' => 'success',
+        'error', 'failed' => 'danger',
+        default => 'neutral',
+    };
+};
+?>
+<div class="w-stack" data-testid="ops-task-admin-page" style="--w-gap:var(--weline-space-4);">
+    <p class="w-text" data-tone="secondary" style="--w-mb:0;max-width:42rem;">
+        <?= __('查看调度产生的任务，审批外发；运行日志在旁边页签。') ?>
+    </p>
+
+    <div class="w-tabs" data-w-component="tabs" data-testid="ops-task-tabs">
+        <div class="w-cluster" data-justify="between" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-3);">
+        <nav class="w-tabs__list" data-variant="soft" role="tablist" aria-label="<?= __('调度管理分区') ?>" style="--w-mb:0;">
+            <a class="w-tabs__tab"
+               role="tab"
+               id="ops-task-tab-tasks"
+               href="<?= $escape($filterQuery(['tab' => 'tasks'])) ?>"
+               aria-controls="ops-task-panel-tasks"
+               aria-selected="<?= $activeTab === 'tasks' ? 'true' : 'false' ?>"
+               data-state="<?= $activeTab === 'tasks' ? 'active' : 'inactive' ?>"
+               data-testid="ops-task-tab-tasks"><?= __('任务') ?></a>
+            <a class="w-tabs__tab"
+               role="tab"
+               id="ops-task-tab-logs"
+               href="<?= $escape($filterQuery(['tab' => 'logs'])) ?>"
+               aria-controls="ops-task-panel-logs"
+               aria-selected="<?= $activeTab === 'logs' ? 'true' : 'false' ?>"
+               data-state="<?= $activeTab === 'logs' ? 'active' : 'inactive' ?>"
+               data-testid="ops-task-tab-logs"><?= __('运行日志') ?><?php if ($logs !== []): ?> (<?= count($logs) ?>)<?php endif; ?></a>
+        </nav>
+        <a class="w-button" data-tone="neutral" data-size="sm" href="<?= $escape((string)($actions['desk'] ?? '#')) ?>" data-testid="ops-task-to-desk">
+            <?= __('返回 AI运营台') ?>
+        </a>
+        </div>
+
+        <div class="w-tabs__panel"
+             role="tabpanel"
+             id="ops-task-panel-tasks"
+             aria-labelledby="ops-task-tab-tasks"
+             data-testid="ops-task-panel-tasks"
+             <?= $activeTab === 'tasks' ? '' : 'hidden' ?>>
+            <div class="w-card" data-testid="ops-task-filters">
+                <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-4);">
+                    <form method="get" class="w-grid" data-align="end" style="--w-gap:var(--weline-space-3);" data-testid="ops-task-filter-form">
+                        <input type="hidden" name="tab" value="tasks"/>
+                        <div class="w-field" data-label-layout="stacked" style="--w-span-md:2;">
+                            <label class="w-field__label" for="ops-task-filter-website"><?= __('网站ID') ?></label>
+                            <input id="ops-task-filter-website" class="w-input" name="website_id" value="<?= $escape((string)($filters['website_id'] ?? '')) ?>"/>
+                        </div>
+                        <div class="w-field" data-label-layout="stacked" style="--w-span-md:2;">
+                            <label class="w-field__label" for="ops-task-filter-status"><?= __('状态') ?></label>
+                            <select id="ops-task-filter-status" class="w-select" name="status">
+                                <option value=""><?= __('全部') ?></option>
+                                <?php foreach ($statuses as $st): ?>
+                                    <?php $meta = $statusMeta((string)$st); ?>
+                                    <option value="<?= $escape((string)$st) ?>" <?= ((string)($filters['status'] ?? '') === (string)$st) ? 'selected' : '' ?>>
+                                        <?= $escape((string)$meta['label']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="w-field" data-label-layout="stacked" style="--w-span-md:3;">
+                            <label class="w-field__label" for="ops-task-filter-agent"><?= __('智能体') ?></label>
+                            <select id="ops-task-filter-agent" class="w-select" name="assignee_agent">
+                                <option value=""><?= __('全部') ?></option>
+                                <?php foreach ($assignees as $ag): ?>
+                                    <option value="<?= $escape((string)$ag) ?>" <?= ((string)($filters['assignee_agent'] ?? '') === (string)$ag) ? 'selected' : '' ?>>
+                                        <?= $escape($agentLabel((string)$ag)) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="w-field" data-label-layout="stacked" style="--w-span-md:3;">
+                            <label class="w-field__label" for="ops-task-filter-session"><?= __('会话ID') ?></label>
+                            <input id="ops-task-filter-session" class="w-input" name="session_id" value="<?= $escape((string)($filters['session_id'] ?? '')) ?>" autocomplete="off"/>
+                        </div>
+                        <div class="w-field" data-label-layout="stacked" style="--w-span-md:2;">
+                            <label class="w-field__label" for="ops-task-filter-dispatch"><?= __('仅调度任务') ?></label>
+                            <select id="ops-task-filter-dispatch" class="w-select" name="dispatch_only">
+                                <option value="1" <?= ((string)($filters['dispatch_only'] ?? '1') === '1') ? 'selected' : '' ?>><?= __('是') ?></option>
+                                <option value="0" <?= ((string)($filters['dispatch_only'] ?? '1') === '0') ? 'selected' : '' ?>><?= __('否') ?></option>
+                            </select>
+                        </div>
+                        <div class="w-cluster" style="--w-span-md:2;" data-align="end">
+                            <button type="submit" class="w-button" data-tone="primary" data-testid="ops-task-filter-submit"><?= __('筛选') ?></button>
+                        </div>
+                    </form>
+
+                    <div class="w-table-wrap" data-testid="ops-task-table">
+                        <table class="w-table">
+                            <thead>
+                            <tr>
+                                <th style="width:4rem;"><?= __('ID') ?></th>
+                                <th><?= __('任务') ?></th>
+                                <th style="width:7rem;"><?= __('状态') ?></th>
+                                <th style="width:8rem;"><?= __('会话') ?></th>
+                                <th style="width:8rem;"><?= __('操作') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($tasks as $task): ?>
+                                <?php
+                                $status = (string)($task['status'] ?? '');
+                                $meta = $statusMeta($status);
+                                $sessionId = (string)($task['session_id'] ?? '');
+                                $idem = (string)($task['queue_idempotency_key'] ?? '');
+                                $title = (string)($task['title'] ?? '');
+                                $type = (string)($task['task_type'] ?? '');
+                                $agent = (string)($task['assignee_agent'] ?? '');
+                                ?>
+                                <tr data-testid="ops-task-row-<?= $escape((string)($task['task_id'] ?? '')) ?>">
+                                    <td><?= $escape((string)($task['task_id'] ?? '')) ?></td>
+                                    <td>
+                                        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                                            <strong title="<?= $escape($idem !== '' ? ((string)__('幂等键') . ': ' . $idem) : $title) ?>">
+                                                <?= $escape($title !== '' ? $title : '—') ?>
+                                            </strong>
+                                            <span class="w-text" data-tone="secondary" data-size="sm">
+                                                <?= $escape($agentLabel($agent)) ?>
+                                                <?php if ($type !== ''): ?>
+                                                    · <code><?= $escape($type) ?></code>
+                                                <?php endif; ?>
+                                                · <?= __('站') ?> <?= $escape((string)($task['website_id'] ?? '')) ?>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="w-badge" data-tone="<?= $escape((string)$meta['tone']) ?>" data-size="sm">
+                                            <?= $escape((string)$meta['label']) ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <code title="<?= $escape($sessionId) ?>"><?= $shortSession($sessionId) ?></code>
+                                    </td>
+                                    <td>
+                                        <?php if ($status === 'queued' || $status === 'failed'): ?>
+                                            <form method="post" action="<?= $escape((string)($actions['cancel'] ?? '#')) ?>" style="display:inline;">
+                                                <input type="hidden" name="task_id" value="<?= $escape((string)($task['task_id'] ?? '')) ?>"/>
+                                                <input type="hidden" name="website_id" value="<?= $escape((string)($task['website_id'] ?? '')) ?>"/>
+                                                <button type="submit" class="w-button" data-tone="neutral" data-size="sm" data-testid="ops-task-cancel"><?= __('取消') ?></button>
+                                            </form>
+                                        <?php endif; ?>
+                                        <?php if ($status === 'awaiting_approval'): ?>
+                                            <form method="post" action="<?= $escape((string)($actions['approve'] ?? '#')) ?>" style="display:inline;">
+                                                <input type="hidden" name="task_id" value="<?= $escape((string)($task['task_id'] ?? '')) ?>"/>
+                                                <input type="hidden" name="website_id" value="<?= $escape((string)($task['website_id'] ?? '')) ?>"/>
+                                                <button type="submit" class="w-button" data-tone="primary" data-size="sm" data-testid="ops-task-approve"><?= __('批准外发') ?></button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if ($tasks === []): ?>
+                                <tr>
+                                    <td colspan="5">
+                                        <div class="w-stack" style="--w-gap:var(--weline-space-1);padding:var(--weline-space-4) 0;">
+                                            <strong><?= __('暂无调度任务') ?></strong>
+                                            <span class="w-text" data-tone="secondary"><?= __('调整筛选条件，或先到运营台提交配置派工。') ?></span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-tabs__panel"
+             role="tabpanel"
+             id="ops-task-panel-logs"
+             aria-labelledby="ops-task-tab-logs"
+             data-testid="ops-task-panel-logs"
+             <?= $activeTab === 'logs' ? '' : 'hidden' ?>>
+            <div class="w-card" data-testid="ops-task-runlogs">
+                <div class="w-card__body">
+                    <?php if ($logs === []): ?>
+                        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                            <strong><?= __('暂无运行日志') ?></strong>
+                            <span class="w-text" data-tone="secondary"><?= __('选定网站后，分析与草稿事件会出现在这里。') ?></span>
+                        </div>
+                    <?php else: ?>
+                        <ul class="w-stack" style="--w-gap:var(--weline-space-3);list-style:none;padding:0;margin:0;">
+                            <?php foreach ($logs as $log): ?>
+                                <?php
+                                $kind = (string)($log['kind'] ?? '');
+                                $logStatus = (string)($log['status'] ?? '');
+                                $summary = trim((string)($log['summary'] ?? ''));
+                                $summaryShort = $summary;
+                                if (mb_strlen($summaryShort) > 120) {
+                                    $summaryShort = mb_substr($summaryShort, 0, 120) . '…';
+                                }
+                                ?>
+                                <li class="w-cluster" data-align="start" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                                    <span class="w-badge" data-tone="info" data-size="sm"><?= $escape($kind !== '' ? $kind : '—') ?></span>
+                                    <span class="w-badge" data-tone="<?= $escape($logTone($logStatus)) ?>" data-size="sm"><?= $escape($logStatus !== '' ? $logStatus : '—') ?></span>
+                                    <div class="w-stack" style="--w-gap:2px;flex:1;min-width:12rem;">
+                                        <span title="<?= $escape($summary) ?>"><?= $escape($summaryShort !== '' ? $summaryShort : '—') ?></span>
+                                        <span class="w-text" data-tone="secondary" data-size="sm"><?= $escape((string)($log['created_at'] ?? '')) ?></span>
+                                    </div>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

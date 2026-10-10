@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Ops::commerce:ops:desk_index"
+          name="ops_desk"
+          title="AI运营台"
+          action="weline_ops/backend/desk/index"
+          parent="Weline_Backend::ai_ops_group"
+          icon="mdi mdi-robot-outline"
+          order="10"/>
+    <menu source="Weline_Ops::commerce:ops:task_index"
+          name="ops_task_admin"
+          title="调度任务管理"
+          action="weline_ops/backend/task/index"
+          parent="Weline_Backend::ai_ops_group"
+          icon="clipboard"
+          order="20"/>
+</menus>

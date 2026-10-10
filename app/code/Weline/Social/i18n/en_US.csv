@@ -24,6 +24,17 @@
 创建一键多平台发布批次。,"Create one-click multi-platform publish batch."
 获取发布批次状态。,"Get publish batch status."
 未知社媒平台：%{1},"Unknown social platform: %{1}"
+社媒运营智能体,社媒运营智能体
+"根据 Ops 会话创建社媒创意草稿；公开外发须 Ops 审批。","根据 Ops 会话创建社媒创意草稿；公开外发须 Ops 审批。"
+运营社媒草稿,运营社媒草稿
+社媒草稿已创建,社媒草稿已创建
+社媒连接,社媒连接
+社媒账户,"Social Accounts"
+连接社媒账号,连接社媒账号
+尚未检测到已绑定社媒账户,尚未检测到已绑定社媒账户
+已有站点社媒绑定,已有站点社媒绑定
+请到社媒模块完成账户绑定,请到社媒模块完成账户绑定
+无法读取社媒绑定状态,无法读取社媒绑定状态
 社媒平台,"Social platform"
 "已检测到社媒平台运营 App 凭据。","Social platform ops App credentials detected."
 "发帖/授权用的各平台 App 凭据，与顾客登录凭据分开。","Per-platform App credentials for posting/auth, separate from customer login credentials."
@@ -141,7 +152,6 @@ share,share
 查看融媒体管理,"View integrated media management"
 grid,grid
 查看融媒体管理页面,"View Fusion Media Management Page"
-社媒账户,"Social Accounts"
 暂无社媒账户,"No social media accounts available."
 "Fake 验证通过","Fake verification passed"
 "Fake 验证失败","Fake verification failed"
@@ -166,7 +176,7 @@ grid,grid
 已连接账户,"Connected Accounts"
 可发布账户,"Publishable Accounts"
 当前配置范围,"Current configuration scope"
-先选择范围类型，再选择该类型下的具体范围（当前支持：站点），最后选择二级范围。全页账户添加、范围社媒与发布都使用这里的选择。,"First choose a scope type, then a concrete scope under that type (currently: website), then the secondary scope. Account add, scope social, and publish all use this selection."
+选择网站范围（仅支持站点）。全页账户添加、范围社媒与一键授权/发布都绑定到这里选中的网站。,"Select a website scope (website only). Account add, scope social, one-click auth, and publish all bind to the selected website."
 "Scope 优先","Scope First"
 范围类型,"Scope Type"
 请选择范围类型,"Select scope type"
@@ -309,6 +319,8 @@ grid,grid
 "社媒发布目标 #%{1}","Social publish target #%{1}"
 站点默认,"site default"
 一级范围,"Website Scope"
+"缺少社媒账户 ID。","Missing social account ID."
+范围无效。,"Invalid scope."
 站点默认社媒账户已保存。,"Website default social accounts saved."
 范围默认社媒账户已保存。,"The scope default social media account is saved."
 账户不存在。,"Account does not exist."
@@ -435,6 +447,7 @@ Snapchat,Snapchat
 "仅用于本地 smoke；不访问外部平台","Only for local smoke; does not access external platforms"
 "填任意 Fake Token，或运行 fake 浏览器验证自动创建","Fill in any Fake Token, or run fake browser to verify automatic creation"
 "本地 fake 发布验证","Local fake release verification"
+先选择范围类型，再选择该类型下的具体范围（当前支持：站点），最后选择二级范围。全页账户添加、范围社媒与发布都使用这里的选择。,"First choose a scope type, then a concrete scope under that type (currently: website), then the secondary scope. Account add, scope social, and publish all use this selection."
 """Weline Social 查询器不支持的操作：%{1}""","""Operation not supported by Weline Social Queryer: %{1}"""
 营销管理,Marketing
 "mdi mdi-shield-key-outline","mdi mdi-shield-key-outline"

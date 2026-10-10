@@ -1,7 +1,11 @@
 ﻿博客分类,"Blog categories"
 "分类 ID 不能为空","Category ID is required."
+博客发布智能体,博客发布智能体
+"根据 Ops 会话上下文创建博客草稿，禁止直接公开发布。","根据 Ops 会话上下文创建博客草稿，禁止直接公开发布。"
+运营博客草稿,运营博客草稿
+由运营调度智能体生成的草稿，待审批后发布。,由运营调度智能体生成的草稿，待审批后发布。
+博客草稿已创建,博客草稿已创建
 "博客文章 sitemap URL 提供器（多语 hreflang）","博客文章 sitemap URL 提供器（多语 hreflang）"
-博客,Blog
 标题（选填）,"Title (optional)"
 一句话概括您的观点,"Summarize your point in one sentence"
 评论内容,"Review content"
@@ -36,6 +40,7 @@
 "AI 生成博客 Slug","AI-generated blog slug"
 "使用翻译 AI 生成博客 slug","Generate blog slug with translation AI"
 删除博客文章,"Delete Blog Post"
+博客,Blog
 作者,Author
 更新于,"Updated on"
 分钟阅读,"min read"

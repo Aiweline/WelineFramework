@@ -1,0 +1,408 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$escape = static fn (mixed $value): string => htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
+$websiteId = (int)$this->getData('website_id');
+$program = is_array($this->getData('program')) ? $this->getData('program') : [];
+$persona = is_array($this->getData('persona')) ? $this->getData('persona') : null;
+$context = is_array($this->getData('context')) ? $this->getData('context') : [];
+$scopes = is_array($this->getData('scopes')) ? $this->getData('scopes') : [];
+$lanes = is_array($this->getData('lanes')) ? $this->getData('lanes') : [];
+$tasks = is_array($this->getData('tasks')) ? $this->getData('tasks') : [];
+$actions = is_array($this->getData('actions')) ? $this->getData('actions') : [];
+$memoryNote = (string)$this->getData('memory_note');
+$enabled = !empty($program['enabled']);
+$personaSseUrl = (string)($this->getData('persona_sse_url') ?: ($actions['refresh_persona_stream'] ?? ''));
+?>
+<div class="w-grid w-ops-desk" data-testid="ops-desk-page">
+    <div style="--w-span:12;">
+        <?php // 页题由后台 chrome 输出；站点切换放页头右侧（全局上下文），勿再占主列大卡 ?>
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between" data-wrap="true" style="--w-gap:var(--weline-space-3); --w-mb:var(--weline-space-4);" data-testid="ops-desk-heading">
+            <p class="w-backend-page__subtitle" style="--w-mb:0; flex:1 1 14rem;">
+                <?= __('AI 运营默认关闭，需本页手动开启。开启后：画像、社媒/GSC/站内事件连接、任务中心与日更派工才生效。') ?>
+            </p>
+            <form method="get" id="ops-desk-website-form" class="w-cluster" data-align="center" data-wrap="true" data-testid="ops-desk-website-form" style="--w-gap:var(--weline-space-2); flex:0 1 auto;">
+                <label class="w-field__label" for="ops-desk-website" style="--w-mb:0; white-space:nowrap;"><?= __('网站') ?></label>
+                <div style="min-width:min(100%,16rem); width:min(22rem,100%);" data-testid="ops-desk-website-select">
+                    <w:websites:website:select
+                        id="ops-desk-website"
+                        name="website_id"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        clearable="false"
+                        empty-label="@lang(请选择站点)"
+                        placeholder="@lang(搜索站点名称或域名)"
+                        auto-submit="true"
+                        form="ops-desk-website-form"
+                    />
+                </div>
+            </form>
+        </div>
+
+        <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="ops-desk-scope">
+            <div class="w-card__header"><h5 class="w-card__title"><?= __('运营程序') ?></h5></div>
+            <div class="w-card__body">
+                <p class="w-text-secondary">
+                    <?= __('站名') ?>: <?= $escape((string)($context['name'] ?? '')) ?>
+                    · <?= __('描述就绪') ?>: <?= !empty($context['description']) ? __('是') : __('否') ?>
+                    <?php
+                    $evidenceCounts = is_array($context['evidence_counts'] ?? null) ? $context['evidence_counts'] : [];
+                    if ($evidenceCounts !== []):
+                    ?>
+                        · <?= __('证据') ?>:
+                        <?= __('分类') ?> <?= $escape((string)($evidenceCounts['categories'] ?? 0)) ?>
+                        / <?= __('商品') ?> <?= $escape((string)($evidenceCounts['products'] ?? 0)) ?>
+                        / <?= __('政策') ?> <?= $escape((string)($evidenceCounts['policies'] ?? 0)) ?>
+                        / <?= __('语种') ?> <?= $escape((string)($evidenceCounts['locales'] ?? 0)) ?>
+                    <?php endif; ?>
+                    · <?= __('运营状态') ?>:
+                    <span data-testid="ops-program-enabled-badge" class="w-badge" data-tone="<?= $enabled ? 'success' : 'warning' ?>">
+                        <?= $enabled ? __('已开启') : __('默认关闭') ?>
+                    </span>
+                </p>
+                <?php if (!$enabled): ?>
+                    <p class="w-text-secondary" style="--w-mt:var(--weline-space-2);" data-testid="ops-program-default-off-hint">
+                        <?= __('当前为默认关闭：日更与任务派工不会运行。确认要用 AI 运营时，再点下方「开启 AI运营」。') ?>
+                    </p>
+                <?php endif; ?>
+                <div class="w-cluster" style="--w-mt:var(--weline-space-3);" data-wrap="true">
+                    <?php if ($enabled): ?>
+                        <form method="post" action="<?= $escape((string)($actions['disable'] ?? '#')) ?>">
+                            <input type="hidden" name="website_id" value="<?= $escape((string)$websiteId) ?>"/>
+                            <button type="submit" class="w-button" data-tone="neutral" data-testid="ops-disable-program"><?= __('关闭 AI运营') ?></button>
+                        </form>
+                    <?php else: ?>
+                        <form method="post" action="<?= $escape((string)($actions['enable'] ?? '#')) ?>">
+                            <input type="hidden" name="website_id" value="<?= $escape((string)$websiteId) ?>"/>
+                            <button type="submit" class="w-button" data-tone="primary" data-testid="ops-enable-program"><?= __('开启 AI运营') ?></button>
+                        </form>
+                    <?php endif; ?>
+                    <button type="button" class="w-button" data-tone="primary" data-testid="ops-refresh-persona" id="ops-refresh-persona-btn">
+                        <?= __('生成/刷新画像') ?>
+                    </button>
+                    <noscript>
+                        <form method="post" action="<?= $escape((string)($actions['refresh_persona'] ?? '#')) ?>">
+                            <input type="hidden" name="website_id" value="<?= $escape((string)$websiteId) ?>"/>
+                            <button type="submit" class="w-button" data-tone="neutral"><?= __('无脚本回退：同步刷新画像') ?></button>
+                        </form>
+                    </noscript>
+                </div>
+                <p class="w-text-secondary" style="--w-mt:var(--weline-space-2);"><?= $escape($memoryNote) ?></p>
+                <div style="--w-mt:var(--weline-space-4); display:none;" data-testid="ops-persona-sse-panel" id="ops-persona-sse-panel">
+                    <w:theme:sse-progress
+                        id="ops-persona-progress"
+                        title="@lang(画像提取进度)"
+                        url="persona_sse_url"
+                        steps="persona_sse_steps_json"
+                        height="280px"
+                    />
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var btn = document.getElementById('ops-refresh-persona-btn');
+            var panel = document.getElementById('ops-persona-sse-panel');
+            var streamUrl = <?= json_encode($personaSseUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+            if (!btn || !streamUrl) {
+                return;
+            }
+            btn.addEventListener('click', function () {
+                if (panel) {
+                    panel.style.display = '';
+                }
+                var progress = window.WelineSseProgress && window.WelineSseProgress['ops-persona-progress'];
+                if (!progress) {
+                    if (typeof Weline !== 'undefined' && Weline.UI && Weline.UI.toast) {
+                        Weline.UI.toast.error(<?= json_encode((string)__('进度面板未就绪，请刷新页面后重试'), JSON_UNESCAPED_UNICODE) ?>);
+                    }
+                    return;
+                }
+                if (progress.isRunning && progress.isRunning()) {
+                    return;
+                }
+                progress.reset && progress.reset();
+                progress.setUrl(streamUrl);
+                progress.on('done', function () {
+                    if (typeof Weline !== 'undefined' && Weline.UI && Weline.UI.toast) {
+                        Weline.UI.toast.success(<?= json_encode((string)__('画像提取完成'), JSON_UNESCAPED_UNICODE) ?>);
+                    }
+                    window.setTimeout(function () {
+                        window.location.reload();
+                    }, 600);
+                });
+                progress.on('failed', function () {
+                    if (typeof Weline !== 'undefined' && Weline.UI && Weline.UI.toast) {
+                        Weline.UI.toast.error(<?= json_encode((string)__('画像提取失败，请查看进度日志'), JSON_UNESCAPED_UNICODE) ?>);
+                    }
+                });
+                progress.start();
+            });
+        })();
+        </script>
+
+        <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="ops-desk-scopes">
+            <div class="w-card__header"><h5 class="w-card__title"><?= __('运营范围目录') ?></h5></div>
+            <div class="w-card__body w-cluster" data-wrap="true">
+                <?php foreach ($scopes as $scope): ?>
+                    <span class="w-badge" data-tone="neutral"><?= $escape((string)($scope['title'] ?? '')) ?></span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="ops-desk-persona">
+            <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                <h5 class="w-card__title" style="--w-mb:0;"><?= __('站点运营画像') ?></h5>
+                <?php if (is_array($persona)): ?>
+                    <span class="w-badge" data-tone="<?= !empty($persona['is_structured']) ? 'success' : 'warning' ?>" data-testid="ops-persona-structured-badge">
+                        <?php if (!empty($persona['is_blurb_paste'])): ?>
+                            <?= __('简介粘贴·须 AI 重生成') ?>
+                        <?php elseif (!empty($persona['is_ai']) && !empty($persona['is_structured'])): ?>
+                            <?= __('AI 结构化画像') ?>
+                        <?php else: ?>
+                            <?= __('待 AI 刷新画像') ?>
+                        <?php endif; ?>
+                    </span>
+                <?php endif; ?>
+            </div>
+            <div class="w-card__body">
+                <?php if (is_array($persona)): ?>
+                    <?php
+                    $audience = is_array($persona['audience'] ?? null) ? $persona['audience'] : [];
+                    $pillars = is_array($persona['pillars']['pillars'] ?? null)
+                        ? $persona['pillars']['pillars']
+                        : (is_array($persona['pillars'] ?? null) ? ($persona['pillars']['pillars'] ?? []) : []);
+                    if (!is_array($pillars)) {
+                        $pillars = [];
+                    }
+                    $tone = is_array($persona['tone'] ?? null) ? $persona['tone'] : [];
+                    $jobs = is_array($audience['jobs'] ?? null) ? $audience['jobs'] : [];
+                    ?>
+                    <div class="w-cluster" data-align="center" data-justify="between" data-wrap="true" style="--w-mb:var(--weline-space-3);">
+                        <h6 data-testid="ops-persona-title" style="--w-mb:0;"><?= $escape((string)($persona['title'] ?? '')) ?></h6>
+                        <?php if (!empty($persona['generator']) || !empty($persona['model_code'])): ?>
+                            <span class="w-text-secondary" data-testid="ops-persona-generator">
+                                <?= $escape(trim((string)($persona['generator'] ?? '') . (!empty($persona['model_code']) ? ' · ' . (string)$persona['model_code'] : ''))) ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php // 先结构、后摘要：避免首屏像「站点简介」 ?>
+                    <div class="w-grid" style="--w-gap:var(--weline-space-3);" data-testid="ops-persona-structure">
+                        <div style="--w-span-md:6;">
+                            <h6><?= __('核心受众') ?></h6>
+                            <p data-testid="ops-persona-audience-primary"><?= $escape((string)($audience['primary'] ?? '—')) ?></p>
+                            <?php if (trim((string)($audience['secondary'] ?? '')) !== ''): ?>
+                                <p class="w-text-secondary"><?= __('次要受众') ?>: <?= $escape((string)$audience['secondary']) ?></p>
+                            <?php endif; ?>
+                            <?php if ($jobs !== []): ?>
+                                <ul data-testid="ops-persona-jobs">
+                                    <?php foreach ($jobs as $job): ?>
+                                        <li><?= $escape((string)$job) ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php endif; ?>
+                        </div>
+                        <div style="--w-span-md:6;">
+                            <h6><?= __('语气') ?></h6>
+                            <p data-testid="ops-persona-tone"><?= $escape((string)($tone['voice'] ?? '—')) ?></p>
+                            <?php
+                            $toneDo = is_array($tone['do'] ?? null) ? $tone['do'] : [];
+                            $toneDont = is_array($tone['dont'] ?? null) ? $tone['dont'] : [];
+                            ?>
+                            <?php if ($toneDo !== [] || $toneDont !== []): ?>
+                                <ul class="w-text-secondary">
+                                    <?php foreach ($toneDo as $item): ?>
+                                        <li><?= __('宜') ?>: <?= $escape((string)$item) ?></li>
+                                    <?php endforeach; ?>
+                                    <?php foreach ($toneDont as $item): ?>
+                                        <li><?= __('忌') ?>: <?= $escape((string)$item) ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php endif; ?>
+                        </div>
+                        <div style="--w-span:12;">
+                            <h6><?= __('内容支柱') ?></h6>
+                            <div class="w-cluster" data-wrap="true" data-testid="ops-persona-pillars">
+                                <?php foreach ($pillars as $pillar): ?>
+                                    <span class="w-badge" data-tone="neutral"><?= $escape((string)$pillar) ?></span>
+                                <?php endforeach; ?>
+                                <?php if ($pillars === []): ?>
+                                    <span class="w-text-secondary">—</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="--w-mt:var(--weline-space-4);" data-testid="ops-persona-summary-block">
+                        <p class="w-text-secondary" style="--w-mb:var(--weline-space-2);"><?= __('运营摘要（非站点简介原文）') ?></p>
+                        <p data-testid="ops-persona-summary"><?= nl2br($escape((string)($persona['summary'] ?? ''))) ?></p>
+                    </div>
+                    <?php
+                    $evCounts = is_array($persona['evidence_counts'] ?? null) ? $persona['evidence_counts'] : [];
+                    $claimsAllowed = is_array($persona['claims_allowed'] ?? null) ? $persona['claims_allowed'] : [];
+                    $claimsForbidden = is_array($persona['claims_forbidden'] ?? null) ? $persona['claims_forbidden'] : [];
+                    ?>
+                    <?php if ($evCounts !== []): ?>
+                        <p class="w-text-secondary" style="--w-mt:var(--weline-space-3);" data-testid="ops-persona-evidence-counts">
+                            <?= __('生成依据') ?>:
+                            <?= __('分类') ?> <?= $escape((string)($evCounts['categories'] ?? 0)) ?>
+                            · <?= __('商品') ?> <?= $escape((string)($evCounts['products'] ?? 0)) ?>
+                            · <?= __('政策') ?> <?= $escape((string)($evCounts['policies'] ?? 0)) ?>
+                            · <?= __('语种') ?> <?= $escape((string)($evCounts['locales'] ?? 0)) ?>
+                        </p>
+                    <?php endif; ?>
+                    <?php if ($claimsAllowed !== [] || $claimsForbidden !== []): ?>
+                        <div style="--w-mt:var(--weline-space-3);" data-testid="ops-persona-claims">
+                            <h6><?= __('承诺边界') ?></h6>
+                            <ul class="w-text-secondary">
+                                <?php foreach ($claimsAllowed as $item): ?>
+                                    <li><?= __('可说') ?>: <?= $escape((string)$item) ?></li>
+                                <?php endforeach; ?>
+                                <?php foreach ($claimsForbidden as $item): ?>
+                                    <li><?= __('不可说') ?>: <?= $escape((string)$item) ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
+                    <p class="w-text-secondary" style="--w-mt:var(--weline-space-3);">
+                        <?= __('请点「生成/刷新画像」：整合分类/商品/政策/语种证据后由真实 AI 输出；禁止把网站简介当作画像。进度见上方 SSE 面板。') ?>
+                    </p>
+                <?php else: ?>
+                    <p class="w-text-secondary"><?= __('尚未生成运营画像。点击上方「生成/刷新画像」将流式整合站点证据并调用 AI（禁止输出简介原文）。') ?></p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="ops-desk-lanes">
+            <div class="w-card__header"><h5 class="w-card__title"><?= __('连接与工作面') ?></h5></div>
+            <div class="w-card__body">
+                <?php foreach ($lanes as $lane): ?>
+                    <div class="w-card" style="--w-mb:var(--weline-space-3);" data-testid="ops-lane-<?= $escape((string)($lane['code'] ?? '')) ?>">
+                        <div class="w-card__header w-cluster" data-justify="between">
+                            <h6 class="w-card__title"><?= $escape((string)($lane['title'] ?? '')) ?></h6>
+                            <span class="w-badge" data-tone="<?= !empty($lane['connected']) ? 'success' : 'warning' ?>">
+                                <?= !empty($lane['connected']) ? __('已就绪') : __('待连接') ?>
+                            </span>
+                        </div>
+                        <div class="w-card__body">
+                            <p><?= $escape((string)($lane['summary'] ?? '')) ?></p>
+                            <div class="w-cluster" data-wrap="true">
+                                <?php foreach ((array)($lane['actions'] ?? []) as $action): ?>
+                                    <a class="w-button" data-tone="neutral" href="<?= $escape((string)($action['url'] ?? '#')) ?>">
+                                        <?= $escape((string)($action['label'] ?? '')) ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="ops-desk-dispatch">
+            <div class="w-card__header"><h5 class="w-card__title"><?= __('提交运营配置（异步派工）') ?></h5></div>
+            <div class="w-card__body">
+                <form method="post" action="<?= $escape((string)($actions['submit_config'] ?? '#')) ?>" class="w-grid" style="--w-gap:var(--weline-space-3);" data-testid="ops-submit-config-form">
+                    <input type="hidden" name="website_id" value="<?= $escape((string)$websiteId) ?>"/>
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('车道') ?></label>
+                        <input class="w-input" name="lanes" value="content,social" data-testid="ops-dispatch-lanes"/>
+                    </div>
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('主题') ?></label>
+                        <input class="w-input" name="topic" placeholder="<?= $escape((string)__('本周日更主题')) ?>" data-testid="ops-dispatch-topic"/>
+                    </div>
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('备注') ?></label>
+                        <input class="w-input" name="note" data-testid="ops-dispatch-note"/>
+                    </div>
+                    <div style="--w-span:12;">
+                        <button type="submit" class="w-button" data-tone="primary" data-testid="ops-submit-config"><?= __('提交配置并派工') ?></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="w-card" data-testid="ops-desk-tasks">
+            <div class="w-card__header">
+                <div class="w-cluster" data-justify="between" data-align="center">
+                    <h5 class="w-card__title"><?= __('任务中心') ?></h5>
+                    <a class="w-button" data-tone="neutral" href="<?= $escape((string)($actions['task_admin'] ?? '#')) ?>" data-testid="ops-open-task-admin">
+                        <?= __('打开调度任务管理') ?>
+                    </a>
+                </div>
+            </div>
+            <div class="w-card__body">
+                <form method="post" action="<?= $escape((string)($actions['create_task'] ?? '#')) ?>" class="w-grid" style="--w-gap:var(--weline-space-3); --w-mb:var(--weline-space-4);">
+                    <input type="hidden" name="website_id" value="<?= $escape((string)$websiteId) ?>"/>
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label"><?= __('范围') ?></label>
+                        <input class="w-input" name="scope" value="site"/>
+                    </div>
+                    <div style="--w-span-md:4;">
+                        <label class="w-field__label"><?= __('任务类型') ?></label>
+                        <input class="w-input" name="task_type" required placeholder="site.connect_gap"/>
+                    </div>
+                    <div style="--w-span-md:5;">
+                        <label class="w-field__label"><?= __('标题') ?></label>
+                        <input class="w-input" name="title" placeholder="<?= $escape((string)__('补齐 GSC')) ?>"/>
+                    </div>
+                    <div style="--w-span:12;">
+                        <label class="w-field__label"><?= __('备注') ?></label>
+                        <textarea class="w-input" name="note" rows="2"></textarea>
+                    </div>
+                    <div style="--w-span:12;">
+                        <button type="submit" class="w-button" data-tone="primary"><?= __('登记任务') ?></button>
+                    </div>
+                </form>
+                <table class="w-table">
+                    <thead>
+                    <tr>
+                        <th><?= __('ID') ?></th>
+                        <th><?= __('会话') ?></th>
+                        <th><?= __('智能体') ?></th>
+                        <th><?= __('标题') ?></th>
+                        <th><?= __('状态') ?></th>
+                        <th><?= __('操作') ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($tasks as $task): ?>
+                        <tr>
+                            <td><?= $escape((string)($task['task_id'] ?? '')) ?></td>
+                            <td><code><?= $escape((string)($task['session_id'] ?? '')) ?></code></td>
+                            <td><?= $escape((string)($task['assignee_agent'] ?? '')) ?></td>
+                            <td><?= $escape((string)($task['title'] ?? '')) ?></td>
+                            <td><?= $escape((string)($task['status'] ?? '')) ?></td>
+                            <td>
+                                <?php if (($task['status'] ?? '') === 'queued'): ?>
+                                    <form method="post" action="<?= $escape((string)($actions['close_task'] ?? '#')) ?>" style="display:inline;">
+                                        <input type="hidden" name="website_id" value="<?= $escape((string)$websiteId) ?>"/>
+                                        <input type="hidden" name="task_id" value="<?= $escape((string)($task['task_id'] ?? '')) ?>"/>
+                                        <input type="hidden" name="status" value="done"/>
+                                        <button type="submit" class="w-button" data-tone="neutral"><?= __('完成') ?></button>
+                                    </form>
+                                <?php endif; ?>
+                                <?php if (($task['status'] ?? '') === 'awaiting_approval'): ?>
+                                    <form method="post" action="<?= $escape((string)($actions['approve_task'] ?? '#')) ?>" style="display:inline;" data-testid="ops-approve-task">
+                                        <input type="hidden" name="website_id" value="<?= $escape((string)$websiteId) ?>"/>
+                                        <input type="hidden" name="task_id" value="<?= $escape((string)($task['task_id'] ?? '')) ?>"/>
+                                        <button type="submit" class="w-button" data-tone="primary"><?= __('批准外发') ?></button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if ($tasks === []): ?>
+                        <tr><td colspan="6"><?= __('暂无任务') ?></td></tr>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

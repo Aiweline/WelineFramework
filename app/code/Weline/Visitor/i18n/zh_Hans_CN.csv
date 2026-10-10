@@ -32,6 +32,11 @@
 "Create visitor A/B test config.","创建访客 A/B 测试配置。"
 "Seed or clean auditable AI/SEO acceptance pixel events.","种子或清理可审核的 AI/SEO 接受像素事件。"
 "Export visitor analytics data.",导出访客分析数据。
+站内事件洞察,站内事件洞察
+"Visitor 分析","Visitor 分析"
+确认像素/事件采集就绪,确认像素/事件采集就绪
+"Visitor 事件引擎可用，将作为日更分析主信号之一","Visitor 事件引擎可用，将作为日更分析主信号之一"
+"Visitor 模块不可用","Visitor 模块不可用"
 像素追踪,像素追踪
 像素追踪默认已开启（当前范围无覆盖关闭）。,像素追踪默认已开启（当前范围无覆盖关闭）。
 已继承上级范围开启访客像素追踪。,已继承上级范围开启访客像素追踪。

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Visitor',
-    "version" => '1.1.57',
+    "version" => '1.1.58',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -10,6 +10,7 @@ return [
         'Weline_Taglib' => '*',
     ],
     "optional" => [
+        'Weline_Ops' => '*',
         'Weline_Dashboard' => '*',
         'Weline_Frontend' => '*',
         'Weline_Server' => '*',

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Marketing',
-    "version" => '1.3.19',
+    "version" => '1.3.20',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Currency' => '*',
@@ -18,6 +18,7 @@ return [
         'Weline_Customer' => '*',
         'Weline_Smtp' => '*',
         'Weline_Cron' => '*',
+        'Weline_Ops' => '*',
     ],
     "provides" => [
         'schedule_window_utc_migration.Weline_Marketing'

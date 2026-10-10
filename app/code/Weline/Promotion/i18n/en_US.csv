@@ -5,6 +5,11 @@
 万能促销运营,"Universal Promotion Desk"
 "读取促销运营台快照与 campaign run 状态。","Read promotion desk snapshot and campaign run status."
 "促销活动 sitemap URL 提供器","Promo campaign sitemap URL provider"
+促销运营,促销运营
+促销运营台,促销运营台
+活动主题,"Activity Theme"
+复查促销运营台,复查促销运营台
+促销运营台已挂接,促销运营台已挂接
 活动页商品列表前,"Before campaign product list"
 在活动页商品列表渲染前输出轻量扩展内容，适合提示、活动说明或筛选入口。,"Emit light extensions before campaign product list render—tips, campaign notes, or filter entry."
 活动页商品列表后,"After campaign product list"
@@ -17,7 +22,6 @@
 "存在交叉 SKU，请确认后保存。","Overlapping SKUs exist; confirm then save."
 保存失败。,"Save failed."
 活动主题已保存。可点击各字段旁的「多语言」补全其它语言文案。,"Theme saved. Click Multilingual beside each field to fill other locales."
-活动主题,"Activity Theme"
 "mdi mdi-palette-outline","mdi mdi-palette-outline"
 管理前台活动主题、范围与多语言文案,"Manage storefront campaign themes, scopes, and multilingual copy"
 查看活动主题,"View campaign theme"

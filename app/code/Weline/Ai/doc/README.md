@@ -78,6 +78,11 @@ const models = await api.resource('ai').listModels({});
 - **数据库**: SQLite / MySQL
 - **测试**: PHPUnit 10.5
 
+## 与网站 AI 运营的边界
+
+网站级运营产品面在 **`Weline_Ops`**（后台「AI运营」菜单组）：按站开智能体、画像/任务结构化记忆、聚合社媒/GSC/Visitor 连接。  
+`Weline_Ai` 只提供 Agent/Scenario/模型运行时；**禁止**在 Ai 内写运营业务路径。站点运营长期记忆 P1 用 Ops 表，不以 `AiKnowledge` 文档索引冒充。
+
 ## PHP 公开契约
 
 其他模块的可选 AI 集成只能引用 `Weline\Ai\Api\*`。Agent、Model、Result、

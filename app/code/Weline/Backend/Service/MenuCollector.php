@@ -787,6 +787,22 @@ class MenuCollector
 
             $parentSource = (string)($menu['parent_source'] ?? '');
             $parentMeta = $sourceMeta[$parentSource] ?? null;
+            // 模块增量 collect 时父级常在其他模块：本轮 $sourceMeta 没有则读库补齐，避免 pid=0 挂到根。
+            if ($parentMeta === null && $parentSource !== '') {
+                /** @var Menu $parentLookup */
+                $parentLookup = ObjectManager::getInstance(Menu::class, [], false);
+                $parentLookup->reset()->clearData();
+                $parentRow = $parentLookup->where(Menu::schema_fields_SOURCE, $parentSource)->find()->fetch();
+                $parentId = (int)$parentRow->getData(Menu::schema_fields_ID);
+                if ($parentId > 0) {
+                    $parentMeta = [
+                        'id' => $parentId,
+                        'level' => (int)($parentRow->getData(Menu::schema_fields_LEVEL) ?: 1),
+                        'path' => (string)($parentRow->getData(Menu::schema_fields_PATH) ?: (string)$parentId),
+                    ];
+                    $sourceMeta[$parentSource] = $parentMeta;
+                }
+            }
             $pid = $parentMeta['id'] ?? 0;
             $level = $parentMeta ? ((int)$parentMeta['level'] + 1) : 1;
 

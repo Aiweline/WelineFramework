@@ -32,6 +32,11 @@
 "Create visitor A/B test config.","Create visitor A/B test config."
 "Seed or clean auditable AI/SEO acceptance pixel events.","Seed or clean auditable AI/SEO acceptance pixel events."
 "Export visitor analytics data.","Export visitor analytics data."
+站内事件洞察,站内事件洞察
+"Visitor 分析","Visitor 分析"
+确认像素/事件采集就绪,确认像素/事件采集就绪
+"Visitor 事件引擎可用，将作为日更分析主信号之一","Visitor 事件引擎可用，将作为日更分析主信号之一"
+"Visitor 模块不可用","Visitor 模块不可用"
 像素追踪,"Pixel tracking"
 像素追踪默认已开启（当前范围无覆盖关闭）。,"Pixel tracking is on by default (no override-off in current scope)."
 已继承上级范围开启访客像素追踪。,"Inherited visitor pixel tracking from parent scope."

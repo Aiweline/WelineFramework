@@ -30,6 +30,7 @@
     
     <!-- ==================== 3. 业务运营 ==================== -->
     <menu source="Weline_Backend::business_operations" name="business_operations" title="业务运营" icon="store" order="2000">
+        <menu source="Weline_Backend::ai_ops_group" name="ai_ops_group" title="AI运营" icon="mdi mdi-robot-outline" order="50"/>
         <menu source="Weline_Backend::shop_group" name="shop_group" title="商城管理" icon="pin" order="100"/>
         <menu source="Weline_Backend::order_group" name="order_group" title="订单管理" icon="list" order="200"/>
         <menu source="Weline_Backend::customer_group" name="customer_group" title="客户管理" icon="users" order="300"/>

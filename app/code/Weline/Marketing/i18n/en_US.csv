@@ -42,6 +42,13 @@
 营销后台服务暂时不可用。,"Marketing admin service temporarily unavailable."
 万能优惠规则后台,"Universal promotion rules admin"
 "读取营销规则摘要，供后台浏览器 API 使用。","Read marketing rule summaries for the admin browser API."
+增长运营,增长运营
+挽回活动,"Win-back campaign"
+挽回看板,"Win-back board"
+生命周期,生命周期
+营销分群,"Marketing segment"
+复查挽回活动,复查挽回活动
+"Marketing 增长能力已挂接运营台","Marketing 增长能力已挂接运营台"
 已达成,Achieved
 还差,Remaining
 活动,Campaigns
@@ -51,7 +58,6 @@
 请填写编码与名称,"Please enter code and name"
 已保存分群,"Segment saved"
 保存失败：%{1},"Save failed: %{1}"
-营销分群,"Marketing segment"
 users,users
 薄分群配置,"Thin segment config"
 分群列表,"Segment list"
@@ -115,7 +121,6 @@ gift,gift
 加载挽回活动失败：%{1},"Load win-back campaign failed: %{1}"
 挽回活动不存在,"Win-back campaign not found"
 挽回活动已保存,"Win-back campaign saved"
-挽回活动,"Win-back campaign"
 mail,mail
 未付订单挽回营销,"Unpaid order win-back marketing"
 挽回活动列表,"Win-back campaign list"
@@ -124,7 +129,6 @@ mail,mail
 编辑挽回活动,"Edit win-back campaign"
 保存挽回活动,"Save win-back campaign"
 加载看板失败：%{1},"Load board failed: %{1}"
-挽回看板,"Win-back board"
 chart,chart
 挽回发送与券核销只读汇总,"Win-back send & coupon redeem read-only summary"
 查看挽回运营汇总,"View win-back ops summary"
