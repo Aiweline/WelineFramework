@@ -19,5 +19,11 @@ final class IdempotentQueueAdmissionContractTest extends TestCase
         self::assertStringContainsString('requeueQueueSafely', $source);
         self::assertStringContainsString('dispatchQueueIfEligible', $source);
         self::assertStringContainsString('queue_edit_active', $source);
+        self::assertStringContainsString('queue_force_required', $source);
+        self::assertMatchesRegularExpression(
+            '/queue_force_required.*?return;/s',
+            $source,
+            'Terminal reopen must soft-skip queue_force_required instead of throwing for cron admission',
+        );
     }
 }

@@ -39,6 +39,7 @@ class AiTranslationPublisher
 
     private function publishCommittedLocale(string $localeCode): bool
     {
+        $this->ensurePublishMemoryCeiling();
         $filename = Env::path_TRANSLATE_FILES_PATH . $localeCode . '.php';
         $previous = null;
         $mode = 0644;
@@ -72,6 +73,7 @@ class AiTranslationPublisher
                 }
                 ksort($words, SORT_STRING);
                 $contents = '<?php return ' . var_export($words, true) . ';?>';
+                unset($words);
                 // 内容相同不等于上次版本已提交；显式发布始终补齐规范 changed。
                 $replaced = true;
                 $this->replaceFile($filename, $contents, $mode);
@@ -122,6 +124,28 @@ class AiTranslationPublisher
         clearstatcache(true, $filename);
         if (function_exists('opcache_invalidate')) {
             opcache_invalidate($filename, true);
+        }
+    }
+
+    /**
+     * cron collect 后 republish 多 locale 时，128M 默认会在 var_export 阶段 OOM。
+     */
+    private function ensurePublishMemoryCeiling(): void
+    {
+        $raw = \trim((string)\ini_get('memory_limit'));
+        if ($raw === '' || $raw === '-1') {
+            return;
+        }
+        $unit = \strtoupper(\substr($raw, -1));
+        $number = (float)$raw;
+        $bytes = match ($unit) {
+            'G' => (int)($number * 1024 * 1024 * 1024),
+            'M' => (int)($number * 1024 * 1024),
+            'K' => (int)($number * 1024),
+            default => (int)$number,
+        };
+        if ($bytes > 0 && $bytes < 512 * 1024 * 1024) {
+            @\ini_set('memory_limit', '512M');
         }
     }
 

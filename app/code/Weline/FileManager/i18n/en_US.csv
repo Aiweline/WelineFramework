@@ -692,6 +692,7 @@ next_offset=%{1},next_offset=%{1}
 "文件资源 AI 自动翻译未启用，cron 已跳过","File resources: AI automatic translation is disabled; cron job skipped."
 "文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒","File resources: AI translation not queued (not enabled, no available slots, or tasks already waiting).  Time taken: %{1} seconds."
 "文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒","File resource AI translation has been queued as #%{1}, taking %{2} seconds."
+"文件资源 AI 翻译入队异常：%{1}（耗时 %{2} 秒）","File resource AI translation enqueue error: %{1} (took %{2} s)"
 "图片 usage JSON 无效。","Image usage JSON is invalid."
 "文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒","File resources: AI translation not queued (disabled or tasks already pending), processing time: %{1} seconds."
 无法读取上传源以计算校验值。,"Unable to read the upload source to calculate its checksum."

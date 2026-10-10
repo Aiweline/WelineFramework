@@ -169,10 +169,11 @@ class LayoutSchedule extends Model
     public function getExpiredActiveSchedules(): array
     {
         $now = date('Y-m-d H:i:s');
+        // end_time 可空：开放式计划不结束。禁止 where(..., '', '!=')——PgSQL timestamp 不能绑空串。
         return $this->reset()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_END_TIME, null, 'IS NOT NULL')
             ->where(self::schema_fields_END_TIME, $now, '<=')
-            ->where(self::schema_fields_END_TIME, '', '!=')
             ->order(self::schema_fields_END_TIME, 'ASC')
             ->select()
             ->fetchArray();

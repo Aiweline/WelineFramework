@@ -40,16 +40,25 @@ class FileAssetLocaleAiTranslation implements CronTaskInterface
     public function execute(): string
     {
         $start = microtime(true);
-        if (!$this->translations->isAutoTranslationEnabled()) {
-            return (string)__('文件资源 AI 自动翻译未启用，cron 已跳过');
-        }
-        $queueId = $this->translations->enqueueAutoFill('cron');
-        $duration = round(microtime(true) - $start, 2);
-        if ($queueId <= 0) {
-            return (string)__('文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒', [$duration]);
-        }
+        try {
+            if (!$this->translations->isAutoTranslationEnabled()) {
+                return (string)__('文件资源 AI 自动翻译未启用，cron 已跳过');
+            }
+            $queueId = $this->translations->enqueueAutoFill('cron');
+            $duration = round(microtime(true) - $start, 2);
+            if ($queueId <= 0) {
+                return (string)__('文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒', [$duration]);
+            }
 
-        return (string)__('文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒', [$queueId, $duration]);
+            return (string)__('文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒', [$queueId, $duration]);
+        } catch (\Throwable $throwable) {
+            $duration = round(microtime(true) - $start, 2);
+
+            return (string)__('文件资源 AI 翻译入队异常：%{1}（耗时 %{2} 秒）', [
+                $throwable->getMessage(),
+                $duration,
+            ]);
+        }
     }
 
     public function unlock_timeout(int $minute = 30): int

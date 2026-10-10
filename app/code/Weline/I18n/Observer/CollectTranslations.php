@@ -48,7 +48,11 @@ class CollectTranslations implements ObserverInterface
                 continue;
             }
 
-            $translation['word'] = Dictionary::assertWord($translation['word']);
+            try {
+                $translation['word'] = Dictionary::assertWord($translation['word']);
+            } catch (\Throwable) {
+                continue;
+            }
             $validatedTranslations[] = $translation;
         }
 

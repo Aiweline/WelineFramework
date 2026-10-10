@@ -28,7 +28,11 @@ class DictionaryRegisterObserver implements ObserverInterface
             if (!is_array($translation) || !isset($translation['word'], $translation['translate'])) {
                 continue;
             }
-            $translation['word'] = Dictionary::assertWord((string)$translation['word']);
+            try {
+                $translation['word'] = Dictionary::assertWord((string)$translation['word']);
+            } catch (\Throwable) {
+                continue;
+            }
             $validatedTranslations[] = $translation;
         }
 

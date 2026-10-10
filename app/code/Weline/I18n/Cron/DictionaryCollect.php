@@ -41,6 +41,21 @@ class DictionaryCollect implements CronTaskInterface
     public function execute(): string
     {
         $startTime = microtime(true);
+        $prevMem = (string)\ini_get('memory_limit');
+        $raw = \trim($prevMem);
+        if ($raw !== '' && $raw !== '-1') {
+            $unit = \strtoupper(\substr($raw, -1));
+            $number = (float)$raw;
+            $bytes = match ($unit) {
+                'G' => (int)($number * 1024 * 1024 * 1024),
+                'M' => (int)($number * 1024 * 1024),
+                'K' => (int)($number * 1024),
+                default => (int)$number,
+            };
+            if ($bytes > 0 && $bytes < 512 * 1024 * 1024) {
+                @\ini_set('memory_limit', '512M');
+            }
+        }
 
         try {
             // Same entry as CLI: php bin/w i18n:collect（全部模块）
@@ -53,6 +68,10 @@ class DictionaryCollect implements CronTaskInterface
             return 'I18n 词典收集完成（复用 i18n:collect），耗时 ' . $duration . ' 秒';
         } catch (\Throwable $throwable) {
             return 'I18n 词典收集异常: ' . $throwable->getMessage();
+        } finally {
+            if ($prevMem !== '') {
+                @\ini_set('memory_limit', $prevMem);
+            }
         }
     }
 

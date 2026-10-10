@@ -42,6 +42,21 @@ class WidgetRegistryRefresh implements CronTaskInterface
     public function execute(): string
     {
         $startTime = microtime(true);
+        $prevMem = (string)\ini_get('memory_limit');
+        $raw = \trim($prevMem);
+        if ($raw !== '' && $raw !== '-1') {
+            $unit = \strtoupper(\substr($raw, -1));
+            $number = (float)$raw;
+            $bytes = match ($unit) {
+                'G' => (int)($number * 1024 * 1024 * 1024),
+                'M' => (int)($number * 1024 * 1024),
+                'K' => (int)($number * 1024),
+                default => (int)$number,
+            };
+            if ($bytes > 0 && $bytes < 512 * 1024 * 1024) {
+                @\ini_set('memory_limit', '512M');
+            }
+        }
 
         try {
             $report = $this->refreshService->refresh('cron_widget_registry_refresh');
@@ -55,6 +70,10 @@ class WidgetRegistryRefresh implements CronTaskInterface
             return "Widget 注册账本刷新 {$ok}：created={$created} updated={$updated} default_injection={$injection} install_event={$dispatched}，耗时 {$duration} 秒";
         } catch (\Throwable $throwable) {
             return 'Widget 注册账本刷新异常: ' . $throwable->getMessage();
+        } finally {
+            if ($prevMem !== '') {
+                @\ini_set('memory_limit', $prevMem);
+            }
         }
     }
 

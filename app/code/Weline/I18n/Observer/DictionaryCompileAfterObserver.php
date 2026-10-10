@@ -72,20 +72,42 @@ class DictionaryCompileAfterObserver implements ObserverInterface
             return;
         }
 
-        $source = $this->aiTranslationConfig->getSourceLocale();
-        foreach ($locales as $localeCode) {
-            $localeCode = trim((string)$localeCode);
-            if ($localeCode === '' || $localeCode === $source) {
-                continue;
+        $prevMem = (string)\ini_get('memory_limit');
+        $raw = \trim($prevMem);
+        if ($raw !== '' && $raw !== '-1') {
+            $unit = \strtoupper(\substr($raw, -1));
+            $number = (float)$raw;
+            $bytes = match ($unit) {
+                'G' => (int)($number * 1024 * 1024 * 1024),
+                'M' => (int)($number * 1024 * 1024),
+                'K' => (int)($number * 1024),
+                default => (int)$number,
+            };
+            if ($bytes > 0 && $bytes < 512 * 1024 * 1024) {
+                @\ini_set('memory_limit', '512M');
             }
-            try {
-                $this->aiTranslationPublisher->publishLocale($localeCode);
-            } catch (\Throwable $throwable) {
-                w_log_error(
-                    'I18n locale republish failed for ' . $localeCode . ': ' . $throwable->getMessage(),
-                    [],
-                    'i18n',
-                );
+        }
+
+        $source = $this->aiTranslationConfig->getSourceLocale();
+        try {
+            foreach ($locales as $localeCode) {
+                $localeCode = trim((string)$localeCode);
+                if ($localeCode === '' || $localeCode === $source) {
+                    continue;
+                }
+                try {
+                    $this->aiTranslationPublisher->publishLocale($localeCode);
+                } catch (\Throwable $throwable) {
+                    w_log_error(
+                        'I18n locale republish failed for ' . $localeCode . ': ' . $throwable->getMessage(),
+                        [],
+                        'i18n',
+                    );
+                }
+            }
+        } finally {
+            if ($prevMem !== '') {
+                @\ini_set('memory_limit', $prevMem);
             }
         }
     }

@@ -163,9 +163,12 @@ class IdempotentQueueAdmission
     {
         $requeued = $this->dispatch->requeueQueueSafely($queueId);
         if (empty($requeued['confirmed'])) {
-            throw new \RuntimeException(
-                'idempotent_queue_reopen_failed:' . (string)($requeued['error_code'] ?? 'unknown'),
-            );
+            $errorCode = (string)($requeued['error_code'] ?? 'unknown');
+            // 活动执行代次仍占槽：cron/自动入队不得 force，软跳过等下一轮。
+            if ($errorCode === 'queue_force_required' || $errorCode === 'queue_edit_active') {
+                return;
+            }
+            throw new \RuntimeException('idempotent_queue_reopen_failed:' . $errorCode);
         }
 
         $updated = \w_query('queue', 'update', [
