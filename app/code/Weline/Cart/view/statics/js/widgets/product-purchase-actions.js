@@ -1067,7 +1067,7 @@
         return raw;
     }
 
-    function showPurchasePanelError(body, message) {
+    function showPurchasePanelError(body, message, onClose) {
         if (!body) {
             return;
         }
@@ -1088,6 +1088,10 @@
         btn.setAttribute('data-purchase-panel-close', '');
         btn.textContent = isZh ? '关闭' : 'Close';
         btn.addEventListener('click', function () {
+            if (typeof onClose === 'function') {
+                onClose();
+                return;
+            }
             closePurchasePanel(document.getElementById('weline-product-purchase-panel-dialog'));
         });
         wrap.appendChild(btn);
@@ -1153,60 +1157,30 @@
         }
     }
 
-    async function openPurchasePanel(button) {
-        const productId = Number(button.dataset.productId || 0);
+    /**
+     * Mount product-info quick_add HTML into an arbitrary container (listing purchase
+     * panel, Compare quick view, …). Ensures product-info assets, fetches via
+     * BinQuery product.getPurchasePanel, rebinds purchase/B2B handlers.
+     *
+     * @param {HTMLElement|null} body
+     * @param {{productId:number, offerUuid?:string, showLoading?:boolean, renderError?:boolean, onErrorClose?:Function}} options
+     * @returns {Promise<object>}
+     */
+    async function mountPurchasePanelInto(body, options) {
+        const opts = options || {};
+        const productId = Number(opts.productId || 0);
         if (productId <= 0) {
             throw new Error('product_id_required');
         }
-        let dialog = document.getElementById('weline-product-purchase-panel-dialog');
-        if (!dialog) {
-            dialog = document.createElement('dialog');
-            dialog.id = 'weline-product-purchase-panel-dialog';
-            dialog.className = 'w-dialog w-product-purchase-panel';
-            dialog.setAttribute('data-w-component', 'dialog');
-            dialog.setAttribute('data-state', 'closed');
-            dialog.setAttribute('data-size', 'lg');
-            dialog.setAttribute('data-w-closable', 'true');
-            dialog.setAttribute('data-w-backdrop', 'dismissible');
-            dialog.setAttribute('aria-labelledby', 'weline-product-purchase-panel-title');
-            dialog.innerHTML = ''
-                + '<header class="w-dialog__header">'
-                + '<h2 id="weline-product-purchase-panel-title" class="w-dialog__title"></h2>'
-                + '<button type="button" class="w-button" data-variant="ghost" data-size="sm" data-purchase-panel-close aria-label="×">×</button>'
-                + '</header>'
-                + '<div class="w-dialog__body w-product-purchase-panel__body" data-purchase-panel-body></div>';
-            document.body.appendChild(dialog);
-            dialog.querySelector('[data-purchase-panel-close]')?.addEventListener('click', function () {
-                closePurchasePanel(dialog);
-            });
-            dialog.addEventListener('click', function (event) {
-                if (event.target === dialog) {
-                    closePurchasePanel(dialog);
-                }
-            });
-            if (global.Weline && global.Weline.UI && typeof global.Weline.UI.mount === 'function') {
-                try {
-                    global.Weline.UI.mount(dialog);
-                } catch (e) {
-                    // Fallback reveal/close still work without the UI component.
-                }
-            }
-        }
-        const title = dialog.querySelector('#weline-product-purchase-panel-title');
-        const body = dialog.querySelector('[data-purchase-panel-body]');
         const isZh = purchasePanelIsZh();
-        if (title) {
-            title.textContent = isZh ? '选择规格并加购' : 'Choose options';
-        }
-        if (body) {
+        if (body && opts.showLoading !== false) {
             body.innerHTML = '<div class="w-product-purchase-panel__loading">'
                 + (isZh ? '加载中…' : 'Loading…')
                 + '</div>';
         }
-        revealPurchasePanel(dialog);
 
         const panelParams = { product_id: productId };
-        const offerUuid = String(button.dataset.globalOfferUuid || '').trim();
+        const offerUuid = String(opts.offerUuid || '').trim();
         if (offerUuid) {
             panelParams.offer = offerUuid;
         }
@@ -1224,7 +1198,9 @@
                 networkError,
                 isZh ? '无法打开加购面板' : 'Could not open options.',
             );
-            showPurchasePanelError(body, msg);
+            if (opts.renderError !== false) {
+                showPurchasePanelError(body, msg, opts.onErrorClose);
+            }
             throw new Error(msg);
         }
 
@@ -1233,7 +1209,9 @@
                 { message: (payload && payload.message) || '' },
                 isZh ? '无法打开加购面板' : 'Could not open options.',
             );
-            showPurchasePanelError(body, msg);
+            if (opts.renderError !== false) {
+                showPurchasePanelError(body, msg, opts.onErrorClose);
+            }
             throw new Error(msg);
         }
         try {
@@ -1301,6 +1279,62 @@
             } catch (e) {}
         }
         return payload;
+    }
+
+    async function openPurchasePanel(button) {
+        const productId = Number(button.dataset.productId || 0);
+        if (productId <= 0) {
+            throw new Error('product_id_required');
+        }
+        let dialog = document.getElementById('weline-product-purchase-panel-dialog');
+        if (!dialog) {
+            dialog = document.createElement('dialog');
+            dialog.id = 'weline-product-purchase-panel-dialog';
+            dialog.className = 'w-dialog w-product-purchase-panel';
+            dialog.setAttribute('data-w-component', 'dialog');
+            dialog.setAttribute('data-state', 'closed');
+            dialog.setAttribute('data-size', 'lg');
+            dialog.setAttribute('data-w-closable', 'true');
+            dialog.setAttribute('data-w-backdrop', 'dismissible');
+            dialog.setAttribute('aria-labelledby', 'weline-product-purchase-panel-title');
+            dialog.innerHTML = ''
+                + '<header class="w-dialog__header">'
+                + '<h2 id="weline-product-purchase-panel-title" class="w-dialog__title"></h2>'
+                + '<button type="button" class="w-button" data-variant="ghost" data-size="sm" data-purchase-panel-close aria-label="×">×</button>'
+                + '</header>'
+                + '<div class="w-dialog__body w-product-purchase-panel__body" data-purchase-panel-body></div>';
+            document.body.appendChild(dialog);
+            dialog.querySelector('[data-purchase-panel-close]')?.addEventListener('click', function () {
+                closePurchasePanel(dialog);
+            });
+            dialog.addEventListener('click', function (event) {
+                if (event.target === dialog) {
+                    closePurchasePanel(dialog);
+                }
+            });
+            if (global.Weline && global.Weline.UI && typeof global.Weline.UI.mount === 'function') {
+                try {
+                    global.Weline.UI.mount(dialog);
+                } catch (e) {
+                    // Fallback reveal/close still work without the UI component.
+                }
+            }
+        }
+        const title = dialog.querySelector('#weline-product-purchase-panel-title');
+        const body = dialog.querySelector('[data-purchase-panel-body]');
+        const isZh = purchasePanelIsZh();
+        if (title) {
+            title.textContent = isZh ? '选择规格并加购' : 'Choose options';
+        }
+        revealPurchasePanel(dialog);
+
+        return mountPurchasePanelInto(body, {
+            productId: productId,
+            offerUuid: String(button.dataset.globalOfferUuid || '').trim(),
+            onErrorClose: function () {
+                closePurchasePanel(dialog);
+            },
+        });
     }
 
     function shouldOpenPurchasePanel(button) {
@@ -1487,6 +1521,7 @@
         bindPurchaseButton: bindPurchaseButton,
         addOfferFromButton: addOfferFromButton,
         bindPurchaseButtons: bindPurchaseButtons,
+        mountPurchasePanelInto: mountPurchasePanelInto,
         showCartAddedNotice: showAmazonCartAddedNotice,
         boot: boot,
     };

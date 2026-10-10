@@ -74,10 +74,34 @@ final class ComparePageHydrateContractTest extends TestCase
         self::assertStringContainsString('product-actions--amz', $css);
         self::assertStringContainsString('border: 0 !important', $css);
         self::assertStringContainsString('color: #c45500', $css);
-        self::assertStringContainsString('20260831-component-scope1', $hook);
+        self::assertStringContainsString('20261010-qv-product-info1', $hook);
         self::assertStringContainsString('showCompareAddedNotice', $js);
         self::assertStringContainsString('ShopperNotice', $js);
         self::assertStringContainsString('data-i18n-compare-label', $hook);
+    }
+
+    public function testQuickViewMountsPurchasePanelProductInfo(): void
+    {
+        $js = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/product-card-actions.js',
+        );
+        $css = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/css/product-shopper-chrome.css',
+        );
+        $modules = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js',
+        );
+
+        self::assertStringContainsString('mountPurchasePanelInto', $js);
+        self::assertStringContainsString('w-product-quickview__extra-actions', $js);
+        self::assertStringContainsString('ensureCartPurchaseActions', $js);
+        self::assertStringContainsString("Weline.load('cart')", $js);
+        self::assertStringNotContainsString('w-product-quickview__grid', $js);
+        self::assertStringNotContainsString('data-quickview-add-cart', $js);
+        self::assertStringNotContainsString('api.quickView(', $js);
+        self::assertStringContainsString('.w-product-quickview__extra-actions', $css);
+        self::assertStringContainsString('.w-product-quickview__body', $css);
+        self::assertStringContainsString('product-card-actions.js?v=20261010-qv-product-info1', $modules);
     }
 
     public function testUpdateWishlistCountOnlyTargetsBadgeNodes(): void

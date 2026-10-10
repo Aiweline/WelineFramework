@@ -10,20 +10,15 @@ final class ProductAddToCartWidgetContractTest extends TestCase
 {
     public function testWidgetRegistrationPinsPurchaseActionsSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Cart/widget.php';
-        self::assertFileExists($path);
-        /** @var array<string, mixed> $widgets */
-        $widgets = include $path;
-        self::assertArrayHasKey('product-add-to-cart', $widgets);
-        $widget = $widgets['product-add-to-cart'];
-        self::assertSame('product-purchase-actions', $widget['slot'] ?? null);
-        self::assertSame(
-            'Weline_Cart::templates/frontend/widgets/product-add-to-cart.phtml',
-            $widget['template'] ?? null,
-        );
-        $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('product-purchase-actions', $injection['slot'] ?? null);
-        self::assertSame('product', $injection['layout_type'] ?? null);
+        $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Cart/widget.php';
+        $tpl = 'Weline_Cart::templates/frontend/widgets/product-add-to-cart.phtml';
+        self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-add-to-cart.phtml');
+        self::assertStringContainsString('@widget.code {product-add-to-cart}', $src);
+        self::assertStringContainsString('@widget.slot {product-purchase-actions}', $src);
+        self::assertStringContainsString('"layout_type":"product"', $src);
+        self::assertStringContainsString('"slot":"product-purchase-actions"', $src);
+        self::assertStringContainsString('"required":true', $src);
     }
 
     public function testWidgetTemplateUsesCartPurchaseActionsScript(): void
@@ -118,7 +113,7 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('closePurchasePanel(dialog)', $script);
         self::assertStringContainsString('Weline.UI.dialog', $script);
         self::assertStringContainsString(
-            'product-purchase-actions.js?v=20261006-tob-keep-pref1',
+            'product-purchase-actions.js?v=20261010-qv-mount1',
             $modules,
         );
     }
@@ -130,7 +125,7 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         );
 
         self::assertStringContainsString('function humanizePurchaseError(error, fallback)', $script);
-        self::assertStringContainsString('function showPurchasePanelError(body, message)', $script);
+        self::assertStringContainsString('function showPurchasePanelError(body, message, onClose)', $script);
         self::assertStringContainsString('w-product-purchase-panel__error', $script);
         self::assertStringContainsString('failed to fetch|networkerror', $script);
         self::assertStringContainsString('worker_timeout', $script);
@@ -138,7 +133,7 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('网络异常，无法打开加购面板，请稍后重试', $script);
         self::assertStringContainsString('/^theme_[a-z0-9_]+$/i', $script);
         self::assertStringContainsString('暂时无法打开加购面板，请稍后重试', $script);
-        self::assertStringContainsString('showPurchasePanelError(body, msg)', $script);
+        self::assertStringContainsString('showPurchasePanelError(body, msg, opts.onErrorClose)', $script);
     }
 
     public function testPurchasePanelLoadsViaBinQueryProductProvider(): void
@@ -160,9 +155,12 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringNotContainsString('fetch(url.toString()', $script);
         self::assertStringNotContainsString('data-purchase-panel-url', $template);
         self::assertStringContainsString(
-            'product-purchase-actions.js?v=20261006-tob-keep-pref1',
+            'product-purchase-actions.js?v=20261010-qv-mount1',
             $modules,
         );
+        self::assertStringContainsString('function mountPurchasePanelInto(body, options)', $script);
+        self::assertStringContainsString('mountPurchasePanelInto: mountPurchasePanelInto', $script);
+        self::assertStringContainsString('return mountPurchasePanelInto(body, {', $script);
     }
 
     public function testPurchasePanelEnsuresProductInfoAssetsOnListingHosts(): void

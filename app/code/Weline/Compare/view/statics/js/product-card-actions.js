@@ -215,31 +215,59 @@
         }
     }
 
-    function renderQuickView(product) {
-        var body = document.querySelector('[data-quickview-body]');
-        if (!body || !product) {
+    function ensureCartPurchaseActions() {
+        if (window.WelineCartPurchaseActions
+            && typeof window.WelineCartPurchaseActions.mountPurchasePanelInto === 'function') {
+            return Promise.resolve(window.WelineCartPurchaseActions);
+        }
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return Promise.resolve(window.Weline.load('cart')).then(function () {
+                if (!window.WelineCartPurchaseActions
+                    || typeof window.WelineCartPurchaseActions.mountPurchasePanelInto !== 'function') {
+                    throw new Error('mountPurchasePanelInto unavailable');
+                }
+                return window.WelineCartPurchaseActions;
+            });
+        }
+        return Promise.reject(new Error('Weline.load unavailable'));
+    }
+
+    function offerUuidFromButton(button) {
+        if (!button) {
+            return '';
+        }
+        var fromButton = String(button.getAttribute('data-global-offer-uuid') || '').trim();
+        if (fromButton) {
+            return fromButton;
+        }
+        var card = button.closest('.product-card, article[data-product-id], .product-storefront__card, .amz-card, .cross-product, .wpc-card, .wpr-card, .wpf-item');
+        if (!card) {
+            return '';
+        }
+        return String(
+            card.getAttribute('data-global-offer-uuid')
+            || (card.querySelector('[data-global-offer-uuid]')
+                && card.querySelector('[data-global-offer-uuid]').getAttribute('data-global-offer-uuid'))
+            || ''
+        ).trim();
+    }
+
+    function appendQuickViewExtraActions(body, productId, productUrl) {
+        if (!body || productId <= 0) {
             return;
         }
-        var rating = Number(product.rating || 0);
-        var reviewCount = Number(product.review_count || 0);
-        body.innerHTML = ''
-            + '<div class="w-product-quickview__grid">'
-            + '  <div class="w-product-quickview__media">'
-            + (product.image ? '<img src="' + product.image + '" alt="" class="w-product-quickview__image">' : '')
-            + '  </div>'
-            + '  <div class="w-product-quickview__info">'
-            + '    <h3 class="w-product-quickview__name">' + (product.name || '') + '</h3>'
-            + '    <p class="w-product-quickview__rating">' + rating.toFixed(1) + ' (' + reviewCount + ')</p>'
-            + '    <p class="w-product-quickview__price">' + (product.formatted_price || '') + '</p>'
-            + '    <p class="w-product-quickview__desc">' + (product.short_description || product.sku || '') + '</p>'
-            + '    <div class="w-product-quickview__actions">'
-            + '      <button type="button" class="w-button" data-variant="primary" data-quickview-add-cart data-product-id="' + product.product_id + '">加入购物车</button>'
-            + '      <a class="w-button" data-variant="outline" href="' + (product.url || '#') + '">查看完整详情</a>'
-            + '      <button type="button" class="w-button" data-variant="ghost" data-quickview-wishlist data-product-id="' + product.product_id + '">收藏</button>'
-            + '      <button type="button" class="w-button" data-variant="ghost" data-quickview-compare data-product-id="' + product.product_id + '">加入对比</button>'
-            + '    </div>'
-            + '  </div>'
-            + '</div>';
+        var existing = body.querySelector('.w-product-quickview__extra-actions');
+        if (existing) {
+            existing.remove();
+        }
+        var wrap = document.createElement('div');
+        wrap.className = 'w-product-quickview__extra-actions';
+        var detailHref = productUrl || '#';
+        wrap.innerHTML = ''
+            + '<a class="w-button" data-variant="outline" href="' + detailHref + '">查看完整详情</a>'
+            + '<button type="button" class="w-button" data-variant="ghost" data-quickview-wishlist data-product-id="' + productId + '">收藏</button>'
+            + '<button type="button" class="w-button" data-variant="ghost" data-quickview-compare data-product-id="' + productId + '">加入对比</button>';
+        body.appendChild(wrap);
     }
 
     function handleWishlist(button) {
@@ -315,41 +343,26 @@
         if (productId <= 0) {
             return;
         }
-        var dialog = openQuickViewDialog();
+        openQuickViewDialog();
         var body = document.querySelector('[data-quickview-body]');
         if (body) {
             body.innerHTML = '<div class="w-product-quickview__loading">' + texts().loading + '</div>';
         }
-        var fallback = cardFallback(button.closest('.product-card'));
-        apiResource('compare').then(function (api) {
-            return api.quickView({ product_id: productId, fallback: fallback });
-        }).then(function (payload) {
-            var data = normalizePayload(payload);
-            if (!data.success || !data.product) {
-                toast(data.message || texts().quickViewFailed, 'error');
-                closeQuickViewDialog();
-                return;
-            }
-            renderQuickView(data.product);
+        var card = button.closest('.product-card, article[data-product-id], .product-storefront__card, .amz-card, .cross-product, .wpc-card, .wpr-card, .wpf-item');
+        var fallback = cardFallback(card);
+        var offerUuid = offerUuidFromButton(button);
+        ensureCartPurchaseActions().then(function (actions) {
+            return actions.mountPurchasePanelInto(body, {
+                productId: productId,
+                offerUuid: offerUuid,
+                renderError: false,
+            });
+        }).then(function () {
+            appendQuickViewExtraActions(body, productId, fallback.url || '');
         }).catch(function () {
             toast(texts().quickViewFailed, 'error');
             closeQuickViewDialog();
         });
-    }
-
-    function handleQuickViewAddToCart(button) {
-        var productId = Number(button.getAttribute('data-product-id') || 0);
-        if (productId <= 0) {
-            return;
-        }
-        apiResource('cart').then(function (api) {
-            return api.add({ product_id: productId, qty: 1 }, { silent: true });
-        }).then(function (payload) {
-            var data = normalizePayload(payload);
-            if (data.success !== false) {
-                toast('已加入购物车', 'success');
-            }
-        }).catch(function () {});
     }
 
     function bindGlobal() {
@@ -384,11 +397,6 @@
             if (target && target.closest && target.closest('[data-quickview-close]')) {
                 event.preventDefault();
                 closeQuickViewDialog();
-                return;
-            }
-            if (target && target.closest && target.closest('[data-quickview-add-cart]')) {
-                event.preventDefault();
-                handleQuickViewAddToCart(target.closest('[data-quickview-add-cart]'));
                 return;
             }
             if (target && target.closest && target.closest('[data-quickview-wishlist]')) {

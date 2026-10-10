@@ -15,7 +15,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     compareShopper: {
         paths: [
-            "Weline_Compare::js/product-card-actions.js"
+            "Weline_Compare::js/product-card-actions.js?v=20261010-qv-product-info1"
         ],
         globalVar: "WelineCompareShopper",
         load: "defer",
