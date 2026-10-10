@@ -1,9 +1,10 @@
 {
     "vendor": "deepseek",
     "model_code": "deepseek-v4-flash",
-    "name": "DeepSeek V4 Flash",
-    "model_name": "DeepSeek V4 Flash",
-    "model_version": "1.0",
+    "name": "DeepSeek V4 Flash（兼容别名→V4.1 Flash）",
+    "model_name": "DeepSeek V4 Flash（兼容别名→V4.1 Flash）",
+    "model_version": "4.1-alias",
+
     "primary_modality": "text2text",
     "token_price_input": 0.00014,
     "token_price_output": 0.00028,
@@ -12,6 +13,7 @@
     "is_default": 0,
     "capabilities": [
         "chat",
+        "vision",
         "reasoning",
         "code",
         "function_calling"

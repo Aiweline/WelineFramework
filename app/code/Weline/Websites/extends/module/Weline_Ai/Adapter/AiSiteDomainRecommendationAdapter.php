@@ -15,7 +15,7 @@ final class AiSiteDomainRecommendationAdapter implements ScenarioAdapterInterfac
 
     public function getDefaultModelBindings(): array
     {
-        return ['text2text' => 'deepseek-v4-flash'];
+        return ['text2text' => 'deepseek-flash'];
     }
 
     public function getCode(): string

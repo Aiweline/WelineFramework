@@ -18,7 +18,7 @@ final class AiSiteDomainRecommendationAdapterTest extends TestCase
         ]);
 
         self::assertSame('websites_ai_site_domain_recommendation', $adapter->getCode());
-        self::assertSame(['text2text' => 'deepseek-v4-flash'], $adapter->getDefaultModelBindings());
+        self::assertSame(['text2text' => 'deepseek-flash'], $adapter->getDefaultModelBindings());
         self::assertStringContainsString('{"labels":[', $prompt);
         self::assertStringContainsString('lowercase ASCII', $prompt);
         self::assertStringContainsString('Do not include a dot, TLD', $prompt);

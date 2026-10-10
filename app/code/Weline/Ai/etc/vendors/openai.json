@@ -3,7 +3,7 @@
     "code": "openai",
     "base_url": "https://api.openai.com/v1",
     "models_prefix": ["gpt-", "gpt-image-", "dall-e-", "text-", "davinci", "curie", "babbage", "ada", "o1-", "o3-", "o4-"],
-    "test_model": "gpt-4o-mini",
+    "test_model": "gpt-6-luna",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
@@ -46,6 +46,7 @@
             "currency": "USD"
         },
         "notes": [
+            "当前旗舰文本：gpt-6-astra / gpt-6.1-sol / gpt-6-luna；图片默认 gpt-image-1。",
             "如果连接测试返回 exceeded your current quota，需要处理 OpenAI Platform 的账单或额度，不是模型代码填错。",
             "图片生成模型和文本模型分开配置；文生图适配器应选择 text2image 模型。"
         ]
@@ -72,7 +73,7 @@
         "max_tokens_key": "max_tokens"
     },
     "model_config_defaults": {
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "temperature": 0.7,
         "top_p": 1.0,
         "stream": true,
@@ -81,6 +82,79 @@
         "capabilities": ["chat", "vision", "code", "function_calling"]
     },
     "models": [
+        {
+            "code": "gpt-6-astra",
+            "name": "GPT-6 Astra",
+            "description": "OpenAI flagship model for the most demanding reasoning and coding work.",
+            "max_tokens": 128000,
+            "context_window": 1050000,
+            "input_price": 10.00,
+            "output_price": 50.00,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling"],
+            "is_active": 1
+        },
+        {
+            "code": "gpt-6.1-sol",
+            "name": "GPT-6.1 Sol",
+            "description": "Near-Astra performance for complex work at a lower cost.",
+            "max_tokens": 128000,
+            "context_window": 1050000,
+            "input_price": 2.00,
+            "output_price": 10.00,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling"],
+            "is_active": 1
+        },
+        {
+            "code": "gpt-6-luna",
+            "name": "GPT-6 Luna",
+            "description": "Most efficient GPT-6 model for focused, high-volume tasks.",
+            "max_tokens": 128000,
+            "context_window": 1050000,
+            "input_price": 0.10,
+            "output_price": 0.50,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling"],
+            "is_active": 1,
+            "is_default": 1
+        },
+        {
+            "code": "gpt-5.6-sol",
+            "name": "GPT-5.6 Sol",
+            "description": "GPT-5.6 balanced reasoning model retained for migration and cost control.",
+            "max_tokens": 128000,
+            "context_window": 400000,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling"],
+            "is_active": 1
+        },
+        {
+            "code": "gpt-5.6-terra",
+            "name": "GPT-5.6 Terra",
+            "description": "Lower-cost GPT-5.6 variant for everyday agent and coding workloads.",
+            "max_tokens": 128000,
+            "context_window": 400000,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling"],
+            "is_active": 1
+        },
+        {
+            "code": "gpt-5.6-luna",
+            "name": "GPT-5.6 Luna",
+            "description": "High-volume GPT-5.6 efficiency model.",
+            "max_tokens": 128000,
+            "context_window": 400000,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling"],
+            "is_active": 1
+        },
         {
             "code": "gpt-image-1",
             "name": "GPT Image 1",
@@ -97,100 +171,31 @@
                 "transparent_background_value": "transparent",
                 "transparent_output_format": "png"
             },
-            "is_active": 1,
-            "is_default": 1
-        },
-        {
-            "code": "dall-e-3",
-            "name": "DALL-E 3",
-            "description": "OpenAI text-to-image generation model.",
-            "max_tokens": 0,
-            "context_window": 0,
-            "input_price": 0.00,
-            "output_price": 0.00,
-            "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"]
-        },
-        {
-            "code": "dall-e-2",
-            "name": "DALL-E 2",
-            "description": "OpenAI legacy text-to-image generation model.",
-            "max_tokens": 0,
-            "context_window": 0,
-            "input_price": 0.00,
-            "output_price": 0.00,
-            "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"]
+            "is_active": 1
         },
         {
             "code": "gpt-4o",
             "name": "GPT-4o",
-            "description": "OpenAI multimodal flagship model for text and vision.",
+            "description": "Previous-generation multimodal model kept for compatibility.",
             "max_tokens": 16384,
             "context_window": 128000,
             "input_price": 2.50,
             "output_price": 10.00,
-            "capabilities": ["chat", "vision", "code", "function_calling"]
+            "capabilities": ["chat", "vision", "code", "function_calling"],
+            "is_active": 1
         },
         {
             "code": "gpt-4o-mini",
             "name": "GPT-4o Mini",
-            "description": "Smaller and faster GPT-4o variant.",
+            "description": "Smaller previous-generation GPT-4o variant.",
             "max_tokens": 16384,
             "context_window": 128000,
             "input_price": 0.15,
             "output_price": 0.60,
-            "capabilities": ["chat", "vision", "code", "function_calling"]
-        },
-        {
-            "code": "gpt-4-turbo",
-            "name": "GPT-4 Turbo",
-            "description": "Enhanced GPT-4 variant with larger context window.",
-            "max_tokens": 4096,
-            "context_window": 128000,
-            "input_price": 10.00,
-            "output_price": 30.00,
-            "capabilities": ["chat", "vision", "code", "function_calling"]
-        },
-        {
-            "code": "gpt-4",
-            "name": "GPT-4",
-            "description": "Strong reasoning and analysis model.",
-            "max_tokens": 8192,
-            "context_window": 8192,
-            "input_price": 30.00,
-            "output_price": 60.00,
-            "capabilities": ["chat", "code", "function_calling"]
-        },
-        {
-            "code": "gpt-3.5-turbo",
-            "name": "GPT-3.5 Turbo",
-            "description": "Fast and economical chat model.",
-            "max_tokens": 4096,
-            "context_window": 16385,
-            "input_price": 0.50,
-            "output_price": 1.50,
-            "capabilities": ["chat", "code", "function_calling"]
-        },
-        {
-            "code": "o1-preview",
-            "name": "o1 Preview",
-            "description": "Reasoning-focused preview model.",
-            "max_tokens": 32768,
-            "context_window": 128000,
-            "input_price": 15.00,
-            "output_price": 60.00,
-            "capabilities": ["chat", "reasoning", "code"]
-        },
-        {
-            "code": "o1-mini",
-            "name": "o1 Mini",
-            "description": "Lower-cost reasoning model for coding and math tasks.",
-            "max_tokens": 65536,
-            "context_window": 128000,
-            "input_price": 3.00,
-            "output_price": 12.00,
-            "capabilities": ["chat", "reasoning", "code"]
+            "capabilities": ["chat", "vision", "code", "function_calling"],
+            "is_active": 1
         }
-    ]
+    ],
+    "models_updated_at": "2026-10-10",
+    "models_source": "https://developers.openai.com/api/docs/models"
 }

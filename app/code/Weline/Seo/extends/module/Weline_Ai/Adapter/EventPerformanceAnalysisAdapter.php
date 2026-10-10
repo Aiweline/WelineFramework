@@ -10,7 +10,7 @@ use Weline\Seo\Service\EventPerformanceAnalysisService;
 
 final class EventPerformanceAnalysisAdapter implements ScenarioAdapterInterface, AdapterModelBindingInterface
 {
-    public function getDefaultModelBindings(): array { return ['text2text' => 'deepseek-v4-flash']; }
+    public function getDefaultModelBindings(): array { return ['text2text' => 'deepseek-flash']; }
     public function getCode(): string { return 'seo_event_performance_analysis'; }
     public function getName(): string { return (string)__('SEO 事件表现分析'); }
     public function getDescription(): string { return (string)__('将汇总的访客与搜索证据转换为一条有边界的结构化优化建议。'); }

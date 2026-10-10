@@ -15,7 +15,7 @@ Register::register(
     Register::MODULE,
     'Weline_Seo',
     __DIR__,
-    '1.1.0',  // 新增 SeoWebsiteStats 统计模型、平台适配器 getStats() 接口、StatsSync 定时任务
+    '1.1.1',  // 默认文本模型绑定 deepseek-flash（V4.1 Flash）
     'SEO 集成与智能优化模块',
     [
         'Weline_Ai',

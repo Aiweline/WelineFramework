@@ -5,16 +5,16 @@
     "models_prefix": [
         "deepseek-"
     ],
-    "test_model": "deepseek-chat",
+    "test_model": "deepseek-flash",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
     "description": "DeepSeek AI API服务",
     "website": "https://www.deepseek.com",
-    "documentation": "https://platform.deepseek.com/api-docs",
+    "documentation": "https://api-docs.deepseek.com",
     "account_setup_guide": {
         "title": "DeepSeek API 接入指南",
-        "summary": "用于 DeepSeek 文本对话和推理模型。需要在 DeepSeek 开放平台创建 API Key，并确保账户有可用余额。",
+        "summary": "用于 DeepSeek 文本对话、推理与原生多模态（V4.1 Flash）。需要在 DeepSeek 开放平台创建 API Key，并确保账户有可用余额。",
         "links": [
             {
                 "label": "DeepSeek 开放平台",
@@ -26,7 +26,11 @@
             },
             {
                 "label": "DeepSeek API 文档",
-                "url": "https://platform.deepseek.com/api-docs"
+                "url": "https://api-docs.deepseek.com"
+            },
+            {
+                "label": "Models & Pricing",
+                "url": "https://api-docs.deepseek.com/quick_start/pricing"
             }
         ],
         "steps": [
@@ -48,8 +52,9 @@
             "currency": "USD"
         },
         "notes": [
-            "DeepSeek 当前配置用于文本模型，不用于 AI 建站文生图。",
-            "如果要做图片生成，请使用 Google Nano Banana 或 OpenAI 图片模型的 text2image 适配器。"
+            "当前正式型号：deepseek-flash（DeepSeek-V4.1-Flash，原生多模态）与 deepseek-v4-pro。",
+            "legacy 名 deepseek-v4-flash / deepseek-v4-flash-vision-exp 已退役，请求会临时路由到 V4.1 Flash 并按 Flash 计费；新配置请用 deepseek-flash。",
+            "DeepSeek 不用于 AI 建站文生图；图片生成请使用 Google Nano Banana 或 OpenAI 图片模型。"
         ]
     },
     "supported_features": {
@@ -74,59 +79,77 @@
         "max_tokens_key": "max_tokens"
     },
     "model_config_defaults": {
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "temperature": 0.7,
         "top_p": 1,
         "stream": true,
-        "timeout": 180,
+        "timeout": 900,
         "max_retries": 3,
         "capabilities": [
             "chat",
-            "code"
+            "code",
+            "reasoning",
+            "function_calling"
         ]
     },
     "models": [
         {
-            "code": "deepseek-chat",
-            "name": "deepseek-chat",
-            "description": "DeepSeek通用对话模型",
-            "max_tokens": 4096,
-            "context_window": 32768,
-            "input_price": 0.14,
-            "output_price": 0.28,
+            "code": "deepseek-flash",
+            "name": "DeepSeek V4.1 Flash",
+            "description": "DeepSeek-V4.1-Flash：当前最新主力模型，原生多模态视觉理解，支持 thinking / non-thinking、工具调用与 Responses API。",
+            "max_tokens": 384000,
+            "context_window": 1000000,
+            "input_price": 0.3,
+            "output_price": 1.2,
+            "primary_modality": "text2text",
             "capabilities": [
                 "chat",
-                "code"
-            ]
+                "vision",
+                "reasoning",
+                "code",
+                "function_calling",
+                "json_mode"
+            ],
+            "is_active": 1,
+            "is_default": 1
         },
         {
-            "code": "deepseek-reasoner",
-            "name": "deepseek-reasoner",
-            "description": "擅长复杂推理任务的模型",
-            "max_tokens": 8192,
-            "context_window": 64000,
-            "input_price": 0.55,
-            "output_price": 2.19,
+            "code": "deepseek-v4-pro",
+            "name": "DeepSeek V4 Pro",
+            "description": "DeepSeek-V4-Pro：高能力 Agent / 推理型号；继续提供 API，计费方式见官方价目。",
+            "max_tokens": 384000,
+            "context_window": 1000000,
+            "input_price": 1.32,
+            "output_price": 3.96,
+            "primary_modality": "text2text",
             "capabilities": [
                 "chat",
                 "reasoning",
-                "code"
-            ]
+                "code",
+                "function_calling",
+                "json_mode"
+            ],
+            "is_active": 1
         },
         {
-            "code": "deepseek-v3",
-            "name": "DeepSeek V3",
-            "description": "DeepSeek V3 通用大模型",
-            "max_tokens": 8192,
-            "context_window": 64000,
-            "input_price": 0.55,
-            "output_price": 2.19,
+            "code": "deepseek-v4-flash",
+            "name": "DeepSeek V4 Flash（兼容别名）",
+            "description": "已退役别名：请求临时路由到 deepseek-flash（V4.1 Flash）并按 Flash 计费。新配置请改用 deepseek-flash。",
+            "max_tokens": 384000,
+            "context_window": 1000000,
+            "input_price": 0.3,
+            "output_price": 1.2,
+            "primary_modality": "text2text",
             "capabilities": [
                 "chat",
+                "vision",
                 "reasoning",
-                "code"
-            ]
+                "code",
+                "function_calling"
+            ],
+            "is_active": 1
         }
     ],
-    "models_updated_at": 1770619721
+    "models_updated_at": "2026-10-10",
+    "models_source": "https://api-docs.deepseek.com/quick_start/pricing"
 }

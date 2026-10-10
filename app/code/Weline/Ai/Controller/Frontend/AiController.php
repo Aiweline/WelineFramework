@@ -218,20 +218,20 @@ class AiController extends FrontendController
         
         return [
             [
-                'code' => 'gpt-3.5-turbo',
-                'name' => 'GPT-3.5 Turbo',
+                'code' => 'gpt-6-luna',
+                'name' => 'GPT-6 Luna',
                 'supplier' => 'openai',
-                'version' => '1.0',
-                'max_tokens' => 4096,
-                'has_user_config' => $this->hasUserModelConfig($userId, 'gpt-3.5-turbo')
+                'version' => '6',
+                'max_tokens' => 128000,
+                'has_user_config' => $this->hasUserModelConfig($userId, 'gpt-6-luna')
             ],
             [
-                'code' => 'deepseek-v3',
-                'name' => 'DeepSeek V3',
+                'code' => 'deepseek-flash',
+                'name' => 'DeepSeek V4.1 Flash',
                 'supplier' => 'deepseek',
-                'version' => '3.0',
-                'max_tokens' => 8192,
-                'has_user_config' => $this->hasUserModelConfig($userId, 'deepseek-v3')
+                'version' => '4.1',
+                'max_tokens' => 384000,
+                'has_user_config' => $this->hasUserModelConfig($userId, 'deepseek-flash')
             ]
         ];
     }

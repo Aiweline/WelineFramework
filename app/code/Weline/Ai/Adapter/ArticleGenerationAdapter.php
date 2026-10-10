@@ -46,7 +46,7 @@ class ArticleGenerationAdapter implements ScenarioAdapterInterface, AdapterModel
 
     public function getDefaultModelBindings(): array
     {
-        return ['text2text' => 'deepseek-v4-flash'];
+        return ['text2text' => 'deepseek-flash'];
     }
 
     public function getCode(): string

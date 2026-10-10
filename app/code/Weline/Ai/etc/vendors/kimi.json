@@ -7,7 +7,7 @@
     "models_prefix": ["kimi-", "moonshot-"],
     "allow_custom_models": true,
     "quick_create": true,
-    "test_model": "kimi-k2.6",
+    "test_model": "kimi-k3",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
@@ -47,26 +47,51 @@
     },
     "models": [
         {
+            "code": "kimi-k3",
+            "name": "Kimi K3",
+            "description": "Kimi most capable model (2.8T), native vision, 1M context for software engineering, knowledge work and deep reasoning.",
+            "max_tokens": 32768,
+            "context_window": 1000000,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "capabilities": ["chat", "vision", "video", "reasoning", "code", "function_calling", "json_mode", "web_search"],
+            "is_active": 1,
+            "is_default": 1
+        },
+        {
+            "code": "kimi-k2.7-code",
+            "name": "Kimi K2.7 Code",
+            "description": "Dedicated coding model with stronger long-context instruction following and higher coding task success.",
+            "max_tokens": 32768,
+            "context_window": 256000,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "json_mode"],
+            "is_active": 1
+        },
+        {
+            "code": "kimi-k2.7-code-highspeed",
+            "name": "Kimi K2.7 Code Highspeed",
+            "description": "High-speed variant of Kimi K2.7 Code (~180 tokens/s, up to ~260 in short context).",
+            "max_tokens": 32768,
+            "context_window": 256000,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "json_mode"],
+            "is_active": 1
+        },
+        {
             "code": "kimi-k2.6",
             "name": "Kimi K2.6",
-            "description": "Kimi latest multimodal model for coding, long-context reasoning, agent tasks, image and video input.",
+            "description": "General multimodal model with thinking/non-thinking modes, image/video input and 256K context.",
             "max_tokens": 32768,
             "context_window": 256000,
             "input_price": 6.50,
             "output_price": 27.00,
-            "capabilities": ["chat", "vision", "video", "reasoning", "code", "function_calling", "json_mode", "web_search"]
-        },
-        {
-            "code": "kimi-k2.5",
-            "name": "Kimi K2.5",
-            "description": "Kimi multimodal model for agent, coding, vision and general tasks.",
-            "max_tokens": 32768,
-            "context_window": 256000,
-            "input_price": 4.00,
-            "output_price": 21.00,
-            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling", "json_mode", "web_search"]
+            "capabilities": ["chat", "vision", "video", "reasoning", "code", "function_calling", "json_mode", "web_search"],
+            "is_active": 1
         }
     ],
-    "models_updated_at": "2026-04-24",
-    "models_source": "https://platform.kimi.com/docs/models"
+    "models_updated_at": "2026-10-10",
+    "models_source": "https://platform.kimi.ai/docs/models"
 }

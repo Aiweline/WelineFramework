@@ -3,7 +3,7 @@
     "code": "google",
     "base_url": "https://generativelanguage.googleapis.com/v1beta",
     "models_prefix": ["gemini-", "bard-"],
-    "test_model": "gemini-flash-latest",
+    "test_model": "gemini-3.8-flash",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",
@@ -12,15 +12,15 @@
     "documentation": "https://ai.google.dev/gemini-api/docs",
     "account_setup_guide": {
         "title": "Google Gemini / Nano Banana 接入指南",
-        "summary": "用于 AI 建站工作台文生图。Google Gemini API 需要在 Google AI Studio 创建 API Key；生产额度和更高限额需要绑定 Google Cloud 账单。",
+        "summary": "用于 AI 建站工作台文生图与 Gemini 文本/多模态推理。Google Gemini API 需要在 Google AI Studio 创建 API Key；生产额度和更高限额需要绑定 Google Cloud 账单。",
         "links": [
             {
                 "label": "创建或查看 Gemini API Key",
                 "url": "https://aistudio.google.com/app/apikey"
             },
             {
-                "label": "Gemini API Key 官方说明",
-                "url": "https://ai.google.dev/gemini-api/docs/api-key"
+                "label": "Gemini API Models",
+                "url": "https://ai.google.dev/gemini-api/docs/models"
             },
             {
                 "label": "Gemini API 价格与付费层级",
@@ -37,7 +37,7 @@
             "API密钥粘贴从 Google AI Studio 复制的 Gemini API Key。",
             "API基础URL建议留空，系统会使用默认 Gemini REST 地址；如需显式填写，可填 https://generativelanguage.googleapis.com 或 https://generativelanguage.googleapis.com/v1beta。",
             "保存后点击连接测试；测试通过后启用账户，并设为默认账户。",
-            "到 AI 模型同步 Google 模型，然后按实际业务适配器绑定 gemini-2.5-flash-image。"
+            "到 AI 模型同步 Google 模型，然后按实际业务适配器绑定文生图型号（如 gemini-nano-banana-2.1 或 gemini-2.5-flash-image）。"
         ],
         "field_hints": {
             "provider_code": "Google",
@@ -48,8 +48,8 @@
             "currency": "USD"
         },
         "notes": [
-            "ChatGPT/Codex 订阅不包含 OpenAI API 额度；Google Gemini API 额度也需要单独的 Google API Key/账单。",
-            "Nano Banana 文生图模型使用 gemini-2.5-flash-image，Nano Banana Pro 使用 gemini-3-pro-image-preview。",
+            "新项目文本主力：gemini-3.8-flash；高性价比可用 gemini-3.5-flash-lite。",
+            "文生图：Nano Banana 2.1 = gemini-nano-banana-2.1；Nano Banana Pro = gemini-3-pro-image；兼容旧 Nano Banana = gemini-2.5-flash-image。",
             "API Key 属于敏感凭证，只应保存在服务端后台，不要放到前端代码或公开仓库。"
         ]
     },
@@ -87,9 +87,58 @@
     },
     "models": [
         {
+            "code": "gemini-3.8-flash",
+            "name": "Gemini 3.8 Flash",
+            "description": "Google latest intelligent Flash model for long-horizon engineering, agents, and enterprise workflows.",
+            "max_tokens": 64000,
+            "context_window": 1048576,
+            "input_price": 0.75,
+            "output_price": 3.75,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling"],
+            "is_active": 1,
+            "is_default": 1
+        },
+        {
+            "code": "gemini-3.5-flash-lite",
+            "name": "Gemini 3.5 Flash-Lite",
+            "description": "Fastest cost-effective Gemini 3.5 model for high-throughput execution.",
+            "max_tokens": 64000,
+            "context_window": 1048576,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "code"],
+            "is_active": 1
+        },
+        {
+            "code": "gemini-3.1-pro-preview",
+            "name": "Gemini 3.1 Pro",
+            "description": "Advanced Gemini 3.1 Pro for complex multimodal reasoning and agentic coding.",
+            "max_tokens": 64000,
+            "context_window": 1048576,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "reasoning", "code", "function_calling"],
+            "is_active": 1
+        },
+        {
+            "code": "gemini-3.6-flash",
+            "name": "Gemini 3.6 Flash",
+            "description": "Previous-generation Flash balancing speed and multimodal capabilities.",
+            "max_tokens": 64000,
+            "context_window": 1048576,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2text",
+            "capabilities": ["chat", "vision", "code"],
+            "is_active": 1
+        },
+        {
             "code": "gemini-flash-latest",
             "name": "Gemini Flash Latest",
-            "description": "Google Gemini Flash latest alias for provider connection testing and fast text generation.",
+            "description": "Moving alias for the latest Gemini Flash release (connection tests / rolling tip).",
             "max_tokens": 8192,
             "context_window": 1048576,
             "input_price": 0.00,
@@ -99,9 +148,9 @@
             "is_active": 1
         },
         {
-            "code": "gemini-2.5-flash-image",
-            "name": "Gemini 2.5 Flash Image (Nano Banana)",
-            "description": "Google Nano Banana text-to-image model for fast image generation and editing.",
+            "code": "gemini-nano-banana-2.1",
+            "name": "Nano Banana 2.1",
+            "description": "High-efficiency image generation and editing with improved typography and multi-turn consistency.",
             "max_tokens": 0,
             "context_window": 0,
             "input_price": 0.00,
@@ -109,15 +158,14 @@
             "primary_modality": "text2image",
             "capabilities": ["image_generation", "image_output"],
             "is_active": 1,
-            "is_default": 1,
             "config": {
                 "response_modalities": ["TEXT", "IMAGE"]
             }
         },
         {
-            "code": "gemini-3-pro-image-preview",
-            "name": "Gemini 3 Pro Image Preview (Nano Banana Pro)",
-            "description": "Google Nano Banana Pro text-to-image model for high-fidelity visual asset production.",
+            "code": "gemini-3.1-flash-image",
+            "name": "Nano Banana 2",
+            "description": "High-efficiency production-scale Gemini 3 image generation (Nano Banana 2).",
             "max_tokens": 0,
             "context_window": 0,
             "input_price": 0.00,
@@ -126,12 +174,58 @@
             "capabilities": ["image_generation", "image_output"],
             "config": {
                 "response_modalities": ["TEXT", "IMAGE"]
+            },
+            "is_active": 1
+        },
+        {
+            "code": "gemini-3-pro-image",
+            "name": "Nano Banana Pro",
+            "description": "Studio-quality Nano Banana Pro image generation and editing.",
+            "max_tokens": 0,
+            "context_window": 0,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2image",
+            "capabilities": ["image_generation", "image_output"],
+            "config": {
+                "response_modalities": ["TEXT", "IMAGE"]
+            },
+            "is_active": 1
+        },
+        {
+            "code": "gemini-3-pro-image-preview",
+            "name": "Nano Banana Pro（preview 别名）",
+            "description": "兼容旧 ID；官方稳定名称为 gemini-3-pro-image。",
+            "max_tokens": 0,
+            "context_window": 0,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2image",
+            "capabilities": ["image_generation", "image_output"],
+            "config": {
+                "response_modalities": ["TEXT", "IMAGE"]
+            },
+            "is_active": 1
+        },
+        {
+            "code": "gemini-2.5-flash-image",
+            "name": "Gemini 2.5 Flash Image (Nano Banana)",
+            "description": "Previous Nano Banana text-to-image model kept for compatibility.",
+            "max_tokens": 0,
+            "context_window": 0,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "primary_modality": "text2image",
+            "capabilities": ["image_generation", "image_output"],
+            "is_active": 1,
+            "config": {
+                "response_modalities": ["TEXT", "IMAGE"]
             }
         },
         {
             "code": "gemini-2.5-flash",
             "name": "Gemini 2.5 Flash",
-            "description": "Fast Gemini text and multimodal reasoning model.",
+            "description": "Gemini 2.5 Flash retained for accounts still authorized on the 2.5 family.",
             "max_tokens": 8192,
             "context_window": 1048576,
             "input_price": 0.00,
@@ -139,28 +233,8 @@
             "primary_modality": "text2text",
             "capabilities": ["chat", "vision", "code"],
             "is_active": 1
-        },
-        {
-            "code": "gemini-1.5-pro",
-            "name": "Gemini 1.5 Pro",
-            "description": "Gemini multimodal model with long context support.",
-            "max_tokens": 8192,
-            "context_window": 2097152,
-            "input_price": 1.25,
-            "output_price": 5.00,
-            "primary_modality": "text2text",
-            "capabilities": ["chat", "vision", "code"]
-        },
-        {
-            "code": "gemini-1.5-flash",
-            "name": "Gemini 1.5 Flash",
-            "description": "Fast Gemini multimodal model.",
-            "max_tokens": 8192,
-            "context_window": 1048576,
-            "input_price": 0.075,
-            "output_price": 0.30,
-            "primary_modality": "text2text",
-            "capabilities": ["chat", "vision", "code"]
         }
-    ]
+    ],
+    "models_updated_at": "2026-10-10",
+    "models_source": "https://ai.google.dev/gemini-api/docs/models"
 }

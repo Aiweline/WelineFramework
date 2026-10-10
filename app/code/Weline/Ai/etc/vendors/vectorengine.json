@@ -33,7 +33,7 @@
         "midjourney",
         "nano-banana"
     ],
-    "test_model": "deepseek-v4-flash",
+    "test_model": "deepseek-flash",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
     "model_field": "model",

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.8.102',
+    "version" => '1.8.103',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
