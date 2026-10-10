@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Currency\Data;
 
+use Weline\Currency\Helper\CurrencyDisplayName;
 use Weline\Currency\Helper\CurrencyFormatter;
 use Weline\Currency\Model\Currency;
 use Weline\Currency\Model\Currency\LocalDescription;
@@ -159,6 +160,14 @@ class CurrencyData
         $localName = trim((string)($currency['local_name'] ?? ''));
         if ($localName !== '') {
             $currency[Currency::schema_fields_NAME] = $localName;
+
+            return $currency;
+        }
+
+        $code = strtoupper(trim((string)($currency[Currency::schema_fields_CODE] ?? '')));
+        $resolved = CurrencyDisplayName::forCode($code, self::getLocaleCode());
+        if ($resolved !== '') {
+            $currency[Currency::schema_fields_NAME] = $resolved;
         }
 
         return $currency;

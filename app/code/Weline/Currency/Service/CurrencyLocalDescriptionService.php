@@ -170,6 +170,7 @@ class CurrencyLocalDescriptionService
         self::clearProcessCache();
         \Weline\Currency\Data\CurrencyData::clearCache();
         \Weline\Currency\Helper\CurrencySymbol::clearProcessCache();
+        \Weline\Currency\Helper\CurrencyDisplayName::clearProcessCache();
     }
 
     public function deleteLocalNames(int $currencyId): void
@@ -185,6 +186,7 @@ class CurrencyLocalDescriptionService
         self::clearProcessCache();
         \Weline\Currency\Data\CurrencyData::clearCache();
         \Weline\Currency\Helper\CurrencySymbol::clearProcessCache();
+        \Weline\Currency\Helper\CurrencyDisplayName::clearProcessCache();
     }
 
     /**

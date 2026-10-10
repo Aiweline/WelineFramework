@@ -34,6 +34,7 @@ final class CurrencySaveInvalidatesCatalogContractTest extends TestCase
         self::assertStringContainsString('CurrencySelect::clearProcessCaches()', $source);
         self::assertStringContainsString('CurrencyData::clearProcessCache()', $source);
         self::assertStringContainsString('CurrencySymbol::clearProcessCache()', $source);
+        self::assertStringContainsString('CurrencyDisplayName::clearProcessCache()', $source);
         self::assertStringContainsString('CurrencyLocalDescriptionService::clearProcessCache()', $source);
         self::assertStringContainsString('invalidateCachedDefinitions', $source);
     }

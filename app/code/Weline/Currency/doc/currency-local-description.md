@@ -2,7 +2,14 @@
 
 ## Purpose
 
-Currency display names need to follow the active language. `CurrencyData` is the shared read path used by the storefront currency switcher and other callers, so it returns a localized `name` when a matching local description exists.
+Currency display names need to follow the active language. `CurrencyData` is the shared read path used by the storefront currency switcher and other callers.
+
+Resolution order (via `CurrencyDisplayName`):
+
+1. Matching `LocalDescription` row for the active locale (admin override / seed)
+2. PHP `intl` ICU `ResourceBundle` (`ICUDATA-curr`) with locale chain (`el_GR` → `el`)
+3. For non-Chinese locales: `en_US` / `en` ICU name (never leave catalog Chinese as the visible label)
+4. Otherwise keep the catalog base `currency.name`
 
 ## Data Model
 

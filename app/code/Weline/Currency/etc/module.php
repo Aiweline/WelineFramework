@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Currency',
-    'version' => '1.0.22',
+    'version' => '1.0.23',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',

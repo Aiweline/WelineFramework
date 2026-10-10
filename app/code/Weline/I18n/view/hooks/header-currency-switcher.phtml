@@ -9,6 +9,7 @@
 use Weline\Framework\App\State;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Currency\Helper\CurrencyDisplayName;
 use Weline\Currency\Service\CurrencyLocalDescriptionService;
 
 /** @var \Weline\Framework\View\Template $this */
@@ -42,47 +43,39 @@ foreach ([$currentLocale, 'zh_Hans_CN', 'en_US', 'es_ES', 'fr_FR', 'de_DE', 'ja_
     }
 }
 
-$normalizeCurrencyName = static function (string $currencyCode, string $currencyName): string {
+$normalizeCurrencyName = static function (string $currencyCode, string $currencyName) use ($currentLocale): string {
     $currencyCode = strtoupper(trim($currencyCode));
     $currencyName = trim($currencyName);
 
     if ($currencyCode !== '' && ($currencyName === '' || strtoupper($currencyName) === $currencyCode)) {
-        return match ($currencyCode) {
-            'CNY' => '人民币',
-            'USD' => '美元',
-            'EUR' => '欧元',
-            'GBP' => '英镑',
-            default => $currencyName !== '' ? $currencyName : $currencyCode,
-        };
+        // Chinese catalog fallbacks only for zh* locales; other locales use CurrencyDisplayName/ICU.
+        if (CurrencyDisplayName::isChineseFamily($currentLocale)) {
+            return match ($currencyCode) {
+                'CNY' => '人民币',
+                'USD' => '美元',
+                'EUR' => '欧元',
+                'GBP' => '英镑',
+                default => $currencyName !== '' ? $currencyName : $currencyCode,
+            };
+        }
+
+        return $currencyName !== '' ? $currencyName : $currencyCode;
     }
 
     return $currencyName;
 };
 $intlCurrencyName = static function (string $currencyCode, string $localeCode): string {
-    if (!class_exists(\Symfony\Component\Intl\Currencies::class)) {
-        return '';
-    }
-
-    try {
-        return \Symfony\Component\Intl\Currencies::getName($currencyCode, $localeCode);
-    } catch (\Throwable) {
-        return '';
-    }
+    return CurrencyDisplayName::forCode($currencyCode, $localeCode);
 };
 $intlCurrencySymbol = static function (string $currencyCode, string $localeCode = ''): string {
-    if (!class_exists(\Symfony\Component\Intl\Currencies::class)) {
-        return '';
-    }
-
-    try {
-        if ($localeCode !== '') {
-            return \Symfony\Component\Intl\Currencies::getSymbol($currencyCode, $localeCode);
+    if (class_exists(\Weline\Currency\Helper\CurrencySymbol::class)) {
+        $glyph = \Weline\Currency\Helper\CurrencySymbol::forCode($currencyCode);
+        if ($glyph !== '' && strcasecmp($glyph, $currencyCode) !== 0) {
+            return $glyph;
         }
-
-        return \Symfony\Component\Intl\Currencies::getSymbol($currencyCode);
-    } catch (\Throwable) {
-        return '';
     }
+
+    return '';
 };
 $currencyLocalDescriptionService = null;
 if (class_exists(CurrencyLocalDescriptionService::class)) {
@@ -237,8 +230,7 @@ foreach ($currencies as $currency) {
         $currencySymbol = \Weline\Currency\Helper\CurrencySymbol::forCode($currencyCode);
     }
 
-    $currencyName = $normalizeCurrencyName($currencyCode, (string)($currency['name'] ?? $currencyCode));
-    $aliases = [$currencyCode, $currencySymbol, $currencyName, (string)($currency['format'] ?? '')];
+    $aliases = [$currencyCode, $currencySymbol, (string)($currency['format'] ?? '')];
     $localNamesByLocale = [];
 
     foreach ($aliasDisplayLocales as $displayLocale) {
@@ -258,14 +250,13 @@ foreach ($currencies as $currency) {
         }
     }
 
-    // Prefer locale-specific display name (local description → ICU → existing).
-    $localizedDisplayName = trim((string)($localNamesByLocale[$currentLocale] ?? ''));
-    if ($localizedDisplayName === '') {
-        $localizedDisplayName = $intlCurrencyName($currencyCode, $currentLocale);
+    // Prefer locale-specific display name (local description → ICU → Chinese-only catalog fallback).
+    $localOverride = trim((string)($localNamesByLocale[$currentLocale] ?? ''));
+    $currencyName = CurrencyDisplayName::forCode($currencyCode, $currentLocale, $localOverride);
+    if ($currencyName === '') {
+        $currencyName = $normalizeCurrencyName($currencyCode, (string)($currency['name'] ?? $currencyCode));
     }
-    if ($localizedDisplayName !== '') {
-        $currencyName = $localizedDisplayName;
-    }
+    $aliases[] = $currencyName;
 
     $normalizedCurrencies[] = [
         'code' => $currencyCode,

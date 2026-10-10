@@ -37,6 +37,14 @@ class CurrencyDataLocalDescriptionTest extends TestCase
         self::assertSame('US Dollar', $currency[Currency::schema_fields_NAME]);
     }
 
+    public function testApplyLocalDescriptionUsesDisplayNameHelperWhenLocalMissing(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Data/CurrencyData.php';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('CurrencyDisplayName::forCode', $source);
+        self::assertStringContainsString('use Weline\\Currency\\Helper\\CurrencyDisplayName;', $source);
+    }
+
     public function testBackendLocalNameNormalizationIgnoresInvalidLocaleCodes(): void
     {
         $service = (new \ReflectionClass(CurrencyLocalDescriptionService::class))

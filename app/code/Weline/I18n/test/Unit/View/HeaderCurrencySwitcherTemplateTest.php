@@ -80,6 +80,17 @@ final class HeaderCurrencySwitcherTemplateTest extends TestCase
         self::assertStringContainsString('name="chevron-down"', $content);
     }
 
+    public function testCurrencyDisplayNamesUseCurrencyHelperNotSymfonyIntl(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('CurrencyDisplayName', $content);
+        self::assertStringContainsString('CurrencyDisplayName::forCode', $content);
+        self::assertStringNotContainsString('Symfony\\Component\\Intl\\Currencies', $content);
+        self::assertStringNotContainsString('Symfony\Component\Intl\Currencies', $content);
+    }
+
     public function testSwitcherInstanceIdsStayUniqueWithoutSharedRequestContext(): void
     {
         $first = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency-switcher-menu');
