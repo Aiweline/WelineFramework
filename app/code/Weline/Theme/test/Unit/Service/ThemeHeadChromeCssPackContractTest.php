@@ -55,6 +55,11 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertStringContainsString('/Weline/Theme/theme-head/', $src);
         self::assertStringContainsString('ThemeData::getCurrentTheme', $src);
         self::assertStringContainsString('?WelineTheme $theme = null', $src);
+        self::assertMatchesRegularExpression(
+            '/function buildWidgetAssetArtifact\s*\([^)]*\?WelineTheme\s+\$theme\s*=\s*null/s',
+            $src
+        );
+        self::assertStringContainsString('/Weline/Theme/widget-assets/', $src);
     }
 
     public function testStorefrontPackEmitsBeforeStylesAfterHook(): void

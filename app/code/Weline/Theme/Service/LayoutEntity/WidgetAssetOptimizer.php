@@ -126,7 +126,9 @@ final class WidgetAssetOptimizer
         $minify = !empty($options[$type . '_minify']);
         // Merge path already decided this batch should pack (layout single pack / late source /
         // multi-file). Always publish so DEV matches PROD tags (incl. deferred CSS rewrite).
-        $url = $this->publisher->publish($pending, $minify);
+        $theme = $options['_theme'] ?? null;
+        $theme = $theme instanceof \Weline\Theme\Model\WelineTheme ? $theme : null;
+        $url = $this->publisher->publish($pending, $minify, $theme);
         if ($url === null) {
             return null;
         }

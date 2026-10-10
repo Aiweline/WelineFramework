@@ -46,9 +46,14 @@ final class TobStorefrontMoneySummaryPolicy implements StorefrontMoneySummaryPol
 
     public function adjustDto(array $dto, array $ctx = []): array
     {
+        $shell = strtolower(trim((string)($ctx['shell_cart_type'] ?? '')));
         $cartType = strtolower(trim((string)($ctx['cart_type'] ?? $dto['cart_type'] ?? '')));
-        if ($cartType !== 'tob') {
-            return $dto;
+        // Shell toc wins — strip sticky deposit chrome (same contract as checkout-tob.js).
+        if ($shell === 'toc' || ($shell !== 'tob' && $cartType !== 'tob')) {
+            return $this->normalizeRetailDto($dto, $ctx);
+        }
+        if ($shell === 'tob') {
+            $cartType = 'tob';
         }
 
         $dto['commerce_deposit_allowed'] = true;
@@ -79,6 +84,30 @@ final class TobStorefrontMoneySummaryPolicy implements StorefrontMoneySummaryPol
         if ($depositLabel !== '') {
             $dto['payable_label'] = $depositLabel;
         }
+
+        return $dto;
+    }
+
+    /**
+     * Retail / toc: clear ToB deposit rows and restore a retail payable label.
+     *
+     * @param array<string, mixed> $dto
+     * @param array<string, mixed> $ctx
+     * @return array<string, mixed>
+     */
+    private function normalizeRetailDto(array $dto, array $ctx = []): array
+    {
+        $dto['cart_type'] = 'toc';
+        $dto['commerce_deposit_allowed'] = false;
+        $dto['deposit_minor'] = 0;
+        $dto['credit_minor'] = 0;
+        $dto['order_total_minor'] = 0;
+        $dto['order_total_label'] = '';
+        $retailLabel = trim((string)($ctx['payable_label_retail'] ?? ''));
+        if ($retailLabel === '') {
+            $retailLabel = $this->phrase('小计');
+        }
+        $dto['payable_label'] = $retailLabel;
 
         return $dto;
     }

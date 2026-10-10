@@ -7,7 +7,9 @@ use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Minify\StaticAssetMinifier;
+use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 use Weline\Theme\Service\ThemeResourceGateway;
 
@@ -54,37 +56,76 @@ class WidgetAssetArtifactPublisher
         }
     }
 
-    public function publish(array $assets, bool $minify): ?string
+    /**
+     * @param list<array<string, mixed>> $assets
+     * @param WelineTheme|null $theme Bake/request theme; when null, ThemeData pin is used.
+     *        Unresolved theme → null (fail-closed, no Default dump).
+     */
+    public function publish(array $assets, bool $minify, ?WelineTheme $theme = null): ?string
     {
         try {
             $sources = [];
             foreach ($assets as $asset) {
                 $source = $this->source($asset);
-                if ($source === null || !$source['relocatable']) { return null; }
+                if ($source === null || !$source['relocatable']) {
+                    return null;
+                }
                 $sources[] = $source;
             }
             $type = $assets[0]['type'];
             $key = hash('sha256', json_encode([$this->implementationVersion(), $type, $minify, array_column($sources, 'hash'), array_column($assets, 'url')], JSON_THROW_ON_ERROR));
+            $theme = $this->resolvePublishTheme($theme);
             $gateway = ObjectManager::getInstance(ThemeResourceGateway::class);
-            $target = $gateway->buildWidgetAssetArtifact($key, $type, $assets[0]['area'] ?? 'frontend');
-            if ($target === null) { return null; }
+            $target = $gateway->buildWidgetAssetArtifact(
+                $key,
+                $type,
+                $assets[0]['area'] ?? 'frontend',
+                $theme,
+            );
+            if ($target === null) {
+                return null;
+            }
+            // Same content hash under this theme namespace: skip rewrite (fast upgrade path).
             if (!is_file($target['path'])) {
                 $contents = [];
                 foreach ($sources as $index => $source) {
                     $content = $source['content'];
-                    if ($type === 'css') { $content = $this->rewriteCssUrls($content, $assets[$index]['url']); }
-                    if ($minify) { $content = ObjectManager::getInstance(StaticAssetMinifier::class)->minifyFileContent($content, $type); }
+                    if ($type === 'css') {
+                        $content = $this->rewriteCssUrls($content, $assets[$index]['url']);
+                    }
+                    if ($minify) {
+                        $content = ObjectManager::getInstance(StaticAssetMinifier::class)->minifyFileContent($content, $type);
+                    }
                     $contents[] = $content;
                 }
                 $content = implode($type === 'js' ? "\n;\n" : "\n", $contents);
-                if ($content === '') { return null; }
+                if ($content === '') {
+                    return null;
+                }
                 ObjectManager::getInstance(AtomicCompiledFilePublisher::class)->publish($target['path'], $content);
             }
+
             return $target['url'];
         } catch (\Throwable $e) {
-            if (function_exists('w_log_warning')) { w_log_warning('Widget resource publication failed: ' . $e->getMessage()); }
+            if (function_exists('w_log_warning')) {
+                w_log_warning('Widget resource publication failed: ' . $e->getMessage());
+            }
+
             return null;
         }
+    }
+
+    private function resolvePublishTheme(?WelineTheme $theme): ?WelineTheme
+    {
+        if ($theme instanceof WelineTheme && (int)$theme->getId() > 0) {
+            return $theme;
+        }
+        $current = ThemeData::getCurrentTheme();
+        if ($current instanceof WelineTheme && (int)$current->getId() > 0) {
+            return $current;
+        }
+
+        return null;
     }
 
     private function implementationVersion(): string

@@ -7,6 +7,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
+use Weline\Theme\Service\SharedChromeService;
 use Weline\Widget\Service\WidgetRegistry;
 
 /**
@@ -105,6 +106,8 @@ final class ThemeLayoutEntityAssetCollector
                 }
             }
         }
+
+        $this->promoteChromeHostNestedLayoutCss($nodes, $layoutCss, $layoutJs, $layoutSeen);
 
         $sourceCss = array_values(array_filter($sourceCss, static fn(string $p): bool => !isset($layoutSeen[strtolower($p)])));
         $sourceJs = array_values(array_filter($sourceJs, static fn(string $p): bool => !isset($layoutSeen[strtolower($p)])));
@@ -301,6 +304,48 @@ final class ThemeLayoutEntityAssetCollector
         }
 
         return \trim($path);
+    }
+
+    /**
+     * When a chrome host (e.g. mini-cart-icon) is on the page, nested slot widgets
+     * only declare @widget.source — those CSS files land in late deferred packs.
+     * Peers listed on {@see SharedChromeService::CHROME_HOST_NESTED_LAYOUT_CSS_PEERS}
+     * are merged into layout_css so footer first-paint chrome stays correct.
+     *
+     * @param array<string|int, mixed> $nodes
+     * @param list<string> $layoutCss
+     * @param list<string> $layoutJs
+     * @param array<string, true> $layoutSeen
+     */
+    private function promoteChromeHostNestedLayoutCss(
+        array $nodes,
+        array &$layoutCss,
+        array &$layoutJs,
+        array &$layoutSeen,
+    ): void {
+        $hostsPresent = [];
+        foreach ($nodes as $node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            if (\array_key_exists('is_active', $node) && empty($node['is_active'])) {
+                continue;
+            }
+            $code = \strtolower(\trim((string)($node['widget_code'] ?? '')));
+            if ($code !== '') {
+                $hostsPresent[$code] = true;
+            }
+        }
+        foreach (SharedChromeService::CHROME_HOST_NESTED_LAYOUT_CSS_PEERS as $hostCode => $paths) {
+            if (empty($hostsPresent[\strtolower((string)$hostCode)])) {
+                continue;
+            }
+            foreach ($paths as $rawPath) {
+                foreach ($this->splitPaths((string)$rawPath) as $path) {
+                    $this->bucketPath($path, self::BUCKET_LAYOUT, $layoutCss, $layoutJs, $layoutSeen);
+                }
+            }
+        }
     }
 
     /**

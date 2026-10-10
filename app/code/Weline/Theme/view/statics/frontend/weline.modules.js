@@ -33,7 +33,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     miniCartIcon: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20261010-tob-order-total2"
+            "Weline_Theme::js/widgets/mini-cart-icon.js?v=20261010-shell-toc-wins1"
         ],
         globalVar: "WelineMiniCartIcon",
         load: "eager",

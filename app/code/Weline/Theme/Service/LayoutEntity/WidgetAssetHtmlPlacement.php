@@ -61,6 +61,12 @@ final class WidgetAssetHtmlPlacement
             foreach ($assets as $asset) { if ($asset['kind'] === $kind) { $ordered[] = $asset; } }
         }
         if ($options !== []) {
+            if (!(($options['_theme'] ?? null) instanceof \Weline\Theme\Model\WelineTheme)) {
+                $current = \Weline\Theme\Helper\ThemeData::getCurrentTheme();
+                if ($current instanceof \Weline\Theme\Model\WelineTheme && (int)$current->getId() > 0) {
+                    $options['_theme'] = $current;
+                }
+            }
             $optimizer = $this->optimizer ?? \Weline\Framework\Manager\ObjectManager::getInstance(WidgetAssetOptimizer::class);
             $ordered = $optimizer->transform($ordered, $options);
         }

@@ -20,17 +20,38 @@ final class ThemeResourceGateway
     ) {
     }
 
-    /** Immutable generated resources use the same namespace and URL builder as layout assets. */
-    public function buildWidgetAssetArtifact(string $hash, string $extension, string $area = 'frontend'): ?array
-    {
-        if (!preg_match('/^[a-f0-9]{64}$/', $hash) || !in_array($extension, ['css', 'js'], true)) { return null; }
+    /**
+     * Immutable widget-asset packs under the active theme public namespace.
+     * Pass the bake/request theme explicitly so multi-theme upgrade never lands
+     * packs under Default (or another scope) because module leaves are shared.
+     *
+     * @return array{path:string,url:string}|null
+     */
+    public function buildWidgetAssetArtifact(
+        string $hash,
+        string $extension,
+        string $area = 'frontend',
+        ?WelineTheme $theme = null,
+    ): ?array {
+        if (!preg_match('/^[a-f0-9]{64}$/', $hash) || !in_array($extension, ['css', 'js'], true)) {
+            return null;
+        }
         $area = $this->themeContext->normalizeArea($area);
-        $theme = $this->resolveTheme($area, null);
-        if (!$theme || !$theme->getId()) { return null; }
+        $theme = $this->resolveTheme($area, $theme);
+        if (!$theme || !$theme->getId()) {
+            // Fail-closed: never write a bare /Weline/Theme/widget-assets pack.
+            return null;
+        }
         $namespace = $this->themeStaticNamespaceService->resolvePublicThemePath($theme);
-        if ($namespace === '') { return null; }
+        if ($namespace === '') {
+            return null;
+        }
         $relative = trim($namespace, '/') . '/Weline/Theme/widget-assets/' . $hash . '.' . $extension;
-        return ['path' => rtrim(BP, '/\\') . '/pub/static/' . $relative, 'url' => $this->buildStaticUrl($relative, false)];
+
+        return [
+            'path' => rtrim(BP, '/\\') . '/pub/static/' . $relative,
+            'url' => $this->buildStaticUrl($relative, false),
+        ];
     }
 
     /**

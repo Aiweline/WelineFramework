@@ -45,6 +45,32 @@ final class ThemeLayoutEntityWidgetAssetsContractTest extends TestCase
         self::assertNotSame('', $manifest['fp']);
     }
 
+    public function testMiniCartIconPromotesNestedMoneySummaryCssToLayoutBucket(): void
+    {
+        $collector = new ThemeLayoutEntityAssetCollector(null);
+        $manifest = $collector->collectFromNodes([
+            [
+                'node_uid' => str_repeat('c', 32),
+                'widget_module' => 'Weline_Theme',
+                'widget_code' => 'mini-cart-icon',
+                'widget_type' => 'header',
+                'is_active' => true,
+                'layout_source' => 'Weline_Theme::css/widgets/mini-cart-drawer.css',
+                'source' => 'Weline_Theme::js/widgets/mini-cart-icon.js',
+            ],
+        ], true);
+
+        self::assertContains(
+            'Weline_Checkout::css/widgets/storefront-money-summary.css',
+            $manifest['layout_css'],
+            'Nested money-summary must ride blocking layout pack, not print-deferred source'
+        );
+        self::assertNotContains(
+            'Weline_Checkout::css/widgets/storefront-money-summary.css',
+            $manifest['source_css']
+        );
+    }
+
     public function testEmitHtmlContainsMarkerAndTags(): void
     {
         $collector = new ThemeLayoutEntityAssetCollector(null);

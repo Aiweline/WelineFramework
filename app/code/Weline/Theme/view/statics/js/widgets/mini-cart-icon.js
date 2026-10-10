@@ -1147,26 +1147,44 @@
         return attr(root, 'data-i18n-discount-automatic', '自动优惠');
     }
 
+    /**
+     * Architecture: B2B owns shell-wins + retail sanitize
+     * ({@see WelineB2BCheckoutTob.isTobCreditSurface} / normalizeRetailMoneyDto).
+     */
     function isTobCreditSurface(root, dto) {
+        var tobApi = window.WelineB2BCheckoutTob;
+        if (tobApi && typeof tobApi.isTobCreditSurface === 'function') {
+            return !!tobApi.isTobCreditSurface(root, dto);
+        }
         var attr = normalizeCartType(root && root.getAttribute('data-cart-type'));
+        if (attr === 'toc') {
+            return false;
+        }
         if (attr === 'tob') {
             return true;
         }
-        if (normalizeCartType(dto && dto.cart_type) === 'tob') {
-            return true;
-        }
-        return false;
+        return normalizeCartType(dto && dto.cart_type) === 'tob';
     }
 
     function mergeTobCreditIntoMoneyDto(root, dto) {
         var base = Object.assign({}, dto || {});
         if (!isTobCreditSurface(root, base)) {
+            var tobApi = window.WelineB2BCheckoutTob;
+            if (tobApi && typeof tobApi.normalizeRetailMoneyDto === 'function') {
+                return tobApi.normalizeRetailMoneyDto(base, {
+                    shell_cart_type: normalizeCartType(root && root.getAttribute('data-cart-type')) || 'toc',
+                    payable_label_retail: attr(root, 'data-i18n-subtotal', '小计'),
+                });
+            }
             base.deposit_minor = 0;
             base.credit_minor = 0;
-            base.cart_type = normalizeCartType(base.cart_type)
-                || normalizeCartType(root && root.getAttribute('data-cart-type'))
+            base.order_total_minor = 0;
+            base.order_total_label = '';
+            base.cart_type = normalizeCartType(root && root.getAttribute('data-cart-type'))
+                || normalizeCartType(base.cart_type)
                 || 'toc';
             base.commerce_deposit_allowed = false;
+            base.payable_label = attr(root, 'data-i18n-subtotal', '小计');
             return base;
         }
         base.cart_type = 'tob';
@@ -1255,8 +1273,65 @@
     }
 
     /**
+     * Resolve collapsed-footer compact host. Prefer data hooks; class fallback keeps
+     * sync alive when shared chrome cache still serves pre-hook SSR (label only, blank amount).
+     */
+    function footerCompactHost(root) {
+        if (!root || !root.querySelector) {
+            return null;
+        }
+        return root.querySelector('[data-mini-cart-footer-compact], .mini-cart-drawer__footer-compact');
+    }
+
+    /**
+     * Old chrome SSR omitted prices wrap + strikethrough was — recreate so collapsed
+     * formula can show「划线原价 + 现应付」(was + now) after credit/coupon.
+     */
+    function ensureFooterCompactPriceNodes(compact) {
+        if (!compact || !document.createElement) {
+            return { wasEl: null, amountEl: null };
+        }
+        var amountEl = compact.querySelector(
+            '[data-mini-cart-footer-compact-amount], .mini-cart-drawer__footer-compact-amount'
+        );
+        var prices = compact.querySelector('.mini-cart-drawer__footer-compact-prices');
+        if (!prices) {
+            prices = document.createElement('span');
+            prices.className = 'mini-cart-drawer__footer-compact-prices';
+            if (amountEl && amountEl.parentNode === compact) {
+                compact.insertBefore(prices, amountEl);
+                prices.appendChild(amountEl);
+            } else {
+                compact.appendChild(prices);
+            }
+        }
+        if (!amountEl) {
+            amountEl = document.createElement('strong');
+            amountEl.className = 'mini-cart-drawer__footer-compact-amount';
+            amountEl.setAttribute('data-mini-cart-footer-compact-amount', '');
+            amountEl.setAttribute('data-cart-total-amount', '');
+            prices.appendChild(amountEl);
+        } else if (amountEl.parentNode !== prices) {
+            prices.appendChild(amountEl);
+        }
+        var wasEl = prices.querySelector(
+            '[data-mini-cart-footer-compact-was], .mini-cart-drawer__footer-compact-was'
+        );
+        if (!wasEl) {
+            wasEl = document.createElement('s');
+            wasEl.className = 'mini-cart-drawer__footer-compact-was';
+            wasEl.setAttribute('data-mini-cart-footer-compact-was', '');
+            wasEl.hidden = true;
+            wasEl.setAttribute('hidden', '');
+            prices.insertBefore(wasEl, amountEl);
+        }
+        return { wasEl: wasEl, amountEl: amountEl };
+    }
+
+    /**
      * Collapsed footer compact must mirror expanded money-summary payable.
      * When credit/coupon savings apply, show strikethrough "was" (deposit or goods).
+     * Selectors stay scoped inside compact so money-summary [data-cart-total-amount] is never hit.
      */
     function syncFooterCompactFromMoneyDto(root, dto) {
         if (!root) {
@@ -1280,9 +1355,16 @@
             && creditMinor <= 0
             && discountMinor <= 0;
 
-        var labelEl = root.querySelector('[data-mini-cart-footer-compact-label]');
-        var wasEl = root.querySelector('[data-mini-cart-footer-compact-was]');
-        var amountEl = root.querySelector('[data-mini-cart-footer-compact-amount]');
+        var compact = footerCompactHost(root);
+        if (!compact) {
+            return;
+        }
+        var labelEl = compact.querySelector(
+            '[data-mini-cart-footer-compact-label], .mini-cart-drawer__footer-compact-label'
+        );
+        var nodes = ensureFooterCompactPriceNodes(compact);
+        var wasEl = nodes.wasEl;
+        var amountEl = nodes.amountEl;
         var payableLabel = String(money.payable_label || '').trim();
         var defaultLabel = attr(root, 'data-i18n-subtotal', '小计');
         if (labelEl) {
@@ -1343,16 +1425,18 @@
         } catch (eEnsure) {}
         // Same B2B policy as checkout / cart page: 本单共计 + 本次应付定金.
         var tobApiPaint = window.WelineB2BCheckoutTob;
-        if (isTobCreditSurface(root, moneyDto) && tobApiPaint
-            && typeof tobApiPaint.adjustMoneySummaryDto === 'function') {
+        if (tobApiPaint && typeof tobApiPaint.adjustMoneySummaryDto === 'function') {
             try {
+                var shellType = normalizeCartType(root && root.getAttribute('data-cart-type')) || 'toc';
                 var adjusted = tobApiPaint.adjustMoneySummaryDto(moneyDto, {
-                    cart_type: 'tob',
+                    shell_cart_type: shellType,
+                    cart_type: isTobCreditSurface(root, moneyDto) ? 'tob' : 'toc',
                     mode: 'mini-cart',
                     shipping_pending: true,
                     subtotal: (Number(moneyDto.goods_subtotal_minor) || 0) / 100,
                     currency: moneyDto.currency || 'CNY',
                     payable_label_deposit: attr(root, 'data-i18n-deposit-payable', '本次应付定金'),
+                    payable_label_retail: attr(root, 'data-i18n-subtotal', '小计'),
                     order_total_label: attr(root, 'data-i18n-order-total', '本单共计'),
                     note: moneyDto.note != null ? moneyDto.note : null,
                 });
@@ -1694,7 +1778,7 @@
         root.classList.toggle('is-footer-collapsed', next);
         var toggle = root.querySelector('[data-mini-cart-footer-toggle]');
         var details = root.querySelector('[data-mini-cart-footer-details]');
-        var compact = root.querySelector('[data-mini-cart-footer-compact]');
+        var compact = footerCompactHost(root);
         var label = root.querySelector('[data-mini-cart-footer-toggle-label]');
         if (toggle) {
             toggle.setAttribute('aria-expanded', next ? 'false' : 'true');
@@ -1715,6 +1799,14 @@
                 : attr(root, 'data-i18n-footer-collapse', '收起明细');
             // Collapsed bar shows compact total; keep label text for SR via toggle aria.
             label.hidden = next;
+        }
+        // Collapse may reveal a chrome-cache shell that never received Tob merge —
+        // re-paint compact from last money base so amount is not left blank.
+        if (next) {
+            var base = root.__welineLastMoneyDtoBase;
+            if (base && typeof base === 'object') {
+                syncFooterCompactFromMoneyDto(root, mergeTobCreditIntoMoneyDto(root, base));
+            }
         }
     }
 

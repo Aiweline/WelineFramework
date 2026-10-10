@@ -26,6 +26,8 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString("'storefront-float-start'", $src);
         self::assertStringContainsString("'storefront-float-end'", $src);
         self::assertStringContainsString('MINI_CART_NESTED_CHROME_SLOTS', $src);
+        self::assertStringContainsString('CHROME_HOST_NESTED_LAYOUT_CSS_PEERS', $src);
+        self::assertStringContainsString('storefront-money-summary.css', $src);
         self::assertStringContainsString("'footer-extras'", $src);
         self::assertStringContainsString("'user-area'", $src);
         self::assertStringContainsString("'currency'", $src);

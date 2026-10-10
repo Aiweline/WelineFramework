@@ -1151,6 +1151,7 @@ Logo,Logo
 正在更新购物车...,"Updating cart..."
 商品小计,"Goods subtotal"
 本次应付定金,"Deposit due now"
+本单共计,"Order total"
 优惠券,Coupon
 叠加优惠,"Stacked discount"
 自动优惠,"Automatic discount"
@@ -4833,4 +4834,3 @@ Chiffon,Chiffon
 选择修订冲突，请刷新后再发布,"Selection revision conflict — refresh then publish"
 作用域结构冲突，请先重置或重新基线化后再发布,"Scope structural conflict — reset or re-baseline before publishing"
 发布主题失败,"Theme publish failed"
-本单共计,Order total

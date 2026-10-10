@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Cart',
-    "version" => '1.3.116',
+    "version" => '1.3.119',
     "requires" => [
         'Weline_Framework' => '*',
     ],

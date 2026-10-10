@@ -183,17 +183,68 @@
     }
 
     /**
+     * Shell data-cart-type wins over sticky dto/cookie cart_type.
+     * rootOrShell: element with data-cart-type, or 'toc'|'tob' string.
+     */
+    function isTobCreditSurface(rootOrShell, dto) {
+        var shell = '';
+        if (typeof rootOrShell === 'string') {
+            shell = String(rootOrShell || '').toLowerCase();
+        } else if (rootOrShell && typeof rootOrShell.getAttribute === 'function') {
+            shell = String(rootOrShell.getAttribute('data-cart-type') || '').toLowerCase();
+        }
+        if (shell === 'toc') {
+            return false;
+        }
+        if (shell === 'tob') {
+            return true;
+        }
+        var fromDto = String(dto && (dto.cart_type || dto.selling_mode) || '').toLowerCase();
+        return fromDto === 'tob';
+    }
+
+    /**
+     * Strip ToB deposit chrome when shell is retail (toc).
+     * Callers pass payable_label_retail (mini-cart/cart: 小计; checkout: 应付合计).
+     */
+    function normalizeRetailMoneyDto(dto, ctx) {
+        ctx = ctx && typeof ctx === 'object' ? ctx : {};
+        var out = Object.assign({}, dto || {});
+        out.cart_type = 'toc';
+        out.selling_mode = 'toc';
+        out.commerce_deposit_allowed = false;
+        out.deposit_minor = 0;
+        out.credit_minor = 0;
+        out.order_total_minor = 0;
+        out.order_total_label = '';
+        var retailLabel = String(ctx.payable_label_retail || '').trim();
+        if (!retailLabel) {
+            retailLabel = String(out.payable_label_retail || '').trim();
+        }
+        if (!retailLabel) {
+            retailLabel = '小计';
+        }
+        out.payable_label = retailLabel;
+        return out;
+    }
+
+    /**
      * Checkout paints a retail money DTO; ToB policy lives here (deposit payable,
      * ban coupon/incentive/tax-in-deposit, DAP note).
+     * shell_cart_type / cart_type toc → normalizeRetailMoneyDto (never leave 定金 sticky).
      */
     function adjustMoneySummaryDto(dto, ctx) {
         if (!dto || typeof dto !== 'object') {
             return dto;
         }
         ctx = ctx && typeof ctx === 'object' ? ctx : {};
+        var shell = String(ctx.shell_cart_type || '').toLowerCase();
         var cartType = String(ctx.cart_type || dto.cart_type || readMode() || 'toc').toLowerCase();
-        if (cartType !== 'tob') {
-            return dto;
+        if (shell === 'toc' || (shell !== 'tob' && cartType !== 'tob')) {
+            return normalizeRetailMoneyDto(dto, ctx);
+        }
+        if (shell === 'tob') {
+            cartType = 'tob';
         }
         var out = Object.assign({}, dto);
         var subtotal = Math.max(0, Number(ctx.subtotal) || 0);
@@ -2476,6 +2527,8 @@
             persistCreditChoice: persistCreditChoice,
             hydrateCreditControls: hydrateCreditControls,
             adjustMoneySummaryDto: adjustMoneySummaryDto,
+            isTobCreditSurface: isTobCreditSurface,
+            normalizeRetailMoneyDto: normalizeRetailMoneyDto,
             syncPaymentIncentiveAvailability: syncPaymentIncentiveAvailability
         };
     }

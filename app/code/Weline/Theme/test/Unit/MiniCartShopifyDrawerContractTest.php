@@ -378,6 +378,9 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-i18n-footer-collapse', $source);
         self::assertStringContainsString('data-i18n-footer-expand', $source);
         self::assertStringContainsString('data-i18n-deposit-payable', $source);
+        // Retail tab: shell toc wins over sticky tob dto; payable label back to 小计.
+        self::assertStringContainsString("attr === 'toc'", $js);
+        self::assertStringContainsString("base.payable_label = attr(root, 'data-i18n-subtotal', '小计')", $js);
         self::assertStringContainsString('data-i18n-order-total', $source);
         self::assertStringContainsString('adjustMoneySummaryDto', $js);
         self::assertStringContainsString('order_total_minor', $js);
@@ -389,6 +392,13 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('never paint credit minors 1:1', $js);
         self::assertStringContainsString('refreshMiniCartMoneyFromCredit', $js);
         self::assertStringContainsString('syncFooterCompactFromMoneyDto', $js);
+        self::assertStringContainsString('footerCompactHost', $js);
+        self::assertStringContainsString('ensureFooterCompactPriceNodes', $js);
+        // Stale shared chrome may omit data-mini-cart-footer-compact-* — class fallback required.
+        self::assertStringContainsString('.mini-cart-drawer__footer-compact-amount', $js);
+        self::assertStringContainsString('.mini-cart-drawer__footer-compact-label', $js);
+        // Old chrome omitted <s was> — must recreate so collapsed formula is was+now.
+        self::assertStringContainsString('createElement(\'s\')', $js);
         self::assertStringContainsString('Do NOT overwrite [data-cart-total-amount] with retail visibleFormatted', $js);
         self::assertStringContainsString('footer-compact-was', $css);
         self::assertStringContainsString('text-decoration: line-through', $css);

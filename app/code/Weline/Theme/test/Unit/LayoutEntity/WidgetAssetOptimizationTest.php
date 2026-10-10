@@ -12,7 +12,7 @@ final class WidgetAssetOptimizationTest extends TestCase
         $publisher = new class extends WidgetAssetArtifactPublisher {
             public array $batches = [];
             public function canMerge(array $asset): bool { return true; }
-            public function publish(array $assets, bool $minify): ?string {
+            public function publish(array $assets, bool $minify, $theme = null): ?string {
                 $this->batches[] = array_column($assets, 'url');
                 return '/static/bundle-' . count($this->batches) . '.js';
             }
@@ -39,7 +39,7 @@ final class WidgetAssetOptimizationTest extends TestCase
         $publisher = new class extends WidgetAssetArtifactPublisher {
             public array $batches = [];
             public function canMerge(array $asset): bool { return !str_contains($asset['url'], 'boundary'); }
-            public function publish(array $assets, bool $minify): ?string {
+            public function publish(array $assets, bool $minify, $theme = null): ?string {
                 $this->batches[] = array_column($assets, 'url');
                 return '/static/bundle-' . count($this->batches) . '.' . $assets[0]['type'];
             }
@@ -79,7 +79,7 @@ final class WidgetAssetOptimizationTest extends TestCase
         $publisher = new class extends WidgetAssetArtifactPublisher {
             public array $batches = [];
             public function canMerge(array $asset): bool { return true; }
-            public function publish(array $assets, bool $minify): ?string {
+            public function publish(array $assets, bool $minify, $theme = null): ?string {
                 $this->batches[] = array_column($assets, 'url');
                 return '/static/layout-pack.css';
             }
@@ -106,7 +106,7 @@ final class WidgetAssetOptimizationTest extends TestCase
     {
         $publisher = new class extends WidgetAssetArtifactPublisher {
             public function canMerge(array $asset): bool { return true; }
-            public function publish(array $assets, bool $minify): ?string {
+            public function publish(array $assets, bool $minify, $theme = null): ?string {
                 return '/static/late-source.css';
             }
         };

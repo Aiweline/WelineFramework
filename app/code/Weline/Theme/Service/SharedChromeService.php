@@ -76,6 +76,19 @@ final class SharedChromeService
         'footer-extras',
     ];
 
+    /**
+     * Chrome host widgets that embed nested slot injections whose CSS must paint
+     * on first drawer open — promote to host layout pack (blocking), not late
+     * source `media=print` defer (WidgetAssetOptimizer merge_start).
+     *
+     * @var array<string, list<string>> host widget_code => Module::css paths
+     */
+    public const CHROME_HOST_NESTED_LAYOUT_CSS_PEERS = [
+        'mini-cart-icon' => [
+            'Weline_Checkout::css/widgets/storefront-money-summary.css',
+        ],
+    ];
+
     public function __construct(
         private readonly ThemeScopedWorkspaceInterface $workspace,
     ) {

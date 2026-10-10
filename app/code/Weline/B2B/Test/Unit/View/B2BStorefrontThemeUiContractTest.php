@@ -109,7 +109,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $modulesContent = (string)file_get_contents($modules);
         self::assertStringContainsString('selling-mode.js?v=20261010-extras-rebuild1', $modulesContent);
         self::assertStringContainsString('WelineMiniCartExtras.rebuild', $jsContent);
-        self::assertStringContainsString('checkout-tob.js?v=20261010-tob-money-policy4', $modulesContent);
+        self::assertStringContainsString('checkout-tob.js?v=20261010-shell-toc-wins1', $modulesContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-toc', $jsContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-bound', $jsContent);
         self::assertStringContainsString('function switchToRetailCart', $jsContent);
@@ -332,6 +332,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('weline:b2b-credit-changed', $miniCartJsContent);
         self::assertStringContainsString('mergeTobCreditIntoMoneyDto', $miniCartJsContent);
         self::assertStringContainsString('isTobCreditSurface', $miniCartJsContent);
+        self::assertStringContainsString('normalizeRetailMoneyDto', $miniCartJsContent);
+        self::assertStringContainsString('shell_cart_type', $miniCartJsContent);
         self::assertStringContainsString('commerce_deposit_allowed', $miniCartJsContent);
         self::assertStringNotContainsString("normalizeCartType(preferredCartType()) === 'tob'", $miniCartJsContent);
         self::assertStringContainsString('cartQueryParams({ item_id: itemId })', $miniCartJsContent);
@@ -341,6 +343,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $cartPageContent = (string) file_get_contents($cartPage);
         self::assertStringContainsString('isTobCreditSurface', $cartPageContent);
         self::assertStringContainsString('mergeTobCreditIntoCartMoneyDto', $cartPageContent);
+        self::assertStringContainsString('normalizeRetailMoneyDto', $cartPageContent);
+        self::assertStringContainsString('shell_cart_type', $cartPageContent);
         self::assertStringContainsString('commerce_deposit_allowed', $cartPageContent);
         self::assertStringNotContainsString('readPersistedCreditApplyMinor', $cartPageContent);
         self::assertStringNotContainsString('preferredCartType() === \'tob\'', $cartPageContent);
@@ -479,6 +483,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString("hang.paymentContext", $checkoutTob);
         self::assertStringContainsString('renderHangPaymentMethods', $checkoutTob);
         self::assertStringContainsString('renderHangOrderSummary', $checkoutTob);
+        self::assertStringContainsString('discount_lines', $checkoutTob);
+        self::assertStringContainsString('b2b-hang-admin-adjustment', $checkoutTob);
         self::assertStringContainsString('data-b2b-hang-methods', $checkoutTob);
         self::assertStringContainsString('data-b2b-hang-order', $checkoutTob);
         self::assertStringContainsString('b2b-hang-order-lines', $checkoutTob);
@@ -510,6 +516,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('syncCheckoutCouponAvailability', $checkoutTob);
         self::assertStringContainsString('syncPaymentIncentiveAvailability', $checkoutTob);
         self::assertStringContainsString('adjustMoneySummaryDto', $checkoutTob);
+        self::assertStringContainsString('isTobCreditSurface', $checkoutTob);
+        self::assertStringContainsString('normalizeRetailMoneyDto', $checkoutTob);
+        self::assertStringContainsString('shell_cart_type', $checkoutTob);
         self::assertStringContainsString('order_total_minor', $checkoutTob);
         self::assertStringContainsString('本单共计', $checkoutTob);
         // Cart / mini-cart share the same policy; shipping-pending must not force DAP note.

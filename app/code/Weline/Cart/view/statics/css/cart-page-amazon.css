@@ -686,6 +686,11 @@
     list-style: none;
 }
 
+/*
+ * Cart-page sync paint only — NOT the mini-cart primary path.
+ * Mini-cart / shared chrome: Theme §8.3 PEERS → layout pack + Checkout leaf
+ * storefront-money-summary.css. Do not copy this flex into design themes.
+ */
 .weline-cart-shell--amazon .w-storefront-money-summary__row {
     display: flex;
     align-items: baseline;

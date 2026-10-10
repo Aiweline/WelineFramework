@@ -97,4 +97,32 @@ final class TobStorefrontMoneySummaryPolicyTest extends TestCase
         self::assertSame('本次应付定金', $out['payable_label']);
         self::assertStringContainsString('到港由买家另付', (string)$out['note']);
     }
+
+    public function testAdjustDtoShellTocWinsOverStickyTobDto(): void
+    {
+        $policy = new TobStorefrontMoneySummaryPolicy();
+        $dto = [
+            'cart_type' => 'tob',
+            'commerce_deposit_allowed' => true,
+            'deposit_minor' => 11845,
+            'credit_minor' => 900,
+            'order_total_minor' => 51962,
+            'order_total_label' => '本单共计',
+            'payable_label' => '本次应付定金',
+            'payable_minor' => 10945,
+            'goods_subtotal_minor' => 39485,
+        ];
+        $out = $policy->adjustDto($dto, [
+            'shell_cart_type' => 'toc',
+            'cart_type' => 'tob',
+            'payable_label_retail' => '小计',
+        ]);
+        self::assertSame('toc', $out['cart_type']);
+        self::assertFalse((bool)$out['commerce_deposit_allowed']);
+        self::assertSame(0, (int)$out['deposit_minor']);
+        self::assertSame(0, (int)$out['credit_minor']);
+        self::assertSame(0, (int)$out['order_total_minor']);
+        self::assertSame('', (string)$out['order_total_label']);
+        self::assertSame('小计', $out['payable_label']);
+    }
 }

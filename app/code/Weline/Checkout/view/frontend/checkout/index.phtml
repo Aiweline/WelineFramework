@@ -3324,11 +3324,15 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         const tobApi = window.WelineB2BCheckoutTob;
         if (tobApi && typeof tobApi.adjustMoneySummaryDto === 'function') {
             try {
+                // Shell data-cart-type wins; retail label belt when toc (no sticky 定金).
+                const shellType = String(root.getAttribute('data-cart-type') || cartType || 'toc').toLowerCase() || 'toc';
                 const adjusted = tobApi.adjustMoneySummaryDto(moneyDto, {
+                    shell_cart_type: shellType,
                     cart_type: cartType,
                     subtotal: subtotal,
                     currency: checkoutState.currency || 'CNY',
                     payable_label_deposit: grandTotalLabelDeposit,
+                    payable_label_retail: grandTotalLabelDefault || '应付合计',
                 });
                 if (adjusted && typeof adjusted === 'object') {
                     moneyDto = adjusted;

@@ -271,6 +271,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         // ToB deposit / incentive / tax policy lives in B2B adjustMoneySummaryDto — Checkout stays retail baseline.
         self::assertStringContainsString('commerce_deposit_allowed: false', $template);
         self::assertStringContainsString('adjustMoneySummaryDto', $template);
+        self::assertStringContainsString('shell_cart_type', $template);
+        self::assertStringContainsString('payable_label_retail', $template);
         self::assertStringContainsString('syncPaymentIncentiveAvailability', $template);
         self::assertStringNotContainsString('const salesTaxMajor = tob ? 0', $template);
         self::assertStringNotContainsString('const incentive = tob ? 0', $template);

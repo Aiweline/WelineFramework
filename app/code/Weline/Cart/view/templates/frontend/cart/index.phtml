@@ -231,24 +231,42 @@ $copy = [
      * Tob credit / deposit chrome only when the cart shell is tob.
      * Credit persist, toggle, or selling-mode cookie must not elevate toc → tob.
      */
+    /**
+     * Architecture: B2B owns shell-wins + retail sanitize
+     * (WelineB2BCheckoutTob.isTobCreditSurface / normalizeRetailMoneyDto).
+     */
     function isTobCreditSurface(detail) {
+        const tobApi = window.WelineB2BCheckoutTob;
+        if (tobApi && typeof tobApi.isTobCreditSurface === 'function') {
+            return !!tobApi.isTobCreditSurface(root, detail || {});
+        }
         const attr = String(root.getAttribute('data-cart-type') || '').toLowerCase();
+        if (attr === 'toc') {
+            return false;
+        }
         if (attr === 'tob') {
             return true;
         }
-        if (detail && String(detail.cart_type || '').toLowerCase() === 'tob') {
-            return true;
-        }
-        return false;
+        return !!(detail && String(detail.cart_type || '').toLowerCase() === 'tob');
     }
 
     function mergeTobCreditIntoCartMoneyDto(dto, detail) {
         const base = Object.assign({}, dto || {});
         if (!isTobCreditSurface(detail)) {
+            const tobApi = window.WelineB2BCheckoutTob;
+            if (tobApi && typeof tobApi.normalizeRetailMoneyDto === 'function') {
+                return tobApi.normalizeRetailMoneyDto(base, {
+                    shell_cart_type: String(root.getAttribute('data-cart-type') || 'toc').toLowerCase() || 'toc',
+                    payable_label_retail: text(copy.subtotal || '小计'),
+                });
+            }
             base.deposit_minor = 0;
             base.credit_minor = 0;
-            base.cart_type = String(base.cart_type || root.getAttribute('data-cart-type') || 'toc').toLowerCase() || 'toc';
+            base.order_total_minor = 0;
+            base.order_total_label = '';
+            base.cart_type = String(root.getAttribute('data-cart-type') || base.cart_type || 'toc').toLowerCase() || 'toc';
             base.commerce_deposit_allowed = false;
+            base.payable_label = text(copy.subtotal || '小计');
             return base;
         }
         base.cart_type = 'tob';
@@ -380,17 +398,20 @@ $copy = [
                     });
                 }
             } catch (eEnsure) {}
-            // Same B2B policy as checkout / mini-cart: 本单共计 + 本次应付定金.
+            // Same B2B policy as checkout / mini-cart (shell_cart_type wins over sticky dto).
             const tobApi = window.WelineB2BCheckoutTob;
-            if (isTobCreditSurface(detail) && tobApi && typeof tobApi.adjustMoneySummaryDto === 'function') {
+            if (tobApi && typeof tobApi.adjustMoneySummaryDto === 'function') {
                 try {
+                    const shellType = String(root.getAttribute('data-cart-type') || 'toc').toLowerCase() || 'toc';
                     const adjusted = tobApi.adjustMoneySummaryDto(moneyDto, {
-                        cart_type: 'tob',
+                        shell_cart_type: shellType,
+                        cart_type: isTobCreditSurface(detail) ? 'tob' : 'toc',
                         mode: 'cart',
                         shipping_pending: true,
                         subtotal: (Number(moneyDto.goods_subtotal_minor) || 0) / 100,
                         currency: moneyDto.currency || 'CNY',
                         payable_label_deposit: text(copy.depositPayable || '本次应付定金'),
+                        payable_label_retail: text(copy.subtotal || '小计'),
                         order_total_label: text(copy.orderTotal || '本单共计'),
                         note: moneyDto.note != null ? moneyDto.note : null,
                     });
