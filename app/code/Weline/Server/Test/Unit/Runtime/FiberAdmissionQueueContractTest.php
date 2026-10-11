@@ -15,9 +15,10 @@ final class FiberAdmissionQueueContractTest extends TestCase
     public function testResolveDefaultsPreferQueueNotUnlimited(): void
     {
         $cfg = wlsResolveFiberAdmissionConfig([]);
-        self::assertSame(12, $cfg['max_active']);
-        self::assertSame(20000, $cfg['queue_wait_ms']);
-        self::assertSame(12, $cfg['queue_depth']);
+        self::assertSame(6, $cfg['max_active']);
+        self::assertSame(30000, $cfg['queue_wait_ms']);
+        // Default depth = max(max_active×8, 64) so mix can wait, not instant queue_full.
+        self::assertSame(64, $cfg['queue_depth']);
         self::assertSame(25, $cfg['queue_slice_ms']);
     }
 
@@ -102,9 +103,12 @@ final class FiberAdmissionQueueContractTest extends TestCase
     public function testAwaitSoftMemoryMissWaitsUntilDeadline(): void
     {
         \Weline\Server\Service\WorkerResponseMemoryGuard::resetThresholdCache();
-        // Soft threshold high, hard floor tiny → defer (not critical) until wait ends.
+        // Soft miss host-agnostic: threshold above current headroom; hard floor tiny → wait then 503.
         \Weline\Server\Service\WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * 1024 * 1024);
-        \Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHeadroomBytes(250 * 1024 * 1024);
+        $headroom = \Weline\Server\Service\WorkerResponseMemoryGuard::absoluteHeadroomBytes();
+        \Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHeadroomBytes(
+            $headroom + (8 * 1024 * 1024)
+        );
         \Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHardFloorBytes(1024);
 
         $active = [
@@ -146,7 +150,11 @@ final class FiberAdmissionQueueContractTest extends TestCase
         self::assertSame(30000, $cfg['queue_wait_ms']);
 
         $moduleEnv = require \dirname(__DIR__, 3) . '/etc/env.php';
-        self::assertSame(20000, $moduleEnv['wls']['fiber']['admission_queue_wait_ms']);
+        self::assertSame(30000, $moduleEnv['wls']['fiber']['admission_queue_wait_ms']);
+        self::assertSame(6, $moduleEnv['wls']['fiber']['max_active']);
+        self::assertSame(64, $moduleEnv['wls']['fiber']['admission_queue_depth']);
+        self::assertTrue((bool) $moduleEnv['wls']['fiber']['pin_max_active']);
+        self::assertFalse((bool) $moduleEnv['wls']['fiber']['adaptive_max_active']);
     }
 
     public function testWaitingRequestCanFinishFromCacheBeforeAdmissionSlotOpens(): void

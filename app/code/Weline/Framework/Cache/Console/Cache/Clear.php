@@ -140,61 +140,80 @@ class Clear implements \Weline\Framework\Console\CommandInterface
      */
     private function warmStorefrontFpcAfterClear(): void
     {
+        $this->printing->note(__('店面 Clear→warm 编排开始：fpc→website→layout_projection→product→search→chrome(子进程)'));
+        $poolNotes = [];
         try {
             $registry = $this->cacheWarmerRegistry
                 ??= ObjectManager::getInstance(CacheWarmerRegistry::class);
             // Owning modules register via provides cache.warmer.* (no Theme FQCN soft-pull).
-            $result = $registry->warmUp('fpc');
-            $warmed = (int)($result['warmed'] ?? 0);
-            if ($warmed > 0) {
-                $this->printing->successIcon(__('店面 FPC 已预热 %{1} 条路径', [$warmed]));
+            $fpc = $registry->warmUp('fpc');
+            $fpcWarmed = (int)($fpc['warmed'] ?? 0);
+            if ($fpcWarmed > 0) {
+                $this->printing->successIcon(__('店面 FPC 已预热 %{1} 条路径', [$fpcWarmed]));
             } else {
-                $this->printing->note(__('店面 FPC 预热未命中可暖路径（WLS 未就绪或主机不可达）'));
+                $this->printing->warning(__('店面 FPC 预热未命中可暖路径（WLS 未就绪或主机不可达）'));
             }
+            $poolNotes[] = 'fpc:warmed=' . $fpcWarmed;
+
             // Website pool: store/channel catalog HotCache (soft-clear cold hit1 tax).
-            $this->reportWarmUpDetails(
-                $registry->warmUp('website'),
-                '网站范围目录已预热 %{1} 条',
-            );
+            $website = $registry->warmUp('website');
+            $this->reportWarmUpDetails($website, '网站范围目录已预热 %{1} 条');
+            $poolNotes[] = 'website:warmed=' . (int)($website['warmed'] ?? 0);
+
             // Layout-entity projection pool (Theme warmer provides; no Theme FQCN soft-pull).
-            $this->reportWarmUpDetails(
-                $registry->warmUp('weline_theme_layout_entity_published_projection'),
-                '部件静态源袋已预热 %{1} 条',
-            );
+            $layout = $registry->warmUp('weline_theme_layout_entity_published_projection');
+            $this->reportWarmUpDetails($layout, '部件静态源袋已预热 %{1} 条');
+            $poolNotes[] = 'layout_projection:warmed=' . (int)($layout['warmed'] ?? 0);
+
             // Product pool: search projection + shelf/offers + PLP light warmers (Registry details).
-            $this->reportWarmUpDetails(
-                $registry->warmUp('product'),
-                '商品池缓存已预热 %{1} 条',
-            );
+            $product = $registry->warmUp('product');
+            $this->reportWarmUpDetails($product, '商品池缓存已预热 %{1} 条');
+            $poolNotes[] = 'product:warmed=' . (int)($product['warmed'] ?? 0);
+
             // Search pool: bounded tip search.query_result warmer (owning module provides).
-            $this->reportWarmUpDetails(
-                $registry->warmUp('search'),
-                '搜索池缓存已预热 %{1} 条',
-            );
+            $search = $registry->warmUp('search');
+            $this->reportWarmUpDetails($search, '搜索池缓存已预热 %{1} 条');
+            $poolNotes[] = 'search:warmed=' . (int)($search['warmed'] ?? 0);
+
             // Chrome must be re-seeded in a fresh CLI process after WLS IPC clear.
             // In-process warmUp here shares the Clear RequestContext / generation
             // dust and quiet dig still rebuilds theme.storefront_chrome (G-chrome-ex).
-            $this->reseedStorefrontChromeLocalesViaSubprocess();
+            $chromeOk = $this->reseedStorefrontChromeLocalesViaSubprocess();
+            $poolNotes[] = $chromeOk ? 'chrome:gate_ok' : 'chrome:gate_miss_or_fail';
+
+            $this->printing->note(__('店面 Clear→warm 编排结束：%{1}', [\implode(' · ', $poolNotes)]));
+            if (!$chromeOk || $fpcWarmed <= 0) {
+                $this->printing->warning(__('店面 Clear→warm 存在未完整暖池；禁止把裸冷混发当唯一成功标准'));
+            }
         } catch (\Throwable $e) {
-            $this->printing->note(__('店面 FPC 预热跳过：%{1}', [$e->getMessage()]));
+            $this->printing->warning(__('店面 Clear→warm 编排失败（未假成功）：%{1}', [$e->getMessage()]));
+            if ($poolNotes !== []) {
+                $this->printing->note(__('店面 Clear→warm 编排结束（部分）：%{1}', [\implode(' · ', $poolNotes)]));
+            } else {
+                $this->printing->note(__('店面 Clear→warm 编排结束：失败可见'));
+            }
         }
     }
 
     /**
      * Fresh-process chrome locale warm after soft-clear IPC.
      * In-process Registry warm shares Clear dust and fails quiet G-chrome-ex.
+     *
+     * @return bool true when subprocess output contains gate_ok (honest success)
      */
-    private function reseedStorefrontChromeLocalesViaSubprocess(): void
+    private function reseedStorefrontChromeLocalesViaSubprocess(): bool
     {
         if (!\defined('BP')) {
-            return;
+            $this->printing->warning(__('店面 chrome 子进程预热跳过：BP 未定义'));
+
+            return false;
         }
         $php = \PHP_BINARY !== '' ? \PHP_BINARY : 'php';
         $bin = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
         if (!\is_file($bin)) {
-            $this->printing->note(__('店面 chrome 子进程预热跳过：找不到 bin/w'));
+            $this->printing->warning(__('店面 chrome 子进程预热跳过：找不到 bin/w'));
 
-            return;
+            return false;
         }
         $cmd = \escapeshellarg($php)
             . ' -d memory_limit=512M -d opcache.enable_cli=0 '
@@ -206,6 +225,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         // phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- intentional Clear subprocess
         @\exec($cmd, $output, $code);
         $joined = \implode("\n", $output);
+        $sawGateOk = \str_contains($joined, 'gate_ok:');
         foreach ($output as $line) {
             $line = \trim((string)$line);
             if ($line === '') {
@@ -219,9 +239,18 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                 }
             }
         }
-        if ($code !== 0 && !\str_contains($joined, 'gate_ok:')) {
-            $this->printing->note(__('店面 chrome 子进程预热失败 exit=%{1}', [(string)$code]));
+        if ($code !== 0 && !$sawGateOk) {
+            $this->printing->warning(__('店面 chrome 子进程预热失败 exit=%{1}', [(string)$code]));
+
+            return false;
         }
+        if (!$sawGateOk) {
+            $this->printing->warning(__('店面 chrome 子进程预热未见 gate_ok（exit=%{1}；CLI 暖≠Worker HIT）', [(string)$code]));
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -237,6 +266,8 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             $warmed = (int)($result['warmed'] ?? 0);
             if ($warmed > 0) {
                 $this->printing->successIcon(__($aggregateFallbackTemplate, [$warmed]));
+            } else {
+                $this->printing->warning(__($aggregateFallbackTemplate, [$warmed]) . ' (warmed=0)');
             }
 
             return;
@@ -322,7 +353,9 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     {
         try {
             $service = $this->getBroadcastService();
-            $result = $service->cacheClearAndWait(null, 12.0);
+            // Mix30 / multi-Worker soft-clear needs headroom above the historical 12s
+            // (8 Ready Workers often finish after ~12–20s). Cap is 30s in RuntimeControlBroadcaster.
+            $result = $service->cacheClearAndWait(null, 30.0);
 
             if (!empty($result['success']) && !empty($result['completed'])) {
                 $this->printing->successIcon(__('WLS 缓存清理已完成'));
@@ -338,7 +371,11 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                 [$result['message'] ?? __('未知错误')]
             ));
         } catch (\Throwable $e) {
-            // WLS 未运行时静默忽略，不影响本地缓存清理的展示
+            // Must stay failure-visible (C4): skipping warm after IPC failure must not look like success.
+            $this->printing->warning(__(
+                'WLS 缓存清理未完成，已跳过店面 FPC 预热：%{1}',
+                [$e->getMessage() !== '' ? $e->getMessage() : __('WLS 不可达或广播失败')]
+            ));
         }
 
         return false;

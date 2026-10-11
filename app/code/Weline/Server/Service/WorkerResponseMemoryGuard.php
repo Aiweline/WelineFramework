@@ -45,6 +45,11 @@ final class WorkerResponseMemoryGuard
      * {@see LOOP_HEADROOM_SHED_BYTES}). 256M → ~102MiB soft → prefer delay/503 over
      * admitting until process-fatal OOM (Nginx 502).
      */
+    /**
+     * Soft headroom fraction of Worker memory_limit.
+     * Keep one budget for all sizes: loosening ≥512M raised max_active and caused
+     * upstream closes (Nginx 502) under mix30; prefer queue/503 over process death.
+     */
     private const ADMISSION_MEMORY_HEADROOM_FRACTION = 0.40;
     /**
      * Budget per admitted short-request Fiber when clamping configured max_active
@@ -344,6 +349,14 @@ final class WorkerResponseMemoryGuard
         return $capped;
     }
 
+    /** @internal exposed for contracts */
+    public static function admissionMemoryHeadroomFractionForLimit(int $limitBytes): float
+    {
+        unset($limitBytes);
+
+        return self::ADMISSION_MEMORY_HEADROOM_FRACTION;
+    }
+
     /**
      * Clamp configured Fiber max_active to a budget that fits under memory_limit
      * after soft headroom. Prefer queue/503 over process-fatal OOM → Nginx 502.
@@ -372,7 +385,8 @@ final class WorkerResponseMemoryGuard
             $headroomNeed = self::$admissionMemoryHeadroomBytes;
         }
         $budget = \max(0, $limit - $headroomNeed);
-        $byBudget = \max(1, (int) \floor($budget / self::ADMISSION_PER_ACTIVE_FIBER_BUDGET_BYTES));
+        $perFiber = self::admissionPerActiveFiberBudgetBytesForLimit($limit);
+        $byBudget = \max(1, (int) \floor($budget / $perFiber));
 
         return \min($configuredMaxActive, $byBudget);
     }
@@ -380,6 +394,14 @@ final class WorkerResponseMemoryGuard
     /** Per admitted short-request Fiber budget used by clamp / adaptive max_active. */
     public static function admissionPerActiveFiberBudgetBytes(): int
     {
+        return self::ADMISSION_PER_ACTIVE_FIBER_BUDGET_BYTES;
+    }
+
+    /** @internal exposed for contracts */
+    public static function admissionPerActiveFiberBudgetBytesForLimit(?int $limitBytes): int
+    {
+        unset($limitBytes);
+
         return self::ADMISSION_PER_ACTIVE_FIBER_BUDGET_BYTES;
     }
 

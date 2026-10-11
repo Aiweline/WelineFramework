@@ -614,13 +614,20 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
-    public function scaleWorkers(string $instanceName, int $targetWorkers, float $timeout = 10.0): array
-    {
+    public function scaleWorkers(
+        string $instanceName,
+        int $targetWorkers,
+        float $timeout = 10.0,
+        bool $alignBaseline = false,
+    ): array {
         return $this->command(
             $instanceName,
             ControlMessage::ACTION_SCALE_WORKERS,
             '',
-            ['target_workers' => $targetWorkers],
+            [
+                'target_workers' => $targetWorkers,
+                'align_baseline' => $alignBaseline,
+            ],
             $timeout
         );
     }

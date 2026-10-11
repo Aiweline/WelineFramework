@@ -321,7 +321,7 @@ if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
 /**
  * Resolve fiber admission defaults.
  *
- * Defaults (when keys omitted): max_active=12, queue_wait_ms=20000 (hard cap 30s),
+ * Defaults (when keys omitted): max_active=6, queue_wait_ms=30000 (hard cap 30s),
  * queue_depth=max_active. Prefer delay over early 503 so Master can scale.
  * Explicit max_active=0 keeps unlimited concurrency (memory path still waits).
  *
@@ -338,10 +338,10 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
 
     $maxActive = \array_key_exists('max_active', $fiber)
         ? \max(0, (int)$fiber['max_active'])
-        : 12;
+        : 6;
 
     // Prefer a short delay for Master scale / peer finish; 503 only after wait.
-    $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 20000);
+    $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 30000);
     if ($waitMs < 0) {
         $waitMs = 0;
     } elseif ($waitMs > 30000) {
@@ -350,8 +350,9 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
 
     $depth = (int)($fiber['admission_queue_depth'] ?? 0);
     if ($depth <= 0) {
-        // Keep the waiter set small: waiting Fibers still cost sockets/buffers.
-        $depth = $maxActive > 0 ? $maxActive : 0;
+        // Default depth >> max_active so mix/crawler can wait (not instant queue_full).
+        // Waiting Fibers still cost sockets — hard cap stays modest.
+        $depth = $maxActive > 0 ? \max($maxActive * 8, 64) : 0;
     }
 
     $sliceMs = (int)($fiber['admission_queue_slice_ms'] ?? 25);

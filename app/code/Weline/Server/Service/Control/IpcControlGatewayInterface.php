@@ -106,7 +106,12 @@ interface IpcControlGatewayInterface
     /**
      * @return array{success:bool,message:string,data:array}
      */
-    public function scaleWorkers(string $instanceName, int $targetWorkers, float $timeout = 10.0): array;
+    public function scaleWorkers(
+        string $instanceName,
+        int $targetWorkers,
+        float $timeout = 10.0,
+        bool $alignBaseline = false,
+    ): array;
 
     /**
      * @return array{success:bool,message:string,data:array}

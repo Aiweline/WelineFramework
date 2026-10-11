@@ -23,6 +23,12 @@ class Scale extends CommandAbstract
         $status = isset($args['status']) || isset($data['status']);
         $auto = isset($args['auto']) || isset($data['auto']);
         $noAuto = isset($args['no-auto']) || isset($args['no_auto']) || isset($data['no-auto']);
+        // Explicit ops: raise user baseline so pressure_recover / Applier serveFloor
+        // cannot silently snap Desired back to the old baseline after server:scale.
+        $alignBaseline = isset($args['align-baseline'])
+            || isset($args['align_baseline'])
+            || isset($data['align-baseline'])
+            || isset($data['align_baseline']);
 
         if ($auto || $noAuto) {
             $this->printer->warning('Persistent auto-scaling writes are disabled in this lifecycle-safe command path.');
@@ -62,8 +68,28 @@ class Scale extends CommandAbstract
             return;
         }
 
-        $this->printer->note("Scaling instance {$resolvedName} to {$targetWorkers} worker(s)...");
-        $this->printScaleResult($gateway->scaleWorkers($resolvedName, $targetWorkers, self::IPC_TIMEOUT));
+        $this->printer->note("Scaling instance {$resolvedName} to {$targetWorkers} worker(s)"
+            . ($alignBaseline ? ' with --align-baseline (ops · G8)' : '')
+            . '...');
+        // Master must update in-memory startup baseline; disk-only write is snapped
+        // back by pressure_recover via MemoryPressureController::getStartupExplicitCount().
+        $scaleResult = $gateway->scaleWorkers(
+            $resolvedName,
+            $targetWorkers,
+            self::IPC_TIMEOUT,
+            $alignBaseline,
+        );
+        $this->printScaleResult($scaleResult);
+        if ($alignBaseline && !empty($scaleResult['success'])) {
+            try {
+                $manager->updateBaselineWorkerCount($resolvedName, $targetWorkers, null, false);
+            } catch (\Throwable $e) {
+                $this->printer->warning('Baseline disk persist after Master align failed: ' . $e->getMessage());
+            }
+            $this->printer->success(
+                "Ops scale+baseline aligned: runtime Desired={$targetWorkers}, baseline requested={$targetWorkers}"
+            );
+        }
     }
 
     private function parseInstanceName(array $args): string
@@ -142,15 +168,18 @@ class Scale extends CommandAbstract
             [
                 '[instance]' => 'Instance name, default: default',
                 '--workers <n>' => 'Target worker count',
+                '--align-baseline' => 'Also set worker_count_requested (explicit ops; stops pressure_recover snap-back)',
                 '--status' => 'Show scaling status',
                 '--instance <name>' => 'Explicit instance name',
             ],
             [
                 'Safety' => 'The command never selects the first running instance implicitly; it resolves the requested instance name.',
+                'G8' => 'Default scale writes runtime Desired only. Use --align-baseline for bookkept ops that must outrank Applier serveFloor=baseline.',
             ],
             [
                 'Show status' => 'php bin/w server:scale api --status',
                 'Scale to 8 workers' => 'php bin/w server:scale api --workers=8',
+                'Scale + align baseline (ops)' => 'php bin/w server:scale default --workers=8 --align-baseline',
             ]
         );
     }

@@ -47,9 +47,12 @@ class FileAdapter implements CacheAdapterInterface
         }
     }
 
-    /** Skip whole-file IO that would push a near-full Worker over memory_limit. */
+    /** Absolute refuse: never load blobs this large via whole-file IO. */
     private const NEAR_LIMIT_REFUSE_FILE_BYTES = 8 * 1024 * 1024;
+    /** Soft headroom kept after a cache get (write path / peer Fibers). */
     private const NEAR_LIMIT_HEADROOM_BYTES = 48 * 1024 * 1024;
+    /** Floor reserved beyond payload size before file_get_contents (unserialize spike). */
+    private const NEAR_LIMIT_PAYLOAD_FLOOR_BYTES = 16 * 1024 * 1024;
 
     private function memoryLimitBytes(): int
     {
@@ -88,11 +91,16 @@ class FileAdapter implements CacheAdapterInterface
         }
 
         $size = @\filesize($file);
-        if (\is_int($size) && $size > self::NEAR_LIMIT_REFUSE_FILE_BYTES) {
-            if ($this->memoryHeadroomBytes() < ($size + self::NEAR_LIMIT_HEADROOM_BYTES)) {
-                // Miss → slow rebuild; never OOM the Worker for one cache blob.
-                return null;
-            }
+        $sizeBytes = \is_int($size) && $size >= 0 ? $size : 0;
+        // Any sized blob: require payload + unserialize floor before whole-file IO.
+        // (Do NOT also demand NEAR_LIMIT_HEADROOM_BYTES here — that thrash-misses
+        // under mix and recreates more memory pressure than it prevents.)
+        $needBytes = $sizeBytes + self::NEAR_LIMIT_PAYLOAD_FLOOR_BYTES;
+        if ($sizeBytes > self::NEAR_LIMIT_REFUSE_FILE_BYTES
+            || $this->memoryHeadroomBytes() < $needBytes
+        ) {
+            // Miss → slow rebuild; never process-fatal OOM → Nginx 502.
+            return null;
         }
 
         $content = @file_get_contents($file);

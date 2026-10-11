@@ -57,6 +57,28 @@ final class WorkerResponseMemoryGuardAdmissionMemoryGateContractTest extends Tes
             0,
             WorkerResponseMemoryGuard::clampMaxActiveForMemoryLimit(0, 256 * 1024 * 1024)
         );
+        // 768M → soft 40% ≈307MiB → budget ≈461MiB / 32MiB ≈ 14; configured 32 → 14.
+        // (Do not loosen ≥512M: higher clamp caused mix30 upstream closes / 502.)
+        self::assertSame(
+            0.40,
+            WorkerResponseMemoryGuard::admissionMemoryHeadroomFractionForLimit(768 * 1024 * 1024)
+        );
+        self::assertSame(
+            32 * 1024 * 1024,
+            WorkerResponseMemoryGuard::admissionPerActiveFiberBudgetBytesForLimit(768 * 1024 * 1024)
+        );
+        self::assertSame(
+            14,
+            WorkerResponseMemoryGuard::clampMaxActiveForMemoryLimit(32, 768 * 1024 * 1024)
+        );
+        self::assertSame(
+            0.40,
+            WorkerResponseMemoryGuard::admissionMemoryHeadroomFractionForLimit(256 * 1024 * 1024)
+        );
+        self::assertSame(
+            32 * 1024 * 1024,
+            WorkerResponseMemoryGuard::admissionPerActiveFiberBudgetBytesForLimit(256 * 1024 * 1024)
+        );
     }
 
     public function testLowHeadroomGateCompactsThenMarksCriticalBelowHardFloor(): void
@@ -75,12 +97,20 @@ final class WorkerResponseMemoryGuardAdmissionMemoryGateContractTest extends Tes
     public function testSoftMissIsNotCriticalWhenAboveHardFloor(): void
     {
         WorkerResponseMemoryGuard::resetThresholdCache();
-        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * 1024 * 1024);
-        WorkerResponseMemoryGuard::setAdmissionMemoryHeadroomBytes(250 * 1024 * 1024);
+        $limit = 256 * 1024 * 1024;
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes($limit);
+        $headroom = WorkerResponseMemoryGuard::absoluteHeadroomBytes();
+        // Soft miss must be host-usage-agnostic: require more free bytes than available.
+        $softThreshold = $headroom + (8 * 1024 * 1024);
+        WorkerResponseMemoryGuard::setAdmissionMemoryHeadroomBytes($softThreshold);
+        // Hard floor well below actual headroom → prefer delay (not critical 503).
         WorkerResponseMemoryGuard::setAdmissionMemoryHardFloorBytes(1024);
+        if ($headroom < 1024) {
+            self::markTestSkipped('host headroom already below hard floor; covered by critical-floor contract');
+        }
         $gate = WorkerResponseMemoryGuard::evaluateAdmissionMemoryGate(true);
         self::assertFalse($gate['admit']);
-        self::assertFalse($gate['critical']);
+        self::assertFalse($gate['critical'], 'soft miss must not be critical when headroom ≥ hard floor');
         self::assertSame('memory_pressure', $gate['reason']);
     }
 

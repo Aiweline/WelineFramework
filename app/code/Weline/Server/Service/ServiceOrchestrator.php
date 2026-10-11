@@ -26558,12 +26558,27 @@ class ServiceOrchestrator
 
         $this->desiredState[ControlMessage::ROLE_WORKER] = $target;
         $this->persistServicesInfo($this->context);
+        $alignBaseline = !empty($msg['align_baseline']) || !empty($msg['align-baseline']);
         try {
-            // Manual scale adjusts runtime Desired only — never wipe baseline (G8).
+            // Manual scale adjusts runtime Desired only — never wipe baseline (G8)
+            // unless explicit ops requests --align-baseline.
             (new ServerInstanceManager())->updateRuntimeDesiredWorkerCount(
                 (string)$this->context->instanceName,
                 $target,
             );
+            if ($alignBaseline) {
+                (new ServerInstanceManager())->updateBaselineWorkerCount(
+                    (string)$this->context->instanceName,
+                    $target,
+                    null,
+                    false,
+                );
+                // Keep Applier serveFloor / pressure_recover from snapping back to old boot baseline.
+                $this->memoryPressureController?->setStartupExplicitCount($target);
+                WlsLogger::info_(
+                    '[Orchestrator] ops scale aligned baseline/startupExplicit requested=' . $target
+                );
+            }
         } catch (\Throwable $persistError) {
             WlsLogger::warning_(
                 '[Orchestrator] Failed to persist scaled worker count=' . $target
@@ -26578,6 +26593,7 @@ class ServiceOrchestrator
             'added_pids' => $addedPids,
             'removed_pids' => $removedPids,
             'desired_state' => $this->desiredState,
+            'align_baseline' => $alignBaseline,
             'accepted' => true,
             'completed' => true,
         ];
