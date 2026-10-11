@@ -161,7 +161,9 @@ if ($allowHanfuDemo) {
     foreach (array_slice($categoryNames, 0, $limit) as $category) {
         $code = (string)$category['code'];
         $localizedName = trim((string)($categoryDisplayNames[$code] ?? ''));
-        $iconCode = explode('/', $code)[0];
+        // 叶子 code 对应独立图标（mamian.webp / ruqun.webp）；勿只取根段 women
+        $codeSegments = explode('/', $code);
+        $iconCode = (string)(end($codeSegments) ?: $codeSegments[0]);
         $categories[] = [
             'id' => (int)$category['id'],
             'name' => $localizedName !== ''
@@ -203,8 +205,8 @@ $isStrip = $displayMode === 'strip';
             <?php
             $categoryImage = trim((string)($category['image'] ?? ''));
             $categoryImageIsBanner = str_contains($categoryImage, '/banners/');
-            $categoryImageWidth = $isStrip ? 96 : ($categoryImageIsBanner ? 1500 : 800);
-            $categoryImageHeight = $isStrip ? 96 : ($categoryImageIsBanner ? 300 : 800);
+            $categoryImageWidth = $isStrip ? 64 : ($categoryImageIsBanner ? 1500 : 800);
+            $categoryImageHeight = $isStrip ? 64 : ($categoryImageIsBanner ? 300 : 800);
             ?>
             <a href="<?= $esc(\Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($category['url'] ?? '#'))) ?>"
                class="category-card<?= $isStrip ? ' category-card--tile' : '' ?>"

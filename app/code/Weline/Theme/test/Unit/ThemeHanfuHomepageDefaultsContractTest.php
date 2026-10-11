@@ -80,6 +80,19 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
             $widget
         );
         self::assertStringNotContainsString('$isEnglish ?', $widget);
+        self::assertStringContainsString('$iconCode = (string)(end($codeSegments) ?: $codeSegments[0]);', $widget);
+        self::assertStringNotContainsString("\$iconCode = explode('/', \$code)[0];", $widget);
+    }
+
+    public function testCategoryGridStripTileUsesRegisteredSizeToken(): void
+    {
+        $css = $this->readProjectFile('view/statics/css/widgets/widget-category-category-grid-default.css');
+        $spacing = $this->readProjectFile('view/theme/frontend/variables/_auto-literals.css');
+
+        self::assertStringContainsString('width: var(--token-size-64px);', $css);
+        self::assertStringContainsString('height: var(--token-size-64px);', $css);
+        self::assertStringNotContainsString('--size-control-64', $css);
+        self::assertMatchesRegularExpression('/--token-size-64px\s*:\s*64px\s*;/', $spacing);
     }
 
     public function testDefaultHeroRoutesCuratedSlidesToLocalizedCatalogInsteadOfMissingProducts(): void
