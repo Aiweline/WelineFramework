@@ -13,6 +13,7 @@ list,列表
 描述/状态,描述/状态
 安装更多编辑器,安装更多编辑器
 "您可以通过 Composer 安装额外的编辑器管理器模块：","您可以通过 Composer 安装额外的编辑器管理器模块："
+"内置占位回退（非可用富文本编辑器）。名称 local 表示缺省占位，不是本机已安装的本地编辑器。已安装 CKEditor 等模块时系统会优先使用它们；仅当无可用编辑器时显示此提示。安装：composer require weline/module-ckeditor-editor-manager","内置占位回退（非可用富文本编辑器）。名称 local 表示缺省占位，不是本机已安装的本地编辑器。已安装 CKEditor 等模块时系统会优先使用它们；仅当无可用编辑器时显示此提示。安装：composer require weline/module-ckeditor-editor-manager"
 """editor-manager 标签属性 container-id 不能为空！""","editor-manager 标签属性 container-id 不能为空！"
 "mdi mdi-content-save-edit","mdi mdi-content-save-edit"
 "mdi mdi-view-list","MDI MDI 视图列表"

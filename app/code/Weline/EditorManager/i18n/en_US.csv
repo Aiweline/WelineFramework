@@ -13,6 +13,7 @@ list,list
 描述/状态,Description/Status
 安装更多编辑器,"Install more editors"
 "您可以通过 Composer 安装额外的编辑器管理器模块：","You can install an additional editor manager module via Composer:"
+"内置占位回退（非可用富文本编辑器）。名称 local 表示缺省占位，不是本机已安装的本地编辑器。已安装 CKEditor 等模块时系统会优先使用它们；仅当无可用编辑器时显示此提示。安装：composer require weline/module-ckeditor-editor-manager","Built-in placeholder fallback (not a usable rich-text editor). The name local means the default stub, not a locally installed editor. When CKEditor or another editor module is installed, the system prefers it; this message appears only when no real editor is available. Install: composer require weline/module-ckeditor-editor-manager"
 """editor-manager 标签属性 container-id 不能为空！""","""The editor-manager label attribute container-id cannot be empty!"""
 "mdi mdi-content-save-edit","mdi mdi-content-save-edit"
 "mdi mdi-view-list","mdi mdi-view-list"
