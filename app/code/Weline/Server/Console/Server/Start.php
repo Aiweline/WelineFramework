@@ -9068,6 +9068,10 @@ class Start extends CommandAbstract
         /** @var SslCertificateService $sslService */
         $sslService = $this->deferredCertificatePreparationService
             ?? ObjectManager::getInstance(SslCertificateService::class);
+        $sslService->setAdministratorAuthorizationSession(
+            $this->administratorAuthorizationSession
+                ??= new \Weline\Server\Service\AdministratorAuthorizationSession(),
+        );
         $wildcard = LocalDomainPolicy::currentWildcardDomain();
 
         if ($sslService->hasValidLocalCertificate($wildcard)) {
@@ -9100,6 +9104,12 @@ class Start extends CommandAbstract
         /** @var SslCertificateService $sslService */
         $sslService = $this->deferredCertificatePreparationService
             ?? ObjectManager::getInstance(SslCertificateService::class);
+        // Leaf issuance may call trustLocalCertificateAuthority; bind the start
+        // authorization session first so System Keychain sync reuses one sudo ticket.
+        $sslService->setAdministratorAuthorizationSession(
+            $this->administratorAuthorizationSession
+                ??= new \Weline\Server\Service\AdministratorAuthorizationSession(),
+        );
         // 0.0.0.0 只是"监听所有网卡"的绑定地址，不是合法证书 CN，归一为 localhost
         $localDomains = [
             '127.0.0.1' => '127.0.0.1',

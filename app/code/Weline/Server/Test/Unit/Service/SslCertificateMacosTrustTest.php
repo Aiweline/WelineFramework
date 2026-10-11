@@ -89,15 +89,23 @@ final class SslCertificateMacosTrustTest extends TestCase
             $service->keychainFingerprints['/Users/unit/Library/Keychains/login.keychain-db'] ?? [],
         );
 
-        $addTrusted = null;
-        foreach ($sessionCommands as $command) {
-            if (\in_array('add-trusted-cert', $command, true)) {
-                $addTrusted = $command;
-                break;
-            }
-        }
-        self::assertNotNull($addTrusted, 'Current CA must still be imported without deleting siblings.');
-        self::assertContains($caPath, $addTrusted);
+        self::assertSame(['/usr/bin/sudo', '-v'], $sessionCommands[0] ?? null);
+        $privileged = $sessionCommands[1] ?? [];
+        self::assertSame('/usr/bin/sudo', $privileged[0] ?? null);
+        self::assertSame('-n', $privileged[1] ?? null);
+        self::assertSame('--', $privileged[2] ?? null);
+        self::assertStringContainsString(
+            'wls_macos_local_ca_trust_editor.php',
+            \implode(' ', $privileged),
+            'Foreign same-CN preservation must still use the one-shot System Keychain editor.',
+        );
+        self::assertStringContainsString('--ca=', \implode(' ', $privileged));
+        self::assertStringNotContainsString(
+            '--retire=',
+            \implode(' ', $privileged),
+            'Non-retired sibling fingerprints must not be passed to the elevated editor.',
+        );
+        self::assertCount(2, $sessionCommands, 'CA trust must elevate exactly once.');
         self::assertContains($leafPath, $service->verifyCertTargets);
     }
 
@@ -141,25 +149,33 @@ final class SslCertificateMacosTrustTest extends TestCase
         self::assertSame('/usr/bin/sudo', $privileged[0] ?? null);
         self::assertSame('-n', $privileged[1] ?? null);
         self::assertSame('--', $privileged[2] ?? null);
-        self::assertContains('delete-certificate', $privileged);
-        self::assertContains(self::SYSTEM_STALE_FINGERPRINT, $privileged);
+        $privilegedLine = \implode(' ', $privileged);
+        self::assertStringContainsString(
+            'wls_macos_local_ca_trust_editor.php',
+            $privilegedLine,
+            'System Keychain retire+import must run in one elevated editor process.',
+        );
+        self::assertStringContainsString('--ca=', $privilegedLine);
+        self::assertStringContainsString(
+            '--retire=' . self::SYSTEM_STALE_FINGERPRINT,
+            $privilegedLine,
+        );
+        self::assertStringNotContainsString(
+            self::LOGIN_STALE_FINGERPRINT,
+            $privilegedLine,
+            'Fingerprints not in this workspace retired list must not be retired by the editor.',
+        );
+        self::assertCount(2, $sessionCommands, 'sudo authorize + one editor invocation only.');
         self::assertContains(self::SYSTEM_STALE_FINGERPRINT, $service->deletedFingerprints);
         self::assertNotContains(
             self::LOGIN_STALE_FINGERPRINT,
             $service->deletedFingerprints,
             'Fingerprints not in this workspace retired list must be preserved.',
         );
-
-        $addTrusted = null;
-        foreach ($sessionCommands as $command) {
-            if (\in_array('add-trusted-cert', $command, true)) {
-                $addTrusted = $command;
-                break;
-            }
-        }
-        self::assertNotNull($addTrusted, 'Current CA must be imported through the start authorization session.');
-        self::assertContains('/Library/Keychains/System.keychain', $addTrusted);
-        self::assertContains($caPath, $addTrusted);
+        self::assertContains(
+            self::CURRENT_CA_FINGERPRINT,
+            $service->keychainFingerprints['/Library/Keychains/System.keychain'] ?? [],
+        );
         self::assertContains($leafPath, $service->verifyCertTargets);
         foreach ($service->commands as $command) {
             self::assertNotContains(
@@ -382,5 +398,52 @@ final class MacosTrustSslCertificateService extends SslCertificateService
         }
 
         return $output;
+    }
+
+    protected function publishMacosSystemLocalCaTrust(
+        string $caCertPath,
+        array $retireFingerprints,
+    ): bool {
+        if ($this->blockTrustMutations) {
+            return false;
+        }
+        $ok = parent::publishMacosSystemLocalCaTrust($caCertPath, $retireFingerprints);
+        if (!$ok) {
+            return false;
+        }
+        // Session commandRunner only records elevation; mirror editor side effects here.
+        foreach ($retireFingerprints as $fingerprint) {
+            $exitCode = 0;
+            $this->runTrustCommand(
+                [
+                    '/usr/bin/security',
+                    'delete-certificate',
+                    '-Z',
+                    $fingerprint,
+                    '/Library/Keychains/System.keychain',
+                ],
+                $exitCode,
+            );
+        }
+        $exitCode = 0;
+        $this->runTrustCommand(
+            [
+                '/usr/bin/security',
+                'add-trusted-cert',
+                '-d',
+                '-r',
+                'trustRoot',
+                '-p',
+                'ssl',
+                '-p',
+                'basic',
+                '-k',
+                '/Library/Keychains/System.keychain',
+                $caCertPath,
+            ],
+            $exitCode,
+        );
+
+        return true;
     }
 }

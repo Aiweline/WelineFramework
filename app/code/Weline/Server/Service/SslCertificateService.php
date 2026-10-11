@@ -3854,6 +3854,7 @@ CNF;
             . \escapeshellarg($caCertPath);
         $loginKeychain = $this->resolveMacosLoginKeychain();
 
+        // Login keychain cleanup stays unprivileged (workspace-retired only).
         $staleLoginCaOutput = $this->removeStaleLocalCertificateAuthoritiesFromMacosKeychain(
             $loginKeychain,
             $currentFingerprint
@@ -3861,35 +3862,32 @@ CNF;
         if ($staleLoginCaOutput !== '') {
             $output = \trim($output . "\n" . $staleLoginCaOutput);
         }
-        $staleSystemCaOutput = $this->removeStaleLocalCertificateAuthoritiesFromMacosKeychain(
-            '/Library/Keychains/System.keychain',
-            $currentFingerprint,
-            true
-        );
-        if ($staleSystemCaOutput !== '') {
-            $output = \trim($output . "\n" . $staleSystemCaOutput);
-        }
 
-        $systemCommand = [
-            $security,
-            'add-trusted-cert',
-            '-d',
-            '-r',
-            'trustRoot',
-            '-p',
-            'ssl',
-            '-p',
-            'basic',
-            '-k',
-            '/Library/Keychains/System.keychain',
+        // Prefer one elevated System Keychain sync (retire deletes + add-trusted-cert)
+        // so macOS askpass / sudo only prompts once for the whole CA registration.
+        $retireFingerprints = $this->resolveMacosSystemRetireFingerprints(
+            $currentFingerprint,
+        );
+        $systemSynced = $this->publishMacosSystemLocalCaTrust(
             $caCertPath,
-        ];
-        $systemExitCode = 1;
-        $systemOutput = $this->runPrivilegedTrustMutation($systemCommand, $systemExitCode);
-        if ($systemExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+            $retireFingerprints,
+        );
+        if ($systemSynced && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
             return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS System Keychain')];
         }
-        $output = \trim($output . "\n" . $systemOutput);
+
+        // Avoid login-keychain trustRoot when an admin session exists: that path
+        // opens a separate Authorization Services dialog (often attributed to
+        // osascript) and defeats the one-prompt startup contract.
+        if ($this->administratorAuthorizationSession !== null || $this->isRootUser()) {
+            $hint = __('Administrator authorization was available, but System Keychain trust did not verify. Run the command below from Terminal if a browser still rejects the certificate.');
+
+            return [
+                'success' => false,
+                'trusted' => false,
+                'message' => __('Local CA was generated, but automatic macOS trust import failed. %{1} Manual command: %{2}. Output: %{3}', [$hint, $manual, \trim($output)]),
+            ];
+        }
 
         if (!$this->isLocalCertificateAuthorityInstalledInMacosLoginKeychain($caCertPath)) {
             $loginCommand = [
@@ -3914,8 +3912,7 @@ CNF;
             $output = \trim($output . "\n" . $loginOutput);
         }
 
-        $hint = $this->administratorAuthorizationSession === null
-            && !$this->canUseInteractivePrivilegePrompt()
+        $hint = !$this->canUseInteractivePrivilegePrompt()
             ? __('macOS System Keychain trust needs an interactive Terminal approval; WLS has already tried the user login Keychain. Run the command below from Terminal if a browser still rejects the certificate.')
             : __('Run the command below to approve Keychain trust.');
 
@@ -3924,6 +3921,186 @@ CNF;
             'trusted' => false,
             'message' => __('Local CA was generated, but automatic macOS trust import failed. %{1} Manual command: %{2}. Output: %{3}', [$hint, $manual, \trim($output)]),
         ];
+    }
+
+    /**
+     * Workspace-retired fingerprints present in System.keychain (excluding current).
+     *
+     * @return list<string>
+     */
+    protected function resolveMacosSystemRetireFingerprints(string $currentFingerprint): array
+    {
+        $currentFingerprint = $this->normalizeCertificateFingerprint($currentFingerprint);
+        $security = $this->resolveTrustExecutable('security');
+        if ($currentFingerprint === '' || $security === '') {
+            return [];
+        }
+
+        $output = $this->runTrustCommand(
+            [
+                $security,
+                'find-certificate',
+                '-a',
+                '-Z',
+                '-c',
+                self::ISSUER_LOCAL_CA,
+                '/Library/Keychains/System.keychain',
+            ],
+            $exitCode
+        );
+        if ($exitCode !== 0 || $output === '') {
+            return [];
+        }
+
+        $retireable = \array_fill_keys($this->loadLocalCaRetiredFingerprints(), true);
+        $retire = [];
+        foreach ($this->parseMacosKeychainCertificateFingerprints($output) as $fingerprint) {
+            if ($fingerprint === $currentFingerprint || !isset($retireable[$fingerprint])) {
+                continue;
+            }
+            $retire[] = $fingerprint;
+        }
+
+        return $retire;
+    }
+
+    /**
+     * One privileged System Keychain sync: delete workspace-retired roots, then
+     * import the current Local CA as trustRoot.
+     *
+     * @param list<string> $retireFingerprints
+     */
+    protected function publishMacosSystemLocalCaTrust(
+        string $caCertPath,
+        array $retireFingerprints,
+    ): bool {
+        if ($this->isRootUser()) {
+            return $this->runMacosSystemLocalCaTrustEditorAsCurrentUser(
+                $caCertPath,
+                $retireFingerprints,
+            );
+        }
+
+        if ($this->administratorAuthorizationSession !== null) {
+            $command = $this->buildMacosSystemLocalCaTrustEditorCommand(
+                $caCertPath,
+                $retireFingerprints,
+            );
+            if ($command === null) {
+                return false;
+            }
+
+            return $this->administratorAuthorizationSession->runPrivileged($command);
+        }
+
+        // No start authorization session: keep the legacy single-command sudo -n
+        // path for narrow callers that already hold a ticket.
+        $security = $this->resolveTrustExecutable('security');
+        if ($security === '' || !$this->commandExists('sudo')) {
+            return false;
+        }
+        foreach ($retireFingerprints as $fingerprint) {
+            $deleteExitCode = 1;
+            $this->runPrivilegedTrustMutation(
+                [$security, 'delete-certificate', '-Z', $fingerprint, '/Library/Keychains/System.keychain'],
+                $deleteExitCode,
+            );
+        }
+        $addExitCode = 1;
+        $this->runPrivilegedTrustMutation(
+            [
+                $security,
+                'add-trusted-cert',
+                '-d',
+                '-r',
+                'trustRoot',
+                '-p',
+                'ssl',
+                '-p',
+                'basic',
+                '-k',
+                '/Library/Keychains/System.keychain',
+                $caCertPath,
+            ],
+            $addExitCode,
+        );
+
+        return $addExitCode === 0;
+    }
+
+    /**
+     * @param list<string> $retireFingerprints
+     * @return list<string>|null
+     */
+    protected function buildMacosSystemLocalCaTrustEditorCommand(
+        string $caCertPath,
+        array $retireFingerprints,
+    ): ?array {
+        $phpBinary = @\realpath(PHP_BINARY);
+        $editorCandidate = \dirname(__DIR__)
+            . DIRECTORY_SEPARATOR
+            . 'bin'
+            . DIRECTORY_SEPARATOR
+            . 'wls_macos_local_ca_trust_editor.php';
+        $editor = @\realpath($editorCandidate);
+        $resolvedCa = @\realpath($caCertPath);
+        if (!\is_string($phpBinary)
+            || $phpBinary === ''
+            || !\is_file($phpBinary)
+            || !\is_executable($phpBinary)
+            || !\is_string($editor)
+            || $editor === ''
+            || !\is_file($editor)
+            || \is_link($editorCandidate)
+            || !\is_executable($editor)
+            || !\is_string($resolvedCa)
+            || $resolvedCa === ''
+            || !\is_file($resolvedCa)
+        ) {
+            return null;
+        }
+
+        $command = [
+            $phpBinary,
+            '-n',
+            $editor,
+            '--ca=' . $resolvedCa,
+        ];
+        if ($retireFingerprints !== []) {
+            $normalized = [];
+            foreach ($retireFingerprints as $fingerprint) {
+                $fingerprint = $this->normalizeCertificateFingerprint((string)$fingerprint);
+                if ($fingerprint === '') {
+                    continue;
+                }
+                $normalized[$fingerprint] = $fingerprint;
+            }
+            if ($normalized !== []) {
+                $command[] = '--retire=' . \implode(',', \array_values($normalized));
+            }
+        }
+
+        return $command;
+    }
+
+    /**
+     * @param list<string> $retireFingerprints
+     */
+    protected function runMacosSystemLocalCaTrustEditorAsCurrentUser(
+        string $caCertPath,
+        array $retireFingerprints,
+    ): bool {
+        $command = $this->buildMacosSystemLocalCaTrustEditorCommand(
+            $caCertPath,
+            $retireFingerprints,
+        );
+        if ($command === null) {
+            return false;
+        }
+        $exitCode = 1;
+        $this->runTrustMutationCommand($command, $exitCode);
+
+        return $exitCode === 0;
     }
 
     /**

@@ -1325,10 +1325,11 @@ URI,统一资源标识符
 "Local CA was generated, but macOS security tool was not found. Import %{1} into Keychain Access manually","已生成本地 CA，但未找到 macOS 安全工具。手动将 %{1} 导入钥匙串访问"
 "Local CA is already trusted by macOS Keychain","本地 CA 已被 macOS 钥匙串信任"
 "Local CA imported into macOS System Keychain","导入到 macOS 系统钥匙串的本地 CA"
+"Administrator authorization was available, but System Keychain trust did not verify. Run the command below from Terminal if a browser still rejects the certificate.","管理员授权已可用，但系统钥匙串信任未通过校验。若浏览器仍拒绝证书，请在终端运行下列命令。"
+"Local CA was generated, but automatic macOS trust import failed. %{1} Manual command: %{2}. Output: %{3}","已生成本地 CA，但自动 macOS 信任导入失败。 %{1} 手动命令：%{2}。输出：%{3}"
 "Local CA imported into macOS login Keychain","本地 CA 导入 macOS 登录钥匙串"
 "macOS System Keychain trust needs an interactive Terminal approval; WLS has already tried the user login Keychain. Run the command below from Terminal if a browser still rejects the certificate.","macOS 系统钥匙串信任需要交互式终端批准； WLS已经尝试过用户登录Keychain。如果浏览器仍然拒绝证书，请从终端运行以下命令。"
 "Run the command below to approve Keychain trust.",运行以下命令以批准钥匙串信任。
-"Local CA was generated, but automatic macOS trust import failed. %{1} Manual command: %{2}. Output: %{3}","已生成本地 CA，但自动 macOS 信任导入失败。 %{1} 手动命令：%{2}。输出：%{3}"
 "Local CA certificate file is missing: %{1}","本地 CA 证书文件丢失：%{1}"
 "Local CA generated; Windows trust-store import skipped during WLS startup. Import %{1} manually or set WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 to opt in.","本地CA生成； WLS 启动期间跳过 Windows 信任存储导入。手动导入 %{1} 或设置 WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 以选择加入。"
 "Local CA is already trusted by the current Windows user","本地 CA 已被当前 Windows 用户信任"
