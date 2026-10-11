@@ -99,9 +99,7 @@ final class GlobalDictionaryProviderSharedBagContractTest extends TestCase
 
     public function testProviderBindsSameNullSourceSharedKeyAsPhraseHelper(): void
     {
-        $source = \file_get_contents(
-            (string)(new ReflectionClass(GlobalDictionaryProvider::class))->getFileName()
-        );
+        $source = \file_get_contents(\dirname(__DIR__, 4) . '/Api/Localization/GlobalDictionaryProvider.php');
         self::assertIsString($source);
         self::assertStringContainsString('GlobalDictionaryModuleBagCache::getNullSource', $source);
         self::assertStringContainsString('GlobalDictionaryModuleBagCache::putNullSource', $source);
@@ -111,5 +109,21 @@ final class GlobalDictionaryProviderSharedBagContractTest extends TestCase
             GlobalDictionaryModuleBagCache::sharedKey('lt_LT', ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY),
             GlobalDictionaryModuleBagCache::nullSourceSharedKey('lt_LT'),
         );
+    }
+
+    public function testPersistentWorkerSkipsWholeLocaleNullSourceMaterialization(): void
+    {
+        // Lock app/code authority (composer may still resolve vendor/weline/module-i18n).
+        $source = \file_get_contents(\dirname(__DIR__, 4) . '/Api/Localization/GlobalDictionaryProvider.php');
+        self::assertIsString($source);
+        self::assertStringContainsString('Runtime::isPersistent()', $source);
+        self::assertStringContainsString('never materialize whole-locale NULL-source bags', $source);
+        self::assertStringContainsString('prefetchTemplateWords', $source);
+        // File/PDO whole-bag paths must stay after the persistent gate.
+        $persistentPos = \strpos($source, 'Runtime::isPersistent()');
+        $filePos = \strpos($source, 'loadLocaleFileWords(');
+        self::assertNotFalse($persistentPos);
+        self::assertNotFalse($filePos);
+        self::assertLessThan($filePos, $persistentPos);
     }
 }

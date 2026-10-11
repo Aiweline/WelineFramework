@@ -10,6 +10,7 @@ use Weline\Framework\Phrase\BatchGlobalDictionaryProviderInterface;
 use Weline\Framework\Phrase\GlobalDictionaryModuleBagCache;
 use Weline\Framework\Phrase\GlobalDictionaryProviderInterface;
 use Weline\Framework\Phrase\ModuleGlobalDictionaryProviderInterface;
+use Weline\Framework\Runtime\Runtime;
 use Weline\I18n\Model\Locale\Dictionary;
 
 final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterface, BatchGlobalDictionaryProviderInterface, ModuleGlobalDictionaryProviderInterface
@@ -119,7 +120,16 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
             return $process;
         }
 
-        // Authoritative deploy artifact: generated/language/{locale}.php
+        // Persistent Workers: never materialize whole-locale NULL-source bags.
+        // generated/language/{locale}.php is 8–11MiB; full PDO NULL scans are the same cliff.
+        // Storefront misses use exactWords / template prefetchTemplateWords (com bake).
+        if (Runtime::isPersistent()) {
+            $this->rememberNullSourceMemo($memoKey, []);
+
+            return [];
+        }
+
+        // Non-persistent (CLI / tip-warm / collect): deploy artifact then DB stream.
         $fromFile = $this->loadLocaleFileWords($locale);
         if ($fromFile !== null) {
             GlobalDictionaryModuleBagCache::putNullSource($locale, $fromFile);
@@ -167,7 +177,11 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
      */
     private function loadLocaleFileWords(string $locale): ?array
     {
-        $path = Env::path_TRANSLATE_FILES_PATH . $locale . '.php';
+        try {
+            $path = Env::path_TRANSLATE_FILES_PATH . $locale . '.php';
+        } catch (\Throwable) {
+            return null;
+        }
         if (!\is_file($path)) {
             return null;
         }

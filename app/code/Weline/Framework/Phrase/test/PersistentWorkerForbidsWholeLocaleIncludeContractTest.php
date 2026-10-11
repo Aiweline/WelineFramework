@@ -45,4 +45,16 @@ final class PersistentWorkerForbidsWholeLocaleIncludeContractTest extends TestCa
             'shedColdLocalesForHeadroom'
         ));
     }
+
+    public function testPersistentModulePrefetchOmitsNullSourceWholeBagKey(): void
+    {
+        $src = (string)\file_get_contents(\dirname(__DIR__) . '/Parser.php');
+        self::assertStringContainsString('withNullSourceGlobalModule', $src);
+        self::assertStringContainsString('must not request NULL-source whole bags', $src);
+        self::assertMatchesRegularExpression(
+            '/function withNullSourceGlobalModule.*?if \(!Runtime::isPersistent\(\)\) \{\s*'
+            . '\$modules\[\] = ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY;/s',
+            $src
+        );
+    }
 }

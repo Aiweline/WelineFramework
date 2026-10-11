@@ -289,6 +289,8 @@ switch,switch
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
 我的订单,"My Orders"
+订单留言,"Order note"
+如有特殊要求请留言,"Leave a message if you have special requirements"
 查看订单进度与支付状态,"View order progress and payment status"
 全部范围,"All scopes"
 多仓会拆成多个子订单；同一子订单也可分批发货,"Multi-warehouse checkout splits into child orders; one child order can also ship in batches"
@@ -324,8 +326,6 @@ SKU,SKU
 本单全部运单,"All shipments for this order"
 待补运单号,"Tracking pending"
 当前,Current
-订单留言,"Order note"
-如有特殊要求请留言,"Leave a message if you have special requirements"
 结账配送（参考）,"Checkout shipping (reference)"
 未指定,"Not specified"
 "对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。","Aligned with Shopify: register shipment first; tracking can be added later; no ""shipped"" email without tracking."

@@ -885,6 +885,71 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+小计,Subtotal
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+去结算,"Proceed to Checkout"
+查看购物车,"View cart"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+官方社交媒体,"Official social media"
+商品,Products
+查看商品图,"View product image"
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+购物车是空的,"Shopping cart is empty"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+零售车,零售车
+批发车,批发车
+继续购物,"Continue shopping"
+正在前往结算...,"Proceeding to checkout..."
+运费将在结算时计算,"Shipping calculated at checkout"
+税费,Tax
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+本次应付定金,"Deposit due now"
+本单共计,"Order total"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+收起明细,"Collapse details"
+展开明细,"Expand details"
+零售,Retail
+迷你购物车金额小计,"Mini-cart money summary"
+关闭通知,"Close notification"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+面包屑,"bread crumbs"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -911,11 +976,6 @@ FAQ/常见问题,FAQ
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -962,10 +1022,6 @@ ERROR,ERROR
 展开悬浮,"Expand float"
 缺货,"Out of Stock"
 联系询价,联系询价
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
 我的,mine
@@ -978,16 +1034,12 @@ ERROR,ERROR
 语言,language
 货币,currency
 关闭菜单,"Close menu"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -997,12 +1049,8 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
-购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
-小计,Subtotal
-查看购物车,"View cart"
-去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1028,8 +1076,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1071,7 +1117,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1082,10 +1127,6 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1103,15 +1144,9 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看更多,"View more"
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
-官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1133,35 +1168,6 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
-商品,Products
-查看商品图,"View product image"
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-零售车,零售车
-批发车,批发车
-继续购物,"Continue shopping"
-正在前往结算...,"Proceeding to checkout..."
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-运费将在结算时计算,"Shipping calculated at checkout"
-税费,Tax
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-本次应付定金,"Deposit due now"
-本单共计,"Order total"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-收起明细,"Collapse details"
-展开明细,"Expand details"
-零售,Retail
-迷你购物车金额小计,"Mini-cart money summary"
-关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -1176,10 +1182,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
@@ -2308,8 +2310,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","Configure the storefront theme under Website Info → Storefront Theme; otherwise it falls back to the registered Theme Default. Backend skin is set in System Config."
 各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,"Storefront themes are configured in Website Info; this list only shows installed themes and bindings."
 所选主题版本不属于当前网站范围,"Selected theme version does not belong to this website scope"
-迷你购物车,迷你购物车
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 Pagination,Pagination
 Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"

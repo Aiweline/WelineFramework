@@ -1848,7 +1848,12 @@ class Parser
      */
     private static function withNullSourceGlobalModule(array $modules): array
     {
-        $modules[] = ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY;
+        // Persistent Workers must not request NULL-source whole bags (I18n would
+        // otherwise include generated/language/{locale}.php). Word-level exactWords
+        // + com prefetchTemplateWords cover storefront globals.
+        if (!Runtime::isPersistent()) {
+            $modules[] = ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY;
+        }
 
         return \array_values(\array_unique($modules));
     }
