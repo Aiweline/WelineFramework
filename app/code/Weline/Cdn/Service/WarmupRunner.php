@@ -144,13 +144,17 @@ class WarmupRunner
         $fetchUrl = $this->resolveFetchUrl($url);
         $localDevFetch = $fetchUrl !== $url;
         $ch = curl_init($fetchUrl);
+        // Warmup only needs HTTP status — discard body; never RETURNTRANSFER whole HTML.
         $curlOpts = [
-            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_RETURNTRANSFER => false,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_HTTPHEADER => [
                 'CF-Prewarm: t0k3n-' . md5($url . time()),
             ],
+            CURLOPT_WRITEFUNCTION => static function ($ch, string $chunk): int {
+                return strlen($chunk);
+            },
         ];
         // 本机 WLS 开发证书为自签链：仅对「已注入 listen 端口」的 fetch 关闭校验，生产 443 仍校验。
         if ($localDevFetch) {

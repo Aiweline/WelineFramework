@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Cdn',
-    "version" => '1.0.37',
+    "version" => '1.0.40',
     "requires" => [
         'Weline_Cron' => '*',
         'Weline_Framework' => '*',

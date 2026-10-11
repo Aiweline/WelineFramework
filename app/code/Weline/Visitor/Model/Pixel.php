@@ -86,22 +86,50 @@ class Pixel extends Model
     public const schema_fields_EXPERIMENT_ID = 'experiment_id';
     #[Col('varchar', 32, nullable: false, default: '', comment: 'SEO 实验变体')]
     public const schema_fields_VARIANT = 'variant';
+    /** Default batch size for undealt pixel fetches (cron / callers). */
+    public const UNDEALT_BATCH_DEFAULT = 500;
+    /** Hard cap aligned with getPixelsByWebsiteId. */
+    public const UNDEALT_BATCH_MAX = 10000;
+
     /**
-     * 获取未处理的像素记录
-     * 
+     * 获取未处理的像素记录（强制 limit，禁止无界全表）。
+     *
      * @param int|null $websiteId 站点ID，如果提供则只获取该站点的记录
+     * @param int|null $limit 批次大小；null 用默认 500；上限 10000
      * @return array
      */
-    public static function getUnDeaPixels(?int $websiteId = null): array
+    public static function getUnDeaPixels(?int $websiteId = null, ?int $limit = null): array
     {
         $model = w_obj(self::class)->reset()->where(self::schema_fields_CRON_DEAL, 0);
-        
-        // 如果提供了站点ID，则添加站点ID过滤条件
+
         if ($websiteId !== null && $websiteId > 0) {
             $model->where(self::schema_fields_WEBSITE_ID, $websiteId);
         }
-        
-        return $model->select()->fetchArray();
+
+        $batch = $limit === null ? self::UNDEALT_BATCH_DEFAULT : (int)$limit;
+        if ($batch < 1) {
+            $batch = self::UNDEALT_BATCH_DEFAULT;
+        }
+        $batch = min(self::UNDEALT_BATCH_MAX, $batch);
+
+        return $model
+            ->order(self::schema_fields_ID, 'ASC')
+            ->limit($batch)
+            ->select()
+            ->fetchArray();
+    }
+
+    /**
+     * Count undealt pixels without loading rows into memory.
+     */
+    public static function countUnDeaPixels(?int $websiteId = null): int
+    {
+        $model = w_obj(self::class)->reset()->where(self::schema_fields_CRON_DEAL, 0);
+        if ($websiteId !== null && $websiteId > 0) {
+            $model->where(self::schema_fields_WEBSITE_ID, $websiteId);
+        }
+
+        return (int)$model->count();
     }
     
     /**
@@ -274,8 +302,8 @@ class Pixel extends Model
             $events[$event] = self::countPixelsByWebsiteIdAndEvent($websiteId, $event);
         }
         
-        // 统计未处理记录数
-        $unDealCount = count(self::getUnDeaPixels($websiteId));
+        // 统计未处理记录数（COUNT，禁止全表装入内存）
+        $unDealCount = self::countUnDeaPixels($websiteId);
         
         return [
             'website_id' => $websiteId,

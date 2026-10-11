@@ -33,7 +33,9 @@
 
 `BLOCK + pid=0 + 合法 launch_id` 是父调度器拥有的 READY 启动窗口；包括 `-force` 在内的其他调度器都不得扫描、收养或盗取。人工锁定使用空 `launch_id`，仍允许显式 force 解锁。已保存 PID 必须使用 running / exited / unknown 三态探测并校验本代三个实时参数；unknown 时保留 PID 并跳过，身份不匹配时不得发送信号。
 
-SQLite 连接不允许父调度器在上一代受管子任务仍运行时继续认领或启动下一项；父进程必须在发布 `GO` 后按精确代次等待 `SUCCESS/FAIL + pid=0 + launch_id=''`，再处理下一任务。父进程还必须用 `waitpid(WNOHANG)` 回收自己已退出的 POSIX child；若数据库仍是本代 `RUNNING + PID`，按精确代次 CAS 为 FAIL 并释放本代 lease，避免 zombie 在 `kill(pid, 0)` 下持续表现为存活而卡死整轮调度。该单飞约束只适用于 SQLite；MySQL、MariaDB 和 PostgreSQL 保持独立任务并发。普通调度不转发子任务日志，后台手动 SSE 仍按原协议转发。
+SQLite 连接不允许父调度器在上一代受管子任务仍运行时继续认领或启动下一项；父进程必须在发布 `GO` 后按精确代次等待 `SUCCESS/FAIL + pid=0 + launch_id=''`，再处理下一任务。父进程还必须用 `waitpid(WNOHANG)` 回收自己已退出的 POSIX child；若数据库仍是本代 `RUNNING + PID`，按精确代次 CAS 为 FAIL 并释放本代 lease，避免 zombie 在 `kill(pid, 0)` 下持续表现为存活而卡死整轮调度。该单飞约束只适用于 SQLite。
+
+MySQL、MariaDB 和 PostgreSQL 保持独立任务并发，但受 **软并发上限**（`ManagedChildAdmission` / 配置键 `cron/max_concurrent_managed_children`，默认 3，范围 1–16）约束：父调度在 `claimTaskLaunch` **前**统计存活受管子进程（`RUNNING`/`BLOCK` + 可验证 PID，探测 `unknown` 时 fail-closed 计槽）以及 READY 窗口（`BLOCK + pid=0 + 合法 launch_id`）；达到上限则本轮 **defer**（不 claim）。claim 成功后立刻 **再计一次**；若因多父调度 TOCTOU 导致 live > max，则释放本 READY 窗口（恢复 `SUCCESS`、清空 `launch_id`/`pid`）且不 spawn。SQLite 路径不走该软上限。普通调度不转发子任务日志，后台手动 SSE 仍按原协议转发。
 
 ## 日志和清理
 

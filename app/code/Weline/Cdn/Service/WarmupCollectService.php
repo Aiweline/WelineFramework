@@ -17,6 +17,8 @@ use Weline\Product\Extends\Module\Weline_Cdn\ProductHeatUrls;
 class WarmupCollectService
 {
     public const PER_PROVIDER_CAP = 3000;
+    /** Chunk size when dispatching accepted URLs to send_warmup. */
+    public const DISPATCH_CHUNK = 200;
 
     public function __construct(
         private readonly WarmupProviderScanner $scanner,
@@ -169,17 +171,20 @@ class WarmupCollectService
         if ($accepted !== []) {
             // EventsManager::dispatch 对非 array 引用会在结束后把 $data 回写成内层 data，
             // 禁止传入 Event 对象再点号取 result——调用方变量会变成 array 导致收集必败。
-            $eventData = [
-                'module' => $module,
-                'provider' => $providerFqcn,
-                'urls' => $accepted,
-                'dedupe' => true,
-            ];
-            $this->eventsManager->dispatch('Weline_Cdn::send_warmup', $eventData);
-            $result = $eventData['result'] ?? null;
-            if (is_array($result)) {
-                $inserted = (int)($result['inserted_count'] ?? 0);
-                $updated = (int)($result['updated_count'] ?? 0);
+            // Chunk dispatch so thousands of URLs never sit in one event payload.
+            foreach (array_chunk($accepted, self::DISPATCH_CHUNK) as $chunk) {
+                $eventData = [
+                    'module' => $module,
+                    'provider' => $providerFqcn,
+                    'urls' => $chunk,
+                    'dedupe' => true,
+                ];
+                $this->eventsManager->dispatch('Weline_Cdn::send_warmup', $eventData);
+                $result = $eventData['result'] ?? null;
+                if (is_array($result)) {
+                    $inserted += (int)($result['inserted_count'] ?? 0);
+                    $updated += (int)($result['updated_count'] ?? 0);
+                }
             }
         }
 

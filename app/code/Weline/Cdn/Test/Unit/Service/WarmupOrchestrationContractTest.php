@@ -22,6 +22,18 @@ final class WarmupOrchestrationContractTest extends TestCase
         $this->assertStringContainsString("dispatch('Weline_Cdn::send_warmup', \$eventData)", $src);
         $this->assertStringContainsString("\$eventData['result']", $src);
         $this->assertStringNotContainsString('new Event(', $src);
+        $this->assertStringContainsString('DISPATCH_CHUNK', $src);
+        $this->assertStringContainsString('array_chunk($accepted, self::DISPATCH_CHUNK)', $src);
+    }
+
+    public function testRunnerDiscardsResponseBodyWithoutReturnTransfer(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Service/WarmupRunner.php';
+        $src = (string)file_get_contents($path);
+        $this->assertStringContainsString('CURLOPT_WRITEFUNCTION', $src);
+        $this->assertStringContainsString('CURLOPT_RETURNTRANSFER => false', $src);
+        $this->assertStringNotContainsString('CURLOPT_RETURNTRANSFER => true', $src);
+        $this->assertStringContainsString('discard body', $src);
     }
 
     public function testCollectDispatchMustNotPassEventObject(): void
