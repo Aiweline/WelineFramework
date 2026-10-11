@@ -10,10 +10,11 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
 
-    <!-- 平台应用商店（顶级菜单） -->
+    <!-- 平台应用商店（挂到「应用与扩展」，勿与个人中心/智能体同占 order=50） -->
     <menu source="Weline_PlatformAppStore::platform"
           name="platform_appstore"
           title="平台应用商店"
+          parent="Weline_Backend::apps_tools"
           icon="mdi mdi-storefront"
           order="50">
 
