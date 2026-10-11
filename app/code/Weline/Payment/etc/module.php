@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Payment',
-    "version" => '1.9.120',
+    "version" => '1.9.121',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',

@@ -9,7 +9,7 @@ use Weline\Framework\App\Controller\FrontendController;
 /**
  * 退换政策（店面指南）。
  *
- * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme public_path_patterns=/guide/returns
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/theme public_path_patterns=/guide/returns
  */
 final class Returns extends FrontendController
 {

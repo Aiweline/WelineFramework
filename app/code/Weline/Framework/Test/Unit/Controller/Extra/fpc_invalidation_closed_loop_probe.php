@@ -6,6 +6,8 @@ use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
 use Weline\Framework\Controller\Extra\ExtraPolicyResolver;
 use Weline\Framework\Event\Changed\ChangedPipeline;
 use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
+use Weline\Framework\Http\Fpc\FpcPayloadPathIndex;
+use Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry;
 use Weline\Framework\Manager\ObjectManager;
 
 $r = ObjectManager::getInstance(ExtraPolicyResolver::class);
@@ -34,9 +36,10 @@ foreach ($checks as $c) {
 }
 
 $probes = [
-    ['type' => 'product_search_projection', 'ns' => ['website/default/catalog'], 'urls' => ['/product/demo']],
-    ['type' => 'theme_layout', 'ns' => ['website/default/theme'], 'urls' => []],
-    ['type' => 'blog.post', 'ns' => ['global/storefront/blog'], 'urls' => []],
+    ['type' => 'product_search_projection', 'ns' => ['website/default/catalog'], 'urls' => ['/product/demo', '/', '/products']],
+    ['type' => 'catalog_category', 'ns' => ['website/default/catalog'], 'urls' => ['/', '/categories', '/category/probe']],
+    ['type' => 'theme_layout', 'ns' => ['website/default/theme'], 'urls' => ['/']],
+    ['type' => 'blog.post', 'ns' => ['global/storefront/blog'], 'urls' => ['/blog', '/blog/probe-post']],
     ['type' => 'cms_page', 'ns' => ['website/default/cms'], 'urls' => ['/cms-demo']],
     ['type' => 'faq.item', 'ns' => ['website/default/cms', 'website/default/theme'], 'urls' => ['/faq']],
 ];
@@ -50,7 +53,7 @@ foreach ($probes as $i => $p) {
         websiteId: 0,
         websiteCode: 'default',
         before: ['k' => 1],
-        after: ['k' => 2],
+        after: ['k' => 2, 'status' => 'published'],
         changedFields: ['k'],
         impact: [
             'namespaces' => $p['ns'],
@@ -60,7 +63,16 @@ foreach ($probes as $i => $p) {
         ],
         origin: ['entry' => 'fpc_loop_probe'],
     );
-    $pipeline->process($change);
+    try {
+        $pipeline->process($change);
+    } catch (\Throwable $e) {
+        // AFTER_COMMIT CDN purge may fail without a bound Cloudflare account; SYNC bump still counts.
+        $msg = $e->getMessage();
+        if (!str_contains($msg, '账户') && !str_contains($msg, 'account') && !str_contains($msg, 'credential')) {
+            fwrite(STDERR, 'PROCESS_FAIL ' . $p['type'] . ' ' . $msg . PHP_EOL);
+            exit(7);
+        }
+    }
     $after = $ns->fingerprint($p['ns']);
     if ($before === $after) {
         fwrite(STDERR, 'NO_BUMP ' . $p['type'] . PHP_EOL);
@@ -68,4 +80,26 @@ foreach ($probes as $i => $p) {
     }
     echo 'BUMP_OK ' . $p['type'] . PHP_EOL;
 }
+
+// Disk path-index purge: body file must disappear after adapter purgeUrls.
+$probePath = '/product/fpc-path-index-probe';
+$payloadDir = BP . 'var' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+    . DIRECTORY_SEPARATOR . 'ff';
+if (!is_dir($payloadDir)) {
+    @mkdir($payloadDir, 0775, true);
+}
+$body = $payloadDir . DIRECTORY_SEPARATOR . 'closed-loop-probe.br';
+file_put_contents($body, 'probe-br');
+FpcPayloadPathIndex::remember($probePath, 'unified-fpc-probe-key', $body);
+$adapter = ObjectManager::getInstance(FpcStoreAdapterRegistry::class)->active();
+if ($adapter === null) {
+    fwrite(STDERR, 'NO_FPC_ADAPTER' . PHP_EOL);
+    exit(5);
+}
+$adapter->purgeUrls([$probePath]);
+if (is_file($body)) {
+    fwrite(STDERR, 'DISK_PURGE_FAIL ' . $probePath . PHP_EOL);
+    exit(6);
+}
+echo 'DISK_PURGE_OK ' . $probePath . PHP_EOL;
 echo 'LOOP_OK' . PHP_EOL;

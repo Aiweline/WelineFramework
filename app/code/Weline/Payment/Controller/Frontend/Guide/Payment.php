@@ -11,7 +11,7 @@ use Weline\Payment\Service\PaymentCustomerGuideRegistry;
 /**
  * 支付方式指南（店面）。
  *
- * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme public_path_patterns=/guide/payment,/guide/payment/**
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/theme public_path_patterns=/guide/payment,/guide/payment/**
  */
 final class Payment extends FrontendController
 {

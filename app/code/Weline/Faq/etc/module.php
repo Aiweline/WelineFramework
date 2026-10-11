@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Faq',
-    'version' => '1.0.26',
+    'version' => '1.0.27',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Websites' => '*',

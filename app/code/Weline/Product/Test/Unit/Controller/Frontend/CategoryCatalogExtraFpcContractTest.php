@@ -16,7 +16,7 @@ final class CategoryCatalogExtraFpcContractTest extends TestCase
         $src = (string)\file_get_contents(\dirname(__DIR__, 4) . '/Controller/Frontend/Category.php');
         self::assertMatchesRegularExpression('/@Extra\s+type=fpc\b/', $src);
         self::assertStringContainsString('enabled=true', $src);
-        self::assertStringContainsString('ttl=600', $src);
+        self::assertStringContainsString('ttl=31536000', $src);
         self::assertStringContainsString('website/default/catalog', $src);
         // 多级分类 path（/category/sets、/category/a/b）须用 **（* 仅单段）
         self::assertStringContainsString('/category/**', $src);

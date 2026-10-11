@@ -469,10 +469,13 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
         }
 
         if (($response['success'] ?? null) === true) {
+            $alwaysOnline = $this->ensureAlwaysOnline($zoneId, $credentials);
+
             return [
                 'success' => true,
                 'message' => __('规则推送成功，共 %{count} 条', ['count' => count($formattedRules)]),
                 'data' => $response['result'] ?? null,
+                'always_online' => $alwaysOnline,
             ];
         }
 
@@ -492,6 +495,36 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
             'message' => $errorMessage,
             'errors' => $response['errors'] ?? [],
         ];
+    }
+
+    /**
+     * Zone Always Online（源站异常时 CF 吐快照）。规则推送成功后幂等开启；失败不回滚规则。
+     *
+     * @param array<string, mixed> $credentials
+     * @return array{ok:bool,value?:string,message?:string}
+     */
+    public function ensureAlwaysOnline(string $zoneId, array $credentials): array
+    {
+        $url = self::API_BASE_URL . '/zones/' . $zoneId . '/settings/always_online';
+        try {
+            $response = $this->makeRequest('PATCH', $url, ['value' => 'on'], $credentials);
+            if (($response['success'] ?? null) === true) {
+                return [
+                    'ok' => true,
+                    'value' => (string)($response['result']['value'] ?? 'on'),
+                ];
+            }
+
+            return [
+                'ok' => false,
+                'message' => (string)($response['errors'][0]['message'] ?? 'always_online_patch_failed'),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
     }
 
     /**

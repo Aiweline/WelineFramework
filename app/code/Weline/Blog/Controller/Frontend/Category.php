@@ -16,7 +16,7 @@ use Weline\Theme\Helper\WidgetI18n;
 /**
  * 博客分类列表（店面）。
  *
- * @Extra type=fpc enabled=true ttl=600 namespaces=global/storefront/blog public_path_patterns=/blog/category,/blog/category/*
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=global/storefront/blog public_path_patterns=/blog/category,/blog/category/*
  */
 final class Category extends FrontendController
 {

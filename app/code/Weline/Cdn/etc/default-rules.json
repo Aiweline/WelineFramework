@@ -4,10 +4,11 @@
         "action": {
             "cache": {
                 "status_code": [200, 301, 308],
-                "ttl": 2592000
+                "ttl": 31536000,
+                "browser_ttl": 31536000
             }
         },
-        "description": "静态资源缓存30天"
+        "description": "静态/媒体：边缘+浏览器缓存一年（源站 Cache-Control 对齐）"
     },
     {
         "expression": "(starts_with(http.request.uri.path, \"/admin/\") or starts_with(http.request.uri.path, \"/backend/\"))",

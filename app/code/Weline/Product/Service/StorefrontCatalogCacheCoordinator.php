@@ -298,6 +298,12 @@ final class StorefrontCatalogCacheCoordinator
         $this->invalidateWebsiteCatalog($websiteId, $reason, [
             'category_id' => max(0, $categoryId),
         ]);
+        try {
+            ObjectManager::getInstance(CatalogCategoryChangedPublisher::class)
+                ->publish($websiteId, $reason, $categoryId);
+        } catch (\Throwable) {
+            // Catalog bags already invalidated; FPC URL purge is best-effort.
+        }
     }
 
     public function notifyCatalogChanged(int $websiteId, string $reason, array $context = []): void

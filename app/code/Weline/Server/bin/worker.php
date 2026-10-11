@@ -6824,7 +6824,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     // ========== 静态文件内存缓存（冷热淘汰策略） ==========
     static $staticFileCache = [];
     static $staticFileCacheTotalSize = 0;
-    static $staticFileCacheMaxAge = 86400 * 7;
+    static $staticFileCacheMaxAge = 31536000;
     /** @var array<string, string> normalized URI => cached absolute path */
     static $staticUriIndex = [];
     static $staticUriIndexMaxEntries = 4096;
@@ -7147,7 +7147,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $mimeType = $mimeTypes[$extension] ?? 'application/octet-stream';
     
     // 缓存控制（静态资源可以长期缓存）
-    $maxAge = 86400 * 7; // 7 天
+    $maxAge = 31536000; // 1 年（浏览器+中间层；指纹/版本化 URL 可安全 immutable）
     $expires = \gmdate('D, d M Y H:i:s', \time() + $maxAge) . ' GMT';
     
     // 大文件阈值（超过此大小使用流式传输标记）
@@ -7244,7 +7244,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         $responseHeaders = "HTTP/1.1 200 OK\r\n";
         $responseHeaders .= "Content-Type: {$mimeType}\r\n";
         $responseHeaders .= "Content-Length: {$actualContentLength}\r\n";
-        $responseHeaders .= "Cache-Control: public, max-age={$maxAge}\r\n";
+        $responseHeaders .= "Cache-Control: public, max-age={$maxAge}, immutable\r\n";
         $responseHeaders .= "ETag: {$etag}\r\n";
         $responseHeaders .= "Vary: Accept-Encoding\r\n";
         $responseHeaders .= "Last-Modified: {$lastModified}\r\n";
@@ -7327,7 +7327,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     
     $response .= "Content-Type: {$mimeType}\r\n";
     $response .= "Content-Length: {$contentLength}\r\n";
-    $response .= "Cache-Control: public, max-age={$maxAge}\r\n";
+    $response .= "Cache-Control: public, max-age={$maxAge}, immutable\r\n";
     $response .= "ETag: {$etag}\r\n";
     $response .= "Vary: Accept-Encoding\r\n";
     $response .= "Last-Modified: {$lastModified}\r\n";

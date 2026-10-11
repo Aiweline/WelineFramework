@@ -17,7 +17,7 @@ use Weline\Product\Service\StorefrontSeoListingFacts;
 /**
  * 店面分类列表（/category/{path…}）。
  *
- * @Extra type=fpc enabled=true ttl=600 namespaces=website/default/catalog public_path_patterns=/category/**
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/catalog public_path_patterns=/category/**
  */
 final class Category extends FrontendController
 {

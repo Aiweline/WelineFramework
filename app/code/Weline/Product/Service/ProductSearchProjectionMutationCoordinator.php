@@ -107,7 +107,10 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
                     changedFields: \array_keys($after),
                     impact: [
                         'namespaces' => [$catalogNamespace],
-                        'urls' => array_column($currentUrls, 'loc'),
+                        'urls' => array_values(array_unique(array_merge(
+                            array_column($currentUrls, 'loc'),
+                            ['/', '/products'],
+                        ))),
                         'previous_urls' => array_column($previousUrls, 'loc'),
                     ],
                     origin: ['entry' => 'product.search_projection.' . $targetType],

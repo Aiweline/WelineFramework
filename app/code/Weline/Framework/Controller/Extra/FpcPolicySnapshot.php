@@ -34,7 +34,7 @@ final class FpcPolicySnapshot
             $id = (string)($row['declaration_id'] ?? self::declarationId($row));
             $attrs = $row['attrs'] ?? [];
             $codeEnabled = (bool)($attrs['enabled'] ?? true);
-            $codeTtl = max(0, (int)($attrs['ttl'] ?? 600));
+            $codeTtl = max(0, (int)($attrs['ttl'] ?? 31536000));
             $enabled = $codeEnabled;
             $ttl = $codeTtl;
             $enabledSource = $ttlSource = 'code';

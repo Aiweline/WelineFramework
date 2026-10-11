@@ -9,7 +9,7 @@ use Weline\Framework\App\Controller\FrontendController;
 /**
  * 配送说明（店面指南）。
  *
- * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme public_path_patterns=/guide/shipping
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/theme public_path_patterns=/guide/shipping
  */
 final class Shipping extends FrontendController
 {

@@ -22,7 +22,7 @@ use Weline\Product\Service\StorefrontSeoListingFacts;
  * IA：根 /category|/categories = 分类网格落地（非全量商品 PLP）；
  * 商品列表保留 /products；叶子 PLP 在 Category（/category/{path}）。
  *
- * @Extra type=fpc enabled=true ttl=600 namespaces=website/default/catalog public_path_patterns=/products,/category,/categories
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/catalog public_path_patterns=/products,/category,/categories
  */
 final class Catalog extends FrontendController
 {

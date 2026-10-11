@@ -25,6 +25,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\ContentEncodingNegotiator;
 use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
 use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
+use Weline\Framework\Http\Fpc\FpcPayloadPathIndex;
 use Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry;
 use Weline\Framework\Http\GuardHeaders;
 use Weline\Framework\Http\HeaderCollector;
@@ -651,7 +652,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         // Externalize while plaintext length is still known, then drop plaintext
         // from Shared/L1 whenever br authority exists.
         $sharedPayload = $this->stripPlaintextWhenBrotliAuthority(
-            $this->externalizeSharedPayload($unifiedCacheKey, $payload)
+            $this->externalizeSharedPayload($unifiedCacheKey, $payload, $fullUri)
         );
         \error_clear_last();
         $sharedPublished = $this->cache()->set(
@@ -680,7 +681,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $staleCacheKey = $this->buildStaleCacheKey($unifiedCacheKey);
             $staleTtl = $this->staleTtlSeconds();
             $stalePayload = $this->stripPlaintextWhenBrotliAuthority(
-                $this->externalizeSharedPayload($staleCacheKey, $payload)
+                $this->externalizeSharedPayload($staleCacheKey, $payload, $fullUri)
             );
             if ($this->shouldPublishSharedStalePayload($stalePayload)) {
                 self::cooperativeBuildYield();
@@ -688,7 +689,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 self::cooperativeBuildYield();
                 $schemaNeutralStaleKey = $this->buildSchemaNeutralStaleCacheKey($fullUri, $method, $variant);
                 $schemaNeutralStalePayload = $this->stripPlaintextWhenBrotliAuthority(
-                    $this->externalizeSharedPayload($schemaNeutralStaleKey, $payload)
+                    $this->externalizeSharedPayload($schemaNeutralStaleKey, $payload, $fullUri)
                 );
                 if ($this->shouldPublishSharedStalePayload($schemaNeutralStalePayload)) {
                     $this->cache()->set(
@@ -1123,6 +1124,54 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         self::$frontendLoginSessionCache = [];
         self::$frontendLoginSessionCacheExpiresAt = [];
         self::$gzipDemandByCacheKey = [];
+    }
+
+    /**
+     * Changed / FpcStoreAdapter: clear process L1, cold body files, and Shared keys
+     * for the given storefront URLs/paths (path-index + pool delete).
+     *
+     * @param list<string> $urls
+     */
+    public static function purgeUrls(array $urls): void
+    {
+        self::clearProcessCache();
+        $indexedKeys = FpcPayloadPathIndex::purgePaths($urls);
+        try {
+            /** @var self $coordinator */
+            $coordinator = ObjectManager::getInstance(self::class);
+            foreach ($indexedKeys as $cacheKey) {
+                $coordinator->deleteCachedPayloadByKey((string)$cacheKey);
+            }
+        } catch (\Throwable) {
+            foreach ($indexedKeys as $cacheKey) {
+                // Fail-open: path index already unlinked body files.
+                unset($cacheKey);
+            }
+        }
+        try {
+            $manager = ObjectManager::getInstance(CacheManager::class);
+            foreach (['router', 'fpc'] as $poolName) {
+                if (!\method_exists($manager, 'hasPool') || !$manager->hasPool($poolName)) {
+                    continue;
+                }
+                $pool = $manager->pool($poolName);
+                foreach ($urls as $url) {
+                    $path = FpcPayloadPathIndex::normalizePath((string)$url);
+                    if ($path === '') {
+                        continue;
+                    }
+                    if (\method_exists($pool, 'deleteMatching')) {
+                        $pool->deleteMatching('*' . \md5($path) . '*');
+                    }
+                }
+                foreach ($indexedKeys as $cacheKey) {
+                    if (\method_exists($pool, 'delete')) {
+                        $pool->delete((string)$cacheKey);
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
     }
 
     private function getStaleCachedResponse(string $method): ?Response
@@ -3113,7 +3162,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 $this->cache()->set(
                     $cacheKey,
                     $this->stripPlaintextWhenBrotliAuthority(
-                        $this->externalizeSharedPayload($cacheKey, $cached)
+                        $this->externalizeSharedPayload($cacheKey, $cached, $this->getCacheKeyFullUri())
                     ),
                     $remainingTtl ?? 3600
                 );
@@ -3764,9 +3813,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     }
 
     /**
-     * FPC HIT/STALE 出站：写 CDN 专用缓存头，供 Cloudflare Cache Rules
-     *（edge_ttl.mode=bypass_by_default）在「有源站缓存头才进边缘」时命中。
-     * 不改浏览器 Cache-Control（保持 private/no-store 语义由调用方决定）。
+     * FPC HIT/STALE 出站：
+     * - CDN：一年级（跟 policy_ttl / remaining）
+     * - 浏览器：短 TTL（默认 60s），避免语种/货币 Cookie 变体被长缓存；Vary: Cookie 仍由调用方保证
      */
     private function applyFpcHitEdgeCacheHeaders(Response $response, bool $stale = false, array $payload = []): void
     {
@@ -3775,6 +3824,23 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $directive = $stale || $maxAge <= 0 ? 'no-store' : 'public, max-age=' . $maxAge;
         $response->setHeader('CDN-Cache-Control', $directive);
         $response->setHeader('Cloudflare-CDN-Cache-Control', $directive);
+        if ($stale || $maxAge <= 0) {
+            $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+        } else {
+            // HTML 浏览器短缓存（默认 60s）；CDN 仍用上面的一年级 maxAge。
+            // 可配：wls.performance.fpc_browser_max_age_seconds（需完整 Env 引导）。
+            $browserTtl = 60;
+            if (\defined('BP') && \defined('DS') && \defined('APP_CODE_PATH')) {
+                $browserTtl = (int)Env::get('wls.performance.fpc_browser_max_age_seconds', 60);
+            }
+            $browserTtl = max(0, min($browserTtl, $maxAge, 86400));
+            $response->setHeader(
+                'Cache-Control',
+                $browserTtl > 0
+                    ? 'public, max-age=' . $browserTtl
+                    : 'public, max-age=0, must-revalidate'
+            );
+        }
         GuardHeaders::writeCacheStatus($response, GuardHeaders::STATUS_HIT);
     }
 
@@ -4282,8 +4348,19 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
-    private function externalizeSharedPayload(string $cacheKey, array $payload): array
-    {
+    private function externalizeSharedPayload(
+        string $cacheKey,
+        array $payload,
+        string $fullUriForPathIndex = '',
+    ): array {
+        $indexPath = FpcPayloadPathIndex::normalizePath($fullUriForPathIndex);
+        $remember = static function (string $file) use ($cacheKey, $indexPath): void {
+            if ($indexPath === '' || $file === '') {
+                return;
+            }
+            FpcPayloadPathIndex::remember($indexPath, $cacheKey, $file);
+        };
+
         $bodyFile = $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] ?? null;
         if (\is_array($bodyFile) && \trim((string)($bodyFile['path'] ?? '')) !== '') {
             // Already externalized: Shared must stay pointer-only (no inline br/plain).
@@ -4292,11 +4369,13 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY],
                 $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY],
             );
+            $remember(\trim((string)$bodyFile['path']));
 
             return $payload;
         }
 
-        $minBytes = (int)(Env::get('wls.performance.fpc_shared_file_body_min_bytes', 262144) ?: 0);
+        // Default 4KiB: prefer cold disk for storefront pages on small machines.
+        $minBytes = (int)(Env::get('wls.performance.fpc_shared_file_body_min_bytes', 4096) ?: 0);
         if ($minBytes <= 0) {
             return $payload;
         }
@@ -4326,6 +4405,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 'bytes' => \strlen($brotli),
                 'encoding' => self::FPC_BODY_FILE_ENCODING_BROTLI,
             ];
+            $remember($file);
 
             return $payload;
         }
@@ -4349,6 +4429,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'bytes' => \strlen($plain),
             'encoding' => self::FPC_BODY_FILE_ENCODING_IDENTITY,
         ];
+        $remember($file);
 
         return $payload;
     }

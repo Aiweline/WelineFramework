@@ -316,8 +316,8 @@ NGINX;
         location ^~ /pub/media/ {
             root {$quotedProjectRoot};
             access_log off;
-            expires 30d;
-            add_header Cache-Control "public, max-age=2592000, immutable" always;
+            expires 365d;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
             add_header X-Wls-Media-Disk "1" always;
             try_files \$uri =404;
         }

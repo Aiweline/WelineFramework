@@ -89,6 +89,28 @@ class RulesPushDefaultsTest extends TestCase
         $this->assertStringNotContainsString(' matches ', ' ' . $expressions . ' ', 'matches operator requires Business plan');
     }
 
+    public function testStaticMediaRuleUsesOneYearEdgeAndBrowserTtl(): void
+    {
+        $rules = \json_decode((string)\file_get_contents($this->resolveRulesFilePath()), true);
+        $this->assertIsArray($rules);
+        $static = null;
+        foreach ($rules as $rule) {
+            if (!\is_array($rule)) {
+                continue;
+            }
+            $expr = (string)($rule['expression'] ?? '');
+            if (\str_contains($expr, '/static/') && \str_contains($expr, '/media/')) {
+                $static = $rule;
+                break;
+            }
+        }
+        $this->assertIsArray($static, 'static/media cache rule missing');
+        $cache = $static['action']['cache'] ?? null;
+        $this->assertIsArray($cache);
+        $this->assertSame(31536000, (int)($cache['ttl'] ?? 0));
+        $this->assertSame(31536000, (int)($cache['browser_ttl'] ?? 0));
+    }
+
     private function resolveRulesFilePath(): string
     {
         $base = \dirname(__DIR__, 4);

@@ -142,9 +142,11 @@ final class FpcPolicyExecutionTest extends TestCase
         $payload = ['fpc_expires_at' => microtime(true) + 12, 'policy_ttl' => 30];
         $this->invoke('applyFpcHitEdgeCacheHeaders', $response, false, $payload);
         self::assertMatchesRegularExpression('/^public, max-age=(?:10|11|12)$/', $response->getHeader('CDN-Cache-Control'));
+        self::assertMatchesRegularExpression('/^public, max-age=(?:10|11|12)$/', $response->getHeader('Cache-Control'));
         $this->invoke('applyFpcHitEdgeCacheHeaders', $response, true, $payload);
         self::assertSame('no-store', $response->getHeader('CDN-Cache-Control'));
         self::assertSame('no-store', $response->getHeader('Cloudflare-CDN-Cache-Control'));
+        self::assertSame('private, no-store, max-age=0, must-revalidate', $response->getHeader('Cache-Control'));
         $http = "HTTP/1.1 200 OK\r\nCDN-Cache-Control: public, max-age=60\r\nCloudflare-CDN-Cache-Control: public, max-age=60\r\nX-Weline-Fpc-Fresh-Until: " . (microtime(true) + 5) . "\r\nConnection: keep-alive\r\n\r\nbody";
         $wire = $this->invoke('withFormattedResponseConnection', $http, true);
         self::assertStringNotContainsString('X-Weline-Fpc-Fresh-Until', $wire);

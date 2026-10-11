@@ -11,7 +11,7 @@ use Weline\Framework\App\Controller\FrontendController;
 /**
  * 店面货币与汇率说明。
  *
- * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme,global/storefront/price public_path_patterns=/currency
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/theme,global/storefront/price public_path_patterns=/currency
  */
 final class Index extends FrontendController
 {

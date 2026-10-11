@@ -15,7 +15,7 @@ use Weline\Theme\Helper\WidgetI18n;
 /**
  * 博客列表（店面）。
  *
- * @Extra type=fpc enabled=true ttl=600 namespaces=global/storefront/blog public_path_patterns=/blog
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=global/storefront/blog public_path_patterns=/blog
  */
 final class Index extends FrontendController
 {

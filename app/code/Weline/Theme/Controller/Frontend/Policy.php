@@ -19,7 +19,7 @@ use Weline\Framework\App\Controller\FrontendController;
 /**
  * 政策/法律壳（店面）。
  *
- * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme public_path_patterns=/about,/sitemap,/guide,/qa,/activity,/policy,/policy/*,/terms,/theme/policy/*
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/theme public_path_patterns=/about,/sitemap,/guide,/qa,/activity,/policy,/policy/*,/terms,/theme/policy/*
  */
 class Policy extends FrontendController
 {

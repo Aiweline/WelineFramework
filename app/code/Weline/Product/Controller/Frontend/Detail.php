@@ -25,7 +25,7 @@ use Weline\Theme\Service\ProductLayoutResolveService;
 /**
  * 商品详情（店面）。
  *
- * @Extra type=fpc enabled=true ttl=600 namespaces=website/default/catalog public_path_patterns=/product/*,/catalog/product/*
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/catalog public_path_patterns=/product/*,/catalog/product/*
  */
 final class Detail extends FrontendController
 {

@@ -10,7 +10,7 @@ use Weline\Framework\App\Controller\FrontendController;
 /**
  * 社媒登录指南（店面；非账户会话页）。
  *
- * @Extra type=fpc enabled=true ttl=1800 namespaces=website/default/theme public_path_patterns=/guide/social-login,/guide/social-login/**
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/theme public_path_patterns=/guide/social-login,/guide/social-login/**
  */
 final class SocialLogin extends FrontendController
 {

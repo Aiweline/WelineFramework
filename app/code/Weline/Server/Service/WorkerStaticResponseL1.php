@@ -18,7 +18,7 @@ final class WorkerStaticResponseL1
 {
     private const MAX_ENTRY_BYTES = 262_144;
     private const MAX_TOTAL_BYTES = 16_777_216;
-    private const DEFAULT_MAX_AGE_SECONDS = 604_800;
+    private const DEFAULT_MAX_AGE_SECONDS = 31_536_000;
 
     /**
      * @var array<string, array{

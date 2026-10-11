@@ -84,6 +84,7 @@ final class BlogContentMutation
         $website = clone ObjectManager::getInstance(Website::class);
         $website->clearData()->load($websiteId);
         $revision = $this->revisions->next($type, $resourceId);
+        $urlImpact = $this->impactUrls($type, $before, $after);
         $change = $this->changes->create(
             resourceType: $type,
             resourceId: $resourceId,
@@ -94,7 +95,11 @@ final class BlogContentMutation
             before: $this->eventSnapshot($before),
             after: $after === null ? null : $this->eventSnapshot($after),
             changedFields: array_keys($after ?? $before),
-            impact: ['namespaces' => $paths],
+            impact: [
+                'namespaces' => $paths,
+                'urls' => $urlImpact['urls'],
+                'previous_urls' => $urlImpact['previous_urls'],
+            ],
             origin: ['entry' => 'Weline_Blog::public_content'],
         );
         \w_changed($change);
@@ -121,6 +126,38 @@ final class BlogContentMutation
             'post_id', 'category_id', 'website_id', 'locale', 'local_code', 'slug',
             'status', 'parent_id', 'sort_order', 'published_at', 'updated_at',
         ]));
+    }
+
+    /**
+     * @return array{urls:list<string>,previous_urls:list<string>}
+     */
+    private function impactUrls(string $type, array $before, ?array $after): array
+    {
+        $current = $after ?? $before;
+        $slug = \trim((string)($current['slug'] ?? ''));
+        $previousSlug = \trim((string)($before['slug'] ?? ''));
+        $urls = ['/blog' => '/blog'];
+        $previous = [];
+        if ($type === 'blog.category') {
+            if ($slug !== '') {
+                $urls['/blog/category/' . $slug] = '/blog/category/' . $slug;
+            }
+            if ($previousSlug !== '' && $previousSlug !== $slug) {
+                $previous['/blog/category/' . $previousSlug] = '/blog/category/' . $previousSlug;
+            }
+        } else {
+            if ($slug !== '') {
+                $urls['/blog/' . $slug] = '/blog/' . $slug;
+            }
+            if ($previousSlug !== '' && $previousSlug !== $slug) {
+                $previous['/blog/' . $previousSlug] = '/blog/' . $previousSlug;
+            }
+        }
+
+        return [
+            'urls' => \array_values($urls),
+            'previous_urls' => \array_values($previous),
+        ];
     }
 
     private function websiteId(array $row): int

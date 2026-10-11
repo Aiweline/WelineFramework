@@ -12463,7 +12463,7 @@ function handleStaticFile(string $uri, string $rawRequest, ?int $maxPreAdmission
     // 缓存格式：[filepath => ['content' => string, 'mtime' => int, 'size' => int, 'cached_at' => float, 'hits' => int, 'last_access' => float]]
     static $staticFileCache = [];
     static $staticFileCacheTotalSize = 0;
-    static $staticFileCacheMaxAge = 86400 * 7;  // 缓存有效期：7 天
+    static $staticFileCacheMaxAge = 31536000;  // 缓存有效期：1 年
 
     // 使用 WlsWorkerGlobals 配置
     $maxTotal = \Weline\Server\Service\WlsWorkerGlobals::getStaticCacheMaxTotal();
@@ -12777,7 +12777,7 @@ function handleStaticFile(string $uri, string $rawRequest, ?int $maxPreAdmission
     $mimeType = $mimeTypes[$extension] ?? 'application/octet-stream';
     
     // 缓存控制（静态资源可以长期缓存）
-    $maxAge = 86400 * 7; // 7 天
+    $maxAge = 31536000; // 1 年（浏览器+中间层；指纹/版本化 URL 可安全 immutable）
 
     $method = wlsStaticRequestMethod($rawRequest);
     $range = wlsResolveStaticByteRange(
@@ -12802,7 +12802,7 @@ function handleStaticFile(string $uri, string $rawRequest, ?int $maxPreAdmission
         $response = "HTTP/1.1 206 Partial Content\r\n"
             . "Content-Range: bytes {$range['start']}-{$range['end']}/{$fileSize}\r\n"
             . "Content-Type: {$mimeType}\r\nContent-Length: {$range['length']}\r\n"
-            . "Cache-Control: public, max-age={$maxAge}\r\nETag: {$etag}\r\n"
+            . "Cache-Control: public, max-age={$maxAge}, immutable\r\nETag: {$etag}\r\n"
             . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\n"
             . "Connection: {$connectionHeader}\r\nX-WLS-Static-Cache: DISK\r\n"
             . "X-WLS-File-Size: {$fileSize}\r\n\r\n";
@@ -12897,7 +12897,7 @@ function handleStaticFile(string $uri, string $rawRequest, ?int $maxPreAdmission
     $response = "HTTP/1.1 200 OK\r\n";
     $response .= "Content-Type: {$mimeType}\r\n";
     $response .= "Content-Length: {$contentLength}\r\n";
-    $response .= "Cache-Control: public, max-age={$maxAge}\r\n";
+    $response .= "Cache-Control: public, max-age={$maxAge}, immutable\r\n";
     $response .= "ETag: {$etag}\r\n";
     $response .= "Vary: Accept-Encoding\r\n";
     $response .= "Last-Modified: {$lastModified}\r\n";
