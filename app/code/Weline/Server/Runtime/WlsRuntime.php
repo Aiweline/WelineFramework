@@ -1832,6 +1832,91 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
+     * Deferred bag/category prime fallbacks.
+     *
+     * When Worker memory_limit ≤512MiB (typical ~3.5Gi hosts with 512M×2), tighten
+     * defaults so locale/currency/category prime + phrase prefetch cannot push RSS
+     * into FileAdapter / memory_pressure thrash under crawler load.
+     * Explicit env keys still win; this only supplies the null-default path.
+     *
+     * @return array{
+     *   locale_max:int,
+     *   locale_elapsed_ms:int,
+     *   currency_max:int,
+     *   currency_elapsed_ms:int,
+     *   category_max_paths:int,
+     *   category_elapsed_ms:int,
+     *   worker_memory_mb:int,
+     *   tight:bool
+     * }
+     */
+    private function resolveStorefrontDeferredPrimeBudgetDefaults(): array
+    {
+        $mb = $this->resolveWorkerMemoryLimitMbForWarmupBudget();
+        $tight = ($mb > 0 && $mb <= 512);
+        if ($tight) {
+            return [
+                'locale_max' => 2,
+                'locale_elapsed_ms' => 2500,
+                'currency_max' => 1,
+                'currency_elapsed_ms' => 1500,
+                'category_max_paths' => 2,
+                'category_elapsed_ms' => 8000,
+                'worker_memory_mb' => $mb,
+                'tight' => true,
+            ];
+        }
+
+        return [
+            'locale_max' => 8,
+            'locale_elapsed_ms' => 8000,
+            'currency_max' => 4,
+            'currency_elapsed_ms' => 6000,
+            'category_max_paths' => 8,
+            'category_elapsed_ms' => 20000,
+            'worker_memory_mb' => $mb,
+            'tight' => false,
+        ];
+    }
+
+    private function resolveWorkerMemoryLimitMbForWarmupBudget(): int
+    {
+        $candidates = [
+            (string)Env::get('wls.worker_memory_limit', ''),
+            (string)(\getenv('WLS_WORKER_MEMORY_LIMIT') ?: ''),
+            (string)\ini_get('memory_limit'),
+        ];
+        foreach ($candidates as $raw) {
+            $mb = $this->parsePhpMemoryLimitToMb($raw);
+            if ($mb > 0) {
+                return $mb;
+            }
+        }
+
+        return 0;
+    }
+
+    private function parsePhpMemoryLimitToMb(string $limit): int
+    {
+        $limit = \trim($limit);
+        if ($limit === '' || $limit === '-1') {
+            return 0;
+        }
+        if (!\preg_match('/^(\d+)\s*([KMG])?$/i', $limit, $m)) {
+            return 0;
+        }
+        $n = (int)$m[1];
+        $u = \strtoupper((string)($m[2] ?? ''));
+
+        return match ($u) {
+            'G' => $n * 1024,
+            'M' => $n,
+            'K' => \max(1, (int)\intdiv($n, 1024)),
+            default => \max(1, (int)\intdiv($n, 1024 * 1024)),
+        };
+    }
+
+    /**
      * After UC-deferred `done`: prime homepage critical allowlist bags for enabled
      * non-default locales × primary currency. Out of mandatory wall clock.
      * Fail-open; never full×locales; never locale HTML SSR; Fiber yield between shards.
@@ -1843,15 +1928,22 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $startedAt = \microtime(true);
         $scopes = $this->resolveDeferredWarmupWebsiteScopes();
 
+        $primeBudget = $this->resolveStorefrontDeferredPrimeBudgetDefaults();
         $maxLocalesRaw = Env::get('wls.worker.storefront_locale_bag_prime_max_locales', null);
         if ($maxLocalesRaw === null || $maxLocalesRaw === '') {
-            $maxLocalesRaw = Env::get('storefront_locale_bag_prime_max_locales', 8);
+            $maxLocalesRaw = Env::get(
+                'storefront_locale_bag_prime_max_locales',
+                $primeBudget['locale_max']
+            );
         }
         $maxLocales = \max(0, \min(16, (int)$maxLocalesRaw));
 
         $elapsedCapRaw = Env::get('wls.worker.storefront_locale_bag_prime_elapsed_cap_ms', null);
         if ($elapsedCapRaw === null || $elapsedCapRaw === '') {
-            $elapsedCapRaw = Env::get('storefront_locale_bag_prime_elapsed_cap_ms', 8000);
+            $elapsedCapRaw = Env::get(
+                'storefront_locale_bag_prime_elapsed_cap_ms',
+                $primeBudget['locale_elapsed_ms']
+            );
         }
         $elapsedCapMs = \max(500, \min(60000, (int)$elapsedCapRaw));
 
@@ -2096,15 +2188,22 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $startedAt = \microtime(true);
         $scopes = $this->resolveDeferredWarmupWebsiteScopes();
 
+        $primeBudget = $this->resolveStorefrontDeferredPrimeBudgetDefaults();
         $maxCurrenciesRaw = Env::get('wls.worker.storefront_currency_bag_prime_max_currencies', null);
         if ($maxCurrenciesRaw === null || $maxCurrenciesRaw === '') {
-            $maxCurrenciesRaw = Env::get('storefront_currency_bag_prime_max_currencies', 4);
+            $maxCurrenciesRaw = Env::get(
+                'storefront_currency_bag_prime_max_currencies',
+                $primeBudget['currency_max']
+            );
         }
         $maxCurrencies = \max(0, \min(8, (int)$maxCurrenciesRaw));
 
         $elapsedCapRaw = Env::get('wls.worker.storefront_currency_bag_prime_elapsed_cap_ms', null);
         if ($elapsedCapRaw === null || $elapsedCapRaw === '') {
-            $elapsedCapRaw = Env::get('storefront_currency_bag_prime_elapsed_cap_ms', 6000);
+            $elapsedCapRaw = Env::get(
+                'storefront_currency_bag_prime_elapsed_cap_ms',
+                $primeBudget['currency_elapsed_ms']
+            );
         }
         $elapsedCapMs = \max(500, \min(60000, (int)$elapsedCapRaw));
 
@@ -2251,15 +2350,22 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     {
         $startedAt = \microtime(true);
 
+        $primeBudget = $this->resolveStorefrontDeferredPrimeBudgetDefaults();
         $maxPathsRaw = Env::get('wls.worker.storefront_category_surface_prime_max_paths', null);
         if ($maxPathsRaw === null || $maxPathsRaw === '') {
-            $maxPathsRaw = Env::get('storefront_category_surface_prime_max_paths', 8);
+            $maxPathsRaw = Env::get(
+                'storefront_category_surface_prime_max_paths',
+                $primeBudget['category_max_paths']
+            );
         }
         $maxPaths = \max(0, \min(16, (int)$maxPathsRaw));
 
         $elapsedCapRaw = Env::get('wls.worker.storefront_category_surface_prime_elapsed_cap_ms', null);
         if ($elapsedCapRaw === null || $elapsedCapRaw === '') {
-            $elapsedCapRaw = Env::get('storefront_category_surface_prime_elapsed_cap_ms', 20000);
+            $elapsedCapRaw = Env::get(
+                'storefront_category_surface_prime_elapsed_cap_ms',
+                $primeBudget['category_elapsed_ms']
+            );
         }
         $elapsedCapMs = \max(1000, \min(120000, (int)$elapsedCapRaw));
 

@@ -21,7 +21,7 @@ use Weline\Websites\Model\Website;
  * Seeds bounded tip search.query_result HotCache after cache:clear.
  *
  * Causal goal: shorten quiet cold hit1 exclusive for frozen tip URLs
- * (default q=hanfu × contracts locale/currency). Projection warmer peek is NOT
+ * (bounded tip q × locale/currency). Projection warmer peek is NOT
  * this bag — do not treat product.search_projection_scope HIT as query_result HIT.
  * Sticky hit2 alone is NOT an acceptance pass for this warmer.
  *
@@ -29,8 +29,6 @@ use Weline\Websites\Model\Website;
  */
 final class SearchQueryResultTipCacheWarmer implements CacheWarmerInterface
 {
-    private const TIP_Q = 'hanfu';
-
     private const PAGE = 1;
 
     private const PAGE_SIZE = 24;
@@ -40,18 +38,31 @@ final class SearchQueryResultTipCacheWarmer implements CacheWarmerInterface
     private const AREA = 'frontend';
 
     /** Soft wall so Clear stays usable alongside product/chrome warmers. */
-    private const BUDGET_MS = 45000;
+    private const BUDGET_MS = 240000;
 
     /**
-     * Frozen tip matrix (contracts A-search-query-result). Bounded — not all q.
+     * Bounded tip queries (storefront mix / crawler hot words) — not all q.
      *
-     * @var list<array{lang:string,currency:string}>
+     * @var list<string>
      */
-    private const TIP_SCOPES = [
-        ['lang' => 'de_DE', 'currency' => 'USD'],
-        ['lang' => 'ja_JP', 'currency' => 'USD'],
-        ['lang' => 'fr_FR', 'currency' => 'EUR'],
+    private const TIP_QS = ['hanfu', 'silk', 'robe', 'dress'];
+
+    /**
+     * Mix/crawler tip locales (aligned with local mix30 probe) — not full website set.
+     *
+     * @var list<string>
+     */
+    private const TIP_LANGS = [
+        'en_US', 'de_DE', 'ar_SA', 'ja_JP', 'fr_FR', 'zh_Hans_CN',
+        'bn_BD', 'hi_IN', 'es_ES', 'it_IT', 'pt_BR', 'ko_KR',
     ];
+
+    /**
+     * Mix/crawler tip currencies — not every ISO code.
+     *
+     * @var list<string>
+     */
+    private const TIP_CURRENCIES = ['USD', 'EUR', 'JPY', 'CNY', 'GBP', 'AUD', 'CAD'];
 
     public function getName(): string
     {
@@ -98,9 +109,12 @@ final class SearchQueryResultTipCacheWarmer implements CacheWarmerInterface
 
         try {
             $this->installDefaultChannelIdentity();
+            $tipScopes = self::tipScopes();
             $notes[] = $this->installAcceptancePublicHost();
-            $notes[] = 'tip_q=' . self::TIP_Q;
-            $notes[] = 'tip_scopes=' . \count(self::TIP_SCOPES);
+            $notes[] = 'tip_qs=' . \count(self::TIP_QS);
+            $notes[] = 'tip_scopes=' . \count($tipScopes);
+            $totalCells = \count(self::TIP_QS) * \count($tipScopes);
+            $notes[] = 'tip_cells=' . $totalCells;
 
             /** @var SearchHubService $hub */
             $hub = ObjectManager::getInstance(SearchHubService::class);
@@ -114,70 +128,80 @@ final class SearchQueryResultTipCacheWarmer implements CacheWarmerInterface
             $resolver = ObjectManager::getInstance(StorefrontCacheKeyContextResolver::class);
             /** @var StorefrontScopeHotCache $hot */
             $hot = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+            $policy = SearchStorefrontCacheCoordinator::queryResultPolicy();
 
-            foreach (self::TIP_SCOPES as $idx => $scope) {
-                $elapsedMs = (\hrtime(true) - $started) / 1e6;
-                if ($elapsedMs >= self::BUDGET_MS) {
-                    $remaining = \count(self::TIP_SCOPES) - $idx;
-                    $notes[] = 'budget_ms=' . self::BUDGET_MS;
-                    $notes[] = 'remaining=' . $remaining;
-                    break;
-                }
+            $cellIdx = 0;
+            foreach (self::TIP_QS as $tipQ) {
+                foreach ($tipScopes as $scope) {
+                    $elapsedMs = (\hrtime(true) - $started) / 1e6;
+                    if ($elapsedMs >= self::BUDGET_MS) {
+                        $remaining = $totalCells - $cellIdx;
+                        $notes[] = 'budget_ms=' . self::BUDGET_MS;
+                        $notes[] = 'remaining=' . $remaining;
+                        break 2;
+                    }
+                    ++$cellIdx;
 
-                $lang = $scope['lang'];
-                $currency = $scope['currency'];
-                try {
-                    RequestContext::setWelineUserLang($lang);
-                    RequestContext::setWelineUserCurrency($currency);
-                    RequestContext::remove('framework.cache.storefront_key_context.v2');
+                    $lang = $scope['lang'];
+                    $currency = $scope['currency'];
+                    try {
+                        RequestContext::setWelineUserLang($lang);
+                        RequestContext::setWelineUserCurrency($currency);
+                        RequestContext::remove('framework.cache.storefront_key_context.v2');
 
-                    if ($resolver instanceof StorefrontCacheKeyContextResolver) {
-                        $ctx = $resolver->freezeCurrent();
-                        if (!$ctx->cacheable) {
-                            ++$skipped;
-                            $notes[] = 'freeze_fail:' . $lang . ':' . ($ctx->failureCode ?: 'unknown');
+                        if ($resolver instanceof StorefrontCacheKeyContextResolver) {
+                            $ctx = $resolver->freezeCurrent();
+                            if (!$ctx->cacheable) {
+                                ++$skipped;
+                                $notes[] = 'freeze_fail:' . $tipQ . ':' . $lang . ':' . ($ctx->failureCode ?: 'unknown');
+                                continue;
+                            }
+                        }
+
+                        $logicalKey = SearchStorefrontCacheCoordinator::queryResultLogicalKey(
+                            $tipQ,
+                            self::TYPE,
+                            self::PAGE,
+                            self::PAGE_SIZE,
+                            $engineCode,
+                            self::AREA,
+                            false,
+                        );
+
+                        // Fast path: already seeded L2 — skip hub search (mix matrix size).
+                        $peek = $hot->peekPolicy($policy, $logicalKey);
+                        if (\is_array($peek) && $peek !== []) {
+                            ++$warmedL2Hit;
+                            $notes[] = 'l2_hit:' . $tipQ . ':' . $lang . ':' . $currency;
                             continue;
                         }
-                    }
 
-                    $logicalKey = SearchStorefrontCacheCoordinator::queryResultLogicalKey(
-                        self::TIP_Q,
-                        self::TYPE,
-                        self::PAGE,
-                        self::PAGE_SIZE,
-                        $engineCode,
-                        self::AREA,
-                        false,
-                    );
+                        $result = $hub->search([
+                            'q' => $tipQ,
+                            'type' => self::TYPE,
+                            'page' => self::PAGE,
+                            'page_size' => self::PAGE_SIZE,
+                        ], false);
 
-                    $result = $hub->search([
-                        'q' => self::TIP_Q,
-                        'type' => self::TYPE,
-                        'page' => self::PAGE,
-                        'page_size' => self::PAGE_SIZE,
-                    ], false);
+                        if (!$result->ok) {
+                            ++$skipped;
+                            $notes[] = 'search_fail:' . $tipQ . ':' . $lang . ':' . ($result->errorCode ?: 'unknown');
+                            continue;
+                        }
 
-                    if (!$result->ok) {
+                        $hot->purgeProcessCacheForLogicalKey($logicalKey);
+                        $peek = $hot->peekPolicy($policy, $logicalKey);
+                        if (\is_array($peek) && $peek !== []) {
+                            ++$warmedL2Hit;
+                            $notes[] = 'l2_hit:' . $tipQ . ':' . $lang . ':' . $currency;
+                        } else {
+                            ++$skipped;
+                            $notes[] = 'l2_miss:' . $tipQ . ':' . $lang . ':' . $currency;
+                        }
+                    } catch (\Throwable $e) {
                         ++$skipped;
-                        $notes[] = 'search_fail:' . $lang . ':' . ($result->errorCode ?: 'unknown');
-                        continue;
+                        $notes[] = 'error:' . $tipQ . ':' . $lang . ':' . $e->getMessage();
                     }
-
-                    $hot->purgeProcessCacheForLogicalKey($logicalKey);
-                    $peek = $hot->peekPolicy(
-                        SearchStorefrontCacheCoordinator::queryResultPolicy(),
-                        $logicalKey,
-                    );
-                    if (\is_array($peek) && $peek !== []) {
-                        ++$warmedL2Hit;
-                        $notes[] = 'l2_hit:' . $lang . ':' . $currency;
-                    } else {
-                        ++$skipped;
-                        $notes[] = 'l2_miss:' . $lang . ':' . $currency;
-                    }
-                } catch (\Throwable $e) {
-                    ++$skipped;
-                    $notes[] = 'error:' . $lang . ':' . $e->getMessage();
                 }
             }
         } catch (\Throwable $e) {
@@ -201,6 +225,23 @@ final class SearchQueryResultTipCacheWarmer implements CacheWarmerInterface
             'skipped' => $skipped,
             'message' => \implode(';', $notes) ?: 'ok',
         ];
+    }
+
+    /**
+     * TIP_SCOPES matrix: TIP_LANGS × TIP_CURRENCIES (84 scopes; × tip q ≤ 336 cells).
+     *
+     * @return list<array{lang:string,currency:string}>
+     */
+    private static function tipScopes(): array
+    {
+        $scopes = [];
+        foreach (self::TIP_LANGS as $lang) {
+            foreach (self::TIP_CURRENCIES as $currency) {
+                $scopes[] = ['lang' => $lang, 'currency' => $currency];
+            }
+        }
+
+        return $scopes;
     }
 
     private function installDefaultChannelIdentity(): void

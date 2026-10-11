@@ -24,6 +24,25 @@ final class AdaptiveFiberMaxActiveContractTest extends TestCase
         self::assertFalse(AdaptiveFiberMaxActive::wantsWorkerScale());
     }
 
+    /**
+     * Known gap (P-util / survive_first): under pin_max_active, effective=ceiling so
+     * effective > halfCeiling ⇒ fiber_admission_saturated never lights even with waiters.
+     * Ops must raise Ready via server:scale --align-baseline; do not blind-unpin.
+     */
+    public function testPinnedWithWaitersNeverLightsSaturated(): void
+    {
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(48 * 1024 * 1024);
+        AdaptiveFiberMaxActive::configure(6, true, false);
+        AdaptiveFiberMaxActive::observe(6, 20);
+        $scalars = AdaptiveFiberMaxActive::capacityScalars();
+        self::assertSame(6, $scalars['fiber_max_active_effective']);
+        self::assertSame(6, $scalars['fiber_max_active_ceiling']);
+        self::assertSame(20, $scalars['fiber_admission_waiters']);
+        self::assertSame(6, $scalars['fiber_admission_active']);
+        self::assertSame(0, $scalars['fiber_admission_saturated']);
+        self::assertFalse(AdaptiveFiberMaxActive::wantsWorkerScale());
+    }
+
     public function testSoftPressureLowersTowardLiveBudget(): void
     {
         // Tiny synthetic limit → headroom below soft → effective drops.

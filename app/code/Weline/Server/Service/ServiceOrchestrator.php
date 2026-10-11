@@ -26443,9 +26443,34 @@ class ServiceOrchestrator
         $workers = $this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER);
         $ready = 0;
         $workerRows = [];
+        $fiberWaiters = 0;
+        $fiberActive = 0;
+        $fiberSaturatedWorkers = 0;
+        $fiberEffMax = null;
+        $fiberCeiling = null;
         foreach ($workers as $worker) {
             if ($worker->state === ServiceInstance::STATE_READY) {
                 $ready++;
+            }
+            $report = $worker->getMeta('last_status_report', []);
+            if (!\is_array($report)) {
+                $report = [];
+            }
+            $waiters = (int)($report['fiber_admission_waiters'] ?? 0);
+            $active = (int)($report['fiber_admission_active'] ?? 0);
+            $saturated = (int)($report['fiber_admission_saturated'] ?? 0);
+            $fiberWaiters += \max(0, $waiters);
+            $fiberActive += \max(0, $active);
+            if ($saturated === 1) {
+                $fiberSaturatedWorkers++;
+            }
+            if (\array_key_exists('fiber_max_active_effective', $report)) {
+                $eff = (int)$report['fiber_max_active_effective'];
+                $fiberEffMax = $fiberEffMax === null ? $eff : \max($fiberEffMax, $eff);
+            }
+            if (\array_key_exists('fiber_max_active_ceiling', $report)) {
+                $ceil = (int)$report['fiber_max_active_ceiling'];
+                $fiberCeiling = $fiberCeiling === null ? $ceil : \max($fiberCeiling, $ceil);
             }
             $workerRows[] = [
                 'instance_id' => $worker->instanceId,
@@ -26453,18 +26478,40 @@ class ServiceOrchestrator
                 'port' => $worker->port,
                 'state' => $worker->state,
                 'restarts' => $worker->restarts,
+                'fiber_admission_waiters' => \max(0, $waiters),
+                'fiber_admission_active' => \max(0, $active),
+                'fiber_admission_saturated' => $saturated === 1 ? 1 : 0,
             ];
         }
+
+        $requestedRaw = $this->context?->getConfig('wls.worker_count_requested', null);
+        $pinMaxActive = (bool)($this->context?->getConfig('wls.fiber.pin_max_active', false) ?? false);
+        $maxActiveConfigured = (int)($this->context?->getConfig('wls.fiber.max_active', 0) ?? 0);
+        $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? \count($workers));
+        // pin ⇒ effective stays at ceiling ⇒ wantsWorkerScale stays false ⇒ saturated never lights.
+        // Ops must raise Ready (--align-baseline); advisors will not auto-add Workers from this signal.
+        $pinSaturatedKnownGap = $pinMaxActive;
 
         $data = [
             'enabled' => (bool)($this->context?->getConfig('wls.scaling.enabled', false) ?? false),
             'current_workers' => \count($workers),
             'ready_workers' => $ready,
-            'desired_workers' => (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? \count($workers)),
+            'desired_workers' => $desired,
+            'worker_count_requested' => $requestedRaw,
             'min_workers' => (int)($this->context?->getConfig('wls.scaling.min_workers', 1) ?? 1),
             'max_workers' => (int)($this->context?->getConfig('wls.scaling.max_workers', 16) ?? 16),
             'locked' => $this->rollingRestartInProgress || $this->isStopFlowActive(),
             'workers' => $workerRows,
+            'fiber_admission_waiters' => $fiberWaiters,
+            'fiber_admission_active' => $fiberActive,
+            'fiber_admission_saturated' => $fiberSaturatedWorkers > 0 ? 1 : 0,
+            'fiber_admission_saturated_workers' => $fiberSaturatedWorkers,
+            'fiber_max_active_effective' => $fiberEffMax,
+            'fiber_max_active_ceiling' => $fiberCeiling,
+            'fiber_pin_max_active' => $pinMaxActive ? 1 : 0,
+            'fiber_max_active_configured' => $maxActiveConfigured,
+            'fiber_admission_saturated_pin_known_gap' => $pinSaturatedKnownGap ? 1 : 0,
+            'utilization_formula' => 'fiber_admission_active / (ready_workers × fiber_max_active_ceiling) + fiber_admission_waiters',
         ];
 
         $this->controlServer?->sendTo(

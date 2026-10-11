@@ -60,7 +60,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     /**
      * @inheritDoc
      */
-    public function execute(array $args = [], array $data = [])
+    public function execute(array $args = [], array $data = []): ?int
     {
         $isForce = \in_array('-f', $args, true) || \in_array('--force', $args, true);
         // pools-only / skip_view_compile：只 flush 缓存池（+可选 WLS IPC），不删模板编译目录。
@@ -77,7 +77,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                 $this->clearViewCompileCaches();
             }
 
-            return;
+            return 0;
         }
 
         $cleared = 0;
@@ -127,21 +127,33 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         }
 
         // 向 WLS 发送缓存清理命令（进程内缓存失效，不重启 Worker）
+        $fpcWarmOk = false;
         if ($this->sendWlsCacheClearCommand()) {
             // Soft-clear (--pools-only) must warm after flush so quiet-cold HTTP
             // sees chrome/shelf L2. Full clear warms after view/tpl delete.
             // Skip only when WLS clear itself failed (caller already returned).
-            $this->warmStorefrontFpcAfterClear();
+            $fpcWarmOk = $this->warmStorefrontFpcAfterClear();
+        } else {
+            // Machine-readable honesty markers for acceptance scripts (W6).
+            $this->printing->warning('fpc_warm_ok=0');
+            $this->printing->warning('storefront_mix_ready=0');
+            $this->printing->warning(__('店面 Clear→warm 跳过：WLS 清理未完成；禁止宣称暖后可抗混发'));
         }
+
+        // Fail-closed exit: fpc:warmed=0 must not look like a green clear for mix scripts.
+        return $fpcWarmOk ? 0 : 2;
     }
 
     /**
      * Rebuild storefront FPC so the next visitor is not the cold SSR victim.
+     *
+     * @return bool true only when fpc pool warmed at least one path (chrome/bags may still warn)
      */
-    private function warmStorefrontFpcAfterClear(): void
+    private function warmStorefrontFpcAfterClear(): bool
     {
         $this->printing->note(__('店面 Clear→warm 编排开始：fpc→website→layout_projection→product→search→chrome(子进程)'));
         $poolNotes = [];
+        $fpcWarmed = 0;
         try {
             $registry = $this->cacheWarmerRegistry
                 ??= ObjectManager::getInstance(CacheWarmerRegistry::class);
@@ -182,9 +194,17 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             $poolNotes[] = $chromeOk ? 'chrome:gate_ok' : 'chrome:gate_miss_or_fail';
 
             $this->printing->note(__('店面 Clear→warm 编排结束：%{1}', [\implode(' · ', $poolNotes)]));
-            if (!$chromeOk || $fpcWarmed <= 0) {
-                $this->printing->warning(__('店面 Clear→warm 存在未完整暖池；禁止把裸冷混发当唯一成功标准'));
+            $fpcOk = $fpcWarmed > 0;
+            // Machine-readable markers — acceptance MUST NOT treat fpc:0 as mix-ready.
+            $this->printing->note('fpc_warm_ok=' . ($fpcOk ? '1' : '0'));
+            $this->printing->note('storefront_mix_ready=' . ($fpcOk ? '1' : '0'));
+            if (!$fpcOk) {
+                $this->printing->warning(__('店面 FPC warmed=0：禁止假绿「暖后混发」；chrome/袋 gate_ok 不可冒充整页 FPC'));
+            } elseif (!$chromeOk) {
+                $this->printing->warning(__('店面 Clear→warm FPC 已暖但 chrome 未完整；禁止把裸冷混发当唯一成功标准'));
             }
+
+            return $fpcOk;
         } catch (\Throwable $e) {
             $this->printing->warning(__('店面 Clear→warm 编排失败（未假成功）：%{1}', [$e->getMessage()]));
             if ($poolNotes !== []) {
@@ -192,6 +212,10 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             } else {
                 $this->printing->note(__('店面 Clear→warm 编排结束：失败可见'));
             }
+            $this->printing->warning('fpc_warm_ok=0');
+            $this->printing->warning('storefront_mix_ready=0');
+
+            return false;
         }
     }
 

@@ -330,4 +330,26 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
         self::assertTrue($validation['ok']);
         self::assertStringContainsString('ready:', $validation['reason']);
     }
+
+    public function testLowMemoryWorkerTightensDeferredBagPrimeDefaults(): void
+    {
+        $source = file_get_contents(self::RUNTIME);
+        self::assertIsString($source);
+        self::assertStringContainsString('resolveStorefrontDeferredPrimeBudgetDefaults', $source);
+        self::assertStringContainsString("Env::get('wls.worker_memory_limit'", $source);
+        self::assertStringContainsString("'locale_max' => 2", $source);
+        self::assertStringContainsString("'currency_max' => 1", $source);
+        self::assertStringContainsString("'category_max_paths' => 2", $source);
+        self::assertStringContainsString('$primeBudget[\'locale_max\']', $source);
+        self::assertStringContainsString('$primeBudget[\'currency_max\']', $source);
+        self::assertStringContainsString('$primeBudget[\'category_max_paths\']', $source);
+
+        $reflection = new \ReflectionClass(WlsRuntime::class);
+        $runtime = $reflection->newInstanceWithoutConstructor();
+        $parse = $reflection->getMethod('parsePhpMemoryLimitToMb');
+        $parse->setAccessible(true);
+        self::assertSame(512, $parse->invoke($runtime, '512M'));
+        self::assertSame(768, $parse->invoke($runtime, '768M'));
+        self::assertSame(0, $parse->invoke($runtime, '-1'));
+    }
 }

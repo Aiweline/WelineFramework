@@ -123,13 +123,63 @@ class Scale extends CommandAbstract
         }
 
         $data = \is_array($result['data'] ?? null) ? $result['data'] : [];
+        $instance = (string)($result['instance'] ?? ($data['instance'] ?? 'unknown'));
+        $requested = $data['worker_count_requested'] ?? null;
+        if ($requested === null || $requested === '') {
+            $requested = $this->readDiskBaselineRequested($instance);
+        }
         $this->printer->setup('WLS worker scaling status');
-        $this->printer->note('Instance: ' . (string)($result['instance'] ?? ($data['instance'] ?? 'unknown')));
+        $this->printer->note('Instance: ' . $instance);
+        $this->printer->note('worker_count_requested (baseline): ' . ($requested === null || $requested === '' ? 'n/a' : (string)$requested));
         $this->printer->note('Current workers: ' . (string)($data['current_workers'] ?? 0));
-        $this->printer->note('Ready workers: ' . (string)($data['ready_workers'] ?? 0));
         $this->printer->note('Desired workers: ' . (string)($data['desired_workers'] ?? 0));
+        $this->printer->note('Ready workers: ' . (string)($data['ready_workers'] ?? 0));
         $this->printer->note('Auto-scaling: ' . (!empty($data['enabled']) ? 'enabled' : 'disabled'));
         $this->printer->note('Locked: ' . (!empty($data['locked']) ? 'yes' : 'no'));
+        // Fiber admission observability (survive_first / P-util): waiters+active; pin keeps saturated dark.
+        if (\array_key_exists('fiber_admission_waiters', $data)
+            || \array_key_exists('fiber_admission_active', $data)
+            || \array_key_exists('fiber_pin_max_active', $data)
+        ) {
+            $this->printer->note(
+                'Fiber admission: waiters=' . (string)($data['fiber_admission_waiters'] ?? 0)
+                . ' active=' . (string)($data['fiber_admission_active'] ?? 0)
+                . ' saturated=' . (string)($data['fiber_admission_saturated'] ?? 0)
+                . ' effective=' . (string)($data['fiber_max_active_effective'] ?? 'n/a')
+                . ' ceiling=' . (string)($data['fiber_max_active_ceiling'] ?? 'n/a')
+                . ' pin=' . (!empty($data['fiber_pin_max_active']) ? 'true' : 'false')
+            );
+            if (!empty($data['fiber_admission_saturated_pin_known_gap'])) {
+                $this->printer->note(
+                    'Known gap: pin_max_active=true ⇒ fiber_admission_saturated never lights; raise Ready via ops --align-baseline'
+                );
+            }
+            if (!empty($data['utilization_formula'])) {
+                $this->printer->note('Utilization: ' . (string)$data['utilization_formula']);
+            }
+        }
+    }
+
+    /**
+     * Disk baseline fallback when Master status predates worker_count_requested field.
+     */
+    private function readDiskBaselineRequested(string $instanceName): mixed
+    {
+        try {
+            /** @var ServerInstanceManager $manager */
+            $manager = ObjectManager::getInstance(ServerInstanceManager::class);
+            $resolved = $manager->resolvePersistedInstanceName($instanceName) ?? $instanceName;
+            $configDir = \Weline\Framework\App\Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'config';
+            $store = new \Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore($configDir);
+            $cfg = $store->load($resolved);
+            if (!\is_array($cfg)) {
+                return null;
+            }
+
+            return $cfg['worker_count_requested'] ?? null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

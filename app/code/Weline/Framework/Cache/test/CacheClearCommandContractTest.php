@@ -73,6 +73,14 @@ final class CacheClearCommandContractTest extends TestCase
         self::assertStringContainsString('host=unresolved', $source);
         self::assertStringContainsString('gate_miss:', $source);
         self::assertStringContainsString('->warning($line)', $source);
+        // W6 / P-orch-warm-honesty: machine markers + fail-closed exit when fpc:warmed=0.
+        // Ready/maintenance ready ≠ FPC HIT; chrome gate_ok must not fake mix-ready.
+        self::assertStringContainsString('fpc_warm_ok=', $source);
+        self::assertStringContainsString('storefront_mix_ready=', $source);
+        self::assertStringContainsString('禁止假绿', $source);
+        self::assertStringContainsString('chrome/袋 gate_ok 不可冒充整页 FPC', $source);
+        self::assertMatchesRegularExpression('/return \$fpcWarmOk \\? 0 : 2;/', $source);
+        self::assertStringContainsString('no Theme FQCN soft-pull', $source);
     }
 
     public function testForceClearsPermanentPools(): void

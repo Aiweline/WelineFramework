@@ -15,6 +15,11 @@ use Weline\Theme\Observer\WorkerBootstrapWarmup;
  * Worker READY already primes homepage once; this warmer covers cache:clear /
  * cache:warm and expands to a small locale/path set so the first visitor is not
  * the cold SSR victim.
+ *
+ * Reachability rule (W6): prefer the public storefront face (public_origin /
+ * public_host on 443). Never force HTTPS against a plain-HTTP worker bind
+ * (ssl_enabled=false → https://127.0.0.1:worker_port resets). Loopback is a
+ * fallback with matching scheme.
  */
 final class StorefrontFpcWarmer implements CacheWarmerInterface
 {
@@ -48,20 +53,31 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
         $bootstrap = ObjectManager::getInstance(WorkerBootstrapWarmup::class);
         $hosts = $bootstrap->getFpcWarmupHosts();
         $paths = $this->priorityPaths($bootstrap->getFpcWarmupPaths());
-        $port = $this->resolvePublicPort();
-        $connectHost = $this->resolveConnectHost($hosts);
+        $workerPort = $this->resolvePublicPort();
+        $targets = $this->resolveWarmTargets($hosts, $workerPort);
 
         $warmed = 0;
         $skipped = 0;
         $notes = [];
-        $requestHost = $this->pickRequestHost($hosts, $connectHost);
-        $requestHost = $this->requestHostWithPort($requestHost, $port);
+        $primary = $targets[0] ?? null;
+        $primaryLabel = $primary === null
+            ? 'host=unresolved'
+            : ('scheme=' . $primary['scheme'] . ' connect=' . $primary['connect'] . ':' . $primary['port']
+                . ' host=' . $primary['host']);
 
         foreach ($paths as $path) {
-            // Prefer public hostname URL so TLS SNI/Host match the storefront face.
-            $result = $this->httpGet($requestHost !== '' ? $requestHost : $connectHost, $port, $requestHost, $path);
-            if (!$result['ok'] && $requestHost !== '' && $requestHost !== $connectHost) {
-                $result = $this->httpGet($connectHost, $port, $requestHost, $path);
+            $result = ['ok' => false, 'status' => 0, 'fpc' => '', 'reason' => 'no_target'];
+            foreach ($targets as $target) {
+                $result = $this->httpGet(
+                    $target['connect'],
+                    $target['port'],
+                    $target['host'],
+                    $path,
+                    $target['scheme'],
+                );
+                if ($result['ok']) {
+                    break;
+                }
             }
             if ($result['ok']) {
                 $warmed++;
@@ -75,7 +91,8 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
         return [
             'warmed' => $warmed,
             'skipped' => $skipped,
-            'message' => 'port=' . $port . ' host=' . $requestHost . ' ' . \implode(';', \array_slice($notes, 0, 6)),
+            'message' => 'worker_port=' . $workerPort . ' ' . $primaryLabel . ' '
+                . \implode(';', \array_slice($notes, 0, 6)),
         ];
     }
 
@@ -113,6 +130,122 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
         }
 
         return \array_slice(\array_values($merged), 0, self::MAX_PATHS);
+    }
+
+    /**
+     * Ordered warm targets: public face first, then loopback with correct scheme.
+     *
+     * @param list<string> $hosts
+     * @return list<array{scheme:string,connect:string,port:int,host:string}>
+     */
+    private function resolveWarmTargets(array $hosts, int $workerPort): array
+    {
+        $targets = [];
+        $seen = [];
+        $push = static function (string $scheme, string $connect, int $port, string $host) use (&$targets, &$seen): void {
+            $scheme = \strtolower($scheme) === 'http' ? 'http' : 'https';
+            $connect = \trim($connect);
+            $host = \trim($host);
+            if ($connect === '' || $host === '' || $port <= 0) {
+                return;
+            }
+            $key = $scheme . '|' . $connect . '|' . $port . '|' . $host;
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            $targets[] = [
+                'scheme' => $scheme,
+                'connect' => $connect,
+                'port' => $port,
+                'host' => $host,
+            ];
+        };
+
+        $publicHost = $this->resolvePublicHostname($hosts);
+        $publicOrigin = $this->resolvePublicOrigin();
+        if ($publicOrigin !== null) {
+            $push($publicOrigin['scheme'], $publicOrigin['host'], $publicOrigin['port'], $publicOrigin['host']);
+        } elseif ($publicHost !== '') {
+            $push('https', $publicHost, 443, $publicHost);
+        }
+
+        $connectHost = $this->resolveConnectHost($hosts);
+        $sslEnabled = $this->isWorkerSslEnabled();
+        $loopbackScheme = $sslEnabled ? 'https' : 'http';
+        // Public Host without :workerPort — :9555 on HTTP triggers canonical 308 to public HTTPS.
+        $loopbackRequestHost = $publicHost !== '' ? $publicHost : $connectHost;
+        if ($sslEnabled) {
+            $loopbackRequestHost = $this->requestHostWithPort($loopbackRequestHost, $workerPort);
+        }
+        $push($loopbackScheme, $connectHost, $workerPort, $loopbackRequestHost);
+
+        return $targets;
+    }
+
+    /**
+     * @param list<string> $hosts
+     */
+    private function resolvePublicHostname(array $hosts): string
+    {
+        foreach ($this->discoverPublicHosts() as $host) {
+            return $host;
+        }
+        foreach ($hosts as $host) {
+            $host = \trim((string)$host);
+            if ($host === '' || $host === '0.0.0.0' || $host === '::') {
+                continue;
+            }
+            if ($host === '127.0.0.1' || $host === 'localhost') {
+                continue;
+            }
+
+            return $host;
+        }
+
+        return '';
+    }
+
+    /**
+     * @return null|array{scheme:string,host:string,port:int}
+     */
+    private function resolvePublicOrigin(): ?array
+    {
+        $instance = $this->readDefaultInstanceConfig();
+        $origin = \trim((string)($instance['public_origin'] ?? ''));
+        if ($origin === '') {
+            return null;
+        }
+        try {
+            $parts = \parse_url($origin);
+        } catch (\ValueError) {
+            return null;
+        }
+        if (!\is_array($parts)) {
+            return null;
+        }
+        $host = \trim((string)($parts['host'] ?? ''));
+        if ($host === '' || $host === '127.0.0.1' || $host === 'localhost') {
+            return null;
+        }
+        $scheme = \strtolower((string)($parts['scheme'] ?? 'https'));
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            $scheme = 'https';
+        }
+        $port = (int)($parts['port'] ?? ($scheme === 'http' ? 80 : 443));
+
+        return ['scheme' => $scheme, 'host' => $host, 'port' => $port];
+    }
+
+    private function isWorkerSslEnabled(): bool
+    {
+        $instance = $this->readDefaultInstanceConfig();
+        if (\array_key_exists('ssl_enabled', $instance)) {
+            return (bool)$instance['ssl_enabled'];
+        }
+        $cert = \trim((string)($instance['ssl_cert'] ?? ''));
+
+        return $cert !== '';
     }
 
     private function resolvePublicPort(): int
@@ -157,30 +290,6 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
         }
 
         return '127.0.0.1';
-    }
-
-    /**
-     * @param list<string> $hosts
-     */
-    private function pickRequestHost(array $hosts, string $connectHost): string
-    {
-        foreach ($hosts as $host) {
-            $host = \trim((string)$host);
-            if ($host === '' || $host === '0.0.0.0' || $host === '::') {
-                continue;
-            }
-            if ($host === '127.0.0.1' || $host === 'localhost') {
-                continue;
-            }
-
-            return $host;
-        }
-
-        foreach ($this->discoverPublicHosts() as $host) {
-            return $host;
-        }
-
-        return $connectHost;
     }
 
     private function requestHostWithPort(string $host, int $port): string
@@ -249,9 +358,26 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
     /**
      * @return array{ok:bool,status:int,fpc:string,reason:string}
      */
-    private function httpGet(string $connectHost, int $port, string $requestHost, string $path): array
-    {
-        $url = 'https://' . $connectHost . ':' . $port . $path;
+    private function httpGet(
+        string $connectHost,
+        int $port,
+        string $requestHost,
+        string $path,
+        string $scheme = 'https',
+    ): array {
+        $scheme = \strtolower($scheme) === 'http' ? 'http' : 'https';
+        $connectHost = \trim($connectHost);
+        if (\str_contains($connectHost, ':') && !\str_starts_with($connectHost, '[')) {
+            // bare IPv6
+            if (\substr_count($connectHost, ':') > 1) {
+                $connectHost = '[' . $connectHost . ']';
+            }
+        }
+        $authority = $connectHost;
+        if (!(($scheme === 'https' && $port === 443) || ($scheme === 'http' && $port === 80))) {
+            $authority .= ':' . $port;
+        }
+        $url = $scheme . '://' . $authority . $path;
         if (!\function_exists('curl_init')) {
             return ['ok' => false, 'status' => 0, 'fpc' => '', 'reason' => 'curl_missing'];
         }

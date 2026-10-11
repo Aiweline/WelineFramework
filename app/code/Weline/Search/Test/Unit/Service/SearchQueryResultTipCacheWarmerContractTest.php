@@ -18,7 +18,7 @@ final class SearchQueryResultTipCacheWarmerContractTest extends TestCase
             SearchQueryResultTipCacheWarmer::class,
             $provides['cache.warmer.search.query_result_tip'] ?? null,
         );
-        self::assertSame('1.4.28', (string)($module['version'] ?? ''));
+        self::assertSame('1.4.30', (string)($module['version'] ?? ''));
     }
 
     public function testWarmerTargetsSearchPoolWithBoundedPriority(): void
@@ -45,8 +45,14 @@ final class SearchQueryResultTipCacheWarmerContractTest extends TestCase
         $src = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/SearchQueryResultTipCacheWarmer.php'
         );
-        self::assertStringContainsString("TIP_Q = 'hanfu'", $src);
+        self::assertStringContainsString('TIP_QS', $src);
+        self::assertStringContainsString("'hanfu'", $src);
+        self::assertStringContainsString("'silk'", $src);
+        self::assertStringContainsString('TIP_LANGS', $src);
+        self::assertStringContainsString('TIP_CURRENCIES', $src);
         self::assertStringContainsString('TIP_SCOPES', $src);
+        self::assertStringContainsString("'bn_BD'", $src);
+        self::assertStringContainsString("'GBP'", $src);
         self::assertStringContainsString('queryResultPolicy', $src);
         self::assertStringContainsString('queryResultLogicalKey', $src);
         self::assertStringContainsString('SearchHubService', $src);
