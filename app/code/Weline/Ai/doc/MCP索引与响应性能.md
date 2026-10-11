@@ -9,6 +9,7 @@
 3. **指导响应预算**：按最终 tools/call JSON 估算（Unicode 字符数÷4），默认只传任务匹配规范，完整规则在准备阶段下发。
 4. **定向刷新**：已准备会话对显式文件/目录做内容 Hash 刷新；全量发现留给准备/周期任务。
 5. **宿主工具面**：插件 `enabled_tools` 与 ensure 对齐索引面 9 工具；按实际运行宿主识别。
+6. **自动 GC（1.3.70）**：`index.gc.purge_shared_leftover` 在迁移标记 + 项目本地索引存在后清理共享 `~/.learning-mcp/indexes` 残留；`checkpoint_wal` 在空闲且 WAL≥阈值时 TRUNCATE；`DataDirLegacyPurge` 删 `learning.db.bak*`。不碰兄弟仓 `projects/<other-hash>/`。详见 `Mcp/docs/OPERATIONS.md`。
 
 ## 定向验收
 

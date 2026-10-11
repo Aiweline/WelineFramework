@@ -283,6 +283,11 @@ final class Config
                     'max_generations' => 100,
                     // When bound_repository is set, quarantine other project generations.
                     'purge_unbound' => true,
+                    // After projects/<hash> migration, delete leftover ~/.learning-mcp/indexes/*.
+                    'purge_shared_leftover' => true,
+                    // When the bound generation is idle, TRUNCATE its WAL (skip if locked).
+                    'checkpoint_wal' => true,
+                    'checkpoint_wal_min_bytes' => 33_554_432,
                 ],
                 'allowed_extensions' => [
                     'php', 'phtml', 'md', 'markdown', 'txt', 'json', 'yaml', 'yml', 'xml', 'toml', 'ini',
@@ -421,6 +426,9 @@ final class Config
                     'sweep_interval' => true,
                     'max_generations' => true,
                     'purge_unbound' => true,
+                    'purge_shared_leftover' => true,
+                    'checkpoint_wal' => true,
+                    'checkpoint_wal_min_bytes' => true,
                 ],
                 'allowed_extensions' => true,
                 'excluded_paths' => true,
@@ -528,6 +536,7 @@ final class Config
             'storage.purge_legacy',
             'index.enabled', 'index.auto_refresh', 'index.sidecar_enabled', 'index.include_tests',
             'index.gc.enabled', 'index.gc.purge_unbound',
+            'index.gc.purge_shared_leftover', 'index.gc.checkpoint_wal',
             'knowledge.auto_generate_skills', 'knowledge.auto_doc_sync',
             'knowledge.learning_skills.enabled', 'knowledge.learning_skills.inject_on_prompt',
             'knowledge.codex.enabled',
@@ -583,6 +592,7 @@ final class Config
             'index.sqlite_mmap_bytes' => [0, 2_147_418_112],
             'index.sqlite_cache_kib' => [1_024, 262_144],
             'index.gc.max_generations' => [1, 10_000],
+            'index.gc.checkpoint_wal_min_bytes' => [0, 2_147_418_112],
             'knowledge.codex.max_context_chars' => [1_024, 1_000_000],
             'knowledge.learning_skills.max_experiences' => [1, 100],
             'knowledge.learning_skills.max_skills' => [1, 24],

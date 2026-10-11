@@ -218,6 +218,14 @@ final class IndexGarbageCollector
             if ($metrics['enabled']) {
                 $metrics = array_replace($metrics, $this->purgeQuarantine($quarantineRoot, $metrics));
             }
+            $sharedLeftover = (new SharedIndexLeftoverPurge($this->config))->sweep((bool) $metrics['enabled']);
+            $metrics['shared_leftover'] = $sharedLeftover;
+            if (is_array($sharedLeftover['errors'] ?? null) && $sharedLeftover['errors'] !== []) {
+                foreach ($sharedLeftover['errors'] as $error) {
+                    $metrics['errors'][] = (string) $error;
+                }
+            }
+            $metrics['wal_checkpoint'] = $this->checkpointBoundWal((bool) $metrics['enabled']);
             $this->store->setMaintenanceCursor(self::TASK, $owner, [
                 'candidates' => $candidates,
                 'scan_after' => $entries === [] ? '' : (string) end($entries),
@@ -529,6 +537,93 @@ final class IndexGarbageCollector
         }
 
         return $metrics;
+    }
+
+    /**
+     * Truncate the bound generation WAL when idle and large enough.
+     *
+     * @return array<string, mixed>
+     */
+    private function checkpointBoundWal(bool $allowMutation): array
+    {
+        $result = [
+            'enabled' => (bool) $this->config->get('index.gc.checkpoint_wal', true),
+            'attempted' => false,
+            'truncated' => false,
+            'skipped_reason' => '',
+            'wal_bytes_before' => 0,
+            'busy' => 0,
+            'log' => 0,
+            'checkpointed' => 0,
+        ];
+        if (!$result['enabled']) {
+            $result['skipped_reason'] = 'disabled';
+
+            return $result;
+        }
+        if (!$allowMutation) {
+            $result['skipped_reason'] = 'dry_run';
+
+            return $result;
+        }
+        try {
+            $boundGeneration = RepositoryScope::boundGeneration($this->config);
+        } catch (Throwable $exception) {
+            $result['skipped_reason'] = $exception->getMessage();
+
+            return $result;
+        }
+        if ($boundGeneration === null || $boundGeneration === '') {
+            $result['skipped_reason'] = 'unbound';
+
+            return $result;
+        }
+        $directory = $this->indexRoot() . DIRECTORY_SEPARATOR . $boundGeneration;
+        $databasePath = $directory . DIRECTORY_SEPARATOR . 'project.sqlite';
+        $walPath = $databasePath . '-wal';
+        if (!is_file($databasePath) || is_link($databasePath)) {
+            $result['skipped_reason'] = 'database_missing';
+
+            return $result;
+        }
+        $walBytes = is_file($walPath) ? (int) (filesize($walPath) ?: 0) : 0;
+        $result['wal_bytes_before'] = $walBytes;
+        $minBytes = max(0, (int) $this->config->get('index.gc.checkpoint_wal_min_bytes', 33_554_432));
+        if ($walBytes < $minBytes) {
+            $result['skipped_reason'] = 'below_threshold';
+
+            return $result;
+        }
+        $lock = $this->exclusiveGenerationLock($directory);
+        if (!is_resource($lock)) {
+            $result['skipped_reason'] = 'locked';
+
+            return $result;
+        }
+        try {
+            $result['attempted'] = true;
+            $database = new PDO('sqlite:' . $databasePath, null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            ]);
+            $row = $database->query('PRAGMA wal_checkpoint(TRUNCATE)')->fetch(PDO::FETCH_NUM);
+            $database = null;
+            if (is_array($row)) {
+                $result['busy'] = (int) ($row[0] ?? 0);
+                $result['log'] = (int) ($row[1] ?? 0);
+                $result['checkpointed'] = (int) ($row[2] ?? 0);
+            }
+            $result['truncated'] = ((int) ($result['busy'] ?? 1)) === 0;
+            if (!$result['truncated']) {
+                $result['skipped_reason'] = 'sqlite_busy';
+            }
+        } catch (Throwable $exception) {
+            $result['skipped_reason'] = $exception->getMessage();
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+
+        return $result;
     }
 
     private function indexRoot(): string

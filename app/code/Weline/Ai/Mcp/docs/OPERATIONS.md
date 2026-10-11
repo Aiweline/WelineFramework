@@ -30,9 +30,12 @@ Effects:
 
 - `prepare_project` / `index_project` / sidecar refresh refuse every other repository (`PROJECT_SCOPE_VIOLATION`).
 - Index GC only maintains the bound generation; with `index.gc.purge_unbound: true` (default) other generations under that project's `indexes/` are quarantined.
+- With `index.gc.purge_shared_leftover: true` (default), after `.migrated-from-shared-v1` and a project-local `indexes/<gen>/project.sqlite` exist, Worker / `prepare_project` legacy purge / `learningctl index-gc` automatically delete leftover generations under the shared `~/.learning-mcp/indexes` (never sibling `projects/<other-hash>/`).
+- With `index.gc.checkpoint_wal: true` (default), GC truncates the bound generation WAL when idle and above `checkpoint_wal_min_bytes` (default 32 MiB).
+- `DataDirLegacyPurge` also removes `learning.db.bak*` next to the live learning DB.
 - Each attached project gets its own STDIO process plus an isolated data directory (SQLite index, sidecar socket, journals). Projects do not share disks.
 
-The first ensure for a project may move that project's legacy generation out of the shared `~/.learning-mcp/indexes` into the new data dir (one-shot marker `.migrated-from-shared-v1`). Override with env vars, or clear both for unbound CLI/tests.
+The first ensure for a project may move that project's legacy generation out of the shared `~/.learning-mcp/indexes` into the new data dir (one-shot marker `.migrated-from-shared-v1`). Override with env vars, or clear both for unbound CLI/tests. Leftover shared generations are then eligible for automatic `purge_shared_leftover` (manual deletion remains safe when MCP is stopped).
 
 ## Client registration
 
@@ -93,7 +96,7 @@ When a scan reports a problem, classify it before changing code:
 - Long `prepare_project`: inspect the persisted index state and last index counters. A long write with changed files is an index-storage performance issue, not a protocol issue.
 - Large relation update: inspect `last_index.relation_resolution`. `scoped` with a small target-name set is the interactive path; `full` or a large resolved count is maintenance-scale work and should be scheduled away from coding sessions.
 - Unresolved relations or low-ranked candidates: treat them as retrieval evidence, not defects. Validate the concrete source/sink and expected behavior with indexed exact regions before opening a host-native code fix.
-- Large SQLite files: retain them while the index is useful; offline rebuild/VACUUM is a maintenance operation requiring stopped MCP processes and a backup, not an interactive workaround. Any path segment `tmp/` (including `dev/tmp`, `app/var/tmp`, `websites/**/tmp`) and `app/var/` are hardcoded-excluded throwaways and must never be ingested even via explicit `indexPaths`. After moving `LEARNING_MCP_DATA_DIR` into `projects/<hash>/`, leftover `~/.learning-mcp/indexes` generations may be deleted only with MCP stopped.
+- Large SQLite files: retain them while the index is useful; offline rebuild/VACUUM is a maintenance operation requiring stopped MCP processes and a backup, not an interactive workaround. Any path segment `tmp/` (including `dev/tmp`, `app/var/tmp`, `websites/**/tmp`) and `app/var/` are hardcoded-excluded throwaways and must never be ingested even via explicit `indexPaths`. After moving `LEARNING_MCP_DATA_DIR` into `projects/<hash>/`, leftover `~/.learning-mcp/indexes` generations are auto-purged by `index.gc.purge_shared_leftover` on Worker/`prepare_project`/`index-gc` (still safe to delete manually when MCP is stopped).
 - `learning.db` durable knowledge is `experiences` only (small). Hook firehose (`tool_call` / `tool_result` / browser dumps) MUST NOT be persisted: `collector.persist_event_types` allowlist defaults to `user_message`, `session_started`, `session_stopped`, `manual_annotation`. Allowed events still cap at `collector.stored_event_chars` (8192). Archive/sweep is `privacy.raw_session_ttl` (14d). Offline `DELETE FROM events` + VACUUM is allowed with MCP stopped; never drop `experiences`.
 - `edit-journal`, `history-backups`, and `edit-locks` under the MCP data directory are leftover file-edit / git clones, not learning. `DataDirLegacyPurge` expires them after `storage.legacy_ttl` (default `1d`) on `prepare_project` / worker maintenance. Unscoped root `learning.db` after isolation is deleted immediately (duplicate, not a backup). Git commit never deletes them.
 

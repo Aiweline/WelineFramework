@@ -1154,6 +1154,7 @@ SH);
         'relation-resolution-scope.php',
         'session-start-background-refresh.php',
         'data-dir-legacy-purge.php',
+        'shared-index-leftover-purge.php',
         'learning-novelty-conflict.php',
     ] as $regression) {
         $result = $runner->run([PHP_BINARY, __DIR__ . '/' . $regression], $root, '', 30);

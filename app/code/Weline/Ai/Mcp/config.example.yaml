@@ -127,6 +127,11 @@ index:
     max_generations: 100
     # When bound_repository is set, immediately quarantine other project generations.
     purge_unbound: true
+    # After projects/<hash> migration, purge leftover ~/.learning-mcp/indexes generations.
+    purge_shared_leftover: true
+    # Truncate the bound generation WAL when idle and above this size (32 MiB default).
+    checkpoint_wal: true
+    checkpoint_wal_min_bytes: 33554432
   allowed_extensions:
     - php
     - phtml

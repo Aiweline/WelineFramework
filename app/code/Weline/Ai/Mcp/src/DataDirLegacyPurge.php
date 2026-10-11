@@ -10,6 +10,7 @@ use Throwable;
 /**
  * File-edit snapshots and one-off git clones are not learning or index data.
  * Worker / prepare_project expire them after storage.legacy_ttl.
+ * Also drops learning.db.bak* and post-migration shared index leftovers.
  */
 final class DataDirLegacyPurge
 {
@@ -37,6 +38,7 @@ final class DataDirLegacyPurge
                 'ttl_seconds' => 0,
                 'removed' => [],
                 'errors' => [],
+                'shared_index_leftover' => ['enabled' => false, 'reason' => 'storage.purge_legacy=false'],
             ];
         }
         $ttl = $this->config->duration('storage.legacy_ttl');
@@ -52,6 +54,11 @@ final class DataDirLegacyPurge
                 } catch (Throwable $exception) {
                     $errors[] = $path . ': ' . $exception->getMessage();
                 }
+            }
+            try {
+                $removed = array_merge($removed, $this->purgeLearningDbBackups($root));
+            } catch (Throwable $exception) {
+                $errors[] = $root . '/learning.db.bak*: ' . $exception->getMessage();
             }
         }
         $shared = $this->sharedLayoutRoot($dataDir);
@@ -70,13 +77,47 @@ final class DataDirLegacyPurge
                 }
             }
         }
+        $sharedLeftover = (new SharedIndexLeftoverPurge($this->config))->sweep(true);
 
         return [
             'enabled' => true,
             'ttl_seconds' => $ttl,
             'removed' => $removed,
-            'errors' => $errors,
+            'errors' => array_values(array_merge($errors, is_array($sharedLeftover['errors'] ?? null) ? $sharedLeftover['errors'] : [])),
+            'shared_index_leftover' => $sharedLeftover,
         ];
+    }
+
+    /** @return list<string> */
+    private function purgeLearningDbBackups(string $root): array
+    {
+        $removed = [];
+        $rootReal = realpath($root);
+        if ($rootReal === false || !is_dir($rootReal)) {
+            return [];
+        }
+        $entries = scandir($rootReal);
+        if (!is_array($entries)) {
+            return [];
+        }
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            // Manual conflict dumps and sqlite backups — never the live learning.db / -wal / -shm.
+            if (preg_match('/^learning\.db\.bak(?:$|[.\-_])/D', $entry) !== 1) {
+                continue;
+            }
+            $path = $rootReal . DIRECTORY_SEPARATOR . $entry;
+            if (is_link($path) || !is_file($path)) {
+                continue;
+            }
+            if (@unlink($path)) {
+                $removed[] = $path;
+            }
+        }
+
+        return $removed;
     }
 
     /** @return list<string> */

@@ -47,8 +47,15 @@ try {
     file_put_contents($dataDir . '/edit-journal/old-ticket/file.after', 'snapshot');
     file_put_contents($dataDir . '/indexes/keep/project.sqlite', 'index');
     file_put_contents($dataDir . '/learning.db', 'scoped');
+    file_put_contents($dataDir . '/learning.db.bak-old', 'bak');
     file_put_contents($shared . '/learning.db', 'unscoped leftover');
     file_put_contents($shared . '/config.yaml', 'keep');
+    $generation = str_repeat('ef', 32);
+    mkdir($dataDir . '/indexes/' . $generation, 0700, true);
+    mkdir($shared . '/indexes/' . $generation, 0700, true);
+    file_put_contents($dataDir . '/indexes/' . $generation . '/project.sqlite', 'local');
+    file_put_contents($shared . '/indexes/' . $generation . '/project.sqlite', 'leftover');
+    file_put_contents($dataDir . '/.migrated-from-shared-v1', "{\"status\":\"moved\"}\n");
     $expired = 1_577_836_800;
     $fresh = 1_700_000_000;
     foreach ([
@@ -63,7 +70,10 @@ try {
     file_put_contents($temporary . '/config.json', json_encode([
         'data_dir' => $dataDir,
         'analysis' => ['provider' => 'none'],
-        'index' => ['sidecar_enabled' => false],
+        'index' => [
+            'sidecar_enabled' => false,
+            'gc' => ['enabled' => true, 'purge_shared_leftover' => true],
+        ],
         'storage' => ['purge_legacy' => true, 'legacy_ttl' => '1d'],
     ], JSON_THROW_ON_ERROR));
     $config = Config::load($temporary . '/config.json', $dataDir);
@@ -77,7 +87,10 @@ try {
     $check(!is_dir($dataDir . '/edit-journal'), 'expired project edit-journal is removed');
     $check(!is_file($shared . '/learning.db'), 'unscoped leftover learning.db is removed immediately');
     $check(is_file($dataDir . '/learning.db'), 'isolated learning.db is kept');
+    $check(!is_file($dataDir . '/learning.db.bak-old'), 'learning.db.bak* is purged with legacy sweep');
     $check(is_file($dataDir . '/indexes/keep/project.sqlite'), 'project index is kept');
+    $check(is_file($dataDir . '/indexes/' . $generation . '/project.sqlite'), 'project-local generation is kept');
+    $check(!is_dir($shared . '/indexes/' . $generation), 'shared leftover generation is purged after migration');
     $check(is_file($shared . '/config.yaml'), 'shared config is kept');
 } catch (Throwable $exception) {
     $failures[] = $exception->getMessage();
