@@ -220,4 +220,50 @@ class CompileTimeStaticMirrorContractTest extends TestCase
         self::assertStringContainsString('<link', $result);
         self::assertStringContainsString('data-order="40"', $result);
     }
+
+    public function testThemeCssLiteralMirrorSkipsPreviewTokenAndCarriesDevFingerprint(): void
+    {
+        if (!defined('DEV') || !DEV) {
+            $this->markTestSkipped('内容指纹只属于开发环境。');
+        }
+
+        $callback = ThemeCss::callback();
+        $tagData = [
+            0 => '<theme:css>Weline_Theme::frontend/assets/css/theme.css</theme:css>',
+            1 => '',
+            2 => 'Weline_Theme::frontend/assets/css/theme.css',
+        ];
+        $result = $callback('tag', [], $tagData, []);
+
+        self::assertIsString($result);
+        self::assertStringNotContainsString('preview_', $result, 'static mirror must not bake preview Token');
+        self::assertMatchesRegularExpression(
+            '/theme\\.css\\?v=dev_[a-f0-9]{12}/',
+            $result,
+            'theme /static URL must still get DEV content fingerprint via Module:: source path'
+        );
+    }
+
+    public function testThemeJsLiteralMirrorSkipsPreviewTokenAndCarriesDevFingerprint(): void
+    {
+        if (!defined('DEV') || !DEV) {
+            $this->markTestSkipped('内容指纹只属于开发环境。');
+        }
+
+        $callback = ThemeJs::callback();
+        $tagData = [
+            0 => '<theme:js>Weline_Theme::frontend/assets/js/theme.js</theme:js>',
+            1 => '',
+            2 => 'Weline_Theme::frontend/assets/js/theme.js',
+        ];
+        $result = $callback('tag', [], $tagData, []);
+
+        self::assertIsString($result);
+        self::assertStringNotContainsString('preview_', $result, 'static mirror must not bake preview Token');
+        self::assertMatchesRegularExpression(
+            '/theme\\.js\\?v=dev_[a-f0-9]{12}/',
+            $result,
+            'theme /static URL must still get DEV content fingerprint via Module:: source path'
+        );
+    }
 }

@@ -94,7 +94,8 @@ class ThemeCss implements TaglibInterface, StaticMirrorCapableInterface
 
         /** @var Template $template */
         $template = ObjectManager::getInstance(Template::class);
-        $href = (string)$template->fetchTagSource(DataInterface::dir_type_THEME, $path);
+        // 编译期镜像禁止烘入 preview Token；DEV 仍走内容指纹，PROD 走全局戳。
+        $href = (string)$template->fetchTagSource(DataInterface::dir_type_THEME, $path, true, false);
         if ($href === '') {
             return '';
         }

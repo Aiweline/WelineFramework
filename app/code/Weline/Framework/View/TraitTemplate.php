@@ -273,8 +273,12 @@ trait TraitTemplate
      * @return bool|string|void
      * @throws Exception
      */
-    public function fetchTagSource(string $type, string $source, bool $rand_version_with_system = true)
-    {
+    public function fetchTagSource(
+        string $type,
+        string $source,
+        bool $rand_version_with_system = true,
+        bool $allowPreviewVersion = true,
+    ) {
         $source = trim($source);
         $source = trim($source, DS);
         // Do not shard compile/fetch mappings by product area_route. Same-locale
@@ -384,12 +388,14 @@ trait TraitTemplate
             // 清理可能残留的 ? 或 &
             $data = rtrim($data, '?&');
             
-            // 优先级：预览 Token > DEV 内容指纹 > 配置的全局版本号。
+            // 优先级：预览 Token（可选）> DEV 内容指纹 > 配置的全局版本号。
             // theme_static_version 是**全局戳**，只在主题发布链路（bumpStaticVersion）
             // 变更；改模块 JS/CSS 不会动它。若让它压过 DEV 内容指纹，就会出现
             // 「改了源文件、普通刷新仍命中旧 UI」——这正是 TaglibInlineTagsTest
             // 「开发环境静态资源必须带内容指纹」所钉住的判据。
-            $version = $this->getPreviewStaticResourceVersion();
+            // 编译期静态镜像（theme:css/js tryStaticMirror）必须传 allowPreviewVersion=false，
+            // 否则会把 ?v=preview_xxxx 烘进按 theme_id 分片的 com 产物，预览结束后仍污染店面 URL。
+            $version = $allowPreviewVersion ? $this->getPreviewStaticResourceVersion() : null;
             if (!$version && defined('DEV') && DEV) {
                 $version = $this->getDevelopmentStaticResourceVersion($source, $data);
             }
@@ -455,8 +461,12 @@ trait TraitTemplate
     private function getDevelopmentStaticResourceVersion(string $source, string $url): ?string
     {
         $moduleName = '';
+        $sourceRelative = '';
         if (str_contains($source, '::')) {
-            $moduleName = trim((string)strtok($source, ':'));
+            [$moduleName, $sourceRelative] = array_pad(explode('::', $source, 2), 2, '');
+            $moduleName = trim((string)$moduleName);
+            $sourceRelative = trim(str_replace('\\', '/', (string)$sourceRelative), '/');
+            $sourceRelative = (string)preg_replace('#^theme/#', '', $sourceRelative);
         }
         if ($moduleName === '') {
             $moduleName = $this->templateSourceModule()[0];
@@ -471,27 +481,44 @@ trait TraitTemplate
             return null;
         }
 
+        $candidates = [];
+        // Prefer Module:: relative source (theme assets live under view/theme/, not /Vendor/Module/ URL).
+        if ($sourceRelative !== '' && !str_contains($sourceRelative, '..')) {
+            $candidates[] = $basePath . DS . 'view' . DS . 'theme' . DS . str_replace('/', DS, $sourceRelative);
+            $candidates[] = $basePath . DS . 'view' . DS . 'statics' . DS . str_replace('/', DS, $sourceRelative);
+        }
+
         $urlPath = (string)(parse_url($url, PHP_URL_PATH) ?: '');
         $moduleUrlPrefix = '/' . str_replace('_', '/', $moduleName) . '/';
-        if (!str_starts_with($urlPath, $moduleUrlPrefix)) {
-            return null;
-        }
-        $relativePath = ltrim(substr($urlPath, strlen($moduleUrlPrefix)), '/');
-        if ($relativePath === '' || str_contains($relativePath, '..')) {
-            return null;
+        if (str_starts_with($urlPath, $moduleUrlPrefix)) {
+            $relativePath = ltrim(substr($urlPath, strlen($moduleUrlPrefix)), '/');
+            if ($relativePath !== '' && !str_contains($relativePath, '..')) {
+                $candidates[] = $basePath . DS . str_replace('/', DS, $relativePath);
+            }
         }
 
-        $filename = $basePath . DS . str_replace('/', DS, $relativePath);
-        if (!is_file($filename)) {
-            return null;
+        // Theme gateway always emits /static/{ns}/... (DEV+PROD). Hash published bytes too.
+        if (str_starts_with($urlPath, '/static/')) {
+            $rest = ltrim(substr($urlPath, strlen('/static/')), '/');
+            if ($rest !== '' && !str_contains($rest, '..')) {
+                $candidates[] = rtrim((string)BP, '/\\') . DS . 'pub' . DS . 'static' . DS . str_replace('/', DS, $rest);
+            }
         }
+
         $algorithm = in_array('xxh3', hash_algos(), true) ? 'xxh3' : 'sha256';
-        $fingerprint = hash_file($algorithm, $filename);
-        if (!is_string($fingerprint) || $fingerprint === '') {
-            return null;
+        foreach ($candidates as $filename) {
+            if (!is_file($filename)) {
+                continue;
+            }
+            $fingerprint = hash_file($algorithm, $filename);
+            if (!is_string($fingerprint) || $fingerprint === '') {
+                continue;
+            }
+
+            return 'dev_' . substr($fingerprint, 0, 12);
         }
 
-        return 'dev_' . substr($fingerprint, 0, 12);
+        return null;
     }
 
     private function resolveThemeAssetUrlByEvent(string $moduleName, string $area, string $relativePath): string

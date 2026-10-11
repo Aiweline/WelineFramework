@@ -190,7 +190,8 @@ class TaglibInlineTagsTest extends TestCore
     }
 
     /**
-     * <theme:css> 必须保留运行期主题解析，避免把某个 website/theme 的 URL 烘焙进共享编译缓存。
+     * <theme:css> 字面量路径走编译期静态镜像（与 Taglib 文档 / CompileTimeStaticMirror 契约一致）。
+     * 动态路径仍吐运行期 PHP；主题 URL 由 view/tpl 的 theme_id 分片承载，不是共享无主题缓存。
      */
     public function testThemeCssTagOutputFormat(): void
     {
@@ -199,22 +200,26 @@ class TaglibInlineTagsTest extends TestCore
 
         $this->assertStringNotContainsString('<theme:css>', $result, '原始 <theme:css> 标签应被替换');
         $this->assertStringContainsString('<link', $result, '应输出 link 标签');
-        $this->assertStringContainsString(
+        $this->assertStringNotContainsString(
             '$__themeCssHref = $this->fetchTagSource(',
             $result,
-            '主题 CSS URL 应在渲染期按当前上下文解析'
+            '字面量 theme:css 应编译期直出，不再吐运行期 fetchTagSource'
         );
-        $this->assertStringContainsString(
-            "htmlspecialchars((string)\$__themeCssHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')",
-            $result,
-            '运行期 href 必须进行 HTML 属性转义'
-        );
+        $this->assertStringNotContainsString('<?php', $result, '字面量 theme:css 不得残留 PHP');
         $this->assertStringContainsString('frontend/assets/css/theme.css', $result);
         $this->assertStringContainsString('rel="stylesheet"', $result);
+        $this->assertStringNotContainsString('preview_', $result, '编译期镜像不得烘入 preview Token');
+        if (defined('DEV') && DEV) {
+            $this->assertMatchesRegularExpression(
+                '/theme\\.css\\?v=dev_[a-f0-9]{12}/',
+                $result,
+                'DEV 下 theme:css 镜像须带内容指纹'
+            );
+        }
     }
 
     /**
-     * <theme:js> 必须保留运行期主题解析，避免把某个 website/theme 的 URL 烘焙进共享编译缓存。
+     * <theme:js> 字面量路径走编译期静态镜像（与 Taglib 文档 / CompileTimeStaticMirror 契约一致）。
      */
     public function testThemeJsTagOutputFormat(): void
     {
@@ -223,17 +228,21 @@ class TaglibInlineTagsTest extends TestCore
 
         $this->assertStringNotContainsString('<theme:js>', $result, '原始 <theme:js> 标签应被替换');
         $this->assertStringContainsString('<script', $result, '应输出 script 标签');
-        $this->assertStringContainsString(
+        $this->assertStringNotContainsString(
             '$__themeJsSrc = $this->fetchTagSource(',
             $result,
-            '主题 JS URL 应在渲染期按当前上下文解析'
+            '字面量 theme:js 应编译期直出，不再吐运行期 fetchTagSource'
         );
-        $this->assertStringContainsString(
-            "htmlspecialchars((string)\$__themeJsSrc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')",
-            $result,
-            '运行期 src 必须进行 HTML 属性转义'
-        );
+        $this->assertStringNotContainsString('<?php', $result, '字面量 theme:js 不得残留 PHP');
         $this->assertStringContainsString('frontend/assets/js/theme.js', $result);
         $this->assertStringContainsString('</script>', $result);
+        $this->assertStringNotContainsString('preview_', $result, '编译期镜像不得烘入 preview Token');
+        if (defined('DEV') && DEV) {
+            $this->assertMatchesRegularExpression(
+                '/theme\\.js\\?v=dev_[a-f0-9]{12}/',
+                $result,
+                'DEV 下 theme:js 镜像须带内容指纹'
+            );
+        }
     }
 }
