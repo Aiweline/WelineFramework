@@ -48,6 +48,7 @@ final class CapacityAdvisorConfigService
                 'sustained_soft' => true,
                 'high_volatility' => true,
                 'host_tight' => true,
+                'fiber_admission_saturated' => true,
             ],
         ];
     }
@@ -175,7 +176,13 @@ final class CapacityAdvisorConfigService
             'sample_retain_days' => (int)($config['sample_retain_days'] ?? 14),
         ];
         $rules = \is_array($config['rules'] ?? null) ? $config['rules'] : [];
-        foreach (['frequent_compact', 'sustained_soft', 'high_volatility', 'host_tight'] as $rule) {
+        foreach ([
+            'frequent_compact',
+            'sustained_soft',
+            'high_volatility',
+            'host_tight',
+            'fiber_admission_saturated',
+        ] as $rule) {
             $out['rules.' . $rule] = (bool)($rules[$rule] ?? true);
         }
 

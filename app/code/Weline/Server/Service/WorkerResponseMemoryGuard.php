@@ -39,6 +39,18 @@ final class WorkerResponseMemoryGuard
      * do we 503. Soft headroom below {@see LOOP_HEADROOM_SHED_BYTES} prefers delay.
      */
     private const ADMISSION_MEMORY_HARD_FLOOR_BYTES = 16 * 1024 * 1024;
+    /**
+     * When Worker `--memory-limit` is known and no explicit headroom override is set,
+     * soft admission headroom scales as this fraction of the limit (never below
+     * {@see LOOP_HEADROOM_SHED_BYTES}). 256M → ~102MiB soft → prefer delay/503 over
+     * admitting until process-fatal OOM (Nginx 502).
+     */
+    private const ADMISSION_MEMORY_HEADROOM_FRACTION = 0.40;
+    /**
+     * Budget per admitted short-request Fiber when clamping configured max_active
+     * to the Worker memory_limit (storefront render growth, not RSS snapshot).
+     */
+    private const ADMISSION_PER_ACTIVE_FIBER_BUDGET_BYTES = 32 * 1024 * 1024;
     /** Zend shell (real−used) above this → gc_mem_caches without wiping bags. */
     private const LOOP_SHELL_TRIM_BYTES = 24 * 1024 * 1024;
     /** used above this → soft rebuildable process-cache reclaim (busy-safe OM when peers). */
@@ -289,8 +301,10 @@ final class WorkerResponseMemoryGuard
     }
 
     /**
-     * Default aligns with {@see LOOP_HEADROOM_SHED_BYTES}; optional env
-     * `wls.fiber.admission_memory_headroom_bytes` or {@see setAdmissionMemoryHeadroomBytes()}.
+     * Soft admission headroom. Explicit {@see setAdmissionMemoryHeadroomBytes()} or env
+     * `wls.fiber.admission_memory_headroom_bytes` wins; else scales with Worker
+     * `--memory-limit` ({@see ADMISSION_MEMORY_HEADROOM_FRACTION}) and never below
+     * {@see LOOP_HEADROOM_SHED_BYTES}.
      */
     public static function admissionMemoryHeadroomThresholdBytes(): int
     {
@@ -308,7 +322,65 @@ final class WorkerResponseMemoryGuard
             }
         }
 
-        return self::LOOP_HEADROOM_SHED_BYTES;
+        return self::scaledAdmissionMemoryHeadroomThresholdBytes(self::$pressureLimitBytes);
+    }
+
+    /**
+     * Scale soft headroom to Worker memory_limit so low limits stop admitting earlier.
+     * Unknown / unlimited limit → {@see LOOP_HEADROOM_SHED_BYTES}.
+     */
+    public static function scaledAdmissionMemoryHeadroomThresholdBytes(?int $limitBytes): int
+    {
+        $floor = self::LOOP_HEADROOM_SHED_BYTES;
+        if ($limitBytes === null || $limitBytes <= 0) {
+            return $floor;
+        }
+
+        $scaled = (int) \floor($limitBytes * self::ADMISSION_MEMORY_HEADROOM_FRACTION);
+        $hardFloor = self::admissionMemoryHardFloorBytes();
+        // Leave at least hard-floor bytes for fail-closed detection.
+        $capped = \max($floor, \min($scaled, \max($floor, $limitBytes - $hardFloor)));
+
+        return $capped;
+    }
+
+    /**
+     * Clamp configured Fiber max_active to a budget that fits under memory_limit
+     * after soft headroom. Prefer queue/503 over process-fatal OOM → Nginx 502.
+     * Unlimited (`0`) is left unchanged (memory gate still delays/rejects).
+     * Pass `$pinned=true` (fiber.pin_max_active) to keep the configured value.
+     */
+    public static function clampMaxActiveForMemoryLimit(
+        int $configuredMaxActive,
+        ?int $limitBytes = null,
+        bool $pinned = false
+    ): int {
+        if ($pinned || $configuredMaxActive <= 0) {
+            return $configuredMaxActive;
+        }
+
+        $limit = $limitBytes;
+        if ($limit === null || $limit <= 0) {
+            $limit = self::$pressureLimitBytes;
+        }
+        if ($limit === null || $limit <= 0) {
+            return $configuredMaxActive;
+        }
+
+        $headroomNeed = self::scaledAdmissionMemoryHeadroomThresholdBytes($limit);
+        if (self::$admissionMemoryHeadroomBytes !== null && self::$admissionMemoryHeadroomBytes > 0) {
+            $headroomNeed = self::$admissionMemoryHeadroomBytes;
+        }
+        $budget = \max(0, $limit - $headroomNeed);
+        $byBudget = \max(1, (int) \floor($budget / self::ADMISSION_PER_ACTIVE_FIBER_BUDGET_BYTES));
+
+        return \min($configuredMaxActive, $byBudget);
+    }
+
+    /** Per admitted short-request Fiber budget used by clamp / adaptive max_active. */
+    public static function admissionPerActiveFiberBudgetBytes(): int
+    {
+        return self::ADMISSION_PER_ACTIVE_FIBER_BUDGET_BYTES;
     }
 
     /**
@@ -428,7 +500,12 @@ final class WorkerResponseMemoryGuard
      *   drain_request_count:int,
      *   last_pressure:float,
      *   admission_memory_rejects:int,
-     *   absolute_headroom_bytes:int
+     *   absolute_headroom_bytes:int,
+     *   fiber_max_active_effective:int,
+     *   fiber_max_active_ceiling:int,
+     *   fiber_admission_waiters:int,
+     *   fiber_admission_active:int,
+     *   fiber_admission_saturated:int
      * }
      */
     public static function capacityStatusScalars(): array
@@ -439,6 +516,17 @@ final class WorkerResponseMemoryGuard
         } catch (\Throwable) {
         }
 
+        $adaptive = [];
+        try {
+            if (\class_exists(AdaptiveFiberMaxActive::class, false)
+                || \class_exists(AdaptiveFiberMaxActive::class)
+            ) {
+                $adaptive = AdaptiveFiberMaxActive::capacityScalars();
+            }
+        } catch (\Throwable) {
+            $adaptive = [];
+        }
+
         return [
             'compact_soft_count' => self::$compactSoftCount,
             'compact_hard_count' => self::$compactHardCount,
@@ -446,7 +534,7 @@ final class WorkerResponseMemoryGuard
             'last_pressure' => self::$lastPressure,
             'admission_memory_rejects' => self::$admissionMemoryRejects,
             'absolute_headroom_bytes' => self::$lastAbsoluteHeadroomBytes,
-        ];
+        ] + $adaptive;
     }
 
     public static function drainTimeoutSecondsForReason(string $reason, int $currentTimeout): int
@@ -969,6 +1057,11 @@ final class WorkerResponseMemoryGuard
         self::$admissionMemoryRejects = 0;
         self::$lastAbsoluteHeadroomBytes = 0;
         self::$lastPressure = 0.0;
+        if (\class_exists(AdaptiveFiberMaxActive::class, false)
+            || \class_exists(AdaptiveFiberMaxActive::class)
+        ) {
+            AdaptiveFiberMaxActive::resetForTests();
+        }
     }
 
     private static function parseMemoryLimit(string $limit): int

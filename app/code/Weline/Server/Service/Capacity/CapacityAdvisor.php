@@ -246,6 +246,26 @@ final class CapacityAdvisor
             }
         }
 
+        // Worker already lowered adaptive max_active and still has admission waiters
+        // under soft memory pressure → prefer another Worker over pushing harder.
+        $saturatedWorkers = 0;
+        if (!empty($rules['fiber_admission_saturated'])) {
+            foreach ($workerReports as $row) {
+                $report = \is_array($row['report'] ?? null) ? $row['report'] : [];
+                $at = (float)($row['at'] ?? 0);
+                if ($at > 0 && ($now - $at) > $staleSec) {
+                    continue;
+                }
+                if ((int)($report['fiber_admission_saturated'] ?? 0) === 1) {
+                    $saturatedWorkers++;
+                }
+            }
+            if ($saturatedWorkers > 0) {
+                $reasonCodes[] = 'fiber_admission_saturated';
+                $advice[] = 'raise_worker_count';
+            }
+        }
+
         $reasonCodes = \array_values(\array_unique($reasonCodes));
         $advice = \array_values(\array_unique($advice));
         $triggered = $reasonCodes !== [];
@@ -262,6 +282,7 @@ final class CapacityAdvisor
             'advice_codes' => $reasonCodes,
             'config_soft_pressure' => $soft,
             'fresh_worker_count' => $freshCount,
+            'fiber_admission_saturated_workers' => $saturatedWorkers,
         ];
 
         return [

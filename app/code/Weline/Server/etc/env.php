@@ -82,8 +82,11 @@ return [
         ],
         // Fiber 准入：默认限制每 Worker 并发渲染数；满则排队等待，优先延迟再 503。
         // max_active=0 表示不限制（内存软压仍会等待）。wait 默认 20s、硬顶 30s。
+        // adaptive_max_active：按实时头寸降快升慢调整有效 max_active；pin_max_active 钉死配置值。
         'fiber' => [
             'max_active' => 12,
+            'adaptive_max_active' => true,
+            'pin_max_active' => false,
             'admission_queue_wait_ms' => 20000,
             'admission_queue_depth' => 1024,
             'admission_queue_slice_ms' => 25,

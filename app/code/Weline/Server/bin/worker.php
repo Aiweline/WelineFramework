@@ -1694,8 +1694,26 @@ if ($controlPort > 0 || $supervisorEnabled) {
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_FIBER_SET_CONFIG:
                     $fiberIdleTtlSec = (int) ($msg['idle_ttl_sec'] ?? 0);
-                    $fiberMaxActive = (int) ($msg['max_active'] ?? 0);
-                    WlsLogger::info_("收到 fiber_set_config: idle_ttl_sec={$fiberIdleTtlSec}, max_active={$fiberMaxActive}");
+                    $fiberMaxActiveConfigured = (int) ($msg['max_active'] ?? 0);
+                    $fiberPinMaxActive = (bool)($fiberAdmissionConfig['pin_max_active'] ?? false);
+                    $fiberAdaptiveMaxActive = (bool)($fiberAdmissionConfig['adaptive_max_active'] ?? true);
+                    $fiberMaxActive = \Weline\Server\Service\WorkerResponseMemoryGuard::clampMaxActiveForMemoryLimit(
+                        $fiberMaxActiveConfigured,
+                        $maxMemoryBytes,
+                        $fiberPinMaxActive
+                    );
+                    \Weline\Server\Service\AdaptiveFiberMaxActive::configure(
+                        $fiberMaxActive,
+                        $fiberPinMaxActive,
+                        $fiberAdaptiveMaxActive
+                    );
+                    $fiberMaxActive = \Weline\Server\Service\AdaptiveFiberMaxActive::current();
+                    WlsLogger::info_(
+                        "收到 fiber_set_config: idle_ttl_sec={$fiberIdleTtlSec}, max_active={$fiberMaxActive}"
+                        . ($fiberMaxActive !== $fiberMaxActiveConfigured
+                            ? (" (configured={$fiberMaxActiveConfigured}, clamped)")
+                            : '')
+                    );
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_FIBER_RELEASE_IDLE:
@@ -1943,7 +1961,20 @@ $fiberAdmissionConfig = wlsResolveFiberAdmissionConfig(
     \is_array($wlsInstance ?? null) ? $wlsInstance : []
 );
 wlsFiberAdmissionApplyMemoryHeadroomConfig($fiberAdmissionConfig);
-$fiberMaxActive = (int)$fiberAdmissionConfig['max_active']; // 活跃渲染上限；0=不限制
+$fiberMaxActiveConfigured = (int)$fiberAdmissionConfig['max_active']; // 活跃渲染上限；0=不限制
+$fiberPinMaxActive = (bool)($fiberAdmissionConfig['pin_max_active'] ?? false);
+$fiberAdaptiveMaxActive = (bool)($fiberAdmissionConfig['adaptive_max_active'] ?? true);
+$fiberMaxActive = \Weline\Server\Service\WorkerResponseMemoryGuard::clampMaxActiveForMemoryLimit(
+    $fiberMaxActiveConfigured,
+    $maxMemoryBytes,
+    $fiberPinMaxActive
+);
+\Weline\Server\Service\AdaptiveFiberMaxActive::configure(
+    $fiberMaxActive,
+    $fiberPinMaxActive,
+    $fiberAdaptiveMaxActive
+);
+$fiberMaxActive = \Weline\Server\Service\AdaptiveFiberMaxActive::current();
 $fiberAdmissionQueueWaitMs = (int)$fiberAdmissionConfig['queue_wait_ms'];
 $fiberAdmissionQueueDepth = (int)$fiberAdmissionConfig['queue_depth'];
 $fiberAdmissionQueueSliceMs = (int)$fiberAdmissionConfig['queue_slice_ms'];
@@ -1952,8 +1983,14 @@ $fiberReleaseIdleRequested = false;  // IPC 请求立即释放闲置时置 true
 $lastFiberIdleCheck = \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
 WlsLogger::info_(
     'Fiber admission: max_active=' . $fiberMaxActive
+    . ($fiberMaxActive !== $fiberMaxActiveConfigured
+        ? (' (configured=' . $fiberMaxActiveConfigured . ', clamped for memory_limit=' . $wlsMemoryLimit . ')')
+        : '')
+    . ' adaptive=' . ($fiberAdaptiveMaxActive && !$fiberPinMaxActive ? '1' : '0')
     . ' queue_wait_ms=' . $fiberAdmissionQueueWaitMs
     . ' queue_depth=' . $fiberAdmissionQueueDepth
+    . ' admission_headroom_bytes='
+    . \Weline\Server\Service\WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes()
 );
 
 // 长连接（长连接/SSE）独立计数与饱和机制
@@ -5218,6 +5255,7 @@ function wlsDispatchRequestFiberStep(
     $isSseProtocolRequest = ($requestProtocol === 'sse');
     $applyLongLivedLimit = !$isSseProtocolRequest;
 
+    wlsFiberAdmissionRefreshAdaptiveMaxActive($fiberMaxActive, $activeFibers, $fiberAdmissionWaiters);
     $activeAdmissionFibers = wlsCountActiveFibersForAdmission($activeFibers, $fiberAdmissionWaiters);
     if (!$isSseProtocolRequest && $fiberMaxActive > 0) {
         if (!wlsFiberAdmissionQueueHasRoom(

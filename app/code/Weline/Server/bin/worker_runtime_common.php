@@ -327,7 +327,7 @@ if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
  *
  * @param array<string, mixed> $wls
  * @param array<string, mixed> $wlsInstance
- * @return array{max_active:int,queue_wait_ms:int,queue_depth:int,queue_slice_ms:int,admission_memory_headroom_bytes:int}
+ * @return array{max_active:int,queue_wait_ms:int,queue_depth:int,queue_slice_ms:int,admission_memory_headroom_bytes:int,pin_max_active:bool,adaptive_max_active:bool}
  */
 if (!\function_exists('wlsResolveFiberAdmissionConfig')) {
 function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): array
@@ -362,6 +362,11 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
     }
 
     $admissionMemoryHeadroom = (int)($fiber['admission_memory_headroom_bytes'] ?? 0);
+    $pinMaxActive = \filter_var($fiber['pin_max_active'] ?? false, \FILTER_VALIDATE_BOOLEAN);
+    // Default on: live headroom drives effective max_active (pin disables).
+    $adaptiveMaxActive = \array_key_exists('adaptive_max_active', $fiber)
+        ? \filter_var($fiber['adaptive_max_active'], \FILTER_VALIDATE_BOOLEAN)
+        : true;
 
     return [
         'max_active' => $maxActive,
@@ -369,7 +374,40 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
         'queue_depth' => $depth,
         'queue_slice_ms' => $sliceMs,
         'admission_memory_headroom_bytes' => $admissionMemoryHeadroom > 0 ? $admissionMemoryHeadroom : 0,
+        'pin_max_active' => $pinMaxActive,
+        'adaptive_max_active' => $adaptiveMaxActive,
     ];
+}
+}
+
+/**
+ * Observe queue depth and refresh water-level max_active into &$fiberMaxActive.
+ *
+ * @param array<int|string, array<string, mixed>> $activeFibers
+ * @param array<int|string, mixed> $admissionWaiters
+ */
+if (!\function_exists('wlsFiberAdmissionRefreshAdaptiveMaxActive')) {
+function wlsFiberAdmissionRefreshAdaptiveMaxActive(
+    int &$fiberMaxActive,
+    array $activeFibers,
+    array $admissionWaiters,
+): int {
+    if (!\class_exists(\Weline\Server\Service\AdaptiveFiberMaxActive::class, false)
+        && !\class_exists(\Weline\Server\Service\AdaptiveFiberMaxActive::class)
+    ) {
+        return $fiberMaxActive;
+    }
+    if (!\Weline\Server\Service\AdaptiveFiberMaxActive::isConfigured()) {
+        return $fiberMaxActive;
+    }
+    $active = wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters);
+    $waiters = \function_exists('wlsCountFiberAdmissionWaiters')
+        ? wlsCountFiberAdmissionWaiters($admissionWaiters)
+        : \count($admissionWaiters);
+    \Weline\Server\Service\AdaptiveFiberMaxActive::observe($active, $waiters);
+    $fiberMaxActive = \Weline\Server\Service\AdaptiveFiberMaxActive::current();
+
+    return $fiberMaxActive;
 }
 }
 
@@ -625,7 +663,21 @@ function wlsAwaitFiberAdmissionSlot(
                 }
             }
 
-            $slotFree = wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters) < $maxActive;
+            $slotLimit = $maxActive;
+            if (\class_exists(\Weline\Server\Service\AdaptiveFiberMaxActive::class, false)
+                || \class_exists(\Weline\Server\Service\AdaptiveFiberMaxActive::class)
+            ) {
+                if (\Weline\Server\Service\AdaptiveFiberMaxActive::isConfigured()) {
+                    \Weline\Server\Service\AdaptiveFiberMaxActive::observe(
+                        wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters),
+                        \function_exists('wlsCountFiberAdmissionWaiters')
+                            ? wlsCountFiberAdmissionWaiters($admissionWaiters)
+                            : \count($admissionWaiters)
+                    );
+                    $slotLimit = \Weline\Server\Service\AdaptiveFiberMaxActive::current();
+                }
+            }
+            $slotFree = wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters) < $slotLimit;
             if ($slotFree) {
                 $compactNow = $now >= $nextMemoryCompactAt;
                 if ($compactNow) {

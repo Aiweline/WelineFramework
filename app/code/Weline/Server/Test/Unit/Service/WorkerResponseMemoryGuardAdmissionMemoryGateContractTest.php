@@ -30,6 +30,35 @@ final class WorkerResponseMemoryGuardAdmissionMemoryGateContractTest extends Tes
         self::assertSame(32 * 1024 * 1024, WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes());
     }
 
+    public function testAdmissionHeadroomScalesWithWorkerMemoryLimit(): void
+    {
+        WorkerResponseMemoryGuard::resetThresholdCache();
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * 1024 * 1024);
+        // 40% of 256MiB = ~102MiB soft headroom (above fixed 64MiB floor).
+        self::assertSame(
+            (int) \floor(256 * 1024 * 1024 * 0.40),
+            WorkerResponseMemoryGuard::admissionMemoryHeadroomThresholdBytes()
+        );
+    }
+
+    public function testClampMaxActiveFitsBudgetUnderMemoryLimit(): void
+    {
+        WorkerResponseMemoryGuard::resetThresholdCache();
+        // 256M → soft ~102MiB → budget ~154MiB / 32MiB ≈ 4; configured 12 → 4.
+        self::assertSame(
+            4,
+            WorkerResponseMemoryGuard::clampMaxActiveForMemoryLimit(12, 256 * 1024 * 1024)
+        );
+        self::assertSame(
+            12,
+            WorkerResponseMemoryGuard::clampMaxActiveForMemoryLimit(12, 256 * 1024 * 1024, true)
+        );
+        self::assertSame(
+            0,
+            WorkerResponseMemoryGuard::clampMaxActiveForMemoryLimit(0, 256 * 1024 * 1024)
+        );
+    }
+
     public function testLowHeadroomGateCompactsThenMarksCriticalBelowHardFloor(): void
     {
         WorkerResponseMemoryGuard::resetThresholdCache();
