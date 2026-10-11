@@ -70,7 +70,7 @@ final class BlogPostAdminListPresenter
      */
     public function websiteLabelMapFromOptions(array $websiteOptions): array
     {
-        $map = [0 => '全站'];
+        $map = [];
         foreach ($websiteOptions as $option) {
             if (!is_array($option)) {
                 continue;
@@ -112,7 +112,7 @@ final class BlogPostAdminListPresenter
      */
     private function formatScopeMarkers(int $websiteId, array $websiteLabels): string
     {
-        $websiteLabel = $websiteLabels[$websiteId] ?? ($websiteId > 0 ? '#' . $websiteId : '全站');
+        $websiteLabel = $websiteLabels[$websiteId] ?? ('#' . max(0, $websiteId));
         $storeLabel = '全店铺';
         $channelLabel = '全渠道';
 

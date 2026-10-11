@@ -19,10 +19,11 @@ final class BlogPostAdminService
     }
 
     /**
+     * @param int|null $websiteId null=全部站；>=0（含默认站 0）=具体站
      * @return array{items:list<array<string,mixed>>,pagination:mixed,total:int}
      */
     public function listing(
-        int $websiteId = 0,
+        ?int $websiteId = null,
         int $page = 1,
         int $pageSize = 30,
         string $status = '',
@@ -44,9 +45,10 @@ final class BlogPostAdminService
     }
 
     /**
+     * @param int|null $websiteId null=全部站；>=0（含默认站 0）=具体站
      * @return array{total:int,draft:int,published:int,disabled:int}
      */
-    public function statusSummary(int $websiteId = 0, string $locale = '', string $search = ''): array
+    public function statusSummary(?int $websiteId = null, string $locale = '', string $search = ''): array
     {
         $summary = [
             'total' => 0,
@@ -162,13 +164,14 @@ final class BlogPostAdminService
     }
 
     /**
+     * @param int|null $websiteId null=全部站；>=0（含默认站 0）=具体站
      * @return list<array<string,mixed>>
      */
-    public function categories(int $websiteId = 0): array
+    public function categories(?int $websiteId = null): array
     {
         $model = clone $this->categoryModel;
         $query = $model->clearData()->reset();
-        if ($websiteId > 0) {
+        if ($websiteId !== null && $websiteId >= 0) {
             $query->where(Category::schema_fields_WEBSITE_ID, $websiteId);
         }
         $rows = $query->order(Category::schema_fields_SORT_ORDER, 'ASC')->select()->fetchArray();
@@ -176,14 +179,18 @@ final class BlogPostAdminService
         return is_array($rows) ? $rows : [];
     }
 
+    /**
+     * @param int|null $websiteId null=全部站；>=0（含默认站 0）=具体站
+     */
     private function applyListingFilters(
         Post $query,
-        int $websiteId,
+        ?int $websiteId,
         string $status,
         string $locale,
         string $search,
     ): void {
-        if ($websiteId > 0) {
+        // 禁止 website_id>0 才筛：默认站 0 必须可定位（Ops Desk 深链）
+        if ($websiteId !== null && $websiteId >= 0) {
             $query->where(Post::schema_fields_WEBSITE_ID, $websiteId);
         }
         if (

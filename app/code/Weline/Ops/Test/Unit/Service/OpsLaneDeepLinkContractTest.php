@@ -21,9 +21,14 @@ final class OpsLaneDeepLinkContractTest extends TestCase
         self::assertStringContainsString('visitor/backend/pixel-dashboard', $helperSrc);
         self::assertStringNotContainsString('pixel-dashboard/index', $helperSrc);
 
+        $contentLane = dirname(__DIR__, 3) . '/extends/module/Weline_Ops/Lane/ContentLane.php';
+        $contentSrc = (string)file_get_contents($contentLane);
+        self::assertStringContainsString('blog/backend/post-admin/index', $contentSrc);
+        self::assertStringNotContainsString('blog/backend/post/index', $contentSrc);
+
         $lanes = [
             dirname(__DIR__, 3) . '/extends/module/Weline_Ops/Lane/SiteLane.php',
-            dirname(__DIR__, 3) . '/extends/module/Weline_Ops/Lane/ContentLane.php',
+            $contentLane,
             dirname(__DIR__, 4) . '/Seo/extends/module/Weline_Ops/Lane/SeoLane.php',
             dirname(__DIR__, 4) . '/Social/extends/module/Weline_Ops/Lane/SocialLane.php',
             dirname(__DIR__, 4) . '/Visitor/extends/module/Weline_Ops/Lane/VisitorLane.php',

@@ -78,4 +78,17 @@ final class PostAdminTemplateContractTest extends TestCase
         self::assertStringContainsString('theme_editor_url', $source);
         self::assertStringContainsString('media_identity_scope', $source);
     }
+
+    public function testIndexUsesAdminWebsiteScopeIncludingDefaultSiteZero(): void
+    {
+        $controller = (string)file_get_contents(dirname(__DIR__, 4) . '/Controller/Backend/PostAdmin.php');
+        self::assertStringContainsString('AdminWebsiteScope::resolveFilterIdFromGet', $controller);
+        self::assertStringContainsString('AdminWebsiteScope::buildSelectView', $controller);
+        self::assertStringNotContainsString('websiteId ?? 0', $controller);
+        self::assertStringNotContainsString('websiteId > 0', $controller);
+
+        $service = (string)file_get_contents(dirname(__DIR__, 4) . '/Service/BlogPostAdminService.php');
+        self::assertStringContainsString('$websiteId !== null && $websiteId >= 0', $service);
+        self::assertStringNotContainsString('if ($websiteId > 0)', $service);
+    }
 }

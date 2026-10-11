@@ -41,14 +41,11 @@ final class ContentLane implements OpsLaneContributionInterface
     public function getActions(int $websiteId): array
     {
         $actions = [];
-        if (
-            class_exists(\Weline\Blog\Controller\Backend\Post::class)
-            || class_exists(\Weline\Blog\Controller\Backend\PostAdmin::class)
-        ) {
+        if (class_exists(\Weline\Blog\Controller\Backend\PostAdmin::class)) {
             $actions[] = [
                 'code' => 'blog_posts',
                 'label' => (string)__('博客文章'),
-                'url' => OpsLaneDeepLink::backend($this->url, 'blog/backend/post/index', $websiteId),
+                'url' => OpsLaneDeepLink::backend($this->url, 'blog/backend/post-admin/index', $websiteId),
                 'connected' => null,
             ];
         }

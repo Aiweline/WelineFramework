@@ -83,7 +83,14 @@ if ($totalPages > 1) {
             <a class="w-button" data-tone="neutral" data-variant="outline" href="<?= $escape($catalog_category_url ?? '') ?>">
                 <lang>万能分类 · 博客</lang>
             </a>
-            <a class="w-button" data-tone="primary" href="@url{'blog/backend/post-admin/form'}">
+            <?php
+            $createQuery = [];
+            if ((string)($website_id_filter ?? '') !== '') {
+                $createQuery['website_id'] = (string)$website_id_filter;
+            }
+            $createUrl = (string)$this->getUrl('blog/backend/post-admin/form', $createQuery);
+            ?>
+            <a class="w-button" data-tone="primary" href="<?= $escape($createUrl) ?>">
                 <w-icon name="plus" size="sm"></w-icon>
                 <span><lang>新建文章</lang></span>
             </a>

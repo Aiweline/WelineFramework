@@ -11,6 +11,7 @@ use Weline\Blog\Service\BlogPostCmsEditorService;
 use Weline\Blog\Service\BlogPostSlugService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Websites\Service\AdminWebsiteScope;
 use Weline\Websites\Service\WebsiteAclGrantService;
 
 #[Acl('Weline_Blog::list', '博客文章', 'mdi-post-outline', '管理博客文章', 'Weline_Backend::cms_group')]
@@ -28,7 +29,8 @@ final class PostAdmin extends BackendController
     #[Acl('Weline_Blog::list_view', '博客文章列表', 'mdi-format-list-bulleted', '查看博客文章')]
     public function index(): string
     {
-        $websiteId = $this->optionalFilterIdFromQuery('website_id');
+        $websiteId = AdminWebsiteScope::resolveFilterIdFromGet($this->request);
+        $websiteSelect = AdminWebsiteScope::buildSelectView($websiteId);
         $status = strtolower(trim((string)$this->request->getGet('status', '')));
         if ($status !== '' && !in_array($status, $this->statuses(), true)) {
             $status = '';
@@ -38,7 +40,7 @@ final class PostAdmin extends BackendController
         $page = max(1, (int)$this->request->getGet('page', 1));
 
         $result = $this->posts->listing(
-            $websiteId ?? 0,
+            $websiteId,
             $page,
             30,
             $status,
@@ -46,13 +48,9 @@ final class PostAdmin extends BackendController
             $search,
         );
 
-        $websiteSelect = $this->buildWebsiteSelect($websiteId);
-        $websiteOptions = json_decode($websiteSelect['options_json'], true);
-        $websiteLabels = $this->listPresenter->websiteLabelMapFromOptions(
-            is_array($websiteOptions) ? $websiteOptions : [],
-        );
+        $websiteLabels = $this->listPresenter->websiteLabelMapFromOptions($websiteSelect['options']);
         $categoryNames = [];
-        foreach ($this->posts->categories($websiteId ?? 0) as $category) {
+        foreach ($this->posts->categories($websiteId) as $category) {
             if (!is_array($category)) {
                 continue;
             }
@@ -64,7 +62,7 @@ final class PostAdmin extends BackendController
         }
 
         $statusLabels = $this->statusLabels();
-        $summary = $this->posts->statusSummary($websiteId ?? 0, $locale, $search);
+        $summary = $this->posts->statusSummary($websiteId, $locale, $search);
         $tableRows = [];
         foreach ($result['items'] as $post) {
             if (!is_array($post)) {
@@ -79,11 +77,12 @@ final class PostAdmin extends BackendController
         }
 
         $editBaseUrl = (string)$this->getUrl('blog/backend/post-admin/form');
+        $editQuery = $websiteId === null ? '' : ('&website_id=' . $websiteId);
         $rowActionsJson = json_encode([
             [
                 'type' => 'link',
                 'label' => (string)__('编辑'),
-                'hrefTemplate' => $editBaseUrl . '?post_id={post_id}',
+                'hrefTemplate' => $editBaseUrl . '?post_id={post_id}' . $editQuery,
                 'testId' => 'blog-post-edit-button',
                 'tone' => 'primary',
                 'variant' => 'outline',
@@ -106,10 +105,14 @@ final class PostAdmin extends BackendController
         $this->assign('websiteSelectValue', $websiteSelect['value']);
         $this->assign('websiteSelectDisplay', $websiteSelect['display']);
         $this->assign('websiteSelectOptionsJson', $websiteSelect['options_json']);
-        $this->assign('catalog_category_url', $this->getUrl('weline_catalog/backend/category/index', [
+        $catalogQuery = [
             'space' => 'blog',
             'scope_level' => 'website',
-        ]));
+        ];
+        if ($websiteId !== null) {
+            $catalogQuery['website_id'] = $websiteId;
+        }
+        $this->assign('catalog_category_url', $this->getUrl('weline_catalog/backend/category/index', $catalogQuery));
 
         return (string)$this->fetch('Weline_Blog::templates/backend/post-admin/index.phtml');
     }
@@ -122,8 +125,10 @@ final class PostAdmin extends BackendController
         if ($this->request->isPost()) {
             try {
                 $params = $this->request->getParams();
-                if (max(0, (int)($params['website_id'] ?? 0)) <= 0) {
+                if (!\array_key_exists('website_id', $params) || trim((string)$params['website_id']) === '') {
                     $params['website_id'] = $this->resolveFormWebsiteId([]);
+                } else {
+                    $params['website_id'] = max(0, (int)$params['website_id']);
                 }
                 $saved = $this->posts->save($params);
                 $this->getMessageManager()->addSuccess(__('博客文章已保存。'));
@@ -157,7 +162,7 @@ final class PostAdmin extends BackendController
         if ($postLocale === '') {
             $postLocale = 'zh_Hans_CN';
         }
-        $websiteSelect = $this->buildWebsiteSelect($websiteId);
+        $websiteSelect = AdminWebsiteScope::buildSelectView($websiteId);
         $statusLabels = $this->statusLabels();
 
         $cmsAvailable = $this->cmsEditor->isAvailable();
@@ -195,12 +200,13 @@ final class PostAdmin extends BackendController
         $this->assign('websiteSelectValue', $websiteSelect['value']);
         $this->assign('websiteSelectDisplay', $websiteSelect['display']);
         $this->assign('websiteSelectOptionsJson', $websiteSelect['options_json']);
-        $this->assign('media_identity_scope', $websiteSelect['media_identity_scope'] ?? 'default.default.default');
+        $this->assign('media_identity_scope', $this->resolveMediaIdentityScope($websiteSelect['options'], $websiteId));
         $this->assign('cms_available', $cmsAvailable);
         $this->assign('cms_page_id', $cmsPageId);
         $this->assign('theme_editor_url', $themeEditorUrl);
         $this->assign('preview_url', $previewUrl);
-        $this->assign('list_url', $this->getUrl('blog/backend/post-admin/index'));
+        $listQuery = ['website_id' => $websiteId];
+        $this->assign('list_url', $this->getUrl('blog/backend/post-admin/index', $listQuery));
         $this->assign('suggest_slug_url', $this->getUrl('blog/backend/post-admin/post-suggest-slug'));
 
         return (string)$this->fetch('Weline_Blog::templates/backend/post-admin/form.phtml');
@@ -254,31 +260,6 @@ final class PostAdmin extends BackendController
         ];
     }
 
-    private function optionalFilterIdFromQuery(string $key): ?int
-    {
-        if (!$this->request->hasGet($key)) {
-            return null;
-        }
-
-        return $this->optionalNonNegativeInt($this->request->getParameterBag()->getQuery($key, ''));
-    }
-
-    private function optionalNonNegativeInt(mixed $raw): ?int
-    {
-        if ($raw === null) {
-            return null;
-        }
-        $raw = trim((string)$raw);
-        if ($raw === '') {
-            return null;
-        }
-        if (!preg_match('/^-?\d+$/', $raw)) {
-            return null;
-        }
-
-        return max(0, (int)$raw);
-    }
-
     /**
      * @param array<string,mixed> $post
      * @param array<string,mixed> $submitted
@@ -316,80 +297,35 @@ final class PostAdmin extends BackendController
      */
     private function resolveFormWebsiteId(array $post): int
     {
-        $fromPost = (int)($post[PostModel::schema_fields_WEBSITE_ID] ?? 0);
-        if ($fromPost > 0) {
-            return $fromPost;
+        if (\array_key_exists(PostModel::schema_fields_WEBSITE_ID, $post)) {
+            return max(0, (int)$post[PostModel::schema_fields_WEBSITE_ID]);
         }
 
-        $fromQuery = $this->optionalFilterIdFromQuery('website_id');
-        if ($fromQuery !== null && $fromQuery > 0) {
-            return $fromQuery;
+        $fromQuery = AdminWebsiteScope::resolveFilterIdFromGet($this->request);
+        if ($fromQuery !== null) {
+            return max(0, $fromQuery);
         }
 
         return max(0, $this->websiteGrants->currentWebsiteId());
     }
 
     /**
-     * @return array{value:string,display:string,options_json:string,media_identity_scope:string}
+     * @param list<array<string,string>> $options
      */
-    private function buildWebsiteSelect(?int $websiteId): array
+    private function resolveMediaIdentityScope(array $options, int $websiteId): string
     {
-        $options = [];
-        try {
-            $queried = w_query('websites', 'getWebsiteSelectOptions', []);
-            if (is_array($queried)) {
-                foreach ($queried as $row) {
-                    if (!is_array($row)) {
-                        continue;
-                    }
-                    $value = trim((string)($row['value'] ?? ''));
-                    if ($value === '') {
-                        continue;
-                    }
-                    $option = [
-                        'value' => $value,
-                        'label' => trim((string)($row['label'] ?? $value)),
-                        'meta' => trim((string)($row['meta'] ?? '')),
-                    ];
-                    $code = trim((string)($row['code'] ?? ''));
-                    if ($code !== '') {
-                        $option['code'] = $code;
-                    }
-                    $options[] = $option;
-                }
-            }
-        } catch (\Throwable) {
-            $options = [];
-        }
-
-        $value = $websiteId === null ? '' : (string)$websiteId;
-        $display = '';
-        $websiteCode = '';
+        $value = (string)$websiteId;
         foreach ($options as $option) {
             if ((string)($option['value'] ?? '') !== $value) {
                 continue;
             }
-            $display = trim((string)($option['label'] ?? ''));
-            if ($display === '') {
-                $display = '#' . $value;
+            $code = trim((string)($option['code'] ?? ''));
+            if ($code !== '' && !str_contains($code, '.') && !str_contains($code, ':')) {
+                return strtolower($code) . '.default.default';
             }
-            $websiteCode = trim((string)($option['code'] ?? ''));
             break;
         }
-        if ($display === '' && $value !== '') {
-            $display = '#' . $value;
-        }
 
-        $mediaIdentityScope = 'default.default.default';
-        if ($websiteCode !== '' && !str_contains($websiteCode, '.') && !str_contains($websiteCode, ':')) {
-            $mediaIdentityScope = strtolower($websiteCode) . '.default.default';
-        }
-
-        return [
-            'value' => $value,
-            'display' => $display,
-            'options_json' => json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]',
-            'media_identity_scope' => $mediaIdentityScope,
-        ];
+        return 'default.default.default';
     }
 }
