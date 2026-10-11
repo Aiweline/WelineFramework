@@ -384,9 +384,17 @@ trait TraitTemplate
             // 清理可能残留的 ? 或 &
             $data = rtrim($data, '?&');
             
-            $version = $this->getStaticResourceVersion();
+            // 优先级：预览 Token > DEV 内容指纹 > 配置的全局版本号。
+            // theme_static_version 是**全局戳**，只在主题发布链路（bumpStaticVersion）
+            // 变更；改模块 JS/CSS 不会动它。若让它压过 DEV 内容指纹，就会出现
+            // 「改了源文件、普通刷新仍命中旧 UI」——这正是 TaglibInlineTagsTest
+            // 「开发环境静态资源必须带内容指纹」所钉住的判据。
+            $version = $this->getPreviewStaticResourceVersion();
             if (!$version && defined('DEV') && DEV) {
                 $version = $this->getDevelopmentStaticResourceVersion($source, $data);
+            }
+            if (!$version) {
+                $version = $this->getConfiguredStaticResourceVersion();
             }
             if ($version) {
                 $data .= (str_contains($data, '?') ? '&' : '?') . 'v=' . $version;
@@ -408,34 +416,35 @@ trait TraitTemplate
     }
     
     /**
-     * 获取静态资源版本号
-     * 
-     * 优先级：
-     * 1. 预览模式：使用预览 Token
-     * 2. 系统配置的静态版本号（发布时更新）
-     * 3. 返回 null（使用默认随机版本号）
-     * 
-     * @return string|null 版本号
+     * 预览模式下的静态资源版本号（可视化编辑必须看到实时资源）。
+     *
+     * @return string|null
      */
-    private function getStaticResourceVersion(): ?string
+    private function getPreviewStaticResourceVersion(): ?string
     {
-        // 1. 通过事件询问外部模块（如 Theme）是否处于预览模式，以及对应 token。
         $previewToken = $this->resolvePreviewTokenByEvent();
-        if ($previewToken !== '') {
-            return 'preview_' . substr($previewToken, 0, 8);
+        if ($previewToken === '') {
+            return null;
         }
-        
-        // 2. 读取系统配置的静态版本号（发布时更新）
-        // 优先顶层 theme_static_version：不被 WelineTheme 整表写入 theme 元数据覆盖。
+
+        return 'preview_' . substr($previewToken, 0, 8);
+    }
+
+    /**
+     * 配置里声明的全局静态版本号（发布时由 bumpStaticVersion 更新）。
+     *
+     * 优先顶层 theme_static_version：不被 WelineTheme 整表写入 theme 元数据覆盖。
+     *
+     * @return string|null
+     */
+    private function getConfiguredStaticResourceVersion(): ?string
+    {
         $staticVersion = Env::getInstance()->getConfig('theme_static_version');
         if (!$staticVersion) {
             $staticVersion = Env::getInstance()->getConfig('theme.static_version');
         }
-        if ($staticVersion) {
-            return $staticVersion;
-        }
-        
-        return null;
+
+        return $staticVersion ?: null;
     }
 
     /**

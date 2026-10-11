@@ -36,7 +36,8 @@ final class WelineBootStubContractTest extends TestCase
 
     public function testBootStubQueuesAsyncApis(): void
     {
-        $stub = $this->read('view/theme/frontend/partials/head/weline-boot-stub.phtml');
+        $stub = $this->readWeline('Frontend/view/blocks/header/base.phtml');
+        self::assertStringContainsString('data-weline-boot-stub', $stub);
         self::assertStringContainsString('__bootQueue', $stub);
         self::assertStringContainsString('__bootStubInstalled', $stub);
         self::assertStringContainsString('__welineBootStub', $stub);
@@ -44,20 +45,24 @@ final class WelineBootStubContractTest extends TestCase
             self::assertStringContainsString("'" . $api . "'", $stub, '桩缺少 API: ' . $api);
         }
         self::assertStringContainsString("'dom.' + api", $stub);
-        // env 必须提前抢出来，否则 body 内联脚本读到的 window.DEV 会变。
+        // env 必须提前给出，否则 body 内联脚本读到的 window.DEV 会变。
         self::assertStringContainsString('window.DEV', $stub);
-        self::assertStringContainsString('data-weline-runtime-config', $stub);
+        self::assertStringContainsString('window.WELINE_ENV', $stub);
+        self::assertStringContainsString("defined('DEV')", $stub);
     }
 
-    public function testPrefixMountsStubBeforeFoucBootstrap(): void
+    public function testStubIsCoLocatedWithDeferredScripts(): void
     {
+        // 桩必须与 defer 脚本同处 base.phtml：不覆盖主题 head 局部的主题也才有桩。
+        $stub = $this->readWeline('Frontend/view/blocks/header/base.phtml');
+        $stubPos = strpos($stub, 'data-weline-boot-stub');
+        $runtimePos = strpos($stub, '<js defer>Weline_Frontend::js/runtime.js</js>');
+        self::assertNotFalse($stubPos, 'base.phtml 缺少启动桩');
+        self::assertNotFalse($runtimePos, 'base.phtml 缺少 defer 的 runtime.js');
+        self::assertLessThan($runtimePos, $stubPos, '启动桩必须排在 defer 脚本之前');
+        // 主题前缀段只负责 prepaint 内联，不再挂桩（避免双源）。
         $prefix = $this->read('view/theme/frontend/partials/head/assets-prefix.phtml');
-        $stubPos = strpos($prefix, 'weline-boot-stub.phtml');
-        $foucPos = strpos($prefix, 'css-fouc-bootstrap.phtml');
-        self::assertNotFalse($stubPos, '前缀段未挂载启动桩');
-        self::assertNotFalse($foucPos);
-        self::assertLessThan($foucPos, $stubPos, '启动桩必须排在 FOUC 引导之前');
-        // prepaint 改内联
+        self::assertStringNotContainsString('weline-boot-stub', $prefix);
         self::assertStringContainsString('tryInlineScriptHtml', $prefix);
     }
 

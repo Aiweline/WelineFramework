@@ -55,8 +55,6 @@ try {
     $earlyJsHtml = null;
 }
 ?>
-<?php // 启动桩必须最先执行：把 declare/load/dom.observe 变成队列，核心脚本才能 defer。 ?>
-<w:template>Weline_Theme::theme/frontend/partials/head/weline-boot-stub.phtml</w:template>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
 <theme:layout-critical area="frontend"/>
 <?php if ($storefrontPackHtml !== null): ?>

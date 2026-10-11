@@ -242,6 +242,53 @@ $canonicalApexHost = (str_starts_with($canonicalPublicHost, 'www.')
 })();
 </script>
 <?php endif; ?>
+<?php
+/**
+ * Weline 启动桩（inline，必须早于下面所有 defer 脚本）。
+ *
+ * 把 `Weline.declare` / `load` / `preLoad` / `mount` / `dom.observe` 在真正实现到位前的
+ * 调用排进 `Weline.__bootQueue`，由 weline.js 初始化后统一回放 —— 这样下面这些核心脚本
+ * 才能全部 `defer`（body 内联脚本会在解析期同步调用它们）。
+ *
+ * 放在本文件（所有主题共用的 header base）而不是主题 head 局部：defer 脚本由本文件发出，
+ * 桩必须与之同处一地，否则不覆盖这些 head 局部的主题会在解析期报 TypeError。
+ */
+$welineBootDev = defined('DEV') ? (bool)DEV : null;
+?>
+<script data-weline-boot-stub="1">
+(function (window) {
+    'use strict';
+    if (!window) { return; }
+    if (window.Weline && window.Weline.__initialized) { return; }
+    var W = window.Weline = window.Weline || {};
+    if (W.__bootStubInstalled) { return; }
+    W.__bootStubInstalled = true;
+<?php if ($welineBootDev !== null): ?>
+    if (typeof window.DEV === 'undefined') { window.DEV = <?= $welineBootDev ? 'true' : 'false' ?>; }
+    if (typeof window.PROD === 'undefined') { window.PROD = !window.DEV; }
+    if (typeof window.WELINE_ENV === 'undefined') { window.WELINE_ENV = window.DEV ? 'DEV' : 'PROD'; }
+<?php endif; ?>
+    var queue = W.__bootQueue = W.__bootQueue || [];
+    function enqueue(api, args) {
+        return new Promise(function (resolve, reject) {
+            queue.push({ api: api, args: Array.prototype.slice.call(args), resolve: resolve, reject: reject });
+        });
+    }
+    function install(apiPath) {
+        var parts = apiPath.split('.');
+        var host = W;
+        for (var i = 0; i < parts.length - 1; i++) { host = host[parts[i]] = host[parts[i]] || {}; }
+        var name = parts[parts.length - 1];
+        if (typeof host[name] === 'function') { return; }
+        var stubFn = function () { return enqueue(apiPath, arguments); };
+        stubFn.__welineBootStub = true;
+        host[name] = stubFn;
+    }
+    ['declare', 'load', 'preLoad', 'mount', 'observeMutationsCoalesced'].forEach(install);
+    W.dom = W.dom || {};
+    ['observe', 'observeMutations'].forEach(function (api) { install('dom.' + api); });
+})(window);
+</script>
 <script type="application/json" id="weline-frontend-runtime-config" data-weline-runtime-config>{"baseUrl":"@url{'/'}",<?= $runtimeJsonTailBody ?></script>
 <js defer>Weline_Frontend::js/runtime.js</js>
 <js defer>Weline_Framework::js/dom-observer.js</js>
