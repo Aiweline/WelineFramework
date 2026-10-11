@@ -190,6 +190,7 @@ final class OpsDispatchService
 
     /**
      * 人工批准待审任务：社媒才允许 createPublishBatch；博客改为 published。
+     * 配置类失败（缺默认账户等）保持 awaiting_approval，可再次批准；仅缺草稿主键才标 failed。
      * @return array{ok:bool,task?:array<string,mixed>,message?:string}
      */
     public function approveTask(int $taskId): array
@@ -199,32 +200,50 @@ final class OpsDispatchService
             return $got;
         }
         $task = $got['task'] ?? [];
-        if ((string)($task['status'] ?? '') !== OpsTask::STATUS_AWAITING_APPROVAL) {
-            return ['ok' => false, 'message' => (string)__('仅待审任务可批准')];
-        }
-
+        $status = (string)($task['status'] ?? '');
         $assignee = (string)($task['assignee_agent'] ?? '');
         $payload = is_array($task['payload'] ?? null) ? $task['payload'] : [];
         $websiteId = (int)($task['website_id'] ?? 0);
+
+        if (!$this->isApproveEligible($status, $assignee, $payload)) {
+            return ['ok' => false, 'message' => (string)__('仅待审或可重试的外发任务可批准')];
+        }
+
+        // 曾因外发失败落到 failed 的任务：先回到待审再试，避免卡死无按钮。
+        if ($status === OpsTask::STATUS_FAILED) {
+            $this->taskService->setStatus($taskId, OpsTask::STATUS_AWAITING_APPROVAL);
+        }
 
         try {
             if ($assignee === OpsTask::AGENT_BLOG_PUBLISH) {
                 $this->publishBlogDraft($payload, $websiteId);
             } elseif ($assignee === OpsTask::AGENT_SOCIAL_OPS) {
-                $this->publishSocialDraft($payload);
+                $this->publishSocialDraft($payload, $websiteId);
+            } else {
+                return ['ok' => false, 'message' => (string)__('该智能体任务不支持批准外发')];
             }
         } catch (\Throwable $e) {
-            $this->taskService->setStatus($taskId, OpsTask::STATUS_FAILED);
+            $terminal = $this->isTerminalPublishFailure($e, $assignee, $payload);
+            $keepStatus = $terminal ? OpsTask::STATUS_FAILED : OpsTask::STATUS_AWAITING_APPROVAL;
+            $this->taskService->setStatus($taskId, $keepStatus);
             $this->runLogService->write(
                 $websiteId,
                 \Weline\Ops\Model\OpsRunLog::KIND_PUBLISH,
                 'error',
                 $e->getMessage(),
                 '',
-                ['task_id' => $taskId],
+                [
+                    'task_id' => $taskId,
+                    'recoverable' => !$terminal,
+                    'status' => $keepStatus,
+                ],
             );
 
-            return ['ok' => false, 'message' => $e->getMessage()];
+            $hint = $terminal
+                ? $e->getMessage()
+                : $e->getMessage() . ' ' . (string)__('任务仍待审，配置修好后可再次批准外发。');
+
+            return ['ok' => false, 'message' => $hint, 'task' => $this->taskService->get($taskId)['task'] ?? $task];
         }
 
         $done = $this->taskService->setStatus($taskId, OpsTask::STATUS_DONE);
@@ -238,6 +257,45 @@ final class OpsDispatchService
         );
 
         return $done;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    private function isApproveEligible(string $status, string $assignee, array $payload): bool
+    {
+        if (!in_array($assignee, [OpsTask::AGENT_BLOG_PUBLISH, OpsTask::AGENT_SOCIAL_OPS], true)) {
+            return false;
+        }
+        if ($status === OpsTask::STATUS_AWAITING_APPROVAL) {
+            return true;
+        }
+        if ($status !== OpsTask::STATUS_FAILED) {
+            return false;
+        }
+
+        return $assignee === OpsTask::AGENT_BLOG_PUBLISH
+            ? (int)($payload['post_id'] ?? 0) > 0
+            : (int)($payload['draft_id'] ?? 0) > 0;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    private function isTerminalPublishFailure(\Throwable $e, string $assignee, array $payload): bool
+    {
+        if ($assignee === OpsTask::AGENT_BLOG_PUBLISH && (int)($payload['post_id'] ?? 0) < 1) {
+            return true;
+        }
+        if ($assignee === OpsTask::AGENT_SOCIAL_OPS && (int)($payload['draft_id'] ?? 0) < 1) {
+            return true;
+        }
+        // 缺默认账户、范围未配、账户不可用等均为运营可修配置 → 保持待审可重试。
+        if ($e instanceof \InvalidArgumentException) {
+            return false;
+        }
+
+        return false;
     }
 
     /** @return array{scope:string,task_type:string,assignee:string,owner_module:string,title:string}|null */
@@ -307,7 +365,7 @@ final class OpsDispatchService
     }
 
     /** @param array<string,mixed> $payload */
-    private function publishSocialDraft(array $payload): void
+    private function publishSocialDraft(array $payload, int $websiteId): void
     {
         $draftId = (int)($payload['draft_id'] ?? 0);
         if ($draftId < 1 || !class_exists(\Weline\Social\Service\SocialPublishService::class)) {
@@ -315,10 +373,20 @@ final class OpsDispatchService
         }
         /** @var \Weline\Social\Service\SocialPublishService $publish */
         $publish = ObjectManager::getInstance(\Weline\Social\Service\SocialPublishService::class);
-        $publish->createPublishBatch([
+        $batchParams = [
             'draft_id' => $draftId,
             'title' => (string)($payload['title'] ?? ''),
             'fake_mode' => (bool)($payload['fake_mode'] ?? true),
-        ]);
+            'website_id' => $websiteId,
+        ];
+        if (!empty($payload['account_ids']) && is_array($payload['account_ids'])) {
+            $batchParams['account_ids'] = array_values(array_map('intval', $payload['account_ids']));
+        }
+        foreach (['scope_type', 'scope_id', 'child_scope_type', 'child_scope_id', 'scope_key'] as $scopeKey) {
+            if (array_key_exists($scopeKey, $payload) && $payload[$scopeKey] !== '' && $payload[$scopeKey] !== null) {
+                $batchParams[$scopeKey] = $payload[$scopeKey];
+            }
+        }
+        $publish->createPublishBatch($batchParams);
     }
 }

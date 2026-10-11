@@ -20,9 +20,24 @@ final class OpsDispatchMappingContractTest extends TestCase
         self::assertStringContainsString('IdempotentQueueAdmission', $src);
         self::assertStringContainsString('ops_task:', $src);
         self::assertStringContainsString('createPublishBatch', $src);
+        self::assertStringContainsString("'website_id' => \$websiteId", $src);
+        self::assertStringContainsString('isApproveEligible', $src);
+        self::assertStringContainsString('isTerminalPublishFailure', $src);
+        self::assertStringContainsString('STATUS_AWAITING_APPROVAL', $src);
+        self::assertStringContainsString('recoverable', $src);
         self::assertStringContainsString('STATUS_PUBLISHED', $src);
         self::assertSame('blog_publish', OpsTask::AGENT_BLOG_PUBLISH);
         self::assertSame('social_ops', OpsTask::AGENT_SOCIAL_OPS);
+    }
+
+    public function test_desk_and_task_templates_allow_retry_approve_on_failed_outbound(): void
+    {
+        $desk = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Desk/index.phtml');
+        $task = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Task/index.phtml');
+        self::assertStringContainsString('canApproveOutbound', $desk);
+        self::assertStringContainsString('再次批准外发', $desk);
+        self::assertStringContainsString('canApproveOutbound', $task);
+        self::assertStringContainsString('再次批准外发', $task);
     }
 
     public function test_queue_consumer_claims_then_execute_agent(): void

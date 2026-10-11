@@ -205,11 +205,28 @@ $logTone = static function (string $status): string {
                                                 <button type="submit" class="w-button" data-tone="neutral" data-size="sm" data-testid="ops-task-cancel"><?= __('取消') ?></button>
                                             </form>
                                         <?php endif; ?>
-                                        <?php if ($status === 'awaiting_approval'): ?>
+                                        <?php
+                                        $taskPayload = is_array($task['payload'] ?? null) ? $task['payload'] : [];
+                                        $assignee = (string)($task['assignee_agent'] ?? '');
+                                        $canApproveOutbound = in_array($assignee, ['blog_publish', 'social_ops'], true)
+                                            && (
+                                                $status === 'awaiting_approval'
+                                                || (
+                                                    $status === 'failed'
+                                                    && (
+                                                        ($assignee === 'blog_publish' && (int)($taskPayload['post_id'] ?? 0) > 0)
+                                                        || ($assignee === 'social_ops' && (int)($taskPayload['draft_id'] ?? 0) > 0)
+                                                    )
+                                                )
+                                            );
+                                        ?>
+                                        <?php if ($canApproveOutbound): ?>
                                             <form method="post" action="<?= $escape((string)($actions['approve'] ?? '#')) ?>" style="display:inline;">
                                                 <input type="hidden" name="task_id" value="<?= $escape((string)($task['task_id'] ?? '')) ?>"/>
                                                 <input type="hidden" name="website_id" value="<?= $escape((string)($task['website_id'] ?? '')) ?>"/>
-                                                <button type="submit" class="w-button" data-tone="primary" data-size="sm" data-testid="ops-task-approve"><?= __('批准外发') ?></button>
+                                                <button type="submit" class="w-button" data-tone="primary" data-size="sm" data-testid="ops-task-approve">
+                                                    <?= $status === 'failed' ? __('再次批准外发') : __('批准外发') ?>
+                                                </button>
                                             </form>
                                         <?php endif; ?>
                                     </td>

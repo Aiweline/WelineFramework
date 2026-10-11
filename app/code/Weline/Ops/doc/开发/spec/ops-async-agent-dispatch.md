@@ -18,6 +18,8 @@ status: ready-for-plan（施工中；合并原 P2 日更分析 + P3 审批发布
 - WHEN Queue 消费 blog/social 且 require_approval=1 THEN 系统 SHALL 停在 `awaiting_approval` 且不得公开外发
 - WHEN 同一 task_id 重复入队 THEN 系统 SHALL 不双跑（idempotency_key=`ops_task:{task_id}`）
 - WHEN 运营者打开调度任务管理页 THEN 系统 SHALL 可按 website/status/assignee/session 筛选调度任务并取消/批准
+- WHEN 批准外发因缺默认社媒账户等配置失败 THEN 系统 SHALL 保持 `awaiting_approval`（不得标 failed），并允许再次批准
+- WHEN 批准外发时社媒任务 THEN 系统 SHALL 将任务 `website_id` 传入 `createPublishBatch` 以解析范围默认账户
 
 ## UC
 

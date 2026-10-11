@@ -14,9 +14,14 @@ final class OpsDeskTemplateContractTest extends TestCase
         self::assertFileExists($path);
         $html = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="ops-desk-page"', $html);
+        self::assertStringContainsString('data-testid="ops-desk-overview"', $html);
+        self::assertStringContainsString('data-testid="ops-desk-config-bar"', $html);
         self::assertStringContainsString('data-testid="ops-desk-scopes"', $html);
         self::assertStringContainsString('data-testid="ops-desk-lanes"', $html);
         self::assertStringContainsString('data-testid="ops-desk-tasks"', $html);
+        self::assertStringContainsString('data-testid="ops-desk-task-table"', $html);
+        self::assertStringContainsString('data-testid="ops-open-persona"', $html);
+        self::assertStringContainsString('data-testid="ops-open-dispatch"', $html);
         self::assertStringContainsString('data-testid="ops-refresh-persona"', $html);
         self::assertStringContainsString('data-testid="ops-persona-sse-panel"', $html);
         self::assertStringContainsString('w:theme:sse-progress', $html);
@@ -24,6 +29,7 @@ final class OpsDeskTemplateContractTest extends TestCase
         self::assertStringContainsString('data-testid="ops-enable-program"', $html);
         self::assertStringContainsString("__('AI 运营默认关闭，需本页手动开启。开启后：画像、社媒/GSC/站内事件连接、任务中心与日更派工才生效。')", $html);
         self::assertStringContainsString('data-testid="ops-desk-persona"', $html);
+        self::assertStringContainsString('data-w-component="dialog"', $html);
         self::assertStringContainsString('data-testid="ops-persona-structure"', $html);
         self::assertStringContainsString('data-testid="ops-persona-summary-block"', $html);
         self::assertStringContainsString("__('运营摘要（非站点简介原文）')", $html);
@@ -43,12 +49,21 @@ final class OpsDeskTemplateContractTest extends TestCase
         self::assertStringContainsString('data-testid="ops-desk-heading"', $html);
         $headingPos = strpos($html, 'data-testid="ops-desk-heading"');
         $formPos = strpos($html, 'data-testid="ops-desk-website-form"');
-        $scopePos = strpos($html, 'data-testid="ops-desk-scope"');
+        $overviewPos = strpos($html, 'data-testid="ops-desk-overview"');
+        $configPos = strpos($html, 'data-testid="ops-desk-config-bar"');
+        $tasksPos = strpos($html, 'data-testid="ops-desk-tasks"');
         self::assertNotFalse($headingPos);
         self::assertNotFalse($formPos);
-        self::assertNotFalse($scopePos);
+        self::assertNotFalse($overviewPos);
+        self::assertNotFalse($configPos);
+        self::assertNotFalse($tasksPos);
         self::assertLessThan($formPos, $headingPos);
-        self::assertLessThan($scopePos, $formPos);
+        self::assertLessThan($overviewPos, $formPos);
+        self::assertLessThan($configPos, $overviewPos);
+        self::assertLessThan($tasksPos, $configPos);
+        // 禁止旧「每车道嵌套大卡」墙：概览后不再出现独立 ops-desk-scope 大卡标题堆叠
+        self::assertStringNotContainsString("__('连接与工作面')", $html);
+        self::assertStringNotContainsString("__('任务中心')", $html);
         // 官方网站选择 Taglib：须带 options/display，筛选场景用 auto-submit
         self::assertStringContainsString('w:websites:website:select', $html);
         self::assertStringContainsString('options="websiteSelectOptionsJson"', $html);
