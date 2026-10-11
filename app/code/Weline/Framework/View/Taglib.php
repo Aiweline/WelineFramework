@@ -31,6 +31,7 @@ use Weline\Framework\View\Taglib\Compiler\StageResolver;
 use Weline\Framework\View\Taglib\Compiler\Pass\StageResolutionPass;
 use Weline\Framework\View\Taglib\Compiler\Pass\ConstantFoldingPass;
 use Weline\Framework\View\Taglib\Compiler\Pass\DeadCodeEliminationPass;
+use Weline\Framework\View\Taglib\Compiler\Pass\HeadAssetOrderPass;
 use Weline\Framework\View\Taglib\Compiler\Pass\InlineOptimizationPass;
 use Weline\Framework\View\Taglib\Generator\CodeGenerator;
 use Weline\Framework\View\Taglib\Cache\MultiLevelCache;
@@ -273,6 +274,7 @@ class Taglib
         $pipeline->addPass(new StageResolutionPass($this->getStageResolver()));
         $pipeline->addPass(new ConstantFoldingPass());
         $pipeline->addPass(new DeadCodeEliminationPass());
+        $pipeline->addPass(new HeadAssetOrderPass());
         $pipeline->addPass(new InlineOptimizationPass());
 
         return $pipeline;

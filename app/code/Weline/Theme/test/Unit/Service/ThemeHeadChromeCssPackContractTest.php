@@ -64,13 +64,29 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
 
     public function testStorefrontPackEmitsBeforeStylesAfterHook(): void
     {
-        $head = $this->read('view/theme/frontend/partials/head/assets-suffix.phtml');
-        $emitPack = strpos($head, '<?= $storefrontPackHtml');
-        $hook = strpos($head, 'Weline_Theme::frontend::partials::head::styles-after');
+        // 2026-10-11：布局 CSS 包从 assets-suffix 前移到 assets-prefix —— 必须在
+        // critical CSS 之后、**任何阻塞 JS 之前**被发现，否则浏览器要先跑完 page 段的
+        // 核心脚本才会开始下载布局样式。段序 prefix → page → suffix 由
+        // Partials::renderStorefrontHeadComposedOrMonolithic 固定，故 prefix 内产出
+        // 必然早于 suffix 内的 styles-after hook。
+        $prefix = $this->read('view/theme/frontend/partials/head/assets-prefix.phtml');
+        $emitPack = strpos($prefix, '<?= $storefrontPackHtml');
+        $critical = strpos($prefix, 'theme:layout-critical');
+        $earlyJs = strpos($prefix, '<?= $earlyJsHtml');
         self::assertNotFalse($emitPack);
-        self::assertNotFalse($hook);
-        self::assertLessThan($hook, $emitPack, 'storefront pack emit must precede styles-after hook');
-        self::assertStringContainsString('PACK_STOREFRONT', $head);
+        self::assertNotFalse($critical);
+        self::assertNotFalse($earlyJs);
+        self::assertLessThan($emitPack, $critical, 'layout CSS pack must come after critical CSS');
+        self::assertLessThan($earlyJs, $emitPack, 'layout CSS pack must come before any head JS');
+        self::assertStringContainsString('PACK_STOREFRONT', $prefix);
+
+        $suffix = $this->read('view/theme/frontend/partials/head/assets-suffix.phtml');
+        self::assertStringContainsString('Weline_Theme::frontend::partials::head::styles-after', $suffix);
+        self::assertStringNotContainsString(
+            '<?= $storefrontPackHtml',
+            $suffix,
+            'layout CSS pack must not be emitted twice (suffix)',
+        );
     }
 
     public function testPackClassConstantsMatchHeadWiring(): void

@@ -2,7 +2,9 @@
 (function (window, document) {
     'use strict';
     const Weline = window.Weline = window.Weline || {};
-    if (typeof Weline.dom?.observe === 'function') return;
+    // 启动桩会先装一个占位 observe（把早期调用排队）；只有**真实**实现才允许提前返回，
+    // 否则桩在场时本文件会误判「已安装」而跳过，真实观察总线就永远不生效。
+    if (typeof Weline.dom?.observe === 'function' && !Weline.dom.observe.__welineBootStub) return;
     function observeMutationsCoalesced(spec) {
         const options = (spec && spec.options) || { childList: true, subtree: true };
         const idleTimeoutMs = (function () {

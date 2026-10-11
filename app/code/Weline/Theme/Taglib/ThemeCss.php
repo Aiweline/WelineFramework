@@ -82,6 +82,10 @@ class ThemeCss implements TaglibInterface, StaticMirrorCapableInterface
         if (!CompileTimeStaticMirror::isLiteralMarkup($content) || !CompileTimeStaticMirror::isLiteralMarkup($attrs)) {
             return null;
         }
+        // 属性必须全为字面量才能固化；含 PHP 内联或 $var 的属性退回运行期。
+        if (!CompileTimeStaticMirror::attributesAreLiteral($attributes)) {
+            return null;
+        }
 
         $path = ThemeAssetSource::normalize($content);
         if ($path === '') {
@@ -95,11 +99,43 @@ class ThemeCss implements TaglibInterface, StaticMirrorCapableInterface
             return '';
         }
 
-        $attrPart = $attrs !== '' ? ' ' . trim($attrs) : '';
-
-        return '<link' . $attrPart . ' href=\''
+        return '<link' . self::buildMirrorAttrPart($attrs, $attributes) . ' href=\''
             . htmlspecialchars($href, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
             . '\' rel="stylesheet" type="text/css"/>';
+    }
+
+    /**
+     * 编译期静态镜像必须原样保留原生属性（media / data-* …）。
+     *
+     * 历史缺陷：tryStaticMirror 只读 tag_data 里的 raw 属性串，而编译期
+     * tag_data[1] 是**资源路径**（运行期才是 rawAttributes），属性只存在于
+     * $attributes —— 于是 `<theme:css data-order="40">` 被固化成无属性的
+     * `<link>`，com 阶段排序与前端验收都拿不到标记。
+     * 取值顺序与运行期 callback 保持一致：raw 优先，为空时回落到 $attributes。
+     *
+     * @param array<string, mixed> $attributes
+     */
+    private static function buildMirrorAttrPart(string $rawAttrs, array $attributes): string
+    {
+        $filtered = trim((string)preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', trim($rawAttrs)));
+        if ($filtered !== '') {
+            return ' ' . $filtered;
+        }
+
+        $parts = [];
+        foreach ($attributes as $name => $value) {
+            $name = trim((string)$name);
+            if ($name === '' || !preg_match('/^[a-zA-Z_:][\w:.-]*$/', $name)) {
+                continue;
+            }
+            if ($value === true || $value === '' || $value === null) {
+                $parts[] = $name;
+                continue;
+            }
+            $parts[] = $name . '="' . htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+        }
+
+        return $parts === [] ? '' : ' ' . implode(' ', $parts);
     }
 
     /**

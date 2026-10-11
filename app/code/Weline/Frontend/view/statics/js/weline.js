@@ -1272,7 +1272,11 @@
     }
 
     // 挂载到全局
+    // 承接启动桩（head 最早执行的 inline 桩）的待办队列：桩把 declare/load/preLoad/
+    // mount/dom.observe 的早期调用排进 __bootQueue，此处统一回放，使这些脚本可以 defer。
+    const __bootQueue = (window.Weline && window.Weline.__bootQueue) || [];
     window.Weline = Weline;
+    Weline.__bootQueue = __bootQueue;
     Weline.whenDomReady = whenDomReady;
     Weline.whenHtmlDocumentLoaded = whenHtmlDocumentLoaded;
     Weline.shouldDeferAttributeModule = shouldDeferAttributeModule;
@@ -1285,6 +1289,45 @@
         observe: observeDomMutations,
         observeMutations: observeDomMutations,
     });
+
+    /**
+     * 回放启动桩队列。API 已被真实实现取代后调用，语义与直接调用一致。
+     * 若某 API 仍是桩（真实实现缺失），跳过而非二次入队，避免队列自增。
+     */
+    function drainBootQueue() {
+        const pending = Weline.__bootQueue;
+        if (!Array.isArray(pending) || pending.length === 0) {
+            Weline.__bootQueueDrained = true;
+            return;
+        }
+        const batch = pending.splice(0, pending.length);
+        Weline.__bootQueueDrained = true;
+        batch.forEach((item) => {
+            try {
+                const parts = String((item && item.api) || '').split('.');
+                let host = Weline;
+                for (let i = 0; i < parts.length - 1 && host; i += 1) {
+                    host = host[parts[i]];
+                }
+                const fn = host ? host[parts[parts.length - 1]] : null;
+                if (typeof fn !== 'function' || fn.__welineBootStub) {
+                    if (item && item.resolve) {
+                        item.resolve(undefined);
+                    }
+                    return;
+                }
+                const result = fn.apply(host, (item && item.args) || []);
+                if (item && item.resolve) {
+                    Promise.resolve(result).then(item.resolve, item.resolve);
+                }
+            } catch (error) {
+                if (item && item.reject) {
+                    item.reject(error);
+                }
+            }
+        });
+    }
+    drainBootQueue();
 
     // 将翻译函数也挂载到 Weline 对象上，方便后续更新
     Weline.__ = __;

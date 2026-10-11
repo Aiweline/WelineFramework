@@ -110,10 +110,11 @@ final class CompilePipeline
     /**
      * 创建默认管道
      * 
-     * 默认包含四个优化通道（按优先级排序）：
+     * 默认包含五个优化通道（按优先级排序）：
      * - StageResolutionPass (优先级 5) - 预处理：解析标签阶段
      * - ConstantFoldingPass (优先级 10) - 常量折叠
      * - DeadCodeEliminationPass (优先级 20) - 死代码消除
+     * - HeadAssetOrderPass (优先级 40) - head 资源按 data-order 排序（无 data-order 时 no-op）
      * - InlineOptimizationPass (优先级 60) - 内联优化
      */
     public static function createDefault(): self
@@ -124,6 +125,7 @@ final class CompilePipeline
         $pipeline->addPass(new Pass\StageResolutionPass());
         $pipeline->addPass(new Pass\ConstantFoldingPass());
         $pipeline->addPass(new Pass\DeadCodeEliminationPass());
+        $pipeline->addPass(new Pass\HeadAssetOrderPass());
         $pipeline->addPass(new Pass\InlineOptimizationPass());
         
         return $pipeline;

@@ -151,4 +151,73 @@ class CompileTimeStaticMirrorContractTest extends TestCase
         self::assertStringContainsString('<?php', $result);
         self::assertStringContainsString('FontFaceService', $result);
     }
+
+    // --- 原生属性透传契约 ---------------------------------------------------
+    // 编译期静态镜像必须保留原生属性，否则 `<theme:js data-order="60" defer>`
+    // 会被固化成无属性 <script>，com 阶段 HeadAssetOrderPass 与前端验收都失效。
+
+    public function testThemeCssLiteralAttrsBakeLinkWithDataOrder(): void
+    {
+        $callback = ThemeCss::callback();
+        $tagData = [
+            0 => '<theme:css data-order="40">Weline_Theme::frontend/assets/css/theme.css</theme:css>',
+            1 => 'Weline_Theme::frontend/assets/css/theme.css',
+            2 => '',
+        ];
+        $result = $callback('tag', [], $tagData, ['data-order' => '40']);
+
+        self::assertIsString($result);
+        self::assertStringContainsString('<link', $result);
+        self::assertStringContainsString('data-order="40"', $result, 'theme:css must keep native attrs');
+        self::assertStringNotContainsString('<?php', $result);
+    }
+
+    public function testThemeJsLiteralAttrsBakeScriptWithDefer(): void
+    {
+        $callback = ThemeJs::callback();
+        $tagData = [
+            0 => '<theme:js data-order="60" defer>Weline_Theme::frontend/assets/js/theme.js</theme:js>',
+            1 => 'Weline_Theme::frontend/assets/js/theme.js',
+            2 => '',
+        ];
+        $result = $callback('tag', [], $tagData, ['data-order' => '60', 'defer' => true]);
+
+        self::assertIsString($result);
+        self::assertStringContainsString('<script', $result);
+        self::assertStringContainsString('data-order="60"', $result, 'theme:js must keep native attrs');
+        self::assertMatchesRegularExpression('/\bdefer\b/', $result, 'boolean defer must survive as bare attr');
+        self::assertStringNotContainsString('<?php', $result);
+    }
+
+    public function testThemeJsDynamicAttrFallsBackToPhp(): void
+    {
+        $callback = ThemeJs::callback();
+        $tagData = [
+            0 => '<theme:js>Weline_Theme::frontend/assets/js/theme.js</theme:js>',
+            1 => 'Weline_Theme::frontend/assets/js/theme.js',
+            2 => '',
+        ];
+        $result = $callback('tag', [], $tagData, ['data-order' => '<?= $order ?>']);
+
+        self::assertStringContainsString('<?php', $result, 'dynamic attr must not be baked into static mirror');
+        self::assertStringContainsString('fetchTagSource', $result);
+    }
+
+    public function testThemeCssTaglibParseLiteralAttrsPreservesDataOrder(): void
+    {
+        /** @var Taglib $taglib */
+        $taglib = ObjectManager::getInstance(Taglib::class);
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
+
+        $result = $taglib->parse(
+            $template,
+            'static_mirror_theme_css_attrs.phtml',
+            '<theme:css data-order="40">Weline_Theme::frontend/assets/css/theme.css</theme:css>',
+        );
+
+        self::assertStringNotContainsString('<theme:css', $result);
+        self::assertStringContainsString('<link', $result);
+        self::assertStringContainsString('data-order="40"', $result);
+    }
 }

@@ -243,9 +243,9 @@ $canonicalApexHost = (str_starts_with($canonicalPublicHost, 'www.')
 </script>
 <?php endif; ?>
 <script type="application/json" id="weline-frontend-runtime-config" data-weline-runtime-config>{"baseUrl":"@url{'/'}",<?= $runtimeJsonTailBody ?></script>
-<js>Weline_Frontend::js/runtime.js</js>
-<js>Weline_Framework::js/dom-observer.js</js>
-<js>Weline_Frontend::js/weline-api-business.js</js>
+<js defer>Weline_Frontend::js/runtime.js</js>
+<js defer>Weline_Framework::js/dom-observer.js</js>
+<js defer>Weline_Frontend::js/weline-api-business.js</js>
 <?php
 // Bust sticky theme_static_version so weline.js edits are not stuck in WLS static cache.
 $welineJsSrc = (defined('DEV') && DEV)
@@ -253,6 +253,7 @@ $welineJsSrc = (defined('DEV') && DEV)
     : '/static/Weline/Frontend/js/weline.js';
 $welineJsSrc .= '?v=' . rawurlencode((string)$frontendAssetVersion);
 ?>
-<script src="<?= htmlspecialchars($welineJsSrc, ENT_QUOTES) ?>"></script>
-<js>Weline_Framework::js/url-frontend.js</js>
+<?php // defer：早期调用（declare/load/dom.observe）由 head 的 weline-boot-stub 排队，本文件初始化后回放 ?>
+<script defer src="<?= htmlspecialchars($welineJsSrc, ENT_QUOTES) ?>"></script>
+<js defer>Weline_Framework::js/url-frontend.js</js>
 <meta name="weline-worker-frontend-bootstrap-slot" content="">

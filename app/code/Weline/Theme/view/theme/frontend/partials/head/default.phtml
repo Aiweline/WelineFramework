@@ -44,13 +44,14 @@ try {
     $jsPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeJsPack::class
     );
-    $earlyJsHtml = $jsPack->tryScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_EARLY);
-    $afterCssJsHtml = $jsPack->tryScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_AFTER_CSS);
+    $earlyJsHtml = $jsPack->tryInlineScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_EARLY);
+    $afterCssJsHtml = $jsPack->tryScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_AFTER_CSS, true);
 } catch (\Throwable $e) {
     $earlyJsHtml = null;
     $afterCssJsHtml = null;
 }
 ?>
+<w:template>Weline_Theme::theme/frontend/partials/head/weline-boot-stub.phtml</w:template>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
 <theme:layout-critical area="frontend"/>
 <?php if ($earlyJsHtml !== null): ?>
@@ -79,7 +80,7 @@ try {
 <?php if ($afterCssJsHtml !== null): ?>
 <?= $afterCssJsHtml ?>
 <?php else: ?>
-<script src="@static(Weline_Theme::ui/weline-css-ready.js)"></script>
+<script defer src="@static(Weline_Theme::ui/weline-css-ready.js)"></script>
 <?php endif; ?>
 <?php // site-blocks.css：由部件 @widget.source bake→head（page.phtml HeadAssets），禁止此处 @static 重复 ?>
 <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>

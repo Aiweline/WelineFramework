@@ -1,0 +1,98 @@
+<?php
+/**
+ * Weline 启动桩（inline，必须最早执行）。
+ *
+ * 目的：让 `Weline.declare` / `load` / `preLoad` / `mount` 以及 `Weline.dom.observe`
+ * 在真正的 weline.js / dom-observer.js 到位**之前**也能被安全调用 —— 调用进入
+ * `Weline.__bootQueue`，待 weline.js 初始化后统一回放。这样 head 里的核心脚本就能
+ * 全部 `defer`，不再阻塞首屏解析（否则 body 内联脚本会在解析期同步调用它们）。
+ *
+ * 为什么还要抢 env：`window.DEV` / `PROD` / `WELINE_ENV` 原本由 runtime.js 设置，
+ * 而 runtime.js 现在也是 deferred；body 内联脚本（如访客统计）会在它之前读 `window.DEV`，
+ * 所以这里先从内联 runtime JSON 里取一次，保持行为不变。
+ *
+ * 幂等：`__bootStubInstalled` 守卫；真实 weline.js 跑过后 `__initialized` 为 true，桩自动让位。
+ *
+ * @meta.name {default="Weline boot stub",name="Weline 启动桩"}
+ */
+?>
+<script data-weline-boot-stub="1">
+(function (window) {
+    'use strict';
+    if (!window) {
+        return;
+    }
+    if (window.Weline && window.Weline.__initialized) {
+        return;
+    }
+    var W = window.Weline = window.Weline || {};
+    if (W.__bootStubInstalled) {
+        return;
+    }
+    W.__bootStubInstalled = true;
+
+    // 1) 抢出 env —— body 内联脚本可能在 deferred runtime.js 之前读 window.DEV
+    try {
+        var cfg = {};
+        var nodes = document.querySelectorAll('script[type="application/json"][data-weline-runtime-config]');
+        for (var i = 0; i < nodes.length; i++) {
+            try {
+                var parsed = JSON.parse(nodes[i].textContent || '{}');
+                for (var k in parsed) {
+                    if (Object.prototype.hasOwnProperty.call(parsed, k)) {
+                        cfg[k] = parsed[k];
+                    }
+                }
+            } catch (parseError) { /* 单个配置块坏了不影响其它 */ }
+        }
+        var env = cfg.env || {};
+        if (typeof window.WELINE_ENV === 'undefined') {
+            window.WELINE_ENV = env.WELINE_ENV || 'PROD';
+        }
+        if (typeof window.DEV === 'undefined') {
+            window.DEV = !!env.DEV;
+        }
+        if (typeof window.PROD === 'undefined') {
+            window.PROD = !window.DEV;
+        }
+    } catch (configError) { /* 拿不到就保持 undefined，等价于 PROD */ }
+
+    // 2) 待办队列 —— 每项 { api, args, resolve, reject }
+    var queue = W.__bootQueue = W.__bootQueue || [];
+
+    function enqueue(api, args) {
+        return new Promise(function (resolve, reject) {
+            queue.push({
+                api: api,
+                args: Array.prototype.slice.call(args),
+                resolve: resolve,
+                reject: reject
+            });
+        });
+    }
+
+    function install(apiPath) {
+        var parts = apiPath.split('.');
+        var host = W;
+        for (var i = 0; i < parts.length - 1; i++) {
+            host = host[parts[i]] = host[parts[i]] || {};
+        }
+        var name = parts[parts.length - 1];
+        if (typeof host[name] === 'function') {
+            return;
+        }
+        var stubFn = function () {
+            return enqueue(apiPath, arguments);
+        };
+        // 标记：回放时若目标仍是桩（真实实现没来），跳过而不是二次入队
+        stubFn.__welineBootStub = true;
+        host[name] = stubFn;
+    }
+
+    ['declare', 'load', 'preLoad', 'mount', 'observeMutationsCoalesced'].forEach(install);
+    W.dom = W.dom || {};
+    ['observe', 'observeMutations'].forEach(function (api) {
+        install('dom.' + api);
+    });
+})(window);
+</script>
