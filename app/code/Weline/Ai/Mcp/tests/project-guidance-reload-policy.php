@@ -22,6 +22,7 @@ $cases = [
         'expected_reload' => false,
         'expected_deferred_refresh' => true,
         'expected_cursor_bounce' => false,
+        'expected_cursor_bounce_recommended' => false,
     ],
     'app-server uptime does not require an MCP or host restart' => [
         'runtime' => ['kind' => 'codex_app_server', 'current' => false],
@@ -32,6 +33,7 @@ $cases = [
         'expected_reload' => false,
         'expected_deferred_refresh' => true,
         'expected_cursor_bounce' => false,
+        'expected_cursor_bounce_recommended' => false,
     ],
     'MCP registration change requests catalog refresh without restarting the host' => [
         'runtime' => ['kind' => 'codex_app_server', 'current' => true],
@@ -42,18 +44,47 @@ $cases = [
         'expected_reload' => false,
         'expected_deferred_refresh' => true,
         'expected_cursor_bounce' => false,
+        'expected_cursor_bounce_recommended' => false,
     ],
-    'Cursor stale mcp-process requires bounce' => [
+    'Cursor stale+healthy mcp-process recommends but does not require bounce' => [
         'runtime' => ['kind' => 'other', 'current' => true],
         'mcp_config_changed' => false,
         'plugin_changed' => false,
-        'cursor' => ['kind' => 'cursor_mcp_process', 'pid' => 4242, 'current' => false],
+        'cursor' => ['kind' => 'cursor_mcp_process', 'pid' => 4242, 'current' => false, 'alive' => true],
+        'missing' => [],
+        'expected_reload' => false,
+        'expected_deferred_refresh' => false,
+        'expected_cursor_bounce' => false,
+        'expected_cursor_bounce_recommended' => true,
+    ],
+    'Cursor stale+dead mcp-process requires bounce' => [
+        'runtime' => ['kind' => 'other', 'current' => true],
+        'mcp_config_changed' => false,
+        'plugin_changed' => false,
+        'cursor' => ['kind' => 'cursor_mcp_process', 'pid' => 4242, 'current' => false, 'alive' => false],
         'missing' => [],
         'expected_reload' => false,
         'expected_deferred_refresh' => false,
         'expected_cursor_bounce' => true,
+        'expected_cursor_bounce_recommended' => true,
     ],
-    'Cursor orphan mcp-process (no learning-mcp child) requires bounce' => [
+    'Cursor idle mcp-process (no persistent learning-mcp child) must not bounce' => [
+        'runtime' => ['kind' => 'cursor', 'current' => true],
+        'mcp_config_changed' => false,
+        'plugin_changed' => false,
+        'cursor' => [
+            'kind' => 'cursor_mcp_process',
+            'pid' => 82380,
+            'current' => true,
+            'reason' => 'shared_process_idle_helper',
+        ],
+        'missing' => [],
+        'expected_reload' => false,
+        'expected_deferred_refresh' => false,
+        'expected_cursor_bounce' => false,
+        'expected_cursor_bounce_recommended' => false,
+    ],
+    'legacy orphan reason also must not bounce' => [
         'runtime' => ['kind' => 'cursor', 'current' => true],
         'mcp_config_changed' => false,
         'plugin_changed' => false,
@@ -66,17 +97,19 @@ $cases = [
         'missing' => [],
         'expected_reload' => false,
         'expected_deferred_refresh' => false,
-        'expected_cursor_bounce' => true,
+        'expected_cursor_bounce' => false,
+        'expected_cursor_bounce_recommended' => false,
     ],
     'missing resolve_skill does not alone bounce Cursor' => [
         'runtime' => ['kind' => 'other', 'current' => true],
         'mcp_config_changed' => false,
         'plugin_changed' => false,
-        'cursor' => ['kind' => 'cursor_mcp_process', 'pid' => 4242, 'current' => true],
+        'cursor' => ['kind' => 'cursor_mcp_process', 'pid' => 4242, 'current' => true, 'alive' => true],
         'missing' => ['resolve_skill'],
         'expected_reload' => false,
         'expected_deferred_refresh' => false,
         'expected_cursor_bounce' => false,
+        'expected_cursor_bounce_recommended' => false,
     ],
 ];
 
@@ -91,8 +124,12 @@ foreach ($cases as $label => $case) {
     );
     $passed = ($decision['reload_required'] ?? null) === $case['expected_reload']
         && ($decision['plugin_refresh_deferred'] ?? null) === $case['expected_deferred_refresh']
-        && ($decision['cursor_mcp_bounce_required'] ?? null) === $case['expected_cursor_bounce'];
+        && ($decision['cursor_mcp_bounce_required'] ?? null) === $case['expected_cursor_bounce']
+        && ($decision['cursor_mcp_bounce_recommended'] ?? null) === $case['expected_cursor_bounce_recommended'];
     fwrite($passed ? STDOUT : STDERR, sprintf("[%s] %s\n", $passed ? 'PASS' : 'FAIL', $label));
+    if (!$passed) {
+        fwrite(STDERR, '  decision=' . json_encode($decision, JSON_UNESCAPED_SLASHES) . "\n");
+    }
     $failed = $failed || !$passed;
 }
 

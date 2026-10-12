@@ -58,7 +58,7 @@ That script probes local STDIO health, probes host attachment, and returns `host
 
 For IDE Agent chats, use the operator's chosen Cursor **Run Mode** (for example **Run Everything** or **Auto-review**). One-time MCP enable is handled via `cursor-agent mcp enable weline_project_intelligence`, not by editing `permissions.json`.
 
-This server is **local STDIO with no OAuth**. Agents must **never** call Cursor `mcp_auth` for `weline_project_intelligence` — that only opens the host authorization toast and is not required for tools to work. `ensure-project-guidance.php` asserts STDIO `tools/list` includes the required index/knowledge tools. On Cursor Agent hosts (`CURSOR_AGENT` / `CURSOR_EXTENSION_HOST_ROLE`), ensure probes the Helper `mcp-process`. When that helper is older than MCP source **or** still running with no `learning-mcp` child (`orphan_no_learning_mcp_child` — IDE keeps a stale catalog while `CallDynamicTool` times out with Transport closed), ensure **SIGTERM-bounces** the helper and returns `host_repair_needed` so the **next Agent turn** re-attaches a fresh catalog. Successful kill does **not** `touch` user `mcp.json`; touch is only a fallback when kill fails, and bounce/touch is **debounced** (~60s) to avoid reload churn. **Never** use Developer: Reload Window (kills all agents). If `mcp_stdio` lists the tools but the current chat’s `GetDynamicTools` does not, start a new Agent turn (do not call `mcp_auth`). Keep the registered PHP `command` on a stable path (for example `/opt/homebrew/bin/php`) so `mcp-approvals` fingerprints do not churn and re-prompt workspace approval.
+This server is **local STDIO with no OAuth**. Agents must **never** call Cursor `mcp_auth` for `weline_project_intelligence` — that only opens the host authorization toast and is not required for tools to work. `ensure-project-guidance.php` asserts STDIO `tools/list` includes the required index/knowledge tools. On Cursor Agent hosts (`CURSOR_AGENT` / `CURSOR_EXTENSION_HOST_ROLE`), ensure probes the Helper `mcp-process`. When a **live healthy** `learning-mcp` child under that helper is older than MCP source, ensure sets `cursor_mcp_bounce_recommended` and keeps `ready` (soft) — start a **new Agent turn**; it does **not** SIGTERM solely for source mtime. Auto **SIGTERM-bounce** remains only when the recorded pid is dead or `WELINE_MCP_FORCE_BOUNCE=1` (then `host_repair_needed`). An idle helper with **no** persistent `learning-mcp` child is normal under Cursor **shared-process MCP routing** (`shared_process_idle_helper`) — **do not** bounce it; killing that helper closes Renderer↔McpProcess MessagePort and breaks IDE `CallDynamicTool` while local STDIO / `cursor-agent mcp list-tools` still look fine. Successful kill does **not** `touch` user `mcp.json`; touch is only a fallback when kill fails, and bounce/touch is **debounced** (~60s) to avoid reload churn. **Never** use Developer: Reload Window (kills all agents). If `mcp_stdio` lists the tools but the current chat’s `GetDynamicTools` does not, use Cursor MCP settings **Reload** for those servers (or a new Agent turn after a real catalog refresh)—do not call `mcp_auth`, and do not keep bouncing the idle helper. Keep the registered PHP `command` on a stable path (for example `/opt/homebrew/bin/php`) so `mcp-approvals` fingerprints do not churn and re-prompt workspace approval.
 
 ## Verification
 
@@ -72,6 +72,19 @@ node --check bin/weline-mcp.js
 
 Use `php scripts/install.php --dry-run` to inspect installer output without changing host registration. STDIO smoke tests must keep stdout valid JSON-RPC; diagnostics go to stderr.
 
+## MCP development maintenance gate
+
+When editing `Weline_Ai/Mcp` source on a live machine, block other agents before the change lands:
+
+```bash
+php app/code/Weline/Ai/Mcp/bin/learningctl mcp-dev enable --reason "editing prepare defer" --ttl 2h --owner "$USER"
+# bounce host learning-mcp / next Agent turn so processes load the gate
+# ... edit + test ...
+php app/code/Weline/Ai/Mcp/bin/learningctl mcp-dev disable --owner "$USER"
+```
+
+While active, every tool except `health` returns `MCP_DEV_MAINTENANCE` with `caller_instruction=use_host_native_tools`: callers must continue via host-native Read/Grep/Write/Shell and may Read `app/code/Weline/Ai/doc/AI硬规则索引.md`; they must not wait forever or pretend `prepare_project` succeeded. `health.dev_maintenance` carries the same notice. TTL defaults to 2h and auto-clears. Always `disable` after the edit wave.
+
 ## Index maintenance
 
 Project indexes are caches and may be deleted only after stopping MCP processes; the next `prepare_project` recreates them. Back up the global learning DB only when its audit history is required.
@@ -80,9 +93,9 @@ Interactive requests use three cost tiers:
 
 1. A recent persisted index with `phase=idle`, `freshness=current`, and a `last_completed_at` inside `index.refresh_interval` is reused. A new MCP process no longer repeats a full discovery just because its in-memory cache is empty.
 2. A request with explicit `path`/`paths` performs a bounded content-hash refresh for those targets. Use this mode for a focused investigation; it preserves same-size/same-mtime change detection.
-3. Revision zero, an expired/partial index, or an explicit forced refresh performs incremental discovery. This is the cold/maintenance path and can be expensive on a large project; it must not be confused with an STDIO connection failure.
+3. Revision zero requires a synchronous cold build. An expired/partial index on `revision > 0` is **deferred** from `prepare_project` / interactive reads via sidecar socket send or a detached `learningctl intelligence index_project` worker — never `pcntl_fork` inside the long-lived STDIO MCP process. This is the maintenance path and can be expensive on a large project; it must not be confused with an STDIO connection failure.
 
-When the SessionStart Hook has indexing enabled, it reads only `project_index_status` for the response and schedules the incremental refresh after the Hook response through the sidecar or a detached worker. The Hook must not wait for a project-wide SQLite rebuild; if `pcntl` is unavailable, use the reported fallback and let the first guarded MCP read perform the required local refresh.
+When the SessionStart Hook has indexing enabled, it reads only `project_index_status` for the response and schedules the incremental refresh after the Hook response through the sidecar or a detached worker. The Hook must not wait for a project-wide SQLite rebuild. `prepare_project` follows the same interactive rule for `revision > 0`.
 
 For a large repository, use an interactive profile with `index.refresh_interval: 10m`–`15m`, `index.auto_refresh: true`, `index.sidecar_enabled: true`, and `index.include_tests: false`; keep a shorter interval only when the freshness requirement justifies charging every new process for a repository scan. This is a local configuration trade-off, not a reason to edit host registration or disable the symbol/vector indexes.
 
@@ -93,6 +106,8 @@ This is a freshness window, not a claim of real-time filesystem watching. The si
 When a scan reports a problem, classify it before changing code:
 
 - `Transport closed`/missing tools: run `ensure-project-guidance.php`; it repairs a stale Codex plugin cache and proves the local STDIO process independently. If the current Codex app-server still has no `learning-mcp` child after the exact plugin reinstall, the remaining fault is its already-loaded transport/catalog; use the host's MCP-only reconnect when available, and do not restart the shared app-server from the bootstrap script. Never use `mcp_auth` for this local STDIO server.
+- Sibling MCP (`aoci`) call timeouts while Weline still answers: inspect `health.project_intelligence.index_refresh_worker` (`alive`, `elapsed_seconds`, `over_budget`, `deadline_epoch`). Detached `index_project` workers are capped by `index.refresh_worker_max_seconds` (default 900) and spawned with `index.refresh_worker_nice` (default 10). An unbounded/high-CPU indexer is a maintenance load that can prevent Cursor from leasing sibling MCP — not an AOCI protocol failure and not a reason to toggle MCP in Settings.
+- Soft stale `learning-mcp` (source newer than live Cursor child, process still healthy): ensure reports `cursor_mcp_bounce_recommended` and does **not** SIGTERM by default. Start a new Agent turn; `MCP_RUNTIME_STALE` may refuse tools until re-lease. Set `WELINE_MCP_FORCE_BOUNCE=1` only when the live transport is dead. Never use Developer: Reload Window.
 - Long `prepare_project`: inspect the persisted index state and last index counters. A long write with changed files is an index-storage performance issue, not a protocol issue.
 - Large relation update: inspect `last_index.relation_resolution`. `scoped` with a small target-name set is the interactive path; `full` or a large resolved count is maintenance-scale work and should be scheduled away from coding sessions.
 - Unresolved relations or low-ranked candidates: treat them as retrieval evidence, not defects. Validate the concrete source/sink and expected behavior with indexed exact regions before opening a host-native code fix.

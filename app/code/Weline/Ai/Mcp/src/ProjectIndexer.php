@@ -124,7 +124,17 @@ final class ProjectIndexer
         $started = microtime(true);
         $startedAt = Clock::now();
         $revision = 0;
+        $deadlineEpoch = max(0, (int) ($options['deadline_epoch'] ?? 0));
+        $budgetExceeded = false;
         try {
+            // Exclusive lock acquired ⇒ prior indexer is gone; clear abandoned phase marks.
+            if ((string) ($this->index->state()['phase'] ?? '') === 'indexing') {
+                $this->index->setState([
+                    'phase' => 'idle',
+                    'freshness' => 'stale',
+                    'last_error' => 'Recovered abandoned indexing phase after acquiring exclusive lock',
+                ]);
+            }
             $this->index->setState([
                 'phase' => 'indexing',
                 'freshness' => 'updating',
@@ -132,12 +142,24 @@ final class ProjectIndexer
                 'last_error' => null,
             ]);
             $discovered = $this->discover($requestedPaths);
-            $existing = $this->existingFiles();
+            if ($this->isPastDeadline($deadlineEpoch)) {
+                $budgetExceeded = true;
+            }
             $eligible = [];
             $removed = [];
             $warnings = [];
             $skipped = ['policy' => 0, 'missing' => 0, 'oversized' => 0, 'binary' => 0, 'unreadable' => 0, 'parser_capacity' => 0];
+            $relationTargetNames = [];
+            $deleted = 0;
+            $changedPaths = [];
+            $indexed = 0;
+            $contentBackfilled = 0;
+            $unchanged = 0;
+            $errors = [];
             $maxFileBytes = (int) $this->config->get('index.max_file_bytes', 1_048_576);
+
+            if (!$budgetExceeded) {
+            $existing = $this->existingFiles();
 
             foreach ($discovered as $path) {
                 if (!$this->pathAllowed($path, $requestedPaths !== null)) {
@@ -200,11 +222,11 @@ final class ProjectIndexer
             $deleted = $this->deletePaths($deletePaths);
             $changedPaths = $deletePaths;
 
-            $indexed = 0;
-            $contentBackfilled = 0;
-            $unchanged = 0;
-            $errors = [];
             foreach ($this->indexBatches(array_values($eligible)) as $batch) {
+                if ($this->isPastDeadline($deadlineEpoch)) {
+                    $budgetExceeded = true;
+                    break;
+                }
                 $writes = [];
                 $touches = [];
                 $contentBackfills = [];
@@ -344,6 +366,7 @@ final class ProjectIndexer
                     });
                 }
             }
+            } // !$budgetExceeded body
 
             $changedPaths = array_values(array_unique($changedPaths));
             sort($changedPaths, SORT_STRING);
@@ -361,10 +384,14 @@ final class ProjectIndexer
                 'target_names' => 0,
                 'resolved' => 0,
             ];
-            if ($revision > 0) {
-                $relationResolution = $this->resolveRelationTargets(
-                    $mode === 'full' ? null : $relationTargetNames,
-                );
+            if (!$budgetExceeded && $revision > 0) {
+                if ($this->isPastDeadline($deadlineEpoch)) {
+                    $budgetExceeded = true;
+                } else {
+                    $relationResolution = $this->resolveRelationTargets(
+                        $mode === 'full' ? null : $relationTargetNames,
+                    );
+                }
             }
             $completedAt = Clock::now();
             $durationMs = (int) round((microtime(true) - $started) * 1_000);
@@ -372,11 +399,17 @@ final class ProjectIndexer
                 $this->writeKnowledgeState($revision, $completedAt);
             }
             $reportedRevision = $this->index->revision();
+            $freshness = $budgetExceeded
+                ? 'stale'
+                : ($errors === [] ? 'current' : 'partial');
+            $lastError = $budgetExceeded
+                ? 'worker_budget_exceeded'
+                : ($errors === [] ? null : implode("\n", array_slice($errors, 0, 20)));
             $this->index->setState([
                 'phase' => 'idle',
-                'freshness' => $errors === [] ? 'current' : 'partial',
+                'freshness' => $freshness,
                 'last_completed_at' => $completedAt,
-                'last_error' => $errors === [] ? null : implode("\n", array_slice($errors, 0, 20)),
+                'last_error' => $lastError,
                 'last_index' => [
                     'mode' => $mode,
                     'discovered' => count($discovered),
@@ -389,6 +422,8 @@ final class ProjectIndexer
                     'errors' => count($errors),
                     'duration_ms' => $durationMs,
                     'relation_resolution' => $relationResolution,
+                    'budget_exceeded' => $budgetExceeded,
+                    'deadline_epoch' => $deadlineEpoch > 0 ? $deadlineEpoch : null,
                 ],
             ]);
 
@@ -400,7 +435,7 @@ final class ProjectIndexer
                 'mode' => $mode,
                 'scope_paths' => $requestedPaths,
                 'revision' => $reportedRevision,
-                'freshness' => $errors === [] ? 'current' : 'partial',
+                'freshness' => $freshness,
                 'discovered' => count($discovered),
                 'eligible' => count($eligible),
                 'indexed' => $indexed,
@@ -413,6 +448,8 @@ final class ProjectIndexer
                 'warnings' => array_values(array_unique($warnings)),
                 'duration_ms' => $durationMs,
                 'relation_resolution' => $relationResolution,
+                'budget_exceeded' => $budgetExceeded,
+                'deadline_epoch' => $deadlineEpoch > 0 ? $deadlineEpoch : null,
             ];
         } catch (Throwable $exception) {
             $this->index->setState([
@@ -432,6 +469,11 @@ final class ProjectIndexer
     public function indexPaths(array $paths): array
     {
         return $this->index(['mode' => 'incremental', 'paths' => $paths]);
+    }
+
+    private function isPastDeadline(int $deadlineEpoch): bool
+    {
+        return $deadlineEpoch > 0 && time() >= $deadlineEpoch;
     }
 
     /**

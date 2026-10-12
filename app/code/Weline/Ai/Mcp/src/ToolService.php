@@ -50,7 +50,7 @@ final class ToolService
             self::tool(
                 'prepare_project',
                 'Prepare Weline project knowledge',
-                'Mandatory session entry. Scan app/code/*/*, verify the three-document contract and dev-branch policy, incrementally refresh the isolated SQLite index, and return project-readiness.v1 with hard_constraints, mcp_skills, and index freshness for knowledge/code-map tools.',
+                'Mandatory session entry. Scan app/code/*/*, verify the three-document contract and dev-branch policy, return project-readiness.v1 with hard_constraints/mcp_skills. Whole-repo index refresh for revision>0 is deferred (sidecar/detached worker) so STDIO stays responsive; path-bounded refreshes stay synchronous.',
                 self::objectSchema($scope + [
                     'client_session_id' => self::stringSchema('Stable identifier for the current AI client session.'),
                 ], ['repository', 'client_session_id']),
@@ -248,6 +248,7 @@ final class ToolService
      */
     public function call(string $name, array $arguments): array
     {
+        (new DevMaintenanceGate($this->config))->assertCallable($name);
         $currentGeneration = self::sourceGeneration();
         $sourceCurrent = hash_equals($this->runtimeGeneration, $currentGeneration);
         if ($name !== 'health' && !$sourceCurrent) {
@@ -260,13 +261,15 @@ final class ToolService
                     'started_at' => $this->runtimeStartedAt,
                     'loaded_generation' => $this->runtimeGeneration,
                     'current_generation' => $currentGeneration,
-                    'next_action' => 'Run ensure-project-guidance and continue only after host_runtime.current is true.',
+                    'next_action' => 'Start a new Agent turn so Cursor re-leases learning-mcp with the current source generation. ensure-project-guidance no longer SIGTERM-bounces a healthy stale process by default; set WELINE_MCP_FORCE_BOUNCE=1 only when the live transport is dead and a forced bounce is required. Do NOT use Developer: Reload Window.',
                 ],
             );
         }
 
         $readiness = null;
-        if (!in_array($name, ['health', 'project_index_status', 'prepare_project', 'repair_project_docs'], true)) {
+        // index_project is a maintenance tool used by sidecar/detached workers; it must not require
+        // interactive readiness / client_session_id (those are session-entry gates).
+        if (!in_array($name, ['health', 'project_index_status', 'prepare_project', 'repair_project_docs', 'index_project'], true)) {
             $readiness = $this->intelligence->assertProjectReadiness($arguments);
         }
         $result = match ($name) {
@@ -321,6 +324,19 @@ final class ToolService
             'storage' => $this->store->health(),
             'project_intelligence' => $this->intelligence->metadata(),
             'analyzer' => $this->analyzer->metadata(),
+            'dev_maintenance' => (static function (Config $config): array {
+                $status = (new DevMaintenanceGate($config))->status();
+                if ((bool) ($status['active'] ?? false)) {
+                    $status['mcp_available'] = false;
+                    $status['caller_instruction'] = 'use_host_native_tools';
+                    $status['message'] = 'Weline MCP 当前不可用（开发维护中）。请改用宿主原生工具（Read/Grep/Write/Shell）；硬规则 Read AI硬规则索引.md。';
+                } else {
+                    $status['mcp_available'] = true;
+                    $status['caller_instruction'] = 'mcp_available';
+                }
+
+                return $status;
+            })($this->config),
             'learning_skills' => [
                 'enabled' => false,
                 'status' => 'retired_in_0.13.0',

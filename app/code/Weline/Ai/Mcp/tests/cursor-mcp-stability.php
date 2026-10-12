@@ -127,10 +127,11 @@ $ensure = (string) file_get_contents(dirname(__DIR__) . '/scripts/ensure-project
 $ops = (string) file_get_contents(dirname(__DIR__) . '/docs/OPERATIONS.md');
 $aociDoc = (string) file_get_contents(dirname(__DIR__, 2) . '/doc/AOCI自动安装.md');
 $noReloadEnsure = !str_contains($ensure, 'or Developer: Reload Window');
-$opsOk = str_contains($ops, 'SIGTERM-bounces')
+$opsOk = (str_contains($ops, 'SIGTERM-bounce') || str_contains($ops, 'SIGTERM-bounces'))
     && str_contains($ops, 'Never')
     && str_contains($ops, 'Reload Window')
-    && str_contains($ops, 'semantic-idempotent');
+    && str_contains($ops, 'semantic-idempotent')
+    && str_contains($ops, 'shared_process_idle_helper');
 $aociOk = str_contains($aociDoc, '语义幂等')
     && str_contains($aociDoc, '禁止')
     && str_contains($aociDoc, 'Reload Window')

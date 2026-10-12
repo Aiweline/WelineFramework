@@ -146,12 +146,12 @@ $reloadDecision = welineGuidanceReloadDecision(
     $missingRequiredTools,
 );
 $cursorBounceRequired = (bool) ($reloadDecision['cursor_mcp_bounce_required'] ?? false);
+$cursorBounceRecommended = (bool) ($reloadDecision['cursor_mcp_bounce_recommended'] ?? false);
 $restart = ['scheduled' => false, 'reason' => $reloadDecision['reason']];
 $cursorBounce = ['attempted' => false, 'bounced' => false, 'reason' => $reloadDecision['reason']];
 // Host processes are shared by other tasks. A source generation change must not
-// restart the app-server; use host-supported MCP/catalog refresh when available.
-// hostReady=null means install state was not probed; still bounce a stale/orphan
-// Cursor mcp-process so Transport-closed sessions can reattach.
+// restart the app-server. Mere source-mtime stale recommends a new Agent turn;
+// SIGTERM bounce only when required (dead pid / WELINE_MCP_FORCE_BOUNCE=1).
 if ($branchOk && $stdioOk && $hostReady !== false && $cursorBounceRequired) {
     $cursorBounce = welineGuidanceBounceCursorMcpProcess($cursorMcpProcess, $userMcp);
     if (($cursorBounce['bounced'] ?? false) === true) {
@@ -212,7 +212,11 @@ if (!$branchOk) {
         ? 'Cursor Helper mcp-process was bounced so tools/list can refresh. Start a new Agent turn in this workspace, rerun ensure-project-guidance, verify index/skill tools are visible, then prepare_project (mandatory for engineering). Do NOT use Developer: Reload Window (kills all agents).'
         : ((($cursorBounce['deferred'] ?? false) === true)
             ? 'Cursor MCP bounce was debounced (recent repair). Start a new Agent turn only; do not touch mcp.json or Reload Window. Rerun ensure-project-guidance after the new turn, then prepare_project.'
-            : 'Cursor MCP tool catalog is stale or incomplete. Start a new Agent turn after ensure-project-guidance; for engineering, prepare_project remains mandatory once tools reappear. Do NOT use Developer: Reload Window.');
+            : 'Cursor MCP transport looks dead or force-bounce was requested. Start a new Agent turn after ensure-project-guidance; for engineering, prepare_project remains mandatory once tools reappear. Do NOT use Developer: Reload Window.');
+} elseif ($cursorBounceRecommended) {
+    // Soft: keep ready so interactive STDIO stays usable; ToolService MCP_RUNTIME_STALE
+    // still refuses stale-generation work until a new Agent turn re-leases the process.
+    $nextAction = 'learning-mcp source generation is newer than the live Cursor child, but the process is still healthy so ensure did not SIGTERM-bounce it. Start a new Agent turn to re-lease MCP (MCP_RUNTIME_STALE may refuse tools until then). Set WELINE_MCP_FORCE_BOUNCE=1 only if the live transport is dead. Do NOT toggle MCP in Settings and do NOT use Developer: Reload Window. Check health.project_intelligence.index_refresh_worker if sibling aoci calls time out.';
 }
 
 welineGuidanceEmit([
@@ -510,6 +514,8 @@ function welineGuidanceCursorMcpProcessState(int $latestSourceMtime): array
             'started_epoch' => $startedEpoch,
             'source_latest_mtime' => $latestSourceMtime,
             'current' => $startedEpoch > 0 && $startedEpoch >= $latestSourceMtime,
+            // Live child observed via /bin/ps — soft-stale must not SIGTERM.
+            'alive' => true,
         ];
     }
     if ($candidates !== []) {
@@ -518,9 +524,13 @@ function welineGuidanceCursorMcpProcessState(int $latestSourceMtime): array
         return $candidates[0];
     }
 
-    // Cursor Helper mcp-process can stay alive after its STDIO child dies. The
-    // IDE then keeps a stale tool catalog while CallDynamicTool times out —
-    // bounce the orphan helper so the host respawns learning-mcp.
+    // Cursor shared-process MCP routing often keeps Helper mcp-process alive
+    // without a persistent learning-mcp child (STDIO is leased on demand).
+    // Treating that idle helper as orphan_no_learning_mcp_child and SIGTERM-
+    // bouncing it closes Renderer↔McpProcess MessagePort and breaks IDE
+    // CallDynamicTool while local STDIO / cursor-agent mcp list-tools still work.
+    // Only bounce when a real learning-mcp under mcp-process is stale vs source
+    // (handled above). Idle helpers are current/no-op.
     foreach ($lines as $line) {
         $line = trim($line);
         if ($line === '') {
@@ -553,8 +563,8 @@ function welineGuidanceCursorMcpProcessState(int $latestSourceMtime): array
             'elapsed' => $elapsed,
             'started_epoch' => $startedEpoch,
             'source_latest_mtime' => $latestSourceMtime,
-            'current' => false,
-            'reason' => 'orphan_no_learning_mcp_child',
+            'current' => true,
+            'reason' => 'shared_process_idle_helper',
         ];
     }
 

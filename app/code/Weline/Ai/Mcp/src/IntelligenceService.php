@@ -78,10 +78,13 @@ final class IntelligenceService
             'post_tool_incremental_refresh' => (bool) $this->config->get('index.auto_refresh', true),
             'post_tool_refresh_strategy' => 'mutation_filtered_targeted_sidecar',
             'index_sidecar' => IndexSidecar::status($this->config),
+            'index_refresh_worker' => IndexRefreshScheduler::workerStatus($this->config),
             'bound_repository' => RepositoryScope::boundRepository($this->config),
             'bound_generation' => RepositoryScope::boundGeneration($this->config),
             'data_dir' => $this->config->dataDir(),
             'refresh_interval_seconds' => $this->config->duration('index.refresh_interval'),
+            'refresh_worker_max_seconds' => (int) $this->config->get('index.refresh_worker_max_seconds', 900),
+            'refresh_worker_nice' => (int) $this->config->get('index.refresh_worker_nice', 10),
             'config_runtime_migrations' => $this->config->runtimeMigrations(),
             'codex_document_planner' => (bool) $this->config->get('knowledge.codex.enabled', false),
             'readiness_protocol' => 'project-readiness.v1',
@@ -155,6 +158,17 @@ final class IntelligenceService
             $options = ['mode' => $mode];
             if ($paths !== []) {
                 $options['paths'] = $paths;
+            }
+            $deadlineEpoch = (int) ($input['deadline_epoch'] ?? 0);
+            if ($deadlineEpoch <= 0) {
+                $deadlineEpoch = (int) (IndexRefreshScheduler::activeDeadlineEpoch($this->config) ?? 0);
+            }
+            // Sidecar / interactive maintenance: apply the same wall-clock budget as detached workers.
+            if ($deadlineEpoch <= 0 && $mode === 'incremental' && $paths === []) {
+                $deadlineEpoch = IndexRefreshScheduler::defaultDeadlineEpoch($this->config);
+            }
+            if ($deadlineEpoch > 0) {
+                $options['deadline_epoch'] = $deadlineEpoch;
             }
             $result = (new ProjectIndexer($index, $this->config, new ProcessRunner()))->index($options);
             $knowledgeState = $this->reconcileKnowledge(
@@ -575,11 +589,17 @@ final class IntelligenceService
         $last = strtotime((string) ($state['last_indexed_at'] ?? $state['last_completed_at'] ?? '')) ?: 0;
         $stale = $last === 0 || (time() - $last) >= $this->config->duration('index.refresh_interval');
         $contentStoreIncomplete = $index->revision() > 0 && $index->missingFileContentCount() > 0;
-        if ($index->revision() === 0 || $stale || $contentStoreIncomplete) {
+        if ($index->revision() === 0) {
             $result = (new ProjectIndexer($index, $this->config, new ProcessRunner()))->index([
-                'mode' => $index->revision() === 0 ? 'full' : 'incremental',
+                'mode' => 'full',
             ]);
             $this->reconcileKnowledge($index, self::strings($result['changed_paths'] ?? []));
+
+            return;
+        }
+        if ($stale || $contentStoreIncomplete) {
+            // Schedule only — no project.sqlite setState on the interactive STDIO path.
+            IndexRefreshScheduler::scheduleFromStdio($this->config, $index->root());
         }
     }
 

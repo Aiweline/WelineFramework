@@ -10,10 +10,19 @@ declare(strict_types=1);
  * the updated configuration through its supported MCP refresh mechanism.
  *
  * Cursor IDE Agent snapshots tools/list at chat start. When the Cursor Helper
- * mcp-process is older than MCP source, has no learning-mcp child (orphan
- * Transport), or the STDIO probe is missing required index/skill tools,
- * agents must bounce the helper (SIGTERM) and open a new Agent turn —
- * continuing on a stale catalog yields HOST_MCP_NOT_ATTACHED.
+ * mcp-process that owns a live learning-mcp child is older than MCP source,
+ * ToolService already refuses work with MCP_RUNTIME_STALE. ensure may
+ * *recommend* a new Agent turn, but MUST NOT SIGTERM-bounce a healthy live
+ * process solely because source mtime advanced — that tears down the current
+ * session pipe (Not connected) and races sibling MCP leases.
+ *
+ * Auto-bounce (SIGTERM) remains only when:
+ * - WELINE_MCP_FORCE_BOUNCE=1, or
+ * - the recorded learning-mcp pid is no longer alive (dead pipe).
+ * Missing required tools stay a separate blocked status and do not alone bounce.
+ *
+ * An idle mcp-process with no persistent learning-mcp child is normal under
+ * Cursor shared-process MCP routing; do NOT bounce it (MessagePort thrash).
  * Bounce does NOT require touching mcp.json when kill succeeds; debounce avoids
  * repeated kill/touch. Never advise Developer: Reload Window (kills all agents).
  *
@@ -24,6 +33,7 @@ declare(strict_types=1);
  *   reload_required:bool,
  *   plugin_refresh_deferred:bool,
  *   cursor_mcp_bounce_required:bool,
+ *   cursor_mcp_bounce_recommended:bool,
  *   reason:string
  * }
  */
@@ -59,16 +69,34 @@ function welineGuidanceReloadDecision(
         && ($cursorMcpProcess['current'] ?? false) !== true
         && (int) ($cursorMcpProcess['pid'] ?? 0) > 1;
     // Missing required tools are a STDIO definition failure (blocked separately).
-    // Cursor bounce when Helper mcp-process is stale or orphaned (no STDIO child).
-    $cursorBounceRequired = (!$isCodexHost) && $cursorStale;
+    // Idle helpers (shared_process_idle_helper / orphan_no_learning_mcp_child legacy)
+    // must not bounce — that tears down Renderer↔McpProcess MessagePort.
+    $idleHelper = is_array($cursorMcpProcess) && in_array(
+        (string) ($cursorMcpProcess['reason'] ?? ''),
+        ['shared_process_idle_helper', 'orphan_no_learning_mcp_child', 'not_running'],
+        true,
+    );
+    $cursorBounceRecommended = (!$isCodexHost) && $cursorStale && !$idleHelper;
+
+    $forceBounce = (string) (getenv('WELINE_MCP_FORCE_BOUNCE') ?: '') === '1';
+    $pid = is_array($cursorMcpProcess) ? (int) ($cursorMcpProcess['pid'] ?? 0) : 0;
+    if (is_array($cursorMcpProcess) && array_key_exists('alive', $cursorMcpProcess)) {
+        $processAlive = (bool) $cursorMcpProcess['alive'];
+    } else {
+        $processAlive = $pid > 1
+            && function_exists('posix_kill')
+            && @posix_kill($pid, 0);
+    }
+    // Auto-kill only when transport is dead or operator forces repair — never for mere source stale.
+    $cursorBounceRequired = $cursorBounceRecommended && ($forceBounce || !$processAlive);
 
     $reason = 'not_required';
     if ($missing !== []) {
         $reason = 'required_tools_missing';
     } elseif ($cursorBounceRequired) {
-        $reason = (($cursorMcpProcess['reason'] ?? '') === 'orphan_no_learning_mcp_child')
-            ? 'cursor_mcp_process_orphan'
-            : 'cursor_mcp_process_stale';
+        $reason = $forceBounce ? 'cursor_mcp_force_bounce' : 'cursor_mcp_process_dead';
+    } elseif ($cursorBounceRecommended) {
+        $reason = 'cursor_mcp_process_stale_soft';
     } elseif ($pluginRefreshDeferred) {
         $reason = 'plugin_refresh_non_blocking';
     }
@@ -77,6 +105,7 @@ function welineGuidanceReloadDecision(
         'reload_required' => $reloadRequired,
         'plugin_refresh_deferred' => $pluginRefreshDeferred,
         'cursor_mcp_bounce_required' => $cursorBounceRequired,
+        'cursor_mcp_bounce_recommended' => $cursorBounceRecommended,
         'reason' => $reason,
     ];
 }

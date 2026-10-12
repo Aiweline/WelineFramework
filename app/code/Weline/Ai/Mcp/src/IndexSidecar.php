@@ -92,6 +92,29 @@ final class IndexSidecar
         ];
     }
 
+    /**
+     * STDIO-safe: only enqueue onto an already-running sidecar socket.
+     * Never pcntl_fork from a long-lived MCP process.
+     *
+     * @param list<string> $paths
+     */
+    public static function trySend(Config $config, string $repository, array $paths = []): bool
+    {
+        if (!(bool) $config->get('index.sidecar_enabled', true)
+            || !in_array('unix', stream_get_transports(), true)) {
+            return false;
+        }
+        $request = self::request($repository, $paths);
+        if ($request === null) {
+            return false;
+        }
+        if (!RepositoryScope::isAllowed($config, (string) $request['repository'])) {
+            return false;
+        }
+
+        return self::send($config, $request);
+    }
+
     /** @param list<string> $paths
      *  @return array<string, mixed>|null
      */
@@ -275,6 +298,7 @@ final class IndexSidecar
                     $input = [
                         'repository' => $repository,
                         'mode' => 'incremental',
+                        'deadline_epoch' => IndexRefreshScheduler::defaultDeadlineEpoch($config),
                     ];
                     if (!$batch['full']) {
                         $input['paths'] = array_keys($batch['paths']);
@@ -388,6 +412,7 @@ final class IndexSidecar
                 $input = [
                     'repository' => (string) $request['repository'],
                     'mode' => 'incremental',
+                    'deadline_epoch' => IndexRefreshScheduler::defaultDeadlineEpoch($config),
                 ];
                 if (($request['paths'] ?? []) !== []) {
                     $input['paths'] = $request['paths'];

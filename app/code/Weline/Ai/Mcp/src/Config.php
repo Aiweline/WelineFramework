@@ -266,6 +266,10 @@ final class Config
                 // Empty = unbound (tests/CLI). Cursor registration injects LEARNING_MCP_BOUND_REPOSITORY.
                 'bound_repository' => '',
                 'refresh_interval' => '10m',
+                // Detached incremental worker wall-clock budget (seconds) + CPU nice.
+                // Prevents unbounded index_project from starving sibling MCP (aoci).
+                'refresh_worker_max_seconds' => 900,
+                'refresh_worker_nice' => 10,
                 'max_file_bytes' => 1_048_576,
                 'max_chunk_chars' => 6_000,
                 'context_token_budget' => 6_000,
@@ -410,6 +414,8 @@ final class Config
                 'sidecar_enabled' => true,
                 'bound_repository' => true,
                 'refresh_interval' => true,
+                'refresh_worker_max_seconds' => true,
+                'refresh_worker_nice' => true,
                 'max_file_bytes' => true,
                 'max_chunk_chars' => true,
                 'context_token_budget' => true,
@@ -591,6 +597,8 @@ final class Config
             'index.vector_max_terms' => [8, 1_024],
             'index.sqlite_mmap_bytes' => [0, 2_147_418_112],
             'index.sqlite_cache_kib' => [1_024, 262_144],
+            'index.refresh_worker_max_seconds' => [60, 7_200],
+            'index.refresh_worker_nice' => [0, 19],
             'index.gc.max_generations' => [1, 10_000],
             'index.gc.checkpoint_wal_min_bytes' => [0, 2_147_418_112],
             'knowledge.codex.max_context_chars' => [1_024, 1_000_000],
