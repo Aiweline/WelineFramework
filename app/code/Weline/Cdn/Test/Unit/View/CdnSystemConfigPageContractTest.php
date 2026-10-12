@@ -49,4 +49,16 @@ final class CdnSystemConfigPageContractTest extends TestCase
         self::assertStringContainsString('cdn/fpc/dev_mode', $src);
         self::assertStringContainsString('website,store,channel', $src);
     }
+
+    public function testAlwaysOnlineConfigTemplateExists(): void
+    {
+        $path = dirname(__DIR__, 3) . '/extends/module/Weline_SystemConfig/Config/backend/cdn-cloudflare-always-online.phtml';
+        self::assertFileExists($path);
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString('cdn/cloudflare/always_online', $src);
+        self::assertStringContainsString('@config.acl {Weline_Cdn::cdn_system_config}', $src);
+        self::assertStringContainsString('type="switch"', $src);
+        self::assertStringContainsString('default="1"', $src);
+        self::assertStringContainsString('scope="global,website"', $src);
+    }
 }

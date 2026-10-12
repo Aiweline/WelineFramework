@@ -1160,3 +1160,7 @@ zone.read dns.write offline_access cache.purge cache-settings.write
 "含 Blog/FAQ/政策等；覆盖站点已启用语种；不含商品通配","含 Blog/FAQ/政策等；覆盖站点已启用语种；不含商品通配"
 "热度 Top N × 站点已启用语种，非全量 catalog","热度 Top N × 站点已启用语种，非全量 catalog"
 （因系统升级意图提前结束）,（因系统升级意图提前结束）
+"Cloudflare Always Online","Cloudflare Always Online"
+"启用 Cloudflare Always Online","启用 Cloudflare Always Online"
+"源站对 Cloudflare 不可达时，由 Cloudflare 尽量吐其归档的公开页快照。这是 zone 设置，不是 Cache Rules，也不是本机冷盘 FPC。","源站对 Cloudflare 不可达时，由 Cloudflare 尽量吐其归档的公开页快照。这是 zone 设置，不是 Cache Rules，也不是本机冷盘 FPC。"
+"默认开启。关闭后，下次规则推送会把 zone always_online 设为 off。","默认开启。关闭后，下次规则推送会把 zone always_online 设为 off。"

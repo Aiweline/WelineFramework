@@ -469,7 +469,8 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
         }
 
         if (($response['success'] ?? null) === true) {
-            $alwaysOnline = $this->ensureAlwaysOnline($zoneId, $credentials);
+            $desiredAlwaysOnline = $this->alwaysOnlineFlagResolver()->isEnabled();
+            $alwaysOnline = $this->syncAlwaysOnline($zoneId, $credentials, $desiredAlwaysOnline);
 
             return [
                 'success' => true,
@@ -498,33 +499,51 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
     }
 
     /**
-     * Zone Always Online（源站异常时 CF 吐快照）。规则推送成功后幂等开启；失败不回滚规则。
+     * Zone Always Online（源站异常时 CF 吐快照）。规则推送成功后按后台配置同步；失败不回滚规则。
      *
      * @param array<string, mixed> $credentials
-     * @return array{ok:bool,value?:string,message?:string}
+     * @return array{ok:bool,desired:bool,value?:string,message?:string}
      */
     public function ensureAlwaysOnline(string $zoneId, array $credentials): array
     {
+        return $this->syncAlwaysOnline($zoneId, $credentials, true);
+    }
+
+    /**
+     * @param array<string, mixed> $credentials
+     * @return array{ok:bool,desired:bool,value?:string,message?:string}
+     */
+    public function syncAlwaysOnline(string $zoneId, array $credentials, bool $enabled): array
+    {
+        $desiredValue = $enabled ? 'on' : 'off';
         $url = self::API_BASE_URL . '/zones/' . $zoneId . '/settings/always_online';
         try {
-            $response = $this->makeRequest('PATCH', $url, ['value' => 'on'], $credentials);
+            $response = $this->makeRequest('PATCH', $url, ['value' => $desiredValue], $credentials);
             if (($response['success'] ?? null) === true) {
                 return [
                     'ok' => true,
-                    'value' => (string)($response['result']['value'] ?? 'on'),
+                    'desired' => $enabled,
+                    'value' => (string)($response['result']['value'] ?? $desiredValue),
                 ];
             }
 
             return [
                 'ok' => false,
+                'desired' => $enabled,
                 'message' => (string)($response['errors'][0]['message'] ?? 'always_online_patch_failed'),
             ];
         } catch (\Throwable $e) {
             return [
                 'ok' => false,
+                'desired' => $enabled,
                 'message' => $e->getMessage(),
             ];
         }
+    }
+
+    private function alwaysOnlineFlagResolver(): \Weline\Cdn\Service\CloudflareAlwaysOnlineFlagResolver
+    {
+        return ObjectManager::getInstance(\Weline\Cdn\Service\CloudflareAlwaysOnlineFlagResolver::class);
     }
 
     /**

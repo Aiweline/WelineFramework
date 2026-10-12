@@ -1,0 +1,32 @@
+<?php
+/**
+ * @meta.title {default="Cloudflare Always Online",description="源站对 Cloudflare 异常时由 CF 吐公开页快照（zone 设置，非 Cache Rules）"}
+ * @meta.description {default="开启后，CDN 规则推送成功时会把对应 Zone 的 Always Online 设为 on；关闭则推 off。默认开启以保持与既有推送行为一致。"}
+ * @config.area {backend}
+ * @config.sort {57}
+ * @config.acl {Weline_Cdn::cdn_system_config}
+ */
+?>
+
+<w:config:group
+    code="cdn_cloudflare_always_online"
+    label="Cloudflare Always Online"
+    description="源站对 Cloudflare 不可达时，由 Cloudflare 尽量吐其归档的公开页快照。这是 zone 设置，不是 Cache Rules，也不是本机冷盘 FPC。"
+    sort="15"
+>
+    <w:config:hint type="info" title="何时生效" collapsed="0">
+保存本开关后，需再执行一次 CDN / FPC 规则推送（putRules）才会把 on/off 写到 Cloudflare Zone。同步失败不会回滚已推送的 Cache Rules。
+短抖动仍可能先见 502；Always Online 依赖 CF 侧是否有快照，不能等同本机 `router-fpc-payloads`。
+    </w:config:hint>
+
+    <w:config:field
+        key="cdn/cloudflare/always_online"
+        label="启用 Cloudflare Always Online"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website"
+        sensitive="0"
+        description="默认开启。关闭后，下次规则推送会把 zone always_online 设为 off。"
+    />
+</w:config:group>
