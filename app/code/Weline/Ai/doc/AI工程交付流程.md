@@ -1,6 +1,7 @@
 # Weline AI 工程交付流程
 
-> 本文是 Weline 框架仓 AI 客户端执行开发任务的**强制工作流**入口。与 [AI开发治理](./AI开发治理.md) 配套：治理定义权威与门禁，本文定义**按什么顺序做**。
+> 本文是 Weline 框架仓 AI 客户端执行开发任务的**强制工作流**入口。与 [AI开发治理](./AI开发治理.md) 配套：治理定义权威与门禁，本文定义**按什么顺序做**。  
+> **压缩脊柱**（去重 + 真机闭环）：[AI流程总览.md](../../../../../dev/ai-command/ai/AI流程总览.md)。冲突时以硬规则 + 总览为准。
 
 ## 适用对象
 
@@ -10,27 +11,31 @@
 
 ## 核心原则（Vibe Coding 工程化）
 
-1. **先定义问题，再写代码**——目标、非目标、成功标准不明时不执行。
-2. **先计划，再执行**——先有需求拆解 / 架构映射 / 验收项，再用宿主原生工具改代码。
-3. **每步可验证**——「看起来对」不算完成；要有测试、命令或 WebUI 证据。
-4. **AI 不能自证正确**——只信可复现命令、测试输出、diff 与 Browser 结果。
-5. **规范代码化**——能写成 lint/test/schema/CI 的，不只用自然语言提醒。
+1. **先路由，再进队**——`intent_lane_router`（技术 / OBC / 内容运营 / 站柜 / 闲聊）。
+2. **先定义问题，再写代码**——目标、非目标、成功标准不明时不执行。
+3. **先计划，再执行**——先有需求拆解 / 架构映射 / 验收项，再用宿主原生工具改代码。
+4. **闭环=真机验收**——UT/契约只锁正确性；交付必须 WB-OP 和/或正式 e2e 覆盖已冻 UC（`real_machine_usecases_not_unit_tests`）。
+5. **AI 不能自证正确**——只信可复现命令、真机证据、diff 与 Browser 读图结果。
+6. **用户要固化用例就固化**——落模块正式 e2e 路径，只用 `php bin/w e2e:run`。
 
 ## 强制阶段
 
 ```text
-0 会话引导（工程必做） ensure-project-guidance → prepare_project → 遵守 hard_constraints
-1 定位与需求确认   需求.md / 用户确认 / 会话笔记（临时）
-1b 澄清与用例规格  doc/开发/spec/{slug}.md（EARS + UC；feature 硬）
-1c 宿主计划模式    Agent 自行 Plan Mode；**简单可 skip**（仍须验收）
-2 扩展点选型       扩展点选型.md → 文档索引 / doc/event / Query / Hook
-3 计划拆解         会话计划笔记（仍在 Plan Mode）→ 自审通过后切 Agent 开发
-3b 工程团队        非简单：一席一智能体；席间 channel+resume 互聊；SESSION 总控+PM 计划生命周期；框架优先；全专席双轨；对齐冻结(UC+contracts+deps)；依赖唤醒流水线；组件协商；UI+原型先审过签才测→测试→文档工程师(实现变→文档同变)→项目经理汇审才汇报；停工等确认
-4 实现             计划自审通过后切回 Agent；宿主原生编辑 + TDD
-5 复审             架构/缺陷/安全 + 每触发专席合规复审（fail→返工）
-6 分层测试         单测 → 运行时 → WebUI；涉 UI 须 UI+原型过签后测试执行 → 文档工程师 documentation_review_pass → 项目经理汇审才可交出
-7 收口             文档工程师对齐（README/需求/功能现状/开发日志）+ 门禁表 + 交付证据
+0a 车道路由（必做）  intent_lane_router → engineering|opc_obc|content_ops|website_ops|chat
+0  会话引导（工程）  ensure → prepare_project → 遵守 hard_constraints
+1  定位与需求确认    request_grade + 需求.md / 会话笔记
+1b 澄清与用例规格    doc/开发/spec/{slug}.md（EARS + UC；feature 硬）
+1c 宿主计划模式      Agent 自行 Plan Mode；**简单可 skip**（仍须真机验收）
+2  扩展点选型        扩展点选型.md → 文档索引 / doc/event / Query / Hook
+3  计划拆解          背景+方案+细节 → 自审通过后切 Agent 开发
+3b 工程团队          非简单：一席一智能体；对齐冻结(UC+contracts+deps)→施工→专席复审
+                     → UI∥原型过签 → **P6 真机测试闭环** → 文档工程师 → PM 汇审
+4  实现              宿主原生编辑 + TDD（红灯可辅助；≠交付）
+5  复审              专席合规复审（fail→返工）
+6  真机闭环          已冻 UC ×（WB-OP/VIS 和/或正式 e2e）；用户要固化则落模块 e2e
+7  收口              文档工程师 + 汇审 + 交付地址 + 真机证据（禁止只报 UT 数）
 ```
+
 
 ### 0. 会话引导（索引 / 规则 / 技能）
 

@@ -588,6 +588,15 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 're-call prepare_project')),
         false,
     ),
+    'hard_constraints include intent_lane_router' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'intent_lane_router'
+            && str_contains((string) ($rule['summary'] ?? ''), 'engineering|opc_obc|content_ops|website_ops|chat')
+            && str_contains((string) ($rule['summary'] ?? ''), 'weline-lane-router')
+            && str_contains((string) ($rule['summary'] ?? ''), 'intent-lane-router.mdc')),
+        false,
+    ),
     'hard_constraints include requirement_engineering_grade_gate' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -624,6 +633,10 @@ $checks = [
     'mcpInstructions carry architecture_grade_change_only' => str_contains(
         (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
         'architecture_grade_change_only'
+    ),
+    'mcpInstructions carry intent_lane_router' => str_contains(
+        (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
+        'intent_lane_router'
     ),
     'mcpInstructions carry requirement_engineering_grade_gate' => str_contains(
         (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),

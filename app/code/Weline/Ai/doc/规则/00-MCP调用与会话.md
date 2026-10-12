@@ -20,9 +20,25 @@ MCP 是**知识面**（技能索引 / 代码地图 / 领域硬规则下发），
 
 **同回合混合任务**：既有内容运营又有框架 Theme/PHP 编码时，**只有编码切片**走 MCP；内容运营切片仍只读仓内技能/指令。
 
+## 1a0. 意图车道路由（`intent_lane_router`）
+
+本地有多套团队/技能时，每条用户需求**先**判车道再进队——禁止未路由就进工程或 OPC。
+
+| `lane` | 含义 | handoff |
+|--------|------|---------|
+| `engineering` | 技术/工程团队 | 插件 `weline-engineering-team` + `prepare_project` |
+| `opc_obc` | OPC/OBC 运营 | 插件 `my-opc-os`；改框架须 `R_obc_pm` 交接工程 |
+| `content_ops` | 内容运营技能族 | `content_ops_skills_skip_mcp`（跳过 prepare） |
+| `website_ops` | 站柜部署/主题媒体 | `weline-website-deploy`；产品内发布归工程「发布」席 |
+| `chat` | 闲聊/概念、不改仓 | 可跳过 MCP |
+
+权威目录：[意图路由.md](../../../dev/ai-command/ai/意图路由.md)；宿主插件 `~/.cursor/plugins/local/weline-lane-router/`（`/lane-route`）。  
+误把会改码的需求标成 chat/opc → **必须重判 engineering**。其后仍跑 §1a `request_grade`。  
+宿主常带：`~/.cursor/rules/intent-lane-router.mdc`（`global_rules_dual_write_mcp_and_host`）。
+
 ## 1a. 需求工程分级（`requirement_engineering_grade_gate`）
 
-每条用户需求提出后，**先**用专业工程视角（归属、扩展点、爆炸半径、耦合、验收面）判定 `request_grade`，**禁止**只看表面措辞直接当补丁下手：
+每条用户需求提出后（**车道已判**），再用专业工程视角（归属、扩展点、爆炸半径、耦合、验收面）判定 `request_grade`，**禁止**只看表面措辞直接当补丁下手：
 
 | `request_grade` | 含义 | 后续 |
 |-----------------|------|------|
