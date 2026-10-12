@@ -489,10 +489,12 @@ if (StorefrontPdpBuyBoxBag::hasKey('review')) {
 }
 $qtyFieldId = 'product-qty-' . max(0, $productId);
 $quoteCaptchaHtml = '';
-try {
-    $quoteCaptchaHtml = (string)ObjectManager::getInstance(ProductQuoteRequestCaptchaGuard::class)->renderChallenge();
-} catch (\Throwable) {
-    $quoteCaptchaHtml = '';
+if ($quoteOnly) {
+    try {
+        $quoteCaptchaHtml = (string)ObjectManager::getInstance(ProductQuoteRequestCaptchaGuard::class)->renderChallenge();
+    } catch (\Throwable) {
+        $quoteCaptchaHtml = '';
+    }
 }
 $productBreadcrumbs = $this->getData('storefront_product_breadcrumbs') ?? [];
 $productBreadcrumbs = is_array($productBreadcrumbs) ? $productBreadcrumbs : [];
@@ -1044,22 +1046,37 @@ if ($productBreadcrumbs === []) {
 
                 <?php if (!$quoteOnly && !$currencyUnavailable): ?>
                     <div class="product-native-detail__qty-row"<?= $sellable ? '' : ' hidden' ?>>
-                        <label class="product-native-detail__qty-label" for="<?= $escape($qtyFieldId) ?>">
-                            <?= __('数量') ?>:
-                        </label>
-                        <select id="<?= $escape($qtyFieldId) ?>"
-                                class="product-native-detail__qty-select"
-                                data-testid="product-qty"
-                                data-qty-min="1"
-                                data-qty-step="1"
-                                data-qty-max="<?= (int)$maxQty ?>"
-                                data-tob-moq="<?= (int)$tobMoq ?>"
-                                data-tob-qty-step="<?= (int)$tobStep ?>"
-                                aria-label="<?= $escape(__('购买数量')) ?>">
-                            <?php for ($quantity = 1; $quantity <= $maxQty; $quantity++): ?>
-                                <option value="<?= $quantity ?>"><?= $quantity ?></option>
-                            <?php endfor; ?>
-                        </select>
+                        <div class="product-native-detail__qty-controls">
+                            <label class="product-native-detail__qty-label" for="<?= $escape($qtyFieldId) ?>">
+                                <?= __('数量') ?>:
+                            </label>
+                            <select id="<?= $escape($qtyFieldId) ?>"
+                                    class="product-native-detail__qty-select"
+                                    data-testid="product-qty"
+                                    data-qty-min="1"
+                                    data-qty-step="1"
+                                    data-qty-max="<?= (int)$maxQty ?>"
+                                    data-tob-moq="<?= (int)$tobMoq ?>"
+                                    data-tob-qty-step="<?= (int)$tobStep ?>"
+                                    aria-label="<?= $escape(__('购买数量')) ?>">
+                                <?php for ($quantity = 1; $quantity <= $maxQty; $quantity++): ?>
+                                    <option value="<?= $quantity ?>"><?= $quantity ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                        <?php if ($productId > 0): ?>
+                            <button type="button"
+                                    class="product-native-detail__wishlist btn-wishlist"
+                                    data-testid="product-add-wishlist"
+                                    data-product-id="<?= (int)$productId ?>"
+                                    data-weline-load="compareShopper,storefrontShopperToast"
+                                    title="<?= $escape(__('加入收藏')) ?>"
+                                    aria-label="<?= $escape(__('加入收藏')) ?>"
+                                    aria-pressed="false">
+                                <w:icon name="heart" size="sm"></w:icon>
+                                <span class="product-native-detail__wishlist-label"><?= __('加入收藏') ?></span>
+                            </button>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
 
@@ -1154,6 +1171,7 @@ if ($productBreadcrumbs === []) {
                         weline-code="product.frontend.detail.express_payment">
                 </w:slot>
                 <?= $this->getHook('Weline_Product::frontend::product::detail::after-add-to-cart') ?>
+                <?php if ($quoteOnly): ?>
                 <button type="button"
                         class="product-native-detail__quote"
                         data-action="open-product-quote"
@@ -1166,10 +1184,10 @@ if ($productBreadcrumbs === []) {
                         data-reference-price-minor="<?= (int)$minor ?>"
                         data-campaign-label="<?= $escape($campaignLabel) ?>"
                         data-product-url="<?= $escape((string)($_SERVER['REQUEST_URI'] ?? '')) ?>"
-                        data-selection-label=""
-                        <?= $quoteOnly ? '' : 'hidden' ?>>
+                        data-selection-label="">
                     <?= __('提交询价') ?>
                 </button>
+                <?php endif; ?>
                 <p class="product-native-detail__secure"><?= __('安全交易保障') ?></p>
                 <p class="product-native-detail__message" data-testid="detail-message" aria-live="polite"></p>
             </aside>
@@ -1233,6 +1251,7 @@ if ($productBreadcrumbs === []) {
         </div>
     <?php endif; ?>
 
+    <?php if ($quoteOnly): ?>
     <div class="product-native-detail__quote-modal"
          data-product-quote-modal
          hidden
@@ -1289,6 +1308,7 @@ if ($productBreadcrumbs === []) {
             </form>
         </div>
     </div>
+    <?php endif; ?>
 
     <?php if (!$quickAdd && !$quoteOnly && !$isPreviewMode && !$currencyUnavailable): ?>
         <?php

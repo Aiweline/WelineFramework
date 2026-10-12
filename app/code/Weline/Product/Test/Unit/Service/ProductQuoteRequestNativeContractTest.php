@@ -70,21 +70,44 @@ final class ProductQuoteRequestNativeContractTest extends TestCase
         self::assertStringContainsString('data-action="open-product-quote"', $pdp);
         self::assertStringContainsString('data-product-quote-modal', $pdp);
         self::assertStringContainsString('data-testid="product-submit-quote"', $pdp);
-        self::assertStringContainsString("params.get('quote') === '1'", $pdp);
-        self::assertStringContainsString("=== '#quote'", $pdp);
-        self::assertStringContainsString("params.set('quote', '1')", $pdp);
-        self::assertStringContainsString('function isOfferPurchasable', $pdp);
-        self::assertStringContainsString('is-disabled\', !exists)', $pdp);
-        self::assertStringContainsString('is-out-of-stock\', exists && !purchasable && !quoteOnlyOption)', $pdp);
-        self::assertStringContainsString('syncQuoteButtonContext', $pdp);
+        // Fail-closed: quote CTA + modal only when $quoteOnly (no theatre for purchasable / digital packs).
+        self::assertMatchesRegularExpression(
+            '/if \(\$quoteOnly\):\s*.*?data-testid="product-submit-quote"/s',
+            $pdp
+        );
+        self::assertMatchesRegularExpression(
+            '/if \(\$quoteOnly\):\s*.*?data-testid="product-quote-modal"/s',
+            $pdp
+        );
+        self::assertMatchesRegularExpression(
+            '/if \(\$quoteOnly\) \{\s*try \{\s*\$quoteCaptchaHtml = \(string\)ObjectManager::getInstance\(ProductQuoteRequestCaptchaGuard::class\)->renderChallenge\(\);/s',
+            $pdp
+        );
         self::assertStringContainsString('data-quote-submit-url', $pdp);
-        self::assertStringContainsString('idempotency_key', $pdp);
         self::assertStringContainsString('<w:theme:address', $pdp);
         self::assertStringContainsString('postal-lookup="true"', $pdp);
         self::assertStringContainsString('code="product-quote-address"', $pdp);
         self::assertStringNotContainsString('w:inquiry', $pdp);
         self::assertStringNotContainsString('Weline_Inquiry', $pdp);
         self::assertStringNotContainsString('<w:inquiry', $pdp);
+
+        $quoteJs = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/view/statics/js/widgets/widget-product-info-1.js'
+        );
+        self::assertStringContainsString("params.get('quote') === '1'", $quoteJs);
+        self::assertStringContainsString("=== '#quote'", $quoteJs);
+        self::assertStringContainsString('idempotencyKey', $quoteJs);
+        // Deep-link open only when quote CTA is present (SSR already gated by $quoteOnly).
+        self::assertStringContainsString('wantsQuote && !openButton.disabled && !openButton.hidden', $quoteJs);
+
+        $infoJs = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/view/statics/js/widgets/widget-product-info-0.js'
+        );
+        self::assertStringContainsString('function isOfferPurchasable', $infoJs);
+        self::assertStringContainsString("params.set('quote', '1')", $infoJs);
+        self::assertStringContainsString("toggle('is-disabled', !exists)", $infoJs);
+        self::assertStringContainsString("toggle('is-out-of-stock', exists && !stocked && !quoteOnlyOption)", $infoJs);
+        self::assertStringContainsString('syncQuoteButtonContext', $infoJs);
     }
 
     public function testCartAddToCartSkipsQuoteOnly(): void
@@ -103,7 +126,7 @@ final class ProductQuoteRequestNativeContractTest extends TestCase
     public function testModuleProvidesSubmitInterfaceAndOptionalCaptcha(): void
     {
         $module = include BP . 'app/code/Weline/Product/etc/module.php';
-        self::assertSame('1.0.164', $module['version'] ?? null);
+        self::assertSame('1.0.393', $module['version'] ?? null);
         self::assertArrayHasKey(
             \Weline\Product\Api\ProductQuoteRequestSubmitInterface::class,
             $module['provides'] ?? []

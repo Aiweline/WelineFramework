@@ -1198,12 +1198,7 @@ final class ThemeLayoutEntityBakeCoordinator
 
     private function injectionPlanDigest(): string
     {
-        try {
-            $declarations = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class)->loadDeclarations();
-        } catch (\Throwable) {
-            $declarations = [];
-        }
-        return hash('sha256', json_encode($declarations, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+        return ThemeLayoutEntityPageInputDigest::planDigest();
     }
 
     /**
@@ -1344,9 +1339,11 @@ final class ThemeLayoutEntityBakeCoordinator
         if ($origin === '' || !is_file($origin)) { return false; }
         $digest = (string)($meta['input_digest'] ?? '');
         if ($digest === '') { return false; }
-        $originHash = hash_file('sha256', $origin);
-        if (!is_string($originHash) || $originHash === '') { return false; }
-        return hash_equals($digest, hash('sha256', $originHash . "\0" . $planDigest));
+        if ($planDigest !== '' && !hash_equals($planDigest, ThemeLayoutEntityPageInputDigest::planDigest())) {
+            return false;
+        }
+
+        return ThemeLayoutEntityPageInputDigest::matchesStored($digest, $origin);
     }
 
     private function context(ThemeVersionIdentity $identity, string $type, string $option, string $target, ?int $targetId): ThemeEditorContext

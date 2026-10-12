@@ -95,9 +95,20 @@ final class ThemeLayoutEntityRequestSolidifyGate
         // intent) and keep using the source template — do NOT treat derived_missing
         // alone as needsJob or the queue re-enqueues forever after every successful job.
         $stampFresh = $actualFp !== null && hash_equals($expectedFp, $actualFp);
+        $originStale = !$derivedMissing && $this->derivedPageOriginStale(
+            $themeId,
+            $scope,
+            $storeMode,
+            $area,
+            $layoutType,
+            $layoutOption,
+            $versionId,
+            $revision,
+        );
         $needsJob = $pending
             || $stale
             || $criticalEmpty
+            || $originStale
             || ($derivedMissing && !$stampFresh);
         $enqueued = false;
         $coalesced = false;
@@ -123,6 +134,8 @@ final class ThemeLayoutEntityRequestSolidifyGate
                 $versionId,
                 $revision,
             ) ? 'empty_filters_inventory_fallback_original' : 'empty_footer_extras_fallback_original';
+        } elseif ($originStale) {
+            $reason = 'design_origin_stale_fallback_original';
         } elseif ($stale) {
             $reason = 'fingerprint_stale_fallback_original';
         } elseif ($derivedMissing && !$stampFresh) {
@@ -222,8 +235,71 @@ final class ThemeLayoutEntityRequestSolidifyGate
         int $versionId,
         int $revision,
     ): bool {
-        if ($versionId < 1) {
+        return $this->derivedPagePath(
+            $themeId,
+            $scope,
+            $storeMode,
+            $area,
+            $layoutType,
+            $layoutOption,
+            $versionId,
+            $revision,
+        ) !== null;
+    }
+
+    /**
+     * Design/layout origin drifted vs weline-source.input_digest → force original + re-solidify.
+     * Missing input_digest on legacy entities counts as stale (one re-bake heals).
+     */
+    private function derivedPageOriginStale(
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+        string $layoutType,
+        string $layoutOption,
+        int $versionId,
+        int $revision,
+    ): bool {
+        $path = $this->derivedPagePath(
+            $themeId,
+            $scope,
+            $storeMode,
+            $area,
+            $layoutType,
+            $layoutOption,
+            $versionId,
+            $revision,
+        );
+        if ($path === null) {
             return false;
+        }
+        try {
+            $meta = ThemeLayoutSourceSnapshot::metadata((string)file_get_contents($path));
+        } catch (\Throwable) {
+            return true;
+        }
+        if (!is_array($meta)) {
+            return true;
+        }
+        $origin = (string)($meta['origin'] ?? '');
+        $digest = (string)($meta['input_digest'] ?? '');
+
+        return !ThemeLayoutEntityPageInputDigest::matchesStored($digest, $origin);
+    }
+
+    private function derivedPagePath(
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+        string $layoutType,
+        string $layoutOption,
+        int $versionId,
+        int $revision,
+    ): ?string {
+        if ($versionId < 1) {
+            return null;
         }
         try {
             $identity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
@@ -237,9 +313,9 @@ final class ThemeLayoutEntityRequestSolidifyGate
             );
             $path = $this->paths->pageLayoutPhtml($identity, $layoutType, $layoutOption);
 
-            return is_file($path);
+            return is_file($path) ? $path : null;
         } catch (\Throwable) {
-            return false;
+            return null;
         }
     }
 

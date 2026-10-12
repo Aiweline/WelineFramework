@@ -79,6 +79,9 @@ final class ThemeLayoutEntityRequestSolidifyGateContractTest extends TestCase
         self::assertStringContainsString('isFiltersCritical', $gateSrc);
         self::assertStringContainsString('filterInventoryBakeBroken', $gateSrc);
         self::assertStringContainsString('empty_filters_inventory_fallback_original', $gateSrc);
+        self::assertStringContainsString('design_origin_stale_fallback_original', $gateSrc);
+        self::assertStringContainsString('derivedPageOriginStale', $gateSrc);
+        self::assertStringContainsString('ThemeLayoutEntityPageInputDigest::matchesStored', $gateSrc);
         self::assertStringContainsString("SharedResponseCachePolicy::forbid('theme_layout_solidify_fallback_original')", $gateSrc);
         self::assertStringNotContainsString("setHeader('CDN-Cache-Control'", $gateSrc);
         self::assertStringNotContainsString("setHeader('Cloudflare-CDN-Cache-Control'", $gateSrc);

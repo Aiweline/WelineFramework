@@ -25,6 +25,8 @@
 
 见既有 PDP 弹层提交与账户 `#product-quotes`（菜单码 `product.quotes`）。SSR 不渲染角标条数。
 
+**Fail-closed（店面）**：仅 `quote_only` 商品渲染「提交询价」按钮、询价弹层与 Captcha；可售 / 数字交付包等非询价商品零询价 DOM（禁止仅靠主题 CSS 隐藏）。
+
 PDP「提交询价」弹层含 `<w:theme:address postal="true" postal-lookup="true" detail="true">`；邮编反查由 Theme 地址标签内置。提交字段 `address` → 落库 `address_json`。
 
 ## 后台
