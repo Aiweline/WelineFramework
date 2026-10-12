@@ -59,12 +59,18 @@ class Rules extends BackendController
                 ->getItems();
 
             $rulesList = [];
+            $ruleManager = $this->getRuleManager();
             foreach ($domains as $domain) {
-                $mergedRules = $this->getRuleManager()->getMergedRules($domain);
+                // 库内展开 ≠ 边缘计划；并排计数供模板/后续 UI，禁止把 merged 标成已上 CF
+                $mergedRules = $ruleManager->getMergedRules($domain);
+                $plannedRules = $ruleManager->planRulesForEdgePush($domain);
                 $rulesList[] = [
                     'domain' => $domain,
                     'rules' => $mergedRules,
-                    'rules_count' => count($mergedRules)
+                    'rules_count' => count($mergedRules),
+                    'inventory_count' => count($mergedRules),
+                    'planned_rules' => $plannedRules,
+                    'planned_count' => count($plannedRules),
                 ];
             }
 
@@ -176,16 +182,27 @@ class Rules extends BackendController
                 ]);
             }
 
+            $ruleManager = $this->getRuleManager();
             $overrideRules = $domain->getRulesOverrideArray();
-            $defaultRules = $this->getRuleManager()->getDefaultRules();
-            $mergedRules = $this->getRuleManager()->getMergedRules($domain);
+            $defaultRules = $ruleManager->getDefaultRules();
+            // mergedRules = 库内展开（inventory）；plannedRules = 边缘真相（将推送）
+            $mergedRules = $ruleManager->getMergedRules($domain);
+            $plannedRules = $ruleManager->planRulesForEdgePush($domain);
 
             return $this->jsonResponse([
                 'success' => true,
                 'data' => [
                     'overrideRules' => $overrideRules,
                     'defaultRules' => $defaultRules,
-                    'mergedRules' => $mergedRules
+                    'mergedRules' => $mergedRules,
+                    'plannedRules' => $plannedRules,
+                    'inventory_count' => count($mergedRules),
+                    'planned_count' => count($plannedRules),
+                    'view_contract' => [
+                        'merged' => 'inventory',
+                        'planned' => 'edge',
+                        'note' => '库内 merged ≠ 边缘 plan；禁止把 mergedRules 标成已上 Cloudflare',
+                    ],
                 ]
             ]);
         } catch (\Exception $e) {

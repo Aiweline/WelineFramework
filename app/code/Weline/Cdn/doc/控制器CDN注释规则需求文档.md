@@ -2,6 +2,8 @@
 
 > **2026-09-28 纠偏**：源站 FPC 是否可缓存以 **`@Extra type=fpc`** 为准（Framework `controller-extra-fpc`）。本文 `@Cdn` 仅描述 **CDN 边缘**规则；二者正交。完整对照与开发模式规格见 `doc/开发/spec/cdn-route-realtime-fpc-devmode.md` 与 `CDN注释使用指南.md` §0。
 
+> **2026-10-12 纠偏（1.0.46）**：下文示例代码若仍写 Collector / Cron 用 `getMergedRules` 做推送，**已过时**。现行边缘推送权威为 **`RuleManager::planRulesForEdgePush`**；`getMergedRules` 仅为库内展开（inventory），**≠** 已上 Cloudflare。注解三面打包、闸门与双视图见 [`CDN注释使用指南.md`](CDN注释使用指南.md) §0.1 / §0.2 与 [`开发日志.md`](开发日志.md) `1.0.46`。本文其余章节作历史设计参考，**不在本波全文重写**。
+
 ---
 
 ## 1. 需求概述

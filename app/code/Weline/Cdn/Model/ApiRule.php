@@ -55,6 +55,8 @@ class ApiRule extends Model
     public const schema_fields_ENABLED = 'enabled';
     #[Col('varchar', 20, nullable: false, default: 'cron', comment: '触发方式')]
     public const schema_fields_TRIGGER = 'trigger';
+    #[Col('varchar', 40, nullable: false, default: 'path_packable', comment: '边缘计划车道：path_packable|predicate_fidelity')]
+    public const schema_fields_LANE = 'lane';
     #[Col('int', comment: '优先级')]
     public const schema_fields_PRIORITY = 'priority';
     #[Col('datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]

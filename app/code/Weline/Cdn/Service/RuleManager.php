@@ -29,15 +29,24 @@ class RuleManager
     private ObjectManager $objectManager;
     private AdapterResolver $adapterResolver;
     private AccountManager $accountManager;
+    private ?AnnotationPackFlagResolver $annotationPackFlagResolver;
+    private ?AnnotationRulePacker $annotationRulePacker;
+    private ?BinQueryFidelityEdgeCompressor $fidelityEdgeCompressor;
 
     public function __construct(
         ObjectManager $objectManager,
         AdapterResolver $adapterResolver,
-        ?AccountManager $accountManager = null
+        ?AccountManager $accountManager = null,
+        ?AnnotationPackFlagResolver $annotationPackFlagResolver = null,
+        ?AnnotationRulePacker $annotationRulePacker = null,
+        ?BinQueryFidelityEdgeCompressor $fidelityEdgeCompressor = null,
     ) {
         $this->objectManager = $objectManager;
         $this->adapterResolver = $adapterResolver;
         $this->accountManager = $accountManager ?? $objectManager->getInstance(AccountManager::class);
+        $this->annotationPackFlagResolver = $annotationPackFlagResolver;
+        $this->annotationRulePacker = $annotationRulePacker;
+        $this->fidelityEdgeCompressor = $fidelityEdgeCompressor;
     }
 
     /**
@@ -75,11 +84,15 @@ class RuleManager
     }
 
     /**
-     * 获取域名的合并规则（通用规则，适用于所有适配器）
-     * 
+     * 库内展开视图（inventory）——非边缘推送真相。
+     *
+     * 双视图契约：
+     * - 本方法 = 启用注解（未打包）+ 域名覆盖 + defaults；命名上是「库内合并」，禁止标成「已上 Cloudflare / 已推送」。
+     * - 边缘真相 = {@see planRulesForEdgePush()}（含 pack / 细推 / 或仅 defaults）。
+     *
      * @param Domain $domain 域名对象
-     * @param string|null $triggerType 触发类型：'cron'（定时）或'realtime'（实时），null表示全部
-     * @return array Cloudflare格式的规则数组（作为统一标准）
+     * @param string|null $triggerType 触发类型：'cron'（定时）或'realtime'（实时），null表示全部（当前展开仍取全部启用注解）
+     * @return array Cloudflare格式的规则数组（库内展开，非 plan）
      */
     public function getMergedRules(Domain $domain, ?string $triggerType = null): array
     {
@@ -89,12 +102,12 @@ class RuleManager
         // 2. 获取域名覆盖规则（Cloudflare格式，通用）
         $overrideRules = $domain->getRulesOverrideArray();
         
-        // 3. 获取API注释规则（Cloudflare格式，通用，不指定适配器）
+        // 3. 获取API注释规则（Cloudflare格式，通用，不指定适配器；未打包）
         $apiRules = $this->getApiRules(null);
         
         // 4. 合并规则（优先级：API规则 > 域名规则 > 默认规则）
         // Cloudflare Cache Rules 先匹配先生效，故注解/覆盖须前置 defaults。
-        // 这些规则是通用的，所有适配器都可以使用
+        // 注意：这是库内展开，不等于 planRulesForEdgePush 推送结果。
         return array_merge(
             $apiRules,
             $overrideRules,
@@ -110,47 +123,54 @@ class RuleManager
      */
     private function getApiRules(?string $triggerType = null, bool $includeIdentity = false): array
     {
-        /** @var ApiRule $apiRuleModel */
-        $apiRuleModel = $this->objectManager->getInstance(ApiRule::class);
-        
-        $query = $apiRuleModel->clear()
-            ->where(ApiRule::schema_fields_ENABLED, 1);
-        
-        // 如果指定了触发类型，只获取对应类型的规则
-        if ($triggerType !== null) {
-            $query->where(ApiRule::schema_fields_TRIGGER, $triggerType);
-        }
-        
-        $apiRules = $query->select()->fetch();
-        $ruleItems = [];
+        try {
+            /** @var ApiRule $apiRuleModel */
+            $apiRuleModel = $this->objectManager->getInstance(ApiRule::class);
+            if (!\is_object($apiRuleModel) || !\method_exists($apiRuleModel, 'clear')) {
+                return [];
+            }
 
-        if (is_object($apiRules) && method_exists($apiRules, 'getItems')) {
-            $ruleItems = $apiRules->getItems();
-        } elseif ($apiRules instanceof \Traversable) {
-            $ruleItems = iterator_to_array($apiRules, false);
-        } elseif (is_array($apiRules)) {
-            $ruleItems = $apiRules;
-        } elseif (is_object($apiRules)) {
-            $ruleItems = [$apiRules];
-        }
+            $query = $apiRuleModel->clear()
+                ->where(ApiRule::schema_fields_ENABLED, 1);
 
-        $rules = [];
-        foreach ($ruleItems as $apiRule) {
-            if (is_object($apiRule) && method_exists($apiRule, 'toCloudflareRule')) {
-                $rule = $apiRule->toCloudflareRule();
-                if ($includeIdentity) {
-                    $rule['_weline_identity'] = 'annotation:' . implode(':', [(string)$apiRule->getData('module'), (string)$apiRule->getData('class'), (string)$apiRule->getData('method')]);
+            // 如果指定了触发类型，只获取对应类型的规则
+            if ($triggerType !== null) {
+                $query->where(ApiRule::schema_fields_TRIGGER, $triggerType);
+            }
+
+            $apiRules = $query->select()->fetch();
+            $ruleItems = [];
+
+            if (is_object($apiRules) && method_exists($apiRules, 'getItems')) {
+                $ruleItems = $apiRules->getItems();
+            } elseif ($apiRules instanceof \Traversable) {
+                $ruleItems = iterator_to_array($apiRules, false);
+            } elseif (is_array($apiRules)) {
+                $ruleItems = $apiRules;
+            } elseif (is_object($apiRules)) {
+                $ruleItems = [$apiRules];
+            }
+
+            $rules = [];
+            foreach ($ruleItems as $apiRule) {
+                if (is_object($apiRule) && method_exists($apiRule, 'toCloudflareRule')) {
+                    $rule = $apiRule->toCloudflareRule();
+                    if ($includeIdentity) {
+                        $rule['_weline_identity'] = 'annotation:' . implode(':', [(string)$apiRule->getData('module'), (string)$apiRule->getData('class'), (string)$apiRule->getData('method')]);
+                    }
+                    $rules[] = $rule;
+                    continue;
                 }
-                $rules[] = $rule;
-                continue;
+
+                if (is_array($apiRule)) {
+                    $rules[] = $apiRule;
+                }
             }
 
-            if (is_array($apiRule)) {
-                $rules[] = $apiRule;
-            }
+            return $rules;
+        } catch (\Throwable) {
+            return [];
         }
-        
-        return $rules;
     }
 
     /**
@@ -222,16 +242,27 @@ class RuleManager
     }
 
     /**
-     * Free（容量≤10）默认不允许注解规则上边缘；仅 defaults。
+     * 注解是否允许进入边缘计划。
+     * 容量 >10，或注解打包开关开启（默认开）时允许；否则仅 defaults。
      */
     public function annotationsAllowedOnEdge(Domain $domain): bool
     {
-        return $this->getCacheRulesCapacity($domain) > self::DEFAULT_CACHE_RULES_CAPACITY;
+        if ($this->getCacheRulesCapacity($domain) > self::DEFAULT_CACHE_RULES_CAPACITY) {
+            return true;
+        }
+
+        return $this->isAnnotationPackEnabled();
     }
 
     /**
-     * 计划推送到边缘的规则集（闸门后）。
-     * Free：仅 default-rules；付费：预算内 api/override 前置 + defaults（CF 先匹配先生效）。
+     * 边缘真相视图（planned）——实际将/已计划推到 CF Cache Rules 的集合。
+     *
+     * 双视图契约：
+     * - 本方法 = 边缘计划（pack 开：packs + overrides(预算) + defaults；pack 关且容量>10：细推；不允许：仅 defaults）。
+     * - 库内展开 = {@see getMergedRules()}（未打包注解 + override + defaults），≠ 本方法结果。
+     *
+     * 顺序（pack 开）：fidelity(≤1) → path packs → overrides → defaults（CF 先匹配先生效）。
+     * 保真车道禁止降级进 path-OR；预算不够则安全缺席保真命中。
      *
      * @return list<array<string, mixed>>
      */
@@ -257,8 +288,24 @@ class RuleManager
             foreach ($overrides as $index => &$rule) { $rule['_weline_identity'] = 'domain:' . $domain->getId() . ':override:' . $index; }
             unset($rule);
         }
-        // API 注释优先于域名覆盖；二者均前置 defaults（先匹配先生效）。
-        $extra = \array_merge($this->getApiRules($triggerType, $includeIdentity), $overrides);
+
+        if ($this->isAnnotationPackEnabled()) {
+            $models = $this->getEnabledApiRuleModels($triggerType);
+            // 保真槽优先占预算；失败则整车道缺席，禁止降级 path pack。
+            $fidelityEdge = $this->getFidelityEdgeCompressor()->compress($models);
+            if ($fidelityEdge !== [] && $budget < 1) {
+                $fidelityEdge = [];
+            }
+            $remaining = \max(0, $budget - \count($fidelityEdge));
+            $packs = $remaining > 0
+                ? $this->getAnnotationRulePacker()->pack($models, $remaining)
+                : [];
+            $extra = \array_merge($fidelityEdge, $packs, $overrides);
+        } else {
+            // pack 关且闸门允许（必然 capacity>10）：现有细推（expression 保真，不经 path pack）
+            $extra = \array_merge($this->getApiRules($triggerType, $includeIdentity), $overrides);
+        }
+
         $accepted = [];
         foreach ($extra as $rule) {
             if (!\is_array($rule)) {
@@ -268,6 +315,9 @@ class RuleManager
             if ($sanitized === null) {
                 continue;
             }
+            if (!$includeIdentity) {
+                unset($sanitized['_weline_identity']);
+            }
             $accepted[] = $sanitized;
             if (\count($accepted) >= $budget) {
                 break;
@@ -275,6 +325,119 @@ class RuleManager
         }
 
         return \array_merge($accepted, $defaults);
+    }
+
+    public function isAnnotationPackEnabled(): bool
+    {
+        return $this->resolveAnnotationPackFlagResolver()->isEnabled();
+    }
+
+    private function resolveAnnotationPackFlagResolver(): AnnotationPackFlagResolver
+    {
+        if ($this->annotationPackFlagResolver instanceof AnnotationPackFlagResolver) {
+            return $this->annotationPackFlagResolver;
+        }
+        try {
+            $resolved = $this->objectManager->getInstance(AnnotationPackFlagResolver::class);
+            if ($resolved instanceof AnnotationPackFlagResolver) {
+                $this->annotationPackFlagResolver = $resolved;
+
+                return $resolved;
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+        $this->annotationPackFlagResolver = new AnnotationPackFlagResolver();
+
+        return $this->annotationPackFlagResolver;
+    }
+
+    private function getAnnotationRulePacker(): AnnotationRulePacker
+    {
+        if ($this->annotationRulePacker instanceof AnnotationRulePacker) {
+            return $this->annotationRulePacker;
+        }
+        try {
+            $resolved = $this->objectManager->getInstance(AnnotationRulePacker::class);
+            if ($resolved instanceof AnnotationRulePacker) {
+                $this->annotationRulePacker = $resolved;
+
+                return $resolved;
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+        $this->annotationRulePacker = new AnnotationRulePacker();
+
+        return $this->annotationRulePacker;
+    }
+
+    private function getFidelityEdgeCompressor(): BinQueryFidelityEdgeCompressor
+    {
+        if ($this->fidelityEdgeCompressor instanceof BinQueryFidelityEdgeCompressor) {
+            return $this->fidelityEdgeCompressor;
+        }
+        try {
+            $resolved = $this->objectManager->getInstance(BinQueryFidelityEdgeCompressor::class);
+            if ($resolved instanceof BinQueryFidelityEdgeCompressor) {
+                $this->fidelityEdgeCompressor = $resolved;
+
+                return $resolved;
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+        $this->fidelityEdgeCompressor = new BinQueryFidelityEdgeCompressor();
+
+        return $this->fidelityEdgeCompressor;
+    }
+
+    /**
+     * 启用中的 ApiRule 模型列表（含 class/route，供 Packer 直接读；禁止仅 toCloudflareRule）。
+     * protected：契约测可子类注入，因 ObjectManager::getInstance 为静态调用无法 mock。
+     *
+     * @return list<ApiRule>
+     */
+    protected function getEnabledApiRuleModels(?string $triggerType = null): array
+    {
+        try {
+            /** @var ApiRule $apiRuleModel */
+            $apiRuleModel = $this->objectManager->getInstance(ApiRule::class);
+            if (!$apiRuleModel instanceof ApiRule) {
+                return [];
+            }
+
+            $query = $apiRuleModel->clear()
+                ->where(ApiRule::schema_fields_ENABLED, 1);
+
+            if ($triggerType !== null) {
+                $query->where(ApiRule::schema_fields_TRIGGER, $triggerType);
+            }
+
+            $apiRules = $query->select()->fetch();
+            $ruleItems = [];
+
+            if (\is_object($apiRules) && \method_exists($apiRules, 'getItems')) {
+                $ruleItems = $apiRules->getItems();
+            } elseif ($apiRules instanceof \Traversable) {
+                $ruleItems = \iterator_to_array($apiRules, false);
+            } elseif (\is_array($apiRules)) {
+                $ruleItems = $apiRules;
+            } elseif (\is_object($apiRules)) {
+                $ruleItems = [$apiRules];
+            }
+
+            $models = [];
+            foreach ($ruleItems as $item) {
+                if ($item instanceof ApiRule) {
+                    $models[] = $item;
+                }
+            }
+
+            return $models;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**

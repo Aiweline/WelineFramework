@@ -15,8 +15,9 @@ final class CdnBinQueryDualPathRuleContractTest extends TestCase
         self::assertStringContainsString('pathBindings', $source);
         self::assertStringContainsString('BinQuery::', $source);
         self::assertStringContainsString('QueryBin::', $source);
-        self::assertStringContainsString('__wq_cache', $source);
+        self::assertStringContainsString('BinQueryCachePolicy::MARKER_PARAM', $source);
         self::assertStringContainsString('cache_key', $source);
+        self::assertStringContainsString('PREDICATE_FIDELITY', $source);
         self::assertStringContainsString('Weline\\\\Frontend\\\\Controller\\\\Api\\\\BinQuery::', $source);
         self::assertStringContainsString('Weline\\\\Frontend\\\\Controller\\\\Api\\\\QueryBin::', $source);
     }

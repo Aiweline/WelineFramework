@@ -61,4 +61,17 @@ final class CdnSystemConfigPageContractTest extends TestCase
         self::assertStringContainsString('default="1"', $src);
         self::assertStringContainsString('scope="global,website"', $src);
     }
+
+    public function testPackAnnotationsConfigTemplateExists(): void
+    {
+        $path = dirname(__DIR__, 3) . '/extends/module/Weline_SystemConfig/Config/backend/cdn-rules-pack-annotations.phtml';
+        self::assertFileExists($path);
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString('cdn/rules/pack_annotations', $src);
+        self::assertStringContainsString('@config.acl {Weline_Cdn::cdn_system_config}', $src);
+        self::assertStringContainsString('type="switch"', $src);
+        self::assertStringContainsString('default="1"', $src);
+        self::assertStringContainsString('scope="global,website"', $src);
+        self::assertStringContainsString('打包', $src);
+    }
 }

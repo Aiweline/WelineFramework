@@ -463,6 +463,7 @@ HTTP抽样验证,HTTP抽样验证
 已恢复所选字段的继承，已安排发布与同步。,已恢复所选字段的继承，已安排发布与同步。
 声明已收集，变更已安排发布与同步。,声明已收集，变更已安排发布与同步。
 设置未变化。,设置未变化。
+"此处管理库内 CDN 注释规则（inventory）；是否已上边缘以推送计划 planRulesForEdgePush 为准，逐条注解不等于已上 Cloudflare。FPC 策略在前一页签。","此处管理库内 CDN 注释规则（inventory）；是否已上边缘以推送计划 planRulesForEdgePush 为准，逐条注解不等于已上 Cloudflare。FPC 策略在前一页签。"
 HTTP抽样通过版本,HTTP抽样通过版本
 "已确认 v%{1}","已确认 v%{1}"
 "云端已受理 v%{1}","云端已受理 v%{1}"
@@ -533,7 +534,8 @@ HTTP抽样未通过,HTTP抽样未通过
 正在推送...,正在推送...
 "未读到全局默认规则（default-rules.json 为空或不存在）。请检查模块配置后刷新。","未读到全局默认规则（default-rules.json 为空或不存在）。请检查模块配置后刷新。"
 该域名暂无覆盖规则。可「从CDN导入」拉取线上规则，或留空以仅使用全局默认。,该域名暂无覆盖规则。可「从CDN导入」拉取线上规则，或留空以仅使用全局默认。
-"当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。","当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。"
+"当前为域名覆盖规则（编辑器）。库内展开 %{1} 条 ≠ 边缘计划 %{2} 条；合并视图不是已上 Cloudflare。保存后需推送到 CDN 才生效。","当前为域名覆盖规则（编辑器）。库内展开 %{1} 条 ≠ 边缘计划 %{2} 条；合并视图不是已上 Cloudflare。保存后需推送到 CDN 才生效。"
+"当前为域名覆盖规则（不含全局默认合并结果）。库内 merged ≠ 边缘 plan。保存后需推送到 CDN 才生效。","当前为域名覆盖规则（不含全局默认合并结果）。库内 merged ≠ 边缘 plan。保存后需推送到 CDN 才生效。"
 请求失败,请求失败
 JSON格式错误,JSON格式错误
 提示,提示
@@ -832,6 +834,7 @@ CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 "规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
+"当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。","当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。"
 "请求失败: %{1}","请求失败: %{1}"
 "HTTP错误: %{1}","HTTP错误: %{1}"
 "Cloudflare 返回无效响应","Cloudflare 返回无效响应"
@@ -1164,3 +1167,8 @@ zone.read dns.write offline_access cache.purge cache-settings.write
 "启用 Cloudflare Always Online","启用 Cloudflare Always Online"
 "源站对 Cloudflare 不可达时，由 Cloudflare 尽量吐其归档的公开页快照。这是 zone 设置，不是 Cache Rules，也不是本机冷盘 FPC。","源站对 Cloudflare 不可达时，由 Cloudflare 尽量吐其归档的公开页快照。这是 zone 设置，不是 Cache Rules，也不是本机冷盘 FPC。"
 "默认开启。关闭后，下次规则推送会把 zone always_online 设为 off。","默认开启。关闭后，下次规则推送会把 zone always_online 设为 off。"
+"CDN 注解三面打包","CDN 注解三面打包"
+启用注解三面打包,启用注解三面打包
+"把库内 @Cdn 注解按 api / backend / frontend 打成少量 Cache Rules，塞进 Free 套餐容量预算。打包只影响边缘计划（planRulesForEdgePush），库内合并视图仍是逐条展开。","把库内 @Cdn 注解按 api / backend / frontend 打成少量 Cache Rules，塞进 Free 套餐容量预算。打包只影响边缘计划（planRulesForEdgePush），库内合并视图仍是逐条展开。"
+"默认开启。用打包进边缘；关闭则 Free 仅 defaults、付费细推。","默认开启。用打包进边缘；关闭则 Free 仅 defaults、付费细推。"
+打包用途,打包用途

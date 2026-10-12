@@ -1,0 +1,31 @@
+<?php
+/**
+ * @meta.title {default="CDN 注解三面打包",description="将控制器 @Cdn 注解按 api/backend/frontend 打包进 Cloudflare Cache Rules（省 Free 容量）"}
+ * @meta.description {default="开启后，推送边缘时把启用中的注解规则按三面打包（同面 OR + 中位 TTL），不再逐条细推；关闭后 Free/低容量仅 defaults，付费才细推。默认开启。"}
+ * @config.area {backend}
+ * @config.sort {58}
+ * @config.acl {Weline_Cdn::cdn_system_config}
+ */
+?>
+
+<w:config:group
+    code="cdn_rules_pack_annotations"
+    label="CDN 注解三面打包"
+    description="把库内 @Cdn 注解按 api / backend / frontend 打成少量 Cache Rules，塞进 Free 套餐容量预算。打包只影响边缘计划（planRulesForEdgePush），库内合并视图仍是逐条展开。"
+    sort="16"
+>
+    <w:config:hint type="info" title="打包用途" collapsed="0">
+默认开启：无论 Free 还是付费，注解侧一律走打包，避免 Free/付费双语义。关闭后：容量≤10 仅推 default-rules；容量&gt;10 恢复逐条细推。保存后需再执行一次 CDN 规则推送才会写到 Cloudflare。含 /admin/、/backend/ 的可缓存注解会被 Packer 硬拒绝，以免盖掉 defaults 后台旁路。
+    </w:config:hint>
+
+    <w:config:field
+        key="cdn/rules/pack_annotations"
+        label="启用注解三面打包"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website"
+        sensitive="0"
+        description="默认开启。用打包进边缘；关闭则 Free 仅 defaults、付费细推。"
+    />
+</w:config:group>

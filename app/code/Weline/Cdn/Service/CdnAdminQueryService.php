@@ -718,7 +718,24 @@ class CdnAdminQueryService
             $rules = method_exists($domain, 'getRulesOverrideArray')
                 ? $domain->getRulesOverrideArray()
                 : [];
-            return ['success' => true, 'data' => $rules];
+            // data 仍为域名覆盖（编辑器权威）；并排库内/边缘计数，禁止把 inventory 标成已上 CF
+            $manager = ObjectManager::getInstance(RuleManager::class);
+            $inventory = $manager->getMergedRules($domain);
+            $planned = $manager->planRulesForEdgePush($domain);
+
+            return [
+                'success' => true,
+                'data' => $rules,
+                'inventory_count' => \count($inventory),
+                'planned_count' => \count($planned),
+                'plannedRules' => $planned,
+                'view_contract' => [
+                    'data' => 'domain_overrides',
+                    'inventory' => 'getMergedRules',
+                    'planned' => 'planRulesForEdgePush',
+                    'note' => '库内 merged ≠ 边缘 plan；data 仅为域名覆盖，不是已上 Cloudflare',
+                ],
+            ];
         } catch (\Throwable $e) {
             return $this->failure('getDomainRules', $e, '规则读取失败，请稍后重试');
         }

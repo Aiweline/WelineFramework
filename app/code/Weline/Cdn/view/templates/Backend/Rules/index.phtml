@@ -254,7 +254,15 @@ $escapeAttr = static function (mixed $value): string {
                         } else if (!domainId) {
                             hint.textContent = '<?= __('「全局默认规则」来自模块 default-rules.json；选具体域名时编辑的是该域名覆盖规则。保存后需推送到 CDN 才生效。') ?>';
                         } else {
-                            hint.textContent = '<?= __('当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。') ?>';
+                            var inv = typeof data.inventory_count === 'number' ? data.inventory_count : null;
+                            var plan = typeof data.planned_count === 'number' ? data.planned_count : null;
+                            if (inv !== null && plan !== null) {
+                                hint.textContent = '<?= __('当前为域名覆盖规则（编辑器）。库内展开 %{1} 条 ≠ 边缘计划 %{2} 条；合并视图不是已上 Cloudflare。保存后需推送到 CDN 才生效。') ?>'
+                                    .replace('%{1}', String(inv))
+                                    .replace('%{2}', String(plan));
+                            } else {
+                                hint.textContent = '<?= __('当前为域名覆盖规则（不含全局默认合并结果）。库内 merged ≠ 边缘 plan。保存后需推送到 CDN 才生效。') ?>';
+                            }
                         }
                     }
                 } else {

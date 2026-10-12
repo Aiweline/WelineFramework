@@ -254,9 +254,11 @@ class CdnRuleCollector
             $config['description'] = $matches[1];
         }
         
-        // 解析完整表达式（高级用法）
-        if (preg_match('/expression\s*=\s*"([^"]+)"/', $configString, $matches)) {
+        // 解析完整表达式（高级用法；优先单引号，避免路径内双引号被截断）
+        if (preg_match('/expression\s*=\s*\'([^\']+)\'/', $configString, $matches)) {
             $config['expression'] = $matches[1];
+        } elseif (preg_match('/expression\s*=\s*"((?:\\\\.|[^"\\\\])*)"/', $configString, $matches)) {
+            $config['expression'] = \stripcslashes($matches[1]);
         }
         
         // 解析完整action（高级用法）
@@ -459,20 +461,19 @@ class CdnRuleCollector
      */
     private function parseCacheTime(string $cacheTime): ?int
     {
-        if (preg_match('/^(\d+)([mhd])$/', $cacheTime, $matches)) {
+        if (preg_match('/^(\d+)([smhd])$/', $cacheTime, $matches)) {
             $value = (int)$matches[1];
             $unit = $matches[2];
-            
-            switch ($unit) {
-                case 'm': // 分钟
-                    return $value * 60;
-                case 'h': // 小时
-                    return $value * 3600;
-                case 'd': // 天
-                    return $value * 86400;
-            }
+
+            return match ($unit) {
+                's' => $value,
+                'm' => $value * 60,
+                'h' => $value * 3600,
+                'd' => $value * 86400,
+                default => null,
+            };
         }
-        
+
         return null;
     }
 
@@ -495,9 +496,16 @@ class CdnRuleCollector
             ->find()
             ->fetch();
         
+        $route = $this->extractRouteFromExpression($rule['expression']);
+        $lane = CdnRuleLane::normalize(
+            isset($rule['lane']) ? (string)$rule['lane'] : CdnRuleLane::PATH_PACKABLE
+        );
+
         if ($existing->getId()) {
-            // 更新现有规则
+            // 更新现有规则（同步 route / lane，避免 pack 抽陈旧前缀）
             $existing->setData(ApiRule::schema_fields_EXPRESSION, $rule['expression'])
+                ->setData(ApiRule::schema_fields_ROUTE, $route)
+                ->setData(ApiRule::schema_fields_LANE, $lane)
                 ->setActionArray($rule['action'])
                 ->setData(ApiRule::schema_fields_DESCRIPTION, $rule['description'] ?? '')
                 ->setData(ApiRule::schema_fields_ENABLED, $rule['enabled'] ? 1 : 0)
@@ -511,7 +519,8 @@ class CdnRuleCollector
             $apiRule->setData(ApiRule::schema_fields_MODULE, $moduleName)
                 ->setData(ApiRule::schema_fields_CLASS, $className)
                 ->setData(ApiRule::schema_fields_METHOD, $methodName)
-                ->setData(ApiRule::schema_fields_ROUTE, $this->extractRouteFromExpression($rule['expression']))
+                ->setData(ApiRule::schema_fields_ROUTE, $route)
+                ->setData(ApiRule::schema_fields_LANE, $lane)
                 ->setData(ApiRule::schema_fields_EXPRESSION, $rule['expression'])
                 ->setActionArray($rule['action'])
                 ->setData(ApiRule::schema_fields_DESCRIPTION, $rule['description'] ?? '')
@@ -595,7 +604,7 @@ class CdnRuleCollector
                         'cache_key' => [
                             'ignore_query_strings_order' => true,
                             'custom_key' => [
-                                'query_string' => ['include' => ['__wq_cache']],
+                                'query_string' => ['include' => [BinQueryCachePolicy::MARKER_PARAM]],
                                 'cookie' => ['include' => [], 'check_presence' => []],
                                 'user' => ['device_type' => false, 'geo' => false, 'lang' => false],
                             ],
@@ -611,15 +620,17 @@ class CdnRuleCollector
                             'method' => $operationName,
                         ],
                     ];
+                    $markerParam = BinQueryCachePolicy::MARKER_PARAM;
                     foreach ($pathBindings as $path => $identity) {
                         $rule = [
-                            'expression' => 'http.request.uri.path eq "' . $path . '" and http.request.method eq "POST" and http.request.uri.query contains "__wq_cache=' . $markerPrefix . '"',
+                            'expression' => 'http.request.uri.path eq "' . $path . '" and http.request.method eq "POST" and http.request.uri.query contains "' . $markerParam . '=' . $markerPrefix . '"',
                             'action' => [
                                 'cache' => $cacheAction,
                             ],
                             'description' => $description . ' [' . $path . ']',
                             'enabled' => true,
                             'trigger' => $trigger,
+                            'lane' => CdnRuleLane::PREDICATE_FIDELITY,
                         ];
 
                         $apiRule = $this->saveRule(
@@ -718,10 +729,10 @@ class CdnRuleCollector
                 continue;
             }
             try {
-                // Free：注解已入库，不向边缘全量 PUT；付费：推预算内安全子集
+                // 闸门：容量>10 或注解打包开 → 推 plan（含 packs/细推）；否则仅 defaults，跳过 realtime PUT
                 if (!$this->ruleManager->annotationsAllowedOnEdge($domain)) {
                     w_log_info(
-                        'CDN realtime：注解已收录，Free/低容量 Zone 跳过边缘 PUT（靠 default-rules + 源站头） ['
+                        'CDN realtime：注解已收录，注解未允许上边缘（pack 关且 Free/低容量），跳过 PUT（靠 default-rules + 源站头） ['
                         . (string)$domain->getData(Domain::schema_fields_DOMAIN_NAME) . ']'
                     );
                     continue;
