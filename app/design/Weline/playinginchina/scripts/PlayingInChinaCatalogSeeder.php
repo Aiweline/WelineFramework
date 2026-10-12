@@ -90,11 +90,14 @@ final class PlayingInChinaCatalogSeeder
 
         $stats = ['packages' => 0, 'tickets' => 0, 'linked' => 0, 'media' => 0];
 
-        // ---- 线路套餐 ----
+        // ---- 线路决策信息包（travel_route；成交价=pack_price，非 land-only 指示预算）----
         foreach (\PlayingInChinaData::routes() as $r) {
             $no = \PlayingInChinaData::routeNo((string)($r['id'] ?? ''));
             $sku = 'PIC-PKG-R' . $no;
-            $priceMinor = (int)\round(((float)\preg_replace('/[^\d.]/', '', (string)($r['price'] ?? '0'))) * 100);
+            $priceMinor = (int)($r['pack_price_minor'] ?? 0);
+            if ($priceMinor <= 0) {
+                $priceMinor = (int)\round(((float)\preg_replace('/[^\d.]/', '', (string)($r['pack_price'] ?? '99'))) * 100);
+            }
             $dests = [];
             foreach ((array)($r['dests'] ?? []) as $did) {
                 $d = \PlayingInChinaData::findDestination((string)$did);
@@ -108,24 +111,52 @@ final class PlayingInChinaCatalogSeeder
             foreach ((array)($r['itin'] ?? []) as $row) {
                 $itinLines[] = \PlayingInChinaData::t((string)($row[0] ?? '')) . ': ' . \PlayingInChinaData::t((string)($row[1] ?? ''));
             }
-            $long = $desc
+            $routePath = \PlayingInChinaData::routePublicPath($r);
+            $long = 'DIGITAL DECISION INFORMATION PACK — not a guided tour, hotel package, or ticket fulfillment.'
+                . "\n\nIncludes: day-by-day decision framework, seasonal/budget/family variant notes, attraction checklist with links, scenery gallery from stops on this route."
+                . "\nDoes NOT include: guide/driver, hotels, flights, attraction tickets, visa processing, or guaranteed outcomes."
+                . "\nDelivery: after payment, order email + account note with deep link to " . $routePath . ' (full itinerary page).'
+                . "\n\n" . $desc
                 . "\n\nCities: " . \PlayingInChinaData::t($r['cities'] ?? '')
                 . "\nDuration: " . $days . " days"
                 . "\nBest season: " . \PlayingInChinaData::t($r['best'] ?? '')
                 . "\nCovers: " . \implode(', ', $dests)
-                . "\n\nItinerary:\n- " . \implode("\n- ", $itinLines);
+                . "\n\nIndicative land-only trip budget (NOT this pack price): "
+                . \PlayingInChinaData::t($r['price'] ?? '') . ' / ' . \PlayingInChinaData::t($r['priceUSD'] ?? '')
+                . "\n\nItinerary outline:\n- " . \implode("\n- ", $itinLines);
+
+            $seoSlug = \PlayingInChinaData::routeProductSlug($r);
+            $gallery = \PlayingInChinaData::routeGallery($r, 12);
+            $main = (string)($r['img'] ?? '');
+            if ($main === '' && $gallery !== []) {
+                $main = $gallery[0];
+            }
+            $galleryRest = \array_values(\array_filter(
+                $gallery,
+                static fn(string $u): bool => $u !== $main
+            ));
 
             $item = [
                 'sku' => $sku,
-                'name' => \PlayingInChinaData::t($r['title'] ?? '') . ' — ' . $days . '-Day China Tour',
-                'slug' => 'route-' . (string)($r['id'] ?? ''),
-                'short' => \PlayingInChinaData::clip($desc, 190),
+                'name' => \PlayingInChinaData::t($r['title'] ?? '') . ' — Information Pack',
+                'slug' => $seoSlug,
+                'short' => \PlayingInChinaData::clip(
+                    'Digital China itinerary decision pack (' . $days . ' days). Not a guided tour. '
+                    . $desc,
+                    190
+                ),
                 'long' => $long,
-                'meta' => \PlayingInChinaData::clip($desc . ' Cities: ' . \PlayingInChinaData::t($r['cities'] ?? '') . '.', 155),
-                'image' => (string)($r['img'] ?? ''),
-                'gallery' => [],
+                'meta' => \PlayingInChinaData::clip(
+                    \PlayingInChinaData::t($r['title'] ?? '') . ' information pack. Cities: '
+                    . \PlayingInChinaData::t($r['cities'] ?? '') . '.',
+                    155
+                ),
+                'image' => $main,
+                'gallery' => $galleryRest,
                 'price_minor' => $priceMinor,
+                'product_type' => 'travel_route',
                 'categories' => ['pic-packages'],
+                'source_route_id' => (string)($r['id'] ?? ''),
             ];
             $this->upsertProduct($websiteId, $item, $currency, $stock, $storeIds, $categoryIds, $stats);
             ++$stats['packages'];
@@ -284,8 +315,11 @@ final class PlayingInChinaCatalogSeeder
             ['short_description', (string)$item['short']],
             ['description', (string)$item['long']],
             ['meta_description', (string)$item['meta']],
-            ['product_type', 'simple'],
+            ['product_type', (string)($item['product_type'] ?? 'simple')],
         ];
+        if (!empty($item['source_route_id'])) {
+            $pairs[] = ['source_route_id', (string)$item['source_route_id']];
+        }
         foreach ($pairs as [$code, $value]) {
             $this->attributes->writeExplicit($websiteId, 0, 'product', $productId, $code, '', $value, true);
         }
