@@ -115,6 +115,8 @@ $activePromptOptimizationIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds(
 $activeTranslationEngineerIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('翻译工程师 漏译 i18n:collect');
 $activeDocumentationEngineerIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('文档工程师 文档同步 documentation_review_pass');
 $activeVisitorAnalyticsIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('数据分析 像素事件 WelinePixel Visitor');
+$activeCodeReviewIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds('代码复审 PR review 模块串融 website_concept_seed');
+$codeReviewSurface = GuidanceWorkflowCatalog::allSurfaces()[GuidanceWorkflowCatalog::SURFACE_CODE_REVIEW] ?? [];
 $engineeringTeamBundle = McpSkillCatalog::policy()['engineering_team_bundle'] ?? [];
 
 $hasSectionIdentityNorm = false;
@@ -676,6 +678,15 @@ $checks = [
     'mcpInstructions carry website_concept_seed_not_in_modules' => str_contains(
         (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
         'website_concept_seed_not_in_modules'
+    ),
+    'hard_constraints include code_review_for_module_boundary' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'code_review_for_module_boundary'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Team:代码复审:')
+            && str_contains((string) ($rule['summary'] ?? ''), 'code_review')
+            && str_contains((string) ($rule['summary'] ?? ''), 'website_concept_seed_not_in_modules')),
+        false,
     ),
     'hard_constraints include shell_provider_business_isomorph' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
@@ -1523,6 +1534,29 @@ $checks = [
         true,
     )
         && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['提示词优化工程师']),
+    'engineering_team_bundle includes 代码复审 ops seat' => in_array(
+        '代码复审',
+        is_array($engineeringTeamBundle['ops_shell_seats'] ?? null)
+            ? $engineeringTeamBundle['ops_shell_seats']
+            : [],
+        true,
+    )
+        && isset($engineeringTeamBundle['seat_skill_mirrors']['seats']['代码复审']),
+    'code_review surface exists' => ($codeReviewSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_CODE_REVIEW
+        && str_contains((string) ($codeReviewSurface['authoritative_doc'] ?? ''), '代码复审'),
+    'resolveActiveSurfaceIds matches code review task' => in_array(
+        GuidanceWorkflowCatalog::SURFACE_CODE_REVIEW,
+        $activeCodeReviewIds,
+        true,
+    ),
+    'code_review norms include module_boundary_hard' => in_array(
+        'code_review_module_boundary_hard',
+        array_map(
+            static fn ($n) => is_array($n) ? (string) ($n['id'] ?? '') : '',
+            is_array($codeReviewSurface['norms'] ?? null) ? $codeReviewSurface['norms'] : []
+        ),
+        true,
+    ),
     'engineering_team_bundle includes 翻译工程师 seat' => in_array(
         '翻译工程师',
         is_array($engineeringTeamBundle['framework_seats'] ?? null)

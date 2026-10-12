@@ -141,6 +141,7 @@ skillCheck(!in_array('主题', is_array($teamBundle['core_roster'] ?? null) ? $t
 skillCheck(in_array('电商顾问', is_array($teamBundle['framework_seats'] ?? null) ? $teamBundle['framework_seats'] : [], true), 'engineering team framework seat 电商顾问');
 skillCheck(in_array('性能检查工程师', is_array($teamBundle['framework_seats'] ?? null) ? $teamBundle['framework_seats'] : [], true), 'engineering team framework seat 性能检查工程师');
 skillCheck(in_array('提示词优化工程师', is_array($teamBundle['framework_seats'] ?? null) ? $teamBundle['framework_seats'] : [], true), 'engineering team framework seat 提示词优化工程师');
+skillCheck(in_array('代码复审', is_array($teamBundle['ops_shell_seats'] ?? null) ? $teamBundle['ops_shell_seats'] : [], true), 'engineering team ops_shell seat 代码复审');
 skillCheck(in_array('翻译工程师', is_array($teamBundle['framework_seats'] ?? null) ? $teamBundle['framework_seats'] : [], true), 'engineering team framework seat 翻译工程师');
 skillCheck(!in_array('合规', is_array($teamBundle['framework_seats'] ?? null) ? $teamBundle['framework_seats'] : [], true), 'engineering team framework seats retired 合规 into 电商顾问');
 skillCheck(in_array('UI', is_array($teamBundle['core_roster'] ?? null) ? $teamBundle['core_roster'] : [], true), 'engineering team core roster includes UI');
@@ -373,6 +374,17 @@ skillCheck(str_contains($promptInc, '硬规则') || str_contains($promptInc, '�
 skillCheck(str_contains($promptInc, '仅重复') || str_contains($promptInc, '无证据禁止'), '提示词优化工程师 prompt requires duplication evidence before edit');
 skillCheck(str_contains($promptInc, '禁止丢义') || str_contains($promptInc, '丢义'), '提示词优化工程师 prompt forbids omitting meaning');
 skillCheck(str_contains($promptInc, '禁止乱加') || str_contains($promptInc, '乱加'), '提示词优化工程师 prompt forbids inventing rules');
+$codeReviewSeat = is_array($seatMap['代码复审'] ?? null) ? $seatMap['代码复审'] : [];
+skillCheck($codeReviewSeat !== [], 'seat_skill_mirrors has 代码复审');
+skillCheck(in_array(GuidanceWorkflowCatalog::SURFACE_CODE_REVIEW, is_array($codeReviewSeat['mcp_skill_ids'] ?? null) ? $codeReviewSeat['mcp_skill_ids'] : [], true), '代码复审 mirror includes code_review');
+skillCheck(in_array('weline-code-review', is_array($codeReviewSeat['host_skills'] ?? null) ? $codeReviewSeat['host_skills'] : [], true), '代码复审 host mirror weline-code-review');
+$codeReviewDocs = is_array($codeReviewSeat['authoritative_docs'] ?? null) ? $codeReviewSeat['authoritative_docs'] : [];
+skillCheck(in_array('dev/ai-command/ai/代码复审.md', $codeReviewDocs, true), '代码复审 docs include 代码复审 command');
+skillCheck(in_array('app/code/Weline/Ai/doc/ai/skills/code-review/reference/module-boundary-contamination.md', $codeReviewDocs, true), '代码复审 docs include module-boundary checklist');
+$codeReviewPrompt = (string) ($codeReviewSeat['prompt_increment'] ?? '');
+skillCheck(str_contains($codeReviewPrompt, 'website_concept_seed') || str_contains($codeReviewPrompt, '模块串融') || str_contains($codeReviewPrompt, 'module_boundary'), '代码复审 prompt HARD module boundary');
+skillCheck(str_contains($codeReviewPrompt, '只读') || str_contains($codeReviewPrompt, '禁止代施工'), '代码复审 prompt is read-only');
+skillCheck(str_contains($codeReviewPrompt, 'awesome-skills') || str_contains($codeReviewPrompt, '四阶段'), '代码复审 prompt cites four-phase upstream process');
 $i18nSeat = is_array($seatMap['翻译工程师'] ?? null) ? $seatMap['翻译工程师'] : [];
 $i18nAliasSeat = is_array($seatMap['i18n'] ?? null) ? $seatMap['i18n'] : [];
 skillCheck($i18nSeat !== [], 'seat_skill_mirrors has 翻译工程师');
@@ -499,6 +511,8 @@ skillCheck(str_contains($teamCmd, '禁止写码') || str_contains($teamCmd, '禁
 skillCheck(str_contains($teamCmd, '运营策划') || str_contains($teamCmd, '要开发什么'), 'engineering team command covers ops planner domain decision');
 skillCheck(str_contains($teamCmd, '性能检查工程师') && str_contains($teamCmd, 'performance_check'), 'engineering team command mirrors performance engineer');
 skillCheck(str_contains($teamCmd, 'performance_engineer_for_design_and_review') || str_contains($teamCmd, 'HotCache'), 'engineering team command mentions performance hard rule or HotCache');
+skillCheck(str_contains($teamCmd, '代码复审') && str_contains($teamCmd, 'code_review'), 'engineering team command mirrors code review seat');
+skillCheck(str_contains($teamCmd, 'code_review_for_module_boundary') || str_contains($teamCmd, 'website_concept_seed'), 'engineering team command mentions code-review module-boundary hard rule');
 skillCheck(str_contains($teamCmd, '提示词优化工程师') && str_contains($teamCmd, 'prompt_optimization'), 'engineering team command mirrors prompt engineer');
 skillCheck(str_contains($teamCmd, 'prompt_engineer_for_skill_prompt_work') || str_contains($teamCmd, '技能引用'), 'engineering team command mentions prompt hard rule or 技能引用');
 skillCheck(str_contains($teamCmd, '翻译工程师') && str_contains($teamCmd, 'translation_engineer'), 'engineering team command mirrors translation engineer');

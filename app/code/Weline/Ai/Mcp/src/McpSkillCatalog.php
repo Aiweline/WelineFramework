@@ -37,6 +37,7 @@ final class McpSkillCatalog
         'weline-prompt-optimization' => GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION,
         'weline-translation-engineer' => GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER,
         'weline-documentation-engineer' => GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER,
+        'weline-code-review' => GuidanceWorkflowCatalog::SURFACE_CODE_REVIEW,
     ];
 
     /**
@@ -159,6 +160,9 @@ final class McpSkillCatalog
                 ],
                 'framework_seats' => [
                     '扩展点', '事件', '数据分析', '查询', 'Taglib', 'Hook', 'Provider', '翻译工程师', 'ACL', 'Setup', '电商顾问', 'API', '部件开发工程师', '主题开发工程师', '支付开发工程师', '性能检查工程师', '提示词优化工程师',
+                ],
+                'ops_shell_seats' => [
+                    '立项收口', '代码复审', '验收闸门', '集成', '运维', '发布', '重构', '迁移复审',
                 ],
                 'acceptance_signoff' => ['UI', '原型'],
                 'acceptance_gate_order' => [
@@ -541,6 +545,7 @@ final class McpSkillCatalog
         $promptOpt = GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION;
         $translation = GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER;
         $documentation = GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER;
+        $codeReview = GuidanceWorkflowCatalog::SURFACE_CODE_REVIEW;
 
         $documentationSeat = [
             'kind' => 'core',
@@ -1018,6 +1023,26 @@ final class McpSkillCatalog
                         . '万能支付：Weline_Payment 唯一壳（URL/编排/状态机/配置/幂等）；渠道差异只在 Extends Provider（shell_provider_business_isomorph）。最小交付=Provider + SystemConfig backend/{method_code}.phtml（+ checkout/CustomerGuide）；getCode/config 文件名/checkout_template_code 三者一致；禁在壳 Controller/Service 重写网关创建/退款/回调，禁按渠道分裂业务控制器。\n'
                         . '资金与安全落地：退款/退货走 Provider.refund + 壳 Refund/Ledger（refund_code+idempotency；不支持→unsupported）；金额 amount_minor。PCI 不碰卡号；CSP 由 Provider.cspDirectives 自报（禁 Framework Defaults 硬编码网关域）；密钥仅 SystemConfig 加密字段；verifyCallback/parseCallback 纯函数。施工+合规复审双轨。\n'
                         . 'HARD（验收闭环 · payment_browser_e2e_closed_loop）：代码改完 ≠ 过手。必须主动拉起真实子智能体 Team:测试:（经项目经理调度或 channel+resume），写清本波 method_code 与必测前端步骤；由测试席用宿主真实 Browser（WB-OP、禁缓存）过该支付方式全流程（选方式→提交→成功/失败/取消；触及则含退款/Webhook return）。仅当测试席 Browser pass + 耐久证据（transaction_no/order_uuid）齐全，本席合规复审才可 pass；否则只能「代码已改，真实浏览器支付通路未过」。禁只改代码不上测试；禁单测/curl/壳层冒烟冒充实浏览器；禁甩测给用户（账号见通用骨架本机测试账号）。后端/通用 Provider 席不得代写本席文件。',
+                ],
+                '代码复审' => [
+                    'kind' => 'ops_shell',
+                    'mcp_skill_ids' => [$codeReview],
+                    'host_skills' => ['weline-code-review'],
+                    'authoritative_docs' => [
+                        'dev/ai-command/ai/代码复审.md',
+                        'dev/ai-command/ai/工程团队.md',
+                        'app/code/Weline/Ai/doc/ai/skills/code-review/SKILL.md',
+                        'app/code/Weline/Ai/doc/ai/skills/code-review/reference/module-boundary-contamination.md',
+                        'app/code/Weline/Ai/doc/规则/30-后端与数据.md',
+                        'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
+                        'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
+                        'app/code/Weline/Ai/doc/AI硬规则索引.md',
+                    ],
+                    'must_query_scope' => '只读 PR/diff 复审；四阶段过程；HARD 模块边界污染（站/主题/品牌不得进 app/code）；fail→escalate PM',
+                    'prompt_increment' => '你是代码复审（Team:代码复审:）——操作壳专席，只读、可否决，禁止代施工。HARD：开工前 get_skill(code_review|weline-code-review)，并 Read 代码复审.md + module-boundary-contamination.md + 规则/30 §6.2。\n'
+                        . '过程（改编 awesome-skills/code-review-skill）：Phase1 范围 → Phase2 高阶（归属/扩展点/污染）→ Phase3 逐文件 → Phase4 结论；严重度 blocking/important/nit/suggestion/learning/praise。技术判据只听 Weline hard_constraints/扩展点/开发标准——禁止用上游 React/Vue/Clean Architecture 教条否决本仓正确机制。\n'
+                        . 'HARD【模块串融一票否决 · website_concept_seed_not_in_modules】：app/code 内禁止某一 website/设计主题/品牌的开站货架、CatalogSeeder/Sample、websiteCode===具体站业务闸、品牌默认回退（站名/SEO/邮件壳/促销/热搜）、基座 Theme 默认首页品牌化。正确落点 app/design/{Vendor}/{theme}/ 或 websites/<site>/。内部已出现 Product/Theme/Websites/Seo/Blog/Smtp 等串融——审查必须拦同类回归。命中 → module_boundary=fail + blocking，禁止 pass。\n'
+                        . '产物：meetings/代码复审-review.md（必含 module_boundary）。fail/blocking → result=escalate + @项目经理：请立刻组队解决。周边架构隐患只汇报不擅自扩修。内容运营执行波不拉本席。',
                 ],
             ],
         ];

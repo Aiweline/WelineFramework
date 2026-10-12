@@ -52,6 +52,8 @@ final class GuidanceWorkflowCatalog
 
     public const SURFACE_DOCUMENTATION_ENGINEER = 'documentation_engineer';
 
+    public const SURFACE_CODE_REVIEW = 'code_review';
+
     /** @return list<string> Repository-relative pinned doc paths. */
     public static function pinnedDocumentPaths(): array
     {
@@ -851,6 +853,7 @@ final class GuidanceWorkflowCatalog
             self::SURFACE_PROMPT_OPTIMIZATION => self::promptOptimizationSurface(),
             self::SURFACE_TRANSLATION_ENGINEER => self::translationEngineerSurface(),
             self::SURFACE_DOCUMENTATION_ENGINEER => self::documentationEngineerSurface(),
+            self::SURFACE_CODE_REVIEW => self::codeReviewSurface(),
         ];
     }
 
@@ -1445,7 +1448,9 @@ final class GuidanceWorkflowCatalog
                     'Recommending business-class parallel process caches outside HotCache/CachePolicy',
                     'Same-module layout <w:widget> plus JSON default_injections for the same widget (double render)',
                     'Cross-module layout inlining of foreign widgets via <w:widget>/fetch instead of owning-module default_injections',
-                    'Finding problems (顾问/性能/提示词优化/安全) without escalate to wake 项目经理',
+                    'Finding problems (顾问/性能/提示词优化/代码复审/安全) without escalate to wake 项目经理',
+                    'Passing code review while app/code hosts website/theme/brand openers (module contamination)',
+                    'Skipping Team:代码复审: on user PR/diff review or suspected module-boundary contamination',
                     '项目经理 receiving escalate but not same-turn staffing seats to resolve',
                     'Using Issue task lists / boards instead of waking 项目经理 immediately',
                     'Issuer hands-off after escalate (closed without waiting_acceptance / ignoring PM progress / no issuer_acceptance)',
@@ -1469,7 +1474,8 @@ final class GuidanceWorkflowCatalog
                     'On Weline_Visitor / pixel / visitor events / Visitor reports: staff Team:数据分析:; get_skill(visitor_data_analytics); distinguish from framework Event seat',
                     'On UI in_scope: components.md; negotiate before extending components; acceptance-ui.md + acceptance-prototype.md dual pass BEFORE Tester execution; Tester pass → PM 汇审 → then user report (ui_prototype_gate_before_test)',
                     'Escalate cross-track findings; hold a meeting before continuing that lane',
-                    'On findings or finalized「要开发什么」from 电商顾问/性能检查/提示词优化/安全: escalate immediately with @项目经理：请立刻组队解决; PM same-turn staffs seats (findings_wake_pm)',
+                    'On findings or finalized「要开发什么」from 电商顾问/性能检查/提示词优化/代码复审/安全: escalate immediately with @项目经理：请立刻组队解决; PM same-turn staffs seats (findings_wake_pm)',
+                    'On user PR/diff review or suspected website/theme/brand seeds in app/code: staff Team:代码复审:; get_skill(code_review); HARD module_boundary checklist',
                     'After escalate: issuer stays waiting_acceptance; PM resumes issuer on milestones; issuer writes issuer_acceptance; FORBID 汇审 without pass (requirement_issuer_owns_acceptance)',
                     'Seat closed reports include related_web_urls; after PM 汇审 user completion report includes 交付地址 summarizing seat related_web_urls + tester probed URLs (feature_delivery_urls)',
                     'On major architecture contradiction: write dev/team/{slug}/stop-work.md and wait',
@@ -2172,6 +2178,68 @@ final class GuidanceWorkflowCatalog
     }
 
     /** @return array<string, mixed> */
+    public static function codeReviewSurface(): array
+    {
+        return [
+            'id' => self::SURFACE_CODE_REVIEW,
+            'label' => '代码复审（结构化 diff 闸 + 模块边界污染禁令）',
+            'description' => '工程团队操作壳专席「代码复审」：只读 PR/diff 复审。过程改编自开源热门 awesome-skills/code-review-skill（四阶段+severity）；技术判据只听 Weline hard_constraints。HARD：禁止网站/设计主题/品牌开站概念串融进 app/code 模块（website_concept_seed_not_in_modules）——站码闸、CatalogSeeder/Sample、品牌默认回退、基座默认首页品牌化一律 fail。写 meetings/代码复审-review.md；fail → escalate PM。',
+            'triggers' => [
+                '代码复审', '代码审查', 'Team:代码复审',
+                'code review', 'PR review', 'diff 复审', '审查代码',
+                '模块串融', '网站概念侵入', 'website_concept_seed',
+                '硬编码网站', 'CatalogSeeder 进模块', '品牌种子进模块',
+                'code_review', 'weline-code-review',
+            ],
+            'authoritative_skill' => 'weline-code-review',
+            'authoritative_doc' => 'dev/ai-command/ai/代码复审.md',
+            'authoritative_docs' => [
+                'dev/ai-command/ai/代码复审.md',
+                'dev/ai-command/ai/工程团队.md',
+                'app/code/Weline/Ai/doc/ai/skills/code-review/SKILL.md',
+                'app/code/Weline/Ai/doc/ai/skills/code-review/reference/module-boundary-contamination.md',
+                'app/code/Weline/Ai/doc/规则/30-后端与数据.md',
+                'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
+                'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
+                'app/code/Weline/Ai/doc/AI硬规则索引.md',
+            ],
+            'norms' => [
+                ['id' => 'code_review_read_only', 'summary' => '只读复审；禁止代施工改生产码骗绿'],
+                ['id' => 'code_review_four_phase_process', 'summary' => '四阶段过程改编自 awesome-skills/code-review-skill；严重度 blocking/important/nit/suggestion/learning/praise'],
+                ['id' => 'code_review_weline_verdicts_only', 'summary' => '技术判据只听 hard_constraints/扩展点/开发标准；禁止用上游语言栈教条否决本仓正确机制'],
+                ['id' => 'code_review_module_boundary_hard', 'summary' => 'HARD 每一轮必须跑模块边界污染清单；站/主题/品牌开场写进 app/code → blocking fail（website_concept_seed_not_in_modules）'],
+                ['id' => 'code_review_mandatory_triggers', 'summary' => '用户明示复审、P4 通用 diff 闸、或 diff 含开站种子/站码闸/品牌默认回退嫌疑时必须 Team:代码复审: 上场'],
+                ['id' => 'code_review_dual_track_artifact', 'summary' => '写 meetings/代码复审-review.md，必须含 module_boundary=pass|fail'],
+                ['id' => 'code_review_wake_pm', 'summary' => 'blocking/fail → escalate @项目经理：请立刻组队解决；禁止私自排施工'],
+                ['id' => 'code_review_not_content_ops', 'summary' => '内容运营执行波不拉本席（除非明示审模块污染）'],
+            ],
+            'verification_commands' => [
+                'test -f dev/ai-command/ai/代码复审.md',
+                'test -f app/code/Weline/Ai/doc/ai/skills/code-review/SKILL.md',
+                'test -f app/code/Weline/Ai/doc/ai/skills/code-review/reference/module-boundary-contamination.md',
+                'rg -n "code_review_for_module_boundary|代码复审" app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php',
+                'rg -n "代码复审|code_review|website_concept_seed" dev/ai-command/ai/工程团队.md',
+            ],
+            'template_surface_rules' => [
+                'forbidden' => [
+                    'Passing review while app/code hosts website/theme/brand openers (CatalogSeeder/Sample/site-code gates/brand defaults)',
+                    'Applying upstream React/Vue/Clean-Architecture preferences to veto documented Weline extension points',
+                    'Rewriting production code under the guise of code review',
+                    'Skipping Team:代码复审: when user asked for PR/diff review or module-boundary contamination is in scope',
+                    'Signing module_boundary=pass without running the contamination checklist',
+                    'Finding blocking contamination without escalate waking 项目经理',
+                ],
+                'required' => [
+                    'get_skill(code_review|weline-code-review); Read 代码复审.md + module-boundary-contamination.md',
+                    'Staff Team:代码复审: as real subagent for independent PR/diff review waves',
+                    'Four-phase review + severity labels; HARD fail on website_concept_seed_not_in_modules violations',
+                    'Write meetings/代码复审-review.md with module_boundary pass|fail; escalate on fail',
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
     public static function translationEngineerSurface(): array
     {
         return [
@@ -2373,6 +2441,11 @@ final class GuidanceWorkflowCatalog
         }
         if (str_contains($path, 'ai/提示词优化')) {
             return self::SURFACE_PROMPT_OPTIMIZATION;
+        }
+        if (str_contains($path, 'ai/代码复审')
+            || str_contains($path, 'ai/skills/code-review')
+            || str_contains($path, 'module-boundary-contamination')) {
+            return self::SURFACE_CODE_REVIEW;
         }
         if (str_contains($path, 'Payment/doc/payment-shell')
             || str_contains($path, 'Payment/doc/provider-development')
