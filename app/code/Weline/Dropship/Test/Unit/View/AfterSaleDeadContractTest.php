@@ -13,7 +13,7 @@ final class AfterSaleDeadContractTest extends TestCase
     {
         $root = dirname(__DIR__, 3);
         $ctrl = (string)file_get_contents($root . '/Controller/Backend/AfterSale.php');
-        $tpl = (string)file_get_contents($root . '/view/templates/Backend/AfterSale/index.phtml');
+        $tpl = (string)file_get_contents($root . '/view/templates/backend/AfterSale/index.phtml');
 
         self::assertStringContainsString('STATUS_DEAD', $ctrl);
         self::assertStringContainsString('STATUS_ERROR', $ctrl);

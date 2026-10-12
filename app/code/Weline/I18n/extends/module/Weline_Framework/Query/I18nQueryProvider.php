@@ -402,6 +402,7 @@ class I18nQueryProvider implements QueryProviderInterface
                 }
                 $collectData[] = [
                     Dictionary::schema_fields_WORD => Dictionary::assertWord($key),
+                    Dictionary::schema_fields_AREA => \Weline\I18n\Service\DictionaryAreaPolicy::AREA_SHARED,
                     Dictionary::schema_fields_IS_BACKEND => 0,
                     Dictionary::schema_fields_MODULE => \substr($module, 0, 255),
                 ];

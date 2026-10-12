@@ -13,10 +13,9 @@ namespace Weline\Meta\Taglib;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Taglib;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Meta\Helper\MetaTranslation;
 
 class WMeta implements TaglibInterface
 {
@@ -88,36 +87,29 @@ class WMeta implements TaglibInterface
                 $scopePhpCode = $scope;
             }
 
-            // 解析 meta 字段路径
+            // 解析 meta 字段路径 → MetaLocal（MetaTranslation）
             // 格式支持：
-            // 1. @meta::theme.component.pagination.info.name（完整路径，使用I18n Dictionary）
-            // 2. @meta.info.name（需要补全前缀，使用I18n Dictionary）
-            // 3. info.name（需要补全前缀和 @meta::，需要提供 prefix 属性，使用I18n Dictionary）
-            // 4. theme.frontend.layouts.default.name（统一规范化为 @meta:: 字典键）
+            // 1. @meta::theme.component.pagination.info.name（完整路径）
+            // 2. @meta.info.name（需要补全前缀）
+            // 3. info.name（需要补全前缀和 @meta::，需要提供 prefix 属性）
+            // 4. theme.frontend.layouts.default.name（统一规范化为 @meta:: 键）
             $metaKey = trim($content);
 
-            // 所有形式统一使用 I18n Dictionary。
-            // 如果已经是完整路径（以 @meta:: 开头），直接使用
             if (str_starts_with($metaKey, '@meta::')) {
                 // 已经是完整路径，不需要处理
             } 
-            // 如果以 @meta. 开头，替换为 @meta::，然后补全前缀
             elseif (str_starts_with($metaKey, '@meta.')) {
                 $metaKey = str_replace('@meta.', '', $metaKey);
-                // 补全路径
                 if (!empty($prefix)) {
                     $metaKey = '@meta::' . $prefix . '.' . $metaKey;
                 } else {
                     $metaKey = '@meta::' . $metaKey;
                 }
             }
-            // 如果都不匹配，说明是简写格式（如 info.name），需要补全
             else {
-                // 补全路径
                 if (!empty($prefix)) {
                     $metaKey = '@meta::' . $prefix . '.' . $metaKey;
                 } else {
-                    // 如果没有 prefix，直接添加 @meta:: 前缀
                     $metaKey = '@meta::' . $metaKey;
                 }
             }
@@ -126,10 +118,7 @@ class WMeta implements TaglibInterface
             $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
 
             // 构建带 scope 的 meta key（用于存储和读取）
-            // 格式：@meta::theme.component.pagination.info.name|scope:default
-            // 如果 scope 是 PHP 变量，需要在运行时构建
             if ($isPhpScope) {
-                // 在运行时构建带 scope 的 key
                 $metaKeyWithScopePhp = '<?=$metaKeyWithScope = $metaKey . (($scope = ' . $scopePhpCode . ') !== \'default\' ? \'|scope:\' . $scope : \');?>';
             } else {
                 $metaKeyWithScope = $metaKey;
@@ -138,41 +127,50 @@ class WMeta implements TaglibInterface
                 }
             }
 
-            // 从I18n Dictionary获取翻译（优先使用带 scope 的 key）
-            // 如果 scope 是 PHP 变量，需要在运行时获取翻译
+            // 从 MetaLocal 获取翻译（优先使用带 scope 的 key）
             if ($isPhpScope) {
-                // 生成运行时获取翻译的 PHP 代码
+                $escapedContent = addcslashes($content, "\\'");
                 $translationPhpCode = <<<PHP
 <?php
 \$locale = \\Weline\\Framework\\Http\\Cookie::getLangLocal() ?? 'zh_Hans_CN';
 \$scope = {$scopePhpCode};
 \$metaKeyWithScope = \$metaKey . (\$scope !== 'default' ? '|scope:' . \$scope : '');
-\$translation = '';
-\$dictionary = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(
-    \\Weline\\Framework\\Runtime\\RuntimeProviderResolver::class,
-)->resolve(\\Weline\\I18n\\Api\\Translation\\DictionaryRepositoryInterface::class);
-if (\$dictionary instanceof \\Weline\\I18n\\Api\\Translation\\DictionaryRepositoryInterface) {
-    \$translation = \$dictionary->getEntry(\$metaKeyWithScope, \$locale)?->translation ?? '';
-    if (empty(\$translation) && \$scope !== 'default') {
-        \$translation = \$dictionary->getEntry(\$metaKey, \$locale)?->translation ?? '';
-    }
+\$translation = \\Weline\\Meta\\Helper\\MetaTranslation::getTranslatedValueWithScope(
+    \$metaKeyWithScope,
+    \$scope,
+    \$locale,
+    '',
+);
+if (\$translation === '' && \$scope !== 'default') {
+    \$translation = \\Weline\\Meta\\Helper\\MetaTranslation::getTranslatedValueWithScope(
+        \$metaKey,
+        'default',
+        \$locale,
+        '',
+    );
 }
-\$defaultValue = \$translation ?: '{$content}';
+\$defaultValue = \$translation !== '' ? \$translation : '{$escapedContent}';
 ?>
 PHP;
                 $defaultValue = '<?=$defaultValue?>';
             } else {
-                // 先尝试带 scope 的 key
-                $dictionary = self::dictionaryRepository();
-                $translation = $dictionary->getEntry($metaKeyWithScope, $locale)?->translation ?? '';
+                $translation = MetaTranslation::getTranslatedValueWithScope(
+                    $metaKeyWithScope,
+                    $scope,
+                    $locale,
+                    '',
+                );
                 
-                // 如果没有找到，尝试不带 scope 的 key（使用默认值）
-                if (empty($translation) && $scope !== 'default') {
-                    $translation = $dictionary->getEntry($metaKey, $locale)?->translation ?? '';
+                if ($translation === '' && $scope !== 'default') {
+                    $translation = MetaTranslation::getTranslatedValueWithScope(
+                        $metaKey,
+                        'default',
+                        $locale,
+                        '',
+                    );
                 }
 
-                // 如果没有翻译，使用默认值（从标签内容中提取，如果有的话）
-                $defaultValue = $translation ?: $content;
+                $defaultValue = $translation !== '' ? $translation : $content;
             }
 
             // 如果 type 不是 translate，直接返回翻译值或默认值
@@ -285,17 +283,6 @@ TAG;
         RequestContext::set(self::REQUEST_IDS_KEY, $ids);
 
         return $id;
-    }
-
-    private static function dictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$provider instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-
-        return $provider;
     }
 
     static function tag_self_close(): bool

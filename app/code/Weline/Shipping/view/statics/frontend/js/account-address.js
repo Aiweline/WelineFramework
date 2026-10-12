@@ -28,6 +28,54 @@
         return value == null ? '' : String(value);
     }
 
+    function joinContactName(form) {
+        if (!form) {
+            return '';
+        }
+        var first = form.querySelector('[data-contact-part="first"]');
+        var last = form.querySelector('[data-contact-part="last"]');
+        var joined = form.querySelector('[data-contact-joined], [name="contact_name"]');
+        var label = form.querySelector('[data-address-label], [name="name"]');
+        if (!first && !last) {
+            return text(joined && joined.value).trim();
+        }
+        var parts = [text(first && first.value).trim(), text(last && last.value).trim()].filter(Boolean);
+        var full = parts.join(' ');
+        var prevJoined = text(joined && joined.value).trim();
+        if (joined) {
+            joined.value = full;
+        }
+        if (label) {
+            var currentLabel = text(label.value).trim();
+            // Keep address label in sync while it still mirrors the previous joined name
+            // (or is empty). Stop once the shopper edits the label independently.
+            if (!currentLabel || currentLabel === prevJoined) {
+                label.value = full;
+            }
+        }
+        return full;
+    }
+
+    function splitContactName(form, fullName) {
+        if (!form) {
+            return;
+        }
+        var first = form.querySelector('[data-contact-part="first"]');
+        var last = form.querySelector('[data-contact-part="last"]');
+        if (!first && !last) {
+            return;
+        }
+        var raw = text(fullName).trim();
+        var parts = raw ? raw.split(/\s+/) : [];
+        if (first) {
+            first.value = parts[0] || '';
+        }
+        if (last) {
+            last.value = parts.slice(1).join(' ') || '';
+        }
+        joinContactName(form);
+    }
+
     function fullAddress(data) {
         return [data.country, data.province, data.city, data.district, data.street].map(text).filter(Boolean).join(' / ');
     }
@@ -37,7 +85,7 @@
         data = data || {};
         data.id = data.id || data[idField] || data.shipping_address_id || data.delivery_address_id || '';
         data[idField] = data[idField] || data.id;
-        data.country = data.country || labels.country;
+        data.country = data.country || '';
         data.full_address = data.full_address || fullAddress(data);
         data.is_default = data.is_default ? 1 : 0;
         return data;
@@ -169,14 +217,21 @@
         var wrap = panel.querySelector('[data-address-form-wrap]');
         var form = panel.querySelector('[data-address-form]');
         data = normalize(data || {}, panel);
+        if (!text(data.country_code) && !text(data.id)) {
+            var fallbackCc = text(panel.getAttribute('data-default-country')).toUpperCase();
+            if (fallbackCc) {
+                data.country_code = fallbackCc;
+            }
+        }
         form.reset();
         form.querySelector('[name="' + panel.getAttribute('data-id-field') + '"]').value = data.id || '';
         ['name', 'contact_name', 'contact_phone', 'country', 'country_code', 'province', 'province_code', 'province_region_id', 'city', 'city_code', 'city_region_id', 'district', 'district_code', 'district_region_id', 'street', 'postal_code'].forEach(function (field) {
             var input = form.querySelector('[name="' + field + '"]');
             if (input) {
-                input.value = data[field] || (field === 'country' ? labels.country : '');
+                input.value = data[field] || '';
             }
         });
+        splitContactName(form, data.contact_name || data.name || '');
         var checkbox = form.querySelector('[name="is_default"]');
         if (checkbox) {
             checkbox.checked = !!data.is_default;
@@ -296,9 +351,19 @@
             }
         });
 
+        panel.querySelector('[data-address-form]').addEventListener('input', function (event) {
+            var part = event.target && event.target.getAttribute
+                ? event.target.getAttribute('data-contact-part')
+                : '';
+            if (part === 'first' || part === 'last') {
+                joinContactName(event.currentTarget);
+            }
+        });
+
         panel.querySelector('[data-address-form]').addEventListener('submit', function (event) {
             event.preventDefault();
             var form = event.currentTarget;
+            joinContactName(form);
             var submit = form.querySelector('[type="submit"]');
             var originalText = submit.textContent;
             submit.disabled = true;

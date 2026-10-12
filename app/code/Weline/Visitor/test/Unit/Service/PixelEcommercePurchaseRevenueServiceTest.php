@@ -124,7 +124,7 @@ final class PixelEcommercePurchaseRevenueServiceTest extends TestCase
         self::assertStringContainsString('PixelEcommercePurchaseRevenueService', $controller);
         self::assertStringContainsString('ecommerce_revenue', $controller);
 
-        $detail = (string)\file_get_contents($root . '/view/templates/Backend/PixelDashboard/detail.phtml');
+        $detail = (string)\file_get_contents($root . '/view/templates/backend/PixelDashboard/detail.phtml');
         self::assertStringContainsString('ecommerce-revenue', $detail);
         self::assertStringContainsString('购成与收入', $detail);
         self::assertStringContainsString('purchase_revenue', $detail);

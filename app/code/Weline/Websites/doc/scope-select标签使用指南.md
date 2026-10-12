@@ -125,8 +125,8 @@ $websiteId = $claims['website_id']; // Global 时为 null；默认站可为 0
 
 参考实现：
 
-- `Dropship/view/templates/Backend/Warehouse/index.phtml`、`Config/index.phtml`
-- `Dropship/view/templates/Backend/Listing/index.phtml`（刊登弹窗）
+- `Dropship/view/templates/backend/Warehouse/index.phtml`、`Config/index.phtml`
+- `Dropship/view/templates/backend/Listing/index.phtml`（刊登弹窗）
 - `Dropship/Controller/Backend/Warehouse.php`、`Listing.php`（`resolveFromInput`）
 
 ---

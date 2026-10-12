@@ -109,6 +109,11 @@ class CachePool implements CachePoolInterface, RemembererInterface
             return true;
         }
 
+        // ttl < 0 → adapter forever (0). ttl === 0 → pool defaultTtl (BC).
+        if ($ttl < 0) {
+            return $this->adapter->set($this->buildKey($key), $value, 0);
+        }
+
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
         $ttl = $this->applyJitter($ttl);
         return $this->adapter->set($this->buildKey($key), $value, $ttl);

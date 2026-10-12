@@ -12,7 +12,7 @@ final class RateTemplateDesignNoteContractTest extends TestCase
     public function testIndexExplainsNoDestinationRateMatrix(): void
     {
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/RateTemplate/index.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/RateTemplate/index.phtml'
         );
         self::assertStringContainsString('data-testid="shipping-rate-template-design-note"', $tpl);
         self::assertStringContainsString('w-alert__content', $tpl);

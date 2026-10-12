@@ -10,7 +10,7 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
 {
     public function testBindModalIsTemplateBackedAndNotEagerDomNode(): void
     {
-        $hookFile = dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml';
+        $hookFile = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/customer-service-float.phtml';
 
         $this->assertFileExists($hookFile);
         $content = (string) file_get_contents($hookFile);
@@ -61,7 +61,7 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
 
     public function testWidgetAssetsUseCanonicalCssVersionAndDeclaredModuleLoader(): void
     {
-        $hookFile = dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml';
+        $hookFile = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/customer-service-float.phtml';
 
         $this->assertFileExists($hookFile);
         $content = (string) file_get_contents($hookFile);

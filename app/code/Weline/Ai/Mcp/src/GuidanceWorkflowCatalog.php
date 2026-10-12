@@ -1046,7 +1046,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'csv_bilingual_aligned', 'summary' => 'zh_Hans_CN.csv 与 en_US.csv source 键对齐；en_US 第二列必须是英文译文，禁止留空或把中文 source 原样当作英文'],
                 ['id' => 'collect_after_csv', 'summary' => '改 CSV 或新增源串后必须 php bin/w i18n:collect，否则运行时词典不更新'],
                 ['id' => 'en_us_no_chinese_placeholder', 'summary' => '交付前抽检 en_US：用户可见词条第二列不得仍为纯中文（与 source 相同）'],
-                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到「翻译」作为任务时：按默认网站已选语言（Website::ID_DEFAULT）全语种译写；模块 CSV 仅 zh_Hans_CN+en_US，其它语种进系统词典，禁止只译 en_US'],
+                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到「翻译」作为任务时：按默认网站已选语言（Website::ID_DEFAULT）全语种译写；官方框架模块 CSV Git瘦身仅 zh_Hans_CN+en_US、其它进系统词典（非框架模块可自备其它 locale CSV）；禁止只译 en_US'],
             ],
             'verification_commands' => [
                 'php bin/w i18n:collect Weline_Module',
@@ -1084,7 +1084,7 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_MODULE_I18N_CSV,
             'label' => '模块翻译 CSV 门禁',
-            'description' => '源串默认简体中文（正确）；活跃/默认 locale 非中文时须显示目标语译文；模块须维护齐全 zh_Hans_CN/en_US CSV（禁止其它 locale CSV）；用户提到翻译时须覆盖默认网站已选全部语言（非中英语种进系统词典）；en_US 第二列须为英文；改中英 CSV 后必须 i18n:collect。',
+            'description' => '源串默认简体中文（正确）；活跃/默认 locale 非中文时须显示目标语译文；模块须维护齐全 zh_Hans_CN/en_US CSV；官方框架模块 Git 瘦身仅中英 CSV（非框架/第三方模块可自备其它 locale CSV）；用户提到翻译时须覆盖默认网站已选全部语言（官方模块非中英语种进系统词典）；en_US 第二列须为英文；改中英 CSV 后必须 i18n:collect。',
             'triggers' => [
                 'csv', 'i18n:collect', 'en_us', 'zh_hans_cn', '翻译文件', '词典', 'collect',
                 '国际化', 'locale', '语言包', '翻译', 'translate', '默认语言', '英文环境',
@@ -1097,9 +1097,9 @@ final class GuidanceWorkflowCatalog
             'norms' => [
                 ['id' => 'chinese_source_default', 'summary' => '模板/菜单/ACL/__() 用户可见源串默认简体中文（正确）；禁止英文源串导致中英 CSV 串列'],
                 ['id' => 'active_locale_must_show_target_language', 'summary' => '网站默认语或请求 locale 非中文时，界面必须显示该语种译文；禁止因源串是中文就在英文站露出中文；禁止 en_US 第二列中文占位'],
-                ['id' => 'bilingual_csv_required', 'summary' => '每模块至少 zh_Hans_CN.csv + en_US.csv，source 键一致；禁止其它 locale CSV'],
+                ['id' => 'bilingual_csv_required', 'summary' => '每模块至少 zh_Hans_CN.csv + en_US.csv，source 键一致；官方框架模块 Git 瘦身禁止其它 locale CSV；非框架模块不受此禁'],
                 ['id' => 'en_us_real_english', 'summary' => 'en_US 第二列必须是英文译文，禁止留空或把中文 source 原样当作英文'],
-                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到翻译任务时：解析默认网站 language_codes（本地 DB，website_id=0）并对每一语种写真实译文；模块 CSV 仅中英，其它进系统词典；禁止只译 en_US'],
+                ['id' => 'user_mentions_translation_all_default_website_locales', 'summary' => '用户提到翻译任务时：解析默认网站 language_codes（本地 DB，website_id=0）并对每一语种写真实译文；官方框架模块 CSV 仅中英、其它进系统词典；非框架模块可自备其它 locale CSV；禁止只译 en_US'],
                 ['id' => 'frontend_backend_csv_sync', 'summary' => '前台加词须同步补后台 CSV 与 en 译文'],
                 ['id' => 'collect_mandatory', 'summary' => 'CSV 处理后必须 i18n:collect，禁止只改文件不收集'],
             ],
@@ -1358,7 +1358,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'ecommerce_advisor_required_for_commerce', 'summary' => '触及商品/目录/购物车/结账/订单/支付政策面/运费/站店渠/首页落地页运营设计/获客投放活动策划时必须 Team:电商顾问: 参与需求讨论与对齐冻结/技术方案会；运营策划禁写码；领域决策定稿后 escalate 通知 PM；须联网检索现行政策与运营要点'],
                 ['id' => 'performance_engineer_required_for_hot_path', 'summary' => '触及热路径/缓存/列表目录搜索/N+1/慢请求时必须 Team:性能检查工程师: 参与需求讨论与对齐冻结/技术方案会，并在开发后复审；建议须落在框架缓存与批量约束内'],
                 ['id' => 'prompt_engineer_required_for_skill_prompt', 'summary' => '触及技能引用/提示词骨架/席位镜/MCP skill·surface 文案或用户明示提示词优化时必须 Team:提示词优化工程师:；引用指针化+重复压缩+语义复审；禁削弱硬规则'],
-                ['id' => 'translation_engineer_required_for_i18n', 'summary' => '新文案/改用户可见文案/i18n in_scope/漏译/界面流程翻译时必须 Team:翻译工程师:（别名 i18n）；模块 CSV 仅中英格式边界；其它已选 locale→词典/实体；禁「其它语种默认不做」'],
+                ['id' => 'translation_engineer_required_for_i18n', 'summary' => '新文案/改用户可见文案/i18n in_scope/漏译/界面流程翻译时必须 Team:翻译工程师:（别名 i18n）；官方框架模块 CSV Git瘦身仅中英；非框架模块可自备其它 locale CSV；其它已选 locale→词典/实体；禁「其它语种默认不做」'],
                 ['id' => 'documentation_engineer_required_on_behavior_change', 'summary' => '行为/契约变更复杂 team：测试 pass 后必须 Team:文档工程师:（别名 文档）执行 documentation_review_pass；实现变→耐久文档描述同变；无 meetings/文档-review.md=pass 禁汇审'],
                 ['id' => 'documentation_engineer_owns_durable_docs', 'summary' => '模块耐久文档只由文档工程师统一编写；其它开发席禁私改 app/code/*/doc/，须交 doc_debt+notify PM 安排上场'],
                 ['id' => 'api_rest_in_owning_module', 'summary' => 'REST 必须落在资源归属 Vendor_Module（Website API→Weline_Websites；词典/翻译 API→Weline_I18n）；禁止跨模块代写 Rest'],
@@ -2177,7 +2177,7 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_TRANSLATION_ENGINEER,
             'label' => '翻译工程师（全站漏译巡检 + 中英 CSV）',
-            'description' => '工程团队「翻译工程师」专席（一代别名 i18n）：专职全站界面/流程文案与活跃·默认 locale 匹配巡检，发现问题即译修（品牌/商标/专有名词除外）。标准流程：解析默认站 language_codes → i18n:collect → 源串默认简中 → 对比缺口 → 译修 → 再 collect → 抽检≥1 非中英。模块 CSV 格式边界仅 zh_Hans_CN+en_US（禁止非中英模块 CSV）；其它已选 locale 进系统词典/归属实体——禁止「其它语种默认不做」。伴生技能 template_i18n + module_i18n_csv。不代跑 content_ops 商品翻译优化。',
+            'description' => '工程团队「翻译工程师」专席（一代别名 i18n）：专职全站界面/流程文案与活跃·默认 locale 匹配巡检，发现问题即译修（品牌/商标/专有名词除外）。标准流程：解析默认站 language_codes → i18n:collect → 源串默认简中 → 对比缺口 → 译修 → 再 collect → 抽检≥1 非中英。官方框架模块 CSV Git 瘦身仅 zh_Hans_CN+en_US（非框架/第三方模块可自备其它 locale CSV）；其它已选 locale 进系统词典/归属实体——禁止「其它语种默认不做」。伴生技能 template_i18n + module_i18n_csv。不代跑 content_ops 商品翻译优化。',
             'triggers' => [
                 '翻译工程师', 'Team:翻译工程师', 'Team:i18n',
                 '漏译', 'locale leak', '界面文案翻译', '流程提示翻译',
@@ -2197,8 +2197,8 @@ final class GuidanceWorkflowCatalog
             'norms' => [
                 ['id' => 'i18n_must_site_audit', 'summary' => '本职必须全站/范围内巡检界面与流程提示是否与活跃·默认 locale 匹配；禁止旁听式签字'],
                 ['id' => 'i18n_collect_then_compare_translate', 'summary' => '标准流程：解析默认站 language_codes → i18n:collect → 源串默认简中 → 对比缺口 → 翻译落盘 → 再 collect → 抽检≥1 非中英'],
-                ['id' => 'i18n_zh_en_csv_only_this_phase', 'summary' => '模块 CSV 格式边界仅 zh_Hans_CN+en_US；禁止写非中英模块 CSV；禁止把「仅中英」写成「其它语种默认不做」——其它已选 locale 进系统词典/实体'],
-                ['id' => 'i18n_default_website_all_locales_on_copy_change', 'summary' => '工程改用户可见文案同波须覆盖默认站每一个已选 locale（zh/en→模块 CSV；其它→词典/实体）；对齐 active_locale_must_show_target_language'],
+                ['id' => 'i18n_zh_en_csv_only_this_phase', 'summary' => '官方框架模块 CSV Git 瘦身仅 zh_Hans_CN+en_US；禁止把「仅中英」写成「非框架也禁其它 CSV」或「其它语种默认不做」——其它已选 locale 进系统词典/实体；非框架模块可自备其它 locale CSV'],
+                ['id' => 'i18n_default_website_all_locales_on_copy_change', 'summary' => '工程改用户可见文案同波须覆盖默认站每一个已选 locale（官方模块 zh/en→模块 CSV；其它→词典/实体）；对齐 active_locale_must_show_target_language'],
                 ['id' => 'i18n_active_locale_no_chinese_leak', 'summary' => 'active_locale_must_show_target_language：非中文环境禁止继续露中文正文或错误回落英文 catalog（品牌/商标/专有名词除外）；en_US 第二列禁止中文占位'],
                 ['id' => 'i18n_chinese_source_default', 'summary' => '源串默认简中；禁止英文源串当默认；禁止为修漏译把模板改成英文'],
                 ['id' => 'i18n_mandatory_on_copy_scope', 'summary' => '新文案/改用户可见文案/i18n in_scope/漏译/界面流程翻译复杂 team 必须 Team:翻译工程师:（别名 i18n）上场'],
@@ -2219,8 +2219,8 @@ final class GuidanceWorkflowCatalog
                     'Leaving Chinese UI prose under en_US / non-Chinese locale (except brand/trademark/tech tokens)',
                     'Leaving English catalog fallback under non-en locales after copy remediation (e.g. ru_RU FAQ still English)',
                     'Editing module i18n CSV without i18n:collect',
-                    'Creating or writing module i18n CSV for locales other than zh_Hans_CN / en_US',
-                    'Treating「模块 CSV 仅中英」as license to skip other default-website locales (dictionary/entity)',
+                    'Creating or writing non-zh/en locale CSV under official framework modules (Weline_* / monorepo official Vendor) — git-slim policy',
+                    'Treating「官方模块 CSV 仅中英」as a ban on non-framework/third-party extra locale CSV, or as license to skip other default-website locales (dictionary/entity)',
                     'Rewriting template sources to English to fake English-locale display',
                     'Treating content-ops product 翻译优化 as this seat’s default work',
                     'Skipping Team:翻译工程师: (alias i18n) on new/changed user-visible copy / i18n in_scope / leak screenshots',

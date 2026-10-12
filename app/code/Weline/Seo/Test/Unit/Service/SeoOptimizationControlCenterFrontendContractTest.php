@@ -11,7 +11,7 @@ final class SeoOptimizationControlCenterFrontendContractTest extends TestCase
     public function testOptimizationConsoleUsesOfficialWebsiteSelectAndKeepEvolveSurface(): void
     {
         $template = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/view/templates/Backend/Optimization/index.phtml'
+            \dirname(__DIR__, 3) . '/view/templates/backend/Optimization/index.phtml'
         );
 
         self::assertStringContainsString('w:websites:website:select', $template);

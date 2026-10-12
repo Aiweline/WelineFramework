@@ -129,7 +129,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 | 纯函数 / Service 局部 | 聚焦单测 |
 | 命令 / API / 持久化 | 真实命令或 API 结果 + 必要单测 |
 | Model / Controller / 注册表 | bump `etc/module.php` version + `setup:upgrade` 或 `--route` 成功（见 [模块版本与升级门禁](../../Framework/doc/3-开发/模块版本与升级门禁.md)） |
-| i18n CSV / 新增可翻译文案 | **源串默认简体中文**（禁止模板英文源串）+ `zh_Hans_CN.csv` + `en_US.csv` 对齐（**禁止其它 locale CSV**）；**用户提到翻译时还须覆盖默认网站已选全部语言（非中英语种进系统词典）** + 中英改动后 `php bin/w i18n:collect`（见 [模块翻译CSV规范](../../I18n/doc/模块翻译CSV规范.md)；MCP `module_i18n_chinese_source_default` / `user_mentions_translation_all_default_website_locales`） |
+| i18n CSV / 新增可翻译文案 | **源串默认简体中文**（禁止模板英文源串）+ `zh_Hans_CN.csv` + `en_US.csv` 对齐；**官方框架模块 Git 瘦身仅中英 CSV**（非框架模块可自备其它 locale CSV）；**用户提到翻译时还须覆盖默认网站已选全部语言（官方模块非中英语种进系统词典）** + 中英改动后 `php bin/w i18n:collect`（见 [模块翻译CSV规范](../../I18n/doc/模块翻译CSV规范.md)；MCP `module_i18n_chinese_source_default` / `user_mentions_translation_all_default_website_locales`） |
 | 页面 / 交互 / SSE | 真实 WLS + **当前宿主可用的真实 Browser** 操作员路径（**WB-OP**）；**须截图 + 对照模块 `doc/原型设计.md` 视觉清单（WB-VIS）**；多断点 375 / ≈768 / ≥1024 |
 | 文档 / 规则 | Diff、链接、渲染检查；**与实现对照无漂移** |
 
@@ -159,7 +159,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 编辑 `*.phtml`、Theme 部件、布局、partial 时，可选 `resolve_task_context` 的 `workflow_contract.v1` 会附带 **`frontend_development`（前端开发规范）**表面。这是一套 Theme/前端规范，**不是**名为 `weline-code` 的独立技能；section 身份属性只是其中一条硬约束。
 
-**【高压线 · 开发语言默认中文 + 中英 CSV】** 前端开发语言默认**简体中文**：模板 / 菜单 / ACL / `__()` / `@lang` / `<lang>` 用户可见源串必须写中文，禁止英文当默认源串。多语言靠模块 **`i18n/zh_Hans_CN.csv` + `en_US.csv`** 翻译（**不是 CSS**）；zh 第二列中文身份、en 第二列真实英文；改文案同回合写齐并 `php bin/w i18n:collect`，抽检当前 locale。未完成双语不得宣称 UI 交付。MCP：`module_i18n_chinese_source_default` / `frontend_ui_requires_zh_en_csv`；权威：`模块翻译CSV规范.md`、Theme 总指南 §4.1。工程团队前端席必须挂 `template_i18n` + `module_i18n_csv`。
+**【高压线 · 开发语言默认中文 + 中英 CSV】** 前端开发语言默认**简体中文**：模板 / 菜单 / ACL / `__()` / `@lang` / `<lang>` 用户可见源串必须写中文，禁止英文当默认源串。多语言靠模块 **`i18n/zh_Hans_CN.csv` + `en_US.csv`** 翻译（**不是 CSS**）；官方框架模块为 **Git 瘦身**仅维护这两份（非框架/第三方模块可自备其它 locale CSV）；zh 第二列中文身份、en 第二列真实英文；改文案同回合写齐并 `php bin/w i18n:collect`，抽检当前 locale。未完成双语不得宣称 UI 交付。MCP：`module_i18n_chinese_source_default` / `frontend_ui_requires_zh_en_csv`；权威：`模块翻译CSV规范.md`、Theme 总指南 §4.1。工程团队前端席必须挂 `template_i18n` + `module_i18n_csv`。
 
 **【高压线 · 自研主题 UI】** 所有前台/后台可视化界面**必须**使用 Weline 自研主题体系（**Weline UI 2.0**）：组件类名（`w-field` / `w-input` / `w-button` / `w-select` 等）+ 主题 CSS 变量 Token（`--color-*` / `--weline-theme-*` / spacing·radius·shadow）。**禁止** Bootstrap / Element / Ant Design 等第三方 UI；**禁止**硬编码 `#hex` / `rgb()` / 随意 `px` 间距；地址/地区级联**必须**用 `<w:theme:address>`，禁止手写国家/省/市 input。权威：`Theme开发总指南.md`、`theme-css-variables-only.md`、`Taglib/场景映射表.md`。本条由 MCP `hard-constraints.v1`（`weline_ui_theme_first`）与 `frontend_development` surface 强制下发，不在宿主引导中复述。
 

@@ -14,7 +14,7 @@ final class ConfigIndexTemplateContractTest extends TestCase
     public function testConfigEmbedFieldsMatchDeclaredKeys(): void
     {
         $root = dirname(__DIR__, 3);
-        $page = $root . '/view/templates/Backend/Config/index.phtml';
+        $page = $root . '/view/templates/backend/Config/index.phtml';
         $declared = $root . '/extends/module/Weline_SystemConfig/Config/frontend/dropship-settings.phtml';
         self::assertFileExists($page);
         self::assertFileExists($declared);

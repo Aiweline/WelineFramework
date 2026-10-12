@@ -519,13 +519,13 @@ class Order extends BackendPageController
             $this->assign('cases', $payload['cases']);
             $this->assign('returnUrl', $returnUrl);
 
-            return $this->template('Weline_Order::templates/Backend/Order/panel/refund.phtml');
+            return $this->template('Weline_Order::templates/backend/Order/panel/refund.phtml');
         }
 
         if ($tab === 'comms' || $tab === 'payment') {
             $this->assign('orderId', $orderId);
 
-            return $this->template('Weline_Order::templates/Backend/Order/panel/comms.phtml');
+            return $this->template('Weline_Order::templates/backend/Order/panel/comms.phtml');
         }
 
         $payload = $presenter->shipmentPanel($orderId);
@@ -545,7 +545,7 @@ class Order extends BackendPageController
         $this->assign('fulfill_grant_version', $grantVersion);
         $this->assign('returnUrl', $returnUrl);
 
-        return $this->template('Weline_Order::templates/Backend/Order/panel/shipment.phtml');
+        return $this->template('Weline_Order::templates/backend/Order/panel/shipment.phtml');
     }
     
     /**

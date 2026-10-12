@@ -54,7 +54,12 @@ class DictionaryRegisterObserver implements ObserverInterface
             if (!$dictionary->getId()) {
                 $dictionary->setData(Dictionary::schema_fields_WORD, $translationKey);
                 $dictionary->setData(Dictionary::schema_fields_MODULE, $entryModule);
-                $dictionary->setData(Dictionary::schema_fields_IS_BACKEND, $translation['is_backend'] ?? 1);
+                $area = \Weline\I18n\Service\DictionaryAreaPolicy::resolveRegistrationArea($translation);
+                $dictionary->setData(Dictionary::schema_fields_AREA, $area);
+                $dictionary->setData(
+                    Dictionary::schema_fields_IS_BACKEND,
+                    $area === \Weline\I18n\Service\DictionaryAreaPolicy::AREA_BACKEND ? 1 : 0
+                );
                 $dictionary->save();
                 $created++;
             }

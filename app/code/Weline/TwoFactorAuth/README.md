@@ -106,7 +106,7 @@ Weline/TwoFactorAuth/
 ├── Setup/
 │   └── Install.php              # 安装脚本
 ├── view/
-│   ├── templates/Backend/       # 后台视图模板
+│   ├── templates/backend/       # 后台视图模板
 │   └── statics/twofa-app/       # PWA验证器应用
 ├── etc/backend/
 │   └── menu.xml                 # 后台菜单配置

@@ -23,7 +23,7 @@ final class LanguageSelectExcludeSiteLanguagesContractTest extends TestCase
 
     public function testLanguageSupportRequestFormUsesExcludeSiteLanguages(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Frontend/language-support-request.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/frontend/language-support-request.phtml';
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 

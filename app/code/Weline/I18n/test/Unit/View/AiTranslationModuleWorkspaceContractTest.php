@@ -17,7 +17,7 @@ final class AiTranslationModuleWorkspaceContractTest extends TestCase
 
     public function testModuleTabTranslateWritebackSurface(): void
     {
-        $template = $this->read('app/code/Weline/I18n/view/templates/Backend/AiTranslation/index.phtml');
+        $template = $this->read('app/code/Weline/I18n/view/templates/backend/AiTranslation/index.phtml');
         $js = $this->read('app/code/Weline/I18n/view/statics/js/backend-admin.js');
         $controller = $this->read('app/code/Weline/I18n/Controller/Backend/AiTranslation.php');
         $provider = $this->read('app/code/Weline/I18n/extends/module/Weline_Framework/Query/I18nAdminQueryProvider.php');

@@ -10,7 +10,7 @@ final class OpsDeskTemplateContractTest extends TestCase
 {
     public function test_desk_template_has_unified_entry_hooks(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Desk/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Desk/index.phtml';
         self::assertFileExists($path);
         $html = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="ops-desk-page"', $html);
@@ -124,7 +124,7 @@ final class OpsDeskTemplateContractTest extends TestCase
 
     public function test_task_admin_template_hooks(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Task/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Task/index.phtml';
         self::assertFileExists($path);
         $html = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="ops-task-admin-page"', $html);

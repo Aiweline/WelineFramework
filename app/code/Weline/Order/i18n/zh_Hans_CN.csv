@@ -289,8 +289,6 @@ switch,转变
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot 必填字段为空：%{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot 数值/hash 非法"
 我的订单,我的订单
-订单留言,订单留言
-如有特殊要求请留言,如有特殊要求请留言
 查看订单进度与支付状态,查看订单进度与支付状态
 全部范围,全部范围
 多仓会拆成多个子订单；同一子订单也可分批发货,多仓会拆成多个子订单；同一子订单也可分批发货
@@ -326,6 +324,8 @@ SKU,存货单位
 本单全部运单,本单全部运单
 待补运单号,待补运单号
 当前,当前
+订单留言,订单留言
+如有特殊要求请留言,如有特殊要求请留言
 结账配送（参考）,结账配送（参考）
 未指定,未指定
 "对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。","对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。"
@@ -673,7 +673,6 @@ Outbox,发件箱
 "非法 number_kind：%{1}","非法 number_kind：%{1}"
 展示号随机源返回值越界,展示号随机源返回值越界
 展示号原子占位失败,展示号原子占位失败
-数据库标识符不能为空,数据库标识符不能为空
 "display_number 必须是 10 位数字","display_number 必须是 10 位数字"
 "entity_uuid 不能为空且不能超过 36 字符","entity_uuid 不能为空且不能超过 36 字符"
 "DisplayNumberAllocator all 仅 memory 模式","DisplayNumberAllocator 所有单一内存模式"
@@ -788,6 +787,7 @@ Outbox,发件箱
 "旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","旧 结帐写入器已被割接门禁止（mode=%{1}）"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）"
+数据库标识符不能为空,数据库标识符不能为空
 已关闭,已关闭
 未知状态,未知状态
 部分状态不同，已展开,部分状态不同，已展开

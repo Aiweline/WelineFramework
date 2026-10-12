@@ -356,8 +356,8 @@ class ExtendsRegistryNewMethodsTest extends TestCase
     public function testFileTypeIdentification(): void
     {
         $testFiles = [
-            'view/templates/Backend/index.phtml' => 'Template',
-            'view/templates/Frontend/index.html' => 'HTML',
+            'view/templates/backend/index.phtml' => 'Template',
+            'view/templates/frontend/index.html' => 'HTML',
             'view/static/css/style.css' => 'CSS',
             'view/static/js/app.js' => 'JavaScript',
             'etc/config.xml' => 'XML',
@@ -381,7 +381,7 @@ class ExtendsRegistryNewMethodsTest extends TestCase
     public function testExtensionComplexityCalculation(): void
     {
         $testFiles = [
-            'view/templates/Backend/index.phtml' => 'complex', // 模板文件
+            'view/templates/backend/index.phtml' => 'complex', // 模板文件
             'etc/config.xml' => 'medium', // 配置文件
             'view/static/css/style.css' => 'medium', // 静态文件
             'README.md' => 'simple' // 文档文件
@@ -403,7 +403,7 @@ class ExtendsRegistryNewMethodsTest extends TestCase
             'etc/di.xml' => 'critical',
             'config/system.xml' => 'critical',
             'module.xml' => 'critical',
-            'view/templates/Backend/index.phtml' => 'global',
+            'view/templates/backend/index.phtml' => 'global',
             'view/static/css/style.css' => 'local'
         ];
 

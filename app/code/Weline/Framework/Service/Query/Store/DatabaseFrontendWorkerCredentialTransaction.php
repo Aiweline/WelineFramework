@@ -33,16 +33,16 @@ final class DatabaseFrontendWorkerCredentialTransaction implements FrontendWorke
         if ($this->databaseNow !== null) {
             return $this->databaseNow;
         }
-        $sql = match ($this->databaseType) {
-            'mysql', 'mariadb' => 'SELECT UNIX_TIMESTAMP()',
-            'pgsql', 'postgres', 'postgresql' => 'SELECT FLOOR(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT',
-            'sqlite', 'sqlite3' => "SELECT CAST(strftime('%s','now') AS INTEGER)",
-            default => throw new FrontendQueryException(
+        try {
+            $sql = 'SELECT ' . $this->connection->getConnector()->getSqlDialect()->unixEpochExpression(false);
+        } catch (\Throwable $e) {
+            throw new FrontendQueryException(
                 'worker_store_unavailable',
                 'Worker credential database driver is unsupported.',
                 503,
-            ),
-        };
+                $e,
+            );
+        }
         $statement = $this->connection->getConnector()->getWrappedConnection()->prepare($sql);
         if (!$statement->execute()) {
             throw new FrontendQueryException(

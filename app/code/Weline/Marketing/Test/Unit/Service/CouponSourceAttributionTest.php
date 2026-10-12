@@ -41,7 +41,7 @@ final class CouponSourceAttributionTest extends TestCase
 
     public function testListTemplateShowsSourceColumn(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/coupon/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/coupon/index.phtml';
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('marketing-coupon-source', $src);
         self::assertStringContainsString('来源', $src);

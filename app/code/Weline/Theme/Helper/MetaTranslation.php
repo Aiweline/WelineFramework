@@ -10,114 +10,81 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RuntimeProviderResolver;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Meta\Helper\MetaTranslation as MetaMetaTranslation;
+use Weline\Meta\Model\MetaLocal;
 
 /**
- * Meta翻译辅助类
- * 
- * 用于获取meta值的翻译
+ * Theme 侧 Meta 翻译：委托 MetaLocal，禁止再写 I18n 词典 @meta::。
  */
 class MetaTranslation
 {
-    /**
-     * 获取meta值的翻译
-     * 
-     * @param string $metaKey meta键，格式：theme.frontend.layouts.default.name
-     * @param string|null $locale 语言代码，如果为null则使用当前语言
-     * @param string|null $defaultValue 默认值
-     * @return string 翻译后的值
-     */
     public static function getTranslatedValue(string $metaKey, ?string $locale = null, ?string $defaultValue = null): string
     {
-        // 构建完整的翻译键
-        $translationKey = '@meta::' . $metaKey;
-        
-        // 获取当前语言
-        if ($locale === null) {
-            $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
-        }
-        
-        $translation = self::loadTranslation($translationKey, $locale);
-        if (!empty($translation)) {
-            return $translation;
-        }
-        
-        // 如果没有翻译，返回默认值
-        return $defaultValue ?? '';
-    }
-    
-    /**
-     * 获取meta值的翻译（支持scope）
-     * 
-     * @param string $metaKey meta键
-     * @param string $scope scope值，如 'default'
-     * @param string|null $locale 语言代码
-     * @param string|null $defaultValue 默认值
-     * @return string 翻译后的值
-     */
-    public static function getTranslatedValueWithScope(string $metaKey, string $scope = 'default', ?string $locale = null, ?string $defaultValue = null): string
-    {
-        // 构建带scope的翻译键
-        $translationKey = '@meta::' . $metaKey;
-        if ($scope !== 'default') {
-            $translationKey .= '|scope:' . $scope;
-        }
-        
-        // 获取当前语言
-        if ($locale === null) {
-            $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
-        }
-        
-        $translation = self::loadTranslation($translationKey, $locale);
-        
-        // 如果没有找到带scope的翻译，尝试不带scope的
-        if (empty($translation) && $scope !== 'default') {
-            $translation = self::loadTranslation('@meta::' . $metaKey, $locale);
-        }
-        
-        // 如果没有翻译，返回默认值
-        return $translation ?: ($defaultValue ?? '');
+        return MetaMetaTranslation::getTranslatedValueWithScope(
+            $metaKey,
+            MetaLocal::DEFAULT_SCOPE,
+            $locale,
+            $defaultValue,
+        );
     }
 
-    private static function loadTranslation(string $translationKey, string $locale): string
-    {
-        return self::dictionaryRepository()->getEntry($translationKey, $locale)?->translation ?? '';
+    public static function getTranslatedValueWithScope(
+        string $metaKey,
+        string $scope = MetaLocal::DEFAULT_SCOPE,
+        ?string $locale = null,
+        ?string $defaultValue = null,
+        int $versionId = MetaLocal::DEFAULT_VERSION_ID,
+    ): string {
+        return MetaMetaTranslation::getTranslatedValueWithScope(
+            $metaKey,
+            $scope,
+            $locale,
+            $defaultValue,
+            $versionId,
+        );
     }
 
-    private static function dictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$provider instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-        return $provider;
+    public static function setTranslatedValueWithScope(
+        string $metaKey,
+        string $value,
+        string $scope = MetaLocal::DEFAULT_SCOPE,
+        ?string $locale = null,
+        int $versionId = MetaLocal::DEFAULT_VERSION_ID,
+    ): bool {
+        return MetaMetaTranslation::setTranslatedValueWithScope(
+            $metaKey,
+            $value,
+            $scope,
+            $locale,
+            $versionId,
+        );
     }
 
-    /**
-     * 设置meta值的翻译（支持scope）
-     * 
-     * @param string $metaKey meta键
-     * @param string $value 翻译值
-     * @param string $scope scope值，如 'default'
-     * @param string|null $locale 语言代码
-     * @return bool 是否保存成功
-     */
-    public static function setTranslatedValueWithScope(string $metaKey, string $value, string $scope = 'default', ?string $locale = null): bool
-    {
-        // 构建带scope的翻译键
-        $translationKey = '@meta::' . $metaKey;
-        if ($scope !== 'default') {
-            $translationKey .= '|scope:' . $scope;
-        }
+    public static function findTranslatedValueWithScope(
+        string $metaKey,
+        string $scope = MetaLocal::DEFAULT_SCOPE,
+        ?string $locale = null,
+        int $versionId = MetaLocal::DEFAULT_VERSION_ID,
+    ): ?string {
+        return MetaMetaTranslation::findTranslatedValueWithScope(
+            $metaKey,
+            $scope,
+            $locale,
+            $versionId,
+        );
+    }
 
-        // 获取当前语言
-        if ($locale === null) {
-            $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
-        }
-
-        return self::dictionaryRepository()->upsert($translationKey, $locale, $value);
+    public static function deleteTranslatedValueWithScope(
+        string $metaKey,
+        string $scope = MetaLocal::DEFAULT_SCOPE,
+        ?string $locale = null,
+        int $versionId = MetaLocal::DEFAULT_VERSION_ID,
+    ): bool {
+        return MetaMetaTranslation::deleteTranslatedValueWithScope(
+            $metaKey,
+            $scope,
+            $locale,
+            $versionId,
+        );
     }
 }

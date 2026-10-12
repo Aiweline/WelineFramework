@@ -16,7 +16,7 @@ final class PixelDashboardDetailReportTabContractTest extends TestCase
     public function testDetailTemplateMountsOnlyEngineReportTabsShell(): void
     {
         $root = dirname(__DIR__, 4);
-        $tpl = $root . '/view/templates/Backend/PixelDashboard/detail.phtml';
+        $tpl = $root . '/view/templates/backend/PixelDashboard/detail.phtml';
         self::assertFileExists($tpl);
         $src = (string)\file_get_contents($tpl);
 

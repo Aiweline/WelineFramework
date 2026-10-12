@@ -97,7 +97,7 @@ class Embed extends BackendPageController
         $this->assign('status', $status);
         $this->assign('is_embed', true);
         
-        return $this->fetch('Weline_Seo::templates/Backend/Embed/index.phtml');
+        return $this->fetch('Weline_Seo::templates/backend/Embed/index.phtml');
     }
 
     /**
@@ -156,7 +156,7 @@ class Embed extends BackendPageController
         $this->assign('scope', $scope);
         $this->assign('is_embed', true);
         
-        return $this->fetch('Weline_Seo::templates/Backend/Embed/detail.phtml');
+        return $this->fetch('Weline_Seo::templates/backend/Embed/detail.phtml');
     }
 
     /**

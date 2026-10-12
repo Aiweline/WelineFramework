@@ -4,7 +4,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Meta\Api\MetaConfigRepositoryInterface;
 use Weline\Meta\Api\Data\MetaConfigSearch;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Meta\Helper\MetaTranslation as MetaMetaTranslation;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Service\ThemeLayoutScopeNormalizer;
 
@@ -24,9 +24,8 @@ final class ThemeLayoutConfigurationSnapshot
         foreach ($scopes as $scope) {
             array_push($records, ...$repository->search(new MetaConfigSearch(namespace:$namespace,scope:$scope,allLocales:true,identifyId:(string)$context->themeId)));
         }
-        // Dictionary iteration can span unrelated themes. Only request the
+        // MetaLocal iteration can span unrelated themes. Only request the
         // configuration words owned by these immutable input records.
-        $words = [];
         $keys = [];
         foreach ($records as $record) {
             if (!str_contains($record->configKey, '.param.')) { continue; }
@@ -47,17 +46,24 @@ final class ThemeLayoutConfigurationSnapshot
                 foreach ($this->leafPaths($default, (string)$name) as $path) { $keys[$resource . '.path.' . $path . '.value'] = $resource . '.path.' . $path . '.value'; }
             }
         }
+        $wantedWords = [];
         foreach ($keys as $key) {
             foreach ($scopes as $scope) {
                 $word = '@meta::' . $namespace . '.' . $key . ($scope === 'default' ? '' : '|scope:' . $scope);
-                $words[$word] = $word;
+                $wantedWords[$word] = true;
             }
         }
         $translations = [];
-        if ($words !== []) {
-            $dictionary = ObjectManager::getInstance(DictionaryRepositoryInterface::class);
-            foreach (ObjectManager::getInstance(\Weline\I18n\Api\Localization\LocaleCatalogInterface::class)->all('en_US') as $locale) {
-                foreach (array_chunk(array_values($words), 250) as $chunk) { array_push($translations, ...array_values($dictionary->getEntries($chunk, $locale['code']))); }
+        if ($wantedWords !== []) {
+            foreach (MetaMetaTranslation::listByIdentifyPrefix($namespace) as $row) {
+                if (!isset($wantedWords[$row['word']])) {
+                    continue;
+                }
+                $translations[] = (object)[
+                    'word' => $row['word'],
+                    'localeCode' => $row['locale_code'],
+                    'translation' => $row['translate'],
+                ];
             }
         }
         return $this->fromRecords($records,$translations,$namespace,array_values($scopes));
@@ -78,11 +84,14 @@ final class ThemeLayoutConfigurationSnapshot
                 else { $out['locale_params'][$record->locale][$match[1]][$match[2]]=$value; }
             }
             foreach ($translations as $entry) {
-                [$word,$entryScope] = array_pad(explode('|scope:',$entry->word,2),2,'default');
-                if ($entryScope !== $scope || !str_starts_with($word,'@meta::'.$namespace.'.')) { continue; }
-                $key=substr($word,strlen('@meta::'.$namespace.'.'));
+                $word = (string)($entry->word ?? '');
+                $localeCode = (string)($entry->localeCode ?? '');
+                $translation = (string)($entry->translation ?? '');
+                [$path,$entryScope] = array_pad(explode('|scope:',$word,2),2,'default');
+                if ($entryScope !== $scope || !str_starts_with($path,'@meta::'.$namespace.'.')) { continue; }
+                $key=substr($path,strlen('@meta::'.$namespace.'.'));
                 if (preg_match('/^(.+)\.(?:param|path)\.(.+?)\.value$/D',$key,$match)) {
-                    $out['locale_params'][$entry->localeCode][$match[1]][$match[2]]=$this->decode($entry->translation);
+                    $out['locale_params'][$localeCode][$match[1]][$match[2]]=$this->decode($translation);
                 }
             }
         }

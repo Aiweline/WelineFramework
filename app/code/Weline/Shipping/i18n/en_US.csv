@@ -376,7 +376,8 @@ grid,grid
 承运方尚未回传轨迹节点,"Carrier has not returned tracking nodes yet"
 打开承运商轨迹页,"Open carrier tracking page"
 选择收货地址,"Select a shipping address"
-China,China
+名,名
+姓,姓
 使用新地址,"Use a new address"
 保存此地址,"Save this address"
 账单地址与收货地址相同,"Billing address same as shipping address"
@@ -772,6 +773,7 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 "Shipping 孤儿运单取消重试","Shipping orphan waybill cancel retry"
 "履约账本失败后的 cancelShipment 孤儿补偿队列","cancelShipment orphan compensation queue after fulfillment ledger failure"
 "孤儿运单处理：done=%{1} dead=%{2} processed=%{3}","Orphan waybill handling: done=%{1} dead=%{2} processed=%{3}"
+China,China
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 收起悬浮,收起悬浮
 展开悬浮,展开悬浮

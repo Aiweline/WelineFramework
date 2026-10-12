@@ -48,23 +48,23 @@ class ProductLayoutProvider implements LayoutProviderInterface
             'products' => [
                 'grid' => [
                     'name' => '网格布局',
-                    'template' => 'WeShop_Product::Frontend/Product/list-grid.phtml',
+                    'template' => 'WeShop_Product::frontend/Product/list-grid.phtml',
                     'preview_image' => 'WeShop_Product::images/layout/grid.png'
                 ],
                 'list' => [
                     'name' => '列表布局',
-                    'template' => 'WeShop_Product::Frontend/Product/list-list.phtml',
+                    'template' => 'WeShop_Product::frontend/Product/list-list.phtml',
                     'preview_image' => 'WeShop_Product::images/layout/list.png'
                 ]
             ],
             'product_detail' => [
                 'standard' => [
                     'name' => '标准布局',
-                    'template' => 'WeShop_Product::Frontend/Product/detail-standard.phtml'
+                    'template' => 'WeShop_Product::frontend/Product/detail-standard.phtml'
                 ],
                 'gallery' => [
                     'name' => '画廊布局',
-                    'template' => 'WeShop_Product::Frontend/Product/detail-gallery.phtml'
+                    'template' => 'WeShop_Product::frontend/Product/detail-gallery.phtml'
                 ]
             ]
         ];

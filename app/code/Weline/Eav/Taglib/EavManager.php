@@ -86,7 +86,7 @@ final class EavManager implements TaglibInterface
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
 
-            return $template->fetch('Weline_Eav::templates/Backend/Manager/surface.phtml', [
+            return $template->fetch('Weline_Eav::templates/backend/Manager/surface.phtml', [
                 'entityScope' => $entityScope,
                 'entityScopeError' => $entityScopeError,
                 'compact' => $compact,

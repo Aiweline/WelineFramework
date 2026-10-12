@@ -11,9 +11,9 @@ final class FooterPaymentMethodsLinkWidgetContractTest extends TestCase
     public function testFooterPaymentMethodsLinkRegistersDefaultInjection(): void
     {
         $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
-        $tpl = 'Weline_Payment::templates/Frontend/widgets/footer-payment-methods-link.phtml';
+        $tpl = 'Weline_Payment::templates/frontend/widgets/footer-payment-methods-link.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
-        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/footer-payment-methods-link.phtml');
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/footer-payment-methods-link.phtml');
         self::assertStringContainsString('@widget.code {footer-payment-methods-link}', $src);
         self::assertStringContainsString('@widget.slot {footer-payment-account-links}', $src);
         self::assertStringContainsString('"slot":"footer-payment-account-links"', $src);

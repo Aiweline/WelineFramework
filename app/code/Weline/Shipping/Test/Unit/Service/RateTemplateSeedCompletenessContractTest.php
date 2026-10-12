@@ -47,7 +47,7 @@ final class RateTemplateSeedCompletenessContractTest extends TestCase
     public function testListUiHumanizesCalcTypeAndSeedBadge(): void
     {
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/RateTemplate/index.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/RateTemplate/index.phtml'
         );
         self::assertStringContainsString('shipping-rate-template-origin-seed', $tpl);
         self::assertStringContainsString('按重量阶梯', $tpl);

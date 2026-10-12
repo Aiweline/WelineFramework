@@ -337,14 +337,14 @@ final class CommerceAdminMenuContractTest extends TestCase
         self::assertStringNotContainsString("setConfig('admin_default_avatar'", $topbarSource);
         self::assertStringNotContainsString('data:image/', (string)\file_get_contents($message));
 
-        $sidebar = BP . 'app/code/Weline/Backend/view/templates/Backend/Profile/partials/sidebar.phtml';
+        $sidebar = BP . 'app/code/Weline/Backend/view/templates/backend/Profile/partials/sidebar.phtml';
         self::assertFileExists($sidebar);
         self::assertStringContainsString('pathToMediaUrl', (string)\file_get_contents($sidebar));
     }
 
     public function testOrderBackendTemplatesUseCurrentSchemaFieldConstants(): void
     {
-        $templates = \glob(BP . 'app/code/Weline/Order/view/templates/Backend/Order/*.phtml') ?: [];
+        $templates = \glob(BP . 'app/code/Weline/Order/view/templates/backend/Order/*.phtml') ?: [];
         self::assertNotSame([], $templates);
         foreach ($templates as $template) {
             self::assertStringNotContainsString(

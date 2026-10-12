@@ -25,7 +25,7 @@
       "findings": []
     },
     {
-      "template": "app/code/Weline/B2B/view/templates/Backend/widgets/backend-order-chat.phtml",
+      "template": "app/code/Weline/B2B/view/templates/backend/widgets/backend-order-chat.phtml",
       "sha256": "684aac897c3b8b13e8fa787805ae054ba95e034933ad87bad00bbf9c82396f45",
       "assets": [
         {
@@ -182,7 +182,7 @@
       "findings": []
     },
     {
-      "template": "app/code/Weline/Currency/view/templates/Frontend/widgets/footer-currency-rates-link.phtml",
+      "template": "app/code/Weline/Currency/view/templates/frontend/widgets/footer-currency-rates-link.phtml",
       "sha256": "5c197232efe2a6c9cd0bae8ecbb61c8fe4e3ec4813080de8979febbd48fc486d",
       "assets": [],
       "findings": []
@@ -285,7 +285,7 @@
       "findings": []
     },
     {
-      "template": "app/code/Weline/CustomerService/view/templates/Frontend/widgets/footer-contact-service-link.phtml",
+      "template": "app/code/Weline/CustomerService/view/templates/frontend/widgets/footer-contact-service-link.phtml",
       "sha256": "bf8ff7cfbad72c49d5c8522552023ea48e3a0279ab2beca72600b6231a0db5cb",
       "assets": [
         {
@@ -302,7 +302,7 @@
       "findings": []
     },
     {
-      "template": "app/code/Weline/CustomerService/view/templates/Frontend/widgets/header-contact-service-link.phtml",
+      "template": "app/code/Weline/CustomerService/view/templates/frontend/widgets/header-contact-service-link.phtml",
       "sha256": "9c830df18d73b08b3a71ee1bc8a18d4b4ae2e88404e150e8aa22eea1937da57a",
       "assets": [
         {
@@ -597,13 +597,13 @@
       "findings": []
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Backend/partials/outcome-chip.phtml",
+      "template": "app/code/Weline/Payment/view/templates/backend/partials/outcome-chip.phtml",
       "sha256": "7906fc765e844a7c9b518f92c2d1673bf77caed093606d5fbd919b7de379d558",
       "assets": [],
       "findings": []
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Backend/widgets/backend-order-payment-records.phtml",
+      "template": "app/code/Weline/Payment/view/templates/backend/widgets/backend-order-payment-records.phtml",
       "sha256": "80df6a1db07118e99f722f0745d529517ef66dc4c03985e505bd78bd7717f385",
       "assets": [
         {
@@ -615,7 +615,7 @@
       "findings": []
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Frontend/widgets/checkout-express-payment.phtml",
+      "template": "app/code/Weline/Payment/view/templates/frontend/widgets/checkout-express-payment.phtml",
       "sha256": "4f7645f0899da66e2e39d1d0d90b07a6e11f0951fa302baad71906f46e5e4f63",
       "assets": [
         {
@@ -637,13 +637,13 @@
       "findings": []
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Frontend/widgets/footer-payment-methods-link.phtml",
+      "template": "app/code/Weline/Payment/view/templates/frontend/widgets/footer-payment-methods-link.phtml",
       "sha256": "0766fe3aec87feb8a8b7c03c518a0fe6f9a76627a053a7b6faaf9fdfc5db239a",
       "assets": [],
       "findings": []
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Frontend/widgets/product-express-payment.phtml",
+      "template": "app/code/Weline/Payment/view/templates/frontend/widgets/product-express-payment.phtml",
       "sha256": "00af9cd2c5362c4ee4f79fa8b3b264f8bc9691590803065982891257fee675cd",
       "assets": [
         {
@@ -876,7 +876,7 @@
       "findings": []
     },
     {
-      "template": "app/code/Weline/Shipping/view/templates/Backend/widgets/backend-order-list-shipping.phtml",
+      "template": "app/code/Weline/Shipping/view/templates/backend/widgets/backend-order-list-shipping.phtml",
       "sha256": "e3d0e145107518f96722983626d7e842f7e9312b342f5b2adc158794ea6cfd96",
       "assets": [
         {
@@ -888,7 +888,7 @@
       "findings": []
     },
     {
-      "template": "app/code/Weline/Shipping/view/templates/Backend/widgets/backend-order-shipments.phtml",
+      "template": "app/code/Weline/Shipping/view/templates/backend/widgets/backend-order-shipments.phtml",
       "sha256": "e330193eb439b1707068aa201368d423765851d9b0584ab94f313151be6a0b81",
       "assets": [
         {

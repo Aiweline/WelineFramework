@@ -101,6 +101,72 @@ if (!\function_exists('wlsCreateWorkerFullPageCacheFastPath')) {
     }
 }
 
+if (!\function_exists('wlsTryFpcAlwaysOnlineRescue')) {
+    /**
+     * Origin empty/5xx rescue: serve anonymous cold-disk FPC when path-index still has a body.
+     */
+    function wlsTryFpcAlwaysOnlineRescue(
+        \Weline\Server\Security\WorkerPolicyDecision $policyDecision,
+        string $scheme = 'https',
+    ): ?string {
+        $method = \strtoupper(\trim((string)$policyDecision->method));
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return null;
+        }
+        $headers = $policyDecision->headers;
+        $host = \trim((string)($headers['host'] ?? ''));
+        if ($host === '') {
+            return null;
+        }
+        $scheme = \strtolower(\trim($scheme));
+        $scheme = \in_array($scheme, ['http', 'https'], true) ? $scheme : 'https';
+        $path = (string)$policyDecision->path;
+        $path = $path !== '' ? $path : '/';
+        if ($path[0] !== '/') {
+            $path = '/' . $path;
+        }
+        $query = '';
+        $target = (string)$policyDecision->target;
+        if ($target !== '') {
+            try {
+                $parts = \parse_url($target);
+            } catch (\ValueError) {
+                $parts = false;
+            }
+            if (\is_array($parts) && isset($parts['query']) && (string)$parts['query'] !== '') {
+                $query = '?' . (string)$parts['query'];
+            }
+        }
+        $fullUri = $scheme . '://' . $host . $path . $query;
+        try {
+            /** @var \Weline\Framework\Router\FullPageCacheCoordinator $coordinator */
+            $coordinator = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Router\FullPageCacheCoordinator::class
+            );
+            $response = $coordinator->tryServeColdDiskOnOriginError(
+                $fullUri,
+                $method,
+                (string)($headers['accept-encoding'] ?? ''),
+                (string)($headers['cookie'] ?? ''),
+            );
+            if ($response === null) {
+                return null;
+            }
+            $http = $response->toHttpString($policyDecision->keepAlive());
+            if ($method === 'HEAD') {
+                $headerEnd = \strpos($http, "\r\n\r\n");
+                if ($headerEnd !== false) {
+                    $http = \substr($http, 0, $headerEnd + 4);
+                }
+            }
+
+            return $http;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+}
+
 if (!\function_exists('wlsAppendBackendLoginReturnUrl')) {
     function wlsAppendBackendLoginReturnUrl(
         string $redirectUrl,

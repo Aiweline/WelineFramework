@@ -86,7 +86,7 @@
 
 模板与资源优先落在：
 
-- `view/templates/Backend/*`
+- `view/templates/backend/*`
 - `view/statics/*`
 
 不要直接改：

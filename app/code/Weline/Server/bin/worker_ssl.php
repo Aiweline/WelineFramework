@@ -12044,6 +12044,13 @@ function handleRequest(
         }
 
         if ($responseBody === '' && !$isExpectedEmptyResponse) {
+            // Local Always Online: prefer cold-disk anonymous FPC over blank 503.
+            if (\function_exists('wlsTryFpcAlwaysOnlineRescue')) {
+                $alwaysOnline = wlsTryFpcAlwaysOnlineRescue($policyDecision, 'https');
+                if (\is_string($alwaysOnline) && $alwaysOnline !== '') {
+                    return $alwaysOnline;
+                }
+            }
             // 渲染失败不得返回 200 空体：空页会被搜索引擎收录，用户也只会看到白屏。
             // 降级为 503 + Retry-After，让爬虫与用户都按「可重试」处理。
             $degradedBody = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">'
@@ -12080,6 +12087,19 @@ function handleRequest(
         if (!$e instanceof \Weline\Framework\Http\ResponseTerminateException) {
             WlsLogger::error_("请求处理错误: " . $e->getMessage() . " (文件: " . $e->getFile() . ":" . $e->getLine() . ")");
             w_log_error('[WLS Worker SSL] Request error: ' . $e->getMessage());
+        }
+
+        if (!$e instanceof \Weline\Framework\Http\ResponseTerminateException
+            && \function_exists('wlsTryFpcAlwaysOnlineRescue')
+        ) {
+            $alwaysOnline = wlsTryFpcAlwaysOnlineRescue($policyDecision, 'https');
+            if (\is_string($alwaysOnline) && $alwaysOnline !== '') {
+                if (\session_status() === PHP_SESSION_ACTIVE) {
+                    \session_write_close();
+                }
+
+                return $alwaysOnline;
+            }
         }
 
         $statusCode = 500;

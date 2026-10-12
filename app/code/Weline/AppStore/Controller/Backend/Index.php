@@ -64,7 +64,7 @@ class Index extends BackendController
         $this->assign('title', __('应用商城'));
         $this->assign('page_title', __('应用商城'));
 
-        return $this->fetch('Weline_AppStore::templates/Backend/Index/index.phtml');
+        return $this->fetch('Weline_AppStore::templates/backend/Index/index.phtml');
     }
 
     #[Acl('Weline_AppStore::index_download', '下载模块', 'download', '从官网商城下载模块包')]
@@ -186,7 +186,7 @@ class Index extends BackendController
         $this->assign('title', __('安装授权'));
         $this->assign('page_title', __('安装授权'));
 
-        return $this->fetch('Weline_AppStore::templates/Backend/Index/authorize-install.phtml');
+        return $this->fetch('Weline_AppStore::templates/backend/Index/authorize-install.phtml');
     }
 
     #[Acl('Weline_AppStore::index_install', '安装模块', 'download', '下载并安装模块')]

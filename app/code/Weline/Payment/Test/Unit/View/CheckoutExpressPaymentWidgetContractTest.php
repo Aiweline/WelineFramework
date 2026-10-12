@@ -11,9 +11,9 @@ final class CheckoutExpressPaymentWidgetContractTest extends TestCase
     public function testExpressPaymentRegistersRequiredDefaultInjectionWithVisibilityToggle(): void
     {
         $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
-        $tpl = 'Weline_Payment::templates/Frontend/widgets/checkout-express-payment.phtml';
+        $tpl = 'Weline_Payment::templates/frontend/widgets/checkout-express-payment.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
-        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/checkout-express-payment.phtml');
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-express-payment.phtml');
         self::assertStringContainsString('@widget.code {checkout-express-payment}', $src);
         self::assertStringContainsString('@widget.slot {checkout-express-payment}', $src);
         self::assertStringContainsString('"layout_type":"checkout"', $src);

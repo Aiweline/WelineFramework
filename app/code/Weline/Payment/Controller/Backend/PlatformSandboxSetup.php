@@ -43,7 +43,7 @@ final class PlatformSandboxSetup extends BackendController
         $this->assign('title', $pageTitle);
         $this->assign('page_title', $pageTitle);
 
-        return $this->fetch('Weline_Payment::templates/Backend/PayPal/platform-sandbox-setup.phtml', [
+        return $this->fetch('Weline_Payment::templates/backend/PayPal/platform-sandbox-setup.phtml', [
             'redirect_uris' => $redirectUris,
             'developer_url' => 'https://developer.paypal.com/dashboard/applications/sandbox',
             'credentials_ready' => $ready,

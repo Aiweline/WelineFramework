@@ -36,24 +36,25 @@ foreach ($checks as $c) {
 }
 
 $probes = [
-    ['type' => 'product_search_projection', 'ns' => ['website/default/catalog'], 'urls' => ['/product/demo', '/', '/products']],
-    ['type' => 'catalog_category', 'ns' => ['website/default/catalog'], 'urls' => ['/', '/categories', '/category/probe']],
-    ['type' => 'theme_layout', 'ns' => ['website/default/theme'], 'urls' => ['/']],
-    ['type' => 'blog.post', 'ns' => ['global/storefront/blog'], 'urls' => ['/blog', '/blog/probe-post']],
-    ['type' => 'cms_page', 'ns' => ['website/default/cms'], 'urls' => ['/cms-demo']],
-    ['type' => 'faq.item', 'ns' => ['website/default/cms', 'website/default/theme'], 'urls' => ['/faq']],
+    ['type' => 'product_search_projection', 'ns' => ['website/default/catalog'], 'urls' => ['/product/demo', '/', '/products'], 'action' => 'upsert'],
+    ['type' => 'catalog_category', 'ns' => ['website/default/catalog'], 'urls' => ['/', '/categories', '/category/probe'], 'action' => 'upsert'],
+    ['type' => 'theme_layout', 'ns' => ['website/default/theme'], 'urls' => ['/'], 'action' => 'upsert'],
+    ['type' => 'theme_layout', 'ns' => ['website/default/theme'], 'urls' => ['/policy/privacy'], 'action' => 'publish', 'id' => 'policy'],
+    ['type' => 'blog.post', 'ns' => ['global/storefront/blog'], 'urls' => ['/blog', '/blog/probe-post'], 'action' => 'upsert'],
+    ['type' => 'cms_page', 'ns' => ['website/default/cms'], 'urls' => ['/cms-demo'], 'action' => 'upsert'],
+    ['type' => 'faq.item', 'ns' => ['website/default/cms', 'website/default/theme'], 'urls' => ['/faq'], 'action' => 'upsert'],
 ];
 foreach ($probes as $i => $p) {
     $before = $ns->fingerprint($p['ns']);
     $change = $factory->create(
         resourceType: $p['type'],
-        resourceId: 'probe-' . ($i + 1),
-        action: 'upsert',
+        resourceId: 'probe-' . ($p['id'] ?? ($i + 1)),
+        action: (string)($p['action'] ?? 'upsert'),
         revision: time() + $i,
         websiteId: 0,
         websiteCode: 'default',
         before: ['k' => 1],
-        after: ['k' => 2, 'status' => 'published'],
+        after: ['k' => 2, 'status' => 'published', 'layout_type' => 'policy', 'layout_option' => 'privacy'],
         changedFields: ['k'],
         impact: [
             'namespaces' => $p['ns'],
@@ -78,28 +79,44 @@ foreach ($probes as $i => $p) {
         fwrite(STDERR, 'NO_BUMP ' . $p['type'] . PHP_EOL);
         exit(4);
     }
-    echo 'BUMP_OK ' . $p['type'] . PHP_EOL;
+    $label = $p['type'] . (isset($p['id']) ? ':' . $p['id'] : '');
+    echo 'BUMP_OK ' . $label . PHP_EOL;
 }
 
-// Disk path-index purge: body file must disappear after adapter purgeUrls.
-$probePath = '/product/fpc-path-index-probe';
-$payloadDir = BP . 'var' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'router-fpc-payloads'
-    . DIRECTORY_SEPARATOR . 'ff';
-if (!is_dir($payloadDir)) {
-    @mkdir($payloadDir, 0775, true);
-}
-$body = $payloadDir . DIRECTORY_SEPARATOR . 'closed-loop-probe.br';
-file_put_contents($body, 'probe-br');
-FpcPayloadPathIndex::remember($probePath, 'unified-fpc-probe-key', $body);
+// Disk path-index purge: target gone, control path still indexed.
 $adapter = ObjectManager::getInstance(FpcStoreAdapterRegistry::class)->active();
 if ($adapter === null) {
     fwrite(STDERR, 'NO_FPC_ADAPTER' . PHP_EOL);
     exit(5);
 }
-$adapter->purgeUrls([$probePath]);
-if (is_file($body)) {
-    fwrite(STDERR, 'DISK_PURGE_FAIL ' . $probePath . PHP_EOL);
+$payloadDir = BP . 'var' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+    . DIRECTORY_SEPARATOR . 'ff';
+if (!is_dir($payloadDir)) {
+    @mkdir($payloadDir, 0775, true);
+}
+$pairs = [
+    ['url' => 'https://probe.test.weline.com/product/fpc-path-index-probe', 'file' => 'closed-loop-probe.br'],
+    ['url' => 'https://probe.test.weline.com/blog/fpc-control-still-hit', 'file' => 'closed-loop-control.br'],
+];
+foreach ($pairs as $row) {
+    $body = $payloadDir . DIRECTORY_SEPARATOR . $row['file'];
+    file_put_contents($body, 'probe-br');
+    FpcPayloadPathIndex::remember($row['url'], 'unified-fpc-probe-' . md5($row['url']), $body);
+}
+$targetUrl = $pairs[0]['url'];
+$controlUrl = $pairs[1]['url'];
+$targetBody = $payloadDir . DIRECTORY_SEPARATOR . $pairs[0]['file'];
+$controlBody = $payloadDir . DIRECTORY_SEPARATOR . $pairs[1]['file'];
+$adapter->purgeUrls([$targetUrl]);
+if (is_file($targetBody)) {
+    fwrite(STDERR, 'DISK_PURGE_FAIL ' . $targetUrl . PHP_EOL);
     exit(6);
 }
-echo 'DISK_PURGE_OK ' . $probePath . PHP_EOL;
+if (!is_file($controlBody) || FpcPayloadPathIndex::lookup($controlUrl) === []) {
+    fwrite(STDERR, 'CONTROL_DISK_GONE ' . $controlUrl . PHP_EOL);
+    exit(8);
+}
+echo 'DISK_PURGE_OK ' . $targetUrl . PHP_EOL;
+echo 'CONTROL_HIT_OK ' . $controlUrl . PHP_EOL;
+$adapter->purgeUrls([$controlUrl]);
 echo 'LOOP_OK' . PHP_EOL;

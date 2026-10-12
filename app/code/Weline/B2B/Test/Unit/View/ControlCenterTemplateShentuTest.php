@@ -15,7 +15,7 @@ final class ControlCenterTemplateShentuTest extends TestCase
 {
     public function testWritableWorkspaceTemplateHasHumanFormAndEmptyState(): void
     {
-        $path = BP . 'app/code/Weline/B2B/view/templates/Backend/ControlCenter/index.phtml';
+        $path = BP . 'app/code/Weline/B2B/view/templates/backend/ControlCenter/index.phtml';
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 
@@ -38,7 +38,7 @@ final class ControlCenterTemplateShentuTest extends TestCase
 
     public function testApplicationsAndGroupsUseTagSearchAndVipActions(): void
     {
-        $path = BP . 'app/code/Weline/B2B/view/templates/Backend/ControlCenter/index.phtml';
+        $path = BP . 'app/code/Weline/B2B/view/templates/backend/ControlCenter/index.phtml';
         $content = (string) file_get_contents($path);
 
         self::assertStringContainsString('<w:theme:search-select', $content);
@@ -109,11 +109,11 @@ final class ControlCenterTemplateShentuTest extends TestCase
 
     public function testControlCenterUsesOfficialWebsiteStoreChannelScopeToolbar(): void
     {
-        $path = BP . 'app/code/Weline/B2B/view/templates/Backend/ControlCenter/index.phtml';
+        $path = BP . 'app/code/Weline/B2B/view/templates/backend/ControlCenter/index.phtml';
         $content = (string) file_get_contents($path);
-        $toolbar = (string) file_get_contents(BP . 'app/code/Weline/B2B/view/templates/Backend/partials/scope-toolbar.phtml');
+        $toolbar = (string) file_get_contents(BP . 'app/code/Weline/B2B/view/templates/backend/partials/scope-toolbar.phtml');
 
-        self::assertStringContainsString("Weline_B2B::templates/Backend/partials/scope-toolbar.phtml", $content);
+        self::assertStringContainsString("Weline_B2B::templates/backend/partials/scope-toolbar.phtml", $content);
         self::assertStringContainsString('data-testid="b2b-work-scope-toolbar"', $toolbar);
         self::assertStringContainsString('<w:scope', $toolbar);
         self::assertStringContainsString('id="b2b-work-scope"', $toolbar);
@@ -134,7 +134,7 @@ final class ControlCenterTemplateShentuTest extends TestCase
 
     public function testApprovedRowUsesEntitlementProjectionForRevokeUi(): void
     {
-        $path = BP . 'app/code/Weline/B2B/view/templates/Backend/ControlCenter/index.phtml';
+        $path = BP . 'app/code/Weline/B2B/view/templates/backend/ControlCenter/index.phtml';
         $content = (string) file_get_contents($path);
 
         self::assertStringContainsString("entitlement_active", $content);
@@ -149,7 +149,7 @@ final class ControlCenterTemplateShentuTest extends TestCase
 
     public function testApplicationsDeleteButtonWrappedByAclTag(): void
     {
-        $path = BP . 'app/code/Weline/B2B/view/templates/Backend/ControlCenter/index.phtml';
+        $path = BP . 'app/code/Weline/B2B/view/templates/backend/ControlCenter/index.phtml';
         $content = (string) file_get_contents($path);
 
         self::assertStringContainsString('delete_application_action', $content);

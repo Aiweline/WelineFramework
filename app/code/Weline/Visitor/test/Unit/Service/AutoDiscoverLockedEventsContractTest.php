@@ -78,7 +78,7 @@ final class AutoDiscoverLockedEventsContractTest extends TestCase
 
     public function test_admin_ui_badge_and_delete_disabled(): void
     {
-        $admin = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/index.phtml');
+        $admin = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/index.phtml');
         self::assertStringContainsString('tv-badge-auto-discovered', $admin);
         self::assertStringContainsString('自动发现', $admin);
         self::assertStringContainsString('data-locked="1"', $admin);

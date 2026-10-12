@@ -11,9 +11,9 @@ final class HeaderContactServiceLinkWidgetContractTest extends TestCase
     public function testHeaderContactServiceLinkRegistersHomepageDefaultInjection(): void
     {
         $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
-        $tpl = 'Weline_CustomerService::templates/Frontend/widgets/header-contact-service-link.phtml';
+        $tpl = 'Weline_CustomerService::templates/frontend/widgets/header-contact-service-link.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
-        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/header-contact-service-link.phtml');
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/header-contact-service-link.phtml');
         self::assertStringContainsString('@widget.code {header-contact-service-link}', $src);
         self::assertStringContainsString('"required":true', $src);
         self::assertStringContainsString('@widget.page_layouts {["*"]}', $src);
@@ -22,7 +22,7 @@ final class HeaderContactServiceLinkWidgetContractTest extends TestCase
     public function testHeaderContactServiceLinkOpensFloatingChat(): void
     {
         $template = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/header-contact-service-link.phtml'
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/header-contact-service-link.phtml'
         );
         self::assertStringContainsString('data-testid="header-contact-service-link"', $template);
         self::assertStringContainsString('data-cs-header-open-chat', $template);

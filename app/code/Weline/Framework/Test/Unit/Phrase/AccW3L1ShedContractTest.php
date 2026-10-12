@@ -71,7 +71,8 @@ final class AccW3L1ShedContractTest extends TestCase
             (string)(new \ReflectionClass(Parser::class))->getFileName()
         );
         self::assertStringContainsString('persistent_worker_no_whole_locale_include', $src);
-        self::assertStringContainsString('Misses resolve via module CSV + word-level Shared/DB', $src);
+        self::assertStringContainsString('loadLocaleAreaBagsForWorker', $src);
+        self::assertStringContainsString('loadMerged($lang, null, false)', $src);
         $gatePos = \strpos($src, 'persistent_worker_no_whole_locale_include');
         $includePos = \strpos($src, '(array)include $words_file');
         self::assertNotFalse($gatePos);

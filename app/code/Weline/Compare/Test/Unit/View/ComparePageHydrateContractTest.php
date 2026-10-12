@@ -16,7 +16,7 @@ final class ComparePageHydrateContractTest extends TestCase
 
         self::assertStringContainsString('data-compare-page', $source);
         self::assertStringContainsString('data-compare-page-content', $source);
-        self::assertStringContainsString('compare-page.js', $source);
+        self::assertStringContainsString('data-weline-load="comparePage,compareShopper"', $source);
         self::assertStringContainsString('weline-compare-page-labels', $source);
         self::assertStringContainsString("__('已选 %{1} / %{2} 件', ['%{1}', '%{2}'])", $source);
         self::assertStringNotContainsString('ComparePagePresenter', $source);

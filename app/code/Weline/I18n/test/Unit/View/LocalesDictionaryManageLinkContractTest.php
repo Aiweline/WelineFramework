@@ -21,8 +21,8 @@ final class LocalesDictionaryManageLinkContractTest extends TestCase
 
     public function testPanelAndListLinkToDictionaryWithLocaleCode(): void
     {
-        $panel = $this->read('app/code/Weline/I18n/view/templates/Backend/Countries/Locales/panel.phtml');
-        $list = $this->read('app/code/Weline/I18n/view/templates/Backend/Countries/Locales/getIndex.phtml');
+        $panel = $this->read('app/code/Weline/I18n/view/templates/backend/Countries/Locales/panel.phtml');
+        $list = $this->read('app/code/Weline/I18n/view/templates/backend/Countries/Locales/getIndex.phtml');
         $queryProvider = $this->read(
             'app/code/Weline/I18n/extends/module/Weline_Framework/Query/I18nAdminQueryProvider.php'
         );
@@ -44,7 +44,7 @@ final class LocalesDictionaryManageLinkContractTest extends TestCase
             BP . 'app/code/Weline/I18n/Controller/Backend/Countries/Locale/Words.php'
         );
         self::assertFileDoesNotExist(
-            BP . 'app/code/Weline/I18n/view/templates/Backend/Countries/Locale/Words/index.phtml'
+            BP . 'app/code/Weline/I18n/view/templates/backend/Countries/Locale/Words/index.phtml'
         );
         self::assertStringNotContainsString('word-collect', $queryProvider);
         self::assertStringNotContainsString(

@@ -17,7 +17,7 @@ final class StoreMusicSettingsContractTest extends TestCase
             $moduleRoot . '/extends/module/Weline_SystemConfig/Config/frontend/store-music.phtml'
         );
         $configController = (string)file_get_contents($moduleRoot . '/Controller/Backend/Config.php');
-        $configTemplate = (string)file_get_contents($moduleRoot . '/view/templates/Backend/Config/index.phtml');
+        $configTemplate = (string)file_get_contents($moduleRoot . '/view/templates/backend/Config/index.phtml');
         $menuXml = (string)file_get_contents($moduleRoot . '/etc/backend/menu.xml');
         $widget = (string)file_get_contents(
             $moduleRoot . '/view/templates/frontend/widgets/store-music.phtml'
@@ -255,7 +255,7 @@ final class StoreMusicSettingsContractTest extends TestCase
         $index = (string)file_get_contents($indexPath);
         // StoreMusic must not require core picker size hardcode changes; assert StoreMusic owns picker.
         $storeMusicAdmin = (string)file_get_contents(
-            $moduleRoot . '/view/templates/Backend/Config/index.phtml'
+            $moduleRoot . '/view/templates/backend/Config/index.phtml'
         );
         self::assertStringContainsString('WelineMedia', $storeMusicAdmin);
         self::assertStringContainsString("'size' => 2097152", $index);

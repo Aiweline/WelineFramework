@@ -10,7 +10,7 @@ final class WarmupProviderTreeUiContractTest extends TestCase
 {
     public function testIndexTemplateHasScopeProviderAndQueuedUrlSections(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Warmup/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Warmup/index.phtml';
         $src = (string)file_get_contents($path);
         $this->assertStringContainsString('cdn-warmup-management', $src);
         $this->assertStringContainsString('cdn-warmup-scope', $src);

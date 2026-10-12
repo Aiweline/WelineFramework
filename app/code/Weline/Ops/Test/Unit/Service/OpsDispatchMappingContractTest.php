@@ -32,8 +32,8 @@ final class OpsDispatchMappingContractTest extends TestCase
 
     public function test_desk_and_task_templates_allow_retry_approve_on_failed_outbound(): void
     {
-        $desk = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Desk/index.phtml');
-        $task = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Task/index.phtml');
+        $desk = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Desk/index.phtml');
+        $task = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Task/index.phtml');
         self::assertStringContainsString('canApproveOutbound', $desk);
         self::assertStringContainsString('再次批准外发', $desk);
         self::assertStringContainsString('canApproveOutbound', $task);

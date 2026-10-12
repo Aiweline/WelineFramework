@@ -11,7 +11,7 @@ final class DashboardOverviewThemeContractTest extends TestCase
     public function testDashboardOverviewUsesSeoAdminEmptyGuide(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = $root . '/view/templates/Backend/Dashboard/index.phtml';
+        $template = $root . '/view/templates/backend/Dashboard/index.phtml';
         $css = $root . '/view/statics/css/seo-admin.css';
         $proto = $root . '/view/statics/prototype/seo-dashboard-overview-ui.html';
 

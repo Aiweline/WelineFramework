@@ -53,6 +53,6 @@ final class Optimization extends BackendPageController
         $this->assign('websites', $websites);
         $this->assign('selected_website_id', $selectedWebsiteId);
 
-        return $this->fetch('Weline_Seo::templates/Backend/Optimization/index.phtml');
+        return $this->fetch('Weline_Seo::templates/backend/Optimization/index.phtml');
     }
 }

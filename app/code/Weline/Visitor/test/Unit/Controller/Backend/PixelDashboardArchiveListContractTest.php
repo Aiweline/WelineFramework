@@ -43,7 +43,7 @@ final class PixelDashboardArchiveListContractTest extends TestCase
     public function testArchiveListTemplateEnforcesWebsiteAndWindowHints(): void
     {
         $root = dirname(__DIR__, 4);
-        $tpl = $root . '/view/templates/Backend/PixelDashboard/archive_list.phtml';
+        $tpl = $root . '/view/templates/backend/PixelDashboard/archive_list.phtml';
         self::assertFileExists($tpl);
         $src = (string)\file_get_contents($tpl);
 
@@ -66,7 +66,7 @@ final class PixelDashboardArchiveListContractTest extends TestCase
     public function testHotListLinksToArchiveList(): void
     {
         $root = dirname(__DIR__, 4);
-        $listTpl = (string)\file_get_contents($root . '/view/templates/Backend/PixelDashboard/list.phtml');
+        $listTpl = (string)\file_get_contents($root . '/view/templates/backend/PixelDashboard/list.phtml');
         self::assertStringContainsString('visitor/backend/pixel-dashboard/archive-list', $listTpl);
         self::assertStringContainsString('冷归档明细', $listTpl);
     }

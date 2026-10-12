@@ -17,7 +17,7 @@ namespace Weline\Payment\Interface;
  * Guide 类只负责元数据（标题、摘要、模板 code、布局），不要在此类中拼接大段 HTML 正文。
  *
  * 模板路径约定：
- * view/templates/Frontend/guide/payment/{method_code}/{guide_template_code}.phtml
+ * view/templates/frontend/guide/payment/{method_code}/{guide_template_code}.phtml
  *
  * @see app/code/Weline/Payment/doc/payment-customer-guide-i18n.md
  */
@@ -38,17 +38,17 @@ interface PaymentCustomerGuideInterface
     public function getAgreementTitle(): string;
 
     /**
-     * 相对 view/templates/Frontend/guide/payment/{method_code}/ 下的模板文件名（不含 .phtml）。
+     * 相对 view/templates/frontend/guide/payment/{method_code}/ 下的模板文件名（不含 .phtml）。
      */
     public function getGuideTemplateCode(): string;
 
     /**
-     * 相对 view/templates/Frontend/guide/payment/{method_code}/ 下的模板文件名（不含 .phtml）。
+     * 相对 view/templates/frontend/guide/payment/{method_code}/ 下的模板文件名（不含 .phtml）。
      */
     public function getPolicyTemplateCode(): string;
 
     /**
-     * 相对 view/templates/Frontend/guide/payment/{method_code}/ 下的模板文件名（不含 .phtml）。
+     * 相对 view/templates/frontend/guide/payment/{method_code}/ 下的模板文件名（不含 .phtml）。
      */
     public function getAgreementTemplateCode(): string;
 

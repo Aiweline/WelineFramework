@@ -644,25 +644,25 @@
     },
     "acl.role.assign": {
       "area": "backend",
-      "templates": ["app/code/Weline/Acl/view/templates/Backend/Acl/Role/assign.phtml"],
+      "templates": ["app/code/Weline/Acl/view/templates/backend/Acl/Role/assign.phtml"],
       "bundles": ["acl-role-assign-css", "acl-role-assign-js"],
       "engines": []
     },
     "acl.role.index": {
       "area": "backend",
-      "templates": ["app/code/Weline/Acl/view/templates/Backend/Acl/Role/index.phtml"],
+      "templates": ["app/code/Weline/Acl/view/templates/backend/Acl/Role/index.phtml"],
       "bundles": ["acl-role-index-js"],
       "engines": []
     },
     "websites.acl.edit": {
       "area": "backend",
-      "templates": ["app/code/Weline/Websites/view/templates/Backend/WebsiteAclGrant/edit.phtml"],
+      "templates": ["app/code/Weline/Websites/view/templates/backend/WebsiteAclGrant/edit.phtml"],
       "bundles": ["acl-role-assign-css", "acl-role-assign-js"],
       "engines": []
     },
     "api.user.permissions": {
       "area": "backend",
-      "templates": ["app/code/Weline/Api/view/templates/Backend/User/assign_permissions.phtml"],
+      "templates": ["app/code/Weline/Api/view/templates/backend/User/assign_permissions.phtml"],
       "bundles": ["acl-role-assign-css", "acl-role-assign-js"],
       "engines": []
     },
@@ -674,59 +674,59 @@
     },
     "ai.default-model.index": {
       "area": "backend",
-      "templates": ["app/code/Weline/Ai/view/templates/Backend/DefaultModel/index.phtml"],
+      "templates": ["app/code/Weline/Ai/view/templates/backend/DefaultModel/index.phtml"],
       "bundles": ["ai-model-select-css", "ai-model-select-js", "ai-default-model-css", "ai-default-model-js"],
       "engines": []
     },
     "eav.manager.index": {
       "area": "backend",
-      "templates": ["app/code/Weline/Eav/view/templates/Backend/Manager/index.phtml"],
+      "templates": ["app/code/Weline/Eav/view/templates/backend/Manager/index.phtml"],
       "bundles": ["eav-manager-css", "eav-manager-js"],
       "engines": []
     },
     "queue.form": {
       "area": "backend",
-      "templates": ["app/code/Weline/Queue/view/templates/Backend/Queue/form.phtml"],
+      "templates": ["app/code/Weline/Queue/view/templates/backend/Queue/form.phtml"],
       "bundles": ["queue-form-css", "queue-form-js"],
       "engines": []
     },
     "queue.index": {
       "area": "backend",
       "templates": [
-        "app/code/Weline/Queue/view/templates/Backend/Queue/index.phtml",
-        "app/code/Weline/Queue/view/templates/Backend/Queue/partials/stats.phtml",
-        "app/code/Weline/Queue/view/templates/Backend/Queue/partials/listing.phtml"
+        "app/code/Weline/Queue/view/templates/backend/Queue/index.phtml",
+        "app/code/Weline/Queue/view/templates/backend/Queue/partials/stats.phtml",
+        "app/code/Weline/Queue/view/templates/backend/Queue/partials/listing.phtml"
       ],
       "bundles": ["queue-admin-css", "queue-index-js"],
       "engines": []
     },
     "queue.type.index": {
       "area": "backend",
-      "templates": ["app/code/Weline/Queue/view/templates/Backend/Type/index.phtml"],
+      "templates": ["app/code/Weline/Queue/view/templates/backend/Type/index.phtml"],
       "bundles": ["queue-admin-css", "queue-type-js"],
       "engines": []
     },
     "queue.show": {
       "area": "backend",
-      "templates": ["app/code/Weline/Queue/view/templates/Backend/Queue/show.phtml"],
+      "templates": ["app/code/Weline/Queue/view/templates/backend/Queue/show.phtml"],
       "bundles": ["queue-admin-css"],
       "engines": []
     },
     "queue.type.show": {
       "area": "backend",
-      "templates": ["app/code/Weline/Queue/view/templates/Backend/Type/show.phtml"],
+      "templates": ["app/code/Weline/Queue/view/templates/backend/Type/show.phtml"],
       "bundles": ["queue-admin-css"],
       "engines": []
     },
     "queue.content": {
       "area": "backend",
-      "templates": ["app/code/Weline/Queue/view/templates/Backend/Queue/content.phtml"],
+      "templates": ["app/code/Weline/Queue/view/templates/backend/Queue/content.phtml"],
       "bundles": ["queue-admin-css", "queue-content-js"],
       "engines": []
     },
     "queue.diagnostics": {
       "area": "backend",
-      "templates": ["app/code/Weline/Queue/view/templates/Backend/Diagnostics/index.phtml"],
+      "templates": ["app/code/Weline/Queue/view/templates/backend/Diagnostics/index.phtml"],
       "bundles": ["queue-admin-css"],
       "engines": []
     },
@@ -738,37 +738,37 @@
     },
     "websites.site-builder.workspace": {
       "area": "backend",
-      "templates": ["app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/workspace.phtml"],
+      "templates": ["app/code/Weline/Websites/view/templates/backend/SiteBuilderAgent/workspace.phtml"],
       "bundles": ["language-select-css", "language-select-js"],
       "engines": []
     },
     "websites.site-builder.v1": {
       "area": "backend",
-      "templates": ["app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/index-v1.phtml"],
+      "templates": ["app/code/Weline/Websites/view/templates/backend/SiteBuilderAgent/index-v1.phtml"],
       "bundles": ["language-select-css", "language-select-js"],
       "engines": []
     },
     "i18n.dictionary": {
       "area": "backend",
-      "templates": ["app/code/Weline/I18n/view/templates/Backend/Dictionary.phtml"],
+      "templates": ["app/code/Weline/I18n/view/templates/backend/Dictionary.phtml"],
       "bundles": ["language-select-css", "language-select-js"],
       "engines": []
     },
     "i18n.language-support-request": {
       "area": "frontend",
-      "templates": ["app/code/Weline/I18n/view/templates/Frontend/language-support-request.phtml"],
+      "templates": ["app/code/Weline/I18n/view/templates/frontend/language-support-request.phtml"],
       "bundles": ["language-select-css", "language-select-js"],
       "engines": []
     },
     "customer-service.agent": {
       "area": "backend",
-      "templates": ["app/code/Weline/CustomerService/view/templates/Backend/Agent/index.phtml"],
+      "templates": ["app/code/Weline/CustomerService/view/templates/backend/Agent/index.phtml"],
       "bundles": ["language-select-css", "language-select-js"],
       "engines": []
     },
     "cms.page.edit": {
       "area": "backend",
-      "templates": ["app/code/Weline/Cms/view/templates/Backend/Page/edit.phtml"],
+      "templates": ["app/code/Weline/Cms/view/templates/backend/Page/edit.phtml"],
       "bundles": ["language-select-css", "language-select-js"],
       "engines": []
     },
@@ -816,13 +816,13 @@
     },
     "seo.embed.index": {
       "area": "backend",
-      "templates": ["app/code/Weline/Seo/view/templates/Backend/Embed/index.phtml"],
+      "templates": ["app/code/Weline/Seo/view/templates/backend/Embed/index.phtml"],
       "bundles": ["seo-embed-css", "seo-embed-index-js"],
       "engines": []
     },
     "seo.embed.detail": {
       "area": "backend",
-      "templates": ["app/code/Weline/Seo/view/templates/Backend/Embed/detail.phtml"],
+      "templates": ["app/code/Weline/Seo/view/templates/backend/Embed/detail.phtml"],
       "bundles": ["seo-embed-css", "seo-embed-detail-js"],
       "engines": []
     },

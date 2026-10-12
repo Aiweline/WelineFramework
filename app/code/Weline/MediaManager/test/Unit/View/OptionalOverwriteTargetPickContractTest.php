@@ -15,7 +15,7 @@ class OptionalOverwriteTargetPickContractTest extends TestCase
     {
         $js = (string)file_get_contents(BP . '/app/code/Weline/MediaManager/view/statics/js/manager.js');
         $template = (string)file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         );
         $css = (string)file_get_contents(BP . '/app/code/Weline/MediaManager/view/statics/css/manager.css');
 

@@ -217,7 +217,7 @@ class Hook extends BaseController
                 'hooks' => $pagination['items'],
                 'stats' => $service->getHookStats(),
                 'total_count' => $pagination['total'],
-                'html' => $this->fetch('Weline_Hook::templates/Backend/Hook/list_table'),
+                'html' => $this->fetch('Weline_Hook::templates/backend/Hook/list_table'),
             ], JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
             header('Content-Type: application/json');
@@ -415,15 +415,15 @@ class Hook extends BaseController
     private function renderHookPage(): string
     {
         $beforeStartedAt = microtime(true);
-        $before = $this->getTemplate()->fetch('Weline_Admin::templates/Backend/page-layout/main-content-before.phtml');
+        $before = $this->getTemplate()->fetch('Weline_Admin::templates/backend/page-layout/main-content-before.phtml');
         $this->logPerformance('render.before', $beforeStartedAt, ['html_bytes' => strlen($before)]);
 
         $contentStartedAt = microtime(true);
-        $content = $this->getTemplate()->fetch('Weline_Hook::templates/Backend/Hook/index.phtml');
+        $content = $this->getTemplate()->fetch('Weline_Hook::templates/backend/Hook/index.phtml');
         $this->logPerformance('render.content', $contentStartedAt, ['html_bytes' => strlen($content)]);
 
         $afterStartedAt = microtime(true);
-        $after = $this->getTemplate()->fetch('Weline_Admin::templates/Backend/page-layout/main-content-after.phtml');
+        $after = $this->getTemplate()->fetch('Weline_Admin::templates/backend/page-layout/main-content-after.phtml');
         $this->logPerformance('render.after', $afterStartedAt, ['html_bytes' => strlen($after)]);
 
         return $before . $content . $after;

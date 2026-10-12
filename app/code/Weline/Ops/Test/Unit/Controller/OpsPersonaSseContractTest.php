@@ -22,7 +22,7 @@ final class OpsPersonaSseContractTest extends TestCase
 
     public function test_desk_template_wires_sse_progress_tag(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Desk/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Desk/index.phtml';
         $html = (string)file_get_contents($path);
         self::assertStringContainsString('w:theme:sse-progress', $html);
         self::assertStringContainsString('data-testid="ops-persona-sse-panel"', $html);

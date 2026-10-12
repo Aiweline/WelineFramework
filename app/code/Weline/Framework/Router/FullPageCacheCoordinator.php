@@ -73,6 +73,15 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private const SCHEMA_NEUTRAL_STALE_CACHE_PREFIX =
         'unified-fpc-schema-neutral-stale:20260907-category-summary-facets-v8:';
     private const DEFAULT_STALE_TTL_SECONDS = 86400;
+    /** Align soft-stale window with policy CDN year; hard store uses persist-until-purge. */
+    private const MAX_STALE_TTL_SECONDS = 31536000;
+    /**
+     * Anonymous storefront Shared store TTL for CachePool.
+     * Negative = forever at adapter (CachePool maps <0 → adapter ttl 0).
+     * Cleared only by admin purge or Changed purgeUrls (persist-until-purge).
+     * Cold-disk path-index remains the durable fallback under memory pressure.
+     */
+    private const ANONYMOUS_SHARED_STORE_TTL_SECONDS = -1;
     private const DEFAULT_SHARED_STALE_MAX_BODY_BYTES = 1048576;
     private const DEFAULT_PRIVATE_SESSION_TTL_SECONDS = 300;
     private const PROCESS_FPC_TTL_SECONDS = 3600;
@@ -641,9 +650,13 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] = \base64_encode($brotliBody);
         }
 
-        $ttl = $this->privateSessionTokenFromVariant($variant) !== ''
+        $isPrivateSession = $this->privateSessionTokenFromVariant($variant) !== '';
+        $ttl = $isPrivateSession
             ? $this->privateSessionFpcTtlSeconds()
             : $this->effectiveFpcPolicy($fullUri)['ttl'];
+        // Anonymous storefront: Shared store TTL=0 (persist until purge). Soft
+        // freshness for CDN/edge still uses policy_ttl / fpc_expires_at.
+        $storeTtl = $isPrivateSession ? $ttl : self::ANONYMOUS_SHARED_STORE_TTL_SECONDS;
         $payload['policy_ttl'] = $ttl;
         $payload['policy_fingerprint'] = $this->effectiveFpcPolicy($fullUri)['policy_fingerprint'];
         $payload[self::UNIFIED_CACHE_EXPIRES_AT_KEY] = \microtime(true) + $ttl;
@@ -658,7 +671,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $sharedPublished = $this->cache()->set(
             $unifiedCacheKey,
             $sharedPayload,
-            $ttl
+            $storeTtl
         );
         $storeError = \error_get_last();
         $cachePool = $this->cache();
@@ -668,7 +681,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'full_key' => $unifiedCacheKey,
             'variant' => $variant,
             'stored' => $sharedPublished,
-            'ttl' => $ttl,
+            'ttl' => $storeTtl,
+            'policy_ttl' => $ttl,
             'payload_keys' => \is_array($sharedPayload) ? \array_keys($sharedPayload) : [],
             'pool_class' => \get_class($cachePool),
             'adapter_class' => \is_object($adapter) ? \get_class($adapter) : '',
@@ -677,15 +691,15 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if (!$sharedPublished && InternalHomepagePrime::isCurrentRequest()) {
             throw new \RuntimeException('Homepage warmup could not publish the compact shared FPC payload.');
         }
-        if ($this->privateSessionTokenFromVariant($variant) === '') {
+        if (!$isPrivateSession) {
             $staleCacheKey = $this->buildStaleCacheKey($unifiedCacheKey);
-            $staleTtl = $this->staleTtlSeconds();
+            $staleStoreTtl = self::ANONYMOUS_SHARED_STORE_TTL_SECONDS;
             $stalePayload = $this->stripPlaintextWhenBrotliAuthority(
                 $this->externalizeSharedPayload($staleCacheKey, $payload, $fullUri)
             );
             if ($this->shouldPublishSharedStalePayload($stalePayload)) {
                 self::cooperativeBuildYield();
-                $this->cache()->set($staleCacheKey, $stalePayload, $staleTtl);
+                $this->cache()->set($staleCacheKey, $stalePayload, $staleStoreTtl);
                 self::cooperativeBuildYield();
                 $schemaNeutralStaleKey = $this->buildSchemaNeutralStaleCacheKey($fullUri, $method, $variant);
                 $schemaNeutralStalePayload = $this->stripPlaintextWhenBrotliAuthority(
@@ -695,7 +709,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                     $this->cache()->set(
                         $schemaNeutralStaleKey,
                         $schemaNeutralStalePayload,
-                        $staleTtl
+                        $staleStoreTtl
                     );
                 }
             }
@@ -734,7 +748,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $this->setProcessCachedFormattedResponse($formattedKey, $formatted, $ttl);
             if ($this->shouldPublishSharedFormattedResponse($formatted)) {
                 self::cooperativeBuildYield();
-                $this->cache()->set($formattedKey, $formatted, $ttl);
+                $this->cache()->set($formattedKey, $formatted, $storeTtl);
             }
         }
     }
@@ -1156,12 +1170,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 }
                 $pool = $manager->pool($poolName);
                 foreach ($urls as $url) {
-                    $path = FpcPayloadPathIndex::normalizePath((string)$url);
-                    if ($path === '') {
+                    $indexKey = FpcPayloadPathIndex::normalizeIndexKey((string)$url);
+                    if ($indexKey === '') {
                         continue;
                     }
                     if (\method_exists($pool, 'deleteMatching')) {
-                        $pool->deleteMatching('*' . \md5($path) . '*');
+                        $pool->deleteMatching('*' . \md5($indexKey) . '*');
                     }
                 }
                 foreach ($indexedKeys as $cacheKey) {
@@ -1172,6 +1186,161 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             }
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * Local Always Online: when the origin fails (empty body / 5xx), serve the last
+     * anonymous cold-disk FPC snapshot for this storefront path if path-index still
+     * points at an on-disk body. Purged pages have no refs → no blind serve.
+     * Logged-in / editor / private pages never receive cold HTML.
+     */
+    public function tryServeColdDiskOnOriginError(
+        string $fullUri,
+        string $method = 'GET',
+        string $acceptEncoding = '',
+        string $cookieHeader = '',
+    ): ?Response {
+        return $this->tryServeColdDiskAnonymous(
+            $fullUri,
+            $method,
+            $acceptEncoding,
+            $cookieHeader,
+            'always-online',
+        );
+    }
+
+    /**
+     * Persist-until-purge durable HIT: Shared/stale miss but cold-disk path-index
+     * still has an anonymous body → serve HIT from disk (not origin SSR).
+     * Cleared only by admin purge or resource-update purgeUrls.
+     */
+    public function tryServeColdDiskDurableHit(
+        string $fullUri,
+        string $method = 'GET',
+        string $acceptEncoding = '',
+        string $cookieHeader = '',
+    ): ?Response {
+        return $this->tryServeColdDiskAnonymous(
+            $fullUri,
+            $method,
+            $acceptEncoding,
+            $cookieHeader,
+            'durable',
+        );
+    }
+
+    /**
+     * @param 'always-online'|'durable' $mode
+     */
+    private function tryServeColdDiskAnonymous(
+        string $fullUri,
+        string $method,
+        string $acceptEncoding,
+        string $cookieHeader,
+        string $mode,
+    ): ?Response {
+        $method = $this->normalizeCacheMethod(\trim($method) ?: 'GET');
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return null;
+        }
+        $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($fullUri));
+        if ($fullUri === '' || !KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+            return null;
+        }
+        if ($this->isEditorOrPreviewRequest($fullUri) || $this->isExcludedFrontendPath($fullUri)) {
+            return null;
+        }
+        if ($this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri)) {
+            return null;
+        }
+        // Path-level Extra may be missing for probe/orphan URLs; cold-disk presence
+        // already proves a prior anonymous FPC publish. Only require global FPC on.
+        if (!Env::get('cache.status.router_cache', 1) || !Env::get('cache.status.frontend_cache', 1)) {
+            return null;
+        }
+
+        // Host-scoped full URL only — path-only index keys cross websites.
+        $indexKey = FpcPayloadPathIndex::normalizeIndexKey($fullUri);
+        if ($indexKey === '' || !FpcPayloadPathIndex::isHostScopedIndexKey($indexKey)) {
+            return null;
+        }
+        $refs = FpcPayloadPathIndex::lookup($indexKey);
+        if ($refs === []) {
+            return null;
+        }
+
+        // Prefer newest ref that still has a readable body file.
+        for ($i = \count($refs) - 1; $i >= 0; $i--) {
+            $bodyFile = (string)($refs[$i]['body_file'] ?? '');
+            if ($bodyFile === '' || !\is_file($bodyFile) || !$this->isSharedPayloadPath($bodyFile)) {
+                continue;
+            }
+            $raw = @\file_get_contents($bodyFile);
+            if (!\is_string($raw) || $raw === '') {
+                continue;
+            }
+            $encoding = \str_ends_with(\strtolower($bodyFile), '.br')
+                ? self::FPC_BODY_FILE_ENCODING_BROTLI
+                : self::FPC_BODY_FILE_ENCODING_IDENTITY;
+            $policyTtl = (int)($this->effectiveFpcPolicy($fullUri)['ttl'] ?? self::MAX_STALE_TTL_SECONDS);
+            if ($policyTtl <= 0) {
+                $policyTtl = self::MAX_STALE_TTL_SECONDS;
+            }
+            $payload = [
+                KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+                KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => [
+                    'Content-Type' => 'text/html; charset=utf-8',
+                ],
+                'policy_ttl' => $policyTtl,
+                self::UNIFIED_CACHE_EXPIRES_AT_KEY => \microtime(true) + $policyTtl,
+            ];
+            if ($encoding === self::FPC_BODY_FILE_ENCODING_BROTLI) {
+                $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] = \base64_encode($raw);
+            } else {
+                $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] = $raw;
+            }
+            $body = $this->resolvePlaintextBody($payload) ?? '';
+            if ($body === '') {
+                continue;
+            }
+            if (!\Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
+                continue;
+            }
+
+            [$responseBody, $hitEncoding] = $this->resolveEncodedHitBody(
+                $payload,
+                $acceptEncoding !== '' ? $acceptEncoding : $this->clientAcceptEncodingHeader(),
+                (string)($refs[$i]['cache_key'] ?? ''),
+            );
+            $response = Response::fromContent($responseBody, 200, 'text/html; charset=utf-8');
+            $this->applyCachedHeaders($response, $payload[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
+            if ($hitEncoding !== null) {
+                $response->setHeader('Content-Encoding', $hitEncoding);
+                $response->setHeader('Content-Length', (string)\strlen($responseBody));
+                $this->ensureVaryAcceptEncoding($response);
+            }
+            $this->ensureVaryHeader($response, 'Cookie');
+            if ($mode === 'always-online') {
+                $response->setHeader('X-Weline-FPC', 'ALWAYS-ONLINE');
+                $response->setHeader('X-Weline-FPC-Source', 'cold-disk');
+                $response->setHeader('X-WLS-Degrade', 'always-online-cold-disk');
+                $response->setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+                RequestContext::set('wls.fpc.hit_source', 'always-online-cold-disk');
+                RequestContext::set('wls.fpc.stale', true);
+                RequestContext::set('wls.fpc.always_online', true);
+            } else {
+                $response->setHeader('X-Weline-FPC', 'HIT');
+                $response->setHeader('X-Weline-FPC-Source', 'cold-disk');
+                $this->applyFpcHitEdgeCacheHeaders($response, false, $payload);
+                RequestContext::set('wls.fpc.hit_source', 'cold-disk-durable');
+                RequestContext::set('wls.fpc.stale', false);
+                RequestContext::set('wls.fpc.cold_disk_durable', true);
+            }
+
+            return $this->markCacheHit($response);
+        }
+
+        return null;
     }
 
     private function getStaleCachedResponse(string $method): ?Response
@@ -1231,7 +1400,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             }
         }
         if (!\is_array($cached)) {
-            return null;
+            return $this->tryServeColdDiskDurableHit(
+                $this->getCacheKeyFullUri(),
+                $method,
+                $this->clientAcceptEncodingHeader(),
+                $this->currentRequestCookieHeader(),
+            );
         }
 
         if (!$this->payloadHasAuthoritativeBody($cached)) {
@@ -1259,7 +1433,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             true
         );
         if ($cached === null) {
-            return null;
+            return $this->tryServeColdDiskDurableHit(
+                $this->getCacheKeyFullUri(),
+                $method,
+                $this->clientAcceptEncodingHeader(),
+                $this->currentRequestCookieHeader(),
+            );
         }
         if ($cachePayloadFetched) {
             $this->setProcessCachedPayload($staleCacheKey, $cached);
@@ -2208,8 +2387,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $privateSessionToken = '';
         // Signed-in shoppers may HIT the public guest FPC; Account soft-reconciles.
         // Never use a private-session token here (P1a hard-off).
+        // Worker fpc_probe / storefront-scoped installs skip legacy Shared rebuild
+        // here (receipt paths cover Process/Shared). Still allow cold-disk durable
+        // keyed by the caller-supplied public full URI (must include host + path).
         if (!$this->legacyPreRouterFpcAllowed()) {
-            return null;
+            return $this->tryFormattedColdDiskDurableHit(
+                $fullUri,
+                $method,
+                $acceptEncoding,
+                $cookieHeader,
+                $keepAlive,
+            );
         }
         if ($loggedInFrontendSession) {
             $privateSessionToken = '';
@@ -2219,7 +2407,14 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
 
         if (!$this->effectiveFpcPolicy($fullUri)['enabled']) {
-            return null;
+            // Persist-until-purge: Extra policy may be gone while cold disk remains.
+            return $this->tryFormattedColdDiskDurableHit(
+                $fullUri,
+                $method,
+                $acceptEncoding,
+                $cookieHeader,
+                $keepAlive,
+            );
         }
         $variant = $this->buildFpcVariantFromCookieHeader($cookieHeader, $fullUri);
         $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $cacheMethod, $variant);
@@ -2279,14 +2474,27 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                     $source = \is_array($cached) ? 'stale-shared' : 'stale-miss';
                 }
                 if (!\is_array($cached)) {
-                    return null;
+                    // Persist-until-purge: cold disk outlives Shared Memory TTL/eviction.
+                    return $this->tryFormattedColdDiskDurableHit(
+                        $fullUri,
+                        $method,
+                        $acceptEncoding,
+                        $cookieHeader,
+                        $keepAlive,
+                    );
                 }
             } else {
                 $source = 'shared';
             }
         }
         if (!\is_array($cached)) {
-            return null;
+            return $this->tryFormattedColdDiskDurableHit(
+                $fullUri,
+                $method,
+                $acceptEncoding,
+                $cookieHeader,
+                $keepAlive,
+            );
         }
 
         if (!$this->payloadHasAuthoritativeBody($cached)) {
@@ -2298,14 +2506,36 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return null;
         }
 
+        $prePrepareCached = $cached;
         $cached = $this->prepareCachedPayloadForFastHit(
             $payloadCacheKey,
             $cached,
             $body,
             $source === 'shared'
         );
+        if ($cached === null && $privateSessionToken === '') {
+            // Soft-expired Shared/Process still authoritative until purge.
+            $cached = $this->prepareCachedPayloadForFrameworkHit(
+                $payloadCacheKey,
+                $prePrepareCached,
+                $body,
+                false,
+                true
+            );
+            if ($cached !== null && !\str_starts_with($source, 'stale-')) {
+                $source = 'stale-' . $source;
+            }
+        }
         if ($cached === null) {
-            return null;
+            return $privateSessionToken !== ''
+                ? null
+                : $this->tryFormattedColdDiskDurableHit(
+                    $fullUri,
+                    $method,
+                    $acceptEncoding,
+                    $cookieHeader,
+                    $keepAlive,
+                );
         }
         $encoding = $this->resolveHitContentEncoding($acceptEncoding, $cached);
         if ($source === 'shared') {
@@ -3992,7 +4222,13 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $remainingTtl += $this->staleTtlSeconds();
         }
         if ($remainingTtl !== null && $remainingTtl <= 0) {
-            return;
+            // Persist-until-purge: soft-expired anonymous payloads may still pin
+            // Process L1 briefly; private-session keys stay drop-on-expiry.
+            $variant = $payload[self::VARIANT_PAYLOAD_KEY] ?? [];
+            if (!\is_array($variant) || $this->privateSessionTokenFromVariant($variant) !== '') {
+                return;
+            }
+            $remainingTtl = self::PROCESS_FPC_TTL_SECONDS;
         }
 
         $bytes = $this->estimatePayloadBytes($payload);
@@ -4298,7 +4534,42 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function staleTtlSeconds(): int
     {
         $configured = (int)Env::get('wls.performance.fpc_stale_ttl_seconds', self::DEFAULT_STALE_TTL_SECONDS);
-        return \max(60, \min($configured, 604800));
+        return \max(60, \min($configured, self::MAX_STALE_TTL_SECONDS));
+    }
+
+    /**
+     * @return array{response: string, source: string, bytes: int}|null
+     */
+    private function tryFormattedColdDiskDurableHit(
+        string $fullUri,
+        string $method,
+        string $acceptEncoding,
+        string $cookieHeader,
+        bool $keepAlive,
+    ): ?array {
+        $response = $this->tryServeColdDiskDurableHit(
+            $fullUri,
+            $method,
+            $acceptEncoding,
+            $cookieHeader,
+        );
+        if ($response === null) {
+            return null;
+        }
+        $http = $response->toHttpString($keepAlive);
+        if (\strtoupper($method) === 'HEAD') {
+            $headerEnd = \strpos($http, "\r\n\r\n");
+            if ($headerEnd !== false) {
+                $http = \substr($http, 0, $headerEnd + 4);
+            }
+        }
+        $body = (string)$response->getBody();
+
+        return [
+            'response' => $http,
+            'source' => 'cold-disk-durable',
+            'bytes' => \strlen($body),
+        ];
     }
 
     /** @param array<string, mixed> $payload */
@@ -4353,12 +4624,16 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         array $payload,
         string $fullUriForPathIndex = '',
     ): array {
-        $indexPath = FpcPayloadPathIndex::normalizePath($fullUriForPathIndex);
-        $remember = static function (string $file) use ($cacheKey, $indexPath): void {
-            if ($indexPath === '' || $file === '') {
+        $indexKey = FpcPayloadPathIndex::normalizeIndexKey($fullUriForPathIndex);
+        // Refuse path-only remember: cold-disk rescue would otherwise cross hosts.
+        if ($indexKey !== '' && !FpcPayloadPathIndex::isHostScopedIndexKey($indexKey)) {
+            $indexKey = '';
+        }
+        $remember = static function (string $file) use ($cacheKey, $indexKey): void {
+            if ($indexKey === '' || $file === '') {
                 return;
             }
-            FpcPayloadPathIndex::remember($indexPath, $cacheKey, $file);
+            FpcPayloadPathIndex::remember($indexKey, $cacheKey, $file);
         };
 
         $bodyFile = $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] ?? null;
@@ -5253,7 +5528,55 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     private function getRawFullUri(): string
     {
-        return (string)(\w_env('full_request_uri', '') ?? '');
+        $full = \trim((string)(\w_env('full_request_uri', '') ?? ''));
+        // Prefer visitor-facing pretty path (pre url_rewrite). Otherwise
+        // /destinations and /routes both become /guide?view=* and cold-disk
+        // / Shared collide after query stripping or rewrite.
+        $originPath = \trim((string)(
+            WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
+            ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? '')
+            ?: WelineEnv::server('ORIGIN_REQUEST_URI', '')
+            ?: ($_SERVER['ORIGIN_REQUEST_URI'] ?? '')
+        ));
+        if ($originPath !== '' && \str_starts_with($originPath, '/')) {
+            $scheme = '';
+            $host = '';
+            if ($full !== '' && \str_contains($full, '://')) {
+                $parts = \parse_url($full);
+                if (\is_array($parts)) {
+                    $scheme = \strtolower((string)($parts['scheme'] ?? ''));
+                    $host = \strtolower((string)($parts['host'] ?? ''));
+                    $port = isset($parts['port']) ? (int)$parts['port'] : 0;
+                    if ($host !== '' && $port > 0) {
+                        $defaultPort = $scheme === 'https' ? 443 : ($scheme === 'http' ? 80 : 0);
+                        if ($defaultPort === 0 || $port !== $defaultPort) {
+                            $host .= ':' . $port;
+                        }
+                    }
+                }
+            }
+            if ($scheme === '') {
+                $scheme = \strtolower((string)(
+                    WelineEnv::server('REQUEST_SCHEME', '')
+                    ?: ($_SERVER['REQUEST_SCHEME'] ?? '')
+                    ?: 'https'
+                ));
+                if ($scheme !== 'http' && $scheme !== 'https') {
+                    $scheme = 'https';
+                }
+            }
+            if ($host === '') {
+                $host = \strtolower((string)(
+                    WelineEnv::server('HTTP_HOST', '')
+                    ?: ($_SERVER['HTTP_HOST'] ?? '')
+                ));
+            }
+            if ($host !== '') {
+                return $scheme . '://' . $host . $originPath;
+            }
+        }
+
+        return $full;
     }
 
     private function getCacheKeyFullUri(): string

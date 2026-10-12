@@ -149,7 +149,7 @@ final class EventChainServiceTest extends TestCase
         $base = \dirname(__DIR__, 3);
         $svc = (string)\file_get_contents($base . '/Service/EventChainService.php');
         $ctl = (string)\file_get_contents($base . '/Controller/Backend/TrackingVendor.php');
-        $tpl = (string)\file_get_contents($base . '/view/templates/Backend/TrackingVendor/index.phtml');
+        $tpl = (string)\file_get_contents($base . '/view/templates/backend/TrackingVendor/index.phtml');
         self::assertStringNotContainsString('ensureDemoCrossPageChain', $svc);
         self::assertStringNotContainsString('postEnsureDemoEventChain', $ctl);
         self::assertStringNotContainsString('tv-ensure-demo-chain', $tpl);

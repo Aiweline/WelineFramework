@@ -13,6 +13,6 @@
 - `Controller/Backend/Review.php`：评论后台列表、筛选与审核控制器。
 - `extends/module/Weline_Framework/Query/ReviewQueryProvider.php`：BinQuery 前端入口。
 - `view/hooks/Weline_Review/frontend/layouts/product-reviews/content.phtml`：可被主题覆盖的商品评论表现层。
-- `view/templates/Backend/Review/index.phtml`：默认后台图文视频评论审核界面。
+- `view/templates/backend/Review/index.phtml`：默认后台图文视频评论审核界面。
 - `test/e2e/backend/Weline_Review-moderation.spec.js`：后台路由、筛选、媒体与审核闭环 E2E。
 - `doc/运营/评论审核.md`：后台审核运营流程、权限与故障恢复说明。

@@ -11,9 +11,9 @@ final class BackendOrderPaymentRecordsWidgetContractTest extends TestCase
     public function testWidgetRegistrationPinsOrderPaymentRecordsSlot(): void
     {
         $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
-        $tpl = 'Weline_Payment::templates/Backend/widgets/backend-order-payment-records.phtml';
+        $tpl = 'Weline_Payment::templates/backend/widgets/backend-order-payment-records.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
-        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/widgets/backend-order-payment-records.phtml');
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/widgets/backend-order-payment-records.phtml');
         self::assertStringContainsString('@widget.code {backend-order-payment-records}', $src);
         self::assertStringContainsString('@widget.slot {backend-order-payment-records}', $src);
         self::assertStringContainsString('"layout_type":"backend-order-view"', $src);
@@ -28,7 +28,7 @@ final class BackendOrderPaymentRecordsWidgetContractTest extends TestCase
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString(
-            'Weline_Payment::templates/Backend/widgets/backend-order-payment-records.phtml',
+            'Weline_Payment::templates/backend/widgets/backend-order-payment-records.phtml',
             $source
         );
     }
@@ -36,7 +36,7 @@ final class BackendOrderPaymentRecordsWidgetContractTest extends TestCase
     public function testWidgetTemplateUsesAttemptService(): void
     {
         $path = dirname(__DIR__, 3)
-            . '/view/templates/Backend/widgets/backend-order-payment-records.phtml';
+            . '/view/templates/backend/widgets/backend-order-payment-records.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('BackendOrderPaymentRecordsService', $source);
@@ -48,10 +48,10 @@ final class BackendOrderPaymentRecordsWidgetContractTest extends TestCase
     {
         $root = dirname(__DIR__, 3);
         $source = (string)file_get_contents(
-            $root . '/view/templates/Backend/widgets/backend-order-payment-records.phtml'
+            $root . '/view/templates/backend/widgets/backend-order-payment-records.phtml'
         );
         $chip = (string)file_get_contents(
-            $root . '/view/templates/Backend/partials/outcome-chip.phtml'
+            $root . '/view/templates/backend/partials/outcome-chip.phtml'
         );
 
         self::assertStringContainsString('BackendPaymentOutcomeChip', $source);

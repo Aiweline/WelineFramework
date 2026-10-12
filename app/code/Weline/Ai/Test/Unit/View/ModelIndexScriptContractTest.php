@@ -13,7 +13,7 @@ final class ModelIndexScriptContractTest extends TestCase
 {
     private function scriptSource(): string
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Model/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Model/index.phtml';
         self::assertFileExists($path);
         $html = (string)file_get_contents($path);
         $start = strpos($html, "(function() { 'use strict';");
@@ -26,7 +26,7 @@ final class ModelIndexScriptContractTest extends TestCase
 
     public function test_model_index_wires_connectivity_test_hooks(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Model/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Model/index.phtml';
         $html = (string)file_get_contents($path);
         self::assertStringContainsString('data-model-action="test-provider"', $html);
         self::assertStringContainsString('window.testModelConnection', $html);

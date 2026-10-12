@@ -9,7 +9,7 @@ if ($websiteName === '') {
 }
 $contextName = $websiteCode !== '' ? (string)__('默认站授权目录') . ' · ' . $websiteCode : (string)__('默认站授权目录');
 ?>
-<?= $this->fetch('Weline_Acl::templates/Backend/Acl/Role/assign.phtml', [
+<?= $this->fetch('Weline_Acl::templates/backend/Acl/Role/assign.phtml', [
     'assignment_mode' => 'website',
     'assignment_action' => (string)$this->getData('action'),
     'assignment_identifier_name' => 'website_id',

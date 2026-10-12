@@ -203,7 +203,7 @@ HTML;
         self::assertStringContainsString('"layout_type":"*"', $musicSrc);
         self::assertStringContainsString('"required":true', $musicSrc);
 
-        $csTpl = 'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml';
+        $csTpl = 'Weline_CustomerService::templates/frontend/widgets/customer-service-float.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($cs, $csTpl));
         $csView = \Weline\Widget\Test\Support\SlimWidgetPhpListing::resolveViewPath($csTpl);
         $csSrc = (string) file_get_contents($csView);

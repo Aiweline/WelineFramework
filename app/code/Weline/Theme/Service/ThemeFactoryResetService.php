@@ -9,6 +9,7 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locale\Dictionary;
 use Weline\Meta\Model\MetaConfig;
+use Weline\Meta\Model\MetaLocal;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Model\ThemeScopePatch;
@@ -43,7 +44,7 @@ final class ThemeFactoryResetService
     ) {
     }
 
-    /** @return array{tables:list<string>,meta:int,dictionary:int,cache:array<string,mixed>} */
+    /** @return array{tables:list<string>,meta:int,meta_local:int,dictionary:int,cache:array<string,mixed>} */
     public function resetAll(string $confirmation): array
     {
         if (\trim($confirmation) !== 'RESET') {
@@ -74,6 +75,19 @@ final class ThemeFactoryResetService
             $metaCount = (int)$connection->getLink()->exec($sql);
         }
 
+        $metaLocalCount = 0;
+        if ($connection->tableExist(MetaLocal::schema_table)) {
+            /** @var MetaLocal $metaLocal */
+            $metaLocal = ObjectManager::getInstance(MetaLocal::class);
+            $identify = $connection->quoteIdentifier(MetaLocal::schema_fields_META_IDENTIFY);
+            $sql = 'DELETE FROM ' . $metaLocal->getTable()
+                . ' WHERE ' . $identify . " LIKE 'theme.frontend.%'"
+                . ' OR ' . $identify . " LIKE 'theme.backend.%'"
+                . ' OR ' . $identify . " IN ('theme.frontend','theme.backend')";
+            $metaLocalCount = (int)$connection->getLink()->exec($sql);
+        }
+
+        // Leftover dictionary @meta::theme.% rows (base + locale tables) if still present.
         $dictCount = 0;
         if ($connection->tableExist(Dictionary::schema_table)) {
             /** @var Dictionary $dictionary */
@@ -89,6 +103,7 @@ final class ThemeFactoryResetService
         return [
             'tables' => $cleared,
             'meta' => $metaCount,
+            'meta_local' => $metaLocalCount,
             'dictionary' => $dictCount,
             'cache' => $cache,
         ];

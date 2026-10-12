@@ -96,6 +96,11 @@ final class Connector extends Query implements ConnectorInterface, PhysicalTable
         return $this->dialect ??= new SqliteDialect();
     }
 
+    public function getSqlDialect(): \Weline\Framework\Database\Compiler\Dialect\DialectInterface
+    {
+        return $this->getDialect();
+    }
+
     static function processName(string $name): string
     {
         return str_replace(['`', '"'], '', $name);

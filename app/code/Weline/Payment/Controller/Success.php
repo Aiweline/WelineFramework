@@ -37,7 +37,7 @@ class Success extends FrontendController
         $this->assign('payment_return_empty', false);
         $this->assignPaymentReturnContext($transaction);
 
-        return $this->fetch('Weline_Payment::templates/Frontend/checkout/return.phtml');
+        return $this->fetch('Weline_Payment::templates/frontend/checkout/return.phtml');
     }
 
     private function assignPaymentReturnContext(?PaymentTransaction $transaction): void

@@ -30,7 +30,7 @@ final class FixedAmountBaseCurrencyContractTest extends TestCase
 
     public function testCouponFormShowsBaseCurrencyHint(): void
     {
-        $path = dirname(__DIR__, 6) . '/view/templates/Backend/coupon/form.phtml';
+        $path = dirname(__DIR__, 6) . '/view/templates/backend/coupon/form.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('marketing-coupon-base-currency', $src);

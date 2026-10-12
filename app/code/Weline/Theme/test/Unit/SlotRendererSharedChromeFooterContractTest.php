@@ -54,6 +54,10 @@ final class SlotRendererSharedChromeFooterContractTest extends TestCase
         self::assertStringContainsString('isChromeSlot($slotId)', $src);
         self::assertStringContainsString("\$widgetArea === 'header' || \$widgetArea === 'footer'", $src);
         self::assertStringContainsString('本页本地 chrome 副本不得覆盖全局', $src);
+        // Hard-cut outbound: blank exclusive root footer/header refill from chrome_payload.
+        self::assertStringContainsString("foreach (['footer', 'header'] as \$rootSlotId)", $src);
+        self::assertStringContainsString('htmlHasRootChromeWidgetCode(', $src);
+        self::assertStringContainsString('footer-container', $src);
     }
 
     public function testProcessSlotsWithLayoutAlsoMergesSharedChrome(): void

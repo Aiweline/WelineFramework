@@ -30,14 +30,23 @@ final class Collect implements CommandInterface
         $moduleName = $args['module'] ?? $args['m'] ?? $args[1] ?? null;
         $moduleName = is_string($moduleName) ? trim($moduleName) : null;
 
+        $pruneStale = !in_array('--no-prune-stale', $args, true)
+            && (($data['no-prune-stale'] ?? false) !== true)
+            && (($data['prune_stale'] ?? true) !== false);
+
         if ($moduleName !== null && $moduleName !== '') {
             $this->printing->note(__('正在收集模块：%{1}', [$moduleName]));
+            // 单模块永不剥离（避免误删其它模块原词）
+            $pruneStale = false;
         } else {
             $this->printing->note(__('正在收集所有模块的翻译词...'));
+            if (!$pruneStale) {
+                $this->printing->note(__('已跳过短语冗余原词剥离（--no-prune-stale）'));
+            }
         }
 
         try {
-            $this->compiler->compile($moduleName !== '' ? $moduleName : null, false);
+            $this->compiler->compile($moduleName !== '' ? $moduleName : null, false, $pruneStale);
             $this->printing->success(
                 $moduleName
                     ? __('模块 %{1} 语言包收集成功！', [$moduleName])
@@ -97,6 +106,7 @@ final class Collect implements CommandInterface
             [
                 '-h, --help' => __('显示帮助信息'),
                 '--module, -m' => __('仅收集指定模块'),
+                '--no-prune-stale' => __('全量收集后不剥离不在收集集中的短语冗余原词'),
             ],
             [],
             [],

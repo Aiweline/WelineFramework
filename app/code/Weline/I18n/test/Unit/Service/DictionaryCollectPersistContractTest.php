@@ -17,8 +17,10 @@ final class DictionaryCollectPersistContractTest extends TestCase
             dirname(__DIR__, 3) . '/Service/DictionaryCollectService.php',
         );
         self::assertStringContainsString('function persistCollectedWords(', $source);
-        self::assertStringContainsString('$this->persistCollectedWords($words', $source);
+        self::assertStringContainsString('pullCompileAfterSummary', $source);
+        self::assertStringNotContainsString('$this->persistCollectedWords($words, \'\', $onProgress)', $source);
         self::assertStringContainsString('schema_fields_WORD', $source);
         self::assertStringContainsString('schema_fields_LOCALE_CODE', $source);
+        self::assertStringContainsString('schema_fields_COLLECT_BATCH', $source);
     }
 }

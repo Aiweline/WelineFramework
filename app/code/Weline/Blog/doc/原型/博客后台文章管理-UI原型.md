@@ -1,6 +1,6 @@
 # 博客后台 · 文章管理 UI 原型（v1）
 
-> 对齐 Weline 后台主题（`w-grid` / `w-card` / `w-button` / Taglib），参考 `Weline_Cms::Backend/Page` 列表与 `Weline_Review::Backend/Review` 工具栏模式。
+> 对齐 Weline 后台主题（`w-grid` / `w-card` / `w-button` / Taglib），参考 `Weline_Cms::backend/Page` 列表与 `Weline_Review::backend/Review` 工具栏模式。
 
 ## 页面一：文章列表 `/blog/backend/post-admin/index`
 
@@ -103,6 +103,6 @@
 
 ## 参考文件
 
-- `Weline_Cms/view/templates/Backend/Page/listing.phtml`
-- `Weline_Cms/view/templates/Backend/Page/edit.phtml`
-- `Weline_Review/view/templates/Backend/Review/index.phtml`
+- `Weline_Cms/view/templates/backend/Page/listing.phtml`
+- `Weline_Cms/view/templates/backend/Page/edit.phtml`
+- `Weline_Review/view/templates/backend/Review/index.phtml`

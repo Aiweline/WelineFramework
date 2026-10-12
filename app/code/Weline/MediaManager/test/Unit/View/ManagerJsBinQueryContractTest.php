@@ -72,7 +72,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
             BP . '/app/code/Weline/MediaManager/view/statics/js/manager.js'
         );
         $template = (string)\file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         );
         $style = (string)\file_get_contents(
             BP . '/app/code/Weline/MediaManager/view/statics/css/manager.css'
@@ -223,15 +223,15 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString("body.append('lockPath', CONFIG.lockPath ? '1' : '0')", $source);
         self::assertStringContainsString('CONFIG.lockRoot = normalizeBoundaryPath(CONFIG.lockRoot || \'\')', $source);
         self::assertStringContainsString('mmf-btn-path-lock', (string)file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         ));
         self::assertStringContainsString('mmf-path-row', (string)file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         ));
         self::assertStringContainsString('FILES[cur] || TREE[cur]', $source);
         self::assertStringContainsString('mmf-path-row--locked', $source);
         self::assertStringContainsString('lockRoot:', (string)file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         ));
         self::assertStringContainsString('assertLockedRelativePath', (string)file_get_contents(
             BP . '/app/code/Weline/MediaManager/Service/ConnectorService.php'
@@ -255,7 +255,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString("['aspect_ratio', 'aspectRatio']", $source);
         self::assertStringContainsString('(absDiff / target) <= tolerance', $source);
         self::assertStringContainsString('aspectRatio:', (string)file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         ));
         self::assertStringContainsString('var hasSelectionError = !!(selectionError && FILES[hash] && FILES[hash].mime !== \'directory\');', $source);
         self::assertStringContainsString('if (hasSelectionError) showError(selectionError);', $source);
@@ -292,7 +292,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
 
     public function testIframeSingleSelectAlwaysRendersOneConfirmControl(): void
     {
-        $templatePath = BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml';
+        $templatePath = BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml';
         $stylePath = BP . '/app/code/Weline/MediaManager/view/statics/css/manager.css';
         $template = (string)file_get_contents($templatePath);
         $style = (string)file_get_contents($stylePath);
@@ -333,7 +333,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
             BP . '/app/code/Weline/MediaManager/view/statics/js/manager.js'
         );
         $template = (string)file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         );
 
         self::assertStringContainsString('block-size: min(90dvh, 52rem);', $pickerStyle);
@@ -363,7 +363,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
             BP . '/app/code/Weline/MediaManager/view/statics/js/manager.js'
         );
         $template = (string)file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         );
         $style = (string)file_get_contents(
             BP . '/app/code/Weline/MediaManager/view/statics/css/manager.css'
@@ -507,7 +507,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
             BP . '/app/code/Weline/MediaManager/view/statics/js/manager.js'
         );
         $template = (string)file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         );
         $style = (string)file_get_contents(
             BP . '/app/code/Weline/MediaManager/view/statics/css/manager.css'
@@ -661,7 +661,7 @@ final class ManagerJsBinQueryContractTest extends TestCase
     public function testRuntimeConfigAndTranslationsAreJsonEncodedForJavascriptContext(): void
     {
         $template = (string)file_get_contents(
-            BP . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            BP . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml'
         );
 
         self::assertStringContainsString('JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT', $template);

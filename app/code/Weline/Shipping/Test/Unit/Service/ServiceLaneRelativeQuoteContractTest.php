@@ -55,7 +55,7 @@ final class ServiceLaneRelativeQuoteContractTest extends TestCase
     public function testBackendLaneUiContracts(): void
     {
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/ShippingService/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/ShippingService/index.phtml',
         );
         self::assertStringContainsString('origin_shipping_address_id', $tpl);
         self::assertStringContainsString('lane_dest_selection', $tpl);
@@ -63,14 +63,14 @@ final class ServiceLaneRelativeQuoteContractTest extends TestCase
         self::assertStringContainsString('shipping-service-lane-table', $tpl);
 
         $free = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/FreeShippingRule/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/FreeShippingRule/index.phtml',
         );
         self::assertStringContainsString('value="region"', $free);
         self::assertStringContainsString('value="mixed"', $free);
         self::assertStringContainsString('free_region_selection', $free);
 
         $rate = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/RateTemplate/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/RateTemplate/index.phtml',
         );
         self::assertStringContainsString('weight_rate', $rate);
         self::assertStringContainsString('volume_rate', $rate);

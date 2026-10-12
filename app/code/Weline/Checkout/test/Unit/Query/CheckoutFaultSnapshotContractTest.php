@@ -38,7 +38,7 @@ final class CheckoutFaultSnapshotContractTest extends TestCase
             dirname(__DIR__, 3) . '/Controller/Backend/Session.php',
         );
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Session/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/Session/index.phtml',
         );
         self::assertStringContainsString("where(CheckoutSession::schema_fields_ERROR_CODE, null, 'is not null')", $ctrl);
         self::assertStringContainsString('只看卡住的结账', $tpl);

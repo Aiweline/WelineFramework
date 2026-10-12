@@ -14,7 +14,7 @@ final class ProviderIndexScriptContractTest extends TestCase
 {
     private function scriptSource(): string
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Provider/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Provider/index.phtml';
         self::assertFileExists($path);
         $html = (string)file_get_contents($path);
         $start = strpos($html, "(function() {\n    'use strict';");
@@ -30,7 +30,7 @@ final class ProviderIndexScriptContractTest extends TestCase
 
     public function test_provider_index_wires_connectivity_test_hooks(): void
     {
-        $html = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Provider/index.phtml');
+        $html = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Provider/index.phtml');
         self::assertStringContainsString('data-provider-action="test"', $html);
         self::assertStringContainsString('window.testConnection', $html);
         self::assertStringContainsString('openProviderBusyDialog', $html);

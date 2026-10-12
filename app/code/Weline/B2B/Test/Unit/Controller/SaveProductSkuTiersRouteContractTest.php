@@ -22,7 +22,7 @@ final class SaveProductSkuTiersRouteContractTest extends TestCase
 
     public function testPriceListFormKeepsAmountMinorAndAddsMinQty(): void
     {
-        $file = dirname(__DIR__, 3) . '/view/templates/Backend/ControlCenter/index.phtml';
+        $file = dirname(__DIR__, 3) . '/view/templates/backend/ControlCenter/index.phtml';
         self::assertFileExists($file);
         $src = (string)file_get_contents($file);
         self::assertStringContainsString('name="amount_minor"', $src);

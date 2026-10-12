@@ -17,7 +17,7 @@ final class EavManagerSelectionModeContractTest extends TestCase
             dirname(__DIR__, 3) . '/view/statics/js/eav-manager-native.js',
         );
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Manager/surface.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/Manager/surface.phtml',
         );
         $css = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/statics/css/eav-manager.css',

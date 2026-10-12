@@ -14,8 +14,8 @@ final class DevRelayTemplatePathContractTest extends TestCase
     public function testControllerFetchesExistingTemplatesPaths(): void
     {
         $controller = dirname(__DIR__, 4) . '/Controller/Backend/DevRelay.php';
-        $index = dirname(__DIR__, 4) . '/view/templates/Backend/DevRelay/index.phtml';
-        $console = dirname(__DIR__, 4) . '/view/templates/Backend/DevRelay/console.phtml';
+        $index = dirname(__DIR__, 4) . '/view/templates/backend/DevRelay/index.phtml';
+        $console = dirname(__DIR__, 4) . '/view/templates/backend/DevRelay/console.phtml';
 
         self::assertFileExists($controller);
         self::assertFileExists($index);
@@ -25,19 +25,19 @@ final class DevRelayTemplatePathContractTest extends TestCase
         self::assertIsString($src);
 
         self::assertStringContainsString(
-            "Weline_Payment::templates/Backend/DevRelay/index.phtml",
+            "Weline_Payment::templates/backend/DevRelay/index.phtml",
             $src
         );
         self::assertStringContainsString(
-            "Weline_Payment::templates/Backend/DevRelay/console.phtml",
+            "Weline_Payment::templates/backend/DevRelay/console.phtml",
             $src
         );
         self::assertStringNotContainsString(
-            "Weline_Payment::Backend/DevRelay/index.phtml",
+            "Weline_Payment::backend/DevRelay/index.phtml",
             $src
         );
         self::assertStringNotContainsString(
-            "Weline_Payment::Backend/DevRelay/console.phtml",
+            "Weline_Payment::backend/DevRelay/console.phtml",
             $src
         );
 

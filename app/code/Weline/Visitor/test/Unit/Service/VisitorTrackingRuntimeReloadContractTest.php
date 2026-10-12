@@ -46,7 +46,7 @@ final class VisitorTrackingRuntimeReloadContractTest extends TestCase
     {
         $pixel = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/statics/js/pixel.js');
         $phtml = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/taglib/js/pixel.phtml');
-        $admin = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/index.phtml');
+        $admin = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/index.phtml');
 
         self::assertStringContainsString('noteConfigRevision', $pixel);
         self::assertStringContainsString('__noteServerConfigRevision', $pixel);

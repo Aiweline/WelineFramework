@@ -19,11 +19,11 @@ final class SettingsTemplatePathContractTest extends TestCase
         foreach (['Basic', 'Email', 'Storage'] as $name) {
             self::assertFileDoesNotExist($root . 'Controller/Settings/' . $name . '.php');
             self::assertFileDoesNotExist($root . 'view/templates/Settings/' . $name . '/index.phtml');
-            self::assertFileDoesNotExist($root . 'view/templates/Backend/Settings/' . $name . '/index.phtml');
+            self::assertFileDoesNotExist($root . 'view/templates/backend/Settings/' . $name . '/index.phtml');
         }
         self::assertDirectoryDoesNotExist($root . 'Controller/Settings');
         self::assertDirectoryDoesNotExist($root . 'view/templates/Settings');
-        self::assertDirectoryDoesNotExist($root . 'view/templates/Backend/Settings');
+        self::assertDirectoryDoesNotExist($root . 'view/templates/backend/Settings');
     }
 
     /** @return list<string> */

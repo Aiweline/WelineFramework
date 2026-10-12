@@ -169,7 +169,7 @@ $embedField = 'payment/method/' . $methodCode . '/enabled';
 />
 ```
 
-真实样例：`Weline_Payment/view/templates/Backend/Method/index.phtml`。
+真实样例：`Weline_Payment/view/templates/backend/Method/index.phtml`。
 
 ### 11.2 静态字面量
 

@@ -24,11 +24,11 @@ final class SocialLoginGuideRouterContractTest extends TestCase
         $root = \dirname(__DIR__, 3);
         self::assertFileExists($root . '/Controller/Frontend/Guide/SocialLogin.php');
         self::assertFileExists($root . '/Service/SocialLogin/SocialLoginGuideRegistry.php');
-        self::assertFileExists($root . '/view/templates/Frontend/guide/social-login/index.phtml');
-        self::assertFileExists($root . '/view/templates/Frontend/guide/social-login/partials/sidebar.phtml');
+        self::assertFileExists($root . '/view/templates/frontend/guide/social-login/index.phtml');
+        self::assertFileExists($root . '/view/templates/frontend/guide/social-login/partials/sidebar.phtml');
         foreach (['google', 'facebook', 'instagram'] as $code) {
-            self::assertFileExists($root . '/view/templates/Frontend/guide/social-login/' . $code . '/guide.phtml');
-            self::assertFileExists($root . '/view/templates/Frontend/guide/social-login/' . $code . '/policy.phtml');
+            self::assertFileExists($root . '/view/templates/frontend/guide/social-login/' . $code . '/guide.phtml');
+            self::assertFileExists($root . '/view/templates/frontend/guide/social-login/' . $code . '/policy.phtml');
         }
     }
 }

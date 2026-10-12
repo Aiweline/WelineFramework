@@ -9,6 +9,7 @@ declare(strict_types=1);
  * 日期：2022/12/29 22:34:35
  */
 namespace Weline\I18n\Model\Locale;
+use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Transaction\Exception\UnsupportedAsyncTransactionConnectionException;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
@@ -19,6 +20,7 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\I18n\Api\Translation\DictionaryEntry;
 use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\I18n\Model\Dictionary as WordDictionary;
 use Weline\I18n\Service\I18nResourceChangePublisher;
 #[Table(comment: '地区词典')]
 #[Index(name: 'idx_code', columns: ['locale_code'], comment: '区码索引')]
@@ -56,6 +58,42 @@ class Dictionary extends Model implements DictionaryRepositoryInterface
     public static function generateMd5(string $word, string $locale_code): string
     {
         return md5($word . $locale_code);
+    }
+
+    /**
+     * 地区码门禁：与 locale_code varchar(12) 对齐，拒绝空串/自然语言/脏采集。
+     *
+     * @throws Exception
+     */
+    public static function assertLocaleCode(mixed $localeCode): string
+    {
+        if (!is_string($localeCode) && !is_int($localeCode)) {
+            throw new Exception((string)__('地区码必须是字符串'));
+        }
+        $localeCode = (string)$localeCode;
+        if ($localeCode === '') {
+            throw new Exception((string)__('地区码不能为空'));
+        }
+        if (strlen($localeCode) > 12) {
+            throw new Exception((string)__('地区码长度不能超过 12 个字符'));
+        }
+        if (preg_match('/^[A-Za-z][A-Za-z0-9_]{1,11}$/', $localeCode) !== 1) {
+            throw new Exception((string)__('地区码格式无效'));
+        }
+
+        return $localeCode;
+    }
+
+    public function save_before(): void
+    {
+        $word = $this->getData(self::schema_fields_WORD);
+        if ($word !== null) {
+            $this->setData(self::schema_fields_WORD, WordDictionary::assertWord($word));
+        }
+        $localeCode = $this->getData(self::schema_fields_LOCALE_CODE);
+        if ($localeCode !== null) {
+            $this->setData(self::schema_fields_LOCALE_CODE, self::assertLocaleCode($localeCode));
+        }
     }
     /**
      * 根据词汇和语言代码获取MD5
@@ -138,6 +176,9 @@ class Dictionary extends Model implements DictionaryRepositoryInterface
 
     public function upsert(string $word, string $localeCode, string $translation): bool
     {
+        $word = WordDictionary::assertWord($word);
+        $localeCode = self::assertLocaleCode($localeCode);
+
         return $this->mutateWithChange('dictionary-upsert', $word, $localeCode, function () use ($word, $localeCode, $translation): bool {
             $model = clone $this;
             return (bool)$model->clearData()->clearQuery()

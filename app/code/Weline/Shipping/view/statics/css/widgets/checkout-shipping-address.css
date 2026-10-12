@@ -170,6 +170,18 @@
   grid-template-columns: 1fr;
 }
 
+.w-shipping-checkout-address__name-split-grid {
+  display: grid;
+  gap: var(--weline-space-3) var(--weline-space-4);
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 640px) {
+  .w-shipping-checkout-address__name-split-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .w-shipping-checkout-address__field {
   min-width: 0;
   /* Match .w-input min-height so foundation resting float centers in the control. */

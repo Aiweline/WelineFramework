@@ -51,7 +51,7 @@ class Module extends BackendController
         $this->assign('page_title', __('新建模块'));
         $this->assign('title', __('新建模块'));
 
-        return $this->fetch('Weline_PlatformAppStore::templates/Backend/Module/edit.phtml');
+        return $this->fetch('Weline_PlatformAppStore::templates/backend/Module/edit.phtml');
     }
 
     #[Acl('Weline_PlatformAppStore::module_save', '保存模块', 'save', '保存平台模块草稿')]

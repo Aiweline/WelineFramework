@@ -12,7 +12,7 @@ use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
-use Weline\Framework\Phrase\DictionaryEvents;
+use Weline\Meta\Helper\MetaTranslation;
 #[Table(comment: '元数据表')]
 #[Index(name: 'uk_namespace_type_identify', columns: ['namespace', 'meta_type', 'meta_identify'], type: 'UNIQUE')]
 #[Index(name: 'idx_namespace', columns: ['namespace'])]
@@ -78,27 +78,23 @@ class Meta extends AbstractModel
      */
     public function saveMeta(array $metaData): static
     {
-        // 保存元数据
         $this->save();
-        
-        // 收集翻译词
-        $translations = [];
-        if (!empty($metaData['info']) && is_array($metaData['info'])) {
+
+        $metaIdentify = trim((string)$this->getData(self::schema_fields_META_IDENTIFY));
+        if ($metaIdentify !== '' && !empty($metaData['info']) && is_array($metaData['info'])) {
+            $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
             foreach ($metaData['info'] as $field => $value) {
-                if (!empty($value)) {
-                    $translations[] = [
-                        'word' => $this->generateTranslationKey('info', $field),
-                        'translate' => $value
-                    ];
+                $value = trim((string)$value);
+                if ($value === '') {
+                    continue;
                 }
+                $configKey = is_string($field) && str_contains($field, '.')
+                    ? $field
+                    : 'info.' . $field;
+                MetaTranslation::setTranslatedValue($metaIdentify, $configKey, $locale, $value);
             }
         }
-        
-        // 触发翻译收集事件（由I18n模块监听并处理）
-        if (!empty($translations)) {
-            DictionaryEvents::register($translations, 'Weline_Meta');
-        }
-        
+
         return $this;
     }
     /**

@@ -11,9 +11,9 @@ final class BackendOrderRefundOutcomeChipContractTest extends TestCase
     public function testRefundHistoryUsesOutcomeChipsNotRawSucceededCode(): void
     {
         $root = dirname(__DIR__, 3);
-        $tpl = (string)file_get_contents($root . '/view/templates/Backend/Order/panel/refund.phtml');
-        $flow = (string)file_get_contents($root . '/view/templates/Backend/Order/partial/status-flow.phtml');
-        $chip = (string)file_get_contents($root . '/view/templates/Backend/Order/partial/outcome-chip.phtml');
+        $tpl = (string)file_get_contents($root . '/view/templates/backend/Order/panel/refund.phtml');
+        $flow = (string)file_get_contents($root . '/view/templates/backend/Order/partial/status-flow.phtml');
+        $chip = (string)file_get_contents($root . '/view/templates/backend/Order/partial/outcome-chip.phtml');
 
         self::assertStringContainsString('BackendOrderOutcomeChip', $tpl);
         self::assertStringContainsString('partial/outcome-chip.phtml', $tpl);

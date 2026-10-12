@@ -94,7 +94,7 @@ class Duplicate extends BackendPageController
         $this->assign('panel_path', $urlBuilder->panelPath());
         $this->assign('filter_website_id', $websiteId);
 
-        return $this->fetch('Weline_Seo::templates/Backend/Duplicate/index.phtml');
+        return $this->fetch('Weline_Seo::templates/backend/Duplicate/index.phtml');
     }
 
     /**
@@ -126,7 +126,7 @@ class Duplicate extends BackendPageController
             $this->assign('report_path_duplicate', $runId > 0 ? $urlBuilder->pathForRun($runId, 'duplicate') : '');
             $this->assign('report_path_suspect', $runId > 0 ? $urlBuilder->pathForRun($runId, 'suspect') : '');
 
-            return $this->fetch('Weline_Seo::templates/Backend/Duplicate/report.phtml');
+            return $this->fetch('Weline_Seo::templates/backend/Duplicate/report.phtml');
         }
 
         // Prefer live builder over persisted URLs (old rows omitted admin frontName → 404).
@@ -145,6 +145,6 @@ class Duplicate extends BackendPageController
         $this->assign('report_path_duplicate', $urlBuilder->pathForRun($runId, 'duplicate'));
         $this->assign('report_path_suspect', $urlBuilder->pathForRun($runId, 'suspect'));
 
-        return $this->fetch('Weline_Seo::templates/Backend/Duplicate/report.phtml');
+        return $this->fetch('Weline_Seo::templates/backend/Duplicate/report.phtml');
     }
 }

@@ -62,7 +62,7 @@ final class DevRelay extends BackendController
             $userApiToken = '';
         }
 
-        return $this->fetch('Weline_Payment::templates/Backend/DevRelay/index.phtml', [
+        return $this->fetch('Weline_Payment::templates/backend/DevRelay/index.phtml', [
             'is_local' => $isLocal,
             'is_online_host' => !$isLocal,
             'feature_enabled' => $featureOn,
@@ -267,7 +267,7 @@ final class DevRelay extends BackendController
         $ackUrl = $this->getBackendUrl('payment/backend/dev-relay/postAck');
         $commandUrl = $this->getBackendUrl('payment/backend/dev-relay/postCommand');
 
-        return $this->fetch('Weline_Payment::templates/Backend/DevRelay/console.phtml', [
+        return $this->fetch('Weline_Payment::templates/backend/DevRelay/console.phtml', [
             'session_code' => $sessionCode,
             'token' => $token,
             'stream_url' => $streamUrl,

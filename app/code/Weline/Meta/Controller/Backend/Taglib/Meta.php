@@ -17,7 +17,7 @@ use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\I18n\Api\Localization\LocaleRepositoryInterface;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Meta\Helper\MetaTranslation;
 
 class Meta extends BackendController
 {
@@ -67,27 +67,34 @@ class Meta extends BackendController
             $metaKeyWithScope = $metaKey . '|scope:' . $scope;
         }
         
-        // 获取所有语言的翻译
+        // 获取所有语言的翻译（MetaLocal）
         $translations = [];
-        $dictionary = $this->dictionaryRepository();
         foreach ($locals as $local) {
             $locale = $local['code'];
             
-            // 先尝试带 scope 的 key
             $resolvedKey = $metaKeyWithScope;
-            $translation = $dictionary->getEntry($resolvedKey, $locale)?->translation ?? '';
+            $translation = MetaTranslation::getTranslatedValueWithScope(
+                $resolvedKey,
+                (string)$scope,
+                $locale,
+                '',
+            );
             
-            // 如果没有找到，尝试不带 scope 的 key（使用默认值）
-            if (empty($translation) && $scope !== 'default') {
+            if ($translation === '' && $scope !== 'default') {
                 $resolvedKey = $metaKey;
-                $translation = $dictionary->getEntry($resolvedKey, $locale)?->translation ?? '';
+                $translation = MetaTranslation::getTranslatedValueWithScope(
+                    $resolvedKey,
+                    'default',
+                    $locale,
+                    '',
+                );
             }
             
             $translations[] = [
                 'local_code' => $locale,
                 'local' => $local,
-                'translate' => $translation ?: $value,
-                // 保留旧模板数据形状；字典指纹的存储细节不再用于读写。
+                'translate' => $translation !== '' ? $translation : $value,
+                // 保留旧模板数据形状；MetaLocal 指纹细节不再用于读写。
                 'md5' => md5($resolvedKey . $locale)
             ];
         }
@@ -125,9 +132,8 @@ class Meta extends BackendController
         
         // 获取翻译数据
         $translations = $this->request->getPost('translation', []);
-        $dictionary = $this->dictionaryRepository();
         
-        // 保存翻译（使用带 scope 的 key）
+        // 保存翻译 → MetaLocal
         foreach ($translations as $translation) {
             $locale = $translation['local_code'] ?? '';
             $translateValue = $translation['translate'] ?? '';
@@ -136,22 +142,16 @@ class Meta extends BackendController
                 continue;
             }
             
-            $dictionary->upsert($metaKeyWithScope, $locale, $translateValue);
+            MetaTranslation::setTranslatedValueWithScope(
+                $metaKeyWithScope,
+                $translateValue,
+                (string)$scope,
+                $locale,
+            );
         }
         
         MessageManager::success(__('翻译完成!'));
         return $this->get();
-    }
-
-    private function dictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$provider instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-
-        return $provider;
     }
 
     private function localeRepository(): LocaleRepositoryInterface

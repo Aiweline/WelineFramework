@@ -308,17 +308,17 @@ php bin/w sticker:refresh
 
 **目标文件**：
 ```
-app/code/Weline/Demo/view/templates/Backend/index.phtml
+app/code/Weline/Demo/view/templates/backend/index.phtml
 ```
 
 **Sticker 规则文件**：
 ```
-app/code/Weline/MyModule/extends/module/Weline_Sticker/Weline/Demo/view/templates/Backend/index.phtml
+app/code/Weline/MyModule/extends/module/Weline_Sticker/Weline/Demo/view/templates/backend/index.phtml
 ```
 
 **编译输出文件**：
 ```
-generated/extends/module/Weline_Sticker/Weline/Demo/view/templates/Backend/index.phtml
+generated/extends/module/Weline_Sticker/Weline/Demo/view/templates/backend/index.phtml
 ```
 
 ---

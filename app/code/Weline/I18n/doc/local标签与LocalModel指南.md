@@ -389,9 +389,9 @@ $model->loadLocalDescription('', \Full\Namespace\To\LocalModel::class);
 
 | 场景 | 主表 | Local 表 | 模板 / 控制器 |
 |---|---|---|---|
-| 营销规则 | `Marketing\Model\Rule\Rule` | `Rule\LocalDescription` | `Marketing/view/templates/Backend/rule/index.phtml` |
-| EAV 实体 | `Eav\Model\EavEntity` | `EavEntity\LocalDescription` | `Eav/view/templates/Backend/Entity/index.phtml` |
-| EAV 属性 | `Eav\Model\EavAttribute` | `EavAttribute\LocalDescription` | `Eav/view/templates/Backend/Attribute/index.phtml` |
+| 营销规则 | `Marketing\Model\Rule\Rule` | `Rule\LocalDescription` | `Marketing/view/templates/backend/rule/index.phtml` |
+| EAV 实体 | `Eav\Model\EavEntity` | `EavEntity\LocalDescription` | `Eav/view/templates/backend/Entity/index.phtml` |
+| EAV 属性 | `Eav\Model\EavAttribute` | `EavAttribute\LocalDescription` | `Eav/view/templates/backend/Attribute/index.phtml` |
 | 活动主题 | `Promotion\Model\PromotionActivityTheme` | `PromotionActivityThemeLocal` | Service 层读写，无 `<local>` |
 
 更完整的 Marketing 模块规范见：`app/code/Weline/Marketing/doc/开发规则/LocalModel开发规范.md`（偏该模块测试与约定；本指南为 I18n 官方入口）。

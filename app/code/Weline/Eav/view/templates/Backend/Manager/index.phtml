@@ -33,7 +33,7 @@ $entityScopeError = trim((string)($this->getData('entityScopeError') ?? ''));
         </p>
     <?php endif; ?>
 
-    <?= $this->fetch('Weline_Eav::templates/Backend/Manager/surface.phtml', [
+    <?= $this->fetch('Weline_Eav::templates/backend/Manager/surface.phtml', [
         'entityScope' => $entityScope,
         'entityScopeError' => $entityScopeError,
         'compact' => true,

@@ -29,6 +29,7 @@ final class Cli
                 'doctor' => self::doctor($arguments),
                 'scheduler' => self::scheduler($arguments),
                 'intelligence', 'intel' => self::intelligence($arguments),
+                'mcp-dev' => self::mcpDev($arguments),
                 'help', '--help', '-h' => self::help(),
                 default => throw new RuntimeException('Unknown learningctl command: ' . $command),
             };
@@ -562,6 +563,34 @@ final class Cli
     }
 
     /** @param list<string> $arguments */
+    private static function mcpDev(array $arguments): int
+    {
+        $subcommand = array_shift($arguments) ?? 'status';
+        if (!in_array($subcommand, ['enable', 'disable', 'status'], true)) {
+            throw new RuntimeException('Usage: learningctl mcp-dev enable|disable|status [--reason TEXT] [--ttl 2h] [--owner NAME]');
+        }
+        [$positionals, $options] = self::options(
+            $arguments,
+            ['config', 'data-dir', 'reason', 'ttl', 'owner'],
+        );
+        self::noPositionals($positionals);
+        $config = self::config($options);
+        $gate = new DevMaintenanceGate($config);
+        $result = match ($subcommand) {
+            'enable' => $gate->enable(
+                (string) ($options['reason'] ?? ''),
+                (string) ($options['owner'] ?? ''),
+                (string) ($options['ttl'] ?? DevMaintenanceGate::DEFAULT_TTL),
+            ),
+            'disable' => $gate->disable((string) ($options['owner'] ?? '')),
+            default => $gate->status(),
+        };
+        self::writeJson($result);
+
+        return 0;
+    }
+
+    /** @param list<string> $arguments */
     private static function intelligence(array $arguments): int
     {
         $tool = array_shift($arguments) ?? '';
@@ -630,6 +659,7 @@ Commands:
   learningctl doctor [--config PATH] [--data-dir PATH]
   learningctl scheduler print|status|install|uninstall|kickstart|run-now ...
   learningctl intelligence <tool> --repository PATH [--input JSON|-]
+  learningctl mcp-dev enable|disable|status [--reason TEXT] [--ttl 2h] [--owner NAME]
 
   learningd once|drain|maintenance|run [--config PATH] [--data-dir PATH]
   learning-mcp [--config PATH] [--data-dir PATH]

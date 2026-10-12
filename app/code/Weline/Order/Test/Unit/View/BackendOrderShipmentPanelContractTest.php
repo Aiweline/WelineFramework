@@ -10,7 +10,7 @@ final class BackendOrderShipmentPanelContractTest extends TestCase
 {
     public function testPanelIsShopifyStyleMarkAsFulfilled(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/panel/shipment.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/panel/shipment.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('shipment-checkout-ref', $src);

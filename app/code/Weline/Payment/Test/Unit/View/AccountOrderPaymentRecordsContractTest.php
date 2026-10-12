@@ -15,7 +15,7 @@ final class AccountOrderPaymentRecordsContractTest extends TestCase
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString(
-            'Weline_Payment::templates/Frontend/account/order-payment-records.phtml',
+            'Weline_Payment::templates/frontend/account/order-payment-records.phtml',
             $source
         );
     }
@@ -23,7 +23,7 @@ final class AccountOrderPaymentRecordsContractTest extends TestCase
     public function testAccountTemplateShowsPaymentEntryBadge(): void
     {
         $path = dirname(__DIR__, 3)
-            . '/view/templates/Frontend/account/order-payment-records.phtml';
+            . '/view/templates/frontend/account/order-payment-records.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('BackendOrderPaymentRecordsService', $source);

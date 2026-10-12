@@ -7,7 +7,7 @@ declare(strict_types=1);
  * 模块：Weline_CustomerService
  */
 return [
-    'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml',
-    'Weline_CustomerService::templates/Frontend/widgets/footer-contact-service-link.phtml',
-    'Weline_CustomerService::templates/Frontend/widgets/header-contact-service-link.phtml',
+    'Weline_CustomerService::templates/frontend/widgets/customer-service-float.phtml',
+    'Weline_CustomerService::templates/frontend/widgets/footer-contact-service-link.phtml',
+    'Weline_CustomerService::templates/frontend/widgets/header-contact-service-link.phtml',
 ];

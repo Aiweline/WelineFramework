@@ -39,7 +39,7 @@ final class SeoPlatformGroupCatalogTest extends TestCase
     public function testAccountFormUsesGroupedTabsNotFlatWall(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = (string)file_get_contents($root . '/view/templates/Backend/Account/form.phtml');
+        $template = (string)file_get_contents($root . '/view/templates/backend/Account/form.phtml');
         $css = (string)file_get_contents($root . '/view/statics/css/seo-admin.css');
 
         self::assertStringContainsString('SeoPlatformGroupCatalog', $template);

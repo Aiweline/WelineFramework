@@ -28,7 +28,7 @@ final class HindiIdentityChipCsvContractTest extends TestCase
     public function testBodyEndUsesPathLocaleAndWidgetI18n(): void
     {
         $path = dirname(__DIR__, 3)
-            . '/view/templates/Frontend/widgets/customer-service-float.phtml';
+            . '/view/templates/frontend/widgets/customer-service-float.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('WidgetI18n::localeFromRequestUri', $src);

@@ -35,7 +35,7 @@ final class SlowLog extends BackendController
         $this->assign('range', $range);
         $this->assign('threshold_ms', $data['threshold_ms'] ?? 200);
 
-        return (string)$this->fetch('Weline_Search::templates/Backend/SlowLog/index.phtml');
+        return (string)$this->fetch('Weline_Search::templates/backend/SlowLog/index.phtml');
     }
 
     /** @return array{website_id:int,store_id:int,channel_id:int} */

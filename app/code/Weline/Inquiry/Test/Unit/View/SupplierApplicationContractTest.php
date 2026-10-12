@@ -139,7 +139,7 @@ final class SupplierApplicationContractTest extends TestCase
 
     public function testBackendEditorExposesCountryFieldType(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Inquiry/edit.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Inquiry/edit.phtml';
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="inquiry-editor"', $src);
         self::assertStringContainsString('FormSchemaService::FIELD_TYPES', $src);
@@ -161,7 +161,7 @@ final class SupplierApplicationContractTest extends TestCase
 
     public function testBackendEditorExposesAiTranslateAction(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Inquiry/edit.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Inquiry/edit.phtml';
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="inquiry-ai-translate"', $src);
         self::assertStringContainsString('adminAiTranslate', $src);
@@ -175,7 +175,7 @@ final class SupplierApplicationContractTest extends TestCase
 
     public function testBackendEditorExposesVisualI18nForm(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Inquiry/edit.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Inquiry/edit.phtml';
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="inquiry-editor-guide"', $src);
         self::assertStringContainsString('data-testid="inquiry-locale-tabs"', $src);
@@ -201,7 +201,7 @@ final class SupplierApplicationContractTest extends TestCase
         self::assertStringNotContainsString('--iq-pad', $cssSrc);
         self::assertStringNotContainsString('calc(100% + 2 * var(--iq-pad))', $cssSrc);
 
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Inquiry/edit.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Inquiry/edit.phtml';
         $src = (string)file_get_contents($path);
         self::assertStringNotContainsString('--iq-pad', $src);
         self::assertStringContainsString('w-inquiry-editor__chrome', $src);

@@ -35,9 +35,9 @@ final class OrderChatAccordionContractTest extends TestCase
     public function testBackendOrderChatUsesWidgetDefaultInjection(): void
     {
         $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_B2B/widget.php';
-        $tpl = 'Weline_B2B::templates/Backend/widgets/backend-order-chat.phtml';
+        $tpl = 'Weline_B2B::templates/backend/widgets/backend-order-chat.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
-        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/widgets/backend-order-chat.phtml');
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/widgets/backend-order-chat.phtml');
         self::assertStringContainsString('@widget.code {b2b-backend-order-chat}', $src);
         self::assertStringContainsString('@widget.slot {backend-order-b2b-chat}', $src);
         self::assertStringContainsString('"layout_type":"backend-order-view"', $src);
@@ -59,7 +59,7 @@ final class OrderChatAccordionContractTest extends TestCase
 
     public function testHangAdminMountsMerchantChat(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/ControlCenter/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/ControlCenter/index.phtml';
         $src = (string) file_get_contents($path);
         self::assertStringContainsString('data-testid="b2b-hang-admin-chat"', $src);
         self::assertStringContainsString('data-testid="b2b-hang-order-ops"', $src);

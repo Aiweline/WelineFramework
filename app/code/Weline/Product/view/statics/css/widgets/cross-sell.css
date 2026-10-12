@@ -114,7 +114,7 @@
   transform: none;
 }
 
-@media (max-width: var(--breakpoint-md)) {
+@media (max-width: 768px) {
   .weline-product-fbt .wpf-stage .product-actions {
     opacity: 1;
     transform: none;
@@ -434,7 +434,7 @@
   color: var(--color-literal-067d62);
 }
 
-@media (max-width: var(--token-size-1023px)) {
+@media (max-width: 1023px) {
   .weline-product-fbt .wpf-summary {
     border-left: 0;
     border-top: var(--border-width-thin) solid var(--color-bg-tertiary);
@@ -454,7 +454,7 @@
   }
 }
 
-@media (max-width: var(--token-bp-767px)) {
+@media (max-width: 767px) {
   .weline-product-fbt {
     padding-inline: var(--spacing-0_65);
   }

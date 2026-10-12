@@ -10,7 +10,7 @@ final class CustomerServiceWidgetAccessibilityContractTest extends TestCase
 {
     public function testSettingsLabelsAreProgrammaticallyAssociatedWithSelects(): void
     {
-        $template = $this->moduleFile('view/templates/Frontend/widgets/customer-service-float.phtml');
+        $template = $this->moduleFile('view/templates/frontend/widgets/customer-service-float.phtml');
 
         self::assertStringContainsString('<label for="cs-locale-select">', $template);
         self::assertStringContainsString('<select id="cs-locale-select"', $template);
@@ -20,7 +20,7 @@ final class CustomerServiceWidgetAccessibilityContractTest extends TestCase
 
     public function testIconOnlySendButtonKeepsALocalizedAccessibleName(): void
     {
-        $template = $this->moduleFile('view/templates/Frontend/widgets/customer-service-float.phtml');
+        $template = $this->moduleFile('view/templates/frontend/widgets/customer-service-float.phtml');
         $script = $this->moduleFile('view/statics/js/customer-service.js');
 
         self::assertMatchesRegularExpression(
@@ -49,7 +49,7 @@ final class CustomerServiceWidgetAccessibilityContractTest extends TestCase
     public function testFloatWidgetKeepsSlimTranslationsAndLoadsDictionariesOnDemand(): void
     {
         // P10: dictionaries never SSR into the float widget (open-time Query batch).
-        $template = $this->moduleFile('view/templates/Frontend/widgets/customer-service-float.phtml');
+        $template = $this->moduleFile('view/templates/frontend/widgets/customer-service-float.phtml');
 
         self::assertStringContainsString('new \\stdClass()', $template);
         self::assertStringContainsString('dictionaries load on first chat open', $template);

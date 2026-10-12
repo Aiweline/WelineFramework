@@ -171,8 +171,8 @@ class File extends BackendController
         $this->assign('scopeOptions', $scopeOptions);
         $this->assign('localeOptions', $localeOptions);
 
-        // 显式指定 templates 目录，匹配实际路径：view/templates/Backend/config/file-meta.phtml
-        return $this->fetch('Weline_Meta::templates/Backend/config/file-meta.phtml');
+        // 显式指定 templates 目录，匹配实际路径：view/templates/backend/config/file-meta.phtml
+        return $this->fetch('Weline_Meta::templates/backend/config/file-meta.phtml');
     }
 
     public function tree()

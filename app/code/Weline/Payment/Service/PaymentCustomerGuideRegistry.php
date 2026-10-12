@@ -405,7 +405,7 @@ class PaymentCustomerGuideRegistry
 
     private function buildTemplateReference(string $sourceModule, string $methodCode, string $templateCode): string
     {
-        return $sourceModule . '::templates/Frontend/guide/payment/' . $methodCode . '/' . $templateCode . '.phtml';
+        return $sourceModule . '::templates/frontend/guide/payment/' . $methodCode . '/' . $templateCode . '.phtml';
     }
 
     private function normalizeMethodCode(string $methodCode): string

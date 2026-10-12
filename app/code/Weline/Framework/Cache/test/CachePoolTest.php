@@ -82,6 +82,17 @@ class CachePoolTest extends TestCase
         $this->assertSame('clear tip', $this->eventSpy->events[0]['data']['tip']);
     }
 
+    public function testNegativeTtlPassesForeverZeroToAdapter(): void
+    {
+        $adapter = new CachePoolSpyAdapter();
+        $pool = new CachePool('unit_persist', $adapter, 'persist tip', false, 1800, true);
+
+        $this->assertTrue($pool->set('forever-key', 'v', -1));
+        $this->assertSame(1, $adapter->setCalls);
+        $this->assertSame(0, $adapter->lastTtl);
+        $this->assertSame('v', $pool->get('forever-key'));
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -115,6 +126,7 @@ final class CachePoolSpyAdapter implements CacheAdapterInterface
     public int $deleteCalls = 0;
     public int $clearCalls = 0;
     public int $hasCalls = 0;
+    public int $lastTtl = -999;
 
     /** @var array<string, mixed> */
     private array $storage = [];
@@ -128,6 +140,7 @@ final class CachePoolSpyAdapter implements CacheAdapterInterface
     public function set(string $key, mixed $value, int $ttl = 0): bool
     {
         $this->setCalls++;
+        $this->lastTtl = $ttl;
         $this->storage[$key] = $value;
         return true;
     }

@@ -136,23 +136,23 @@ class PixelChannelHotTotalsServiceTest extends TestCore
     {
         $root = BP . '/app/code/Weline/Visitor';
         self::assertFileExists($root . '/Service/PixelChannelHotTotalsService.php');
-        self::assertFileExists($root . '/view/templates/Backend/TrafficChannel/detail.phtml');
+        self::assertFileExists($root . '/view/templates/backend/TrafficChannel/detail.phtml');
 
         $controller = (string)\file_get_contents($root . '/Controller/Backend/TrafficChannel.php');
         self::assertStringContainsString('function getDetail', $controller);
         self::assertStringContainsString('PixelChannelHotTotalsService', $controller);
         self::assertStringContainsString('traffic_channel_detail', $controller);
 
-        $index = (string)\file_get_contents($root . '/view/templates/Backend/TrafficChannel/index.phtml');
+        $index = (string)\file_get_contents($root . '/view/templates/backend/TrafficChannel/index.phtml');
         self::assertStringContainsString('traffic-channel/getDetail', $index);
         self::assertStringContainsString('<lang>详情</lang>', $index);
 
-        $detail = (string)\file_get_contents($root . '/view/templates/Backend/TrafficChannel/detail.phtml');
+        $detail = (string)\file_get_contents($root . '/view/templates/backend/TrafficChannel/detail.phtml');
         self::assertStringContainsString('近 %{1} 天', $detail);
         self::assertStringContainsString('hot_totals', $detail);
         // B11 起详情含轨迹；漏斗仍属 B12
         self::assertStringContainsString('channel-timeline', (string)\file_get_contents(
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/TrafficChannel/detail.phtml'
+            BP . '/app/code/Weline/Visitor/view/templates/backend/TrafficChannel/detail.phtml'
         ));
     }
 }

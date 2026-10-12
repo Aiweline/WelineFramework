@@ -49,9 +49,9 @@ final class StoreChannelManagementContractTest extends TestCase
     public function testWorkbenchDelegatesReadsAndWritesToExistingDomainBoundaries(): void
     {
         $service = (string)file_get_contents(BP . 'app/code/Weline/Websites/Service/StoreChannelAdminService.php');
-        $template = (string)file_get_contents(BP . 'app/code/Weline/Websites/view/templates/Backend/ScopeManagement/index.phtml');
-        $editStore = (string)file_get_contents(BP . 'app/code/Weline/Websites/view/templates/Backend/ScopeManagement/edit-store.phtml');
-        $editChannel = (string)file_get_contents(BP . 'app/code/Weline/Websites/view/templates/Backend/ScopeManagement/edit-channel.phtml');
+        $template = (string)file_get_contents(BP . 'app/code/Weline/Websites/view/templates/backend/ScopeManagement/index.phtml');
+        $editStore = (string)file_get_contents(BP . 'app/code/Weline/Websites/view/templates/backend/ScopeManagement/edit-store.phtml');
+        $editChannel = (string)file_get_contents(BP . 'app/code/Weline/Websites/view/templates/backend/ScopeManagement/edit-channel.phtml');
         foreach (['StoreCatalogInterface', 'SalesChannelCatalogInterface', 'Store $storeModel', 'SalesChannel $channelModel'] as $dependency) {
             self::assertStringContainsString($dependency, $service);
         }

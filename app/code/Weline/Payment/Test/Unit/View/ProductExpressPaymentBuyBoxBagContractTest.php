@@ -11,7 +11,7 @@ final class ProductExpressPaymentBuyBoxBagContractTest extends TestCase
     public function testExpressPaymentReadsBuyBoxBeforeListExpressMethods(): void
     {
         $widget = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/product-express-payment.phtml',
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-express-payment.phtml',
         );
         self::assertStringContainsString("StorefrontPdpBuyBoxBag::hasKey('express_methods')", $widget);
         $bagPos = strpos($widget, "StorefrontPdpBuyBoxBag::hasKey('express_methods')");

@@ -37,8 +37,8 @@ Weline_Sticker 模块提供了非侵入式修改其他模块文件的能力，�
 **路径格式**: `extends/module/Weline_Sticker/{目标模块名}/{目标文件路径}`
 
 **示例**:
-- 目标文件: `Weline/Demo/view/templates/Backend/index.phtml`
-- Sticker 文件: `extends/module/Weline_Sticker/Weline/Demo/view/templates/Backend/index.phtml`
+- 目标文件: `Weline/Demo/view/templates/backend/index.phtml`
+- Sticker 文件: `extends/module/Weline_Sticker/Weline/Demo/view/templates/backend/index.phtml`
 
 **适用场景**: 
 - 直接修改特定模块的特定文件
@@ -49,8 +49,8 @@ Weline_Sticker 模块提供了非侵入式修改其他模块文件的能力，�
 **路径格式**: `extends/theme/{主题名}/Weline_Sticker/{目标模块名}/{目标文件路径}`
 
 **示例**:
-- 目标文件: `Weline/Demo/view/templates/Backend/index.phtml`
-- Sticker 文件: `extends/theme/default/Weline_Sticker/Weline/Demo/view/templates/Backend/index.phtml`
+- 目标文件: `Weline/Demo/view/templates/backend/index.phtml`
+- Sticker 文件: `extends/theme/default/Weline_Sticker/Weline/Demo/view/templates/backend/index.phtml`
 
 **适用场景**:
 - 基于主题的文件覆盖
@@ -229,7 +229,7 @@ A:
 假设我们要修改 `Weline_Demo` 模块的首页模板：
 
 ```html
-<!-- 文件: extends/module/Weline_Sticker/Weline/Demo/view/templates/Frontend/index.phtml -->
+<!-- 文件: extends/module/Weline_Sticker/Weline/Demo/view/templates/frontend/index.phtml -->
 
 <!-- 修改页面标题 -->
 <w:sticker action="replace" position="1">

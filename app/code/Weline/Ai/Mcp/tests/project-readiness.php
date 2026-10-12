@@ -97,9 +97,12 @@ try {
     $stalePrepared = $service->prepare($index, ['client_session_id' => 'session-a']);
     readinessCheck(
         ($stalePrepared['status'] ?? '') === 'ready'
-            && (string) ($index->state()['last_completed_at'] ?? '') !== '2000-01-01T00:00:00.000Z',
-        'prepare refreshes an expired persisted index',
+            && ($stalePrepared['deferred_refresh'] ?? false) === true
+            && (string) ($stalePrepared['index']['refresh']['mode'] ?? '') === 'deferred',
+        'prepare defers expired whole-repo refresh and stays ready without blocking sync reindex',
     );
+    // Detached workers may finish instantly on tiny fixtures and advance last_completed_at;
+    // that must not be treated as synchronous interactive reindex.
 
     $ready = $prepared;
     readinessCheck(is_string($ready['readiness_id'] ?? null) && $ready['readiness_id'] !== '', 'ready response binds a readiness id');

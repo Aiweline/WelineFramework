@@ -51,6 +51,6 @@ final class Index extends FrontendController
         );
         $this->assign('showSidebar', false);
 
-        return (string)$this->fetch('Weline_Currency::templates/Frontend/currency/index.phtml');
+        return (string)$this->fetch('Weline_Currency::templates/frontend/currency/index.phtml');
     }
 }

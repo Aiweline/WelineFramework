@@ -57,7 +57,7 @@ class Installed extends BackendController
         $this->assign('latest_uninstall_record', $this->loadLatestUninstallRecord());
         $this->assign('page_title', __('我的模块'));
 
-        return $this->fetch('Weline_AppStore::templates/Backend/Installed/index.phtml');
+        return $this->fetch('Weline_AppStore::templates/backend/Installed/index.phtml');
     }
 
     #[Acl('Weline_AppStore::installed_detail', '模块详情', 'info', '查看模块详情')]

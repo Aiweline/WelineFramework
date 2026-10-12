@@ -9,26 +9,21 @@ use Weline\Framework\Runtime\RequestContext;
 /**
  * Resolves the public catalog surface before the Product controller rewrites
  * the request into its shared listing action.
+ *
+ * Brand / website copy lives in design-theme {@code data/catalog-surfaces.php};
+ * this class keeps route skeleton + neutral ecommerce fallback only.
  */
 final class StorefrontCatalogSurfaceResolver
 {
     /**
-     * Shared social/share image for catalog listing surfaces (absolute-capable path).
-     * Default-website / Hanfu storefronts only — DaoCharms uses SHARE_IMAGE_BY_WEBSITE.
+     * Neutral default share image (empty = omit brand asset).
+     * Theme packs supply brand images via {@see StorefrontCatalogSurfaceThemeCopyLoader}.
      */
-    public const SHARE_IMAGE = '/pub/media/catalog/hanfu/r2/homepage/taoyuan-qingmeng.webp';
+    public const SHARE_IMAGE = '';
 
     /**
-     * Website-scoped share images (empty = omit Hanfu asset on that storefront).
+     * Route skeleton + neutral ecommerce copy (no website / design-theme brand).
      *
-     * @var array<string, string>
-     */
-    private const SHARE_IMAGE_BY_WEBSITE = [
-        'daocharms' => '',
-        'grocery' => '',
-    ];
-
-    /**
      * @var array<string, array{
      *     page_type:string,
      *     layout_type:string,
@@ -45,21 +40,20 @@ final class StorefrontCatalogSurfaceResolver
             'zh' => [
                 'title' => '商品列表',
                 'heading' => '全部商品',
-                'lede' => '浏览当前网站已发布的汉服、马面裙与传统配饰，可按价格与名称排序。',
-                'seo_title' => '汉服商城 | 明制、宋制、唐制与马面裙',
-                'seo_description' => '浏览全系列汉服，选购明制、宋制、唐制汉服、马面裙与传统配饰，支持国际独立站多语言浏览。',
-                'seo_keywords' => '汉服,明制汉服,宋制汉服,唐制汉服,马面裙,传统配饰',
-                'share_image_alt' => '桃园清梦米白粉色明制上衣与马面裙套装',
+                'lede' => '浏览当前网站已发布的商品，可按价格与名称排序。',
+                'seo_title' => '商品列表',
+                'seo_description' => '浏览当前网站已发布的商品，支持多语言店面浏览。',
+                'seo_keywords' => '商品,购物,商城',
+                'share_image_alt' => '商品列表',
             ],
             'en' => [
-                'title' => 'Hanfu Shop',
-                'heading' => 'Shop All Hanfu',
-                'lede' => 'Explore published Hanfu, mamian skirts, and traditional accessories, with price and name sorting.',
-                // Keep final composed title ≤65 with brand suffix from Website identity.
-                'seo_title' => 'Shop All Hanfu | Ming & Tang',
-                'seo_description' => 'Shop Ming, Song, and Tang dynasty Hanfu, mamian skirts, and traditional accessories with international storefront support.',
-                'seo_keywords' => 'hanfu,ming hanfu,song hanfu,tang hanfu,mamian skirt,traditional accessories',
-                'share_image_alt' => 'Peach Garden Dream ivory-and-pink Ming-style top and mamian set',
+                'title' => 'Shop',
+                'heading' => 'Shop All Products',
+                'lede' => 'Browse published products with price and name sorting.',
+                'seo_title' => 'Shop All Products',
+                'seo_description' => 'Browse published products with international storefront support.',
+                'seo_keywords' => 'shop,products,store',
+                'share_image_alt' => 'Product listing',
             ],
         ],
         'categories' => [
@@ -67,22 +61,22 @@ final class StorefrontCatalogSurfaceResolver
             'layout_type' => 'category',
             'public_route' => 'categories',
             'zh' => [
-                'title' => '汉服分类',
-                'heading' => '按形制探索汉服',
-                'lede' => '从明制、宋制、唐制、马面裙与传统配饰中，找到适合日常、节庆与礼仪的款式。',
-                'seo_title' => '汉服分类 | 按朝代、形制与场景选购',
-                'seo_description' => '按朝代、形制与穿着场景探索明制、宋制、唐制汉服、马面裙和传统配饰。',
-                'seo_keywords' => '汉服分类,明制,宋制,唐制,马面裙',
-                'share_image_alt' => '桃园清梦米白粉色明制上衣与马面裙套装',
+                'title' => '商品分类',
+                'heading' => '按分类探索',
+                'lede' => '从店铺分类中找到适合的商品。',
+                'seo_title' => '商品分类',
+                'seo_description' => '按分类浏览当前网站已发布的商品。',
+                'seo_keywords' => '分类,商品分类',
+                'share_image_alt' => '商品分类',
             ],
             'en' => [
-                'title' => 'Hanfu Categories',
-                'heading' => 'Explore Hanfu by Style',
-                'lede' => 'Browse Ming, Song, and Tang styles, mamian skirts, and accessories for everyday wear, festivals, and ceremonies.',
-                'seo_title' => 'Hanfu Categories | By Style',
-                'seo_description' => 'Explore Ming, Song, and Tang dynasty Hanfu, mamian skirts, and accessories by style and occasion.',
-                'seo_keywords' => 'hanfu categories,ming style,song style,tang style,mamian skirt',
-                'share_image_alt' => 'Peach Garden Dream ivory-and-pink Ming-style top and mamian set',
+                'title' => 'Categories',
+                'heading' => 'Explore by Category',
+                'lede' => 'Browse store categories to find what you need.',
+                'seo_title' => 'Categories',
+                'seo_description' => 'Explore published products by category.',
+                'seo_keywords' => 'categories,shop categories',
+                'share_image_alt' => 'Product categories',
             ],
         ],
         'new_arrivals' => [
@@ -91,21 +85,21 @@ final class StorefrontCatalogSurfaceResolver
             'public_route' => 'new-arrivals',
             'zh' => [
                 'title' => '新品上架',
-                'heading' => '新到汉服',
-                'lede' => '按上架时间探索最新汉服、马面裙与传统配饰，发现当季东方衣冠新作。',
-                'seo_title' => '汉服新品 | 最新汉服、马面裙与传统配饰',
-                'seo_description' => '探索新品上架，选购最新汉服、马面裙与传统配饰。',
-                'seo_keywords' => '汉服新品,新到汉服,马面裙,传统配饰',
-                'share_image_alt' => '桃园清梦米白粉色明制上衣与马面裙套装',
+                'heading' => '新品上架',
+                'lede' => '按上架时间探索最新商品。',
+                'seo_title' => '新品上架',
+                'seo_description' => '探索最新上架的商品。',
+                'seo_keywords' => '新品,上新',
+                'share_image_alt' => '新品上架',
             ],
             'en' => [
                 'title' => 'New Arrivals',
-                'heading' => 'New Hanfu Arrivals',
-                'lede' => 'Explore the latest Hanfu, mamian skirts, and traditional accessories in arrival order.',
-                'seo_title' => 'New Hanfu Arrivals',
-                'seo_description' => 'Discover the latest Hanfu, mamian skirts, and traditional accessories.',
-                'seo_keywords' => 'new hanfu,new arrivals,mamian skirt,traditional accessories',
-                'share_image_alt' => 'Peach Garden Dream ivory-and-pink Ming-style top and mamian set',
+                'heading' => 'New Arrivals',
+                'lede' => 'Explore the latest products in arrival order.',
+                'seo_title' => 'New Arrivals',
+                'seo_description' => 'Discover the latest products.',
+                'seo_keywords' => 'new arrivals,new products',
+                'share_image_alt' => 'New arrivals',
             ],
         ],
         'best_sellers' => [
@@ -114,209 +108,32 @@ final class StorefrontCatalogSurfaceResolver
             'public_route' => 'best-sellers',
             'zh' => [
                 'title' => '热销榜',
-                'heading' => '人气汉服榜',
-                'lede' => '查看当前最受欢迎的汉服、马面裙与传统配饰，快速发现店铺口碑之选。',
-                'seo_title' => '热销汉服榜 | 人气汉服与马面裙推荐',
-                'seo_description' => '探索热销榜，发现人气汉服、马面裙与传统配饰。',
-                'seo_keywords' => '热销汉服,人气汉服,马面裙,汉服榜单',
-                'share_image_alt' => '桃园清梦米白粉色明制上衣与马面裙套装',
+                'heading' => '热销榜',
+                'lede' => '查看当前最受欢迎的商品。',
+                'seo_title' => '热销榜',
+                'seo_description' => '探索热销商品。',
+                'seo_keywords' => '热销,人气商品',
+                'share_image_alt' => '热销榜',
             ],
             'en' => [
                 'title' => 'Best Sellers',
-                'heading' => 'Most-Loved Hanfu',
-                'lede' => 'Discover the Hanfu, mamian skirts, and traditional accessories our customers love most.',
-                'seo_title' => 'Best-Selling Hanfu',
-                'seo_description' => 'Discover best-selling Hanfu, mamian skirts, and traditional accessories.',
-                'seo_keywords' => 'best selling hanfu,popular hanfu,mamian skirt',
-                'share_image_alt' => 'Peach Garden Dream ivory-and-pink Ming-style top and mamian set',
+                'heading' => 'Best Sellers',
+                'lede' => 'Discover the products customers love most.',
+                'seo_title' => 'Best Sellers',
+                'seo_description' => 'Discover best-selling products.',
+                'seo_keywords' => 'best sellers,popular products',
+                'share_image_alt' => 'Best sellers',
             ],
         ],
     ];
 
-    /**
-     * DaoCharms ritual-objects catalog copy (website code = daocharms).
-     *
-     * @var array<string, array{
-     *     zh:array{title:string,heading:string,lede:string,seo_title:string,seo_description:string,seo_keywords:string,share_image_alt:string},
-     *     en:array{title:string,heading:string,lede:string,seo_title:string,seo_description:string,seo_keywords:string,share_image_alt:string}
-     * }>
-     */
-    private const SURFACES_DAOCHARMS = [
-        'products' => [
-            'zh' => [
-                'title' => '仪式物件',
-                'heading' => '仪式物件',
-                'lede' => '浏览可佩戴吊坠、无为空间物件与居家器物，可按价格与名称排序。',
-                'seo_title' => '仪式物件 | DaoCharms',
-                'seo_description' => '选购 DaoCharms 仪式物件：天然石与木质吊坠、香器与磬铃，以及安静的居家器物。',
-                'seo_keywords' => '仪式物件,吊坠,无为,道家,DaoCharms',
-                'share_image_alt' => 'DaoCharms 仪式物件',
-            ],
-            'en' => [
-                'title' => 'Ritual Objects',
-                'heading' => 'Shop Ritual Objects',
-                'lede' => 'Browse wearable rituals, Wu Wei sanctuary objects, and quiet home pieces — sort by price or name.',
-                'seo_title' => 'Shop Ritual Objects',
-                'seo_description' => 'Shop DaoCharms ritual objects: natural-stone pendants, incense and bells, and quiet home pieces.',
-                'seo_keywords' => 'ritual objects,pendants,wu wei,dao,DaoCharms',
-                'share_image_alt' => 'DaoCharms ritual objects',
-            ],
-        ],
-        'categories' => [
-            'zh' => [
-                'title' => '物件分类',
-                'heading' => '按系列探索',
-                'lede' => '从可佩戴仪式、无为空间、居家器物与居服中，找到适合日常节奏的物件。',
-                'seo_title' => '物件分类 | DaoCharms',
-                'seo_description' => '按系列探索 DaoCharms：可佩戴仪式、无为空间、居家器物与居服。',
-                'seo_keywords' => '分类,吊坠,香器,居服,DaoCharms',
-                'share_image_alt' => 'DaoCharms 物件分类',
-            ],
-            'en' => [
-                'title' => 'Collections',
-                'heading' => 'Explore by Collection',
-                'lede' => 'Browse Wearable Rituals, Wu Wei Sanctuary, home objects, and lounge wear for quieter everyday rituals.',
-                'seo_title' => 'Collections | DaoCharms',
-                'seo_description' => 'Explore DaoCharms by collection: wearable rituals, sanctuary objects, home pieces, and lounge wear.',
-                'seo_keywords' => 'collections,pendants,incense,lounge wear,DaoCharms',
-                'share_image_alt' => 'DaoCharms collections',
-            ],
-        ],
-        'new_arrivals' => [
-            'zh' => [
-                'title' => '新品上架',
-                'heading' => '新到物件',
-                'lede' => '按上架时间探索最新仪式物件与材质作品。',
-                'seo_title' => '新品 | DaoCharms',
-                'seo_description' => '探索 DaoCharms 新品：最新吊坠、香器与居家器物。',
-                'seo_keywords' => '新品,仪式物件,DaoCharms',
-                'share_image_alt' => 'DaoCharms 新品',
-            ],
-            'en' => [
-                'title' => 'New Arrivals',
-                'heading' => 'New Ritual Objects',
-                'lede' => 'Explore the latest ritual objects and material pieces in arrival order.',
-                'seo_title' => 'New Arrivals | DaoCharms',
-                'seo_description' => 'Discover new DaoCharms pendants, incense pieces, and quiet home objects.',
-                'seo_keywords' => 'new arrivals,ritual objects,DaoCharms',
-                'share_image_alt' => 'DaoCharms new arrivals',
-            ],
-        ],
-        'best_sellers' => [
-            'zh' => [
-                'title' => '热销榜',
-                'heading' => '人气物件',
-                'lede' => '查看当前最受欢迎的仪式物件，快速发现店铺口碑之选。',
-                'seo_title' => '热销 | DaoCharms',
-                'seo_description' => '探索 DaoCharms 热销仪式物件与吊坠。',
-                'seo_keywords' => '热销,人气物件,DaoCharms',
-                'share_image_alt' => 'DaoCharms 热销物件',
-            ],
-            'en' => [
-                'title' => 'Best Sellers',
-                'heading' => 'Most-Loved Objects',
-                'lede' => 'Discover the ritual objects our customers return to most.',
-                'seo_title' => 'Best Sellers | DaoCharms',
-                'seo_description' => 'Discover best-selling DaoCharms ritual objects and pendants.',
-                'seo_keywords' => 'best sellers,ritual objects,DaoCharms',
-                'share_image_alt' => 'DaoCharms best sellers',
-            ],
-        ],
-    ];
+    public function __construct(
+        private readonly StorefrontCatalogSurfaceThemeCopyLoader $themeCopyLoader = new StorefrontCatalogSurfaceThemeCopyLoader(),
+    ) {
+    }
 
     /**
-     * Neighborhood grocery catalog copy (website code = grocery).
-     *
-     * @var array<string, array{
-     *     zh:array{title:string,heading:string,lede:string,seo_title:string,seo_description:string,seo_keywords:string,share_image_alt:string},
-     *     en:array{title:string,heading:string,lede:string,seo_title:string,seo_description:string,seo_keywords:string,share_image_alt:string}
-     * }>
-     */
-    private const SURFACES_GROCERY = [
-        'products' => [
-            'zh' => [
-                'title' => '货架商品',
-                'heading' => '全部货架',
-                'lede' => '浏览邻里杂货铺已发布的生鲜蔬果、乳品烘焙、粮油调味、零食饮料与日用清洁，可按价格与名称排序。',
-                'seo_title' => '邻里货架 | 生鲜日用杂货',
-                'seo_description' => '逛邻里杂货铺货架：新鲜蔬果、乳品烘焙、粮油调味、零食饮料与日用清洁，货架到家更省心。',
-                'seo_keywords' => '邻里杂货铺,生鲜蔬果,粮油调味,日用清洁,零食饮料',
-                'share_image_alt' => '邻里杂货铺货架',
-            ],
-            'en' => [
-                'title' => 'Shelf Goods',
-                'heading' => 'Shop the Shelf',
-                'lede' => 'Browse published produce, dairy, pantry staples, snacks, and household essentials — sort by price or name.',
-                'seo_title' => 'Neighborhood Shelf | Daily Grocery',
-                'seo_description' => 'Shop Neighborhood Grocery: fresh produce, dairy, pantry staples, snacks, and household essentials.',
-                'seo_keywords' => 'neighborhood grocery,produce,pantry,snacks,household',
-                'share_image_alt' => 'Neighborhood grocery shelf',
-            ],
-        ],
-        'categories' => [
-            'zh' => [
-                'title' => '货架分类',
-                'heading' => '按货架探索',
-                'lede' => '从生鲜蔬果、乳品烘焙、粮油调味、零食饮料与日用清洁中，找到今日需要的邻里好物。',
-                'seo_title' => '货架分类 | 邻里杂货铺',
-                'seo_description' => '按货架分类逛邻里杂货铺：生鲜、乳品、粮油、零食与日用清洁。',
-                'seo_keywords' => '货架分类,生鲜,粮油,日用,邻里杂货铺',
-                'share_image_alt' => '邻里杂货铺分类',
-            ],
-            'en' => [
-                'title' => 'Shelf Categories',
-                'heading' => 'Explore by Aisle',
-                'lede' => 'Browse produce, dairy & bakery, pantry, snacks & drinks, and household essentials.',
-                'seo_title' => 'Aisles | Neighborhood Grocery',
-                'seo_description' => 'Explore Neighborhood Grocery by aisle: produce, dairy, pantry, snacks, and household.',
-                'seo_keywords' => 'grocery aisles,produce,pantry,household',
-                'share_image_alt' => 'Neighborhood grocery aisles',
-            ],
-        ],
-        'new_arrivals' => [
-            'zh' => [
-                'title' => '货架上新',
-                'heading' => '新到货架',
-                'lede' => '按上架时间探索最新邻里日用与生鲜好物。',
-                'seo_title' => '货架上新 | 邻里杂货铺',
-                'seo_description' => '探索邻里杂货铺新品：新鲜蔬果、乳品与日用补给。',
-                'seo_keywords' => '货架上新,邻里杂货,日用',
-                'share_image_alt' => '邻里杂货铺上新',
-            ],
-            'en' => [
-                'title' => 'New on the Shelf',
-                'heading' => 'New Arrivals',
-                'lede' => 'Explore the latest neighborhood grocery picks in arrival order.',
-                'seo_title' => 'New Arrivals | Neighborhood Grocery',
-                'seo_description' => 'Discover new produce, dairy, and household staples on the neighborhood shelf.',
-                'seo_keywords' => 'new grocery,new arrivals,neighborhood shelf',
-                'share_image_alt' => 'New grocery arrivals',
-            ],
-        ],
-        'best_sellers' => [
-            'zh' => [
-                'title' => '热销货架',
-                'heading' => '邻里热买',
-                'lede' => '查看当前最受欢迎的日用与生鲜好物。',
-                'seo_title' => '热销 | 邻里杂货铺',
-                'seo_description' => '探索邻里杂货铺热销货架与日用补给。',
-                'seo_keywords' => '热销,邻里杂货,日用',
-                'share_image_alt' => '邻里杂货铺热销',
-            ],
-            'en' => [
-                'title' => 'Best Sellers',
-                'heading' => 'Neighborhood Favorites',
-                'lede' => 'Discover the grocery staples neighbors pick up most.',
-                'seo_title' => 'Best Sellers | Neighborhood Grocery',
-                'seo_description' => 'Discover best-selling neighborhood grocery staples and household essentials.',
-                'seo_keywords' => 'best sellers,grocery,neighborhood',
-                'share_image_alt' => 'Neighborhood grocery favorites',
-            ],
-        ],
-    ];
-
-    /**
-     * @return array<string, string>
+     * @return array<string, mixed>
      */
     public function resolve(string $requestUri, string $locale = '', string $websiteCode = ''): array
     {
@@ -325,7 +142,7 @@ final class StorefrontCatalogSurfaceResolver
     }
 
     /**
-     * @return array<string, string>|null
+     * @return array<string, mixed>|null
      */
     public function resolveSupported(string $requestUri, string $locale = '', string $websiteCode = ''): ?array
     {
@@ -375,23 +192,40 @@ final class StorefrontCatalogSurfaceResolver
     }
 
     /**
-     * @return array<string, string>
+     * True when the active/bound theme pack (or websiteCode design folder) provides surfaces.
+     */
+    public function hasWebsiteCopy(string $websiteCode = ''): bool
+    {
+        return $this->themeCopyLoader->hasSurfaces($this->normalizeWebsiteCode($websiteCode));
+    }
+
+    /**
+     * @return array<string, mixed>
      */
     private function localizedSurface(string $surfaceCode, string $locale, string $websiteCode = ''): array
     {
         $surface = self::SURFACES[$surfaceCode];
         $websiteCode = $this->normalizeWebsiteCode($websiteCode);
+        $themePack = $this->themeCopyLoader->load($websiteCode);
+        $themeSurfaces = is_array($themePack['surfaces'] ?? null) ? $themePack['surfaces'] : [];
         $copyBucket = $surface;
-        if ($websiteCode === 'daocharms' && isset(self::SURFACES_DAOCHARMS[$surfaceCode])) {
-            $copyBucket = array_merge($surface, self::SURFACES_DAOCHARMS[$surfaceCode]);
-        } elseif ($websiteCode === 'grocery' && isset(self::SURFACES_GROCERY[$surfaceCode])) {
-            $copyBucket = array_merge($surface, self::SURFACES_GROCERY[$surfaceCode]);
+        if (isset($themeSurfaces[$surfaceCode]) && is_array($themeSurfaces[$surfaceCode])) {
+            $copyBucket = array_merge($surface, $themeSurfaces[$surfaceCode]);
         }
 
         $normalizedLocale = strtolower(str_replace('-', '_', trim($locale)));
         $copy = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh')
-            ? $copyBucket['zh']
-            : $copyBucket['en'];
+            ? ($copyBucket['zh'] ?? $surface['zh'])
+            : ($copyBucket['en'] ?? $surface['en']);
+
+        $shareImage = array_key_exists('share_image', $themePack)
+            ? (string)$themePack['share_image']
+            : self::SHARE_IMAGE;
+
+        $presentationAll = is_array($themePack['presentation'] ?? null) ? $themePack['presentation'] : [];
+        $presentation = is_array($presentationAll[$surfaceCode] ?? null)
+            ? $presentationAll[$surfaceCode]
+            : [];
 
         return [
             'code' => $surfaceCode,
@@ -399,22 +233,16 @@ final class StorefrontCatalogSurfaceResolver
             'layout_type' => $surface['layout_type'],
             'public_route' => $surface['public_route'],
             'locale' => trim($locale),
-            'title' => $copy['title'],
-            'heading' => $copy['heading'],
-            'lede' => $copy['lede'],
-            'seo_title' => $copy['seo_title'],
-            'seo_description' => $copy['seo_description'],
-            'seo_keywords' => $copy['seo_keywords'],
-            'share_image' => $this->shareImageForWebsite($websiteCode),
-            'share_image_alt' => $copy['share_image_alt'],
+            'title' => (string)($copy['title'] ?? ''),
+            'heading' => (string)($copy['heading'] ?? ''),
+            'lede' => (string)($copy['lede'] ?? ''),
+            'seo_title' => (string)($copy['seo_title'] ?? ''),
+            'seo_description' => (string)($copy['seo_description'] ?? ''),
+            'seo_keywords' => (string)($copy['seo_keywords'] ?? ''),
+            'share_image' => $shareImage,
+            'share_image_alt' => (string)($copy['share_image_alt'] ?? ''),
+            'presentation' => $presentation,
         ];
-    }
-
-    public function hasWebsiteCopy(string $websiteCode = ''): bool
-    {
-        $code = $this->normalizeWebsiteCode($websiteCode);
-
-        return $code === 'daocharms' || $code === 'grocery';
     }
 
     private function normalizeWebsiteCode(string $websiteCode): string
@@ -429,15 +257,6 @@ final class StorefrontCatalogSurfaceResolver
         } catch (\Throwable) {
             return '';
         }
-    }
-
-    private function shareImageForWebsite(string $websiteCode): string
-    {
-        if ($websiteCode !== '' && array_key_exists($websiteCode, self::SHARE_IMAGE_BY_WEBSITE)) {
-            return self::SHARE_IMAGE_BY_WEBSITE[$websiteCode];
-        }
-
-        return self::SHARE_IMAGE;
     }
 
     private function isCurrencySegment(string $segment): bool

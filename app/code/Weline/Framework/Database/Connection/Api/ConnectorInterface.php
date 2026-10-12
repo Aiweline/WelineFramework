@@ -164,6 +164,12 @@ interface ConnectorInterface
     public function quoteIdentifier(string $identifier): string;
 
     /**
+     * ORM 底层 SQL 方言（可移植表达式：epoch / LIMIT / JSON / 时间桶等）。
+     * 业务代码应通过本入口取方言助手，禁止在业务层 match(driver) 拼方言 SQL。
+     */
+    public function getSqlDialect(): \Weline\Framework\Database\Compiler\Dialect\DialectInterface;
+
+    /**
      * Build DDL for the adapter's current exact physical target. $table may be
      * qualified and/or quoted; implementations must not add a prefix or replace
      * its namespace. $col: name, type, length?, nullable, primaryKey,

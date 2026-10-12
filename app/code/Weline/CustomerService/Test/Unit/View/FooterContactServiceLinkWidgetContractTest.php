@@ -11,9 +11,9 @@ final class FooterContactServiceLinkWidgetContractTest extends TestCase
     public function testFooterContactServiceLinkRegistersHomepageDefaultAndRemainsGloballyAvailable(): void
     {
         $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
-        $tpl = 'Weline_CustomerService::templates/Frontend/widgets/footer-contact-service-link.phtml';
+        $tpl = 'Weline_CustomerService::templates/frontend/widgets/footer-contact-service-link.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
-        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/footer-contact-service-link.phtml');
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/footer-contact-service-link.phtml');
         self::assertStringContainsString('@widget.code {footer-contact-service-link}', $src);
         self::assertStringContainsString('@widget.page_layouts {["*"]}', $src);
         self::assertStringContainsString('@widget.slot {footer-help-links}', $src);

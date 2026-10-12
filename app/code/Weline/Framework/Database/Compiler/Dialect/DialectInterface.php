@@ -25,6 +25,24 @@ interface DialectInterface
     /** 当前时间戳函数名，如 NOW() / CURRENT_TIMESTAMP / datetime('now') */
     public function currentTimestamp(): string;
 
+    /**
+     * Unix epoch 秒表达式（整数）。
+     * @param bool $utc true=UTC；false=连接会话时区（SQLite 仍为 UTC）
+     */
+    public function unixEpochExpression(bool $utc = true): string;
+
+    /**
+     * 将时间戳表达式按分钟桶向下取整，返回可 GROUP BY 的 'YYYY-MM-DD HH:MM:00' 文本表达式。
+     * $timestampExpr 须已是安全标识符/表达式（由调用方 quote）。
+     */
+    public function timeBucketExpression(string $timestampExpr, int $intervalMinutes): string;
+
+    /**
+     * 提取 JSON 列路径为未加引号的文本标量（供绑定普通 PHP 字符串比较）。
+     * $path 使用点分路径，如 testId / a.b（不含 $./）。
+     */
+    public function jsonExtractText(string $columnExpr, string $path): string;
+
     /** 布尔字面量 */
     public function booleanLiteral(bool $value): string;
 

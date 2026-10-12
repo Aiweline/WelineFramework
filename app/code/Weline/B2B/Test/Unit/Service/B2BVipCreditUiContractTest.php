@@ -11,8 +11,8 @@ final class B2BVipCreditUiContractTest extends TestCase
     public function testApproveDefaultsToFirstGroupOptionAndConfigEmbedsCreditSwitch(): void
     {
         $moduleRoot = dirname(__DIR__, 3);
-        $controlCenter = (string)file_get_contents($moduleRoot . '/view/templates/Backend/ControlCenter/index.phtml');
-        $config = (string)file_get_contents($moduleRoot . '/view/templates/Backend/Config/index.phtml');
+        $controlCenter = (string)file_get_contents($moduleRoot . '/view/templates/backend/ControlCenter/index.phtml');
+        $config = (string)file_get_contents($moduleRoot . '/view/templates/backend/Config/index.phtml');
         $declaration = (string)file_get_contents(
             $moduleRoot . '/extends/module/Weline_SystemConfig/Config/frontend/selling-mode.phtml'
         );

@@ -149,7 +149,7 @@ final class ExpressCheckoutOrchestratorContractTest extends TestCase
     public function testExpressWidgetUsesShellList(): void
     {
         $tpl = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/checkout-express-payment.phtml'
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-express-payment.phtml'
         );
         self::assertStringContainsString('PaymentExpressFacadeInterface', $tpl);
         self::assertStringContainsString('listExpressMethods', $tpl);

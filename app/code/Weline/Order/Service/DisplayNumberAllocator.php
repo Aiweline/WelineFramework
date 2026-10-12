@@ -226,65 +226,20 @@ final class DisplayNumberAllocator
             DisplayNumberRegistry::schema_fields_NUMBER_KIND,
             DisplayNumberRegistry::schema_fields_DISPLAY_NUMBER,
         ];
-        $connection = $registry->getConnection()
-            ->getConnector()
-            ->getWrappedConnection();
-        $driver = strtolower($connection->getDriverType());
-        $table = $this->quoteIdentifier($registry->getTable(), $driver);
-        $columns = array_keys($data);
-        $quotedColumns = array_map(
-            fn (string $column): string => $this->quoteIdentifier($column, $driver),
-            $columns,
-        );
-        $placeholders = array_map(
-            static fn (string $column): string => ':' . $column,
-            $columns,
-        );
-        $sql = 'INSERT INTO ' . $table
-            . ' (' . implode(', ', $quotedColumns) . ')'
-            . ' VALUES (' . implode(', ', $placeholders) . ')';
-        if ($driver === 'mysql') {
-            $displayColumn = $this->quoteIdentifier(
-                DisplayNumberRegistry::schema_fields_DISPLAY_NUMBER,
-                $driver,
-            );
-            $sql .= ' ON DUPLICATE KEY UPDATE '
-                . $displayColumn . ' = ' . $displayColumn;
-        } else {
-            $quotedConflicts = array_map(
-                fn (string $column): string => $this->quoteIdentifier($column, $driver),
-                $conflictFields,
-            );
-            $sql .= ' ON CONFLICT (' . implode(', ', $quotedConflicts) . ') DO NOTHING';
-        }
-        $statement = $connection->prepare($sql);
-        if (!$statement->execute($data)) {
-            throw new \RuntimeException(\__('展示号原子占位失败'));
+        // 冲突时只自写 display_number：占位 no-op，不抢已有 entity_uuid。方言由 ORM 下沉。
+        try {
+            $registry->clear()->reset()
+                ->insert(
+                    [$data],
+                    $conflictFields,
+                    DisplayNumberRegistry::schema_fields_DISPLAY_NUMBER,
+                )
+                ->fetch();
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(\__('展示号原子占位失败'), 0, $e);
         }
 
         return $this->lookup($websiteId, $storeId, $kind, $display)?->entityUuid === $entityUuid;
-    }
-
-    private function quoteIdentifier(string $identifier, string $driver): string
-    {
-        $quote = $driver === 'mysql' ? '`' : '"';
-        $parts = array_filter(
-            array_map('trim', explode('.', str_replace(['`', '"'], '', $identifier))),
-            static fn (string $part): bool => $part !== '',
-        );
-        if ($parts === []) {
-            throw new \InvalidArgumentException(\__('数据库标识符不能为空'));
-        }
-
-        return implode(
-            '.',
-            array_map(
-                static fn (string $part): string => $quote
-                    . str_replace($quote, $quote . $quote, $part)
-                    . $quote,
-                $parts,
-            ),
-        );
     }
 
     /** DB 模式：释放本次已占用展示号（写入失败补偿清理）。 */

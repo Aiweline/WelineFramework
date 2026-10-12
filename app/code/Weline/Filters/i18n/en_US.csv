@@ -16,7 +16,7 @@
 可选尺码,"Available sizes"
 面料,Fabric
 织物,Fabric
-材质,Material
+材质,MATERIAL
 面料名称,Fabric
 主面料成分,"Main fabric"
 适用场合,Occasion
@@ -80,3 +80,6 @@ winter,Winter
 茗月萱,Mingyuexuan
 茵卡蕾,Yinkalei
 鑫耀,Xinyao
+意图,INTENT
+符号,SYMBOL
+形状,SHAPE

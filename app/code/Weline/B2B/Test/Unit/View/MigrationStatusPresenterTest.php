@@ -41,7 +41,7 @@ final class MigrationStatusPresenterTest extends TestCase
 
     public function testTemplateUsesStatusViewMarkers(): void
     {
-        $path = BP . 'app/code/Weline/B2B/view/templates/Backend/ControlCenter/index.phtml';
+        $path = BP . 'app/code/Weline/B2B/view/templates/backend/ControlCenter/index.phtml';
         $content = (string) file_get_contents($path);
         self::assertStringContainsString('workspace_status_view', $content);
         self::assertStringContainsString('data-testid="b2b-migration-status-summary"', $content);

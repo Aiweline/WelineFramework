@@ -168,7 +168,7 @@ final class PixelChannelEcommerceFunnelServiceTest extends TestCase
         self::assertStringContainsString("getGet('funnel_mode')", $controller);
         self::assertStringContainsString("assign('funnel_mode'", $controller);
 
-        $detail = (string)\file_get_contents($root . '/view/templates/Backend/TrafficChannel/detail.phtml');
+        $detail = (string)\file_get_contents($root . '/view/templates/backend/TrafficChannel/detail.phtml');
         self::assertStringContainsString('data-funnel-mode-switch', $detail);
         self::assertStringContainsString('<lang>营销简漏斗</lang>', $detail);
         self::assertStringContainsString('<lang>电商四步</lang>', $detail);

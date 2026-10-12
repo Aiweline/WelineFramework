@@ -104,7 +104,7 @@ class Log extends BackendController
     private function respondEmbedDocument(): never
     {
         $this->layoutType = null;
-        $html = (string)$this->getTemplate()->fetch('Weline_Smtp::Backend/Log/embed');
+        $html = (string)$this->getTemplate()->fetch('Weline_Smtp::backend/Log/embed');
         $response = $this->request->getResponse();
         $response->setHeader('Content-Type', 'text/html; charset=UTF-8');
         $response->setBody($html);
@@ -154,8 +154,8 @@ class Log extends BackendController
             $this->respondEmbedDocument();
         }
 
-        // get() 默认解析为 templates/Backend/Log，须显式指向阅读模板
-        return $this->fetch('Weline_Smtp::Backend/Log/get');
+        // get() 默认解析为 templates/backend/Log，须显式指向阅读模板
+        return $this->fetch('Weline_Smtp::backend/Log/get');
     }
 
     function postDelete()

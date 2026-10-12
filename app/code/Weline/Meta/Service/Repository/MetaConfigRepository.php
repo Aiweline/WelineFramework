@@ -457,36 +457,15 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
     /** @param array<string, mixed> $data */
     private function insertIdentityNoOp(array $data): void
     {
-        $connector = $this->configs->getConnection()->getConnector();
-        $table = $connector->quoteTable($this->configs->getTable());
-        $columns = [];
-        $placeholders = [];
-        $params = [];
-        foreach ($data as $field => $value) {
-            $columns[] = $connector->quoteIdentifier($field);
-            $placeholder = ':meta_config_insert_' . count($placeholders);
-            $placeholders[] = $placeholder;
-            $params[$placeholder] = $value;
-        }
-        $fingerprint = $connector->quoteIdentifier(MetaConfig::schema_fields_IDENTITY_FINGERPRINT);
-        $sql = 'INSERT INTO ' . $table
-            . ' (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ') ';
-        $sql .= match ($this->databaseType()) {
-            // MySQL invokes this clause for every UNIQUE conflict, not only the
-            // fingerprint key.  Assign the stored value to itself so a legacy
-            // or unexpected UNIQUE can never rewrite another row's identity.
-            // The exact locking read below then distinguishes the intended
-            // fingerprint conflict from any other uniqueness violation.
-            'mysql', 'mariadb' => 'ON DUPLICATE KEY UPDATE ' . $fingerprint . '=' . $fingerprint,
-            'pgsql', 'postgres', 'postgresql' => 'ON CONFLICT (' . $fingerprint . ') DO UPDATE SET '
-                . $fingerprint . '=EXCLUDED.' . $fingerprint,
-            'sqlite' => 'ON CONFLICT (' . $fingerprint . ') DO UPDATE SET '
-                . $fingerprint . '=excluded.' . $fingerprint,
-            default => throw new \RuntimeException(__('MetaConfig 原子建件不支持当前数据库类型。')),
-        };
-
-        $statement = $connector->getWrappedConnection()->prepare($sql);
-        $statement->execute($params);
+        // 冲突时只把 fingerprint 写成自己：等价 no-op，避免误改其它 UNIQUE 冲突行的身份。
+        // 冲突更新由 ORM Adapter Compiler 下沉，业务禁止手写引擎方言 SQL。
+        $this->configs->clear()->reset()
+            ->insert(
+                [$data],
+                [MetaConfig::schema_fields_IDENTITY_FINGERPRINT],
+                MetaConfig::schema_fields_IDENTITY_FINGERPRINT,
+            )
+            ->fetch();
     }
 
     private function canonicalIdentity(MetaConfigIdentity $identity): MetaConfigIdentity

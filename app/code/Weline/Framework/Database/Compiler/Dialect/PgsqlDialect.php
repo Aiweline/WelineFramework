@@ -54,6 +54,35 @@ final class PgsqlDialect implements DialectInterface
         return 'CURRENT_TIMESTAMP';
     }
 
+    public function unixEpochExpression(bool $utc = true): string
+    {
+        // CURRENT_TIMESTAMP 跟随会话时区；UTC 用 timezone('utc', now())
+        return $utc
+            ? "CAST(EXTRACT(EPOCH FROM timezone('utc', now())) AS BIGINT)"
+            : 'CAST(EXTRACT(EPOCH FROM clock_timestamp()) AS BIGINT)';
+    }
+
+    public function timeBucketExpression(string $timestampExpr, int $intervalMinutes): string
+    {
+        $intervalMinutes = max(1, $intervalMinutes);
+
+        return "TO_CHAR(DATE_TRUNC('hour', {$timestampExpr}) + FLOOR(EXTRACT(MINUTE FROM {$timestampExpr}) / {$intervalMinutes}) * INTERVAL '{$intervalMinutes} minutes', 'YYYY-MM-DD HH24:MI:SS')";
+    }
+
+    public function jsonExtractText(string $columnExpr, string $path): string
+    {
+        $segments = array_values(array_filter(
+            array_map('trim', explode('.', str_replace(['$', '"', "'"], '', $path))),
+            static fn(string $part): bool => $part !== '',
+        ));
+        if ($segments === []) {
+            throw new \InvalidArgumentException('JSON path cannot be empty');
+        }
+        $pgPath = '{' . implode(',', $segments) . '}';
+
+        return "({$columnExpr}::jsonb #>> '{$pgPath}')";
+    }
+
     public function booleanLiteral(bool $value): string
     {
         return $value ? 'TRUE' : 'FALSE';

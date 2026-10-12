@@ -13,7 +13,7 @@ final class BackendOrderViewShippingMethodHumanizeContractTest extends TestCase
 {
     public function testViewTemplateShowsHumanLabelAndCopyableCode(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/view.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/view.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
 

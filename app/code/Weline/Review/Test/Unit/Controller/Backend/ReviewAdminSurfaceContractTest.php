@@ -14,7 +14,7 @@ final class ReviewAdminSurfaceContractTest extends TestCase
         $controller = (string)file_get_contents($moduleRoot . '/Controller/Backend/Review.php');
         $menu = (string)file_get_contents($moduleRoot . '/etc/backend/menu.xml');
         $service = (string)file_get_contents($moduleRoot . '/Service/ReviewAdminService.php');
-        $template = (string)file_get_contents($moduleRoot . '/view/templates/Backend/Review/index.phtml');
+        $template = (string)file_get_contents($moduleRoot . '/view/templates/backend/Review/index.phtml');
 
         self::assertStringContainsString("#[Acl('Weline_Review::list'", $controller);
         self::assertStringContainsString("#[Acl('Weline_Review::moderate'", $controller);

@@ -27,7 +27,7 @@ final class CloudflareOAuthServiceConfigFallbackTest extends TestCase
     public function testAccountIndexExposesOneClickConnectButton(): void
     {
         $source = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Account/index.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Account/index.phtml'
         );
 
         self::assertStringContainsString('cdn/backend/oauth/connect', $source);

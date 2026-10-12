@@ -121,8 +121,10 @@ class SlotValidator
         // 验证 id 格式（只允许字母、数字、下划线、连字符）
         $id = trim((string)$attrs['id']);
         if (!preg_match('/^[a-zA-Z][a-zA-Z0-9_-]*$/', $id)) {
+            // 动态值拼在 __() 外，避免脏 id 被采集成词典主键
             self::throwError(
-                __('w:slot 标签 id 格式无效: "%{id}"，只允许字母开头，包含字母、数字、下划线、连字符', ['id' => $id]),
+                (string)__('w:slot 标签 id 格式无效，只允许字母开头，包含字母、数字、下划线、连字符')
+                . ': "' . self::attrPreview($id) . '"',
                 $file,
                 $line,
                 '<w:slot id="main-content" name="主内容区">...</w:slot>'
@@ -159,8 +161,8 @@ class SlotValidator
         
         if (!in_array($position, self::VALID_POSITIONS, true)) {
             self::throwError(
-                __('w:slot 标签 position 属性值无效: "%{value}"', ['value' => $position]) . "\n" .
-                __('允许的值: %{values}', ['values' => implode(', ', self::VALID_POSITIONS)]),
+                (string)__('w:slot 标签 position 属性值无效') . ': "' . self::attrPreview($position) . '"' . "\n" .
+                (string)__('允许的值: %{values}', ['values' => implode(', ', self::VALID_POSITIONS)]),
                 $file,
                 $line,
                 '<w:slot id="main" position="content">...</w:slot>'
@@ -263,7 +265,7 @@ class SlotValidator
             $max = $attrs['max'];
             if (!is_numeric($max) || (int)$max < -1) {
                 self::throwError(
-                    __('w:slot 标签 max 属性必须是 >= -1 的整数，当前值: "%{value}"', ['value' => $max]),
+                    (string)__('w:slot 标签 max 属性必须是 >= -1 的整数') . ': "' . self::attrPreview((string)$max) . '"',
                     $file,
                     $line,
                     '<w:slot id="sidebar" max="5">...</w:slot>'
@@ -276,7 +278,7 @@ class SlotValidator
             $min = $attrs['min'];
             if (!is_numeric($min) || (int)$min < 0) {
                 self::throwError(
-                    __('w:slot 标签 min 属性必须是 >= 0 的整数，当前值: "%{value}"', ['value' => $min]),
+                    (string)__('w:slot 标签 min 属性必须是 >= 0 的整数') . ': "' . self::attrPreview((string)$min) . '"',
                     $file,
                     $line,
                     '<w:slot id="content" min="1">...</w:slot>'
@@ -302,6 +304,20 @@ class SlotValidator
         }
     }
     
+    /**
+     * 属性预览：截断并压掉控制字符/连续引号，禁止把整段脏值拼进可采集文案。
+     */
+    private static function attrPreview(string $raw): string
+    {
+        $raw = preg_replace('/[\x00-\x1F\x7F]/u', '', $raw) ?? $raw;
+        $raw = preg_replace('/["\']{2,}/u', '"', $raw) ?? $raw;
+        if (mb_strlen($raw, 'UTF-8') > 64) {
+            return mb_substr($raw, 0, 64, 'UTF-8') . '…';
+        }
+
+        return $raw;
+    }
+
     /**
      * 抛出模板错误
      * 

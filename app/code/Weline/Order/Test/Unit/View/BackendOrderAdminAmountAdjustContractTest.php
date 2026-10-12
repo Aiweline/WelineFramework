@@ -10,7 +10,7 @@ final class BackendOrderAdminAmountAdjustContractTest extends TestCase
 {
     public function testEditTemplateDeclaresAdminAmountAdjustFormHooks(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/edit.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="order-edit-admin-amount-adjust"', $src);

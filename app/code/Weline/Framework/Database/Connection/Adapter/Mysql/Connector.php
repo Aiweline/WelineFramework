@@ -94,6 +94,11 @@ final class Connector extends Query implements
         return $this->dialect ??= new MysqlDialect();
     }
 
+    public function getSqlDialect(): \Weline\Framework\Database\Compiler\Dialect\DialectInterface
+    {
+        return $this->getDialect();
+    }
+
     public function create(): static
     {
         if ($this->link !== null && $this->lease?->isActive()) {

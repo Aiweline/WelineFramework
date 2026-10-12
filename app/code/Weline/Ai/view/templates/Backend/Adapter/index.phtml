@@ -22,14 +22,14 @@ if ($modelOptionsJson === false) {
 }
 ?>
 <?php if (empty($embed)): ?>
-<?= $this->fetch('Weline_Ai::templates/Backend/Manager/page-header.phtml', [
+<?= $this->fetch('Weline_Ai::templates/backend/Manager/page-header.phtml', [
     'pageHeading' => (string)__('场景适配器管理'),
     'pageBreadcrumbs' => [
         ['title' => (string)__('AI 中心')],
         ['title' => (string)__('场景适配器'), 'active' => true],
     ],
 ]) ?>
-<template>Weline_Ai::Backend/Manager/tabs.phtml</template>
+<template>Weline_Ai::backend/Manager/tabs.phtml</template>
 <?php endif; ?>
 <?php
 $totalCount = count($adapters);

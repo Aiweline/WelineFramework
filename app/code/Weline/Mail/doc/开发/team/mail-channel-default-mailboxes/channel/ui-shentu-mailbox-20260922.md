@@ -1,7 +1,7 @@
 # 审图线稿 · 企业邮箱「邮箱」页（ui_shot）
 
 来源：用户截图 2026-09-22 · `web_ui` + `ui_shot`  
-主文件：`Mail/view/templates/Backend/Index/enterprise.phtml`（`$view === 'mailbox'`）
+主文件：`Mail/view/templates/backend/Index/enterprise.phtml`（`$view === 'mailbox'`）
 
 ```
 +------------------------------------------------------------------+

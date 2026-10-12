@@ -11,7 +11,7 @@ final class SocialChoiceFloatingContractTest extends TestCase
     public function testAdminChoiceUsesThemeFloatingAttach(): void
     {
         $src = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Social/index.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Social/index.phtml'
         );
         self::assertStringContainsString('data-w-float-surface', $src);
         self::assertStringContainsString('UI.floating', $src);
@@ -33,7 +33,7 @@ final class SocialChoiceFloatingContractTest extends TestCase
     public function testScopeTypeDoesNotShowTechnicalWebsiteCodeChip(): void
     {
         $src = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Social/index.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Social/index.phtml'
         );
         self::assertStringContainsString("label: String(group.scope_label || group.scope_type || '')", $src);
         self::assertStringContainsString("meta: ''", $src);

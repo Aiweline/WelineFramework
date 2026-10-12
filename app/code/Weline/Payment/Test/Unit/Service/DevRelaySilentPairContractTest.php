@@ -93,7 +93,7 @@ final class DevRelaySilentPairContractTest extends TestCase
 
     public function testIndexTemplateCopiesWebsiteBaseUrlAndToken(): void
     {
-        $src = file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/DevRelay/index.phtml');
+        $src = file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/DevRelay/index.phtml');
         self::assertIsString($src);
         self::assertStringContainsString('dev-relay-website-base-url', $src);
         self::assertStringContainsString('dev-relay-user-api-token', $src);

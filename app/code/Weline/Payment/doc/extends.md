@@ -163,8 +163,8 @@ final class YourProvider implements ProviderInterface
 
 ```text
 extends/module/Weline_Payment/PaymentCustomerGuide/YourPayCustomerGuide.php
-view/templates/Frontend/guide/payment/your_pay/guide.phtml
-view/templates/Frontend/guide/payment/your_pay/policy.phtml
+view/templates/frontend/guide/payment/your_pay/guide.phtml
+view/templates/frontend/guide/payment/your_pay/policy.phtml
 ```
 
 Guide 类示例（元数据须 `__()`，**不写正文 HTML**）：
@@ -189,15 +189,15 @@ final class YourPayCustomerGuide implements PaymentCustomerGuideInterface
 `guide.phtml` 正文示例（**只用 `<lang>`，不用 `__()`**）：
 
 ```php
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
 
 <article class="amazon-payment-guide-layout__main amazon-payment-guide-article" weline-code="payment.guide.your_pay">
     <h1><lang>Your Pay 支付指南</lang></h1>
     <p><lang>在结账页选择 Your Pay，并按页面提示完成支付。</lang></p>
 </article>
 
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>
 ```
 
 收集与审计：

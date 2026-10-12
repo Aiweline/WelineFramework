@@ -6,7 +6,7 @@
 
 | 组件 / 面 | 归属 | 用途 |
 |-----------|------|------|
-| `.payment-methods` / `.payment-methods__grid` / `.payment-method-card*` | `Weline_Payment` `view/templates/Frontend/checkout/payment-methods.phtml` | 支付方式列表壳；激励提示挂在**既有卡片**内，不另开第二套选卡 UI |
+| `.payment-methods` / `.payment-methods__grid` / `.payment-method-card*` | `Weline_Payment` `view/templates/frontend/checkout/payment-methods.phtml` | 支付方式列表壳；激励提示挂在**既有卡片**内，不另开第二套选卡 UI |
 | `.payment-method-card__badge` / `__reason` | 同上 | Badge 槽复用为「可选减 / 减 X」；不可用态仍走 `__reason`，禁灰卡仍显示可点「可减」 |
 | `Weline_Payment::frontend::checkout::payment-methods-*` hooks | Payment | 列表前后扩展点；优先槽内增量，不平行新区块 |
 | `.weline-checkout__totals` + `role="listitem"` 行模式 | `Weline_Checkout` `checkout/index.phtml` | 摘要金额表；激励行**平行**现有 `data-checkout-discount-row` / `data-checkout-cod-fee-row` |

@@ -15,7 +15,7 @@ final class WlsDeployEmbeddedTitleContractTest extends TestCase
     {
         $base = \defined('BP') ? (string)\BP : (\dirname(__DIR__, 7) . DIRECTORY_SEPARATOR);
         return (string)file_get_contents(
-            $base . 'app/code/Weline/Deploy/view/templates/Backend/WlsDeploy/index.phtml'
+            $base . 'app/code/Weline/Deploy/view/templates/backend/WlsDeploy/index.phtml'
         );
     }
 

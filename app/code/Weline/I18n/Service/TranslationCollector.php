@@ -14,6 +14,7 @@ namespace Weline\I18n\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\I18n\Api\Translation\TranslationCollectorInterface;
+use Weline\I18n\Service\DictionaryAreaPolicy;
 
 /**
  * 翻译字符串收集服务
@@ -56,7 +57,7 @@ class TranslationCollector implements TranslationCollectorInterface
      * 逐条产出翻译字符串，不在内存中累积完整数组，适合大规模扫描场景
      * @param string|null $modulePath 模块路径，如果为null则收集所有模块
      * @param string|null $moduleName 模块名称（用于显示），如果为null则从路径推断
-     * @return \Generator<string, array{file: string, context: string, module: string}>
+     * @return \Generator<string, array{file: string, context: string, module: string, area: string}>
      */
     public function collectLazy(?string $modulePath = null, ?string $moduleName = null): \Generator
     {
@@ -195,7 +196,7 @@ class TranslationCollector implements TranslationCollectorInterface
      * 逐文件读取、逐条产出，内存中同时只持有一个文件的内容
      * @param string $directory 目录路径
      * @param string $moduleName 模块名称
-     * @return \Generator<string, array{file: string, context: string, module: string}>
+     * @return \Generator<string, array{file: string, context: string, module: string, area: string}>
      */
     private function yieldFromDirectory(string $directory, string $moduleName): \Generator
     {
@@ -244,7 +245,7 @@ class TranslationCollector implements TranslationCollectorInterface
                     foreach ($matches[1] as $match) {
                         $match = trim($match);
                         if (!empty($match) && $this->isValidTranslationString($match)) {
-                            yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName];
+                            yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName, 'area' => DictionaryAreaPolicy::evidenceFromPath($pathname)];
                         }
                     }
                 }
@@ -255,7 +256,7 @@ class TranslationCollector implements TranslationCollectorInterface
                         $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $matchData[0]);
                         $match = trim($match);
                         if (!empty($match) && $this->isValidTranslationString($match)) {
-                            yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName];
+                            yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName, 'area' => DictionaryAreaPolicy::evidenceFromPath($pathname)];
                         }
                     }
                 }
@@ -272,7 +273,7 @@ class TranslationCollector implements TranslationCollectorInterface
                         }
                         $match = trim($match);
                         if (!empty($match) && $this->isValidTranslationString($match)) {
-                            yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName];
+                            yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName, 'area' => DictionaryAreaPolicy::evidenceFromPath($pathname)];
                         }
                     }
                 }
@@ -292,7 +293,7 @@ class TranslationCollector implements TranslationCollectorInterface
                         $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $match);
                         $match = trim($match);
                         if (!empty($match) && $this->isValidTranslationString($match)) {
-                            yield $match => ['file' => $relativePath, 'context' => $context, 'module' => $moduleName];
+                            yield $match => ['file' => $relativePath, 'context' => $context, 'module' => $moduleName, 'area' => DictionaryAreaPolicy::evidenceFromPath($pathname)];
                         }
                     }
                 }
@@ -316,7 +317,7 @@ class TranslationCollector implements TranslationCollectorInterface
                         }
                         
                         if (!empty($match) && strlen($match) <= 200 && $this->isValidTranslationString($match)) {
-                            yield $match => ['file' => $relativePath, 'context' => $context, 'module' => $moduleName];
+                            yield $match => ['file' => $relativePath, 'context' => $context, 'module' => $moduleName, 'area' => DictionaryAreaPolicy::evidenceFromPath($pathname)];
                         }
                     }
                 }
@@ -325,7 +326,7 @@ class TranslationCollector implements TranslationCollectorInterface
                 // Acl 构造时会对 source_name / document 调用 __()，但属性参数本身不是 __('...')，
                 // 若不单独提取，setup:upgrade / i18n:collect 整表重写会丢掉这些 ACL 文案。
                 if ($ext === 'php') {
-                    yield from $this->yieldFromAclAttributes($content, $relativePath, $moduleName);
+                    yield from $this->yieldFromAclAttributes($content, $relativePath, $pathname, $moduleName);
                 }
                 
                 // Generator 自然释放：$content 在下次循环迭代时被覆盖
@@ -341,7 +342,7 @@ class TranslationCollector implements TranslationCollectorInterface
     /**
      * @return \Generator<string, array{file: string, context: string, module: string}>
      */
-    private function yieldFromAclAttributes(string $content, string $relativePath, string $moduleName): \Generator
+    private function yieldFromAclAttributes(string $content, string $relativePath, string $absolutePath, string $moduleName): \Generator
     {
         if (!str_contains($content, '#[Acl') && !str_contains($content, 'Framework\\Acl\\Acl')) {
             return;
@@ -373,6 +374,7 @@ class TranslationCollector implements TranslationCollectorInterface
                     'file' => $relativePath,
                     'context' => 'Acl',
                     'module' => $moduleName,
+                    'area' => DictionaryAreaPolicy::evidenceFromPath($absolutePath),
                 ];
             }
         }

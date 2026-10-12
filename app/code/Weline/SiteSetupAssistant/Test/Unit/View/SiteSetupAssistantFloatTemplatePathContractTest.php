@@ -35,7 +35,7 @@ final class SiteSetupAssistantFloatTemplatePathContractTest extends TestCase
             $widgetSrc
         );
         self::assertStringNotContainsString(
-            "templates/Backend/widgets/site-setup-assistant-float.phtml",
+            "templates/backend/widgets/site-setup-assistant-float.phtml",
             $hookSrc
         );
 

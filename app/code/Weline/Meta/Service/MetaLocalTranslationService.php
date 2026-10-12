@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Meta\Service;
 
-use Weline\Framework\App\Env;
 use Weline\I18n\Service\AiTranslationConfig;
 use Weline\I18n\Service\I18nAiTranslationAdapter;
 use Weline\Meta\Helper\MetaTranslation;
-use Weline\Meta\Model\Meta;
 use Weline\Meta\Model\MetaLocal;
+use Weline\Meta\Service\MetaLocalWordParser;
 
 /**
- * MetaLocal（w_meta_local）批量 AI 翻译；不走 dictionary_translate。
+ * MetaLocal（w_meta_local）批量 AI 翻译；覆盖全部 config_key / scope / version_id。
+ * 不走 dictionary_translate / 词典 meta 前缀。
  */
 final class MetaLocalTranslationService
 {
@@ -21,7 +21,6 @@ final class MetaLocalTranslationService
     public function __construct(
         private readonly I18nAiTranslationAdapter $translationAdapter,
         private readonly AiTranslationConfig $translationConfig,
-        private readonly Meta $meta,
         private readonly MetaLocal $metaLocal,
     ) {
     }
@@ -75,67 +74,90 @@ final class MetaLocalTranslationService
         $errors = [];
         $processed = 0;
 
-        foreach ($this->meta->reset()->select()->fetchArray() as $row) {
-            $metaIdentify = trim((string)($row[Meta::schema_fields_META_IDENTIFY] ?? ''));
-            if ($metaIdentify === '') {
+        $rows = $this->metaLocal->reset()
+            ->where(MetaLocal::schema_fields_LOCALE_CODE, $sourceLocale)
+            ->limit(self::BATCH_LIMIT * 4)
+            ->select()
+            ->fetchArray();
+
+        foreach ($rows as $row) {
+            if ($processed >= self::BATCH_LIMIT) {
+                break;
+            }
+
+            $metaIdentify = trim((string)($row[MetaLocal::schema_fields_META_IDENTIFY] ?? ''));
+            $configKey = trim((string)($row[MetaLocal::schema_fields_CONFIG_KEY] ?? ''));
+            $scope = trim((string)($row[MetaLocal::schema_fields_SCOPE] ?? MetaLocal::DEFAULT_SCOPE));
+            $versionId = (int)($row[MetaLocal::schema_fields_VERSION_ID] ?? MetaLocal::DEFAULT_VERSION_ID);
+            $sourceText = trim((string)($row[MetaLocal::schema_fields_CONFIG_VALUE] ?? ''));
+            if ($metaIdentify === '' || $configKey === '' || $sourceText === '') {
+                $skipped++;
+                continue;
+            }
+            if ($scope === '') {
+                $scope = MetaLocal::DEFAULT_SCOPE;
+            }
+            if (MetaLocalWordParser::isPreviewScope($scope)) {
+                $skipped++;
                 continue;
             }
 
-            foreach (['name', 'description'] as $configKey) {
-                if ($processed >= self::BATCH_LIMIT) {
-                    break 2;
-                }
-
-                $sourceText = MetaTranslation::getTranslatedValue($metaIdentify, $configKey, $sourceLocale, '');
-                if ($sourceText === '') {
-                    $skipped++;
-                    continue;
-                }
-
-                $existing = MetaTranslation::getTranslatedValue($metaIdentify, $configKey, $targetLocale, '');
-                if ($existing !== '' && $existing !== $sourceText) {
-                    $skipped++;
-                    continue;
-                }
-
-                try {
-                    $batch = $this->translationAdapter->translateBatch(
-                        [$sourceText],
-                        $sourceLocale,
-                        $targetLocale,
-                        $this->translationConfig->getStrategy($targetLocale),
-                        'meta',
-                    );
-                    if (!$batch['success']) {
-                        $itemErrors = array_map('strval', (array)($batch['errors'] ?? []));
-                        $errors = array_merge($errors, $itemErrors);
-                        // Busy/hard AI error: stop this round; next cron continues.
-                        if ($this->errorsIndicateBusy($itemErrors)) {
-                            break 2;
-                        }
-                        break 2;
-                    }
-                    $translation = trim((string)($batch['translations'][$sourceText] ?? ''));
-                    if ($translation === '') {
-                        $skipped++;
-                        continue;
-                    }
-                    if (MetaTranslation::setTranslatedValue($metaIdentify, $configKey, $targetLocale, $translation)) {
-                        $translated++;
-                    } else {
-                        $errors[] = $metaIdentify . '.' . $configKey;
-                    }
-                } catch (\Throwable $throwable) {
-                    $message = $throwable->getMessage();
-                    $errors[] = $metaIdentify . '.' . $configKey . ': ' . $message;
-                    if (str_contains($message, 'AI_TRANSLATION_BUSY')) {
-                        break 2;
-                    }
-                    break 2;
-                }
-
-                $processed++;
+            $existing = MetaTranslation::getTranslatedValue(
+                $metaIdentify,
+                $configKey,
+                $targetLocale,
+                '',
+                $scope,
+                $versionId,
+            );
+            if ($existing !== '' && $existing !== $sourceText) {
+                $skipped++;
+                continue;
             }
+
+            try {
+                $batch = $this->translationAdapter->translateBatch(
+                    [$sourceText],
+                    $sourceLocale,
+                    $targetLocale,
+                    $this->translationConfig->getStrategy($targetLocale),
+                    'meta',
+                );
+                if (!$batch['success']) {
+                    $itemErrors = array_map('strval', (array)($batch['errors'] ?? []));
+                    $errors = array_merge($errors, $itemErrors);
+                    if ($this->errorsIndicateBusy($itemErrors)) {
+                        break;
+                    }
+                    break;
+                }
+                $translation = trim((string)($batch['translations'][$sourceText] ?? ''));
+                if ($translation === '') {
+                    $skipped++;
+                    continue;
+                }
+                if (MetaTranslation::setTranslatedValue(
+                    $metaIdentify,
+                    $configKey,
+                    $targetLocale,
+                    $translation,
+                    $scope,
+                    $versionId,
+                )) {
+                    $translated++;
+                } else {
+                    $errors[] = $metaIdentify . '.' . $configKey . '@' . $scope . '/v' . $versionId;
+                }
+            } catch (\Throwable $throwable) {
+                $message = $throwable->getMessage();
+                $errors[] = $metaIdentify . '.' . $configKey . ': ' . $message;
+                if (str_contains($message, 'AI_TRANSLATION_BUSY')) {
+                    break;
+                }
+                break;
+            }
+
+            $processed++;
         }
 
         return ['translated' => $translated, 'skipped' => $skipped, 'errors' => $errors];

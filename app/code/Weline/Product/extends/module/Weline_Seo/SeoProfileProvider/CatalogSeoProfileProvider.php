@@ -46,9 +46,14 @@ final class CatalogSeoProfileProvider implements SeoProfileProviderInterface
         }
 
         $leafCategory = $this->isLeafCategoryContext($template, $context, $url);
+        $websiteCode = trim((string)($context['website_code'] ?? $context['websiteCode'] ?? ''));
         $surface = $leafCategory
             ? null
-            : $this->surfaces->resolveSupported($url, trim((string)($context['locale'] ?? '')));
+            : $this->surfaces->resolveSupported(
+                $url,
+                trim((string)($context['locale'] ?? '')),
+                $websiteCode,
+            );
 
         if ($surface === null && !$leafCategory) {
             return [];

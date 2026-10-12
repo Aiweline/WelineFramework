@@ -79,13 +79,13 @@ final class ConversionEventDedupeContractTest extends TestCase
         self::assertStringNotContainsString('sessionStorage', $success);
 
         $payment = (string)\file_get_contents(
-            \dirname(__DIR__, 4) . '/Payment/view/templates/Frontend/checkout/payment-success.phtml'
+            \dirname(__DIR__, 4) . '/Payment/view/templates/frontend/checkout/payment-success.phtml'
         );
         self::assertStringContainsString("WelinePixel.track('payment_success'", $payment);
         self::assertStringNotContainsString('sessionStorage.getItem(dedupeKey)', $payment);
 
         $return = (string)\file_get_contents(
-            \dirname(__DIR__, 4) . '/Payment/view/templates/Frontend/checkout/return.phtml'
+            \dirname(__DIR__, 4) . '/Payment/view/templates/frontend/checkout/return.phtml'
         );
         self::assertStringContainsString("WelinePixel.track('payment_success'", $return);
         self::assertStringContainsString('items:', $return);

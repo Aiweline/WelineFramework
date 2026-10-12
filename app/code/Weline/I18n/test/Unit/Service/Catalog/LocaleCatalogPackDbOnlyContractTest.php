@@ -86,7 +86,7 @@ final class LocaleCatalogPackDbOnlyContractTest extends TestCase
         self::assertFileDoesNotExist(\BP . 'app/code/Weline/I18n/Service/CountryUpdateService.php');
         self::assertFileDoesNotExist(\BP . 'app/code/Weline/I18n/Controller/Backend/Countries/AsyncUpdate.php');
         $countriesIndex = (string)\file_get_contents(
-            \BP . 'app/code/Weline/I18n/view/templates/Backend/Countries/index.phtml'
+            \BP . 'app/code/Weline/I18n/view/templates/backend/Countries/index.phtml'
         );
         self::assertStringNotContainsString('更新全球数据', $countriesIndex);
         self::assertStringNotContainsString('country-sync', $countriesIndex);

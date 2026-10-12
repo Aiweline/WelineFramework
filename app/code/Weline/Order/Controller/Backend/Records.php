@@ -66,6 +66,6 @@ final class Records extends BackendPageController
         $this->assign('records',$records);
         $this->assign('status',$status);
         $this->assign('load_error',$loadError);
-        return $this->fetch('Weline_Order::templates/Backend/Records/index.phtml');
+        return $this->fetch('Weline_Order::templates/backend/Records/index.phtml');
     }
 }

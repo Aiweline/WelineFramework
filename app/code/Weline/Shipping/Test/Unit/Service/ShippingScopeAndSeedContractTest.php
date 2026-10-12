@@ -41,14 +41,14 @@ final class ShippingScopeAndSeedContractTest extends TestCase
     {
         foreach (['ShippingService', 'RateTemplate', 'FreeShippingRule'] as $page) {
             $tpl = (string)file_get_contents(
-                dirname(__DIR__, 3) . '/view/templates/Backend/' . $page . '/index.phtml',
+                dirname(__DIR__, 3) . '/view/templates/backend/' . $page . '/index.phtml',
             );
             self::assertStringContainsString('scope-toolbar.phtml', $tpl);
             self::assertStringContainsString('name="scope_type"', $tpl);
             self::assertStringContainsString('name="target_scope"', $tpl);
         }
-        self::assertFileExists(dirname(__DIR__, 3) . '/view/templates/Backend/partials/scope-toolbar.phtml');
-        $toolbar = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/partials/scope-toolbar.phtml');
+        self::assertFileExists(dirname(__DIR__, 3) . '/view/templates/backend/partials/scope-toolbar.phtml');
+        $toolbar = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/partials/scope-toolbar.phtml');
         self::assertStringContainsString('shipping-work-scope.js', $toolbar);
         self::assertStringContainsString('shipping-work-scope-i18n', $toolbar);
         self::assertStringNotContainsString('function navigateFromNode', $toolbar);

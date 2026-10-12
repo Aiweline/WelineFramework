@@ -11,7 +11,7 @@ final class DuplicatePanelThemeContractTest extends TestCase
     public function testDuplicateIndexUsesSeoFormSectionsAndEmptyState(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = $root . '/view/templates/Backend/Duplicate/index.phtml';
+        $template = $root . '/view/templates/backend/Duplicate/index.phtml';
         $css = $root . '/view/statics/css/seo-admin.css';
         $proto = $root . '/view/statics/prototype/duplicate-panel-ui.html';
 
@@ -46,7 +46,7 @@ final class DuplicatePanelThemeContractTest extends TestCase
     public function testDuplicateReportUsesMetaAndGradeChips(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = $root . '/view/templates/Backend/Duplicate/report.phtml';
+        $template = $root . '/view/templates/backend/Duplicate/report.phtml';
         $src = (string) file_get_contents($template);
 
         self::assertStringContainsString('data-testid="seo-duplicate-report"', $src);

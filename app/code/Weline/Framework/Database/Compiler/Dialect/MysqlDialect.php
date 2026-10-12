@@ -57,9 +57,41 @@ final class MysqlDialect implements DialectInterface
         return 'NOW()';
     }
 
+    public function unixEpochExpression(bool $utc = true): string
+    {
+        return $utc ? 'UNIX_TIMESTAMP(UTC_TIMESTAMP())' : 'UNIX_TIMESTAMP()';
+    }
+
+    public function timeBucketExpression(string $timestampExpr, int $intervalMinutes): string
+    {
+        $intervalMinutes = max(1, $intervalMinutes);
+
+        return "DATE_FORMAT(DATE_SUB({$timestampExpr}, INTERVAL MINUTE({$timestampExpr}) % {$intervalMinutes} MINUTE), '%Y-%m-%d %H:%i:00')";
+    }
+
+    public function jsonExtractText(string $columnExpr, string $path): string
+    {
+        $jsonPath = $this->jsonPathLiteral($path);
+
+        return "JSON_UNQUOTE(JSON_EXTRACT({$columnExpr}, {$jsonPath}))";
+    }
+
     public function booleanLiteral(bool $value): string
     {
         return $value ? '1' : '0';
+    }
+
+    private function jsonPathLiteral(string $path): string
+    {
+        $segments = array_values(array_filter(
+            array_map('trim', explode('.', str_replace(['$', '"', "'"], '', $path))),
+            static fn(string $part): bool => $part !== '',
+        ));
+        if ($segments === []) {
+            throw new \InvalidArgumentException('JSON path cannot be empty');
+        }
+
+        return "'$." . implode('.', $segments) . "'";
     }
 
     public function getSinceVersion(): string

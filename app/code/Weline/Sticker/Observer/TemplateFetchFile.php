@@ -165,7 +165,7 @@ class TemplateFetchFile implements ObserverInterface
 
     /**
      * 提取目标文件路径（相对于模块根目录）
-     * 例如：Weline/Demo/view/templates/Backend/index.phtml
+     * 例如：Weline/Demo/view/templates/backend/index.phtml
      *
      * @param string $filePath 文件完整路径
      * @param string $moduleName 模块名

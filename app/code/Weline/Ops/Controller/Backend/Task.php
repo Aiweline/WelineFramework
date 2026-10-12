@@ -85,7 +85,7 @@ class Task extends BackendController
             'desk' => $this->url->getBackendUrl('*/backend/desk/index'),
         ]);
 
-        return $this->fetch('Weline_Ops::templates/Backend/Task/index.phtml');
+        return $this->fetch('Weline_Ops::templates/backend/Task/index.phtml');
     }
 
     #[Acl(

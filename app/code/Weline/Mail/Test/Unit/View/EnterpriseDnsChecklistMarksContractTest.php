@@ -12,7 +12,7 @@ final class EnterpriseDnsChecklistMarksContractTest extends TestCase
 {
     public function testEnterpriseShowsLiveDnsMarksAndOauthError(): void
     {
-        $path = BP . 'app/code/Weline/Mail/view/templates/Backend/Index/enterprise.phtml';
+        $path = BP . 'app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml';
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('dns_live_checks', $src);
         self::assertStringContainsString('detected_origin_ip', $src);

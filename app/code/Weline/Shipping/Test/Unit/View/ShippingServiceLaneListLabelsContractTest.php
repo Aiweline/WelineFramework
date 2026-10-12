@@ -14,7 +14,7 @@ final class ShippingServiceLaneListLabelsContractTest extends TestCase
     private function template(): string
     {
         return (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/ShippingService/index.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/ShippingService/index.phtml'
         );
     }
 

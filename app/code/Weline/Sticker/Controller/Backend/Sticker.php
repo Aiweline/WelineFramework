@@ -218,7 +218,7 @@ class Sticker extends BackendController
 
             if ($isAjax) {
                 // 渲染详情内容并返回JSON
-                $html = $this->fetchView('Weline_Sticker::Backend/Sticker/detail-content.phtml', $data);
+                $html = $this->fetchView('Weline_Sticker::backend/Sticker/detail-content.phtml', $data);
                 return json_encode([
                     'success' => true,
                     'html' => $html,
@@ -340,7 +340,7 @@ class Sticker extends BackendController
                 'sort_order' => $sortOrder
             ];
             
-            $html = $this->fetchView('Weline_Sticker::Backend/Sticker/list-table.phtml', $data);
+            $html = $this->fetchView('Weline_Sticker::backend/Sticker/list-table.phtml', $data);
             
             return json_encode([
                 'success' => true,

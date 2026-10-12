@@ -104,9 +104,12 @@ final class I18nRemoteTranslationQueryProviderContractTest extends TestCase
         self::assertStringContainsString('TYPE_META', $src);
         self::assertStringContainsString('TYPE_LOCAL_MODEL', $src);
         self::assertStringContainsString('wrong_shape_for_type', $src);
+        self::assertStringContainsString('queryMetaPendingUnion', $src);
+        self::assertStringContainsString('queryPhrasePendingUnion', $src);
+        self::assertStringContainsString('MetaTranslation::setTranslatedValueWithScope', $src);
+        self::assertStringContainsString('MetaLocalWordParser', $src);
         self::assertStringContainsString("NOT LIKE ", $src);
-        self::assertStringContainsString("LIKE ", $src);
-        self::assertStringContainsString('@meta::%', $src);
+        self::assertStringNotContainsString("d.word LIKE " . "'@meta::%'", $src);
     }
 
     public function testNormalizeTypeDefaultsAndRejectsUnknown(): void

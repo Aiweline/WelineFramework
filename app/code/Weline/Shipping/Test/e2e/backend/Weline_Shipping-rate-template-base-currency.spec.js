@@ -24,7 +24,7 @@ moduleDescribe(test, MODULE, '费用模板基础货币与编辑', () => {
     '完整通路契约：编辑入口、金额/货币列、基础货币只读、updateRateTemplate',
     async () => {
       const tpl = fs.readFileSync(
-        path.join(ROOT, 'view/templates/Backend/RateTemplate/index.phtml'),
+        path.join(ROOT, 'view/templates/backend/RateTemplate/index.phtml'),
         'utf8',
       );
       const controller = fs.readFileSync(
@@ -72,7 +72,7 @@ moduleDescribe(test, MODULE, '费用模板基础货币与编辑', () => {
     '完整功能通路 e2e 组：编辑契约 + 基础货币锁定 + 报价换算',
     async () => {
       const tpl = fs.readFileSync(
-        path.join(ROOT, 'view/templates/Backend/RateTemplate/index.phtml'),
+        path.join(ROOT, 'view/templates/backend/RateTemplate/index.phtml'),
         'utf8',
       );
       const manager = fs.readFileSync(

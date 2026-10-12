@@ -9,6 +9,9 @@ namespace Weline\Framework\Phrase;
  */
 final class DictionaryWordValidator
 {
+    /** 与 I18n Dictionary::MAX_WORD_LENGTH 对齐；Framework 不依赖 I18n。 */
+    public const MAX_WORD_LENGTH = 512;
+
     private const CODE_PATTERNS = [
         '/\$[a-zA-Z_][a-zA-Z0-9_]*/',
         '/->[a-zA-Z_][a-zA-Z0-9_]*\s*\(/',
@@ -30,6 +33,26 @@ final class DictionaryWordValidator
     public static function isValidTranslationString(string $str): bool
     {
         if ($str === '' || trim($str) === '') {
+            return false;
+        }
+
+        if (!mb_check_encoding($str, 'UTF-8')) {
+            return false;
+        }
+
+        if (mb_strlen($str, 'UTF-8') > self::MAX_WORD_LENGTH) {
+            return false;
+        }
+
+        if (str_contains($str, "\u{FEFF}") || str_starts_with($str, "\xEF\xBB\xBF")) {
+            return false;
+        }
+
+        if (str_contains($str, "\n") || str_contains($str, "\r")) {
+            return false;
+        }
+
+        if (preg_match('/["\']{4,}/u', $str) === 1) {
             return false;
         }
 

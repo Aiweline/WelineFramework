@@ -1904,7 +1904,37 @@ class Partials extends Block
 
     private function isEmptyPartialHtml(string $html): bool
     {
-        return \trim($html) === '';
+        if (\trim($html) === '') {
+            return true;
+        }
+
+        // Incomplete footer chrome (exclusive root blank, no footer-container) must not
+        // poison shared HotCache / L1 — first hit would ship empty footer until refresh.
+        return $this->isIncompleteStorefrontFooterChrome($html);
+    }
+
+    private function isIncompleteStorefrontFooterChrome(string $html): bool
+    {
+        if (!\str_contains($html, 'data-slot-id="footer"')
+            && !\str_contains($html, "data-slot-id='footer'")
+            && !\str_contains($html, 'weline-footer-slot')
+        ) {
+            return false;
+        }
+        if (\str_contains($html, 'data-widget-code="footer-container"')
+            || \str_contains($html, "data-widget-code='footer-container'")
+            || \str_contains($html, 'data-testid="footer-container"')
+            || \str_contains($html, 'wc-theme_widget_footer_container')
+        ) {
+            return false;
+        }
+
+        // Has footer destination but no host widget → treat as empty for cache gates.
+        return \preg_match(
+            '/data-slot-id=(["\'])footer\1[^>]*>\s*<\/(?:div|footer|section)>/i',
+            $html,
+        ) === 1
+            || (\str_contains($html, 'weline-footer-slot') && !\str_contains($html, 'footer-container'));
     }
 
     private function logPartialCacheDiagnostic(string $event, array $context = []): void

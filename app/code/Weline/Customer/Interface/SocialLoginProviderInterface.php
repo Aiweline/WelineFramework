@@ -54,13 +54,13 @@ interface SocialLoginProviderInterface
 
     /**
      * Template basename under
-     * `view/templates/Frontend/guide/social-login/{code}/` (without `.phtml`).
+     * `view/templates/frontend/guide/social-login/{code}/` (without `.phtml`).
      */
     public function getGuideTemplateCode(): string;
 
     /**
      * Template basename under
-     * `view/templates/Frontend/guide/social-login/{code}/` (without `.phtml`).
+     * `view/templates/frontend/guide/social-login/{code}/` (without `.phtml`).
      */
     public function getPolicyTemplateCode(): string;
 

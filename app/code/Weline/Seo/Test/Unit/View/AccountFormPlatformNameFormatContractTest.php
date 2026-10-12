@@ -11,7 +11,7 @@ final class AccountFormPlatformNameFormatContractTest extends TestCase
     public function testFormRequiresPlatformBeforePrefixedAccountName(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = $root . '/view/templates/Backend/Account/form.phtml';
+        $template = $root . '/view/templates/backend/Account/form.phtml';
         $controller = $root . '/Controller/Backend/Account.php';
 
         self::assertFileExists($template);

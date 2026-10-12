@@ -43,7 +43,7 @@ final class PageBuilderDirectHandoffContractTest extends TestCase
     public function testWebsiteHubNeverNavigatesToPageBuilderAfterCreate(): void
     {
         $source = (string)\file_get_contents(
-            BP . '/app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/index.phtml'
+            BP . '/app/code/Weline/Websites/view/templates/backend/SiteBuilderAgent/index.phtml'
         );
 
         self::assertStringContainsString("workspaceUrl.indexOf('/pagebuilder/') === -1", $source);

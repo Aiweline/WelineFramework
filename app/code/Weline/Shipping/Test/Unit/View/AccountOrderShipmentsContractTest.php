@@ -15,7 +15,7 @@ final class AccountOrderShipmentsContractTest extends TestCase
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString(
-            'Weline_Shipping::templates/Frontend/account/order-shipments.phtml',
+            'Weline_Shipping::templates/frontend/account/order-shipments.phtml',
             $source
         );
         self::assertStringContainsString('Weline_Shipping::css/account-order-shipments.css', $source);
@@ -24,7 +24,7 @@ final class AccountOrderShipmentsContractTest extends TestCase
     public function testAccountTemplateIsReadOnlyAndUsesShipmentsService(): void
     {
         $path = dirname(__DIR__, 3)
-            . '/view/templates/Frontend/account/order-shipments.phtml';
+            . '/view/templates/frontend/account/order-shipments.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('BackendOrderShipmentsService', $source);

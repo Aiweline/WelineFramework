@@ -16,7 +16,7 @@ final class EnterpriseCloudflareOauthPostContractTest extends TestCase
 {
     public function testEnterpriseDomainsPanelPostsOauthConnect(): void
     {
-        $path = BP . 'app/code/Weline/Mail/view/templates/Backend/Index/enterprise.phtml';
+        $path = BP . 'app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
 

@@ -15,7 +15,7 @@ final class NotificationPaginationContractTest extends TestCase
     {
         $service = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/NotificationService.php');
         $template = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Notification/index.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Notification/index.phtml'
         );
 
         self::assertStringContainsString('->getPaginationState()', $service);

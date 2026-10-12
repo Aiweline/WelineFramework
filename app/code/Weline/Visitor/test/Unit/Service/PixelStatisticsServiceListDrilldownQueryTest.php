@@ -70,7 +70,7 @@ class PixelStatisticsServiceListDrilldownQueryTest extends TestCore
     public function testDetailTemplateWiresChannelDrilldownToList(): void
     {
         $tpl = (string)\file_get_contents(
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/PixelDashboard/detail.phtml'
+            BP . '/app/code/Weline/Visitor/view/templates/backend/PixelDashboard/detail.phtml'
         );
         self::assertStringContainsString('$channel_rows', $tpl);
         self::assertStringContainsString('$channelRows', $tpl);
@@ -88,7 +88,7 @@ class PixelStatisticsServiceListDrilldownQueryTest extends TestCore
     public function testIndexTemplateWiresChannelDrilldownToList(): void
     {
         $tpl = (string)\file_get_contents(
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/PixelDashboard/index.phtml'
+            BP . '/app/code/Weline/Visitor/view/templates/backend/PixelDashboard/index.phtml'
         );
         self::assertStringContainsString('buildListDrilldownQuery', $tpl);
         self::assertStringContainsString("'channel_code' => \$code", $tpl);

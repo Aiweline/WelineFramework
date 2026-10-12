@@ -11,7 +11,7 @@ final class RoleAssignTreeSyncContractTest extends TestCase
     public function testMenuSyncSelectsOnlyLeavesSoAncestorGrantsDoNotRecheckAppStore(): void
     {
         $template = (string)\file_get_contents(
-            BP . '/app/code/Weline/Acl/view/templates/Backend/Acl/Role/assign.phtml'
+            BP . '/app/code/Weline/Acl/view/templates/backend/Acl/Role/assign.phtml'
         );
 
         self::assertStringContainsString('function isTreeLeaf(tree, id)', $template);
@@ -26,7 +26,7 @@ final class RoleAssignTreeSyncContractTest extends TestCase
     public function testAssignTreeCssKillsJstreeLightSpriteInDarkMode(): void
     {
         $template = (string)\file_get_contents(
-            BP . '/app/code/Weline/Acl/view/templates/Backend/Acl/Role/assign.phtml'
+            BP . '/app/code/Weline/Acl/view/templates/backend/Acl/Role/assign.phtml'
         );
 
         self::assertStringContainsString('background-image: none !important;', $template);

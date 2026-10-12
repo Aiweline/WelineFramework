@@ -31,7 +31,7 @@ class AiTranslationExportService
                 'modules' => [],
                 'errors' => [],
                 'message' => (string)__(
-                    'locale %{1} 仅保留在系统词典，不写回模块 CSV（模块 CSV 仅允许 zh_Hans_CN / en_US）。',
+                    'locale %{1} 仅保留在系统词典，不写回模块 CSV（官方框架模块 Git 瘦身：模块 CSV 仅 zh_Hans_CN / en_US）。',
                     [$localeCode],
                 ),
             ];
@@ -214,7 +214,7 @@ class AiTranslationExportService
                 'csv_file' => '',
                 'errors' => [],
                 'message' => (string)__(
-                    'locale %{1} 仅保留在系统词典，不写回模块 CSV（模块 CSV 仅允许 zh_Hans_CN / en_US）。',
+                    'locale %{1} 仅保留在系统词典，不写回模块 CSV（官方框架模块 Git 瘦身：模块 CSV 仅 zh_Hans_CN / en_US）。',
                     [$localeCode],
                 ),
             ];
@@ -381,7 +381,7 @@ class AiTranslationExportService
             $empty['success'] = true;
             $empty['module'] = $moduleName;
             $empty['message'] = (string)__(
-                'locale %{1} 仅保留在系统词典，不写回模块 CSV（模块 CSV 仅允许 zh_Hans_CN / en_US）。',
+                'locale %{1} 仅保留在系统词典，不写回模块 CSV（官方框架模块 Git 瘦身：模块 CSV 仅 zh_Hans_CN / en_US）。',
                 [$localeCode],
             );
 

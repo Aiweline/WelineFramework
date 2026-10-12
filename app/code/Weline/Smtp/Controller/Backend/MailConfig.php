@@ -53,6 +53,6 @@ class MailConfig extends BackendController
         $this->assign('scope_store_code', (string)($resolved['store_code'] ?? ''));
         $this->assign('scope_channel_code', (string)($resolved['channel_code'] ?? ''));
 
-        return $this->fetch('Weline_Smtp::Backend/MailConfig');
+        return $this->fetch('Weline_Smtp::backend/MailConfig');
     }
 }

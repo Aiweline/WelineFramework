@@ -60,7 +60,7 @@ if ($selected === null && $vendorsRuntime !== []) {
 <link rel="stylesheet" href="<?= $h($cmThemeAbyss) ?>">
 <div class="tvp-root" data-testid="tracking-vendor-admin" data-layout="split" data-variant-winner="2">
     <div class="tvp-topbar" data-testid="tv-topbar">
-        <?= $this->fetch('Weline_Visitor::templates/Backend/TrackingVendor/partials/scope-toolbar.phtml') ?>
+        <?= $this->fetch('Weline_Visitor::templates/backend/TrackingVendor/partials/scope-toolbar.phtml') ?>
         <div class="tvp-toolbar" data-testid="tv-toolbar">
             <span class="tvp-field__hint" id="tv-config-revision" data-testid="tv-config-revision" title="当前配置范围与事件配置版本（编辑后 bump，沙盒/助手对齐）" style="align-self:center;white-space:nowrap;max-width:min(52vw,420px);overflow:hidden;text-overflow:ellipsis;">
                 <strong data-tv-scope-version-label><?= $h(

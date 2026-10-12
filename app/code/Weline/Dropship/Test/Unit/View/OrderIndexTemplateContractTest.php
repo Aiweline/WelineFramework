@@ -12,7 +12,7 @@ final class OrderIndexTemplateContractTest extends TestCase
     public function testOrderIndexIsHumanReadable(): void
     {
         $root = dirname(__DIR__, 3);
-        $tpl = (string)file_get_contents($root . '/view/templates/Backend/Order/index.phtml');
+        $tpl = (string)file_get_contents($root . '/view/templates/backend/Order/index.phtml');
         $ctrl = (string)file_get_contents($root . '/Controller/Backend/Order.php');
         $mod = (string)file_get_contents($root . '/view/statics/backend/weline.modules.js');
 

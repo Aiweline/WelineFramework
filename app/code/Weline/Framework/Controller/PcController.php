@@ -28,6 +28,7 @@ use Weline\Framework\Security\Token;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
+use Weline\Framework\View\ViewAreaTemplatePath;
 use Weline\Framework\DataObject\DataObject;
 use ReflectionObject;
 
@@ -465,25 +466,13 @@ class PcController extends Core
                 return $this->fetchTemplateWithEvents($fileName);
             }
         }
-        $controller_class_name = $this->request->getRouterData('class/controller_name');
-        if ($fileName === '') {
-            $methodName = (string)$this->request->getRouterData('class/method');
-            // 框架规则：*Index 方法默认渲染 index 模板，而不是 getIndex/postIndex 模板文件。
-            // 例如 getIndex() -> templates/xxx/index.phtml
-            if (\preg_match('/^(get|post|put|delete|patch)?index$/i', $methodName)) {
-                $fileName = $controller_class_name . DS . 'index';
-            } elseif (in_array(strtoupper($methodName), $this->request::METHODS)) {
-                $fileName = $controller_class_name;
-            } else {
-                $fileName = $controller_class_name . '/' . $methodName;
-            }
-        } elseif (is_bool(strpos($fileName, '/')) || is_bool(strpos($fileName, '\\'))) {
-            $fileName = $controller_class_name . DS . $fileName;
-        } else {
-            $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
-        }
 
-        return $this->fetchTemplateWithEvents('templates' . DS . $fileName);
+        return $this->fetchTemplateWithEvents(
+            ViewAreaTemplatePath::joinTemplates(
+                $this->resolveViewTemplateArea(),
+                $this->buildImplicitTemplateRelativePath($fileName)
+            )
+        );
     }
 
     protected function fetchThemeTemplate(string $fileName, array $data = []): mixed
@@ -497,24 +486,70 @@ class PcController extends Core
                 return $this->fetchTemplateWithEvents($fileName);
             }
         }
-        $controller_class_name = $this->request->getRouterData('class/controller_name');
-        if ($fileName === '') {
-            $methodName = (string)$this->request->getRouterData('class/method');
-            // 与 fetch() 保持一致：*Index 方法默认渲染 index 模板。
-            if (\preg_match('/^(get|post|put|delete|patch)?index$/i', $methodName)) {
-                $fileName = $controller_class_name . DS . 'index';
-            } elseif (in_array(strtoupper($methodName), $this->request::METHODS)) {
-                $fileName = $controller_class_name;
-            } else {
-                $fileName = $controller_class_name . '/' . $methodName;
+
+        return $this->fetchTemplateWithEvents(
+            ViewAreaTemplatePath::joinThemes(
+                $this->resolveViewTemplateArea(),
+                $this->buildImplicitTemplateRelativePath($fileName)
+            )
+        );
+    }
+
+    /**
+     * 请求/控制器前|后端 → templates 下一层区段名。
+     */
+    protected function resolveViewTemplateArea(): string
+    {
+        try {
+            if (RequestContext::isInitialized() && RequestContext::isBackendArea()) {
+                return ViewAreaTemplatePath::AREA_BACKEND;
             }
-        } elseif (is_bool(strpos($fileName, '/')) || is_bool(strpos($fileName, '\\'))) {
-            $fileName = $controller_class_name . DS . $fileName;
-        } else {
-            $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
+        } catch (\Throwable) {
+        }
+        if ($this instanceof \Weline\Framework\App\Controller\BackendController) {
+            return ViewAreaTemplatePath::AREA_BACKEND;
+        }
+        try {
+            if (\method_exists($this->request, 'isBackend') && $this->request->isBackend()) {
+                return ViewAreaTemplatePath::AREA_BACKEND;
+            }
+        } catch (\Throwable) {
         }
 
-        return $this->fetchTemplateWithEvents('themes' . DS . $fileName);
+        return ViewAreaTemplatePath::AREA_FRONTEND;
+    }
+
+    /**
+     * 隐式模板短路径（不含 templates/{area}/）：由 controller_name 剥区段后 + method 规则拼出。
+     */
+    protected function buildImplicitTemplateRelativePath(string $fileName = ''): string
+    {
+        $controllerShort = ViewAreaTemplatePath::stripLeadingAreaSegment(
+            (string)$this->request->getRouterData('class/controller_name')
+        );
+        if ($fileName === '') {
+            $methodName = (string)$this->request->getRouterData('class/method');
+            // 框架规则：*Index 方法默认渲染 index 模板，而不是 getIndex/postIndex 模板文件。
+            if (\preg_match('/^(get|post|put|delete|patch)?index$/i', $methodName)) {
+                return $controllerShort === '' ? 'index' : $controllerShort . '/' . 'index';
+            }
+            if (\in_array(\strtoupper($methodName), $this->request::METHODS, true)) {
+                return $controllerShort;
+            }
+
+            return $controllerShort === ''
+                ? $methodName
+                : $controllerShort . '/' . $methodName;
+        }
+        if (\is_bool(\strpos($fileName, '/')) || \is_bool(\strpos($fileName, '\\'))) {
+            return $controllerShort === '' ? $fileName : $controllerShort . '/' . $fileName;
+        }
+
+        $methodName = (string)$this->request->getRouterData('class/method');
+
+        return $controllerShort === ''
+            ? $methodName . '/' . $fileName
+            : $controllerShort . '/' . $methodName . '/' . $fileName;
     }
 
     /**

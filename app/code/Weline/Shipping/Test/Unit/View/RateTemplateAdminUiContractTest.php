@@ -12,7 +12,7 @@ final class RateTemplateAdminUiContractTest extends TestCase
     private function template(): string
     {
         return (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/RateTemplate/index.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/RateTemplate/index.phtml'
         );
     }
 

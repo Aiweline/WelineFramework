@@ -70,10 +70,10 @@ final class MultiWarehouseSplitShippingContractTest extends TestCase
         $ctrl = (string)file_get_contents(dirname(__DIR__, 3) . '/Controller/Backend/ShippingService.php');
         self::assertStringContainsString('bindWarehouseOrigin', $ctrl);
         self::assertStringContainsString('copyDefaultLanes', $ctrl);
-        $view = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/ShippingService/index.phtml');
+        $view = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/ShippingService/index.phtml');
         self::assertStringContainsString('copy-default-lanes-btn', $view);
         self::assertStringContainsString('仓 ↔ 发货地址绑定', $view);
-        $rate = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/RateTemplate/index.phtml');
+        $rate = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/RateTemplate/index.phtml');
         self::assertStringContainsString('按距离', $rate);
         self::assertStringContainsString('相加', $rate);
     }

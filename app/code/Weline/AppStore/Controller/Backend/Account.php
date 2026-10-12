@@ -37,7 +37,7 @@ class Account extends BackendController
         $this->assign('title', __('账户绑定'));
         $this->assign('page_title', __('账户绑定'));
 
-        return $this->fetch('Weline_AppStore::templates/Backend/Account/index.phtml');
+        return $this->fetch('Weline_AppStore::templates/backend/Account/index.phtml');
     }
 
     /**

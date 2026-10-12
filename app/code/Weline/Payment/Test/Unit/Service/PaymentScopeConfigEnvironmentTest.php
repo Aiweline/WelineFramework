@@ -81,7 +81,7 @@ final class PaymentScopeConfigEnvironmentTest extends TestCase
 
         $general = (string) file_get_contents($root . '/general.phtml');
         $assets = (string) file_get_contents($root . '/assets.phtml');
-        $index = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Method/index.phtml');
+        $index = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Method/index.phtml');
 
         self::assertStringNotContainsString('payment/general/default_environment', $general);
         self::assertStringNotContainsString('payment/asset/credit/environment', $assets);

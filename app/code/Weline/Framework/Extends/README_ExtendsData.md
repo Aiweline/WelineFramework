@@ -152,7 +152,7 @@ $extensions = ExtendsData::getExtensionsBySourceModule('Weline_Sticker');
 
 ```php
 // 根据文件路径查找扩展信息
-$extension = ExtendsData::findExtensionByFilePath('view/templates/Backend/index.phtml');
+$extension = ExtendsData::findExtensionByFilePath('view/templates/backend/index.phtml');
 
 if ($extension) {
     echo "找到扩展：{$extension['source_module']} 扩展了 {$extension['target_module']}";
@@ -221,7 +221,7 @@ foreach ($targetModules as $targetModule => $extensions) {
 use Weline\Framework\Extends\ExtendsData;
 
 // 检查特定文件是否有 Sticker 扩展
-$extension = ExtendsData::findExtensionByFilePath('Weline/Demo/view/templates/Backend/index.phtml');
+$extension = ExtendsData::findExtensionByFilePath('Weline/Demo/view/templates/backend/index.phtml');
 
 if ($extension && ($extension['is_sticker_extension'] ?? false)) {
     echo "该文件有 Sticker 扩展\n";

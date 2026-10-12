@@ -9,7 +9,7 @@ notify_pm: true
 
 ## #4 已落地（源码 + 活页）
 
-文件：`Mail/view/templates/Backend/Index/enterprise.phtml`
+文件：`Mail/view/templates/backend/Index/enterprise.phtml`
 
 - mailbox 分支 **零** `<details>` / `<summary>`（开通账号 / 域名页的 details 不在 mailbox 主路径）。
 - 默认态：工具条「写邮件」深链 `?compose=1#mail-compose`；工具条与 workspace 之间 **无** 折叠写信条 / 「展开写信」。

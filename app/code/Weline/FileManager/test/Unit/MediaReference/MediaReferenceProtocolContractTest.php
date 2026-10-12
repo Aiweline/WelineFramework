@@ -133,7 +133,7 @@ final class MediaReferenceProtocolContractTest extends TestCase
         self::assertStringContainsString('data-media-identity-root="catalog"', $catalog);
 
         $manager = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/MediaManager/view/templates/Backend/Manager/manager.phtml'
+            dirname(__DIR__, 4) . '/MediaManager/view/templates/backend/Manager/manager.phtml'
         );
         $managerJs = (string)file_get_contents(
             dirname(__DIR__, 4) . '/MediaManager/view/statics/js/manager.js'
@@ -153,7 +153,7 @@ final class MediaReferenceProtocolContractTest extends TestCase
         self::assertStringContainsString('appendWidgetMediaIdentityParams', $widgetParam);
 
         $backendConfig = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Backend/view/templates/Backend/Config/index.phtml'
+            dirname(__DIR__, 4) . '/Backend/view/templates/backend/Config/index.phtml'
         );
         self::assertStringContainsString('identity_root="config"', $backendConfig);
         self::assertStringContainsString('identity_code="logo_dark"', $backendConfig);
@@ -166,7 +166,7 @@ final class MediaReferenceProtocolContractTest extends TestCase
         self::assertStringContainsString('identity_scope=', $blogForm);
 
         $eavForm = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Eav/view/templates/Backend/Attribute/form.phtml'
+            dirname(__DIR__, 4) . '/Eav/view/templates/backend/Attribute/form.phtml'
         );
         self::assertStringContainsString('identity_root=eav', $eavForm);
         self::assertStringContainsString('identity_scope=', $eavForm);
@@ -180,7 +180,7 @@ final class MediaReferenceProtocolContractTest extends TestCase
         self::assertStringContainsString("'identity_scope' => \$wscIdentityScope", $systemConfig);
 
         $backendAvatar = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Backend/view/templates/Backend/Profile/avatar.phtml'
+            dirname(__DIR__, 4) . '/Backend/view/templates/backend/Profile/avatar.phtml'
         );
         self::assertStringContainsString('Weline_FileManager::js/w-scope.js', $backendAvatar);
         self::assertStringContainsString("'identity' => \$identityPath", $backendAvatar);

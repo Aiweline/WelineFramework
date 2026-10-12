@@ -52,7 +52,7 @@ final class GatewayReleaseWorkflowCoverageTest extends TestCase
             'app/code/Weline/Server/Security/AttackDetector.php',
             'app/code/Weline/Server/Service/WlsPanelSecurityDataService.php',
             'app/code/Weline/Server/Controller/Backend/WlsPanel.php',
-            'app/code/Weline/Server/view/templates/Backend/WlsPanel/index.phtml',
+            'app/code/Weline/Server/view/templates/backend/WlsPanel/index.phtml',
             'app/code/Weline/Framework/System/Process/Processer.php',
             'app/code/Weline/Framework/System/Process/bin/posix_detached_spawn.php',
             'app/code/Weline/Server/Test/Session/SessionServerIntegrationTest.php',

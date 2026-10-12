@@ -217,7 +217,7 @@ $mockExtendsData = [
 
 // 模拟路径数据
 $testPaths = [
-    'extends/module/Weline_Sticker/Weline_Demo/view/templates/Backend/index.phtml',
+    'extends/module/Weline_Sticker/Weline_Demo/view/templates/backend/index.phtml',
     'extends/theme/default/Weline_Sticker/Weline_Admin/view/templates/index.phtml'
 ];
 ```

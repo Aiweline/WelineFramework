@@ -55,7 +55,7 @@ final class PixelEventVendorContractTest extends TestCase
             '/isSystemVendorCode\(\$code\)[\s\S]{0,40}return\s+true;/',
             $src
         );
-        $tpl = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/index.phtml');
+        $tpl = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/index.phtml');
         self::assertStringContainsString('data-locked="1"', $tpl);
         self::assertStringContainsString('系统像素默认启用且不可关闭', $tpl);
     }
@@ -89,7 +89,7 @@ final class PixelEventVendorContractTest extends TestCase
 
     public function testAdminSplitLayoutTemplateExists(): void
     {
-        $path = \dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/index.phtml';
+        $path = \dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/index.phtml';
         self::assertFileExists($path);
         $src = (string)\file_get_contents($path);
         self::assertStringContainsString('data-variant-winner="2"', $src);
@@ -161,7 +161,7 @@ final class PixelEventVendorContractTest extends TestCase
         self::assertStringContainsString('function postAutosave', $tv);
         self::assertStringContainsString('payloadFromSaveRequest', $tv);
         self::assertStringContainsString("'tab' => \$uiTab", $tv);
-        $src = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/index.phtml');
+        $src = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/index.phtml');
         self::assertStringContainsString('autosave_url', $src);
         self::assertStringContainsString('scheduleAutosave', $src);
         self::assertStringContainsString('tvp_ui_tab_v1', $src);

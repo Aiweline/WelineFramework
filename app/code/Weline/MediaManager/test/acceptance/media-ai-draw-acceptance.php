@@ -228,7 +228,7 @@ try {
     record($results, $failed, 'MM-AI-07', '批量生成返回 2 张 preview', false, $e->getMessage());
 }
 
-$phtml = (string)@file_get_contents($root . '/app/code/Weline/MediaManager/view/templates/Backend/Manager/manager.phtml');
+$phtml = (string)@file_get_contents($root . '/app/code/Weline/MediaManager/view/templates/backend/Manager/manager.phtml');
 record(
     $results,
     $failed,

@@ -51,7 +51,7 @@ final class AttributeGroupListContractTest extends TestCase
     public function testGroupIndexTemplateUsesModernPageShell(): void
     {
         $source = (string)file_get_contents(
-            self::moduleRoot() . '/view/templates/Backend/Attribute/Group/index.phtml',
+            self::moduleRoot() . '/view/templates/backend/Attribute/Group/index.phtml',
         );
 
         self::assertStringContainsString('w-eav-manager-page', $source);

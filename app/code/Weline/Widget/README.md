@@ -72,7 +72,7 @@ Weline_Widget/
 │       ├── Widget.php             # 部件管理控制器
 │       └── Preview.php            # AJAX 预览控制器
 ├── view/
-│   ├── templates/Backend/
+│   ├── templates/backend/
 │   │   ├── Editor/
 │   │   │   └── index.phtml        # 编辑器主界面
 │   │   └── Widget/

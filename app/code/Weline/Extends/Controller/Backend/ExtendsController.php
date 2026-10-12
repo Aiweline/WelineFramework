@@ -176,7 +176,7 @@ class ExtendsController extends BackendController
                 MessageManager::warning(__('请指定模块名'));
                 if ($this->request->isAjax() || $this->request->getGet('isIframe')) {
                     $this->assign('error', __('请指定模块名'));
-                    return $this->fetch('templates/Backend/Extends/error.phtml');
+                    return $this->fetch('templates/backend/Extends/error.phtml');
                 }
                 $this->redirect('*/index');
                 return;

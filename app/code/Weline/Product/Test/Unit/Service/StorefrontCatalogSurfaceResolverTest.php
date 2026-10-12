@@ -7,29 +7,37 @@ namespace Weline\Product\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Product\Service\StorefrontCatalogSurfaceResolver;
+use Weline\Product\Service\StorefrontCatalogSurfaceThemeCopyLoader;
 
 final class StorefrontCatalogSurfaceResolverTest extends TestCase
 {
     private StorefrontCatalogSurfaceResolver $resolver;
 
+    /** Neutral-only resolver: never loads design theme packs. */
+    private StorefrontCatalogSurfaceResolver $neutralResolver;
+
     protected function setUp(): void
     {
         $this->resolver = new StorefrontCatalogSurfaceResolver();
+        $this->neutralResolver = new StorefrontCatalogSurfaceResolver(
+            new StorefrontCatalogSurfaceThemeCopyLoader(static fn (): ?string => null),
+        );
     }
 
     public function testProductsKeepTheProductListSurface(): void
     {
-        $surface = $this->resolver->resolve('/products?sort=price_asc', 'zh_Hans_CN');
+        $surface = $this->neutralResolver->resolve('/products?sort=price_asc', 'zh_Hans_CN');
 
         self::assertSame('products', $surface['code']);
         self::assertSame('products', $surface['page_type']);
         self::assertSame('products', $surface['public_route']);
         self::assertSame('全部商品', $surface['heading']);
+        self::assertStringNotContainsString('汉服', (string)$surface['lede']);
     }
 
     public function testLocalePrefixedCategoriesUseCategorySurfaceAndEnglishCopy(): void
     {
-        $surface = $this->resolver->resolve('/en_US/categories?sort=name_asc');
+        $surface = $this->resolver->resolve('/en_US/categories?sort=name_asc', '', 'hanfu');
 
         self::assertSame('categories', $surface['code']);
         self::assertSame('category', $surface['page_type']);
@@ -39,7 +47,7 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
 
     public function testArabicBestSellersUseReviewedEnglishFallbackCopy(): void
     {
-        $surface = $this->resolver->resolve('/ar_SA/best-sellers');
+        $surface = $this->resolver->resolve('/ar_SA/best-sellers', '', 'hanfu');
 
         self::assertSame('best_sellers', $surface['code']);
         self::assertSame('best-sellers', $surface['public_route']);
@@ -49,7 +57,7 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
 
     public function testCurrencyAndLocalePrefixedProductsResolve(): void
     {
-        $surface = $this->resolver->resolveSupported('/EUR/en_US/products');
+        $surface = $this->resolver->resolveSupported('/EUR/en_US/products', '', 'hanfu');
 
         self::assertNotNull($surface);
         self::assertSame('products', $surface['code']);
@@ -57,7 +65,10 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
         self::assertSame('en_US', $surface['locale']);
         self::assertSame('Shop All Hanfu | Ming & Tang', $surface['seo_title']);
         self::assertNotSame('', $surface['seo_keywords'] ?? '');
-        self::assertSame(StorefrontCatalogSurfaceResolver::SHARE_IMAGE, $surface['share_image'] ?? null);
+        self::assertSame(
+            '/pub/media/catalog/hanfu/r2/homepage/taoyuan-qingmeng.webp',
+            $surface['share_image'] ?? null,
+        );
     }
 
     public function testUnsupportedRoutesDoNotLeakCatalogSeo(): void
@@ -95,11 +106,21 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
         $surface = $this->resolver->resolve('/products', 'en_US', 'daocharms');
 
         self::assertSame('products', $surface['code']);
-        self::assertSame('Shop Ritual Objects', $surface['heading']);
-        self::assertSame('Shop Ritual Objects', $surface['seo_title']);
+        self::assertSame('Objects for a quieter everyday.', $surface['heading']);
+        self::assertSame('Objects for a quieter everyday. | DaoCharms', $surface['seo_title']);
         self::assertStringNotContainsString('Hanfu', $surface['heading']);
         self::assertStringNotContainsString('Hanfu', $surface['seo_title']);
         self::assertSame('', $surface['share_image'] ?? null);
+    }
+
+    public function testDaocharmsNewArrivalsPresentationComesFromThemePack(): void
+    {
+        $surface = $this->resolver->resolve('/new-arrivals', 'en_US', 'daocharms');
+        $presentation = is_array($surface['presentation'] ?? null) ? $surface['presentation'] : [];
+
+        self::assertSame(3, $presentation['card_limit'] ?? null);
+        self::assertFalse((bool)($presentation['show_filters'] ?? true));
+        self::assertSame('New to your everyday.', $surface['heading']);
     }
 
     public function testGroceryWebsiteUsesNeighborhoodShelfCopyWithoutHanfuShareImage(): void
@@ -115,11 +136,34 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
         self::assertSame('', $surface['share_image'] ?? null);
     }
 
-    public function testDefaultWebsiteKeepsHanfuCopyWhenWebsiteCodeEmpty(): void
+    public function testEmptyWebsiteWithoutThemePackUsesNeutralCopy(): void
     {
-        $surface = $this->resolver->resolve('/products', 'en_US', '');
+        $surface = $this->neutralResolver->resolve('/products', 'en_US', '');
+
+        self::assertSame('Shop All Products', $surface['heading']);
+        self::assertSame('', $surface['share_image'] ?? null);
+        self::assertStringNotContainsString('Hanfu', $surface['heading']);
+    }
+
+    public function testHanfuWebsiteCodeLoadsThemePackCopy(): void
+    {
+        $surface = $this->resolver->resolve('/products', 'en_US', 'hanfu');
 
         self::assertSame('Shop All Hanfu', $surface['heading']);
-        self::assertSame(StorefrontCatalogSurfaceResolver::SHARE_IMAGE, $surface['share_image'] ?? null);
+        self::assertSame(
+            '/pub/media/catalog/hanfu/r2/homepage/taoyuan-qingmeng.webp',
+            $surface['share_image'] ?? null,
+        );
+    }
+
+    public function testProductSourceForbidsWebsiteSurfaceConstants(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/StorefrontCatalogSurfaceResolver.php'
+        );
+        self::assertStringNotContainsString('SURFACES_DAOCHARMS', $source);
+        self::assertStringNotContainsString('SURFACES_GROCERY', $source);
+        self::assertStringNotContainsString("websiteCode === 'daocharms'", $source);
+        self::assertStringNotContainsString('SHARE_IMAGE_BY_WEBSITE', $source);
     }
 }

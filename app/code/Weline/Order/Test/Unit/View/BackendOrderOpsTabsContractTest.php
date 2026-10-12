@@ -11,7 +11,7 @@ final class BackendOrderOpsTabsContractTest extends TestCase
     public function testEditUsesAsyncOpsTabsNotPlainLinks(): void
     {
         $src = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Order/edit.phtml'
         );
         self::assertNotSame('', $src);
         self::assertStringContainsString('data-testid="order-edit-ops-tabs"', $src);
@@ -34,9 +34,9 @@ final class BackendOrderOpsTabsContractTest extends TestCase
             dirname(__DIR__, 3) . '/Controller/Backend/Order.php'
         );
         self::assertNotSame('', $src);
-        self::assertStringContainsString("->template('Weline_Order::templates/Backend/Order/panel/shipment.phtml')", $src);
-        self::assertStringContainsString("->template('Weline_Order::templates/Backend/Order/panel/refund.phtml')", $src);
-        self::assertStringContainsString("->template('Weline_Order::templates/Backend/Order/panel/comms.phtml')", $src);
-        self::assertStringNotContainsString("->fetch('Weline_Order::templates/Backend/Order/panel/", $src);
+        self::assertStringContainsString("->template('Weline_Order::templates/backend/Order/panel/shipment.phtml')", $src);
+        self::assertStringContainsString("->template('Weline_Order::templates/backend/Order/panel/refund.phtml')", $src);
+        self::assertStringContainsString("->template('Weline_Order::templates/backend/Order/panel/comms.phtml')", $src);
+        self::assertStringNotContainsString("->fetch('Weline_Order::templates/backend/Order/panel/", $src);
     }
 }

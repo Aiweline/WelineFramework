@@ -10,7 +10,7 @@ final class CdnSystemConfigPageContractTest extends TestCase
 {
     public function testConfigTemplateEmbedsCdnBackendSystemConfig(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Config/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Config/index.phtml';
         self::assertFileExists($path);
         $html = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="cdn-system-config"', $html);

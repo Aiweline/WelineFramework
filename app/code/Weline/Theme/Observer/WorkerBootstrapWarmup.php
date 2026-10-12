@@ -397,6 +397,28 @@ class WorkerBootstrapWarmup implements ObserverInterface
     }
 
     /**
+     * Idle deferred warmup: provider paths whose rank is in [minRank, maxRank].
+     * Rank 0 = home/locale roots; 1 = category; 2 = product; 3 = policy/other; 4 = blog/long-tail.
+     *
+     * @return list<string>
+     */
+    public function getFpcWarmupPathsByRanks(int $minRank = 1, int $maxRank = 4): array
+    {
+        $minRank = \max(0, \min(4, $minRank));
+        $maxRank = \max($minRank, \min(4, $maxRank));
+        $out = [];
+        foreach ($this->resolveFpcWarmupPaths() as $path) {
+            $rank = $this->fpcWarmupPathRank($path);
+            if ($rank < $minRank || $rank > $maxRank) {
+                continue;
+            }
+            $out[] = $path;
+        }
+
+        return $out;
+    }
+
+    /**
      * @return list<string>
      */
     private function resolveFpcWarmupHosts(): array
@@ -505,20 +527,37 @@ class WorkerBootstrapWarmup implements ObserverInterface
         $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
         $trimmed = \trim($pathOnly, '/');
         if ($trimmed === ''
+            || $pathOnly === '/products'
             || \preg_match('/^(?:[A-Z]{3}\/)?[a-z]{2}(?:_[A-Za-z]+){1,2}$/', $trimmed) === 1
         ) {
             return 0;
         }
 
-        if (\str_contains($pathOnly, '/catalog/category/')) {
+        // P1 categories (rewrite + legacy catalog routes).
+        if ($pathOnly === '/categories'
+            || \str_starts_with($pathOnly, '/category/')
+            || \str_contains($pathOnly, '/catalog/category/')
+        ) {
             return 1;
         }
 
+        // P2 product detail (non-view listing/detail slug routes).
         if (\str_contains($pathOnly, '/product/') && !\str_contains($pathOnly, '/product/view')) {
             return 2;
         }
 
-        if (\str_contains($pathOnly, '/product/view')) {
+        // P3 policy / CMS-like storefront pages.
+        if (\str_starts_with($pathOnly, '/policy')
+            || $pathOnly === '/about'
+            || \str_starts_with($pathOnly, '/faq')
+        ) {
+            return 3;
+        }
+
+        // P4 blog / product view / long-tail.
+        if (\str_starts_with($pathOnly, '/blog')
+            || \str_contains($pathOnly, '/product/view')
+        ) {
             return 4;
         }
 

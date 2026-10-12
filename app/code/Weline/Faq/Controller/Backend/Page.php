@@ -69,7 +69,7 @@ final class Page extends BackendController
         $this->assign('new_url', $this->getUrl('faq/backend/page/new'));
         $this->assign('listing_url', $this->getUrl('faq/backend/page/listing'));
 
-        return $this->fetch('Weline_Faq::templates/Backend/Page/listing.phtml');
+        return $this->fetch('Weline_Faq::templates/backend/Page/listing.phtml');
     }
 
     #[Acl('Weline_Faq::page_new', '新建帮助页面', 'plus', '创建帮助中心草稿页')]
@@ -142,7 +142,7 @@ final class Page extends BackendController
             'website_id' => (string)($page['website_id'] ?? ''),
         ]));
 
-        return $this->fetch('Weline_Faq::templates/Backend/Page/edit.phtml');
+        return $this->fetch('Weline_Faq::templates/backend/Page/edit.phtml');
     }
 
     /**

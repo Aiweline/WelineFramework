@@ -11,7 +11,7 @@ final class BackendOrderSummaryCompactContractTest extends TestCase
     public function testEditSummaryUsesCompactMultiColumnGridNotWideTables(): void
     {
         $src = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Order/edit.phtml'
         );
         self::assertNotSame('', $src);
         self::assertStringContainsString('data-testid="order-edit-summary-grid"', $src);

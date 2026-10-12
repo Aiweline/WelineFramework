@@ -35,7 +35,7 @@ $filterService = ObjectManager::getInstance(FilterService::class);
 $result = $filterService->getFilterResult($categoryId, $productIds, $filterParams);
 
 // 渲染筛选模板
-echo $this->fetch('WeShop_Filters::Frontend/filters.phtml');
+echo $this->fetch('WeShop_Filters::frontend/filters.phtml');
 ?>
 ```
 

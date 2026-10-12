@@ -57,7 +57,7 @@ final class LanguageSupportRequestService
         $profile = $this->customerProfile();
         [$prefillFirst, $prefillLast] = $this->splitDisplayName($profile['name']);
         $html = (string)$this->template->fetchModuleThemeHtml(
-            'Weline_I18n::templates/Frontend/language-support-request.phtml',
+            'Weline_I18n::templates/frontend/language-support-request.phtml',
             [
                 'form_id' => 'weline-language-request-' . \bin2hex(\random_bytes(6)),
                 'prefill_first_name' => $prefillFirst,

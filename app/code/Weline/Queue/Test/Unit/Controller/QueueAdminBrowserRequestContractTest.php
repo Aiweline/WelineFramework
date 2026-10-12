@@ -10,9 +10,9 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
 {
     /** @var array<string,string> */
     private const BROWSER_SOURCES = [
-        'queue-list' => 'view/templates/Backend/Queue/index.phtml',
-        'queue-form' => 'view/templates/Backend/Queue/form.phtml',
-        'type-list' => 'view/templates/Backend/Type/index.phtml',
+        'queue-list' => 'view/templates/backend/Queue/index.phtml',
+        'queue-form' => 'view/templates/backend/Queue/form.phtml',
+        'type-list' => 'view/templates/backend/Type/index.phtml',
         'legacy-form-wizard' => 'view/statics/backend/js/pages/form-wizard.init.js',
     ];
 
@@ -44,9 +44,9 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
     public function testEveryInteractiveQueueAdminTemplateLoadsTheDedicatedResource(): void
     {
         foreach ([
-            'queue-list' => 'view/templates/Backend/Queue/index.phtml',
-            'queue-form' => 'view/templates/Backend/Queue/form.phtml',
-            'type-list' => 'view/templates/Backend/Type/index.phtml',
+            'queue-list' => 'view/templates/backend/Queue/index.phtml',
+            'queue-form' => 'view/templates/backend/Queue/form.phtml',
+            'type-list' => 'view/templates/backend/Type/index.phtml',
         ] as $label => $relativePath) {
             $source = $this->removePhpBlocks($this->readModuleFile($relativePath));
             self::assertMatchesRegularExpression(
@@ -60,21 +60,21 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
     public function testTemplatesInvokeOnlyTheirPublishedQueueAdminOperations(): void
     {
         $queueList = $this->removePhpBlocks(
-            $this->readModuleFile('view/templates/Backend/Queue/index.phtml')
+            $this->readModuleFile('view/templates/backend/Queue/index.phtml')
         );
         foreach (['snapshot', 'action', 'batchAction'] as $operation) {
             self::assertStringContainsString("queueAdminCall('" . $operation . "'", $queueList);
         }
 
         $queueForm = $this->removePhpBlocks(
-            $this->readModuleFile('view/templates/Backend/Queue/form.phtml')
+            $this->readModuleFile('view/templates/backend/Queue/form.phtml')
         );
         foreach (['save', 'searchTypes', 'typeAttributes', 'resolveAttributeDependence'] as $operation) {
             self::assertStringContainsString("queueAdminCall('" . $operation . "'", $queueForm);
         }
 
         $typeList = $this->removePhpBlocks(
-            $this->readModuleFile('view/templates/Backend/Type/index.phtml')
+            $this->readModuleFile('view/templates/backend/Type/index.phtml')
         );
         self::assertStringContainsString('api.setTypeEnabled(', $typeList);
     }
@@ -82,7 +82,7 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
     public function testDynamicAttributeHtmlIsSanitizedAndLegacyScriptsAreNeverExecuted(): void
     {
         $queueForm = $this->removePhpBlocks(
-            $this->readModuleFile('view/templates/Backend/Queue/form.phtml')
+            $this->readModuleFile('view/templates/backend/Queue/form.phtml')
         );
         self::assertStringContainsString('sanitizeAttributeHtml(', $queueForm);
         self::assertStringContainsString(
@@ -103,7 +103,7 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
 
     public function testQueueFormBootAndAsyncResponsesCannotCorruptSubmittedData(): void
     {
-        $queueForm = $this->readModuleFile('view/templates/Backend/Queue/form.phtml');
+        $queueForm = $this->readModuleFile('view/templates/backend/Queue/form.phtml');
         self::assertStringContainsString('JSON_HEX_TAG', $queueForm);
         self::assertStringContainsString('JSON_HEX_AMP', $queueForm);
         self::assertStringContainsString('JSON_HEX_APOS', $queueForm);
@@ -145,7 +145,7 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
 
     public function testQueueFormReliesOnTheBackendLayoutFlashMessage(): void
     {
-        $queueForm = $this->readModuleFile('view/templates/Backend/Queue/form.phtml');
+        $queueForm = $this->readModuleFile('view/templates/backend/Queue/form.phtml');
 
         self::assertStringNotContainsString(
             '<template>Weline_Component::message.phtml</template>',
@@ -157,7 +157,7 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
     public function testQueueIframeReusesOnlyItsSameOriginParentBackendApi(): void
     {
         $queueForm = $this->removePhpBlocks(
-            $this->readModuleFile('view/templates/Backend/Queue/form.phtml')
+            $this->readModuleFile('view/templates/backend/Queue/form.phtml')
         );
 
         self::assertStringContainsString('window.parent === window', $queueForm);
@@ -173,7 +173,7 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
     public function testSuccessfulCreateIsTerminalAndAttributeControlsAreGrouped(): void
     {
         $queueForm = $this->removePhpBlocks(
-            $this->readModuleFile('view/templates/Backend/Queue/form.phtml')
+            $this->readModuleFile('view/templates/backend/Queue/form.phtml')
         );
         self::assertStringContainsString('this.params.queue_id = String(savedQueueId)', $queueForm);
         self::assertStringContainsString('allowEscapeKey: false', $queueForm);
@@ -188,14 +188,14 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
     public function testLiveListingDiscardsPreMutationSnapshotsAndTypeViewUsesOneOffcanvas(): void
     {
         $queueList = $this->removePhpBlocks(
-            $this->readModuleFile('view/templates/Backend/Queue/index.phtml')
+            $this->readModuleFile('view/templates/backend/Queue/index.phtml')
         );
         self::assertStringContainsString('snapshotMutationEpoch', $queueList);
         self::assertStringContainsString('requestEpoch !== snapshotMutationEpoch', $queueList);
         self::assertStringContainsString('snapshotRefreshPending = true', $queueList);
         self::assertStringContainsString('requestQueueMutationRefresh(', $queueList);
 
-        $typeList = $this->readModuleFile('view/templates/Backend/Type/index.phtml');
+        $typeList = $this->readModuleFile('view/templates/backend/Type/index.phtml');
         self::assertSame(1, \substr_count($typeList, "id='queue_type_shared_view'"));
         self::assertSame(1, \substr_count($typeList, 'Weline\\Component\\Block\\OffCanvas'));
         self::assertStringContainsString('weline-queue-type-view-btn', $typeList);
@@ -204,7 +204,7 @@ final class QueueAdminBrowserRequestContractTest extends TestCase
 
     public function testQueueConfirmationPlaceholdersSurviveServerTranslation(): void
     {
-        $queueList = $this->readModuleFile('view/templates/Backend/Queue/index.phtml');
+        $queueList = $this->readModuleFile('view/templates/backend/Queue/index.phtml');
 
         self::assertSame(2, \substr_count($queueList, "'__QUEUE_NAME__'"));
         self::assertSame(4, \substr_count($queueList, "'__QUEUE_COUNT__'"));

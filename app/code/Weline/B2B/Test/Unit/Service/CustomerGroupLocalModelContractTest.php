@@ -46,7 +46,7 @@ final class CustomerGroupLocalModelContractTest extends TestCase
 
     public function testControlCenterEditUsesLocalTagForNameAndDescription(): void
     {
-        $path = BP . 'app/code/Weline/B2B/view/templates/Backend/ControlCenter/index.phtml';
+        $path = BP . 'app/code/Weline/B2B/view/templates/backend/ControlCenter/index.phtml';
         $content = (string)file_get_contents($path);
         self::assertStringContainsString('Weline\\B2B\\Model\\CustomerGroupRecord\\LocalDescription', $content);
         self::assertStringContainsString('field="name"', $content);

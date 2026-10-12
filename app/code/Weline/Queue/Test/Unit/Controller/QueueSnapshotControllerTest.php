@@ -188,7 +188,7 @@ final class QueueSnapshotControllerTest extends TestCase
     private function readStatsPartialSource(): string
     {
         $source = \file_get_contents(
-            \dirname(__DIR__, 3) . '/view/templates/Backend/Queue/partials/stats.phtml'
+            \dirname(__DIR__, 3) . '/view/templates/backend/Queue/partials/stats.phtml'
         );
         self::assertIsString($source);
 
@@ -198,7 +198,7 @@ final class QueueSnapshotControllerTest extends TestCase
     private function readListingPartialSource(): string
     {
         $source = \file_get_contents(
-            \dirname(__DIR__, 3) . '/view/templates/Backend/Queue/partials/listing.phtml'
+            \dirname(__DIR__, 3) . '/view/templates/backend/Queue/partials/listing.phtml'
         );
         self::assertIsString($source);
 

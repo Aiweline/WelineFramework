@@ -17,10 +17,10 @@ final class SiteBuilderPlanCollectContractTest extends TestCase
             '/app/code/Weline/Websites/Service/AiWorkbench/SiteBuilderWorkbenchQueryHandler.php'
         );
         $frontend = $this->source(
-            '/app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/index-v1.phtml'
+            '/app/code/Weline/Websites/view/templates/backend/SiteBuilderAgent/index-v1.phtml'
         );
         $workspace = $this->source(
-            '/app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/workspace.phtml'
+            '/app/code/Weline/Websites/view/templates/backend/SiteBuilderAgent/workspace.phtml'
         );
 
         self::assertStringContainsString("'siteBuilderWorkbench'", $provider);

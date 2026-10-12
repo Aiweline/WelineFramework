@@ -365,8 +365,14 @@ class BackupService
             ->fields(array_merge($primaryKeys, [$columnName]))
             ->where($columnName, null, 'IS NOT NULL')
             ->select();
-        $data = $query->fetch();
-        if (empty($data)) {
+        // 大表禁止 fetch()：41k+ 行会触发 Unbounded SELECT 门禁并打断 setup:upgrade
+        $data = [];
+        foreach ($query->fetchIterator() as $row) {
+            if (\is_array($row)) {
+                $data[] = $row;
+            }
+        }
+        if ($data === []) {
             return [];
         }
 
@@ -914,9 +920,15 @@ class BackupService
                 ->fields($fields)
                 ->where($columnName, null, 'IS NOT NULL')
                 ->select();
-            $data = $query->fetch();
+            // 流式拉取：大表列备份不得 Unbounded SELECT
+            $data = [];
+            foreach ($query->fetchIterator() as $row) {
+                if (\is_array($row)) {
+                    $data[] = $row;
+                }
+            }
 
-            if (empty($data)) {
+            if ($data === []) {
                 $prefix = $reason !== null && $reason !== '' ? "[{$reason}] " : '';
                 $this->printing->info($prefix . __("表 %{1} 的列 %{2} 没有数据需要备份", [$tableName, $columnName]));
                 return [];

@@ -8,13 +8,13 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Session\Session;
-use Weline\I18n\Api\Translation\DictionaryEntry;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\Meta\Api\Data\MetaConfigIdentity;
 use Weline\Meta\Api\Data\MetaConfigRecord;
 use Weline\Meta\Api\Data\MetaConfigSearch;
 use Weline\Meta\Api\Data\MetaConfigWrite;
 use Weline\Meta\Api\MetaConfigRepositoryInterface;
+use Weline\Meta\Helper\MetaTranslation as MetaMetaTranslation;
+use Weline\Theme\Helper\MetaTranslation;
 
 final class PreviewThemeScopeService
 {
@@ -22,7 +22,6 @@ final class PreviewThemeScopeService
     private const INIT_SESSION_KEY = 'theme_preview_scope_init';
 
     private ?MetaConfigRepositoryInterface $metaConfigRepository;
-    private DictionaryRepositoryInterface $dictionary;
     private PreviewTokenService $previewTokenService;
 
     public function __construct(
@@ -30,13 +29,14 @@ final class PreviewThemeScopeService
         private readonly Session $session,
         private readonly PreviewRequestInspector $previewRequestInspector,
         mixed $metaConfig = null,
-        ?DictionaryRepositoryInterface $dictionary = null,
+        mixed $dictionary = null,
         ?PreviewTokenService $previewTokenService = null,
     ) {
         $this->metaConfigRepository = $metaConfig instanceof MetaConfigRepositoryInterface
             ? $metaConfig
             : null;
-        $this->dictionary = $dictionary ?? $this->resolveDictionaryRepository();
+        // $dictionary kept for constructor signature compatibility; MetaLocal is the store.
+        unset($dictionary);
         $this->previewTokenService = $previewTokenService
             ?? ObjectManager::getInstance(PreviewTokenService::class);
     }
@@ -178,7 +178,7 @@ final class PreviewThemeScopeService
 
         $discardedTranslations = 0;
         foreach ($this->listTranslationsForScope($area, $previewScope) as $row) {
-            if ($this->dictionary->deleteEntry($row->word, $row->localeCode)) {
+            if (MetaTranslation::deleteTranslatedValueWithScope($row['word'], $previewScope, $row['locale_code'])) {
                 $discardedTranslations++;
             }
         }
@@ -228,8 +228,8 @@ final class PreviewThemeScopeService
 
     private function ensureScopeInitialized(int $themeId, string $area, string $baseScope, string $previewScope): void
     {
-        // Do not clone config or dictionary rows on read. Historical preview
-        // copies made `@meta::theme.{area}.` about a million rows; listing that
+        // Do not clone config or MetaLocal rows on read. Historical preview
+        // copies made theme.{area} MetaLocal rows about a million times; listing that
         // prefix on every new editor session was the canvas multi-second stall.
         // Unpublished edits stay in the preview scope; reads fall back to default.
     }
@@ -246,33 +246,15 @@ final class PreviewThemeScopeService
 
     private function cloneTranslations(string $area, string $baseScope, string $previewScope): void
     {
-        $prefix = '@meta::theme.' . $area . '.';
-
-        foreach ($this->dictionary->listByWordPrefix($prefix) as $item) {
-            $word = $item->word;
-            if (!$this->matchesBaseScopeWord($word, $prefix, $baseScope)) {
-                continue;
-            }
-
-            $previewWord = $this->bindWordToScope($word, $previewScope);
-            $this->dictionary->upsert($previewWord, $item->localeCode, $item->translation);
+        foreach ($this->listTranslationsForScope($area, $baseScope) as $item) {
+            $previewWord = $this->bindWordToScope($item['word'], $previewScope);
+            MetaTranslation::setTranslatedValueWithScope(
+                $previewWord,
+                $item['translate'],
+                $previewScope,
+                $item['locale_code'],
+            );
         }
-    }
-
-    private function matchesBaseScopeWord(string $word, string $prefix, string $baseScope): bool
-    {
-        if (!\str_starts_with($word, $prefix)) {
-            return false;
-        }
-
-        $scopeMarker = '|scope:';
-        $scopePos = \strpos($word, $scopeMarker);
-
-        if ($baseScope === 'default') {
-            return $scopePos === false;
-        }
-
-        return $scopePos !== false && \substr($word, $scopePos + \strlen($scopeMarker)) === $baseScope;
     }
 
     private function bindWordToScope(string $word, string $scope): string
@@ -405,19 +387,18 @@ final class PreviewThemeScopeService
         $published = 0;
 
         foreach ($previewRows as $previewRow) {
-            $previewWord = $previewRow->word;
-            $baseWord = $this->bindWordToScope($previewWord, $baseScope);
-            $localeCode = $previewRow->localeCode;
-            $translate = $previewRow->translation;
+            $baseWord = $this->bindWordToScope($previewRow['word'], $baseScope);
+            $localeCode = $previewRow['locale_code'];
+            $translate = $previewRow['translate'];
             $previewBaseWords[$baseWord . '|' . $localeCode] = true;
-            $this->saveDictionaryWord($baseWord, $localeCode, $translate);
+            $this->saveMetaLocalWord($baseWord, $localeCode, $translate, $baseScope);
             $published++;
         }
 
         foreach ($baseRows as $baseRow) {
-            $key = $baseRow->word . '|' . $baseRow->localeCode;
+            $key = $baseRow['word'] . '|' . $baseRow['locale_code'];
             if (!isset($previewBaseWords[$key])) {
-                $this->dictionary->deleteEntry($baseRow->word, $baseRow->localeCode);
+                MetaTranslation::deleteTranslatedValueWithScope($baseRow['word'], $baseScope, $baseRow['locale_code']);
             }
         }
 
@@ -425,25 +406,22 @@ final class PreviewThemeScopeService
     }
 
     /**
-     * @return list<DictionaryEntry>
+     * @return list<array{word:string,locale_code:string,translate:string,scope:string}>
      */
     private function listTranslationsForScope(string $area, string $scope): array
     {
-        $prefix = '@meta::theme.' . $this->normalizeArea($area) . '.';
-
+        $prefix = 'theme.' . $this->normalizeArea($area);
         $filtered = [];
-        foreach ($this->dictionary->listByWordPrefix($prefix) as $item) {
-            if ($this->matchesBaseScopeWord($item->word, $prefix, $scope)) {
-                $filtered[] = $item;
-            }
+        foreach (MetaMetaTranslation::listByIdentifyPrefix($prefix, null, $scope) as $item) {
+            $filtered[] = $item;
         }
 
         return $filtered;
     }
 
-    private function saveDictionaryWord(string $word, string $localeCode, string $translate): void
+    private function saveMetaLocalWord(string $word, string $localeCode, string $translate, string $scope): void
     {
-        $this->dictionary->upsert($word, $localeCode, $translate);
+        MetaTranslation::setTranslatedValueWithScope($word, $translate, $scope, $localeCode);
     }
 
     private function metaConfigRepository(): MetaConfigRepositoryInterface
@@ -459,17 +437,6 @@ final class PreviewThemeScopeService
         }
 
         return $this->metaConfigRepository = $repository;
-    }
-
-    private function resolveDictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $repository = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$repository instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-
-        return $repository;
     }
 
     private function identityForRecord(MetaConfigRecord $record, ?string $scope = null): MetaConfigIdentity

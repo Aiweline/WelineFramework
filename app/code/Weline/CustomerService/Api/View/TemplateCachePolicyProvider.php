@@ -12,7 +12,7 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
     {
         return [
             'output_files' => [
-                'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml' => ['context' => 'static'],
+                'Weline_CustomerService::templates/frontend/widgets/customer-service-float.phtml' => ['context' => 'static'],
             ],
         ];
     }

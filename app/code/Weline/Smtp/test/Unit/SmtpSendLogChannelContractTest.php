@@ -15,7 +15,7 @@ final class SmtpSendLogChannelContractTest extends TestCase
     {
         $moduleRoot = dirname(__DIR__, 2);
         $model = (string)file_get_contents($moduleRoot . '/Model/SmtpSendLog.php');
-        $listing = (string)file_get_contents($moduleRoot . '/view/templates/Backend/Log/listing.phtml');
+        $listing = (string)file_get_contents($moduleRoot . '/view/templates/backend/Log/listing.phtml');
         $controller = (string)file_get_contents($moduleRoot . '/Controller/Backend/Log.php');
         $sender = (string)file_get_contents($moduleRoot . '/Helper/SmtpSender.php');
         $provider = (string)file_get_contents(
@@ -61,7 +61,7 @@ final class SmtpSendLogChannelContractTest extends TestCase
         self::assertStringContainsString('content_excerpt', (string)file_get_contents($moduleRoot . '/Service/SmtpSendLogListPresenter.php'));
         self::assertStringNotContainsString('smtp-log-channel-tabs', $listing);
         self::assertStringNotContainsString('{{log.content}}', $listing);
-        self::assertFileExists($moduleRoot . '/view/templates/Backend/Log/embed.phtml');
-        self::assertStringContainsString('data-smtp-embed-standalone', (string)file_get_contents($moduleRoot . '/view/templates/Backend/Log/embed.phtml'));
+        self::assertFileExists($moduleRoot . '/view/templates/backend/Log/embed.phtml');
+        self::assertStringContainsString('data-smtp-embed-standalone', (string)file_get_contents($moduleRoot . '/view/templates/backend/Log/embed.phtml'));
     }
 }

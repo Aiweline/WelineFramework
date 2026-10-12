@@ -81,7 +81,7 @@ class Social extends FrontendController
         $this->assign('creative_result', $creativeResult);
         $this->assign('batch_result', $batchResult);
 
-        return $this->fetch('Weline_Social::templates/Frontend/Social/smoke.phtml');
+        return $this->fetch('Weline_Social::templates/frontend/Social/smoke.phtml');
     }
 
     private function toBool(mixed $value): bool

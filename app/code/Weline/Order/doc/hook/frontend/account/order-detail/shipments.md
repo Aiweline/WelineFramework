@@ -9,5 +9,5 @@
 ## 实现路径示例
 
 - `Weline_Shipping/view/hooks/Weline_Order/frontend/account/order-detail/shipments.phtml`
-- 模板：`Weline_Shipping::templates/Frontend/account/order-shipments.phtml`
+- 模板：`Weline_Shipping::templates/frontend/account/order-shipments.phtml`
 - 查询：`BackendOrderShipmentsService::listForOrderId` + `OrderShipmentTrackingQueryService`

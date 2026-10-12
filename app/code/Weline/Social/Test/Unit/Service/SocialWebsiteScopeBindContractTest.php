@@ -44,7 +44,7 @@ final class SocialWebsiteScopeBindContractTest extends TestCase
 
     public function testAdminOneClickAuthPassesScopePayload(): void
     {
-        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Social/index.phtml');
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Social/index.phtml');
         self::assertStringContainsString('scopePayload(currentScope)', $src);
         self::assertStringContainsString("callSocial('startAuthorization'", $src);
         self::assertStringContainsString('选择网站范围（仅支持站点）', $src);

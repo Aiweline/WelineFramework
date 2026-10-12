@@ -14,7 +14,7 @@ final class AccountFormWebsiteBindingSelectContractTest extends TestCase
     public function testAccountFormExposesMultiWebsiteSelectBinding(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = $root . '/view/templates/Backend/Account/form.phtml';
+        $template = $root . '/view/templates/backend/Account/form.phtml';
         $js = $root . '/view/statics/js/seo-admin.js';
         $service = $root . '/Service/Admin/SeoAdminAccountService.php';
         $provider = $root . '/extends/module/Weline_Framework/Query/SeoAdminQueryProvider.php';

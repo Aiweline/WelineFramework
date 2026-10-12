@@ -13,7 +13,7 @@ final class B2BCatalogDisplayTypeContractTest extends TestCase
         $provider = dirname(__DIR__, 3) . '/extends/module/Weline_Websites/ScopeDisplayType/B2B.php';
         $filter = dirname(__DIR__, 3) . '/Service/B2BStorefrontCatalogVisibilityFilter.php';
         $module = dirname(__DIR__, 3) . '/etc/module.php';
-        $configTpl = dirname(__DIR__, 3) . '/view/templates/Backend/Config/index.phtml';
+        $configTpl = dirname(__DIR__, 3) . '/view/templates/backend/Config/index.phtml';
         $configField = dirname(__DIR__, 3) . '/extends/module/Weline_SystemConfig/Config/frontend/catalog-b2b-products-only.phtml';
 
         self::assertFileExists($provider);

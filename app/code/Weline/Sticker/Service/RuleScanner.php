@@ -28,9 +28,9 @@ class RuleScanner
      * @return array 返回格式：
      * [
      *   'source_module' => 'Weline_MyModule',
-     *   'sticker_file' => 'extends/module/Weline_Sticker/Weline/Demo/view/templates/Backend/index.phtml',
+     *   'sticker_file' => 'extends/module/Weline_Sticker/Weline/Demo/view/templates/backend/index.phtml',
      *   'target_module' => 'Weline_Demo',
-     *   'target_file' => 'Weline/Demo/view/templates/Backend/index.phtml',
+     *   'target_file' => 'Weline/Demo/view/templates/backend/index.phtml',
      *   'type' => 'module' // 或 'theme'
      * ]
      */
@@ -93,7 +93,7 @@ class RuleScanner
 
                 // 从路径中提取目标模块和文件路径
                 // 新规约: extends/module/Weline_Sticker/{模块名}/{文件路径}
-                // 例如: Weline/Demo/view/templates/Backend/index.phtml
+                // 例如: Weline/Demo/view/templates/backend/index.phtml
                 $targetInfo = $this->parseTargetFromPath($relativePath);
 
                 if ($targetInfo) {
@@ -155,8 +155,8 @@ class RuleScanner
     /**
      * 从路径中解析目标模块和文件路径
      *
-     * @param string $relativePath 相对路径，例如：Weline/Demo/view/templates/Backend/index.phtml
-     * @return array|null ['target_module' => 'Weline_Demo', 'target_file' => 'Weline/Demo/view/templates/Backend/index.phtml']
+     * @param string $relativePath 相对路径，例如：Weline/Demo/view/templates/backend/index.phtml
+     * @return array|null ['target_module' => 'Weline_Demo', 'target_file' => 'Weline/Demo/view/templates/backend/index.phtml']
      */
     private function parseTargetFromPath(string $relativePath): ?array
     {

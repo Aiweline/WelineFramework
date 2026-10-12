@@ -11,7 +11,7 @@ final class AccountIndexThemeContractTest extends TestCase
     public function testAccountIndexUsesNativeThemeSurfacesWithoutHardcodedLightPalette(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = $root . '/view/templates/Backend/Account/index.phtml';
+        $template = $root . '/view/templates/backend/Account/index.phtml';
         $css = $root . '/view/statics/css/seo-admin.css';
 
         self::assertFileExists($template);

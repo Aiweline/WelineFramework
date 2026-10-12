@@ -14,7 +14,7 @@ const {
 
 const MODULE = 'Weline_Shipping';
 const ROOT = path.join(__dirname, '../../..');
-const TPL = path.join(ROOT, 'view/templates/Backend/ShippingService/index.phtml');
+const TPL = path.join(ROOT, 'view/templates/backend/ShippingService/index.phtml');
 
 moduleDescribe(test, MODULE, '航线列表名称标签', () => {
   moduleCase(

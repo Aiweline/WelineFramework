@@ -60,7 +60,7 @@ $escape = static fn (mixed $value): string => htmlspecialchars((string)$value, E
             <?php if ($refunds === []): ?>
                 <div class="w-cluster" data-align="baseline" style="--w-gap:var(--weline-space-2);">
                     <span class="w-text" data-tone="muted" data-size="sm"><lang>退款</lang></span>
-                    <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/outcome-chip.phtml', [
+                    <?= $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
                         'chip' => BackendOrderOutcomeChip::present((string)($flow['current_code'] ?? 'refunded')),
                         'testid' => 'order-status-flow-refund-chip',
                     ]) ?>
@@ -80,7 +80,7 @@ $escape = static fn (mixed $value): string => htmlspecialchars((string)$value, E
                             (string)($refund['status'] ?? ''),
                             (string)($refund['channel_status'] ?? ''),
                         ) as $outcomeChip): ?>
-                            <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/outcome-chip.phtml', [
+                            <?= $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
                                 'chip' => $outcomeChip,
                                 'testid' => 'order-status-flow-refund-chip',
                             ]) ?>

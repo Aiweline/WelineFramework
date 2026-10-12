@@ -15,15 +15,15 @@ final class PaymentGuideTemplateScannerTest extends TestCase
     {
         $moduleRoot = dirname(__DIR__, 3);
         $scanner = new PaymentGuideTemplateScanner(new \Weline\Payment\Service\PaymentCustomerGuideRegistry());
-        $guidePath = $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/guide.phtml';
-        $policyPath = $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/policy.phtml';
+        $guidePath = $moduleRoot . '/view/templates/frontend/guide/payment/paypal/guide.phtml';
+        $policyPath = $moduleRoot . '/view/templates/frontend/guide/payment/paypal/policy.phtml';
 
         foreach ([$guidePath, $policyPath] as $path) {
             $content = (string) file_get_contents($path);
             $violations = $scanner->scanTemplateContent(
                 'paypal',
                 'Weline_Payment',
-                'Weline_Payment::templates/Frontend/guide/payment/paypal/guide.phtml',
+                'Weline_Payment::templates/frontend/guide/payment/paypal/guide.phtml',
                 $path,
                 $content,
             );
@@ -37,7 +37,7 @@ final class PaymentGuideTemplateScannerTest extends TestCase
         $violations = $scanner->scanTemplateContent(
             'demo',
             'Weline_Payment',
-            'Weline_Payment::templates/Frontend/guide/payment/demo/guide.phtml',
+            'Weline_Payment::templates/frontend/guide/payment/demo/guide.phtml',
             'demo/guide.phtml',
             '<h1>PayPal Payment Guide</h1><p>Please pay with PayPal.</p>',
         );
@@ -71,7 +71,7 @@ final class PaymentGuideTemplateScannerTest extends TestCase
         }
 
         $scanner = new PaymentGuideTemplateScanner(new \Weline\Payment\Service\PaymentCustomerGuideRegistry());
-        $path = $scanner->resolveTemplatePath('Weline_Payment::templates/Frontend/guide/payment/paypal/guide.phtml');
+        $path = $scanner->resolveTemplatePath('Weline_Payment::templates/frontend/guide/payment/paypal/guide.phtml');
 
         self::assertStringEndsWith('guide/payment/paypal/guide.phtml', str_replace('\\', '/', $path));
         self::assertFileExists($path);

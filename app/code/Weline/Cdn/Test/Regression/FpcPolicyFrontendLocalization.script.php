@@ -1,6 +1,6 @@
 <?php
 require dirname(__DIR__, 6) . '/app/bootstrap.php';
-$source = file_get_contents(dirname(__DIR__, 2) . '/view/templates/Backend/ApiRules/index.phtml');
+$source = file_get_contents(dirname(__DIR__, 2) . '/view/templates/backend/ApiRules/index.phtml');
 if (!preg_match('/\$texts = (\[.*?\n\]);/s', $source, $matches)) { throw new RuntimeException('missing translation data'); }
 $texts = eval('return ' . $matches[1] . ';');
 foreach (['seconds', 'otherPaths', 'total', 'published', 'accepted', 'purged', 'verified', 'pendingVersion'] as $key) {

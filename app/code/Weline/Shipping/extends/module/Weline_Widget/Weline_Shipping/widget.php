@@ -11,6 +11,6 @@ return [
     'Weline_Shipping::templates/frontend/widgets/checkout-shipping-address.phtml',
     'Weline_Shipping::templates/frontend/widgets/footer-shipping-info-link.phtml',
     'Weline_Shipping::templates/frontend/widgets/footer-returns-policy-link.phtml',
-    'Weline_Shipping::templates/Backend/widgets/backend-order-shipments.phtml',
-    'Weline_Shipping::templates/Backend/widgets/backend-order-list-shipping.phtml',
+    'Weline_Shipping::templates/backend/widgets/backend-order-shipments.phtml',
+    'Weline_Shipping::templates/backend/widgets/backend-order-list-shipping.phtml',
 ];

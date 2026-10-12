@@ -1,7 +1,7 @@
 # UI 验收 · 企业邮箱「邮箱」页（Team:UI:）
 
 日期：2026-09-22  
-主文件：`app/code/Weline/Mail/view/templates/Backend/Index/enterprise.phtml`  
+主文件：`app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml`  
 线稿：`channel/ui-shentu-mailbox-20260922.md`  
 对照 fail 纪要：`channel/acceptance-test-mailbox-browser.md`  
 席位：Team:UI:（视觉层次）· 可与前端席协调结构/交互细节  

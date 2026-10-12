@@ -19,7 +19,7 @@ final class NotificationCenterMarkAllReadContractTest extends TestCase
     public function testIndexTemplateWiresMarkAllReadActionAndScript(): void
     {
         $template = (string) file_get_contents(
-            $this->backendRoot() . '/view/templates/Backend/Notification/index.phtml'
+            $this->backendRoot() . '/view/templates/backend/Notification/index.phtml'
         );
         $script = (string) file_get_contents(
             $this->backendRoot() . '/view/statics/js/notification-center.js'
@@ -45,7 +45,7 @@ final class NotificationCenterMarkAllReadContractTest extends TestCase
     public function testDetailTemplateWiresMarkTopicReadActionAndScript(): void
     {
         $template = (string) file_get_contents(
-            $this->backendRoot() . '/view/templates/Backend/Notification/detail.phtml'
+            $this->backendRoot() . '/view/templates/backend/Notification/detail.phtml'
         );
         $script = (string) file_get_contents(
             $this->backendRoot() . '/view/statics/js/notification-center.js'

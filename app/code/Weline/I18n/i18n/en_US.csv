@@ -276,11 +276,19 @@ language,language
 "%{1} 个国家卸载失败","Uninstallation failed for %{1} countries"
 获取成功,"Successfully got"
 "语言包(%{1})：%{2} 已安装。","Language pack (%{1}): %{2} has been installed."
+地区码必须是字符串,地区码必须是字符串
+地区码不能为空,地区码不能为空
+"地区码长度不能超过 12 个字符","地区码长度不能超过 12 个字符"
+地区码格式无效,地区码格式无效
 词典写入与资源变更必须使用同一逻辑数据库连接,"Dictionary writes and resource changes must use the same logical DB connection"
 翻译词必须是字符串或整数,"The translation word must be a string or integer"
 翻译词不能为空,"The translation word cannot be empty"
+"禁止将 @meta:: 键写入 I18n 词典，请使用 MetaLocal","禁止将 @meta:: 键写入 I18n 词典，请使用 MetaLocal"
 "翻译词必须是有效的 UTF-8 文本","The translation word must be valid UTF-8 text"
 "翻译词长度不能超过 %{1} 个 Unicode 字符","The translation word cannot exceed %{1} Unicode characters"
+"翻译词不能包含 BOM","翻译词不能包含 BOM"
+翻译词不能包含换行,翻译词不能包含换行
+翻译词不能包含连续引号失控串,翻译词不能包含连续引号失控串
 语言目录写入与资源变更必须使用同一逻辑数据库连接,"Language catalog writes and resource changes must use the same logical DB connection"
 成功推送收集词汇！推送消息：%{msg},"Successfully pushed vocabulary collection! Push message: %{msg}"
 推送收集词汇失败！推送消息：%{1},"Failed to push vocabulary collection! Push message: %{1}"
@@ -634,7 +642,7 @@ clock,clock
 "国家 %{1} 的地区库存尚未就绪，请先执行模块升级补齐库存后再安装。","Locale inventory for country %{1} is not ready. Run module upgrade to seed inventory before installing."
 "I18n 地区库存未就绪","I18n locale inventory is not ready"
 "国家 %{1} 的地区库存尚未就绪，请先执行模块升级（setup:upgrade）补齐库存后再安装。","Locale inventory for country %{1} is not ready. Run module upgrade (setup:upgrade) to seed inventory before installing."
-"locale %{1} 仅保留在系统词典，不写回模块 CSV（模块 CSV 仅允许 zh_Hans_CN / en_US）。","locale %{1} stays in the system dictionary only and is not written back to module CSV (module CSV allows only zh_Hans_CN / en_US)."
+"locale %{1} 仅保留在系统词典，不写回模块 CSV（官方框架模块 Git 瘦身：模块 CSV 仅 zh_Hans_CN / en_US）。","locale %{1} stays in the system dictionary only and is not written back to module CSV (official framework modules git-slim: module CSV allows only zh_Hans_CN / en_US)."
 "模块 %{1} 不存在，跳过词：%{2}","Module %{1} does not exist, skipping term: %{2}"
 "导出 %{1} 到模块 %{2} 失败：%{3}","Export %{1} to module %{2} failed: %{3}"
 "写入 CSV 失败：%{1} — %{2}","Failed to write CSV: %{1} — %{2}"
@@ -803,10 +811,11 @@ CSV文件不存在：%{1},"CSV file does not exist: %{1}"
 "开始扫描模块 CSV 语言包…","Scanning module CSV language packs…"
 "扫描源码 __()/lang 词条…","Scanning source __()/lang phrases…"
 没有找到需要收集的词汇,"No vocabulary found that needs to be collected"
-"写入词典表，共 %{1} 条待处理…","Writing dictionary table, %{1} pending…"
+词典收集与分区已同步…,词典收集与分区已同步…
 "提交 AI 翻译队列…","Submitting AI translation queue…"
 开始收集词典,"Start dictionary collect"
 批量插入新词条…,"Batch-inserting new phrases…"
+标记当前收集批次…,标记当前收集批次…
 同步默认语言译文…,"Syncing default-language translations…"
 开始AI翻译...,"Starting AI translation..."
 "目标语言: %{1}","Target language: %{1}"
@@ -871,7 +880,9 @@ CSV文件路径（导入单个文件时必填）,"CSV file path (required when i
 "3. AI API 密钥是否正确配置","3. Is the AI API key configured correctly"
 "4. 网络连接是否正常","4. Is the network connection normal?"
 无法创建文件：%{1},"Unable to create file: %{1}"
+清理超长/换行/BOM/引号失控/非法地区码的词典脏行,清理超长/换行/BOM/引号失控/非法地区码的词典脏行
 查看本地语言码,"View local language code"
+"写入词典表，共 %{1} 条待处理…","Writing dictionary table, %{1} pending…"
 该区域未激活或者未安装！,"This locale is not activated or not installed!"
 地方码不存在！,"Locale code does not exist!"
 "词典收集成功！一共更新 %{1} 个词。","Dictionary collection successful! Total updated words: %{1}"

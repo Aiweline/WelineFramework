@@ -1150,6 +1150,8 @@ SH);
         'project-guidance-reload-policy.php',
         'readiness-incremental-scope.php',
         'index-directory-scope.php',
+        'index-refresh-scheduler.php',
+        'mcp-dev-maintenance.php',
         'collector-event-storage.php',
         'relation-resolution-scope.php',
         'session-start-background-refresh.php',

@@ -1,0 +1,103 @@
+<?php
+/**
+ * DaoCharms design_theme breadcrumb IA:
+ * - UI 07 PDP: Home / Shop / Product
+ * - UI 03 PLP: Home / Shop / Ritual Objects
+ *
+ * Theme-owned presentation only — does not put website copy into Product module services.
+ */
+$items = $this->getData('meta.items') ?? $this->getData('items') ?? [];
+$items = is_array($items) ? $items : [];
+
+if ($items === []) {
+    $raw = $this->getData('storefront_product_breadcrumbs')
+        ?? $this->getData('storefront_category_breadcrumbs')
+        ?? $this->getData('breadcrumbs')
+        ?? null;
+    if (!is_array($raw) || $raw === []) {
+        $seoBag = $this->getData('seo');
+        $raw = (is_array($seoBag) && is_array($seoBag['breadcrumbs'] ?? null))
+            ? $seoBag['breadcrumbs']
+            : [];
+    }
+    if (is_array($raw) && $raw !== []) {
+        $normalized = [];
+        $total = count($raw);
+        $i = 0;
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $text = trim((string)($row['text'] ?? $row['name'] ?? $row['label'] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+            $isLast = $i === $total - 1;
+            $url = trim((string)($row['url'] ?? $row['href'] ?? ''));
+            $normalized[] = [
+                'text' => $text,
+                'url' => $isLast ? '' : $url,
+            ];
+            $i++;
+        }
+        $items = $normalized;
+    }
+}
+
+$needsShopParent = false;
+try {
+    $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+    $path = (string)(parse_url($uri, PHP_URL_PATH) ?: '');
+    $isPdp = (bool)preg_match('#/(product|products/view)/#i', $path)
+        || (bool)preg_match('#/product/[^/]+#i', $path);
+    $isProductsPlp = (bool)preg_match('#/products/?$#i', $path);
+    $needsShopParent = $isPdp || $isProductsPlp;
+} catch (\Throwable) {
+    $needsShopParent = false;
+}
+
+if ($needsShopParent && $items !== []) {
+    $hasShop = false;
+    foreach ($items as $it) {
+        if (!is_array($it)) {
+            continue;
+        }
+        $t = strtolower(trim((string)($it['text'] ?? '')));
+        if ($t === 'shop' || $t === '选购' || str_contains((string)($it['url'] ?? ''), '/shop')) {
+            $hasShop = true;
+            break;
+        }
+    }
+    if (!$hasShop) {
+        $shopItem = [
+            'text' => (string)__('选购'),
+            'url' => '/shop',
+        ];
+        // Prefer after first (Home); else prepend Home+Shop
+        $firstText = strtolower(trim((string)($items[0]['text'] ?? '')));
+        if ($firstText === 'home' || $firstText === '首页' || $firstText === '主页') {
+            array_splice($items, 1, 0, [$shopItem]);
+        } else {
+            array_unshift($items, [
+                'text' => (string)__('首页'),
+                'url' => '/',
+            ], $shopItem);
+        }
+    }
+}
+?>
+<w:hook>Weline_Theme::frontend::partials::breadcrumb::before</w:hook>
+<?php if ($items !== []): ?>
+    <nav class="w-container w-frontend-breadcrumb" aria-label="<?= htmlspecialchars((string)__('面包屑'), ENT_QUOTES, 'UTF-8') ?>">
+        <ol class="w-breadcrumb">
+            <?php foreach ($items as $item): ?>
+                <?php if (!is_array($item)) continue; ?>
+                <li>
+                    <?php if (!empty($item['url'])): ?><a href="<?= htmlspecialchars((string)$item['url'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($item['text'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
+                    <?php else: ?><span aria-current="page"><?= htmlspecialchars((string)($item['text'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                </li>
+            <?php endforeach; ?>
+        </ol>
+    </nav>
+<?php endif; ?>
+<w:hook>Weline_Theme::frontend::partials::breadcrumb::after</w:hook>

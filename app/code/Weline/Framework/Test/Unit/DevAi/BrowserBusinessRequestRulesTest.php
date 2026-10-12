@@ -20,17 +20,17 @@ final class BrowserBusinessRequestRulesTest extends TestCase
             '/app/code/Weline/Theme/view/templates/backend/index.phtml'
         ));
         self::assertTrue(\BrowserBusinessRequestRules::isBackendBusinessPath(
-            '/app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/workspace.phtml'
+            '/app/code/Weline/Websites/view/templates/backend/SiteBuilderAgent/workspace.phtml'
         ));
         self::assertFalse(\BrowserBusinessRequestRules::isBackendBusinessPath(
-            '/app/code/Weline/Ai/view/templates/Frontend/Chat/index.phtml'
+            '/app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml'
         ));
     }
 
     public function testInstallerAndVisitorPanelAreExcluded(): void
     {
         self::assertTrue(\BrowserBusinessRequestRules::isExcludedPath(
-            '/app/code/Weline/Installer/view/templates/Frontend/Install/index.phtml',
+            '/app/code/Weline/Installer/view/templates/frontend/Install/index.phtml',
             []
         ));
         self::assertTrue(\BrowserBusinessRequestRules::isExcludedPath(

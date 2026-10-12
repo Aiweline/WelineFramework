@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_DataTable',
-    "version" => '1.1.3',
+    "version" => '1.1.4',
     "requires" => [
         'Weline_Framework' => '*',
         'Weline_Taglib' => '*',

@@ -5,4 +5,4 @@
 ## 实现
 
 - `Weline_B2B/view/hooks/Weline_Order/backend/order/view/wholesale-chat.phtml`
-- `Weline_B2B/view/templates/Backend/widgets/backend-order-chat.phtml`
+- `Weline_B2B/view/templates/backend/widgets/backend-order-chat.phtml`

@@ -83,7 +83,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                     (string)($row['status'] ?? ''),
                     (string)($row['channel_status'] ?? ''),
                 ) as $outcomeChip): ?>
-                  <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/outcome-chip.phtml', [
+                  <?= $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
                       'chip' => $outcomeChip,
                       'testid' => 'order-edit-refund-status-chip',
                   ]) ?>
@@ -93,7 +93,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
             <td data-testid="order-edit-refund-customer-view">
               <?php
               $customerChip = BackendOrderOutcomeChip::present((string)($row['customer_view'] ?? ''));
-              echo $this->fetch('Weline_Order::templates/Backend/Order/partial/outcome-chip.phtml', [
+              echo $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
                   'chip' => $customerChip,
                   'testid' => 'order-edit-refund-customer-view-chip',
               ]);

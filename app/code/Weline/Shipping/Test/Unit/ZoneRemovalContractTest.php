@@ -16,7 +16,7 @@ final class ZoneRemovalContractTest extends TestCore
         self::assertFileDoesNotExist($base . 'Model/ZoneRegion.php');
         self::assertFileDoesNotExist($base . 'Service/ZoneService.php');
         self::assertFileDoesNotExist($base . 'Controller/Backend/Zone.php');
-        self::assertFileDoesNotExist($base . 'view/templates/Backend/Zone/index.phtml');
+        self::assertFileDoesNotExist($base . 'view/templates/backend/Zone/index.phtml');
     }
 
     public function testShippingServiceHasNoZoneIdField(): void

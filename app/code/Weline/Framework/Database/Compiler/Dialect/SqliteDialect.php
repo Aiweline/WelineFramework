@@ -57,6 +57,35 @@ final class SqliteDialect implements DialectInterface
         return "datetime('now')";
     }
 
+    public function unixEpochExpression(bool $utc = true): string
+    {
+        // SQLite datetime('now') 为 UTC；无独立会话时区时钟
+        return "CAST(strftime('%s','now') AS INTEGER)";
+    }
+
+    public function timeBucketExpression(string $timestampExpr, int $intervalMinutes): string
+    {
+        $intervalMinutes = max(1, $intervalMinutes);
+
+        return "strftime('%Y-%m-%d %H:', {$timestampExpr})"
+            . " || printf('%02d', (CAST(strftime('%M', {$timestampExpr}) AS INTEGER) / {$intervalMinutes}) * {$intervalMinutes})"
+            . " || ':00'";
+    }
+
+    public function jsonExtractText(string $columnExpr, string $path): string
+    {
+        $segments = array_values(array_filter(
+            array_map('trim', explode('.', str_replace(['$', '"', "'"], '', $path))),
+            static fn(string $part): bool => $part !== '',
+        ));
+        if ($segments === []) {
+            throw new \InvalidArgumentException('JSON path cannot be empty');
+        }
+        $sqlitePath = '$.' . implode('.', $segments);
+
+        return "json_extract({$columnExpr}, '{$sqlitePath}')";
+    }
+
     public function booleanLiteral(bool $value): string
     {
         return $value ? '1' : '0';

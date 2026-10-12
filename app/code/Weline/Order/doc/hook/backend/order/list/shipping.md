@@ -7,4 +7,4 @@
 ## 实现路径示例
 
 - `Weline_Shipping/view/hooks/Weline_Order/backend/order/list/shipping.phtml`
-- 部件：`Weline_Shipping::backend-order-list-shipping` → `templates/Backend/widgets/backend-order-list-shipping.phtml`
+- 部件：`Weline_Shipping::backend-order-list-shipping` → `templates/backend/widgets/backend-order-list-shipping.phtml`

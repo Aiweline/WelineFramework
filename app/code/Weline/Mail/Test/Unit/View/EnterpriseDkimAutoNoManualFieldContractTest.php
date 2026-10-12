@@ -13,7 +13,7 @@ final class EnterpriseDkimAutoNoManualFieldContractTest extends TestCase
     public function testEnterpriseHidesManualDkimPasteAndDocumentsAutoGenerate(): void
     {
         $src = (string)file_get_contents(
-            BP . 'app/code/Weline/Mail/view/templates/Backend/Index/enterprise.phtml'
+            BP . 'app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml'
         );
         self::assertStringNotContainsString('DKIM 公钥（只填公钥正文）', $src);
         self::assertStringContainsString('mail-dkim-auto-note', $src);

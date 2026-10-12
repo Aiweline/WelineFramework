@@ -14,7 +14,7 @@ final class ConfigRevisionDisplayContractTest extends TestCase
     public function test_admin_tracking_vendor_shows_config_revision(): void
     {
         $php = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/TrackingVendor.php');
-        $tpl = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/index.phtml');
+        $tpl = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/index.phtml');
         self::assertStringContainsString("assign('config_revision'", $php);
         self::assertStringContainsString('配置版本 %{2}', $php);
         self::assertStringContainsString('tv-config-revision', $tpl);

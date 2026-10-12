@@ -276,6 +276,7 @@ class LayoutDataService
             'rma' => __('退换货页'),
             'terms' => __('服务条款'),
             'journal' => __('道记'),
+            'journal-article' => __('道记文章'),
             'sanctuary' => __('无为空间'),
             'shop' => __('选购'),
             'lounge' => __('道家居服'),

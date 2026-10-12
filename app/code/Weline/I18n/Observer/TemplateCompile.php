@@ -135,7 +135,7 @@ class TemplateCompile implements ObserverInterface
     private function extractModuleNameFromTemplatePath(string $tplFile): string
     {
         // 尝试从路径中提取模块名
-        // 例如：app/code/Weline/Frontend/view/templates/Frontend/index.phtml -> Weline_Frontend
+        // 例如：app/code/Weline/Frontend/view/templates/frontend/index.phtml -> Weline_Frontend
         if (preg_match('#app/code/([^/]+)/([^/]+)/#', $tplFile, $matches)) {
             return $matches[1] . '_' . $matches[2];
         }

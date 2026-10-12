@@ -19,9 +19,9 @@ app/code/Vendor/YourPay/
 ├─ extends/module/Weline_Payment/PaymentProvider/YourPayProvider.php
 ├─ extends/module/Weline_Payment/PaymentCustomerGuide/YourPayCustomerGuide.php   # 推荐
 ├─ extends/module/Weline_SystemConfig/Config/backend/your_pay.phtml
-├─ view/templates/Frontend/checkout/your_pay.phtml
-├─ view/templates/Frontend/guide/payment/your_pay/guide.phtml                    # 推荐
-├─ view/templates/Frontend/guide/payment/your_pay/policy.phtml                   # 推荐
+├─ view/templates/frontend/checkout/your_pay.phtml
+├─ view/templates/frontend/guide/payment/your_pay/guide.phtml                    # 推荐
+├─ view/templates/frontend/guide/payment/your_pay/policy.phtml                   # 推荐
 ├─ i18n/zh_Hans_CN.csv
 ├─ i18n/en_US.csv
 ├─ etc/env.php
@@ -38,7 +38,7 @@ app/code/Vendor/YourPay/
 | --- | --- |
 | Provider `getCode()` | 返回稳定 `method_code`，例如 `your_pay`。 |
 | Config phtml 文件名 | `backend/your_pay.phtml`。 |
-| Checkout 模板 code | `view/templates/Frontend/checkout/your_pay.phtml`，并在 `getDisplayMetadata()` 中声明 `checkout_template_code => your_pay`。 |
+| Checkout 模板 code | `view/templates/frontend/checkout/your_pay.phtml`，并在 `getDisplayMetadata()` 中声明 `checkout_template_code => your_pay`。 |
 
 ## 2. Provider 类
 
@@ -228,7 +228,7 @@ extends/module/Weline_SystemConfig/Config/backend/your_pay.phtml
 Provider 的 checkout 模板建议放在：
 
 ```text
-view/templates/Frontend/checkout/your_pay.phtml
+view/templates/frontend/checkout/your_pay.phtml
 ```
 
 模板 code 默认等于 `method_code`。Provider 在 `getDisplayMetadata()` 中返回：

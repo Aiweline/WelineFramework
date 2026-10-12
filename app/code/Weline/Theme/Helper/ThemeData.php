@@ -20,7 +20,6 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\Meta\Api\Data\MetaConfigIdentity;
 use Weline\Meta\Api\Data\MetaConfigRecord;
 use Weline\Meta\Api\Data\MetaConfigScopeSearch;
@@ -402,17 +401,6 @@ class ThemeData
         return $provider;
     }
 
-    private static function dictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$provider instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-
-        return $provider;
-    }
-
     private static function paramDefinitionNormalizer(): ParamDefinitionNormalizerInterface
     {
         $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
@@ -638,14 +626,14 @@ class ThemeData
         $locales = array_values(array_unique([$requestedLocale, 'zh_Hans_CN'], SORT_STRING));
 
         try {
-            $dictionary = self::dictionaryRepository();
             foreach ($locales as $locale) {
-                $entry = $dictionary->getEntry($translationKey, $locale);
-                if ($entry === null) {
-                    continue;
-                }
-                $translation = $entry->translation;
-                if ($translation !== null && $translation !== '') {
+                $translation = MetaTranslation::getTranslatedValueWithScope(
+                    $translationKey,
+                    'default',
+                    $locale,
+                    '',
+                );
+                if ($translation !== '') {
                     return $translation;
                 }
             }
@@ -666,18 +654,17 @@ class ThemeData
         $locales = array_values(array_unique([$locale, 'zh_Hans_CN'], SORT_STRING));
 
         try {
-            $dictionary = self::dictionaryRepository();
             foreach (self::scopeReadChain($scope, $area) as $candidateScope) {
-                $word = '@meta::' . $metaKey;
-                if ($candidateScope !== 'default') {
-                    $word .= '|scope:' . $candidateScope;
-                }
                 foreach ($locales as $candidateLocale) {
-                    $entry = $dictionary->getEntry($word, $candidateLocale);
-                    if ($entry !== null) {
+                    $found = MetaTranslation::findTranslatedValueWithScope(
+                        $metaKey,
+                        $candidateScope,
+                        $candidateLocale,
+                    );
+                    if ($found !== null) {
                         // The row itself is ownership. Empty text is therefore
                         // a valid local value and must stop fallback.
-                        return [true, $entry->translation];
+                        return [true, $found];
                     }
                 }
             }
@@ -973,7 +960,12 @@ class ThemeData
             $locale = self::currentConfigLocale($locale);
 
             try {
-                return self::dictionaryRepository()->upsert($translationKey, $locale, (string)$value);
+                return MetaTranslation::setTranslatedValueWithScope(
+                    $translationKey,
+                    (string)$value,
+                    'default',
+                    $locale,
+                );
             } catch (\Throwable) {
                 return false;
             }
@@ -1352,7 +1344,7 @@ class ThemeData
     /**
      * 设置某个参数在指定语言下的翻译值
      *
-     * 注意：翻译值写入 I18n Dictionary 表，而不是 MetaConfig 表，
+     * 注意：翻译值写入 MetaLocal，而不是 MetaConfig 表，
      * 读取时通过 MetaTranslation 统一取值。
      *
      * @param string      $identify  meta_identify（如 layouts.account）
@@ -1374,14 +1366,13 @@ class ThemeData
             $locale = self::currentConfigLocale();
         }
 
-        // 与 MetaTranslation::getTranslatedValueWithScope 保持相同的 key 约定
         $metaKey = "{$identify}.param.{$paramName}.value";
-        $translationKey = '@meta::' . $metaKey;
-        if ($effectiveScope !== 'default') {
-            $translationKey .= '|scope:' . $effectiveScope;
-        }
 
-        return self::writeLayoutConfiguration($identify, $effectiveScope, static fn(): bool => self::dictionaryRepository()->upsert($translationKey, $locale, $value));
+        return self::writeLayoutConfiguration(
+            $identify,
+            $effectiveScope,
+            static fn(): bool => MetaTranslation::setTranslatedValueWithScope($metaKey, $value, $effectiveScope, $locale),
+        );
     }
 
     /**
@@ -1400,12 +1391,12 @@ class ThemeData
         }
 
         $metaKey = "{$identify}.param.{$paramName}.value";
-        $translationKey = '@meta::' . $metaKey;
-        if ($effectiveScope !== 'default') {
-            $translationKey .= '|scope:' . $effectiveScope;
-        }
 
-        return self::writeLayoutConfiguration($identify, $effectiveScope, static fn(): bool => self::dictionaryRepository()->deleteEntry($translationKey, $locale));
+        return self::writeLayoutConfiguration(
+            $identify,
+            $effectiveScope,
+            static fn(): bool => MetaTranslation::deleteTranslatedValueWithScope($metaKey, $effectiveScope, $locale),
+        );
     }
 
     /**
@@ -2730,12 +2721,12 @@ class ThemeData
         }
 
         $metaKey = "{$identify}.path.{$path}.value";
-        $translationKey = '@meta::' . $metaKey;
-        if ($effectiveScope !== 'default') {
-            $translationKey .= '|scope:' . $effectiveScope;
-        }
 
-        return self::writeLayoutConfiguration($identify, $effectiveScope, static fn(): bool => self::dictionaryRepository()->upsert($translationKey, $locale, $value));
+        return self::writeLayoutConfiguration(
+            $identify,
+            $effectiveScope,
+            static fn(): bool => MetaTranslation::setTranslatedValueWithScope($metaKey, $value, $effectiveScope, $locale),
+        );
     }
 
     private static function writeLayoutConfiguration(string $identify, string $scope, callable $mutation): mixed

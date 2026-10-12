@@ -11,11 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Meta\Taglib;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Taglib\TaglibInterface;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\Meta\Helper\MetaData;
+use Weline\Meta\Helper\MetaTranslation;
 
 class Meta implements TaglibInterface
 {
@@ -127,30 +125,19 @@ class Meta implements TaglibInterface
                     }
                 }
 
-                // 如果 MetaData 没有找到，尝试从 I18n Dictionary 获取翻译（作为最后的回退）
+                // MetaLocal 回退
                 if (!str_starts_with($translationKey, '@meta::')) {
                     $translationKey = '@meta::' . $translationKey;
                 }
-
-                // 验证翻译键格式
-                if (preg_match('/^@meta::(.+)$/', $translationKey, $matches)) {
-                    $keyParts = explode('.', $matches[1]);
-                    if (count($keyParts) >= 5) {
-                        // 获取当前语言
-                        $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
-
-                        // 通过 I18n 公开契约获取翻译。
-                        $translation = self::dictionaryRepository()
-                            ->getEntry($translationKey, $locale)?->translation;
-                        if (!empty($translation)) {
-                            return $translation;
-                        }
-                    }
+                $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+                $translation = MetaTranslation::getTranslatedValueWithScope($translationKey, 'default', $locale, '');
+                if ($translation !== '') {
+                    return $translation;
                 }
             } catch (\Exception $e) {
                 // 如果获取失败，返回默认值
             }
-            // 优先级：MetaConfig配置值 > MetaData元数据标签 > I18n翻译值 > 默认值
+            // 优先级：MetaConfig配置值 > MetaData元数据标签 > MetaLocal > 默认值
             return $defaultValue;
         };
     }
@@ -168,17 +155,6 @@ class Meta implements TaglibInterface
     static function parent(): ?string
     {
         return null;
-    }
-
-    private static function dictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$provider instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-
-        return $provider;
     }
 
     static function document(): string

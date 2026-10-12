@@ -31,7 +31,7 @@ final class TrackingVendorPrototypeContractTest extends TestCase
 
     public function testPrototypeTemplateHasThreeVariantsAndDevBanner(): void
     {
-        $path = \dirname(__DIR__, 4) . '/view/templates/Backend/TrackingVendorPrototype/index.phtml';
+        $path = \dirname(__DIR__, 4) . '/view/templates/backend/TrackingVendorPrototype/index.phtml';
         self::assertFileExists($path);
         $src = (string)\file_get_contents($path);
         self::assertStringContainsString('data-testid="tracking-vendor-prototype"', $src);

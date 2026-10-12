@@ -15,8 +15,8 @@ final class MailTemplateUiSendContractTest extends TestCase
     {
         $root = dirname(__DIR__, 2);
         self::assertFileExists($root . '/Controller/Backend/Template.php');
-        self::assertFileExists($root . '/view/templates/Backend/Template/listing.phtml');
-        self::assertFileExists($root . '/view/templates/Backend/Template/edit.phtml');
+        self::assertFileExists($root . '/view/templates/backend/Template/listing.phtml');
+        self::assertFileExists($root . '/view/templates/backend/Template/edit.phtml');
         self::assertFileExists($root . '/view/Backend/Template/listing.phtml');
         self::assertFileExists($root . '/view/Backend/Template/edit.phtml');
 
@@ -57,7 +57,7 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('array_key_exists($key, $post)', $controller);
         self::assertStringContainsString('website_code', $controller);
 
-        $listingStub = (string)file_get_contents($root . '/view/templates/Backend/Template/listing.phtml');
+        $listingStub = (string)file_get_contents($root . '/view/templates/backend/Template/listing.phtml');
         self::assertStringContainsString('view/Backend/Template/listing.phtml', $listingStub);
         self::assertStringNotContainsString('data-testid="smtp-channel-listing"', $listingStub);
 
@@ -87,13 +87,13 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('writeListingParams', $listing);
         self::assertStringNotContainsString('data-smtp-locale-tag', $listing);
         self::assertStringNotContainsString('smtp-template-locale', $listing);
-        self::assertStringNotContainsString('view/templates/Backend/Template/listing.phtml', $listing);
+        self::assertStringNotContainsString('view/templates/backend/Template/listing.phtml', $listing);
 
         $resolver = (string)file_get_contents($root . '/Service/MailTemplateResolver.php');
         self::assertStringContainsString('default_LANGUAGE_CODE', $resolver);
         self::assertStringContainsString('resolveWebsiteDefaultLanguage', $resolver);
 
-        $editStub = (string)file_get_contents($root . '/view/templates/Backend/Template/edit.phtml');
+        $editStub = (string)file_get_contents($root . '/view/templates/backend/Template/edit.phtml');
         self::assertStringContainsString('view/Backend/Template/edit.phtml', $editStub);
         self::assertStringNotContainsString('w:editor-manager', $editStub);
 
@@ -202,7 +202,7 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('确定重置为默认模板？将丢失自定义正文以及页头/页尾改动。', $edit);
         self::assertStringContainsString('data-testid="smtp-template-reset-form"', $edit);
         self::assertStringContainsString('data-testid="smtp-template-save"', $edit);
-        self::assertStringNotContainsString('view/templates/Backend/Template/edit.phtml', $edit);
+        self::assertStringNotContainsString('view/templates/backend/Template/edit.phtml', $edit);
         self::assertDoesNotMatchRegularExpression('/<textarea[^>]*\seditor\b/', $edit);
     }
 

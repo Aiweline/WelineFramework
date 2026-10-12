@@ -7,5 +7,5 @@ declare(strict_types=1);
  * 模块：Weline_Currency
  */
 return [
-    'Weline_Currency::templates/Frontend/widgets/footer-currency-rates-link.phtml',
+    'Weline_Currency::templates/frontend/widgets/footer-currency-rates-link.phtml',
 ];

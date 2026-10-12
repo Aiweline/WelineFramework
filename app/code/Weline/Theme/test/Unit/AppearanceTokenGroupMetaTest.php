@@ -29,7 +29,8 @@ final class AppearanceTokenGroupMetaTest extends TestCase
         $catalog = $this->read('app/code/Weline/Theme/Service/Disk/ThemeTokenCatalogService.php');
         $appearance = $this->read('app/code/Weline/Theme/view/statics/js/theme-disk-appearance.js');
 
-        self::assertStringContainsString('DictionaryEvents::register', $helper);
+        self::assertStringNotContainsString('DictionaryEvents::register', $helper);
+        self::assertStringContainsString('MetaTranslation::setTranslatedValueWithScope', $helper);
         self::assertStringContainsString('appearance.token_group.', $helper);
         self::assertStringContainsString('MetaTranslation::getTranslatedValue', $helper);
         self::assertStringContainsString('parseSectionHeading', $helper);

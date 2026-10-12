@@ -11,7 +11,7 @@ final class AccountFormProviderConfigFieldsContractTest extends TestCase
     public function testProvidersDeclareOwnFieldsAndFormRendersDynamically(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = $root . '/view/templates/Backend/Account/form.phtml';
+        $template = $root . '/view/templates/backend/Account/form.phtml';
         $capability = $root . '/Service/SeoPlatformCapabilityService.php';
         $interface = $root . '/Interface/SearchEngineAdapterInterface.php';
 

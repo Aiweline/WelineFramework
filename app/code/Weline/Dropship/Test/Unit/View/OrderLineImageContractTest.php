@@ -14,7 +14,7 @@ final class OrderLineImageContractTest extends TestCase
         $root = dirname(__DIR__, 3);
         $ctrl = (string)file_get_contents($root . '/Controller/Backend/Order.php');
         $js = (string)file_get_contents($root . '/view/statics/backend/order-accordion.js');
-        $tpl = (string)file_get_contents($root . '/view/templates/Backend/Order/index.phtml');
+        $tpl = (string)file_get_contents($root . '/view/templates/backend/Order/index.phtml');
         $mod = (string)file_get_contents($root . '/view/statics/backend/weline.modules.js');
 
         self::assertStringContainsString('enrichLinesWithImages', $ctrl);

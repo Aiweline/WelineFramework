@@ -7,6 +7,7 @@ namespace Weline\Websites\Service;
 use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Model\Website\LocalDescription;
 use Weline\Websites\Model\WebsiteLanguage;
 
 /**
@@ -242,30 +243,22 @@ final class WebsiteBrandIdentitySeedService
     private function upsertWebsiteLocal(int $websiteId, string $locale, string $name, string $description): bool
     {
         // LocalDescription 复合身份是 (website_id, local_code)；默认站 website_id=0 时
-        // Model::save 会把「有 ID」误判成更新同一行，导致多语互相覆盖。走 ON CONFLICT。
+        // Model::save 会把「有 ID」误判成更新同一行，导致多语互相覆盖。
+        // 用 ORM insert 冲突更新（方言下沉 Adapter），禁止业务手写引擎方言 SQL / 直连 PDO。
         $description = mb_substr($description, 0, 500);
         try {
-            $env = \Weline\Framework\App\Env::getInstance()->getConfig('db')['master'] ?? [];
-            if (!is_array($env) || trim((string)($env['database'] ?? '')) === '') {
-                return false;
-            }
-            $pdo = new \PDO(
-                sprintf(
-                    'pgsql:host=%s;port=%s;dbname=%s',
-                    (string)($env['hostname'] ?? '127.0.0.1'),
-                    (string)($env['hostport'] ?? '5432'),
-                    (string)$env['database']
-                ),
-                (string)($env['username'] ?? ''),
-                (string)($env['password'] ?? ''),
-                [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
-            );
-            $cur = $pdo->prepare(
-                'SELECT name, description FROM w_weline_websites_website_local
-                 WHERE website_id = :id AND local_code = :locale LIMIT 1'
-            );
-            $cur->execute([':id' => $websiteId, ':locale' => $locale]);
-            $row = $cur->fetch(\PDO::FETCH_ASSOC) ?: null;
+            /** @var LocalDescription $local */
+            $local = ObjectManager::getInstance(LocalDescription::class);
+            $existing = (clone $local)->clear()->reset()
+                ->where(LocalDescription::schema_fields_ID, $websiteId)
+                ->where(LocalDescription::schema_fields_LOCALE_CODE, $locale)
+                ->find()
+                ->fetch();
+            $hasRow = trim((string)$existing->getData(LocalDescription::schema_fields_LOCALE_CODE)) !== '';
+            $row = $hasRow ? [
+                'name' => (string)$existing->getData(LocalDescription::schema_fields_NAME),
+                'description' => (string)$existing->getData(LocalDescription::schema_fields_DESCRIPTION),
+            ] : null;
             $curName = trim((string)($row['name'] ?? ''));
             $curDesc = trim((string)($row['description'] ?? ''));
             $nextName = $name !== '' ? $name : $curName;
@@ -273,19 +266,21 @@ final class WebsiteBrandIdentitySeedService
             if ($row !== null && $nextName === $curName && $nextDesc === $curDesc) {
                 return false;
             }
-            $stmt = $pdo->prepare(
-                'INSERT INTO w_weline_websites_website_local (website_id, local_code, name, description)
-                 VALUES (:id, :locale, :name, :description)
-                 ON CONFLICT (website_id, local_code) DO UPDATE SET
-                   name = EXCLUDED.name,
-                   description = EXCLUDED.description'
-            );
-            $stmt->execute([
-                ':id' => $websiteId,
-                ':locale' => $locale,
-                ':name' => $nextName,
-                ':description' => $nextDesc,
-            ]);
+            (clone $local)->clear()->reset()
+                ->insert(
+                    [[
+                        LocalDescription::schema_fields_ID => $websiteId,
+                        LocalDescription::schema_fields_LOCALE_CODE => $locale,
+                        LocalDescription::schema_fields_NAME => $nextName,
+                        LocalDescription::schema_fields_DESCRIPTION => $nextDesc,
+                    ]],
+                    [
+                        LocalDescription::schema_fields_ID,
+                        LocalDescription::schema_fields_LOCALE_CODE,
+                    ],
+                    LocalDescription::schema_fields_NAME . ',' . LocalDescription::schema_fields_DESCRIPTION,
+                )
+                ->fetch();
 
             return true;
         } catch (\Throwable) {

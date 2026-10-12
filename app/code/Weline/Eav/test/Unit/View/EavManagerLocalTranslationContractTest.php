@@ -20,7 +20,7 @@ final class EavManagerLocalTranslationContractTest extends TestCase
             dirname(__DIR__, 3) . '/Queue/EavLocalTranslationQueue.php',
         );
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Manager/surface.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/Manager/surface.phtml',
         );
         $js = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/statics/js/eav-manager-native.js',

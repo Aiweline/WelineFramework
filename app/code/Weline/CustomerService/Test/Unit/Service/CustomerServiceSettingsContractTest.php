@@ -16,7 +16,7 @@ final class CustomerServiceSettingsContractTest extends TestCase
             $moduleRoot . '/extends/module/Weline_SystemConfig/Config/frontend/customer-service.phtml'
         );
         $configController = (string)file_get_contents($moduleRoot . '/Controller/Backend/Config.php');
-        $configTemplate = (string)file_get_contents($moduleRoot . '/view/templates/Backend/Config/index.phtml');
+        $configTemplate = (string)file_get_contents($moduleRoot . '/view/templates/backend/Config/index.phtml');
         $menuXml = (string)file_get_contents($moduleRoot . '/etc/backend/menu.xml');
         $chat = (string)file_get_contents($moduleRoot . '/Controller/Frontend/Chat.php');
         $query = (string)file_get_contents(
@@ -24,7 +24,7 @@ final class CustomerServiceSettingsContractTest extends TestCase
         );
         $chatService = (string)file_get_contents($moduleRoot . '/Service/ChatService.php');
         $widget = (string)file_get_contents(
-            $moduleRoot . '/view/templates/Frontend/widgets/customer-service-float.phtml'
+            $moduleRoot . '/view/templates/frontend/widgets/customer-service-float.phtml'
         );
 
         self::assertStringContainsString('customer_service/general/enabled', $template);
@@ -64,7 +64,7 @@ final class CustomerServiceSettingsContractTest extends TestCase
         );
 
         $widgetPhp = $moduleRoot . '/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
-        $tpl = 'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml';
+        $tpl = 'Weline_CustomerService::templates/frontend/widgets/customer-service-float.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
         self::assertStringContainsString('"slot":"storefront-float-end"', $widget);
         self::assertStringContainsString('"area":"footer"', $widget);

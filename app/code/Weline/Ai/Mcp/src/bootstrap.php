@@ -41,6 +41,8 @@ require_once __DIR__ . '/KnowledgeService.php';
 require_once __DIR__ . '/LearningSkillService.php';
 require_once __DIR__ . '/IntelligenceService.php';
 require_once __DIR__ . '/IndexSidecar.php';
+require_once __DIR__ . '/DevMaintenanceGate.php';
+require_once __DIR__ . '/IndexRefreshScheduler.php';
 require_once __DIR__ . '/ProjectAutoContext.php';
 require_once __DIR__ . '/ProjectRoutingGuard.php';
 require_once __DIR__ . '/Collector.php';

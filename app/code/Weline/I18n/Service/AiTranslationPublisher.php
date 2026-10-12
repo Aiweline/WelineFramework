@@ -6,8 +6,13 @@ namespace Weline\I18n\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Model\Dictionary as WordDictionary;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 
+/**
+ * 系统词典 → generated/language/{locale}.{shared|frontend|backend}.php 唯一写出入口。
+ * 三袋互斥：一词只进一区；可选保留 {locale}.php 并集供 CLI。
+ */
 class AiTranslationPublisher
 {
     public function __construct(
@@ -25,7 +30,6 @@ class AiTranslationPublisher
         $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
         $connection = $this->localeDictionary->getConnection();
         if ($transactions->isActive($connection)) {
-            // 事务内只登记提交后发布；同语言的重复请求合并，回滚不触碰公共文件。
             $transactions->afterCommit($connection, 'i18n.publish_locale.' . $localeCode, function () use ($localeCode): void {
                 if (!$this->publishCommittedLocale($localeCode)) {
                     throw new \RuntimeException('i18n_locale_file_publish_failed');
@@ -40,24 +44,41 @@ class AiTranslationPublisher
     private function publishCommittedLocale(string $localeCode): bool
     {
         $this->ensurePublishMemoryCeiling();
-        $filename = Env::path_TRANSLATE_FILES_PATH . $localeCode . '.php';
-        $previous = null;
+        $dir = Env::path_TRANSLATE_FILES_PATH;
+        $unionFile = $dir . $localeCode . '.php';
+        $areaFiles = [
+            DictionaryAreaPolicy::AREA_SHARED => $dir . DictionaryAreaPolicy::localeBagBasename($localeCode, DictionaryAreaPolicy::AREA_SHARED),
+            DictionaryAreaPolicy::AREA_FRONTEND => $dir . DictionaryAreaPolicy::localeBagBasename($localeCode, DictionaryAreaPolicy::AREA_FRONTEND),
+            DictionaryAreaPolicy::AREA_BACKEND => $dir . DictionaryAreaPolicy::localeBagBasename($localeCode, DictionaryAreaPolicy::AREA_BACKEND),
+        ];
+        /** @var array<string, string|null> $previousByPath */
+        $previousByPath = [];
         $mode = 0644;
         $replaced = false;
+
         return ObjectManager::getInstance(I18nResourceChangePublisher::class)->publishLocaleFile(
             $localeCode,
-            function () use ($localeCode, $filename, &$previous, &$mode, &$replaced): array {
-                // 本回调在语言资源修订行锁内执行，不能提前读取 DB 或文件快照。
-                clearstatcache(true, $filename);
-                if (is_file($filename)) {
-                    $previous = file_get_contents($filename);
-                    if ($previous === false) {
-                        throw new \RuntimeException('i18n_locale_file_read_failed');
+            function () use ($localeCode, $unionFile, $areaFiles, &$previousByPath, &$mode, &$replaced): array {
+                foreach ([$unionFile, ...array_values($areaFiles)] as $path) {
+                    clearstatcache(true, $path);
+                    if (is_file($path)) {
+                        $prev = file_get_contents($path);
+                        if ($prev === false) {
+                            throw new \RuntimeException('i18n_locale_file_read_failed');
+                        }
+                        $previousByPath[$path] = $prev;
+                        $mode = fileperms($path) & 0777;
+                    } else {
+                        $previousByPath[$path] = null;
                     }
-                    $mode = fileperms($filename) & 0777;
                 }
-                $words = $this->readExistingWords($localeCode);
-                // 词典常 >10000 行：禁止无界 fetchArray（否则 Unbounded SELECT，publish 失败，locale 文件停更）。
+
+                $areaByWord = $this->loadBaseWordAreas();
+                $bags = [
+                    DictionaryAreaPolicy::AREA_SHARED => [],
+                    DictionaryAreaPolicy::AREA_FRONTEND => [],
+                    DictionaryAreaPolicy::AREA_BACKEND => [],
+                ];
                 $query = (clone $this->localeDictionary)->clear()->reset()
                     ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
                     ->select();
@@ -67,33 +88,87 @@ class AiTranslationPublisher
                     }
                     $word = (string)($row[LocaleDictionary::schema_fields_WORD] ?? '');
                     $translate = (string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? '');
-                    if ($word !== '' && $translate !== '') {
-                        $words[$word] = $translate;
+                    if ($word === '' || $translate === '' || str_starts_with($word, '@meta::')) {
+                        continue;
                     }
+                    $area = $areaByWord[$word] ?? DictionaryAreaPolicy::AREA_SHARED;
+                    $bags[$area][$word] = $translate;
                 }
-                ksort($words, SORT_STRING);
-                $contents = '<?php return ' . var_export($words, true) . ';?>';
-                unset($words);
-                // 内容相同不等于上次版本已提交；显式发布始终补齐规范 changed。
+
+                $total = count($bags[DictionaryAreaPolicy::AREA_SHARED])
+                    + count($bags[DictionaryAreaPolicy::AREA_FRONTEND])
+                    + count($bags[DictionaryAreaPolicy::AREA_BACKEND]);
+                if ($total === 0 && is_string($previousByPath[$unionFile] ?? null) && $previousByPath[$unionFile] !== '') {
+                    w_log_warning('I18n locale publish skipped empty DB snapshot', [
+                        'locale' => $localeCode,
+                    ], 'i18n');
+                    $replaced = false;
+
+                    return ['content_sha256' => hash('sha256', (string)$previousByPath[$unionFile])];
+                }
+
+                $hashes = [];
+                $union = [];
+                foreach ($bags as $area => $words) {
+                    ksort($words, SORT_STRING);
+                    $contents = '<?php return ' . var_export($words, true) . ';?>';
+                    $hashes[$area] = hash('sha256', $contents);
+                    $this->replaceFile($areaFiles[$area], $contents, $mode);
+                    $union += $words;
+                }
+                ksort($union, SORT_STRING);
+                $unionContents = '<?php return ' . var_export($union, true) . ';?>';
+                $this->replaceFile($unionFile, $unionContents, $mode);
                 $replaced = true;
-                $this->replaceFile($filename, $contents, $mode);
-                return ['content_sha256' => hash('sha256', $contents)];
+
+                return [
+                    'content_sha256' => hash('sha256', implode('|', $hashes) . '|' . hash('sha256', $unionContents)),
+                    'area_sha256' => $hashes,
+                ];
             },
-            function () use ($filename, &$previous, &$mode, &$replaced): void {
+            function () use ($areaFiles, $unionFile, &$previousByPath, &$mode, &$replaced): void {
                 if (!$replaced) {
                     return;
                 }
-                if (is_string($previous)) {
-                    $this->replaceFile($filename, $previous, $mode);
-                } elseif (is_file($filename) && !unlink($filename)) {
-                    throw new \RuntimeException('i18n_locale_file_remove_failed');
+                foreach ([$unionFile, ...array_values($areaFiles)] as $path) {
+                    $previous = $previousByPath[$path] ?? null;
+                    if (is_string($previous)) {
+                        $this->replaceFile($path, $previous, $mode);
+                    } elseif (is_file($path) && !unlink($path)) {
+                        throw new \RuntimeException('i18n_locale_file_remove_failed');
+                    }
+                    $this->invalidateFile($path);
                 }
-                $this->invalidateFile($filename);
             },
         );
     }
 
-    /** 同目录临时文件原子替换，发布及失败恢复共用相同写入路径。 */
+    /**
+     * @return array<string, string> word => area
+     */
+    private function loadBaseWordAreas(): array
+    {
+        /** @var WordDictionary $base */
+        $base = ObjectManager::getInstance(WordDictionary::class);
+        $map = [];
+        $query = (clone $base)->clear()->reset()->select();
+        foreach ($query->fetchIterator() as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $word = (string)($row[WordDictionary::schema_fields_WORD] ?? '');
+            if ($word === '') {
+                continue;
+            }
+            $area = (string)($row[WordDictionary::schema_fields_AREA] ?? '');
+            $map[$word] = $area === ''
+                ? DictionaryAreaPolicy::AREA_SHARED
+                : DictionaryAreaPolicy::normalize($area);
+        }
+
+        return $map;
+    }
+
     private function replaceFile(string $filename, string $contents, int $mode): void
     {
         $dir = dirname($filename);
@@ -127,9 +202,6 @@ class AiTranslationPublisher
         }
     }
 
-    /**
-     * cron collect 后 republish 多 locale 时，128M 默认会在 var_export 阶段 OOM。
-     */
     private function ensurePublishMemoryCeiling(): void
     {
         $raw = \trim((string)\ini_get('memory_limit'));
@@ -147,44 +219,5 @@ class AiTranslationPublisher
         if ($bytes > 0 && $bytes < 512 * 1024 * 1024) {
             @\ini_set('memory_limit', '512M');
         }
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function readExistingWords(string $localeCode): array
-    {
-        $filename = Env::path_TRANSLATE_FILES_PATH . $localeCode . '.php';
-        if (!is_file($filename)) {
-            return [];
-        }
-
-        try {
-            $data = include $filename;
-        } catch (\Throwable) {
-            return [];
-        }
-
-        return $this->flattenWords(is_array($data) ? $data : []);
-    }
-
-    /**
-     * @param array<mixed> $data
-     * @return array<string, string>
-     */
-    private function flattenWords(array $data): array
-    {
-        $words = [];
-        foreach ($data as $key => $value) {
-            if (is_array($value)) {
-                $words += $this->flattenWords($value);
-                continue;
-            }
-            if (is_string($key) && $key !== '' && (is_string($value) || is_numeric($value))) {
-                $words[$key] = (string)$value;
-            }
-        }
-
-        return $words;
     }
 }

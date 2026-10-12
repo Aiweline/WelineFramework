@@ -122,9 +122,9 @@ class BaseController extends BackendController
             $fileName = $controllerClassName . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
         }
 
-        $before = $this->getTemplate()->fetch('Weline_Admin::templates/Backend/page-layout/main-content-before.phtml');
+        $before = $this->getTemplate()->fetch('Weline_Admin::templates/backend/page-layout/main-content-before.phtml');
         $content = $this->getTemplate()->fetch('templates' . DS . $fileName);
-        $after = $this->getTemplate()->fetch('Weline_Admin::templates/Backend/page-layout/main-content-after.phtml');
+        $after = $this->getTemplate()->fetch('Weline_Admin::templates/backend/page-layout/main-content-after.phtml');
 
         return $before . $content . $after;
     }

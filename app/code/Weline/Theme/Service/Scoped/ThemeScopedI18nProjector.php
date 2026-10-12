@@ -4,18 +4,17 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Scoped;
 
-use Weline\I18n\Api\Translation\DictionaryEntry;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Meta\Helper\MetaTranslation as MetaMetaTranslation;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\ThemeData;
 
 /**
- * Dedicated I18n translation load/project collaborator for scoped Theme workspaces.
+ * Dedicated MetaLocal translation load/project collaborator for scoped Theme workspaces.
  */
 final class ThemeScopedI18nProjector
 {
     public function __construct(
-        private readonly DictionaryRepositoryInterface $dictionary,
         private readonly ThemeScopedProjectionSupport $support,
     ) {
     }
@@ -28,26 +27,23 @@ final class ThemeScopedI18nProjector
             return ['translations' => $translations];
         }
         [, $layoutIdentify] = $this->support->metaResourceIdentity($context);
-        // Legacy theme_layout rows are gone; resolve widget owners from dictionary words
-        // via wi_{node_uid} identify when scanning translations below.
-        $entries = $this->dictionary->listByWordPrefix('@meta::theme.' . $context->area . '.');
+        $entries = MetaMetaTranslation::listByIdentifyPrefix('theme.' . $context->area);
 
         foreach (array_reverse($this->support->legacyReadScopes($context)) as $scope) {
             foreach ($entries as $entry) {
-                if (!$entry instanceof DictionaryEntry
-                    || $entry->localeCode !== $context->locale
-                    || !$this->wordMatchesScope($entry->word, $scope)
+                if ($entry['locale_code'] !== $context->locale
+                    || !$this->wordMatchesScope($entry['word'], $scope)
                 ) {
                     continue;
                 }
-                $layoutKey = $this->translationParamForIdentify($entry->word, $layoutIdentify);
+                $layoutKey = $this->translationParamForIdentify($entry['word'], $layoutIdentify);
                 if ($layoutKey !== null) {
                     $translations['layout'][$layoutKey] = ThemeData::decodeProjectedTranslationValue(
-                        $entry->translation,
+                        $entry['translate'],
                     );
                     continue;
                 }
-                $nodeUid = $this->nodeUidFromTranslationWord($entry->word, $context->area);
+                $nodeUid = $this->nodeUidFromTranslationWord($entry['word'], $context->area);
                 if ($nodeUid === null) {
                     continue;
                 }
@@ -55,10 +51,10 @@ final class ThemeScopedI18nProjector
                 if ($identify === null) {
                     continue;
                 }
-                $param = $this->translationParamForIdentify($entry->word, $identify);
+                $param = $this->translationParamForIdentify($entry['word'], $identify);
                 if ($param !== null) {
                     $translations[$nodeUid][$param] = ThemeData::decodeProjectedTranslationValue(
-                        $entry->translation,
+                        $entry['translate'],
                     );
                 }
             }
@@ -109,23 +105,23 @@ final class ThemeScopedI18nProjector
         }
 
         $relatedIdentifies = array_values(array_unique(array_merge([$layoutIdentify], array_values($nodeIdentifies))));
-        foreach ($this->dictionary->listByWordPrefix('@meta::theme.' . $context->area . '.') as $entry) {
-            if ($entry->localeCode !== $context->locale || !$this->wordMatchesScope($entry->word, $scope)) {
+        foreach (MetaMetaTranslation::listByIdentifyPrefix('theme.' . $context->area, $context->locale, $scope) as $entry) {
+            if (!$this->wordMatchesScope($entry['word'], $scope)) {
                 continue;
             }
             $related = false;
             foreach ($relatedIdentifies as $identify) {
-                if ($this->translationParamForIdentify($entry->word, $identify) !== null) {
+                if ($this->translationParamForIdentify($entry['word'], $identify) !== null) {
                     $related = true;
                     break;
                 }
             }
-            if ($related && !array_key_exists($entry->word, $expected)) {
-                $this->dictionary->deleteEntry($entry->word, $entry->localeCode);
+            if ($related && !array_key_exists($entry['word'], $expected)) {
+                MetaTranslation::deleteTranslatedValueWithScope($entry['word'], $scope, $entry['locale_code']);
             }
         }
         foreach ($expected as $word => $translation) {
-            $this->dictionary->upsert($word, $context->locale, $translation);
+            MetaTranslation::setTranslatedValueWithScope($word, $translation, $scope, $context->locale);
         }
         ThemeData::clearCache();
     }

@@ -1829,6 +1829,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         // Evidence 8f7f40: category MISS 1–2.9s vs HIT ~0.2–0.5s; critical
         // warmup only seals `/`+`/products` (localeBudget=0 drops provider extras).
         $this->runCategorySurfaceFpcPrimeShards();
+        // Idle P2–P4 (product / policy / blog long-tail) after category surface.
+        // Wait for quiet window so crawler pressure does not starve workers.
+        $this->runIdleRankFpcPrimeShards();
     }
 
     /**
@@ -2466,6 +2469,163 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 'elapsed_cap_ms' => $elapsedCapMs,
             ]
         );
+    }
+
+    /**
+     * Idle deferred FPC for provider ranks P2–P4 (products, policy, blog/long-tail).
+     * P0 critical + P1 category_surface already ran; this fills the long tail when quiet.
+     */
+    private function runIdleRankFpcPrimeShards(): void
+    {
+        $startedAt = \microtime(true);
+        $enabledRaw = Env::get('wls.worker.storefront_idle_rank_warmup_enabled', null);
+        if ($enabledRaw === null || $enabledRaw === '') {
+            $enabledRaw = Env::get('storefront_idle_rank_warmup_enabled', 1);
+        }
+        if (!(bool)(int)$enabledRaw) {
+            $this->logDeferredStorefrontWarmupStage('idle_rank_prime_skipped', [
+                'reason' => 'disabled',
+                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            ]);
+
+            return;
+        }
+
+        $maxPathsRaw = Env::get('wls.worker.storefront_idle_rank_warmup_max_paths', null);
+        if ($maxPathsRaw === null || $maxPathsRaw === '') {
+            $maxPathsRaw = Env::get('storefront_idle_rank_warmup_max_paths', 8);
+        }
+        $maxPaths = \max(0, \min(24, (int)$maxPathsRaw));
+        $minRank = \max(1, \min(4, (int)(Env::get('wls.worker.storefront_idle_rank_warmup_min', 2) ?: 2)));
+        $maxRank = \max($minRank, \min(4, (int)(Env::get('wls.worker.storefront_idle_rank_warmup_max', 4) ?: 4)));
+        $elapsedCapRaw = Env::get('wls.worker.storefront_idle_rank_warmup_elapsed_cap_ms', null);
+        if ($elapsedCapRaw === null || $elapsedCapRaw === '') {
+            $elapsedCapRaw = Env::get('storefront_idle_rank_warmup_elapsed_cap_ms', 30000);
+        }
+        $elapsedCapMs = \max(1000, \min(180000, (int)$elapsedCapRaw));
+
+        if ($maxPaths <= 0) {
+            $this->logDeferredStorefrontWarmupStage('idle_rank_prime_skipped', [
+                'reason' => 'max_paths_zero',
+                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            ]);
+
+            return;
+        }
+
+        $idleGate = $this->awaitDeferredStorefrontIdleGate('idle_rank');
+        $paths = $this->resolveIdleRankWarmupPaths($maxPaths, $minRank, $maxRank);
+        if ($paths === []) {
+            $this->logDeferredStorefrontWarmupStage('idle_rank_prime_skipped', [
+                'reason' => 'no_paths',
+                'min_rank' => $minRank,
+                'max_rank' => $maxRank,
+                'idle_gate' => $idleGate,
+                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            ]);
+
+            return;
+        }
+
+        $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
+        $items = [];
+        foreach ($paths as $path) {
+            $items[] = ['path' => $path, 'host' => (string)($hosts[0] ?? '127.0.0.1')];
+        }
+
+        $this->logDeferredStorefrontWarmupStage('idle_rank_prime', [
+            'paths' => $paths,
+            'min_rank' => $minRank,
+            'max_rank' => $maxRank,
+            'max_paths' => $maxPaths,
+            'elapsed_cap_ms' => $elapsedCapMs,
+            'idle_gate' => $idleGate,
+            'hosts' => $hosts,
+        ]);
+
+        $warmed = 0;
+        $failed = 0;
+        $bounded = $this->runBoundedDeferredPrimeShards(
+            'idle_rank_prime',
+            $items,
+            $elapsedCapMs,
+            30,
+            function (array $item) use (&$warmed, &$failed, $hosts): array {
+                // Yield between paths so busy crawlers can reclaim the event loop.
+                $gate = $this->awaitDeferredStorefrontIdleGate('idle_rank_path');
+                $result = $this->runStorefrontFpcWarmupInternal([(string)$item['path']], $hosts, true);
+                $warmed += (int)($result['warmed'] ?? 0);
+                $failed += (int)($result['failed'] ?? 0);
+                $errors = [];
+                foreach (\is_array($result['errors'] ?? null) ? $result['errors'] : [] as $error) {
+                    $errors[] = (string)$item['path'] . ':' . (string)$error;
+                }
+
+                return [
+                    'sample' => [
+                        'path' => (string)$item['path'],
+                        'warmed' => (int)($result['warmed'] ?? 0),
+                        'failed' => (int)($result['failed'] ?? 0),
+                        'idle_gate' => $gate,
+                    ],
+                    'errors' => $errors,
+                ];
+            },
+        );
+
+        $this->logDeferredStorefrontWarmupStage(
+            !empty($bounded['truncated']) ? 'idle_rank_prime_truncated' : 'idle_rank_prime_done',
+            [
+                'warmed' => $warmed,
+                'failed' => $failed,
+                'attempted' => (int)$bounded['attempted'],
+                'truncated' => (bool)$bounded['truncated'],
+                'min_rank' => $minRank,
+                'max_rank' => $maxRank,
+                'errors' => \array_slice($bounded['errors'], 0, 8),
+                'samples' => \array_slice($bounded['samples'], 0, 8),
+                'elapsed_ms' => (float)$bounded['elapsed_ms'],
+                'elapsed_cap_ms' => $elapsedCapMs,
+            ]
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveIdleRankWarmupPaths(int $maxPaths, int $minRank, int $maxRank): array
+    {
+        try {
+            // Ranked paths live on Theme WorkerBootstrapWarmup (not the thin provider).
+            if (\class_exists(\Weline\Theme\Observer\WorkerBootstrapWarmup::class)) {
+                /** @var \Weline\Theme\Observer\WorkerBootstrapWarmup $bootstrap */
+                $bootstrap = ObjectManager::getInstance(\Weline\Theme\Observer\WorkerBootstrapWarmup::class);
+                $ranked = $bootstrap->getFpcWarmupPathsByRanks($minRank, $maxRank);
+                $paths = [];
+                foreach ($ranked as $rawPath) {
+                    $path = $this->filterDeferredStorefrontWarmupPath((string)$rawPath);
+                    if ($path === null || $path === '' || $path === '/' || $path === '/products') {
+                        continue;
+                    }
+                    $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
+                    // Categories stay on category_surface_prime (P1).
+                    if ($pathOnly === '/categories' || \str_starts_with($pathOnly, '/category/')) {
+                        continue;
+                    }
+                    $paths[$path] = $path;
+                }
+
+                return \array_slice(\array_values($paths), 0, \max(0, $maxPaths));
+            }
+
+            return [];
+        } catch (\Throwable $e) {
+            $this->logDeferredStorefrontWarmupStage('idle_rank_paths_error', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
     }
 
     /**

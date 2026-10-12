@@ -5,7 +5,7 @@
  * Keeps the established homepage slot ids while making the default Theme page
  * complete without any store/catalog module.
  *
- * @meta.name {default="首页",name="首页",description="默认商城首页（站名取自 Website 基础信息）"}
+ * @meta.name {default="DaoCharms 首页",name="DaoCharms 首页",description="仪式生活物件首页（站名取自 Website 基础信息）"}
  * @param.title {default="",name="页面标题 · Page title",description="留空则使用当前网站名称（Website 基础信息）"}
  * @param.meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
  * @param.meta_description {default="",name="SEO描述",description="SEO描述，用于搜索结果和社交摘要；有实体SEO时不覆盖实体"}
@@ -82,18 +82,19 @@ if ($configuredTitle === '' || preg_match('/^[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9_]
 $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBrandTitle)
     ? $localizedBrandTitle
     : $configuredTitle;
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
-        <theme:css>Weline_Theme::theme/frontend/assets/css/layout-homepage-default.css</theme:css>
+    <!-- DaoCharms homepage aesthetics: frontend/assets/css/daocharms-homepage.css -->
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::homepage::head-after</w:hook>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="theme-layout-homepage <?= $class ?>">
+<body class="theme-layout-homepage daocharms-storefront <?= $class ?>">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::homepage::body-start</w:hook>
@@ -135,32 +136,85 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             wrapper="section"
                             class="homepage-section homepage-hero" weline-code="theme.homepage.homepage_hero">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::hero<else/>
-                            <w:widget type="banner" name="hero-slider" />
+                            <?php /* 浅底编辑式首屏：眉题 + 衬线大标题 + 单一主 CTA + 宽幅自然影像 */ ?>
+                            <section class="daocharms-hero daocharms-hero--editorial"
+                                     weline-code="theme.homepage.daocharms_hero_editorial"
+                                     aria-label="<?= $esc($translateThemeCopy('道家意象', 'Daoist motifs')) ?>">
+                                <div class="daocharms-hero__intro">
+                                    <p class="daocharms-hero__eyebrow"><?= $esc($translateThemeCopy('天然之物 · 古老智慧 · 日常仪式。', 'NATURAL OBJECTS. ANCIENT WISDOM. EVERYDAY RITUALS.')) ?></p>
+                                    <h2 class="daocharms-hero__display"><?= $esc($translateThemeCopy('为日常，留一寸静。', 'Keep a quiet inch for the day.')) ?></h2>
+                                    <div class="daocharms-hero__actions">
+                                        <a class="daocharms-hero__btn daocharms-hero__btn--primary" href="@url{'products'}">
+                                            <span><?= $esc($translateThemeCopy('探索可佩戴的仪式', 'Explore wearable rituals')) ?></span>
+                                            <span class="daocharms-hero__btn-arrow" aria-hidden="true">→</span>
+                                        </a>
+                                    </div>
+                                    <p class="daocharms-hero__aside"><?= $esc($translateThemeCopy('更沉静，更笃定，更贴近自己。', 'A CALMER MORE GROUNDED YOU')) ?></p>
+                                </div>
+                                <figure class="daocharms-hero__band">
+                                    <?php /* UI 01-home：宽幅自然影像；图内叠字由 .daocharms-hero__band-note 承担（可翻译） */ ?>
+                                    <img class="daocharms-hero__band-img"
+                                         src="/pub/media/catalog/daocharms/homepage/hero-nature-band.webp?v=20261012ui01"
+                                         alt="<?= $esc($translateThemeCopy('山石水景与陶瓶枝叶', 'Stone pool, mountains and a ceramic vessel')) ?>"
+                                         width="1440"
+                                         height="544"
+                                         fetchpriority="high"
+                                         decoding="async">
+                                    <figcaption class="daocharms-hero__band-note"><?= $esc($translateThemeCopy('自然，带我们回来。', 'NATURE BRINGS US BACK')) ?></figcaption>
+                                </figure>
+                            </section>
                         </w:hook>
                     </w:slot>
 
-                    <?php /* WO-HP-P2-05 + Wave-3：Hero → 信任条 → 精选 → 品类磁贴 → 特价 → … → 压缩内容 → 视频页底 */ ?>
-                    <w:slot id="homepage-trust"
-                            name="Homepage trust"
-                            accept="layout-homepage-trust,trust-badges,testimonial,content"
-                            multiple="true"
-                            position="content"
-                            wrapper="section"
-                            class="homepage-section homepage-section--trust-strip" weline-code="theme.homepage.homepage_trust">
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust<else/>
-                            <w:widget type="content" name="trust-badges" params='{"preset_badges":["free-shipping","money-back","secure-payment"],"columns":"3","style":"icon-text"}' />
-                        </w:hook>
-                    </w:slot>
+                    <?php /* 气口：首屏后一句静语，无销售控件 */ ?>
+                    <section class="daocharms-ritual-intro daocharms-ritual-intro--breath" weline-code="theme.homepage.daocharms_ritual_intro" aria-label="DaoCharms">
+                        <h2 class="daocharms-ritual-intro__title"><?= $esc($translateThemeCopy('留出空间，回到自己。', 'Make space. Return to yourself.')) ?></h2>
+                        <p class="daocharms-ritual-intro__lede"><?= $esc($translateThemeCopy('两条路，同一个去处——一个更自然的你。', 'Two paths. The same destination — a more natural you.')) ?></p>
+                    </section>
 
+                    <?php /* 两张等宽图像卡：可佩戴的仪式 / 无为静居 */ ?>
+                    <section class="daocharms-paths" weline-code="theme.homepage.daocharms_collections" aria-label="Collections">
+                        <article class="daocharms-path">
+                            <img class="daocharms-path__media"
+                                 src="/pub/media/catalog/daocharms/homepage/path-wearable.webp?v=20261012ui01"
+                                 alt="<?= $esc($translateThemeCopy('黑曜石阴阳吊坠', 'Obsidian yin-yang pendants')) ?>"
+                                 width="800"
+                                 height="403"
+                                 loading="lazy"
+                                 decoding="async">
+                            <div class="daocharms-path__copy">
+                                <h3 class="daocharms-path__title"><?= $esc($translateThemeCopy('可佩戴的仪式', 'Wearable Rituals')) ?></h3>
+                                <p class="daocharms-path__lede"><?= $esc($translateThemeCopy('天然象征，适合日常佩戴。', 'Natural symbols for everyday life.')) ?></p>
+                                <a class="daocharms-path__link" href="@url{'products'}"><?= $esc($translateThemeCopy('现已可购', 'Available now')) ?> <span aria-hidden="true">→</span></a>
+                            </div>
+                        </article>
+                        <article class="daocharms-path">
+                            <img class="daocharms-path__media"
+                                 src="/pub/media/catalog/daocharms/homepage/path-sanctuary.webp?v=20261012ui01"
+                                 alt="<?= $esc($translateThemeCopy('静修坐垫与香器', 'Meditation cushion and incense vessel')) ?>"
+                                 width="800"
+                                 height="402"
+                                 loading="lazy"
+                                 decoding="async">
+                            <div class="daocharms-path__copy">
+                                <h3 class="daocharms-path__title"><?= $esc($translateThemeCopy('无为静居', 'Wu Wei Sanctuary')) ?></h3>
+                                <p class="daocharms-path__lede"><?= $esc($translateThemeCopy('一处更深的练习空间。', 'A space for deeper practices.')) ?></p>
+                                <a class="daocharms-path__link" href="@url{'sanctuary'}"><?= $esc($translateThemeCopy('稍后开放', 'Coming later')) ?> <span aria-hidden="true">→</span></a>
+                            </div>
+                        </article>
+                    </section>
+
+                    <?php /* UI 01-home：Paths 后直接 New Arrivals；不保留「五分钟…」静语条 */ ?>
+
+                    <?php /* Lean storefront: shelf first — Dao before logistics. */ ?>
                     <w:slot id="homepage-featured"
                             name="Homepage featured"
                             accept="layout-homepage-featured,featured-products,product-carousel,product,content,cards"
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft homepage-section--featured-lead" weline-code="theme.homepage.homepage_featured">
+                            class="homepage-section homepage-section--soft homepage-section--featured-lead homepage-section--optional" weline-code="theme.homepage.homepage_featured">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::featured<else/>
-                            <w:widget type="product" name="featured-products" params='{"limit":"4","columns":"4"}' />
                         </w:hook>
                     </w:slot>
 
@@ -170,9 +224,8 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--category-strip" weline-code="theme.homepage.homepage_categories">
+                            class="homepage-section homepage-section--category-strip homepage-section--optional" weline-code="theme.homepage.homepage_categories">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::categories<else/>
-                            <w:widget type="category" name="category-grid" params='{"display_mode":"strip","limit":"7","columns":"7","show_count":false,"subtitle":""}' />
                         </w:hook>
                     </w:slot>
 
@@ -182,9 +235,8 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section" weline-code="theme.homepage.homepage_deals">
+                            class="homepage-section homepage-section--optional" weline-code="theme.homepage.homepage_deals">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::deals<else/>
-                            <w:widget type="product" name="deals-of-day" />
                         </w:hook>
                     </w:slot>
 
@@ -194,9 +246,8 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             exclusive="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-promo" weline-code="theme.homepage.homepage_promo">
+                            class="homepage-section homepage-promo homepage-section--optional" weline-code="theme.homepage.homepage_promo">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::promo<else/>
-                            <w:widget type="banner" name="promo-banner" />
                         </w:hook>
                     </w:slot>
 
@@ -206,9 +257,22 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_new_arrivals">
+                            class="homepage-section homepage-section--soft homepage-section--shelf" weline-code="theme.homepage.homepage_new_arrivals">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::new-arrivals<else/>
-                            <w:widget type="product" name="new-arrivals" />
+                            <?php /* 三张干净商品卡：图、名、价；卡内不放加购控件（设计 01） */ ?>
+                            <w:widget type="product" name="new-arrivals" params='{"limit":"3","columns":"3","title":"New Arrivals","subtitle":"Carry an ancient symbol. Live more present.","view_all_label":"View all","show_new_badge":"0","show_wishlist":"0","show_compare":"0","show_quickview":"0"}' />
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-trust"
+                            name="Homepage trust"
+                            accept="layout-homepage-trust,trust-badges,testimonial,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-section--trust-strip homepage-section--trust-quiet homepage-section--optional" weline-code="theme.homepage.homepage_trust">
+                        <?php /* UI 01-home：无 trust badges 条；槽保留供编辑器注入，默认空 */ ?>
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust<else/>
                         </w:hook>
                     </w:slot>
 
@@ -218,9 +282,8 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section" weline-code="theme.homepage.homepage_bestsellers">
+                            class="homepage-section homepage-section--optional" weline-code="theme.homepage.homepage_bestsellers">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::bestsellers<else/>
-                            <w:widget type="product" name="bestsellers" />
                         </w:hook>
                     </w:slot>
 
@@ -230,11 +293,42 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft homepage-section--content-compact" weline-code="theme.homepage.homepage_brands">
+                            class="homepage-section homepage-section--soft homepage-section--content-compact homepage-section--optional" weline-code="theme.homepage.homepage_brands">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/>
-                            <w:widget type="content" name="brand-logos" params='{"title":"合作品牌","columns":"8","layout":"grid"}' />
                         </w:hook>
                     </w:slot>
+
+                    <?php /* 两行并置特写：五行观照（原问答入口）/ 道记 */ ?>
+                    <div class="daocharms-features">
+                        <section class="daocharms-feature" weline-code="theme.homepage.daocharms_quiz" aria-labelledby="daocharms-feature-elements-title">
+                            <img class="daocharms-feature__media"
+                                 src="/pub/media/catalog/daocharms/homepage/feature-five-elements.webp?v=20261012ui01"
+                                 alt="<?= $esc($translateThemeCopy('水面涟漪与石', 'Water ripples and a stone')) ?>"
+                                 width="800"
+                                 height="800"
+                                 loading="lazy"
+                                 decoding="async">
+                            <div class="daocharms-feature__copy">
+                                <h3 id="daocharms-feature-elements-title" class="daocharms-feature__title"><?= $esc($translateThemeCopy('五行观照', 'Five Elements Reflection')) ?></h3>
+                                <p class="daocharms-feature__lede"><?= $esc($translateThemeCopy('以木火土金水为镜，观照日常的平衡。', 'Explore wood, fire, earth, metal and water as a lens for everyday balance.')) ?></p>
+                                <a class="daocharms-feature__link" href="@url{'qa'}"><?= $esc($translateThemeCopy('读这篇导引', 'Read the guide')) ?> <span aria-hidden="true">→</span></a>
+                            </div>
+                        </section>
+                        <section class="daocharms-feature" weline-code="theme.homepage.daocharms_journal" aria-labelledby="daocharms-feature-notes-title">
+                            <img class="daocharms-feature__media"
+                                 src="/pub/media/catalog/daocharms/homepage/feature-dao-notes.webp?v=20261012ui01"
+                                 alt="<?= $esc($translateThemeCopy('雾中山林', 'Misty forested mountains')) ?>"
+                                 width="800"
+                                 height="800"
+                                 loading="lazy"
+                                 decoding="async">
+                            <div class="daocharms-feature__copy">
+                                <h3 id="daocharms-feature-notes-title" class="daocharms-feature__title"><?= $esc($translateThemeCopy('道记', 'Dao Notes')) ?></h3>
+                                <p class="daocharms-feature__lede"><?= $esc($translateThemeCopy('关于平静生活、自然与古老智慧的随笔。', 'Thoughts on a calmer life, natural living and ancient wisdom for modern days.')) ?></p>
+                                <a class="daocharms-feature__link" href="@url{'journal'}"><?= $esc($translateThemeCopy('读道记', 'Read the notes')) ?> <span aria-hidden="true">→</span></a>
+                            </div>
+                        </section>
+                    </div>
 
                     <w:slot id="homepage-testimonials"
                             name="Homepage customer looks"
@@ -242,10 +336,8 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft homepage-section--content-compact" weline-code="theme.homepage.homepage_testimonials">
+                            class="homepage-section homepage-section--soft homepage-section--content-compact homepage-section--optional" weline-code="theme.homepage.homepage_testimonials">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::testimonials<else/>
-                            <?php /* WO-HP-P1-03 + MALL-05 + WO-BUYER-SHOW-01/02：买家秀 6 格真实竖构图 + CTA→PDP#product-reviews */ ?>
-                            <w:widget type="content" name="image-gallery" params='{"title":"买家秀","subtitle":"晒出你的穿搭","columns":"6","variant":"looks","items":[]}' />
                         </w:hook>
                     </w:slot>
 
@@ -255,9 +347,8 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--content-compact" weline-code="theme.homepage.homepage_reviews">
+                            class="homepage-section homepage-section--content-compact homepage-section--optional" weline-code="theme.homepage.homepage_reviews">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::reviews<else/>
-                            <w:widget type="testimonial" name="testimonials" params='{"title":"买家评价","subtitle":"来自顾客的星级口碑"}' />
                         </w:hook>
                     </w:slot>
 
@@ -267,9 +358,8 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
                             multiple="true"
                             position="content"
                             wrapper="section"
-                            class="homepage-section homepage-section--soft homepage-section--page-bottom" weline-code="theme.homepage.homepage_videos">
+                            class="homepage-section homepage-section--soft homepage-section--page-bottom homepage-section--optional" weline-code="theme.homepage.homepage_videos">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::videos<else/>
-                            <w:widget type="video" name="video-carousel" params='{"title":"穿搭灵感 · 视频轮播","subtitle":"滑动浏览穿搭视频，查看关联商品"}' />
                         </w:hook>
                     </w:slot>
                 <?php endif; ?>

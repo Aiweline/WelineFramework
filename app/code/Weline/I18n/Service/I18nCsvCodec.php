@@ -20,11 +20,16 @@ final class I18nCsvCodec
 {
     public const UTF8_BOM = "\xEF\xBB\xBF";
 
-    /** 模块仓库允许落盘的 locale CSV（其它语种只进系统词典）。 */
+    /**
+     * 官方框架模块 Git 瘦身基线：允许落盘的 locale CSV。
+     * 其它语种默认进系统词典，避免多 locale CSV 撑爆框架仓。
+     * 这不是「非框架/第三方模块禁止其它 locale CSV」——见 I18n/doc/模块翻译CSV规范.md。
+     */
     public const MODULE_CSV_LOCALES = ['zh_Hans_CN', 'en_US'];
 
     /**
-     * 是否允许写入模块 `i18n/{locale}.csv`（仅中英基线）。
+     * 是否属于官方框架模块写回门禁允许的 locale（中英基线）。
+     * 用于本仓官方模块 AI/工具写回路径；非框架模块交付约定可自备其它 locale CSV。
      */
     public static function isModuleCsvLocale(string $localeCode): bool
     {

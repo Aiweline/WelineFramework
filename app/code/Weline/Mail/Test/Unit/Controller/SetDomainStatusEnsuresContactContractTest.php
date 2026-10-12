@@ -24,7 +24,7 @@ final class SetDomainStatusEnsuresContactContractTest extends TestCase
 
     public function testEnterpriseUiHintsAutoContactOnEnable(): void
     {
-        $path = BP . '/app/code/Weline/Mail/view/templates/Backend/Index/enterprise.phtml';
+        $path = BP . '/app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml';
         $src = (string) \file_get_contents($path);
         self::assertStringContainsString('mail-enterprise__domain-lifecycle', $src);
         self::assertStringContainsString('自动开通 contact@', $src);

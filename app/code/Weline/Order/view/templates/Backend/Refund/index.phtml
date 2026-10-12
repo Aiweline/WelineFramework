@@ -47,14 +47,14 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
           <td><?= (int)($row['amount_minor'] ?? 0) ?></td>
           <td>
             <?php foreach (BackendOrderOutcomeChip::presentMany((string)($row['status'] ?? '')) as $outcomeChip): ?>
-              <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/outcome-chip.phtml', [
+              <?= $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
                   'chip' => $outcomeChip,
                   'testid' => 'order-refund-mgmt-status-chip',
               ]) ?>
             <?php endforeach; ?>
           </td>
           <td>
-            <?= $this->fetch('Weline_Order::templates/Backend/Order/partial/outcome-chip.phtml', [
+            <?= $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
                 'chip' => BackendOrderOutcomeChip::present((string)($row['customer_view'] ?? '')),
                 'testid' => 'order-refund-mgmt-customer-view-chip',
             ]) ?>

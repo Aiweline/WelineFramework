@@ -39,7 +39,7 @@ final class EavManagerAttributeFieldContractTest extends TestCase
     public function testAttributeFormTemplateExposesCompareMode(): void
     {
         $source = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Eav/view/templates/Backend/Attribute/form.phtml',
+            dirname(__DIR__, 4) . '/Eav/view/templates/backend/Attribute/form.phtml',
         );
         self::assertStringContainsString('compare_mode', $source);
         self::assertStringContainsString('frontend_is_searchable', $source);

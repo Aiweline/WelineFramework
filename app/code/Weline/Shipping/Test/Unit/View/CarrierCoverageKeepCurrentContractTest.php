@@ -14,7 +14,7 @@ final class CarrierCoverageKeepCurrentContractTest extends TestCase
     public function testEditTemplateDefaultsToKeepCurrentSelection(): void
     {
         $base = dirname(__DIR__, 3);
-        $tpl = (string)file_get_contents($base . '/view/templates/Backend/Carrier/edit.phtml');
+        $tpl = (string)file_get_contents($base . '/view/templates/backend/Carrier/edit.phtml');
         self::assertStringContainsString('name="coverage_keep_current"', $tpl);
         self::assertStringContainsString('id="coverage_keep_current" checked', $tpl);
         self::assertStringContainsString('data-testid="shipping-carrier-coverage-caution"', $tpl);

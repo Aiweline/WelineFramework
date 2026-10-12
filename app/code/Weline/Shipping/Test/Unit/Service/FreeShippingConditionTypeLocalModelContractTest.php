@@ -77,7 +77,7 @@ final class FreeShippingConditionTypeLocalModelContractTest extends TestCase
         self::assertStringContainsString('condition_types_by_code', $ctl);
 
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/FreeShippingRule/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/FreeShippingRule/index.phtml',
         );
         self::assertStringContainsString('Weline\\Shipping\\Model\\FreeShippingConditionType\\LocalDescription', $tpl);
         self::assertStringContainsString('field="condition_name"', $tpl);

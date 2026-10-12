@@ -71,7 +71,7 @@
 ### 3.2 路由与文件
 
 - 页面：`media/backend/manager`
-- 模板：`view/templates/Backend/Manager/manager.phtml`
+- 模板：`view/templates/backend/Manager/manager.phtml`
 - 脚本：`view/statics/js/manager.js`
 - 工具栏按钮：`#mmf-btn-ai-draw`
 

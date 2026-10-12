@@ -7,9 +7,8 @@ namespace Weline\Theme\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Theme\Helper\MetaTranslation;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\LayoutScanner;
@@ -1149,18 +1148,20 @@ readonly class ThemeLayoutVersionService
 
     private function collectTranslationRows(string $identify): array
     {
-        $prefix = '@meta::' . $identify . '.';
         $translations = [];
-        foreach ($this->dictionaryRepository()->listByWordPrefix($prefix) as $entry) {
-            $word = $entry->word;
-            $locale = $entry->localeCode;
+        foreach (\Weline\Meta\Helper\MetaTranslation::listByIdentifyPrefix($identify) as $entry) {
+            if ($entry['meta_identify'] !== $identify) {
+                continue;
+            }
+            $word = $entry['word'];
+            $locale = $entry['locale_code'];
             if ($word === '' || $locale === '') {
                 continue;
             }
             $translations[] = [
                 'word' => $word,
                 'locale_code' => $locale,
-                'translate' => $entry->translation,
+                'translate' => $entry['translate'],
             ];
         }
 
@@ -1169,17 +1170,7 @@ readonly class ThemeLayoutVersionService
 
     private function saveDictionaryTranslation(string $word, string $localeCode, string $translate): void
     {
-        $this->dictionaryRepository()->upsert($word, $localeCode, $translate);
-    }
-
-    private function dictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$provider instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-        return $provider;
+        MetaTranslation::setTranslatedValueWithScope($word, $translate, 'default', $localeCode);
     }
 
     private function normalizeThemeIdentify(string $identify, string $area): string

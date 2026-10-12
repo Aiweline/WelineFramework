@@ -18,7 +18,7 @@ final class B2BSellingModeSettingsContractTest extends TestCase
             $moduleRoot . '/extends/module/Weline_SystemConfig/Config/frontend/selling-mode.phtml'
         );
         $configController = (string)file_get_contents($moduleRoot . '/Controller/Backend/Config.php');
-        $configTemplate = (string)file_get_contents($moduleRoot . '/view/templates/Backend/Config/index.phtml');
+        $configTemplate = (string)file_get_contents($moduleRoot . '/view/templates/backend/Config/index.phtml');
         $menuXml = (string)file_get_contents($moduleRoot . '/etc/backend/menu.xml');
         $policy = (string)file_get_contents($moduleRoot . '/Service/SellingModePolicy.php');
 

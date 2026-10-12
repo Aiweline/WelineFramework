@@ -462,4 +462,34 @@ class ThemeDirectoryResolverTest extends TestCore
             }
         }
     }
+
+    /**
+     * Absolute module view/{frontend|backend}/… paths must convert back to Module::…
+     * so Template::fetchFile (post processFileSource) can hit design overrides.
+     * Regression: Weline_Checkout::frontend/checkout/index.phtml was invisible to
+     * design/{theme}/Weline_Checkout/frontend/checkout/index.phtml.
+     */
+    public function testResolveAbsoluteViewFrontendPathHitsDesignOverride(): void
+    {
+        $theme = $this->loadTheme(4); // daocharms
+        if (!$theme->getId()) {
+            $theme = ObjectManager::getInstance(WelineTheme::class);
+            $theme->reset()->where('path', '%daocharms%', 'like')->find()->fetch();
+        }
+        if (!$theme->getId()) {
+            $this->markTestSkipped('daocharms theme not found.');
+        }
+
+        $designOverride = rtrim((string)$theme->getPath(), '\\/')
+            . DS . 'Weline_Checkout' . DS . 'frontend' . DS . 'checkout' . DS . 'index.phtml';
+        if (!is_file($designOverride)) {
+            $this->markTestSkipped('daocharms checkout design override missing.');
+        }
+
+        $absoluteModule = BP . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Checkout'
+            . DS . 'view' . DS . 'frontend' . DS . 'checkout' . DS . 'index.phtml';
+        $resolved = $this->resolver->resolveThemeTemplatePath($absoluteModule, $theme);
+        $this->assertSame($designOverride, $resolved);
+        $this->assertStringContainsString('weline-checkout--daocharms', (string)file_get_contents($resolved));
+    }
 }

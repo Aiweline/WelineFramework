@@ -30,7 +30,7 @@ moduleDescribe(test, MODULE, '费用模板自建删除', () => {
         'utf8',
       );
       const tpl = fs.readFileSync(
-        path.join(ROOT, 'view/templates/Backend/RateTemplate/index.phtml'),
+        path.join(ROOT, 'view/templates/backend/RateTemplate/index.phtml'),
         'utf8',
       );
       const model = fs.readFileSync(

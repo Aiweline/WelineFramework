@@ -16,7 +16,7 @@ if ($email !== '') {
     $subject .= ' · ' . $email;
 }
 ?>
-<?= $this->fetch('Weline_Acl::templates/Backend/Acl/Role/assign.phtml', [
+<?= $this->fetch('Weline_Acl::templates/backend/Acl/Role/assign.phtml', [
     'assignment_mode' => 'api-user',
     'assignment_action' => (string)$this->getData('action'),
     'assignment_identifier_name' => 'user_id',

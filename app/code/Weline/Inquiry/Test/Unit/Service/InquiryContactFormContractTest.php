@@ -70,7 +70,7 @@ final class InquiryContactFormContractTest extends TestCase
 
     public function testBackendSubmissionTemplateRendersPayloadSummary(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Submission/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Submission/index.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
 

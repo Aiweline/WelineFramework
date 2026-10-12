@@ -484,7 +484,11 @@ final class PromotionActivityThemeService
                     ->where(PromotionActivityTheme::schema_fields_CHANNEL_CODE, '')
                     ->find()
                     ->fetch();
-                if ($existing->getId()) {
+                // find()/fetch() 未命中时可能残留上一轮 clone 身份；必须核对 website+slug 才算已有。
+                $existingMatches = $existing->getId()
+                    && (int)$existing->getData(PromotionActivityTheme::schema_fields_WEBSITE_ID) === (int)$websiteId
+                    && strtolower(trim((string)$existing->getData(PromotionActivityTheme::schema_fields_PAGE_SLUG))) === strtolower(trim((string)$row['page_slug']));
+                if ($existingMatches) {
                     $this->overwriteDefaultLocalizedCopy((int)$existing->getId(), $row);
                     continue;
                 }
@@ -501,6 +505,7 @@ final class PromotionActivityThemeService
                     'price_band' => $row['price_band'],
                     'deal_discount_type' => PromotionThemeDealDiscountSyncService::DISCOUNT_NONE,
                     'deal_discount_value' => 0,
+                    'product_ids' => [],
                     'nav_label' => $row['nav_label'],
                     'page_title' => $row['page_title'],
                     'hero_lede' => $row['hero_lede'],

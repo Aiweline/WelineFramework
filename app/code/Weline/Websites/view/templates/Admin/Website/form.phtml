@@ -239,7 +239,7 @@ $treeReturnUrl = trim((string)($tree_return_url ?? $this->getData('tree_return_u
                                     <?php
                                     $this->assign('display_type_value', (string)($website['display_type'] ?? ''));
                                     $this->assign('display_type_inherit_label', __('无特殊类型'));
-                                    echo $this->fetch('Weline_Websites::templates/Backend/partials/display-type-field.phtml');
+                                    echo $this->fetch('Weline_Websites::templates/backend/partials/display-type-field.phtml');
                                     ?>
                                 </div>
 

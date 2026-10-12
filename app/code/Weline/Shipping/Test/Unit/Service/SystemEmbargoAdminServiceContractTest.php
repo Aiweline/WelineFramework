@@ -96,7 +96,7 @@ final class SystemEmbargoAdminServiceContractTest extends TestCase
         self::assertStringNotContainsString('<iframe', $manager);
 
         $tabs = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/partials/manager-tabs.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/partials/manager-tabs.phtml',
         );
         self::assertStringContainsString('systemembargo', $tabs);
         self::assertStringContainsString('shipping/backend/systemembargo', $tabs);
@@ -104,7 +104,7 @@ final class SystemEmbargoAdminServiceContractTest extends TestCase
         self::assertStringNotContainsString('<iframe', $tabs);
 
         $managerTpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Manager/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/Manager/index.phtml',
         );
         self::assertStringNotContainsString('<iframe', $managerTpl);
 
@@ -123,7 +123,7 @@ final class SystemEmbargoAdminServiceContractTest extends TestCase
         self::assertStringContainsString('title="系统禁运"', $menu);
 
         $embargoTpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/SystemEmbargo/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/SystemEmbargo/index.phtml',
         );
         self::assertStringContainsString('manager-tabs.phtml', $embargoTpl);
         self::assertStringContainsString("'systemembargo'", $embargoTpl);
@@ -132,7 +132,7 @@ final class SystemEmbargoAdminServiceContractTest extends TestCase
     public function testDeactivateConfirmMentionsSiteWide(): void
     {
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/SystemEmbargo/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/SystemEmbargo/index.phtml',
         );
         self::assertStringContainsString('全站生效', $tpl);
         self::assertStringContainsString('系统种子不可删除', $tpl);

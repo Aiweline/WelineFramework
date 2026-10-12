@@ -98,7 +98,7 @@ final class RequiredDefaultInjectionRuntimeSafetyNetContractTest extends TestCas
             $cs = dirname(__DIR__, 5) . '/CustomerService/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
         }
         self::assertFileExists($cs);
-        $csTpl = 'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml';
+        $csTpl = 'Weline_CustomerService::templates/frontend/widgets/customer-service-float.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($cs, $csTpl));
         $csSrc = (string) file_get_contents(\Weline\Widget\Test\Support\SlimWidgetPhpListing::resolveViewPath($csTpl));
         self::assertStringContainsString('"layout_type":"*"', $csSrc);

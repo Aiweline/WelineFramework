@@ -4,11 +4,11 @@
 $entry = (array) ($this->getData('payment_guide_entry') ?? []);
 ?>
 
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
 
 <article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-agreement-fake-card">
-    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+    <?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
 
     <header class="amazon-payment-guide-article__header">
         <p class="amazon-payment-guide-article__badge"><lang>用户协议</lang></p>
@@ -31,4 +31,4 @@ $entry = (array) ($this->getData('payment_guide_entry') ?? []);
         <p><lang>上线前您必须禁用或移除本地测试支付方式，并改用经审批的正式支付供应商。</lang></p>
     </section>
 </article>
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>

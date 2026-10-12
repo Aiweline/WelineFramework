@@ -11,15 +11,15 @@ final class BackendOrderStatusFlowContractTest extends TestCase
     public function testEditAndViewMountStatusFlowBeforeSummary(): void
     {
         $root = dirname(__DIR__, 3);
-        $edit = (string)file_get_contents($root . '/view/templates/Backend/Order/edit.phtml');
-        $view = (string)file_get_contents($root . '/view/templates/Backend/Order/view.phtml');
-        $partial = (string)file_get_contents($root . '/view/templates/Backend/Order/partial/status-flow.phtml');
+        $edit = (string)file_get_contents($root . '/view/templates/backend/Order/edit.phtml');
+        $view = (string)file_get_contents($root . '/view/templates/backend/Order/view.phtml');
+        $partial = (string)file_get_contents($root . '/view/templates/backend/Order/partial/status-flow.phtml');
 
         self::assertNotSame('', $edit);
         self::assertNotSame('', $view);
         self::assertNotSame('', $partial);
-        self::assertStringContainsString('Weline_Order::templates/Backend/Order/partial/status-flow.phtml', $edit);
-        self::assertStringContainsString('Weline_Order::templates/Backend/Order/partial/status-flow.phtml', $view);
+        self::assertStringContainsString('Weline_Order::templates/backend/Order/partial/status-flow.phtml', $edit);
+        self::assertStringContainsString('Weline_Order::templates/backend/Order/partial/status-flow.phtml', $view);
         self::assertStringContainsString('data-testid="order-status-flow"', $partial);
         self::assertStringContainsString('data-testid="order-status-flow-steps"', $partial);
         self::assertStringContainsString('data-testid="order-status-flow-refunds"', $partial);

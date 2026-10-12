@@ -14,7 +14,7 @@ final class AccountOauthErrorAlertContractTest extends TestCase
     public function testIndexSurfacesCloudflareErrorCodesPersistently(): void
     {
         $source = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Account/index.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Account/index.phtml'
         );
 
         self::assertStringContainsString('oauth_cf_error', $source);

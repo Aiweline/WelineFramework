@@ -129,8 +129,8 @@ final class ThemeStorefrontModuleContentWidthContractTest extends TestCase
             'Compare/view/statics/css/product-shopper-chrome.css',
             'Consent/view/statics/css/consent-banner.css',
             'Index/view/templates/Index.phtml',
-            'Payment/view/templates/Frontend/checkout/return.phtml',
-            'Ai/view/templates/Frontend/Center/index.phtml',
+            'Payment/view/templates/frontend/checkout/return.phtml',
+            'Ai/view/templates/frontend/Center/index.phtml',
             'Product/view/statics/css/widgets/recommended-products.css',
         ];
         foreach ($pageShells as $rel) {

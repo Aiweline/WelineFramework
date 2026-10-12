@@ -10,7 +10,7 @@ final class HeaderChoiceSelectorAssetsContractTest extends TestCase
 {
     public function testHeaderChoiceAssetsDeclareI18nAndCurrencyModules(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Frontend/header-choice-selector-assets.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/frontend/header-choice-selector-assets.phtml';
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 

@@ -120,7 +120,7 @@ record(
 );
 
 // §10.3 发布历史模板含回滚入口
-$releaseTpl = (string) file_get_contents($root . '/app/code/Weline/Deploy/view/templates/Backend/Release/index.phtml');
+$releaseTpl = (string) file_get_contents($root . '/app/code/Weline/Deploy/view/templates/backend/Release/index.phtml');
 record(
     $results,
     $failed,
@@ -134,7 +134,7 @@ record(
 );
 
 // §10.2 发布控制模板
-$controlTpl = (string) file_get_contents($root . '/app/code/Weline/Deploy/view/templates/Backend/ReleaseControl/index.phtml');
+$controlTpl = (string) file_get_contents($root . '/app/code/Weline/Deploy/view/templates/backend/ReleaseControl/index.phtml');
 record(
     $results,
     $failed,

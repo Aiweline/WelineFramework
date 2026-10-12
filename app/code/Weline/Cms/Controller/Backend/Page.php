@@ -217,7 +217,7 @@ class Page extends BackendController
         $this->assign('theme_editor_url', $themeEditorUrl);
         $this->assign('preview_url', $previewUrl);
 
-        return $this->fetch('Weline_Cms::templates/Backend/Page/edit.phtml');
+        return $this->fetch('Weline_Cms::templates/backend/Page/edit.phtml');
     }
 
     #[Acl('Weline_Cms::page_save', '保存 CMS 页面', 'save', '保存 CMS 页面')]

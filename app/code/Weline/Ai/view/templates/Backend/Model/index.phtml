@@ -8,9 +8,9 @@ $currentStatus = $currentStatus ?? '';
 $currentSearch = $currentSearch ?? '';
 ?>
 <?php if (empty($embed)): ?>
-<?= $this->fetch('Weline_Ai::templates/Backend/Manager/page-header.phtml', [ 'pageHeading' => (string)__('AI模型管理'), 'pageBreadcrumbs' => [ ['title' => (string)__('AI 中心')], ['title' => (string)__('AI模型'), 'active' => true], ],
+<?= $this->fetch('Weline_Ai::templates/backend/Manager/page-header.phtml', [ 'pageHeading' => (string)__('AI模型管理'), 'pageBreadcrumbs' => [ ['title' => (string)__('AI 中心')], ['title' => (string)__('AI模型'), 'active' => true], ],
 ]) ?>
-<template>Weline_Ai::Backend/Manager/tabs.phtml</template>
+<template>Weline_Ai::backend/Manager/tabs.phtml</template>
 <?php endif; ?> <style>
 .weline-ai-model-table .badge.bg-secondary { color: #fff !important; }
 .weline-ai-model-table .badge.bg-info,

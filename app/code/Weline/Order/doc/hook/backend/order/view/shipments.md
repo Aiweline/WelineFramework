@@ -7,5 +7,5 @@
 ## 实现路径示例
 
 - `Weline_Shipping/view/hooks/Weline_Order/backend/order/view/shipments.phtml`
-- 部件：`Weline_Shipping::backend-order-shipments` → `templates/Backend/widgets/backend-order-shipments.phtml`
+- 部件：`Weline_Shipping::backend-order-shipments` → `templates/backend/widgets/backend-order-shipments.phtml`
 - 查询：`OrderShipmentTrackingQueryService` → 各 Provider `queryTracking`（服务端渲染进程列表）

@@ -12,7 +12,7 @@ final class ServerManagerIndexContractTest extends TestCase
 {
     private function source(): string
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/ServerManager/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/ServerManager/index.phtml';
         self::assertFileExists($path);
         return (string)file_get_contents($path);
     }

@@ -14,7 +14,7 @@ final class BackendOrderEditOpsPanelSrcContractTest extends TestCase
 {
     public function testOpsPanelSrcAppendsOrderIdQueryViaPhpEcho(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/edit.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
 

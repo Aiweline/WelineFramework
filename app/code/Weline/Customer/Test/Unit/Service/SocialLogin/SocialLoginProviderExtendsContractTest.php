@@ -73,9 +73,9 @@ final class SocialLoginProviderExtendsContractTest extends TestCase
                 'https://example.test/callback',
                 'state-token'
             ));
-            $guide = \dirname(__DIR__, 4) . '/view/templates/Frontend/guide/social-login/'
+            $guide = \dirname(__DIR__, 4) . '/view/templates/frontend/guide/social-login/'
                 . $provider->getCode() . '/guide.phtml';
-            $policy = \dirname(__DIR__, 4) . '/view/templates/Frontend/guide/social-login/'
+            $policy = \dirname(__DIR__, 4) . '/view/templates/frontend/guide/social-login/'
                 . $provider->getCode() . '/policy.phtml';
             self::assertFileExists($guide);
             self::assertFileExists($policy);

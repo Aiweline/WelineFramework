@@ -5,11 +5,11 @@ $entry = (array) ($this->getData('payment_guide_entry') ?? []);
 $agreementRoute = (string) ($entry['agreement_route'] ?? '');
 ?>
 
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
 
 <article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-agreement-paypal">
-    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+    <?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
 
     <header class="amazon-payment-guide-article__header">
         <p class="amazon-payment-guide-article__badge"><lang>用户协议</lang></p>
@@ -42,4 +42,4 @@ $agreementRoute = (string) ($entry['agreement_route'] ?? '');
         <p><lang>除本协议外，您还须遵守 PayPal 用户协议、隐私声明及当地适用法律。若条款冲突，涉及 PayPal 账户与资金清算的部分以 PayPal 规则为准。</lang></p>
     </section>
 </article>
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>

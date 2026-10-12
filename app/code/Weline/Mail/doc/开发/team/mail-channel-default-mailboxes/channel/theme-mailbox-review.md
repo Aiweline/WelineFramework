@@ -4,7 +4,7 @@
 from: `Team:主题开发工程师:`  
 to: `@项目经理:`  
 slug: `mail-channel-default-mailboxes`  
-文件：`Mail/view/templates/Backend/Index/enterprise.phtml`  
+文件：`Mail/view/templates/backend/Index/enterprise.phtml`  
 线稿：`channel/ui-shentu-mailbox-20260922.md`
 
 ## work_mode 声明
@@ -46,7 +46,7 @@ slug: `mail-channel-default-mailboxes`
 
 ## 改动路径
 
-- `app/code/Weline/Mail/view/templates/Backend/Index/enterprise.phtml`
+- `app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml`
 
 ## notify
 

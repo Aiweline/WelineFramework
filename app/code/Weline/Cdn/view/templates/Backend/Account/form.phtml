@@ -68,7 +68,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
                     $this->assign('isEdit', (bool)$isEdit);
                     $this->assign('showConnectionTest', (bool)$isEdit);
                     ?>
-                    <template>Weline_Cdn::Backend/Account/form-fields.phtml</template>
+                    <template>Weline_Cdn::backend/Account/form-fields.phtml</template>
                     <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
                         <button type="submit" class="w-button" data-testid="cdn-account-editor-submit" data-tone="primary">
                             <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
@@ -104,4 +104,4 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
     ],
 ], $jsonFlags) ?></script>
 
-<template>Weline_Cdn::Backend/Account/form-script.phtml</template>
+<template>Weline_Cdn::backend/Account/form-script.phtml</template>

@@ -16,7 +16,7 @@ final class EavManagerTaglibContractTest extends TestCase
 
         self::assertStringContainsString("return 'eav:manager';", $source);
         self::assertStringContainsString("'entity-code'", $source);
-        self::assertStringContainsString('templates/Backend/Manager/surface.phtml', $source);
+        self::assertStringContainsString('templates/backend/Manager/surface.phtml', $source);
         self::assertStringContainsString('resolveEntityScope', $source);
         self::assertStringContainsString('tag_self_close_with_attrs', $source);
         self::assertStringContainsString('function document()', $source);

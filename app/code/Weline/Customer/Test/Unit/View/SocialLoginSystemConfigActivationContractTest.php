@@ -95,7 +95,7 @@ final class SocialLoginSystemConfigActivationContractTest extends TestCase
         self::assertStringContainsString('未登录 One Tap（需点击确认）', $src);
         self::assertStringContainsString('customer/social_login/http_proxy', $src);
 
-        $facebookGuide = \dirname(__DIR__, 3) . '/view/templates/Frontend/guide/social-login/facebook/guide.phtml';
+        $facebookGuide = \dirname(__DIR__, 3) . '/view/templates/frontend/guide/social-login/facebook/guide.phtml';
         self::assertFileExists($facebookGuide);
         $guideSrc = (string) \file_get_contents($facebookGuide);
         self::assertStringContainsString('customer.social_login.guide.facebook.permissions', $guideSrc);
@@ -118,7 +118,7 @@ final class SocialLoginSystemConfigActivationContractTest extends TestCase
         self::assertStringNotContainsString('Instagram Login / Basic Display', $src);
         self::assertStringNotContainsString('Basic Display / Instagram Login', $src);
 
-        $instagramGuide = \dirname(__DIR__, 3) . '/view/templates/Frontend/guide/social-login/instagram/guide.phtml';
+        $instagramGuide = \dirname(__DIR__, 3) . '/view/templates/frontend/guide/social-login/instagram/guide.phtml';
         self::assertFileExists($instagramGuide);
         $igGuideSrc = (string) \file_get_contents($instagramGuide);
         self::assertStringContainsString('Instagram 专业账户', $igGuideSrc);

@@ -9,7 +9,7 @@ class PixelErrorMonitorSeverityBadgeContractTest extends TestCore
 {
     public function testIndexShowsSeverityBadgeColumn(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/PixelErrorMonitor/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/PixelErrorMonitor/index.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('重要程度', $src);
@@ -21,7 +21,7 @@ class PixelErrorMonitorSeverityBadgeContractTest extends TestCore
 
     public function testDetailPageRemovedInFavorOfModal(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/PixelErrorMonitor/detail.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/PixelErrorMonitor/detail.phtml';
         self::assertFileDoesNotExist($path);
     }
 }

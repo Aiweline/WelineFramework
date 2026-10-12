@@ -104,7 +104,7 @@ class Scanner extends BackendController
             $this->getMessageManager()->addError(__('扫描失败：%1', $e->getMessage()));
         }
         
-        return $this->fetch('templates/Backend/Scanner/results.phtml');
+        return $this->fetch('templates/backend/Scanner/results.phtml');
     }
 }
 

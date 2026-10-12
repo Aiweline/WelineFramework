@@ -4,7 +4,7 @@
 
 Weline I18n 是系统的国际化翻译模块，提供了完整的多语言支持功能。该模块支持语言包管理、自动翻译、本地化模型、国家地区管理等功能，为系统提供企业级的国际化解决方案。
 
-**跨模块硬规则**：各业务模块须维护齐全 `i18n/zh_Hans_CN.csv` 与 `en_US.csv`（**禁止其它 locale CSV**），改词或改 CSV 后必须 `php bin/w i18n:collect` 才生效。**用户提到「翻译」作为任务时**，须覆盖默认网站已选全部语言（`Website::ID_DEFAULT` / `website_id=0`）：中英写模块 CSV，其它语种进系统词典，禁止只译英文。CSV 统一 UTF-8（文件头最多一个 BOM，键内禁止 BOM），详见 [模块翻译 CSV 规范](./模块翻译CSV规范.md)。
+**跨模块硬规则**：各业务模块须维护齐全 `i18n/zh_Hans_CN.csv` 与 `en_US.csv`；**官方框架模块**（本仓 `Weline_*` 等）为 **Git 瘦身**仅保留这两份、其它语种进系统词典——**不是**禁止非框架/第三方模块自备其它 locale CSV。改词或改 CSV 后必须 `php bin/w i18n:collect` 才生效。**用户提到「翻译」作为任务时**，须覆盖默认网站已选全部语言（`Website::ID_DEFAULT` / `website_id=0`）：官方模块中英写 CSV、其它语种进系统词典，禁止只译英文。CSV 统一 UTF-8（文件头最多一个 BOM，键内禁止 BOM），详见 [模块翻译 CSV 规范](./模块翻译CSV规范.md)。
 
 ## 跨模块公共契约
 
@@ -72,7 +72,9 @@ WLS 的翻译所有权统一在 `Weline\Framework\Phrase\Parser`，`Weline\I18n\
 
 因此 Worker 只会把自己实际遇到的词不断加入常驻内存，不会一次装载 21,055 条全 locale 数据。最终词哈希最多 32,768 项并有界裁剪；普通请求清理不影响它，翻译发布/cache epoch 才统一失效。失效后的首次读取才重新计算文件版本并访问 Shared Memory，后续请求恢复为纯进程数组查询。新增词条仍建议保存正确 `source_module` 以便维护、导出和模块归属，但无归属的历史词条也能通过精确单词回源生效，不会迫使 WLS 加载整张词典。
 
-全局基础词典 `i18n_dictionary.word` 的可移植上限为 512 个 Unicode 字符，并由完整字段主键承担去重，不使用 TEXT 前缀索引或冗余 UNIQUE。该上限在 utf8mb4 最坏情况下为 2048 字节，兼容 MySQL 8 InnoDB 与 PostgreSQL btree；当前仓库全部模块及全局 i18n CSV 的 source 扫描最大为 431 字符。所有基础词典写入入口统一通过 `Dictionary::assertWord()` 校验：只接受字符串或整数，空字符串、非法 UTF-8 和超过 512 字符的数据会在首个批量写入之前明确失败；校验不做 trim、大小写折叠或 Unicode 归一化，也禁止截断后写入。地区译文表继续使用指纹主键，`word` 与 `translate` 保持 TEXT。
+全局基础词典 `i18n_dictionary.word` 的可移植上限为 512 个 Unicode 字符，并由完整字段主键承担去重，不使用 TEXT 前缀索引或冗余 UNIQUE。该上限在 utf8mb4 最坏情况下为 2048 字节，兼容 MySQL 8 InnoDB 与 PostgreSQL btree；当前仓库全部模块及全局 i18n CSV 的 source 扫描最大为 431 字符。所有基础词典写入入口统一通过 `Dictionary::assertWord()` 校验：只接受字符串或整数；空字符串、非法 UTF-8、超过 512 字符、含 BOM/换行、连续引号失控串会在写入前明确失败；校验不做 trim、大小写折叠或 Unicode 归一化，也禁止截断后写入。地区译文表 `i18n_locale_dictionary` 的 `word`/`locale_code` 在 `save_before`、`upsert` 与 AI `saveTranslation` 同样过 `assertWord` / `assertLocaleCode`（`translate` 仍为 TEXT 可长）；`php bin/w i18n:dictionary:purge-invalid` 可清理历史脏行。事件 `description` 禁止把多行 API 文档塞进 `__()`（长说明只放 `doc`）。
+
+**全量 `i18n:collect` 短语旧词清理（收集批次）**：触达集仍来自 **中文 CSV（默认语）原词 ∪ 源码收集原词**（不以 en_US 等其它语 CSV 键保活）。入库时对见到的 local 词分块打上 `i18n_dictionary.collect_batch = 当前批次`（流水线减压，避免大内存对账与 locale DISTINCT）；搞完后 **`collect_batch != 当前批次`（含 0 未标记）** 的短语按**原词**删 base + 全部语种行。排除 `@meta::`（同字段预留给后续 meta 收集，本轮不打标不删）。单模块 / `--no-prune-stale` 不打批次、不删；当前批次触达过少拒删。不扫「仅 locale 无 base」孤儿。`generated/language/{locale}.php` 固化导出剔除 `@meta::`（DB meta 行保留）。
 
 `Countries` / `Locale` / `Locals` 会保存完整内联 SVG 国旗，不是资源键或国家码；三张表的 `flag` 统一声明为 `MEDIUMTEXT`。MySQL `TEXT` 的 65,535 字节上限不足以容纳部分 `flag-icons` SVG（例如 ES 资源超过 80 KB）；不允许静默截断或把安装失败降级成每轮重复警告。PostgreSQL/SQLite 按各自方言映射为无小容量上限的 TEXT 语义。
 

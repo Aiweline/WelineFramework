@@ -13,7 +13,7 @@ final class MethodIndexTemplateHeaderContractTest extends TestCase
 {
     public function testIndexTemplateDoesNotDuplicatePageHeading(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Method/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Method/index.phtml';
         self::assertFileExists($path);
         $html = (string)file_get_contents($path);
 

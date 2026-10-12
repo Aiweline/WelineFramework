@@ -14,7 +14,7 @@ final class EavManagerAttributeEditLockContractTest extends TestCase
             dirname(__DIR__, 4) . '/Theme/view/statics/ui/pages/weline-eav-manager.js',
         );
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Manager/surface.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/Manager/surface.phtml',
         );
         $controller = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Controller/Backend/Manager.php',

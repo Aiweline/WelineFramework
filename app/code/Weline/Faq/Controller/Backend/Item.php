@@ -44,7 +44,7 @@ final class Item extends BackendController
         $this->assign('save_url', $this->getUrl('faq/backend/item/save'));
         $this->assign('delete_url', $this->getUrl('faq/backend/item/delete'));
 
-        return $this->fetch('Weline_Faq::templates/Backend/Item/listing.phtml');
+        return $this->fetch('Weline_Faq::templates/backend/Item/listing.phtml');
     }
 
     #[Acl('Weline_Faq::item_edit', '编辑 FAQ 条目', 'mdi-pencil', '新建或编辑 FAQ 条目')]
@@ -78,7 +78,7 @@ final class Item extends BackendController
         $this->assign('listing_url', $this->getUrl('faq/backend/item/listing'));
         $this->assign('save_url', $this->getUrl('faq/backend/item/save'));
 
-        return $this->fetch('Weline_Faq::templates/Backend/Item/edit.phtml');
+        return $this->fetch('Weline_Faq::templates/backend/Item/edit.phtml');
     }
 
     #[Acl('Weline_Faq::item_save', '保存 FAQ 条目', 'mdi-content-save', '保存 FAQ 条目')]

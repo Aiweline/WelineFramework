@@ -1,0 +1,843 @@
+/**
+ * DaoCharms responsive shell — gray-green natural.
+ * Breakpoints (viewport): 375 · 768 · 1024 · 1440
+ * Focus: home · listing · PDP · checkout
+ * Contracts: responsive.v1 · theme-tokens.v1
+ *
+ * Strategy:
+ *  - ≤767px (375 design): single column; capabilities collapsible, never removed;
+ *    touch targets ≥44×44; overflow-x clipped (no intentional horizontal scroll).
+ *  - 768–1023px: independent tablet — not a phone stretch, not a desktop squeeze.
+ *  - ≥1024px: desktop rhythm; ≥1440px uses wide content measure.
+ *  - Tables → stacked row groups on phone; controlled overflow on tablet if needed.
+ *  - Sticky chrome / summary / sticky-purchase leave CTA + errors + consent clear.
+ */
+
+:root {
+    --daocharms-bp-phone-max: 767px;
+    --daocharms-bp-tablet-min: 768px;
+    --daocharms-bp-tablet-max: 1023px;
+    --daocharms-bp-desktop-min: 1024px;
+    --daocharms-bp-wide-min: 1440px;
+    --daocharms-touch-min: 44px;
+    --daocharms-sticky-safe-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+    --daocharms-sticky-safe-top: calc(env(safe-area-inset-top, 0px) + 4.5rem);
+}
+
+/* —— Global: no intentional horizontal scroll; min touch —— */
+html {
+    overflow-x: clip;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)),
+body.theme-layout-homepage,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)),
+body.daocharms-pdp,
+body.daocharms-products,
+body.account-auth-layout,
+body.account-dashboard-layout,
+body:has(.weline-checkout),
+body:has(.weline-cart-shell) {
+    overflow-x: clip;
+    max-inline-size: 100%;
+}
+
+/* —— Phone (≤767 ≈ 375 design) —— */
+@media (max-width: 767px) {
+    /* Touch targets */
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) :is(
+        .w-button,
+        .btn,
+        .daocharms-page__btn,
+        .daocharms-hero__btn,
+        .products-layout__filter-toggle,
+        .products-layout__sidebar-close,
+        .account-sidebar__menu-toggle,
+        .account-sidebar__nav-link,
+        .account-hook-nav-link,
+        .weline-cart-shell__checkout,
+        .weline-cart-shell__continue,
+        .weline-checkout__empty-primary,
+        .storefront-wishlist__cta,
+        .daocharms-shop-hub__card-cta,
+        .product-native-detail__add,
+        .product-native-detail__buy-now,
+        .w-auth-login__form button[type="submit"],
+        .w-auth-recovery__submit,
+        .account-form__btn--primary
+    ),
+    body.theme-layout-homepage :is(.daocharms-hero__btn, .w-button, .btn),
+    body.daocharms-pdp :is(
+        .product-native-detail__add,
+        .product-native-detail__buy-now,
+        .product-native-detail__sticky-purchase-actions .product-native-detail__add,
+        .product-native-detail__sticky-purchase-actions .product-native-detail__buy-now,
+        .product-native-detail__sticky-purchase-jump
+    ),
+    body:has(.weline-checkout) :is(
+        .weline-checkout__empty-primary,
+        .w-button[data-tone="primary"],
+        button[type="submit"]
+    ) {
+        min-height: var(--daocharms-touch-min);
+        min-width: var(--daocharms-touch-min);
+    }
+
+    /* —— Home: single column, calm gaps —— */
+    body.theme-layout-homepage .homepage-section:not(.homepage-hero):not(.homepage-promo) > * {
+        padding-inline: max(var(--weline-space-4, 1rem), env(safe-area-inset-left, 0px));
+        padding-inline-end: max(var(--weline-space-4, 1rem), env(safe-area-inset-right, 0px));
+    }
+
+    body.theme-layout-homepage .homepage-section--featured-lead .products-grid,
+    body.theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4,
+    body.theme-layout-homepage .homepage-section .products-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 0.85rem;
+    }
+
+    body.theme-layout-homepage .homepage-section--trust-strip .badges-grid.columns-3 {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+    }
+
+    body.theme-layout-homepage .daocharms-hero__actions,
+    body.theme-layout-homepage .daocharms-page__actions {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+
+    body.theme-layout-homepage .daocharms-hero__btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* —— Listing: drawer filter kept; grid single/double —— */
+    body.daocharms-products .products-layout__container,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__container,
+    body.theme-layout-products .products-layout__container {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding-inline: max(
+            var(--weline-layout-content-padding-inline, 1rem),
+            env(safe-area-inset-left, 0px)
+        ) !important;
+        padding-inline-end: max(
+            var(--weline-layout-content-padding-inline, 1rem),
+            env(safe-area-inset-right, 0px)
+        ) !important;
+    }
+
+    body.daocharms-products .products-layout__sidebar,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__sidebar {
+        /* Capability retained via filter toggle + overlay drawer — do not display:none permanently */
+        width: min(100%, 20rem);
+        max-width: 100%;
+    }
+
+    body.daocharms-products .products-layout__filter-toggle,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__filter-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        min-height: var(--daocharms-touch-min);
+        padding-inline: 0.85rem;
+    }
+
+    body.daocharms-products .products-layout__grid,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__grid,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__grid--product {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 0.65rem;
+    }
+
+    /* 41-mobile-shop：真实商品架在 `.product-storefront__grid`（模块新壳），
+     * 上面 `!important` 那条只命中外层 `.products-layout__grid`（其直接子仅 section+style）
+     * ⇒ 手机面实际单列铺满。ui/41 为双列卡片 ⇒ 在此补双列，并收两处实测缺陷：
+     *  a) 窄卡上「Add to Cart」折三行、「Buy Now」一行（按钮不等宽）⇒ 购买区改等分两列；
+     *  b) 收藏/对比/速览浮层（.product-actions--amz）常驻压在商品图上——它本应只在
+     *     hover/focus 出现（桌面行为一致），手机无 hover ⇒ 默认收起、hover/聚焦再显。 */
+    body.daocharms-products .product-storefront__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem 0.65rem;
+    }
+
+    /* 实际按钮在内层 `.product-card-purchase-actions`（模块 Product/product-card.css:354-363
+     * 以 (0,3,0) 写死 `display:flex;flex-direction:column`）+ 两个 widget wrapper。
+     * ⇒ 等分必须**就地指向该内层**并覆盖其 column；外层 slot 同时改 block，避免 grid
+     *   轨道被 column 子级撑成半宽。桌面版式不动（本块在 ≤767px 内）。 */
+    /* 双列卡（~174px）放不下「图标 + Add to Cart / Buy Now」并排两枚 ⇒ ui/41 取
+     * 「各占整行、加购为描边次要钮、直购为实心主钮」。模块 product-card.css:354-363
+     * 已给 `.wpc-cta .product-card-purchase-actions{flex-direction:column}`，但商品架
+     * 的宿主不是 `.wpc-cta`（实测为 slot div）⇒ 那条落空，此处按真实结构补。
+     * ⚠️ `!important` 是**惯例而非提权需要**：本主题 daocharms-commerce.css 用
+     *   (0,2,0) 裸类把该容器写成 `display:flex;gap:.5rem`（无 direction），普通声明会因
+     *   同特异度靠后加载而输 ⇒ 沿用 forms/account/chrome 同款 important 收口。 */
+    /* ⚠️ 只收**布局**（列宽放不下并排 ⇒ 改纵向），**不动配色**。
+     * 本商品架的 CTA 宿主是 `.product-card-purchase-actions-slot`，而主题与模块的
+     * CTA 配色规则都挂在 `.wpc-cta` 下（commerce.css:330/352、product-card.css:392/398）
+     * ⇒ 该面两枚钮天然都是透明描边钮；在此另填色会造出「手机实心 / 桌面描边」的
+     * 断点分裂。首版曾误加 `.btn-add-to-cart{background:transparent}` 把仅存的
+     * product-card.css 填充也压掉，已撤。 */
+    body.daocharms-products .product-storefront__grid .product-card-purchase-actions-slot {
+        display: block !important;
+    }
+
+    body.daocharms-products .product-storefront__grid .product-card-purchase-actions {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.4rem;
+        width: 100%;
+    }
+
+    body.daocharms-products .product-storefront__grid :is(.weline-cart-product-card-add-to-cart, .weline-checkout-product-card-buy-now) {
+        min-width: 0;
+        width: 100%;
+    }
+
+    body.daocharms-products .product-storefront__grid .product-card-purchase-actions :is(button, .w-button, .btn) {
+        min-width: 0;
+        width: 100%;
+        padding-inline: 0.6rem;
+    }
+
+    /* 模块把浮层做成 `opacity:1;pointer-events:none`，`:hover` 才放开（transition .15s）。
+     * 手机无 hover ⇒ 三枚圆钮常驻压在首图上。这里**只换触发条件、不改机制**：
+     * 用 (0,4,0) 压回默认收起，再以同特异度的 :hover/:focus-within 放开——
+     * 桌面行为不变（本块在 ≤767px 媒体查询内），键盘聚焦仍可达。 */
+    body.daocharms-products .product-storefront__grid .weline-product-card .product-actions--amz {
+        opacity: 0 !important;
+    }
+
+    body.daocharms-products .product-storefront__grid .weline-product-card :is(:hover, :focus-within) .product-actions--amz {
+        opacity: 1 !important;
+    }
+
+    body.daocharms-products .products-layout__toolbar,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__toolbar {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    /* —— PDP: stack; sticky purchase clear of safe area —— */
+    /* 42-mobile-product：PDP 模板自带面包屑（.product-native-detail__crumb，
+     * 与布局级 .w-frontend-breadcrumb 文字完全同构）⇒ 手机首屏出现两条「Home › …」。
+     * 桌面同样双条（草图 ui/42 只有一条），属模块冗余而非本主题新增；此处只在 ≤767px
+     * 收掉**外层布局级**那条，保留离商品上下文更近的一条。 */
+    body.daocharms-pdp .weline-page-wrapper > .w-frontend-breadcrumb {
+        display: none;
+    }
+
+    /*
+     * 审图 2026-10-11 响应式：模块曾用 @media (max-width: var(--breakpoint-lg))，
+     * 浏览器丢弃整段 ⇒ hero/buy 仍双列，标题列被压成 ~16px（一字竖排）。
+     * 模块已改字面断点；此处再钉一层，防烘焙滞后。
+     */
+    body.daocharms-pdp .product-native-detail__hero-grid,
+    body.daocharms-pdp .product-native-detail__buy-column {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    body.daocharms-pdp .product-native-detail__summary-panel,
+    body.daocharms-pdp .product-native-detail__title {
+        min-width: 0;
+        max-width: 100%;
+        width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    body.daocharms-pdp .product-detail-layout__wrapper,
+    body.daocharms-pdp .product-native-detail {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    body.daocharms-pdp .product-native-detail__actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+    }
+
+    body.daocharms-pdp .product-native-detail__actions :is(
+        .product-native-detail__add,
+        .product-native-detail__buy-now
+    ) {
+        width: 100%;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        /* Leave room so sticky bar does not cover in-page CTA / consent when both show */
+        z-index: 40;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase-actions :is(
+        .product-native-detail__add,
+        .product-native-detail__buy-now
+    ) {
+        min-height: var(--daocharms-touch-min);
+        width: 100%;
+    }
+
+    body.daocharms-pdp .product-detail-layout__main {
+        padding-bottom: var(--daocharms-sticky-safe-bottom);
+    }
+
+    body.daocharms-pdp .daocharms-pdp-story__grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* —— Checkout: single column; summary after form; sticky not covering place-order —— */
+    .weline-checkout,
+    .weline-checkout__grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .weline-checkout__main,
+    .weline-checkout__summary {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .weline-checkout__summary {
+        position: static !important;
+        order: 2;
+    }
+
+    .weline-checkout__main {
+        order: 1;
+    }
+
+    .weline-checkout__header {
+        flex-wrap: wrap;
+        gap: 0.65rem;
+    }
+
+    .weline-checkout__header-actions {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .weline-checkout :is(
+        [data-checkout-place-order],
+        .weline-checkout__place,
+        button[type="submit"]:not([data-variant="ghost"]):not([data-variant="outline"])
+    ) {
+        width: 100%;
+        min-height: var(--daocharms-touch-min);
+    }
+
+    /* If a sticky summary chrome still appears, pad content so CTA stays reachable */
+    .weline-checkout__form-host,
+    .weline-checkout__grid {
+        padding-bottom: var(--daocharms-sticky-safe-bottom);
+    }
+
+    .checkout-summary.sticky {
+        position: static !important;
+    }
+
+    /* —— Cart —— */
+    .weline-cart-shell__grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .weline-cart-shell__checkout {
+        width: 100%;
+        min-height: var(--daocharms-touch-min);
+    }
+
+    /* —— Account nav: collapsible via existing toggle; links stay in DOM —— */
+    .account-dashboard__body,
+    #account-dashboard {
+        flex-direction: column;
+        gap: 0.85rem;
+        padding-inline: max(1rem, env(safe-area-inset-left, 0px));
+    }
+
+    .account-sidebar,
+    aside.account-sidebar {
+        width: 100% !important;
+        position: static !important;
+        max-width: 100%;
+    }
+
+    .account-sidebar__menu-toggle {
+        display: inline-flex;
+        align-items: center;
+        min-height: var(--daocharms-touch-min);
+        width: 100%;
+    }
+
+    .account-sidebar__nav-link,
+    .account-hook-nav-link {
+        min-height: var(--daocharms-touch-min);
+        display: flex;
+        align-items: center;
+    }
+
+    body.account-auth-layout .w-auth-login,
+    body.account-auth-layout .w-auth-recovery {
+        max-inline-size: 100%;
+        margin-inline: 0.75rem;
+    }
+
+    /* —— Shop / journal cards —— */
+    .daocharms-shop-hub__grid,
+    .daocharms-journal-hub__grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    /* —— Tables → semantic stacked rows —— */
+    .product-account-quotes__table,
+    .account-orders table,
+    .weline-checkout table,
+    .w-currency-guide table {
+        display: block;
+        width: 100%;
+    }
+
+    .product-account-quotes__table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .product-account-quotes__table tbody,
+    .product-account-quotes__table tr,
+    .product-account-quotes__table td {
+        display: block;
+        width: 100%;
+    }
+
+    .product-account-quotes__table tr {
+        border: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle);
+        border-radius: var(--daocharms-radius-md, 2px);
+        background: var(--color-bg-primary);
+        margin-block-end: 0.65rem;
+        padding: 0.65rem 0.75rem;
+        box-shadow: none;
+    }
+
+    .product-account-quotes__table td {
+        border: 0;
+        padding: 0.2rem 0;
+    }
+
+    .amazon-blog-listing__grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    /* ══ 40-mobile-home：头部收成一排薄条（ui/40：☰ + 居中字标 + 购物袋）══
+     * 实测缺陷（iPhone 13 / 390px）：header 336px ≈ 半屏。分解与对策：
+     *  ① 通知条 53px：items/links 两段 nowrap+space-between 挤行换行 ⇒ 允许换行并收紧 gap/padding。
+     *  ② belt 198px：模块 order 规则只在 ≥769px 生效（header-chrome-amazon.css:370-381），
+     *     <769 按 DOM 序「left→search→actions」各占一行，且 .header-belt-left 的
+     *     `min-height: var(--size-control-md)`（partials/header-default.css:306-310 裸类，
+     *     chrome 表 `.weline-header` 前缀赢不了同属性值）把本行撑到 64px ⇒
+     *     补 order（left=1 / actions=2 / search=3 整行），并压掉该 min-height。
+     *  ③ logo img max-height 走 --header-logo-height:64px ⇒ 手机收到 40px。
+     *  ④ nav 带 is-nav-stacked 双行（模块 header-chrome-amazon.css:734-757）⇒
+     *     覆盖回单行 nowrap；左簇横向滚动保能力（规范 §7「收纳但不隐藏」），右簇收缩。
+     * 只动布局/尺寸，不动颜色；均不带 !important 时以 (0,3,0)+媒体查询压过模块同类。
+     * ⚠️ 作用域：40 收口时刻意只挂首页；41-mobile-shop 对照 ui/41（薄条头）判定同缺陷后
+     *    扩到 products 族，42-mobile-product 同样对照 ui/42（☰+字标+袋 薄条头）后扩入
+     *    .daocharms-pdp。其余页面族（currency/guide/account…）验收各自草图时再逐族扩容，
+     *    勿未审先灌。
+     * 🔎 选择器体检（改判据先反证）：`.daocharms-products` **只出现在商品列表页** body
+     *    （实测 /products=有、/shop hub=无），故它压不到 shop-hub；但 `.theme-layout-*`
+     *    与 `.daocharms-pdp` 会命中「从列表/PDP 加购后弹出的迷你车抽屉」——已实测该抽屉
+     *    在 390px 下正常渲染（搜索行整行、导航单行、无横向溢出）。 */
+    body:is(.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp):has(.weline-header) .header-site-notice-inner {
+        flex-wrap: wrap;
+        gap: .15rem 1rem;
+        row-gap: 0;
+        padding-block: .15rem;
+    }
+
+    body:is(.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp) .weline-header .header-belt-row-1 :is(.header-belt-left, .header-mobile-menu-btn, .header-logo, .header-logo__link) {
+        min-height: 0;
+    }
+
+    body:is(.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp) .weline-header .header-belt-row-1 {
+        align-items: center;
+        row-gap: .5rem;
+    }
+
+    body:is(.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp) .weline-header .header-belt-row-1 .header-belt-left {
+        order: 1;
+        gap: .5rem;
+    }
+
+    body:is(.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp) .weline-header .header-belt-row-1 .header-actions {
+        order: 2;
+    }
+
+    body:is(.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp) .weline-header .header-belt-row-1 .header-search-wrapper {
+        order: 3;
+        flex: 0 0 100%;
+        max-width: none;
+    }
+
+    body:is(.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp) .weline-header .header-logo img {
+        max-height: 2.5rem;
+        height: auto;
+    }
+
+    body:is(.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp) .weline-header .header-main-nav-inner.is-nav-stacked {
+        flex-wrap: nowrap;
+    }
+
+    body:is(.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp) .weline-header .header-main-nav-inner.is-nav-stacked :is(.header-nav-left-cluster, .header-nav-right-cluster) {
+        flex: 0 0 auto;
+        order: unset;
+        min-height: 0;
+    }
+
+    /* 手机顶栏分类带：内容可横滑，禁止把 100vw 撑破（实测 left-cluster 425 > 390） */
+    body:is(.daocharms-storefront,.daocharms-page,.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp,:has(.weline-cart-shell),:has(.blog-layout)) .weline-header .header-main-nav {
+        max-width: 100%;
+        overflow-x: clip;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp,:has(.weline-cart-shell),:has(.blog-layout)) .weline-header .header-main-nav-inner {
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp,:has(.weline-cart-shell),:has(.blog-layout)) .weline-header .header-nav-left-cluster {
+        flex: 1 1 auto !important;
+        max-width: 100% !important;
+        width: auto !important;
+        min-width: 0 !important;
+        overflow-x: auto !important;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp,:has(.weline-cart-shell),:has(.blog-layout)) .weline-header .header-nav-left-cluster::-webkit-scrollbar {
+        display: none;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,.theme-layout-homepage,.daocharms-products,.theme-layout-products,.daocharms-pdp,:has(.weline-cart-shell),:has(.blog-layout)) .weline-header .categories-nav {
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+    }
+
+    /* ══ 43-mobile-checkout：结账族薄条（ui/43：字标 + 购物袋，无搜索/导航行）══
+     * ⚠️ 该族 **body 无任何 class**（模块 layout `Checkout/view/theme/.../checkout/default.phtml:24`
+     *    就是裸 `<body>`；cart layout :19 同样裸），所以上面 `body:is(类名…)` 收口命中不了，
+     *    只能以 `body:has(.weline-checkout)` 标记 —— shell 类在
+     *    `Checkout/view/frontend/checkout/index.phtml:41`。
+     * 🔎 反证（改判据先拿真实样本）：`:has()` 只匹配「DOM 里真有该 shell」的页面——
+     *    /checkout、/cart 有；/shop hub、首页无 ⇒ 不会误伤未审族。迷你车抽屉是
+     *    `.weline-mini-cart*` 而非 `.weline-checkout`，也不受影响。
+     * 与 40-42 的差异：通知条/belt 内三行收缩**同构复用**（source/checkout.txt banner
+     *   仍含 searchbox / My Favorites / Cart / Category navigation ⇒ 「收纳但不隐藏」，
+     *   §7 规范）；但 ui/43 草图**无分类导航行**，故 ≤767 整行收起，类目能力由
+     *   belt 左簇已有的 ☰（.header-mobile-menu-btn → "Open menu"）承载，属收纳非删除。 */
+    body:has(.weline-checkout) .header-site-notice-inner {
+        flex-wrap: wrap;
+        gap: .15rem 1rem;
+        row-gap: 0;
+        padding-block: .15rem;
+    }
+
+    body:has(.weline-checkout) .weline-header .header-belt-row-1 :is(.header-belt-left, .header-mobile-menu-btn, .header-logo, .header-logo__link) {
+        min-height: 0;
+    }
+
+    body:has(.weline-checkout) .weline-header .header-belt-row-1 {
+        align-items: center;
+        row-gap: .5rem;
+    }
+
+    body:has(.weline-checkout) .weline-header .header-belt-row-1 .header-belt-left {
+        order: 1;
+        gap: .5rem;
+    }
+
+    body:has(.weline-checkout) .weline-header .header-belt-row-1 .header-actions {
+        order: 2;
+    }
+
+    body:has(.weline-checkout) .weline-header .header-belt-row-1 .header-search-wrapper {
+        order: 3;
+        flex: 0 0 100%;
+        max-width: none;
+    }
+
+    body:has(.weline-checkout) .weline-header .header-logo img {
+        max-height: 2.5rem;
+        height: auto;
+    }
+
+    body:has(.weline-checkout) .weline-header .header-main-nav {
+        display: none;
+    }
+}
+
+/* —— Tablet (768–1023): independent mid layout —— */
+@media (min-width: 768px) and (max-width: 1023px) {
+    body.theme-layout-homepage .homepage-section--featured-lead .products-grid,
+    body.theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4,
+    body.theme-layout-homepage .homepage-section .products-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 1rem;
+    }
+
+    body.theme-layout-homepage .homepage-section--trust-strip .badges-grid.columns-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    body.daocharms-products .products-layout__container,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__container {
+        display: grid;
+        grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr);
+        gap: 1rem 1.25rem;
+        align-items: start;
+    }
+
+    body.daocharms-products .products-layout__sidebar,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__sidebar {
+        position: sticky;
+        top: var(--daocharms-sticky-safe-top);
+        width: auto;
+        max-height: calc(100vh - var(--daocharms-sticky-safe-top) - 1rem);
+        overflow: auto;
+    }
+
+    body.daocharms-products .products-layout__grid,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__grid,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__grid--product {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 0.85rem;
+    }
+
+    /* PDP: gallery | buybox two-up without desktop density */
+    body.daocharms-pdp .product-detail-layout__wrapper {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        gap: 1.25rem;
+        align-items: start;
+    }
+
+    body.daocharms-pdp .product-native-detail__buybox {
+        position: sticky;
+        top: var(--daocharms-sticky-safe-top);
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase {
+        /* Prefer in-flow buybox on tablet; sticky bar if present stays clear of consent */
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .weline-checkout__grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 0.8fr);
+        gap: 1.25rem;
+        align-items: start;
+    }
+
+    .weline-checkout__summary {
+        position: sticky;
+        top: var(--daocharms-sticky-safe-top);
+        /* Do not cover place-order: keep summary in side column only */
+        max-height: calc(100vh - var(--daocharms-sticky-safe-top) - 1rem);
+        overflow: auto;
+    }
+
+    .weline-cart-shell__grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(14rem, 0.75fr);
+        gap: 1.15rem;
+        align-items: start;
+    }
+
+    .account-dashboard__body,
+    #account-dashboard {
+        display: grid;
+        grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr);
+        gap: 1.15rem;
+        align-items: start;
+    }
+
+    .account-sidebar,
+    aside.account-sidebar {
+        position: sticky;
+        top: var(--daocharms-sticky-safe-top);
+        width: auto !important;
+    }
+
+    .daocharms-shop-hub__grid,
+    .daocharms-journal-hub__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    /* Controlled horizontal for wide tables on tablet only */
+    .product-account-quotes__table,
+    .account-orders table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .product-account-quotes__table table,
+    .account-orders table {
+        min-width: 32rem;
+    }
+}
+
+/* —— Desktop (≥1024) —— */
+@media (min-width: 1024px) {
+    body.theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    body.daocharms-products .products-layout__grid,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__grid,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__grid--product {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    body.daocharms-pdp .product-detail-layout__wrapper {
+        gap: clamp(1.25rem, 2vw, 2rem);
+    }
+
+    .weline-checkout__summary {
+        position: sticky;
+        top: var(--daocharms-sticky-safe-top);
+        /* Side column sticky must not overlay main CTA */
+        align-self: start;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase {
+        /* Desktop sticky bar: keep clear of bottom consent if present */
+        bottom: 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+}
+
+/* —— Wide (≥1440) —— */
+@media (min-width: 1440px) {
+    body.theme-layout-homepage .homepage-section:not(.homepage-hero):not(.homepage-promo) > *,
+    body.daocharms-products .products-layout__container,
+    body.daocharms-pdp .daocharms-pdp-story__inner,
+    .weline-checkout,
+    .weline-cart-shell {
+        /* Stay on shared content shell — do not invent a private wider container */
+        max-inline-size: var(--weline-layout-content-max-width, 72rem);
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__container {
+        margin-inline: auto;
+    }
+}
+
+/* —— Sticky / consent / error clearance (all breakpoints) —— */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) :is(
+    .w-consent,
+    .consent-banner,
+    [data-consent],
+    .cookie-banner,
+    [role="alertdialog"]
+),
+body:has(.weline-checkout) :is(.w-consent, .cookie-banner, [data-consent]) {
+    z-index: 60;
+}
+
+body.daocharms-pdp .product-native-detail__sticky-purchase,
+.weline-checkout__summary[style*="sticky"],
+.checkout-summary.sticky {
+    /* CTA / errors sit above sticky chrome stacking when both compete */
+    z-index: 35;
+}
+
+body.daocharms-pdp :is(
+    .product-native-detail__actions,
+    [role="alert"],
+    .w-alert,
+    .account-card__alert
+),
+.weline-checkout :is([role="alert"], .w-alert, [data-checkout-message]) {
+    position: relative;
+    z-index: 45;
+}
+
+/* —— 200% text: allow wrap, avoid clipping task chrome —— */
+@media (max-width: 767px) {
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) :is(
+        .weline-product-card .wpc-title,
+        .wpc-name,
+        .product-native-detail__title,
+        .account-card__title,
+        .w-auth-login__title
+    ) {
+        overflow-wrap: anywhere;
+        hyphens: auto;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-inline-size: 100%;
+    }
+}
+
+/* —— Reduced motion —— */
+@media (prefers-reduced-motion: reduce) {
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) *,
+    body.theme-layout-homepage *,
+    body.daocharms-pdp *,
+    body.daocharms-products *,
+    body:has(.weline-checkout) *,
+    body.account-dashboard-layout *,
+    body.account-auth-layout * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    body.theme-layout-homepage :is(
+        .daocharms-hero__plane,
+        .daocharms-bagua__plane,
+        .daocharms-wuxing-hero__phases,
+        .daocharms-hero__mist--far,
+        .daocharms-carousel__slide
+    ) {
+        animation: none !important;
+        transform: none;
+    }
+
+    body.daocharms-pdp .product-native-detail__buy-now:hover,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card:hover {
+        transform: none !important;
+    }
+}

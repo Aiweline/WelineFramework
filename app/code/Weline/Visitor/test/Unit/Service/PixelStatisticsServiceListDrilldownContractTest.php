@@ -56,7 +56,7 @@ class PixelStatisticsServiceListDrilldownContractTest extends TestCore
     public function testListFormAndControllerAcceptAllContractKeys(): void
     {
         $listTpl = (string)\file_get_contents(
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/PixelDashboard/list.phtml'
+            BP . '/app/code/Weline/Visitor/view/templates/backend/PixelDashboard/list.phtml'
         );
         $controller = (string)\file_get_contents(
             BP . '/app/code/Weline/Visitor/Controller/Backend/PixelDashboard.php'
@@ -100,9 +100,9 @@ class PixelStatisticsServiceListDrilldownContractTest extends TestCore
     public function testAllDrilldownSurfacesUseSharedBuilder(): void
     {
         $surfaces = [
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/PixelDashboard/index.phtml',
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/PixelDashboard/detail.phtml',
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/TrafficChannel/detail.phtml',
+            BP . '/app/code/Weline/Visitor/view/templates/backend/PixelDashboard/index.phtml',
+            BP . '/app/code/Weline/Visitor/view/templates/backend/PixelDashboard/detail.phtml',
+            BP . '/app/code/Weline/Visitor/view/templates/backend/TrafficChannel/detail.phtml',
         ];
         foreach ($surfaces as $path) {
             $src = (string)\file_get_contents($path);
@@ -118,7 +118,7 @@ class PixelStatisticsServiceListDrilldownContractTest extends TestCore
     public function testTrafficChannelDetailLinksListWithChannelCode(): void
     {
         $tpl = (string)\file_get_contents(
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/TrafficChannel/detail.phtml'
+            BP . '/app/code/Weline/Visitor/view/templates/backend/TrafficChannel/detail.phtml'
         );
         self::assertStringContainsString("'channel_code' => \$channelCode", $tpl);
         self::assertStringContainsString('像素事件列表', $tpl);

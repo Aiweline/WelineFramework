@@ -208,7 +208,17 @@ class Router implements RouterInterface
             if (class_exists('Weline\\Promotion\\Controller\\Router')) {
                 \Weline\Promotion\Controller\Router::process($path, $rule);
             }
+            if (class_exists('Aiweline\\PlayinChina\\Controller\\Router')) {
+                \Aiweline\PlayinChina\Controller\Router::process($path, $rule);
+            }
             return;
+        }
+
+        if (class_exists('Aiweline\\PlayinChina\\Controller\\Router')) {
+            \Aiweline\PlayinChina\Controller\Router::process($path, $rule);
+            if (!empty($rule['module'])) {
+                return;
+            }
         }
 
         if (class_exists('Weline\\Customer\\Controller\\Router')) {
@@ -470,6 +480,13 @@ class Router implements RouterInterface
             if (preg_match('#^promotion/([a-z0-9_-]+)$#D', $normalizedPath) === 1) {
                 return true;
             }
+        }
+
+        if (class_exists('Aiweline\\PlayinChina\\Controller\\Router')
+            && class_exists('Aiweline\\PlayinChina\\Api\\Uri\\PlayinChinaNamespace')
+            && \Aiweline\PlayinChina\Api\Uri\PlayinChinaNamespace::isPlayinChinaIdentifier($normalizedPath)
+        ) {
+            return true;
         }
 
         return false;

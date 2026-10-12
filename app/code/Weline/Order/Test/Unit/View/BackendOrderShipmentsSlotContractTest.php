@@ -10,7 +10,7 @@ final class BackendOrderShipmentsSlotContractTest extends TestCase
 {
     public function testOrderDetailProvidesEmptyShipmentsSlotWithoutHardcodedShipmentTable(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/view.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/view.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
 
@@ -29,7 +29,7 @@ final class BackendOrderShipmentsSlotContractTest extends TestCase
 
     public function testOrderShipmentPanelProvidesEmptyShipmentsSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/panel/shipment.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/panel/shipment.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('id="backend-order-shipments"', $source);
@@ -42,7 +42,7 @@ final class BackendOrderShipmentsSlotContractTest extends TestCase
 
     public function testOrderListProvidesShippingSlot(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/index.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('id="backend-order-list-shipping"', $source);
@@ -54,7 +54,7 @@ final class BackendOrderShipmentsSlotContractTest extends TestCase
 
     public function testOrderEditShipmentPanelProvidesShipmentsSlotOnly(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/panel/shipment.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/panel/shipment.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('id="backend-order-shipments"', $source);
@@ -68,7 +68,7 @@ final class BackendOrderShipmentsSlotContractTest extends TestCase
 
     public function testOrderEditPageDoesNotHardcodeShipmentsTable(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/edit.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringNotContainsString('data-testid="order-edit-shipments"', $source);

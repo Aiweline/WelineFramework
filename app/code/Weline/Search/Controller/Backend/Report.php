@@ -34,7 +34,7 @@ final class Report extends BackendController
         $this->assign('range', $range);
         $this->assign('engine', 'mysql');
 
-        return (string)$this->fetch('Weline_Search::templates/Backend/Report/index.phtml');
+        return (string)$this->fetch('Weline_Search::templates/backend/Report/index.phtml');
     }
 
     /** @return array{website_id:int,store_id:int,channel_id:int} */

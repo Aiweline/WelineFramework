@@ -116,7 +116,7 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
 
     public function testLanguageSupportRequestFormHasNoInlineSubmitScript(): void
     {
-        $form = $this->read('view/templates/Frontend/language-support-request.phtml');
+        $form = $this->read('view/templates/frontend/language-support-request.phtml');
         self::assertStringContainsString('data-language-request-form-shell', $form);
         self::assertStringContainsString('data-language-request-feedback', $form);
         self::assertStringContainsString('data-msg-success=', $form);

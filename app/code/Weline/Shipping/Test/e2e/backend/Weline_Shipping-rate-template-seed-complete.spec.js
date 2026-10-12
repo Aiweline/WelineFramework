@@ -26,7 +26,7 @@ moduleDescribe(test, MODULE, '费用模板九档种子补齐', () => {
         'utf8',
       );
       const tpl = fs.readFileSync(
-        path.join(ROOT, 'view/templates/Backend/RateTemplate/index.phtml'),
+        path.join(ROOT, 'view/templates/backend/RateTemplate/index.phtml'),
         'utf8',
       );
       const modulePhp = fs.readFileSync(path.join(ROOT, 'etc/module.php'), 'utf8');

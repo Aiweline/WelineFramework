@@ -50,7 +50,7 @@ $prodSrc = (string)file_get_contents($root . '/app/code/Weline/Product/extends/m
 $assert(str_contains($prodSrc, 'WarmupLocaleUrlExpander'), 'locale: ProductHeat expands locales');
 $assert(str_contains($prodSrc, '站点已启用语种'), 'locale: ProductHeat hint mentions locales');
 
-$ui = (string)file_get_contents($root . '/app/code/Weline/Cdn/view/templates/Backend/Warmup/index.phtml');
+$ui = (string)file_get_contents($root . '/app/code/Weline/Cdn/view/templates/backend/Warmup/index.phtml');
 $assert(str_contains($ui, '<w:scope'), 'UC1 UI: uses official w:scope taglib');
 $assert(str_contains($ui, 'target_scope'), 'UC1 UI: target_scope wiring');
 $assert(str_contains($ui, 'scope="global,website"'), 'UC1 UI: global+website levels');

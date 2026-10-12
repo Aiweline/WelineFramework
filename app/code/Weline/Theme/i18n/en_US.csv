@@ -1,5 +1,7 @@
 ﻿主题通知事件,"Theme Notification Events"
+"主题发布、预览等操作时触发通知；payload 含 type/data/timestamp。","主题发布、预览等操作时触发通知；payload 含 type/data/timestamp。"
 "构建预览 URL 事件","Build preview URL event"
+"构建前端预览 URL 时触发，可改 base_url；另含 theme_id/page_type。","构建前端预览 URL 时触发，可改 base_url；另含 theme_id/page_type。"
 "Theme editor result after","Theme editor result after"
 "Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result.","Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result."
 "Layout path resolve","Layout path resolve"
@@ -147,18 +149,18 @@ id属性不能为空,id属性不能为空
 "w:slot wrapper=""section"" 必须配置 weline-code 属性（用于事件溯源）","w:slot wrapper=""section"" must be configured with the weline-code attribute (for event sourcing)"
 "w:slot wrapper=""section"" 的 weline-code 不能为空","The weline-code of w:slot wrapper=""section"" cannot be empty"
 "w:slot 标签缺少必填属性 id","w:slot tag missing required attribute id"
-"w:slot 标签 id 格式无效: ""%{id}""，只允许字母开头，包含字母、数字、下划线、连字符","w:slot tag id format invalid: ""%{id}"", must start with letter, contains letters, numbers, underscore, hyphen"
+"w:slot 标签 id 格式无效，只允许字母开头，包含字母、数字、下划线、连字符","w:slot 标签 id 格式无效，只允许字母开头，包含字母、数字、下划线、连字符"
 "w:slot 标签 id 重复: ""%{id}""","w:slot tag id duplicate: ""%{id}"""
 "已存在于: %{location}","Already exists at: %{location}"
 "当前位置: %{location}","Current location: %{location}"
-"w:slot 标签 position 属性值无效: ""%{value}""","w:slot tag position attribute value invalid: ""%{value}"""
+"w:slot 标签 position 属性值无效","w:slot 标签 position 属性值无效"
 "允许的值: %{values}","Allowed values: %{values}"
 "w:slot 标签属性冲突 - exclusive 和 multiple 不能同时为 true","w:slot tag attribute conflict - exclusive and multiple cannot both be true"
 "w:slot 标签属性冲突 - append 和 prepend 不能同时为 true","w:slot tag attribute conflict - append and prepend cannot both be true"
 "w:slot 标签属性冲突 - exclusive 模式下不能使用 append 或 prepend","w:slot tag attribute conflict - cannot use append or prepend in exclusive mode"
 "w:slot id=""%{id}"" accept 和 reject 包含相同的部件类型: %{types}","w:slot id=""%{id}"" accept and reject contain same widget types: %{types}"
-"w:slot 标签 max 属性必须是 >= -1 的整数，当前值: ""%{value}""","w:slot tag max attribute must be integer >= -1, current value: ""%{value}"""
-"w:slot 标签 min 属性必须是 >= 0 的整数，当前值: ""%{value}""","w:slot tag min attribute must be integer >= 0, current value: ""%{value}"""
+"w:slot 标签 max 属性必须是 >= -1 的整数","w:slot 标签 max 属性必须是 >= -1 的整数"
+"w:slot 标签 min 属性必须是 >= 0 的整数","w:slot 标签 min 属性必须是 >= 0 的整数"
 "w:slot 标签 min (%{min}) 不能大于 max (%{max})","w:slot tag min (%{min}) cannot be greater than max (%{max})"
 致命错误,"Fatal Error"
 "文件: %{file}","File: %{file}"
@@ -885,19 +887,10 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-迷你购物车,迷你购物车
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
-小计,Subtotal
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-去结算,"Proceed to Checkout"
-查看购物车,"View cart"
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
-官方社交媒体,"Official social media"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 商品,Products
 查看商品图,"View product image"
 查看规格图,"View spec images"
@@ -909,7 +902,11 @@ FAQ/常见问题,FAQ
 零售车,零售车
 批发车,批发车
 继续购物,"Continue shopping"
+小计,Subtotal
+去结算,"Proceed to Checkout"
 正在前往结算...,"Proceeding to checkout..."
+查看购物车,"View cart"
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
 运费将在结算时计算,"Shipping calculated at checkout"
 税费,Tax
 正在加载购物车...,"Loading cart..."
@@ -927,29 +924,6 @@ FAQ/常见问题,FAQ
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-面包屑,"bread crumbs"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-件商品,"items of goods"
-查看更多,"View more"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-天,Day(s)
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -976,6 +950,11 @@ NEW,NEW
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1022,6 +1001,10 @@ ERROR,ERROR
 展开悬浮,"Expand float"
 缺货,"Out of Stock"
 联系询价,联系询价
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
 我的,mine
@@ -1076,6 +1059,8 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1117,6 +1102,7 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1127,6 +1113,10 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1144,9 +1134,15 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+查看更多,"View more"
+距离结束,"Ends in"
 精选轮播,"Featured Carousel"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
+官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1182,6 +1178,10 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
 加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
@@ -1606,6 +1606,7 @@ AI目录加载失败,"AI directory loading failed"
 已发布版本,"Published version"
 当前生效,"Currently active"
 范围,Scope
+选购,Shop
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
 字体子集预热开始…,"Font subset warm-up begins..."
@@ -1619,8 +1620,8 @@ AI目录加载失败,"AI directory loading failed"
 "Theme 布局写入必须位于写意图事务内。","Theme layout writes must run inside a write-intent transaction."
 政策页面,"Policy Page"
 道记,"Dao Notes"
+道记文章,道记文章
 无为空间,"Wu Wei Sanctuary"
-选购,Shop
 道家居服,"Daoist Lounge Wear"
 测试页,"Test Page"
 "-- 选择主题 --","-- Select Theme --"
@@ -2306,15 +2307,21 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
-全部,All
-"店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","Configure the storefront theme under Website Info → Storefront Theme; otherwise it falls back to the registered Theme Default. Backend skin is set in System Config."
-各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,"Storefront themes are configured in Website Info; this list only shows installed themes and bindings."
-所选主题版本不属于当前网站范围,"Selected theme version does not belong to this website scope"
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 Pagination,Pagination
 Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"
 Next,Next
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+"w:slot 标签 id 格式无效: ""%{id}""，只允许字母开头，包含字母、数字、下划线、连字符","w:slot tag id format invalid: ""%{id}"", must start with letter, contains letters, numbers, underscore, hyphen"
+"w:slot 标签 position 属性值无效: ""%{value}""","w:slot tag position attribute value invalid: ""%{value}"""
+"w:slot 标签 max 属性必须是 >= -1 的整数，当前值: ""%{value}""","w:slot tag max attribute must be integer >= -1, current value: ""%{value}"""
+"w:slot 标签 min 属性必须是 >= 0 的整数，当前值: ""%{value}""","w:slot tag min attribute must be integer >= 0, current value: ""%{value}"""
+全部,All
+"店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","Configure the storefront theme under Website Info → Storefront Theme; otherwise it falls back to the registered Theme Default. Backend skin is set in System Config."
+各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,"Storefront themes are configured in Website Info; this list only shows installed themes and bindings."
+所选主题版本不属于当前网站范围,"Selected theme version does not belong to this website scope"
 个人中心,"Personal center"
 登录,"Log in"
 登录页工具,"Login page tools"
@@ -4570,7 +4577,7 @@ Chiffon,Chiffon
 玉石,Jade
 古老智慧。现代仪式。,"Ancient wisdom. Modern rituals."
 黑曜石外圈，阴阳流转——佩戴一件小小的平衡。,"Obsidian rim, yin and yang in motion — wear a quiet balance."
-选购仪式物件,"Shop Ritual Objects"
+选购仪式物件,"Objects for a quieter everyday."
 发现你的五行平衡,"Discover Your Elemental Balance"
 阴阳、八卦与平安扣——真实吊坠在雾与光中缓缓回转，佩一件小小的持中。,"Yin-Yang, Bagua, and peace discs — real pendants turning slowly in mist and light. Wear a quiet center."
 黑曜石阴阳吊坠,"Obsidian Yin-Yang Pendant"
@@ -4834,3 +4841,4 @@ Chiffon,Chiffon
 选择修订冲突，请刷新后再发布,"Selection revision conflict — refresh then publish"
 作用域结构冲突，请先重置或重新基线化后再发布,"Scope structural conflict — reset or re-baseline before publishing"
 发布主题失败,"Theme publish failed"
+"查看物件 →","View object →"

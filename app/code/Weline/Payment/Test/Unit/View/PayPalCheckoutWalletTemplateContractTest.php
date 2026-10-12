@@ -11,7 +11,7 @@ final class PayPalCheckoutWalletTemplateContractTest extends TestCase
     public function testCheckoutTemplateExposesWalletDataAttributes(): void
     {
         $tpl = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Frontend/checkout/paypal.phtml'
+            dirname(__DIR__, 3) . '/view/templates/frontend/checkout/paypal.phtml'
         );
         self::assertStringContainsString('data-paypal-sdk-src', $tpl);
         self::assertStringContainsString('data-paypal-google-pay', $tpl);

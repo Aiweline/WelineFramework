@@ -14,7 +14,7 @@ final class BackendOrderBreadcrumbRouteContractTest extends TestCase
 {
     public function testOrderDetailBodyHasNoDuplicateBreadcrumb(): void
     {
-        $template = dirname(__DIR__, 3) . '/view/templates/Backend/Order/view.phtml';
+        $template = dirname(__DIR__, 3) . '/view/templates/backend/Order/view.phtml';
         self::assertFileExists($template);
         $html = (string) file_get_contents($template);
 
@@ -42,7 +42,7 @@ final class BackendOrderBreadcrumbRouteContractTest extends TestCase
 
     public function testOrderEditBodyHasNoDuplicateBreadcrumb(): void
     {
-        $template = dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml';
+        $template = dirname(__DIR__, 3) . '/view/templates/backend/Order/edit.phtml';
         self::assertFileExists($template);
         $html = (string) file_get_contents($template);
 

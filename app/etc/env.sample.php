@@ -271,7 +271,7 @@ return [
             'fpc_build_wait_timeout_ms' => 15000,
             // Publish-only grace only while the per-URI build lock is still held.
             'fpc_publish_grace_wait_ms' => 10000,
-            // Serve stale public FPC during rebuild lock contention instead of blocking readers.
+            // Soft-stale window (Process / grace). Cap 31536000 (1y). Anonymous Shared store uses CachePool ttl=-1 (forever until purge).
             'fpc_stale_ttl_seconds' => 86400,
             'fpc_serve_stale_before_build' => true,
             'runtime_log_file' => 'var/log/wls/runtime.log',

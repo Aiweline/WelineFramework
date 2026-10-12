@@ -9,7 +9,7 @@ class PixelErrorMonitorModalContractTest extends TestCore
 {
     public function testIndexUsesDialogInsteadOfDetailPageLink(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/PixelErrorMonitor/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/PixelErrorMonitor/index.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('pixel-error-detail-dialog', $src);
@@ -23,7 +23,7 @@ class PixelErrorMonitorModalContractTest extends TestCore
         self::assertStringContainsString('glanceCell', $src);
         self::assertStringNotContainsString('adminRequest', $src);
         self::assertStringNotContainsString('pixel-error-monitor/detail?id=', $src);
-        self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/view/templates/Backend/PixelErrorMonitor/detail.phtml');
+        self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/view/templates/backend/PixelErrorMonitor/detail.phtml');
     }
 
     public function testControllerServesJsonDetailAndRedirectsHtml(): void

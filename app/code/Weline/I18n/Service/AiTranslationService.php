@@ -830,6 +830,10 @@ class AiTranslationService
         string $sourceModule = ''
     ): void
     {
+        // insert/update 绕过 Model::save_before，必须在此显式门禁，避免 AI 扇出脏词撑爆地区词典
+        $word = Dictionary::assertWord($word);
+        $localeCode = LocaleDictionary::assertLocaleCode($localeCode);
+
         $connection = $this->localeDictionary->getConnection();
         $publisher = ObjectManager::getInstance(I18nResourceChangePublisher::class);
         if (TransactionContext::logicalConnectionKey($connection->getConnector())

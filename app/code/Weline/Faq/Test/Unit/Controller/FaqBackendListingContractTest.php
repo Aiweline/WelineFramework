@@ -11,7 +11,7 @@ final class FaqBackendListingContractTest extends TestCase
     public function testListingIsWebsiteGrouped(): void
     {
         $controller = (string)file_get_contents(dirname(__DIR__, 3) . '/Controller/Backend/Page.php');
-        $listing = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Page/listing.phtml');
+        $listing = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Page/listing.phtml');
 
         self::assertStringContainsString('groupPagesByWebsite', $controller);
         self::assertStringContainsString('loadWebsiteOptions', $controller);
@@ -24,7 +24,7 @@ final class FaqBackendListingContractTest extends TestCase
 
     public function testBackendTemplatesUseWelineUiNotBootstrap(): void
     {
-        $root = dirname(__DIR__, 3) . '/view/templates/Backend';
+        $root = dirname(__DIR__, 3) . '/view/templates/backend';
         $files = [
             $root . '/Page/listing.phtml',
             $root . '/Page/edit.phtml',

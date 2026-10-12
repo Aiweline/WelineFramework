@@ -22,14 +22,33 @@ final class NewArrivals extends FrontendController
     public function index(): string
     {
         $title = (string)__('新品上架');
+        $eyebrow = $title;
         $websiteCode = (string)RequestContext::getWelineWebsiteCode();
-        if ($this->surfaceResolver->hasWebsiteCopy($websiteCode)) {
-            $surface = $this->surfaceResolver->resolve(
-                '/new-arrivals',
-                (string)RequestContext::getWelineUserLang(),
-                $websiteCode,
-            );
-            $this->assign('storefront_new_arrivals_lede', (string)($surface['lede'] ?? ''));
+        $surface = $this->surfaceResolver->resolve(
+            '/new-arrivals',
+            (string)RequestContext::getWelineUserLang(),
+            $websiteCode,
+        );
+        $surfaceTitle = trim((string)($surface['title'] ?? ''));
+        $surfaceHeading = trim((string)($surface['heading'] ?? ''));
+        if ($surfaceTitle !== '') {
+            $eyebrow = $surfaceTitle;
+        }
+        if ($surfaceHeading !== '') {
+            $title = $surfaceHeading;
+        }
+        $this->assign('storefront_new_arrivals_lede', (string)($surface['lede'] ?? ''));
+        $this->assign('storefront_new_arrivals_eyebrow', $eyebrow);
+
+        $presentation = is_array($surface['presentation'] ?? null) ? $surface['presentation'] : [];
+        if (array_key_exists('show_filters', $presentation)) {
+            $this->assign('showFilters', (bool)$presentation['show_filters']);
+        }
+        if (array_key_exists('show_toolbar', $presentation)) {
+            $this->assign('showToolbar', (bool)$presentation['show_toolbar']);
+        }
+        if (array_key_exists('show_recommendations', $presentation)) {
+            $this->assign('showRecommendations', (bool)$presentation['show_recommendations']);
         }
 
         $this->layoutType = 'products';
@@ -38,12 +57,17 @@ final class NewArrivals extends FrontendController
         $this->request->setGet('layout_option', 'default');
         $this->request->setGet('theme_page_title', $title);
 
-        $items = $this->widgetCatalog->newArrivalCards(24, 3650);
+        $cardLimit = (int)($presentation['card_limit'] ?? 24);
+        if ($cardLimit < 1) {
+            $cardLimit = 24;
+        }
+        $items = $this->widgetCatalog->newArrivalCards($cardLimit, 3650);
         if ($items === []) {
-            $items = $this->widgetCatalog->cards(24);
+            $items = $this->widgetCatalog->cards($cardLimit);
         }
 
         $this->assign('page_title', $title);
+        $this->assign('storefront_new_arrivals_eyebrow', $eyebrow);
         $this->assign('storefront_new_arrivals', $items);
         $this->assign('storefront_new_arrivals_count', count($items));
         $this->assign('storefront_new_arrivals_rss_url', '/new-arrivals/rss.xml');

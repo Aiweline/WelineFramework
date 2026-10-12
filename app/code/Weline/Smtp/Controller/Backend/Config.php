@@ -91,7 +91,7 @@ class Config extends BackendController
             ])
         );
         $this->assignScopeVars($workScope);
-        return $this->fetch('Weline_Smtp::Backend/Config');
+        return $this->fetch('Weline_Smtp::backend/Config');
     }
 
     #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]

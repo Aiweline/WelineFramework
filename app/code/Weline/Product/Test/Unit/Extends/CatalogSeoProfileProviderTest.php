@@ -21,6 +21,7 @@ final class CatalogSeoProfileProviderTest extends TestCase
         $profile = $this->provider->provideSeoProfile(null, [
             '_slot' => 'head',
             'canonical_url' => 'https://shop.example/zh_Hans_CN/categories',
+            'website_code' => 'hanfu',
             'title' => '商品列表 | 商品列表页布局',
             'description' => '商品列表 | 商品列表页布局 - Weline Framework',
         ]);
@@ -35,6 +36,7 @@ final class CatalogSeoProfileProviderTest extends TestCase
         $profile = $this->provider->provideSeoProfile(null, [
             '_slot' => 'head',
             'canonical_url' => 'https://shop.example/ar_SA/best-sellers',
+            'website_code' => 'hanfu',
             'title' => '热销榜 | 热销榜布局',
             'description' => '热销榜 | 热销榜布局 - Weline Framework',
         ]);
@@ -49,13 +51,14 @@ final class CatalogSeoProfileProviderTest extends TestCase
         $profile = $this->provider->provideSeoProfile(null, [
             '_slot' => 'head',
             'canonical_url' => 'https://shop.example/en_US/categories',
+            'website_code' => 'hanfu',
             'site_name' => 'Weline Framework',
             'title' => '分类 | 分类页面布局',
             'description' => '分类 | 分类页面布局 - Weline Framework',
         ]);
 
         self::assertSame(
-            'Hanfu Categories | Shop by Dynasty & Style',
+            'Hanfu Categories | By Style',
             $profile['title'],
         );
         self::assertSame(

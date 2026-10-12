@@ -62,7 +62,7 @@ final class FreeShippingRuleSeedContractTest extends TestCase
         self::assertStringContainsString('FreeShippingRuleSeedService', $ctl);
 
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/FreeShippingRule/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/FreeShippingRule/index.phtml',
         );
         self::assertStringContainsString('free-shipping-origin-seed', $tpl);
         self::assertStringContainsString('系统种子不可删除', $tpl);

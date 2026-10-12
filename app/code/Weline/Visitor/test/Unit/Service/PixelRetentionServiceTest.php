@@ -147,7 +147,7 @@ final class PixelRetentionServiceTest extends TestCase
         self::assertStringContainsString('buildRetention', $controller);
         self::assertStringContainsString("'retention'", $controller);
 
-        $detail = (string)\file_get_contents($root . '/view/templates/Backend/PixelDashboard/detail.phtml');
+        $detail = (string)\file_get_contents($root . '/view/templates/backend/PixelDashboard/detail.phtml');
         self::assertStringContainsString('id="retention"', $detail);
         self::assertStringContainsString('留存分析', $detail);
         self::assertStringContainsString('次日留存', $detail);

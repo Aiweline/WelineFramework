@@ -182,7 +182,7 @@ class Index extends BackendController
         $this->assign('compose_account_locked', $compose['account_locked']);
         $this->assign('compose_can_pick_account', $compose['can_pick_account']);
 
-        return $this->fetch('Weline_Mail::templates/Backend/Index/enterprise.phtml');
+        return $this->fetch('Weline_Mail::templates/backend/Index/enterprise.phtml');
     }
 
     public function postCreateDomain(): string

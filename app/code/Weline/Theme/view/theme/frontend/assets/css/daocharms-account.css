@@ -1,0 +1,2988 @@
+/**
+ * DaoCharms account / auth skin — gray-green natural.
+ * Scope: login · register · forgot · dashboard · orders · wishlist · profile · addresses · quotes · B2B.
+ * Design pages 19 login · 20 register · 21 reset · 22 account · 23 orders · 24 wishlist
+ * · 25 addresses · 26 profile & security · 27 quotes · 28 wholesale/B2B.
+ * Pages 22–28 are hash sections of one route (customer/account/index); the DOM is
+ * owned by Order / Wishlist / Shipping / TwoFactorAuth / Product / B2B, so this is a
+ * skin over inherited markup — never a template copy. Forms and CSRF are untouched.
+ * Prefer module DOM hooks; preserve forms/CSRF (no template copy unless CSS insufficient).
+ * Contracts: page-state.v1 · theme-tokens.v1
+ */
+
+/* —— Auth stage (login / register / forgot / set-password / challenge) ——
+ * The account layouts ship their own inline <style> AFTER the theme head and hard
+ * code a dark stage (background #232f3e, white rail copy, dock drop-shadow), so
+ * stage-level resets here must win by specificity or !important.
+ * Body class is account-auth-layout — NOT daocharms-storefront — so the shared
+ * forms.css control skin does not reach these pages; auth controls are covered here. */
+body.account-auth-layout,
+body.account-challenge-layout,
+body.account-logout-layout {
+    --w-input-border: var(--color-border-default);
+    --w-input-bg: var(--color-bg-primary);
+    --w-input-fg: var(--color-text);
+    --w-input-radius: var(--daocharms-radius-sm);
+    --w-focus-ring: color-mix(in srgb, var(--color-primary) 55%, transparent);
+    color: var(--color-text);
+    background: var(--color-bg-canvas) !important;
+}
+
+body.account-auth-layout .account-auth-content,
+body.account-auth-layout .account-auth-shell,
+body.account-auth-layout .account-auth-stage__shell,
+body.account-auth-layout .account-auth__content-slot,
+body.account-auth-layout .account-auth__content-root-slot {
+    background: transparent;
+}
+
+/* —— Auth split stage: quiet intro rail · form panel (design 19 / 20) —— */
+body.account-auth-layout .account-login-widget {
+    background: var(--color-bg-canvas) !important;
+    min-height: min(72vh, 44rem);
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 1fr) !important;
+    column-gap: 0;
+    padding: 0 !important;
+    isolation: isolate;
+    overflow: hidden;
+}
+
+/* Clip stage image to the left column (ui/19–20 50/50). */
+body.account-auth-layout .account-login-widget__backdrop {
+    inset: 0 auto 0 0 !important;
+    width: 50%;
+    background-size: cover !important;
+    background-position: center !important;
+}
+
+body.account-auth-layout .account-login-widget__media,
+body.account-auth-layout .account-login-widget__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+body.account-auth-layout .account-login-widget__overlay {
+    background: color-mix(in srgb, #0f1111 22%, transparent) !important;
+}
+
+/* Hide placeholder eyebrow / trust when layout setData uses dash/dot sentinels */
+body.account-auth-layout .account-login-widget__eyebrow,
+body.account-auth-layout .account-login-widget__promo-trust {
+    display: none !important;
+}
+
+body.account-auth-layout .account-login-widget--register .account-login-widget__rail {
+    display: none !important;
+}
+
+body.account-auth-layout .w-auth-login__eyebrow {
+    margin: 0 0 .35rem;
+    font-size: .7rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+body.account-auth-layout .w-auth-recovery__kicker {
+    margin: .35rem 0 .75rem;
+    font-size: .95rem;
+    color: var(--color-text-secondary);
+}
+
+body.account-auth-layout .w-auth-recovery__icon {
+    display: none !important;
+}
+
+/* No merchant image → tonal sand-to-canvas wash instead of the built-in dark ink art. */
+body.account-auth-layout .account-login-widget--wash .account-login-widget__backdrop {
+    background-color: transparent;
+    background-image: linear-gradient(
+        158deg,
+        color-mix(in srgb, var(--color-bg-secondary) 58%, var(--color-bg-canvas)) 0%,
+        var(--color-bg-canvas) 74%
+    );
+    background-size: cover;
+    background-position: center;
+    background-blend-mode: normal;
+}
+
+body.account-auth-layout .account-login-widget--wash .account-login-widget__rail {
+    align-self: stretch;
+    align-content: center;
+    max-width: 36rem;
+    padding: clamp(1.5rem, 4vw, 3.25rem);
+    gap: 0.85rem;
+    color: var(--color-text);
+}
+
+body.account-auth-layout .account-login-widget--wash .account-login-widget__eyebrow {
+    color: var(--color-text-secondary);
+    letter-spacing: var(--daocharms-label-tracking);
+}
+
+body.account-auth-layout .account-login-widget--wash .account-login-widget__promo-title {
+    color: var(--color-text);
+    /* ui/19：舞台大标题走衬线展示体（草图「Welcome back」为 serif） */
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, "Times New Roman", serif);
+    font-weight: 400;
+    font-size: clamp(2rem, 3.4vw, 3rem);
+    line-height: var(--daocharms-heading-leading);
+    letter-spacing: var(--daocharms-heading-tracking);
+}
+
+body.account-auth-layout .account-login-widget--wash .account-login-widget__promo-subtitle,
+body.account-auth-layout .account-login-widget--wash .account-login-widget__promo-trust {
+    max-width: 24rem;
+    color: var(--color-text-secondary);
+}
+
+/* Merchant-uploaded stage image: rail copy overlays left photography (ui/19). */
+body.account-auth-layout .account-login-widget--has-image .account-login-widget__rail {
+    align-self: start;
+    align-content: start;
+    max-width: 28rem;
+    padding: clamp(1.75rem, 4vw, 3.5rem);
+    color: #fff;
+    text-shadow: 0 1px 2px color-mix(in srgb, #0f1111 35%, transparent);
+}
+
+body.account-auth-layout .account-login-widget--has-image .account-login-widget__promo-title {
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, "Times New Roman", serif);
+    font-weight: 400;
+    font-size: clamp(1.85rem, 3.2vw, 2.75rem);
+    letter-spacing: var(--daocharms-heading-tracking);
+    line-height: 1.2;
+    color: #fff;
+}
+
+body.account-auth-layout .account-login-widget--has-image .account-login-widget__promo-subtitle {
+    margin-block-start: .85rem;
+    padding-block-start: .85rem;
+    border-block-start: var(--daocharms-rule-width) solid color-mix(in srgb, #fff 55%, transparent);
+    max-width: 18rem;
+    font-size: .72rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: color-mix(in srgb, #fff 88%, transparent);
+}
+
+body.account-auth-layout .account-login-widget--has-image .account-login-widget__eyebrow {
+    letter-spacing: var(--daocharms-label-tracking);
+}
+
+/* Form titles on dock use serif display (ui/19–20). */
+body.account-auth-layout .account-login-widget .w-auth-login__title {
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, "Times New Roman", serif);
+    font-weight: 400;
+}
+
+body.account-auth-layout .w-auth-recovery__title {
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, "Times New Roman", serif);
+    font-weight: 400;
+    font-size: clamp(1.85rem, 3vw, 2.5rem);
+}
+
+/* Dock: flat panel on warm stone, hairline against the rail. No drop shadow. */
+body.account-auth-layout .account-login-widget__dock {
+    grid-column: 2;
+    align-self: stretch;
+    justify-self: stretch;
+    max-width: none;
+    display: flex;
+}
+
+body.account-auth-layout .account-login-widget__stage {
+    display: flex;
+    width: 100%;
+    filter: none !important;
+}
+
+body.account-auth-layout .account-login-widget .w-auth-login,
+body.account-auth-layout .account-login-widget .w-auth-login--amazon {
+    flex: 1 1 auto;
+    width: 100%;
+    max-inline-size: none !important;
+    margin: 0;
+    padding: clamp(1.5rem, 3vw, 3rem);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 0;
+    border-inline-start: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: 0 !important;
+    background: var(--color-bg-primary);
+    box-shadow: none;
+    overflow: visible;
+    color: var(--color-text);
+}
+
+/* Standalone auth panels (set-password / challenge) stay a centred narrow card.
+ * Deliberately lower specificity than the widget-scoped panel rule, so the
+ * login/register stage keeps its full-width dock panel and the split border. */
+.account-auth-shell :is(.w-auth-login, .w-auth-login--amazon) {
+    max-inline-size: min(100%, 26rem);
+    margin-inline: auto;
+    padding: clamp(1.25rem, 3vw, 1.75rem);
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+    color: var(--color-text);
+}
+
+body.account-auth-layout .w-auth-recovery {
+    max-inline-size: min(100%, 27rem);
+    margin-inline: auto;
+    margin-block: clamp(2rem, 6vh, 5rem);
+    padding: clamp(1.5rem, 4vw, 2.75rem);
+    text-align: center;
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+    color: var(--color-text);
+}
+
+body.account-auth-layout .w-auth-login__title,
+body.account-auth-layout .w-auth-recovery__title {
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 400;
+    font-size: clamp(1.5rem, 2.4vw, 2rem);
+    line-height: var(--daocharms-heading-leading);
+    color: var(--color-text);
+}
+
+body.account-auth-layout .w-auth-login__subtitle,
+body.account-auth-layout .w-auth-recovery__subtitle {
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+body.account-auth-layout .w-auth-login__social-title {
+    letter-spacing: var(--daocharms-label-tracking);
+    color: var(--color-text-secondary) !important;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+/* "— OR CONTINUE WITH —" hairlines either side of the label (design 19). */
+body.account-auth-layout :is(.w-auth-login__divider, .w-auth-login__social-divider) {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-block: 0.85rem;
+    border: 0;
+    background: none;
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    text-align: center;
+}
+
+body.account-auth-layout :is(.w-auth-login__divider, .w-auth-login__social-divider)::before,
+body.account-auth-layout :is(.w-auth-login__divider, .w-auth-login__social-divider)::after {
+    content: "";
+    flex: 1 1 auto;
+    block-size: var(--daocharms-rule-width);
+    background: var(--color-border-subtle);
+}
+
+/* Labels stay visible beside the control (§6). Field icons are decorative. */
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) .w-field__label {
+    color: var(--color-text) !important;
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) .w-field__label :is(i, svg, .w-icon) {
+    display: none;
+}
+
+/* —— 认证页字段标签：改成「标签独占一行、落在控件上方」（设计稿 19/20/21，§8 ④ P0）——
+ * foundation.css 的 `.w-field__label` 是**浮动标签**组件：
+ *   静止态（空值且未聚焦）`inset-block-start: calc(--weline-control-height / 2)` + `translate: 0 -50%`，
+ *   设计意图是「空值时标签就顶替占位符、有值/聚焦时浮到上边框缺口」。
+ * 设计稿不是这个组件：19-login / 20-register / 21-reset 三页都是
+ *   **标签独占一行在控件上方（常显）**，且控件内**另有灰色占位符**（21-reset 的框内为空）。
+ * 规范 §6 明确「标签持续可见；占位提示不能替代标签」，浮动标签的静止态正好违反这一条。
+ * 实测（1440 静止态）：所有认证字段的标签盒 h=44、y = 控件顶 −1，文字被 `align-items:center`
+ *   居中到控件**垂直中点** ⇒ 与原生 placeholder 完全重叠（密码框读作 "Passwopdssword"，
+ *   注册页多字段读出 "Ranter first name"）；`Remember` 是 select，走缺口态但同样 h=44，
+ *   文字落在控件中线 ⇒ 与选中值 "1 week" 叠成 "1 weea"。
+ * ⚠️ 两条一起改才有效：本块负责「不浮动」，下方 `.w-field > label` 的 `min-height: 2.75rem`
+ *   负责「标签盒不被撑到 44px」。只改一条仍会叠印。
+ * ⚠️ 不要顺手把标签改回缺口态：设计稿要的是「上方常显」，不是 Material 缺口。
+ * 作用域限认证/挑战/登出三类 body，购物车·结账·联系表单的浮动标签**不受影响**。
+ * ⚠️ 选择器必须**同时带上 `.w-auth-login--amazon`**：该页 SECTION 的实际类是
+ *   `w-card w-auth-login w-auth-login--amazon`，模块的亚马逊皮肤
+ *   （`widget-account-login.css` / `weline-customer-account-login.css`）带 `!important`，
+ *   不带 amazon 类时本条特异性 (0,3,1) 打不过它的 (0,4,0) —— 实测「Remember」标签因此
+ *   仍是 `display:inline-flex` 且字段 `gap:0`，标签行与 select 贴死（2026-09-26 踩过）。
+ *   本主题既有的做法就是「重写亚马逊皮肤」而非摘掉该类（见本文件 L144 同款写法）。 */
+body:is(.account-auth-layout, .account-challenge-layout, .account-logout-layout) .w-field > .w-field__label,
+body:is(.account-auth-layout, .account-challenge-layout, .account-logout-layout) .w-auth-login--amazon .w-field > .w-field__label,
+body:is(.account-auth-layout, .account-challenge-layout, .account-logout-layout) .w-auth-recovery .w-field > .w-field__label {
+    position: static !important;
+    inset: auto !important;
+    translate: none !important;
+    display: block !important;
+    min-height: 0 !important;
+    max-inline-size: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: none !important;
+    overflow: visible !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+}
+
+/* 标签与控件之间的间距：`.w-field` 是 grid，gap 即标签行到控件行的距离。
+   设计稿实测 9–16px（20-register ≈9–10、21-reset ≈14、19-login ≈15–16），取 10px 折中。
+   ⚠️ 同样要压过亚马逊皮肤的 `gap: 0 !important`（见上），故此处也带 !important。 */
+body:is(.account-auth-layout, .account-challenge-layout, .account-logout-layout) .w-field,
+body:is(.account-auth-layout, .account-challenge-layout, .account-logout-layout) .w-auth-login--amazon .w-field,
+body:is(.account-auth-layout, .account-challenge-layout, .account-logout-layout) .w-auth-login--amazon .w-auth-login__remember {
+    gap: 0.625rem !important;
+}
+
+/* —— 恢复原生占位符（同属本次「标签改上方常显」的配套改动）——
+ * foundation 的浮动标签静止态把原生 placeholder 设成 `transparent + opacity:0`，
+ * 因为那时**标签自己就在框内充当占位符**。标签改为上方常显后，若不恢复占位符，
+ * 字段看起来就是空白的 —— 与设计稿不符：
+ *   设计稿 19-login / 20-register / 21-reset 的输入框内**都有浅灰文字**
+ *   （对 ui/*.webp 逐框像素实测，框内墨迹率 2–20%；20-register 最暗色 ≈ #969696，是典型占位符）。
+ * 色值沿用本主题既定口径（与 30-contact 同一条）：secondary 80% → 实测约 3.6:1，
+ * 明显浅于标签（11.09:1，不会与已填值混淆），又优于设计稿自身的 ≈2.9:1。
+ * ⚠️ 必须同时覆盖 `-webkit-text-fill-color` 与 `opacity`：foundation 是三条一起写的。 */
+body:is(.account-auth-layout, .account-challenge-layout, .account-logout-layout) :is(.w-input, .w-textarea)::placeholder {
+    color: color-mix(in srgb, var(--color-text-secondary) 80%, transparent) !important;
+    -webkit-text-fill-color: color-mix(in srgb, var(--color-text-secondary) 80%, transparent) !important;
+    opacity: 1 !important;
+}
+
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) .w-field__help,
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) .w-field__error,
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) .form-hint {
+    color: var(--color-text-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+/* —— Auth text controls: hairline, warm stone, moss focus —— */
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]),
+    select,
+    textarea,
+    .w-input,
+    .w-select
+) {
+    min-height: var(--daocharms-control-height, 2.75rem);
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: var(--color-bg-primary) !important;
+    color: var(--color-text) !important;
+    box-shadow: none !important;
+}
+
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(
+    input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    .w-input:focus-visible
+) {
+    outline: var(--daocharms-focus-ring-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    outline-offset: 1px;
+    border-color: var(--color-primary) !important;
+}
+
+/* Password reveal toggle: quiet, but a 44x44 hit target. */
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(.w-auth-login__password, .w-auth-recovery__password) {
+    position: relative;
+    display: block;
+}
+
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(.w-auth-login__password, .w-auth-recovery__password) .w-input {
+    padding-inline-end: 3.25rem;
+}
+
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(.w-auth-login__password, .w-auth-recovery__password) > .w-button {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: 0.25rem;
+    translate: 0 -50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--color-text-secondary) !important;
+    box-shadow: none !important;
+}
+
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(.w-auth-login__password, .w-auth-recovery__password) > .w-button:hover {
+    color: var(--color-primary) !important;
+}
+
+body.account-auth-layout :is(
+    .w-auth-login__form .w-button[data-tone="primary"],
+    .w-auth-login__form button[type="submit"],
+    .w-auth-recovery__submit,
+    .w-auth-recovery__submit[data-tone="primary"],
+    .w-button[data-tone="primary"]
+) {
+    border: var(--daocharms-rule-width) solid var(--color-primary) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary) !important;
+    box-shadow: none !important;
+    width: 100%;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    letter-spacing: var(--daocharms-label-tracking);
+}
+
+body.account-auth-layout :is(
+    .w-auth-login__form .w-button[data-tone="primary"]:hover,
+    .w-auth-login__form button[type="submit"]:hover,
+    .w-auth-recovery__submit:hover,
+    .w-button[data-tone="primary"]:hover
+) {
+    background: var(--color-primary-hover) !important;
+    border-color: var(--color-primary-hover) !important;
+    color: var(--color-on-primary) !important;
+}
+
+/* Secondary / quiet actions (social buttons, "Back to log in"). */
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(
+    .w-button[data-tone="quiet"],
+    .w-button[data-tone="outline"],
+    .w-button[data-tone="secondary"],
+    .w-button:not([data-tone])
+) {
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: transparent;
+    color: var(--color-text);
+    box-shadow: none;
+}
+
+/* Providers sit two-up under the divider (design 19). */
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(.w-auth-login__social, .w-auth-login__social--quick) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0;
+}
+
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(.w-auth-login__social, .w-auth-login__social--quick) .w-auth-login__social-title {
+    order: -1;
+}
+
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) .w-auth-login__social-slot {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.75rem;
+    align-items: stretch;
+}
+
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) :is(.w-auth-login__social, .w-auth-login__social--quick) .w-button {
+    min-height: var(--daocharms-control-height, 2.75rem);
+    justify-content: center;
+}
+
+/* ui/19：主表单在前、社交快捷登录在后（DOM 源序相反，仅视觉重排）。
+ * ⚠️ __social-divider / __social--quick / __footer 与 form 同为 .w-auth-login 子元素；
+ *   面板在上方 widget 规则里已是 column flex ⇒ order 同池直接生效。 */
+body.account-auth-layout .account-login-widget :is(.w-auth-login__header, .w-auth-login__messages) {
+    order: 0;
+}
+
+body.account-auth-layout .account-login-widget form.w-auth-login__form {
+    order: 1;
+}
+
+body.account-auth-layout .account-login-widget .w-auth-login__social-divider {
+    order: 2;
+}
+
+body.account-auth-layout .account-login-widget .w-auth-login__social--quick {
+    order: 3;
+}
+
+/* 「OR SIGN IN WITH YOUR ACCOUNT」保留（承接 form→social 的过渡）；
+   页脚「新客户？」分隔线在重排后与上方 divider 重复，隐藏。 */
+body.account-auth-layout .account-login-widget .w-auth-login__divider {
+    display: none;
+}
+
+body.account-auth-layout .account-login-widget .w-auth-login__footer {
+    order: 4;
+}
+
+/* Providers sit two-up under the divider (design 19). */
+body.account-auth-layout .w-auth-login__register {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 2.75rem;
+    border: 0 !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: transparent !important;
+    color: var(--color-link) !important;
+    box-shadow: none !important;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+body.account-auth-layout .w-auth-login__register:hover {
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--color-link-hover) !important;
+}
+
+body.account-auth-layout :is(.w-field__label, .w-auth-login__footer a, .w-auth-recovery__footer a) {
+    color: var(--color-text);
+}
+
+body.account-auth-layout .w-auth-login__footer,
+body.account-auth-layout .w-auth-recovery__footer {
+    color: var(--color-text-secondary);
+}
+
+body.account-auth-layout .w-auth-login__footer a:hover,
+body.account-auth-layout .w-auth-recovery__footer a:hover {
+    color: var(--color-link-hover);
+}
+
+/* Recovery: no icon tile (§ design 21 keeps a single calm column). */
+body.account-auth-layout .w-auth-recovery__icon {
+    display: none;
+}
+
+/* Register: 2-up name row, visible terms checkbox with adjacent legal links. */
+body.account-auth-layout .w-auth-login__row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem 1.25rem;
+    align-items: start;
+}
+
+body.account-auth-layout .w-auth-login__terms {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.55;
+}
+
+body.account-auth-layout .w-auth-login__terms-checkbox {
+    width: 1.125rem;
+    height: 1.125rem;
+    min-width: 1.125rem;
+    margin-block-start: 0.15rem;
+    accent-color: var(--color-primary);
+}
+
+body.account-auth-layout .w-auth-login__terms-label {
+    color: var(--color-text-secondary);
+}
+
+body.account-auth-layout .w-auth-login__terms-link {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+body.account-auth-layout .w-auth-login__terms-link:hover {
+    color: var(--color-link-hover);
+}
+
+/* Register mode tabs (email / phone) — underline, one visible selected state. */
+body.account-auth-layout .w-tabs__list {
+    display: flex;
+    gap: 1.5rem;
+    margin-block-end: 1rem;
+    padding: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    list-style: none;
+}
+
+body.account-auth-layout .w-tabs__tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0 0.125rem;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    cursor: pointer;
+}
+
+body.account-auth-layout .w-tabs__tab[aria-selected="true"],
+body.account-auth-layout .w-tabs__tab.active,
+body.account-auth-layout .w-tabs__tab.is-active {
+    color: var(--color-text);
+    box-shadow: inset 0 -2px 0 0 var(--color-primary);
+}
+
+body.account-auth-layout .w-tabs__tab:focus-visible {
+    outline: var(--daocharms-focus-ring-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    outline-offset: 2px;
+}
+
+/* Checkboxes / radios on the auth stage (forms.css does not reach this body class). */
+body.account-auth-layout :is(input[type="checkbox"], input[type="radio"]) {
+    accent-color: var(--color-primary);
+}
+
+/* 44x44 hit target for label+control rows; consent checkboxes keep their own rule.
+   ⚠️ 必须排除 `.w-field__label`：那条 `min-height: 2.75rem` 会把**浮动字段标签**的盒子撑到 44px，
+   于是 foundation 的 `translate: 0 -50%` 让标签文字正好落在控件垂直中点 —— 这正是
+   19/20/21「标签与 placeholder 叠印」的第二个根因（2026-09-26 实测，见本文件上方标签块）。
+   本规则原意是给「label 包住控件」的勾选/单选行做 44px 命中区，那类 label 不带 `.w-field__label`。 */
+body.account-auth-layout :is(.w-auth-login, .w-auth-recovery) .w-field > label:not(.w-field__label) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+}
+
+/* Messages: semantic states, always with text (§2). */
+body.account-auth-layout :is(.w-alert, [data-w-login-feedback], [data-w-recovery-feedback], .auth-form__error) {
+    border-radius: var(--daocharms-radius-sm);
+    box-shadow: none;
+}
+
+body.account-auth-layout .w-alert[data-tone="info"],
+body.account-auth-layout .w-auth-recovery .w-alert {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    text-align: inherit;
+}
+
+body.account-auth-layout .w-alert[data-tone="danger"],
+body.account-auth-layout .auth-form__error,
+body.account-auth-layout .wflash--danger {
+    border: var(--daocharms-rule-width) solid var(--color-danger-border-subtle, var(--color-danger));
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-danger-bg-subtle, transparent);
+    color: var(--color-danger-text-emphasis, var(--color-danger));
+}
+
+body.account-auth-layout .w-alert[data-tone="success"] {
+    border: var(--daocharms-rule-width) solid var(--color-success-border-subtle, var(--color-success));
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-success-bg-subtle, transparent);
+    color: var(--color-success-text-emphasis, var(--color-success));
+}
+
+body.account-auth-layout .auth-form__flash {
+    color: var(--color-text-secondary);
+}
+
+/* —— Login aux row: session length · remember me · forgot password (§6 one task) —— */
+body.account-auth-layout [data-w-component="account-login"] .w-auth-login__meta {
+    display: block !important;
+    width: 100%;
+}
+
+body.account-auth-layout [data-w-component="account-login"] .w-auth-login__meta-tools {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center;
+    gap: 0.75rem 1rem;
+}
+
+body.account-auth-layout [data-w-component="account-login"] .w-auth-login__remember {
+    flex: 1 1 10rem !important;
+    max-width: none !important;
+    min-width: 0;
+    align-self: auto;
+}
+
+body.account-auth-layout [data-w-component="account-login"] .w-auth-login__remember .w-select {
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background-color: var(--color-bg-primary) !important;
+    color: var(--color-text) !important;
+    min-height: var(--daocharms-control-height, 2.75rem) !important;
+    box-shadow: none !important;
+    font-size: 0.875rem !important;
+}
+
+body.account-auth-layout [data-w-component="account-login"] .w-auth-login__forgot {
+    align-self: auto;
+}
+
+body.account-auth-layout [data-w-component="account-login"] .w-auth-login__forgot-link {
+    min-height: 2.75rem;
+    color: var(--color-link);
+    font-weight: 500 !important;
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+body.account-auth-layout [data-w-component="account-login"] .w-auth-login__forgot-link:hover {
+    color: var(--color-link-hover);
+}
+
+/* —— Recovery (design 21): single calm column, one primary action —— */
+body.account-auth-layout .w-auth-recovery__header {
+    gap: 0.5rem;
+    margin-block-end: 1.25rem;
+}
+
+body.account-auth-layout .w-auth-recovery__form {
+    gap: 1rem;
+    text-align: start;
+}
+
+body.account-auth-layout .w-auth-recovery__messages:empty {
+    display: none;
+}
+
+body.account-auth-layout .w-auth-recovery__submit {
+    justify-content: center;
+}
+
+body.account-auth-layout .w-auth-recovery__footer {
+    margin-block-start: 1.25rem;
+    padding-block-start: 1.25rem;
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    text-align: center;
+}
+
+body.account-auth-layout .w-auth-recovery__footer .w-button {
+    min-height: 2.75rem;
+    color: var(--color-text);
+}
+
+/* —— Logout —— */
+body.account-logout-layout .account-logout__empty-state {
+    max-inline-size: min(100%, 28rem);
+    margin-inline: auto;
+    padding: clamp(2rem, 4vw, 3rem) 1.25rem;
+    text-align: center;
+    border: var(--daocharms-rule-width) dashed var(--color-border-default);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+body.account-logout-layout .account-logout__button--primary {
+    border: var(--daocharms-rule-width) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    box-shadow: none;
+    text-decoration: none;
+}
+
+body.account-logout-layout .account-logout__button:not(.account-logout__button--primary) {
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: transparent;
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+/* —— Dashboard shell —— */
+body.account-dashboard-layout,
+body:has(.account-dashboard),
+body:has(.account-dashboard__body),
+body:has(.account-index) {
+    background: var(--color-bg-canvas);
+    color: var(--color-text);
+}
+
+/* ui/22: quiet sidebar — hide avatar card & group titles */
+body.account-dashboard-layout .account-sidebar__header,
+body.account-dashboard-layout .account-hook-nav-title {
+    display: none !important;
+}
+
+/* ui/22: keep only Overview…Security + Quotes + Wholesale + Sign out */
+body.account-dashboard-layout .account-hook-nav-link {
+    display: none !important;
+}
+body.account-dashboard-layout .account-hook-nav-link[data-section="product-quotes"],
+body.account-dashboard-layout .account-hook-nav-link[data-section="b2b-identity"] {
+    display: flex !important;
+    align-items: center;
+    gap: .65rem;
+}
+body.account-dashboard-layout .account-hook-nav-link[data-section="product-quotes"] .account-hook-nav-link__text span,
+body.account-dashboard-layout .account-hook-nav-link[data-section="b2b-identity"] .account-hook-nav-link__text span,
+body.account-dashboard-layout .account-hook-nav-link[data-section="product-quotes"] .account-hook-nav-link__arrow,
+body.account-dashboard-layout .account-hook-nav-link[data-section="b2b-identity"] .account-hook-nav-link__arrow {
+    display: none !important;
+}
+body.account-dashboard-layout .account-hook-nav-group:not(:has([data-section="product-quotes"], [data-section="b2b-identity"])) {
+    display: none !important;
+}
+
+body.account-dashboard-layout .account-sidebar__nav-link {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+}
+body.account-dashboard-layout .account-sidebar__nav-link .w-icon,
+body.account-dashboard-layout .account-sidebar__nav-link [data-w-icon],
+body.account-dashboard-layout .account-sidebar__nav-link svg {
+    flex: 0 0 auto;
+    opacity: .72;
+}
+
+body.account-dashboard-layout .account-sidebar,
+body.account-dashboard-layout aside.account-sidebar {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding-inline: 0 !important;
+}
+
+/* ui/23–28 分区独立 hero：仅 .is-visible 显示（wishlist/quotes/wholesale 稿面无顶栏） */
+.daocharms-account-hero {
+    display: none;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 1.5rem;
+    align-items: center;
+    margin-block: 0 1.75rem;
+    padding-block-end: 1.5rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+.daocharms-account-hero.is-visible:not([hidden]) {
+    display: grid;
+}
+.daocharms-account-hero[hidden] {
+    display: none !important;
+}
+.daocharms-account-hero__eyebrow[hidden],
+.daocharms-account-hero__lede[hidden] {
+    display: none !important;
+}
+.daocharms-account-hero__eyebrow {
+    margin: 0 0 .4rem;
+    font-size: .7rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+.daocharms-account-hero__title {
+    margin: 0 0 .5rem;
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: clamp(1.75rem, 3.2vw, 2.4rem);
+    font-weight: 400;
+    color: var(--color-text);
+}
+.daocharms-account-hero__lede {
+    margin: 0;
+    max-inline-size: 28rem;
+    line-height: 1.65;
+    color: var(--color-text-secondary);
+}
+.daocharms-account-hero__media {
+    margin: 0;
+    overflow: hidden;
+    aspect-ratio: 16 / 7;
+    background: var(--color-bg-secondary);
+}
+.daocharms-account-hero__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+@media (max-width: 899px) {
+    .daocharms-account-hero.is-visible:not([hidden]) {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Hide overview when another account section is active */
+body.account-dashboard-layout:has([data-account-section="orders"]:not([hidden])) .daocharms-account-overview,
+body.account-dashboard-layout:has([data-account-section="wishlist"]:not([hidden])) .daocharms-account-overview,
+body.account-dashboard-layout:has([data-account-section="addresses"]:not([hidden])) .daocharms-account-overview,
+body.account-dashboard-layout:has([data-account-section="delivery-address"]:not([hidden])) .daocharms-account-overview,
+body.account-dashboard-layout:has([data-account-section="shipping-address"]:not([hidden])) .daocharms-account-overview,
+body.account-dashboard-layout:has([data-account-section="profile"]:not([hidden])) .daocharms-account-overview,
+body.account-dashboard-layout:has([data-account-section="security"]:not([hidden])) .daocharms-account-overview,
+body.account-dashboard-layout:has([data-account-section="product-quotes"]:not([hidden])) .daocharms-account-overview,
+body.account-dashboard-layout:has([data-account-section="b2b-identity"]:not([hidden])) .daocharms-account-overview {
+    display: none !important;
+}
+
+/* ui/23 orders shell */
+.daocharms-account-orders__header h2 {
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: clamp(1.6rem, 3vw, 2.1rem);
+    font-weight: 400;
+}
+.daocharms-account-orders__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    margin: 1rem 0 1.5rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+.daocharms-account-orders__tab {
+    padding: 0 0 .65rem;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    border-block-end: 2px solid transparent;
+}
+.daocharms-account-orders__tab.is-active,
+.daocharms-account-orders__tab[aria-current="page"] {
+    color: var(--color-text);
+    border-block-end-color: var(--color-primary, #2f4f3e);
+}
+.daocharms-account-orders__empty {
+    display: grid;
+    gap: .85rem;
+    padding: 1.5rem 0 2rem;
+    max-inline-size: 32rem;
+}
+.daocharms-account-orders__empty-title {
+    margin: 0;
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: 1.5rem;
+    font-weight: 400;
+}
+
+/* ui/24 favorites */
+.daocharms-account-wishlist__header .storefront-wishlist__title {
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: clamp(1.6rem, 3vw, 2.1rem);
+    font-weight: 400;
+}
+.daocharms-account-wishlist__sample {
+    margin: .35rem 0 0;
+    font-size: .8rem;
+    color: var(--color-text-secondary);
+}
+.daocharms-account-wishlist .storefront-wishlist__count {
+    opacity: .55;
+}
+.daocharms-account-wishlist__empty {
+    display: grid;
+    gap: 1rem;
+    padding: 1.25rem 0 2rem;
+    max-inline-size: 28rem;
+}
+
+/* ui/22 Overview panel */
+.daocharms-account-overview {
+    display: grid;
+    gap: clamp(1.5rem, 3vw, 2.5rem);
+    padding-block: clamp(1rem, 2vw, 1.75rem);
+}
+
+.daocharms-account-overview__eyebrow {
+    margin: 0 0 .5rem;
+    font-size: .7rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+.daocharms-account-overview__title {
+    margin: 0 0 .5rem;
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+.daocharms-account-overview__lede {
+    margin: 0;
+    max-inline-size: 36rem;
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+}
+
+.daocharms-account-overview__quick {
+    display: grid;
+    gap: 1.25rem;
+    margin: 0;
+    padding: 0 0 1.5rem;
+    list-style: none;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+@media (min-width: 800px) {
+    .daocharms-account-overview__quick {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1.75rem;
+    }
+}
+
+.daocharms-account-overview__quick-icon {
+    display: inline-flex;
+    margin-block-end: .45rem;
+    color: var(--color-text-secondary);
+    opacity: .85;
+}
+
+.daocharms-account-overview__empty-icon {
+    display: inline-flex;
+    margin-block-end: .65rem;
+    color: var(--color-text-secondary);
+    opacity: .8;
+}
+
+.daocharms-account-overview__quick-title {
+    margin: 0 0 .35rem;
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.daocharms-account-overview__quick-copy {
+    margin: 0 0 .65rem;
+    font-size: .92rem;
+    line-height: 1.55;
+    color: var(--color-text-secondary);
+}
+
+.daocharms-account-overview__quick-link {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: .2em;
+}
+
+.daocharms-account-overview__empty {
+    display: grid;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+@media (min-width: 900px) {
+    .daocharms-account-overview__empty {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+        gap: 2rem;
+    }
+}
+
+.daocharms-account-overview__empty-title {
+    margin: 0 0 .75rem;
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 400;
+    color: var(--color-text);
+}
+
+.daocharms-account-overview__empty-copy p {
+    margin: 0 0 1.25rem;
+    max-inline-size: 28rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+}
+
+.daocharms-account-overview__empty-media {
+    margin: 0;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+    background: var(--color-bg-secondary);
+}
+
+.daocharms-account-overview__empty-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.account-dashboard,
+.account-dashboard-layout .account-dashboard,
+body:has(.account-dashboard) .account-dashboard {
+    background: var(--color-bg-canvas) !important;
+    box-shadow: none !important;
+}
+
+.account-dashboard__body,
+#account-dashboard {
+    gap: clamp(1rem, 2vw, 1.75rem);
+}
+
+.account-sidebar,
+.account-sidebar-wrapper,
+aside.account-sidebar {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle) !important;
+    border-radius: var(--daocharms-radius-md) !important;
+    background: var(--color-bg-primary) !important;
+    box-shadow: none !important;
+    color: var(--color-text);
+}
+
+.account-sidebar__header {
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle) !important;
+}
+
+.account-sidebar__username,
+.account-sidebar__nav-link,
+.account-hook-nav-link {
+    color: var(--color-text) !important;
+}
+
+.account-sidebar__email,
+.account-sidebar__login-status {
+    color: var(--color-text-secondary) !important;
+}
+
+.account-sidebar__nav-link,
+.account-hook-nav-link {
+    min-height: var(--daocharms-control-height, 2.75rem);
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.account-sidebar__nav-link:hover,
+.account-hook-nav-link:hover {
+    color: var(--color-text) !important;
+    background: color-mix(in srgb, var(--color-bg-secondary) 34%, transparent) !important;
+}
+
+/* Selected section: soft stone wash + a moss left rule (design 23 / 24 / 25 / 28). */
+.account-sidebar__nav-link.is-active,
+.account-sidebar__nav-link--active,
+.account-sidebar__nav-link.account-sidebar__nav-link--active,
+.account-hook-nav-link.is-active:not([data-account-nav-parent]),
+.account-hook-nav-link[data-account-nav-parent].is-active {
+    color: var(--color-text) !important;
+    background: color-mix(in srgb, var(--color-bg-secondary) 48%, var(--color-bg-primary)) !important;
+    box-shadow: inset 2px 0 0 0 var(--color-primary) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    font-weight: 600;
+}
+
+.account-sidebar__nav-link.is-active .account-hook-nav-link__text strong,
+.account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__text strong {
+    color: var(--color-text);
+}
+
+.account-hook-nav-title {
+    color: var(--color-text-secondary) !important;
+    letter-spacing: var(--daocharms-label-tracking);
+    font-weight: 500 !important;
+    text-transform: uppercase;
+    font-size: 0.75rem !important;
+}
+
+.account-hook-nav-link__text span {
+    color: var(--color-text-secondary);
+}
+
+.account-sidebar__nav-link--logout {
+    color: var(--color-danger-text-emphasis, var(--color-danger)) !important;
+}
+
+.account-sidebar__nav-link--logout:hover {
+    color: var(--color-danger-text-emphasis, var(--color-danger)) !important;
+    background: color-mix(in srgb, var(--color-danger) 8%, transparent) !important;
+}
+
+.account-sidebar__menu-toggle {
+    min-height: var(--daocharms-control-height, 2.75rem);
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: transparent;
+    color: var(--color-text);
+}
+
+.account-sidebar__login-status-dot {
+    background: var(--color-success, var(--color-primary));
+}
+
+.account-sidebar__avatar-img,
+.account-sidebar__avatar-fallback,
+.account-index__avatar-img,
+.account-index__avatar-fallback {
+    border-color: var(--color-border-default) !important;
+    box-shadow: none !important;
+}
+
+.account-sidebar__avatar-fallback,
+.account-index__avatar-fallback {
+    background: color-mix(in srgb, var(--color-bg-secondary) 55%, var(--color-bg-primary));
+    color: var(--color-text);
+}
+
+/* —— Account cards / forms ——
+ * account-index.css / account-address.css / account-sidebar.css load from the
+ * template body, i.e. AFTER this sheet, and carry their own blue-grey + pastel
+ * palettes (border-radius 1rem, shadow-sm, #d1fae5 alerts, brass badges).
+ * Equal-specificity module rules would win on source order, hence !important. */
+.account-index,
+.account-main-content,
+.account-main {
+    color: var(--color-text);
+}
+
+.account-card,
+.account-index .account-card,
+.storefront-wishlist.account-card {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle) !important;
+    border-radius: var(--daocharms-radius-md) !important;
+    background: var(--color-bg-primary) !important;
+    box-shadow: none !important;
+}
+
+/* Section headers: plain warm stone with a hairline, not a sand band. */
+.account-card__header {
+    padding: clamp(1rem, 2vw, 1.35rem) clamp(1rem, 2.4vw, 1.75rem) !important;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle) !important;
+    background: transparent !important;
+}
+
+.account-card__body {
+    padding: clamp(1rem, 2.4vw, 1.75rem) !important;
+}
+
+.account-card__title,
+.account-index__username {
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 500;
+    color: var(--color-text) !important;
+}
+
+.account-card__description,
+.account-card__eyebrow,
+.account-card__metric-label,
+.account-card__field-label,
+.account-card__muted,
+.account-card__notice,
+.account-card__empty,
+.account-card__report-empty {
+    color: var(--color-text-secondary);
+}
+
+.account-card__eyebrow {
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+}
+
+.account-card__metric-value,
+.account-card__money {
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.account-card__mono {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-secondary);
+}
+
+.account-card__link,
+.account-card__link-row {
+    color: var(--color-link);
+}
+
+.account-card__link:hover,
+.account-card__link-row:hover {
+    color: var(--color-link-hover);
+}
+
+/* —— Account profile header (design 22 / 26: calm, no moss gradient) —— */
+.account-index__header {
+    gap: 1.25rem;
+    padding: clamp(1rem, 2.4vw, 1.5rem) 0 !important;
+    margin-block-end: clamp(1rem, 2vw, 1.5rem) !important;
+    border: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: var(--color-text) !important;
+}
+
+.account-index__avatar {
+    width: 4.5rem !important;
+    height: 4.5rem !important;
+}
+
+.account-index__avatar-img {
+    border-width: var(--daocharms-rule-width) !important;
+    border-style: solid;
+    border-radius: 50%;
+}
+
+.account-index__username {
+    font-size: clamp(1.25rem, 2vw, 1.6rem) !important;
+    font-weight: 500 !important;
+    color: var(--color-text) !important;
+}
+
+.account-index__email,
+.account-index__welcome,
+.account-form__hint {
+    color: var(--color-text-secondary) !important;
+    opacity: 1 !important;
+}
+
+.account-index__logout {
+    min-height: 2.75rem;
+    padding-inline: 0.5rem !important;
+    border: 0 !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: transparent !important;
+    color: var(--color-link) !important;
+    font-weight: 500 !important;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.account-index__logout:hover {
+    background: transparent !important;
+    color: var(--color-link-hover) !important;
+}
+
+/* Lazy-section loading state. */
+.account-index__section-loading {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    color: var(--color-text-secondary);
+    box-shadow: none;
+}
+
+.account-index__section-loading-spinner {
+    border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+    border-block-start-color: var(--color-primary);
+}
+
+.account-index__section-loading-text[data-tone="danger"] {
+    color: var(--color-danger-text-emphasis, var(--color-danger));
+}
+
+/* —— Account form field anatomy (§6: label visible, hint, error adjacent) —— */
+.account-form {
+    gap: clamp(1rem, 2vw, 1.35rem);
+}
+
+.account-form__label,
+.account-info-item__label,
+.account-address-card__term,
+.account-card__field-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text) !important;
+}
+
+.account-form__group {
+    gap: 0.4rem;
+}
+
+.account-form__input,
+.account-form__display,
+.account-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.account-form select,
+.account-form textarea {
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: var(--color-bg-primary) !important;
+    color: var(--color-text) !important;
+    box-shadow: none !important;
+    min-height: var(--daocharms-control-height, 2.75rem);
+}
+
+.account-form__display--soft {
+    color: var(--color-text) !important;
+    font-weight: 500;
+}
+
+.account-form__input-group {
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.account-form__input-group .account-form__input {
+    border: 0 !important;
+}
+
+.account-form__input:focus-visible,
+.account-form input:focus-visible,
+.account-form select:focus-visible,
+.account-form textarea:focus-visible {
+    outline: var(--daocharms-focus-ring-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    outline-offset: 1px;
+    border-color: var(--color-primary) !important;
+}
+
+.account-form__btn,
+.account-form__btn--primary,
+.account-form__btn.account-form__btn--primary,
+button.account-form__btn--primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary) !important;
+    box-shadow: none !important;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    letter-spacing: var(--daocharms-label-tracking);
+    transform: none !important;
+}
+
+.account-form__btn--primary:hover,
+button.account-form__btn--primary:hover {
+    background: var(--color-primary-hover) !important;
+    border-color: var(--color-primary-hover) !important;
+    color: var(--color-on-primary) !important;
+    transform: none !important;
+}
+
+.account-form__btn--outline {
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: transparent !important;
+    color: var(--color-text) !important;
+    box-shadow: none !important;
+}
+
+.account-form__btn--outline:hover {
+    border-color: var(--color-primary) !important;
+    background: transparent !important;
+    color: var(--color-primary) !important;
+}
+
+.account-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* —— Account alerts / badges: semantic tokens, readable contrast —— */
+.account-card__alert {
+    padding: 0.85rem 1rem !important;
+    border: var(--daocharms-rule-width) solid transparent;
+    border-radius: var(--daocharms-radius-sm) !important;
+    font-size: 0.875rem;
+}
+
+.account-card__alert--success {
+    border-color: var(--color-success-border-subtle, var(--color-success)) !important;
+    background: var(--color-success-bg-subtle, transparent) !important;
+    color: var(--color-success-text-emphasis, var(--color-success)) !important;
+}
+
+.account-card__alert--danger {
+    border-color: var(--color-danger-border-subtle, var(--color-danger)) !important;
+    background: var(--color-danger-bg-subtle, transparent) !important;
+    color: var(--color-danger-text-emphasis, var(--color-danger)) !important;
+}
+
+.account-identity__badge {
+    min-width: 4rem;
+    min-height: 2.25rem;
+    padding: 0.35rem 0.8rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: color-mix(in srgb, var(--color-bg-secondary) 40%, var(--color-bg-primary));
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.account-identity__name {
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+.account-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1rem 1.5rem;
+}
+
+.account-info-item__value {
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+/* —— Orders —— */
+.account-orders,
+[data-account-orders],
+.account-orders__group {
+    color: var(--color-text);
+}
+
+.account-orders__header h2,
+.account-orders__group-title {
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 500;
+}
+
+.account-orders__hint,
+.account-orders__empty {
+    color: var(--color-text-secondary);
+}
+
+.account-orders__empty {
+    padding: clamp(1.5rem, 3vw, 2.25rem);
+    text-align: center;
+    border: var(--daocharms-rule-width) dashed var(--color-border-default);
+    border-radius: var(--daocharms-radius-md);
+    background: color-mix(in srgb, var(--color-bg-primary) 88%, var(--color-bg-secondary));
+}
+
+.account-orders__group,
+.account-orders__card,
+[data-account-orders] li.account-orders__group {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+.account-orders__groups {
+    display: grid;
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* Group summary = the row a shopper scans: number, state, total, one action. */
+.account-orders__summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    padding: clamp(0.75rem, 1.6vw, 1rem) clamp(1rem, 2vw, 1.35rem);
+    color: var(--color-text);
+    list-style: none;
+    cursor: pointer;
+}
+
+.account-orders__summary::-webkit-details-marker {
+    display: none;
+}
+
+.account-orders__summary > strong {
+    font-weight: 500;
+    letter-spacing: var(--daocharms-heading-tracking);
+}
+
+.account-orders__summary > span:not([class]) {
+    color: var(--color-text-secondary);
+}
+
+.account-orders__chevron {
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-inline-start: auto;
+    border-inline-end: var(--daocharms-rule-width) solid var(--color-text-secondary);
+    border-block-end: var(--daocharms-rule-width) solid var(--color-text-secondary);
+    rotate: 45deg;
+    transition: rotate var(--daocharms-transition-out, 140ms ease-out);
+}
+
+.account-orders__accordion[open] > .account-orders__summary .account-orders__chevron {
+    rotate: 225deg;
+}
+
+.account-orders__total {
+    margin-inline-start: auto;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.account-orders__actions,
+.account-orders__actions--below-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.account-orders__actions--below-summary {
+    padding: 0 clamp(1rem, 2vw, 1.35rem) clamp(0.85rem, 1.6vw, 1.1rem);
+}
+
+.account-orders__continue-pay,
+.account-orders__detail-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    padding: 0.25rem 1rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: 0.875rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-decoration: none;
+    box-shadow: none;
+}
+
+.account-orders__continue-pay:hover,
+.account-orders__detail-link:hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
+}
+
+.account-orders__accordion .account-orders__panel {
+    padding: 0 clamp(1rem, 2vw, 1.35rem) clamp(1rem, 2vw, 1.35rem);
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    color: var(--color-text);
+}
+
+.account-orders__partial {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.75rem 0 0;
+    color: var(--color-text-secondary);
+    list-style: none;
+}
+
+.account-orders__partial li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    padding-block: 0.5rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+.account-orders__badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--daocharms-radius-sm);
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    background: color-mix(in srgb, var(--color-bg-secondary) 35%, var(--color-bg-primary));
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    box-shadow: none;
+}
+
+/* Status stays distinguishable by text + tone, never by opacity alone (§6). */
+.account-orders__badge[data-status="paid"],
+.account-orders__badge[data-status="completed"] {
+    border-color: var(--color-success-border-subtle, var(--color-success));
+    background: var(--color-success-bg-subtle, transparent);
+    color: var(--color-success-text-emphasis, var(--color-success));
+}
+
+.account-orders__badge[data-status="pending_payment"],
+.account-orders__badge[data-status="pending"] {
+    border-color: var(--color-warning-border-subtle, var(--color-warning));
+    background: var(--color-warning-bg-subtle, transparent);
+    color: var(--color-warning-text-emphasis, var(--color-warning));
+}
+
+.account-orders__badge[data-status="cancelled"],
+.account-orders__badge[data-status="closed"] {
+    border-color: var(--color-border-default);
+    background: color-mix(in srgb, var(--color-bg-secondary) 30%, transparent);
+    color: var(--color-text-secondary);
+}
+
+.account-orders__badge--type[data-tone="info"] {
+    border-color: var(--color-border-default);
+    background: color-mix(in srgb, var(--color-bg-secondary) 40%, var(--color-bg-primary));
+    color: var(--color-text-secondary);
+}
+
+.account-orders__badge--unread {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+}
+
+/* Order detail (same section) — table, totals, shipping block. */
+.account-order-detail {
+    margin-block-start: 1rem;
+    padding: clamp(1rem, 2vw, 1.5rem);
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+}
+
+.account-order-detail__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding-block-end: 0.85rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+.account-order-detail__eyebrow,
+.account-order-detail__uuid {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    overflow-wrap: anywhere;
+}
+
+.account-order-detail__table-wrap {
+    overflow-x: auto;
+}
+
+.account-order-detail__table {
+    display: grid;
+    min-width: 34rem;
+}
+
+.account-order-detail__row {
+    display: grid;
+    grid-template-columns: minmax(10rem, 2fr) repeat(4, minmax(5rem, 1fr));
+    gap: 0.75rem;
+    padding-block: 0.6rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    color: var(--color-text);
+}
+
+.account-order-detail__row--head {
+    color: var(--color-text-secondary);
+    font-size: 0.8125rem;
+    letter-spacing: var(--daocharms-label-tracking);
+}
+
+.account-order-detail__shipping {
+    margin-block-start: 1rem;
+    padding: 0.85rem 1rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-sm);
+    background: color-mix(in srgb, var(--color-bg-secondary) 18%, transparent);
+    color: var(--color-text);
+}
+
+.account-order-detail__shipping-recipient,
+.account-order-detail__shipping-address {
+    margin: 0.35rem 0 0;
+    color: var(--color-text-secondary);
+}
+
+.account-order-detail__totals {
+    display: grid;
+    gap: 0.35rem;
+    margin-block-start: 1rem;
+    padding-block-start: 0.85rem;
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+.account-order-detail__totals > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--color-text-secondary);
+}
+
+.account-order-detail__grand-total {
+    color: var(--color-text) !important;
+    font-weight: 500;
+}
+
+.account-order-detail__back {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    margin-block-start: 1rem;
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.account-order-detail__tracking h4 {
+    margin-block: 0.75rem 0.35rem;
+}
+
+/* —— Wishlist (design 24) —— */
+.storefront-wishlist__header,
+.storefront-wishlist__header-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.75rem;
+}
+
+.storefront-wishlist__title {
+    margin: 0 !important;
+}
+
+.storefront-wishlist__meta,
+.storefront-wishlist__count {
+    color: var(--color-text-secondary);
+}
+
+.storefront-wishlist__meta {
+    margin-inline-start: auto;
+    font-size: 0.875rem;
+}
+
+.storefront-wishlist__empty {
+    padding: clamp(1.5rem, 3vw, 2.25rem);
+    text-align: center;
+    border: var(--daocharms-rule-width) dashed var(--color-border-default);
+    border-radius: var(--daocharms-radius-md);
+    background: color-mix(in srgb, var(--color-bg-primary) 88%, var(--color-bg-secondary));
+    color: var(--color-text-secondary);
+}
+
+.storefront-wishlist__cta {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    margin-block-start: 0.75rem;
+    padding: 0.3rem 0.95rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    text-decoration: none;
+    letter-spacing: var(--daocharms-label-tracking);
+    box-shadow: none;
+}
+
+.storefront-wishlist__cta:hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
+}
+
+.storefront-wishlist__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+.storefront-wishlist__card,
+.storefront-wishlist__grid :is(.weline-product-card, .wpc-card, .wpc-listing-card) {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+    overflow: hidden;
+}
+
+.storefront-wishlist__remove,
+.storefront-wishlist__card .wishlist-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: 999px;
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+    box-shadow: none;
+}
+
+.storefront-wishlist__remove:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+/* —— Addresses (design 25) —— */
+.account-address-panel__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+.account-address-panel__desc {
+    margin: 0.25rem 0 0;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+}
+
+.account-address-panel__action,
+.account-address-form__submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    padding: 0.3rem 1rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary) !important;
+    font-size: 0.875rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-decoration: none;
+    box-shadow: none !important;
+}
+
+.account-address-panel__action:hover,
+.account-address-form__submit:hover {
+    background: var(--color-primary-hover) !important;
+    border-color: var(--color-primary-hover) !important;
+    color: var(--color-on-primary) !important;
+}
+
+.account-address-form__cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    padding: 0.3rem 1rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: transparent !important;
+    color: var(--color-text) !important;
+    box-shadow: none !important;
+}
+
+.account-address-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+    gap: clamp(0.85rem, 1.8vw, 1.25rem);
+}
+
+.account-address-card {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle) !important;
+    border-radius: var(--daocharms-radius-md) !important;
+    background: var(--color-bg-primary) !important;
+    box-shadow: none !important;
+    color: var(--color-text);
+}
+
+.account-address-card--default {
+    border-color: var(--color-primary) !important;
+}
+
+.account-address-card__header {
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle) !important;
+}
+
+.account-address-card__header strong {
+    color: var(--color-text) !important;
+    font-weight: 500 !important;
+}
+
+.account-address-card__badge {
+    border-radius: var(--daocharms-radius-sm) !important;
+    border: var(--daocharms-rule-width) solid var(--color-primary) !important;
+    background: color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-primary)) !important;
+    color: var(--color-text) !important;
+    font-size: 0.75rem;
+}
+
+.account-address-card__term {
+    color: var(--color-text-secondary) !important;
+}
+
+.account-address-card__value,
+.account-address-part__text,
+.account-address-card__postal {
+    color: var(--color-text) !important;
+    overflow-wrap: anywhere;
+}
+
+.account-address-part__icon {
+    color: var(--color-text-secondary) !important;
+}
+
+.account-address-card__actions {
+    gap: 0.5rem;
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+.account-address-card__action {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0.2rem 0.6rem;
+    border: 0 !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: transparent !important;
+    color: var(--color-link) !important;
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    box-shadow: none !important;
+}
+
+.account-address-card__action:hover {
+    color: var(--color-link-hover) !important;
+}
+
+.account-address-card__action--danger {
+    color: var(--color-danger-text-emphasis, var(--color-danger)) !important;
+}
+
+.account-address-card__action--danger:hover {
+    color: var(--color-danger) !important;
+}
+
+.account-address-form__close {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: transparent !important;
+    color: var(--color-text) !important;
+}
+
+.account-address-form__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem 1.25rem;
+}
+
+.account-address-form__field--wide {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 639px) {
+    .account-address-form__grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* UI 25：theme:address 级联内层也走双列节奏 */
+.account-address-form__field--wide[data-account-address-cascade] :is(.w-address, .w-theme-address, [data-w-component="address"]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem 1.25rem;
+}
+
+@media (max-width: 639px) {
+    .account-address-form__field--wide[data-account-address-cascade] :is(.w-address, .w-theme-address, [data-w-component="address"]) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.account-address-form__field:not(.w-field),
+.account-address-form__checkbox {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    color: var(--color-text);
+    font-size: 0.875rem;
+}
+
+/* UI25：First/Last/Phone 与 theme:address 共用 foundation 浮动标签；勿用 flex column 压掉 .w-field 定位 */
+.account-address-form__field.w-field {
+    display: grid;
+    gap: 0;
+    position: relative;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    /* 表单纸面：浮动 notch 标签底与纸面一致，避免透出渐变 */
+    --weline-theme-field-label-bg: var(--color-bg-primary, #fff);
+}
+
+.account-address-form__checkbox {
+    flex-direction: row;
+    align-items: center;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    gap: 0.5rem;
+}
+
+.account-address-form :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    min-height: var(--daocharms-control-height, 2.75rem);
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: var(--color-bg-primary) !important;
+    color: var(--color-text) !important;
+    box-shadow: none !important;
+}
+
+.account-address-form :is(input, select, textarea):focus-visible {
+    outline: var(--daocharms-focus-ring-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    outline-offset: 1px;
+    border-color: var(--color-primary) !important;
+}
+
+.account-address-form :is(input[type="checkbox"], input[type="radio"]) {
+    accent-color: var(--color-primary);
+}
+
+.account-address-message {
+    margin-block-end: 1rem;
+    padding: 0.75rem 1rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    font-size: 0.875rem;
+}
+
+.account-address-message--success {
+    border-color: var(--color-success-border-subtle, var(--color-success)) !important;
+    background: var(--color-success-bg-subtle, transparent);
+    color: var(--color-success-text-emphasis, var(--color-success));
+}
+
+.account-address-message--danger {
+    border-color: var(--color-danger-border-subtle, var(--color-danger)) !important;
+    background: var(--color-danger-bg-subtle, transparent);
+    color: var(--color-danger-text-emphasis, var(--color-danger));
+}
+
+.account-address-empty {
+    padding: clamp(1.25rem, 2.6vw, 2rem);
+    text-align: center;
+    border: var(--daocharms-rule-width) dashed var(--color-border-default);
+    border-radius: var(--daocharms-radius-md);
+    color: var(--color-text-secondary);
+}
+
+/* —— Addresses / quotes / B2B identity (hash sections) —— */
+[data-account-section="shipping-address"],
+[data-account-section="delivery-address"],
+[data-account-section="quotes"],
+[data-account-section="product-quotes"],
+[data-account-section="wishlist"],
+[data-account-section="orders"],
+[data-account-section="b2b"],
+[data-account-section="b2b-identity"],
+[data-account-section="wholesale"],
+[data-account-section="twofa"],
+.product-account-quotes,
+.b2b-account-identity,
+.motor-account-section,
+.account-hook-section {
+    color: var(--color-text);
+}
+
+.product-account-quotes__table,
+.b2b-account-identity,
+.shipping-account-address,
+[data-account-section] .account-card {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+/* —— Addresses (design 25): Shipping / Billing tabs + always-on form —— */
+.daocharms-account-addresses__header .account-card__title {
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+}
+.daocharms-account-addresses__tabs {
+    display: flex;
+    gap: 1.5rem;
+    margin: 0 0 1.25rem;
+    padding: 0 1.25rem;
+    border-bottom: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+.daocharms-account-addresses__tab {
+    position: relative;
+    padding: 0.65rem 0;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 0.9375rem;
+}
+.daocharms-account-addresses__tab.is-active,
+.daocharms-account-addresses__tab[aria-current="page"] {
+    color: var(--color-text);
+    font-weight: 500;
+}
+.daocharms-account-addresses__tab.is-active::after,
+.daocharms-account-addresses__tab[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: var(--color-primary);
+}
+.daocharms-account-addresses__form-title {
+    margin: 0.5rem 0 1rem;
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: 1.25rem;
+    font-weight: 400;
+}
+.daocharms-account-addresses [data-address-form-wrap],
+.daocharms-account-addresses [data-address-form-wrap][hidden] {
+    display: block !important;
+    /* UI 25：常显新增表单，压过 [hidden] 默认 display:none */
+}
+.daocharms-account-addresses__new,
+.daocharms-account-addresses [data-address-new],
+.daocharms-account-addresses button[data-address-new] {
+    display: none !important;
+}
+.daocharms-account-addresses .account-address-form__header {
+    display: none;
+}
+.daocharms-account-addresses .account-address-empty[hidden] + .daocharms-account-addresses__form-title,
+.daocharms-account-addresses .account-address-empty:not([hidden]) {
+    /* keep empty hint soft when no cards */
+}
+
+/* —— Settings (design 26): profile / security shell —— */
+.daocharms-account-settings__header .account-card__title {
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+    font-weight: 400;
+}
+.daocharms-account-settings__lede {
+    margin: 0.35rem 0 1rem;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+}
+.daocharms-account-settings__tabs {
+    display: flex;
+    gap: 1.5rem;
+    margin: 0 0 1.25rem;
+    border-bottom: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+.daocharms-account-settings__tab {
+    position: relative;
+    padding: 0.65rem 0;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 0.9375rem;
+}
+.daocharms-account-settings__tab.is-active,
+.daocharms-account-settings__tab[aria-current="page"] {
+    color: var(--color-text);
+    font-weight: 500;
+}
+.daocharms-account-settings__tab.is-active::after,
+.daocharms-account-settings__tab[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: var(--color-primary);
+}
+.daocharms-account-settings__subhead {
+    margin: 0 0 0.35rem;
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: 1.2rem;
+    font-weight: 400;
+}
+.daocharms-account-settings__hint {
+    margin: 0 0 1rem;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+}
+.daocharms-account-settings__form .account-form__actions {
+    margin-top: 1rem;
+}
+
+/* UI 26：First · Last · Email 三列（压过 .account-form 的 display:flex） */
+.daocharms-account-settings__form--profile.account-form,
+.daocharms-account-settings__form--profile {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem 1.25rem;
+    align-items: start;
+    flex-direction: unset;
+    flex-wrap: unset;
+}
+
+.daocharms-account-settings__form--profile > .account-form__group,
+.daocharms-account-settings__form--profile > .w-field {
+    min-width: 0;
+    width: auto;
+    max-width: none;
+}
+
+.daocharms-account-settings__form--profile .account-form__actions {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 899px) {
+    .daocharms-account-settings__form--profile.account-form,
+    .daocharms-account-settings__form--profile {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.daocharms-account-settings__session {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.75rem 1.25rem;
+    align-items: center;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+.daocharms-account-settings__session-title {
+    display: block;
+    margin: 0 0 0.35rem;
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: 1.05rem;
+    font-weight: 400;
+    color: var(--color-text);
+}
+
+.daocharms-account-settings__session-copy {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+}
+
+.daocharms-account-settings__session-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+}
+
+.daocharms-account-settings__session-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+.daocharms-account-settings__session-link:hover,
+.daocharms-account-settings__session-link:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+@media (max-width: 719px) {
+    .daocharms-account-settings__session {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* —— Quotes (design 27): quiet empty state, one primary + one secondary —— */
+.daocharms-account-quotes__header .motor-account-section__title {
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: clamp(1.6rem, 2.8vw, 2.1rem);
+}
+.daocharms-account-quotes__empty {
+    text-align: center;
+    padding: clamp(1.75rem, 4vw, 2.75rem) 1rem;
+}
+.daocharms-account-quotes__empty-icon {
+    color: var(--color-text-secondary);
+    margin: 0 auto 1rem;
+    opacity: 0.75;
+}
+.daocharms-account-quotes__empty-title {
+    margin: 0 0 0.4rem;
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: 1.35rem;
+    font-weight: 400;
+}
+.daocharms-account-quotes__empty-copy {
+    margin: 0 0 1.25rem;
+    color: var(--color-text-secondary);
+}
+.daocharms-account-quotes__empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-bottom: 1.75rem;
+}
+.daocharms-account-quotes__biz {
+    max-width: 36rem;
+    margin: 0 auto;
+    padding-top: 1.25rem;
+    border-top: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    text-align: start;
+}
+.daocharms-account-quotes__biz-title {
+    margin: 0 0 0.35rem;
+    font-weight: 500;
+}
+.daocharms-account-quotes__biz-copy {
+    margin: 0 0 0.5rem;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+}
+.daocharms-account-quotes__biz-link {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+/* —— Wholesale (design 28) —— */
+.daocharms-account-wholesale__eyebrow {
+    margin: 0 0 0.35rem;
+    font-size: 0.7rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+.daocharms-account-wholesale__header .account-card__title {
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: clamp(1.6rem, 2.8vw, 2.15rem);
+    font-weight: 400;
+}
+.daocharms-account-wholesale__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: clamp(1.25rem, 3vw, 2rem);
+    align-items: start;
+}
+@media (max-width: 899px) {
+    .daocharms-account-wholesale__layout {
+        grid-template-columns: 1fr;
+    }
+    .daocharms-account-wholesale__aside {
+        order: -1;
+        max-width: 22rem;
+    }
+}
+.daocharms-account-wholesale__media {
+    margin: 0;
+}
+.daocharms-account-wholesale__media img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: var(--daocharms-radius-md);
+}
+.daocharms-account-wholesale__media figcaption {
+    margin-top: 0.75rem;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+.daocharms-account-wholesale__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 0.75rem;
+}
+.daocharms-account-wholesale__form .w-field {
+    margin-bottom: 0.85rem;
+}
+/* ui/28 apply hero: keep form quiet — hide long VIP legal alert under apply */
+.daocharms-account-wholesale [data-testid="b2b-account-membership-tier-info"] {
+    display: none !important;
+}
+.daocharms-account-wholesale__header .w-badge {
+    align-self: flex-start;
+}
+
+.motor-account-section__header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.motor-account-section__title {
+    margin: 0;
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 400;
+    color: var(--color-text);
+}
+
+.motor-account-section__desc {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.9375rem;
+}
+
+.motor-account-empty {
+    padding: clamp(1.5rem, 3vw, 2.25rem);
+    text-align: center;
+    border: var(--daocharms-rule-width) dashed var(--color-border-default);
+    border-radius: var(--daocharms-radius-md);
+    background: color-mix(in srgb, var(--color-bg-primary) 88%, var(--color-bg-secondary));
+    color: var(--color-text-secondary);
+}
+
+.product-account-quotes__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+}
+
+.product-account-quotes__table th,
+.product-account-quotes__table td {
+    padding: 0.65rem 0.75rem;
+    border-color: var(--color-border-subtle);
+    color: var(--color-text);
+    text-align: start;
+    vertical-align: top;
+}
+
+.product-account-quotes__table th {
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    font-size: 0.8125rem;
+    letter-spacing: var(--daocharms-label-tracking);
+}
+
+.product-account-quotes__table tr.is-unread {
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+    box-shadow: inset 2px 0 0 0 var(--color-primary);
+}
+
+.product-account-quotes__campaign {
+    color: var(--color-text-secondary);
+}
+
+/* —— B2B / wholesale identity (design 28) —— */
+.b2b-account-identity {
+    padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.b2b-account-identity :is(.b2b-account-identity__label, .account-card__field-label) {
+    display: block;
+    color: var(--color-text-secondary) !important;
+    font-size: 0.8125rem;
+    letter-spacing: var(--daocharms-label-tracking);
+}
+
+.b2b-account-identity__value {
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.b2b-identity-hub__title,
+.b2b-account-identity h3 {
+    color: var(--color-text);
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 500;
+    margin-block: 0.75rem 0.5rem;
+}
+
+.b2b-identity-hub {
+    color: var(--color-text);
+}
+
+.b2b-hang-tabs {
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.b2b-account-identity :is(
+    .w-button[data-tone="primary"],
+    .w-button[data-variant="primary"],
+    button[type="submit"]:not(.account-form__btn--outline),
+    .account-form__btn--primary,
+    .account-btn:not(.account-btn--secondary):not(.account-btn--danger)
+) {
+    border: var(--daocharms-rule-width) solid var(--color-primary) !important;
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    box-shadow: none !important;
+    min-height: var(--daocharms-control-height, 2.75rem);
+}
+
+.b2b-account-identity :is(.account-btn--secondary) {
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: transparent !important;
+    color: var(--color-text) !important;
+    min-height: var(--daocharms-control-height, 2.75rem);
+}
+
+/* —— Two-factor / security extras (design 26 "Security" area) —— */
+.twofa-account-panel {
+    color: var(--color-text);
+}
+
+.twofa-notice,
+.twofa-message,
+.twofa-meta-item,
+.twofa-app-card {
+    border-color: var(--color-border-subtle);
+    color: var(--color-text-secondary);
+}
+
+.twofa-status-card {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-sm);
+    background: color-mix(in srgb, var(--color-bg-secondary) 20%, transparent);
+    color: var(--color-text);
+}
+
+.twofa-status-pill {
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: color-mix(in srgb, var(--color-bg-secondary) 35%, var(--color-bg-primary));
+    color: var(--color-text-secondary);
+}
+
+.twofa-status-pill--enabled {
+    border-color: var(--color-success-border-subtle, var(--color-success));
+    background: var(--color-success-bg-subtle, transparent);
+    color: var(--color-success-text-emphasis, var(--color-success));
+}
+
+.twofa-meta-item,
+.twofa-qr-card,
+.twofa-secret,
+.twofa-backup-result {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+}
+
+.twofa-secret,
+.twofa-backup-code-grid {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.06em;
+}
+
+.twofa-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.account-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    padding: 0.3rem 1rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: 0.875rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-decoration: none;
+    box-shadow: none;
+}
+
+.account-btn:hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
+}
+
+.account-btn--secondary {
+    border-color: var(--color-border-default);
+    background: transparent;
+    color: var(--color-text);
+}
+
+.account-btn--secondary:hover {
+    border-color: var(--color-primary);
+    background: transparent;
+    color: var(--color-primary);
+}
+
+.account-btn--danger {
+    border-color: var(--color-danger);
+    background: var(--color-danger);
+    color: var(--color-on-danger, var(--color-bg-primary));
+}
+
+.account-btn--danger:hover {
+    border-color: var(--color-danger-hover, var(--color-danger));
+    background: var(--color-danger-hover, var(--color-danger));
+    color: var(--color-on-danger, var(--color-bg-primary));
+}
+
+.account-btn:focus-visible,
+.account-orders__continue-pay:focus-visible,
+.account-orders__detail-link:focus-visible,
+.storefront-wishlist__cta:focus-visible,
+.account-address-card__action:focus-visible,
+.account-sidebar__nav-link:focus-visible,
+.account-hook-nav-link:focus-visible {
+    outline: var(--daocharms-focus-ring-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    outline-offset: 2px;
+}
+
+/* —— Badges: squared hairline chips, semantic tones via inherited tokens —— */
+.w-badge,
+.account-card__badge {
+    padding: 0.2rem 0.6rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: color-mix(in srgb, var(--color-bg-secondary) 35%, var(--color-bg-primary)) !important;
+    color: var(--color-text-secondary) !important;
+    font-size: 0.75rem;
+    font-weight: 500 !important;
+    letter-spacing: 0.01em;
+}
+
+.w-badge[data-tone="success"] {
+    border-color: var(--color-success-border-subtle, var(--color-success)) !important;
+    background: var(--color-success-bg-subtle, transparent) !important;
+    color: var(--color-success-text-emphasis, var(--color-success)) !important;
+}
+
+.w-badge[data-tone="warning"] {
+    border-color: var(--color-warning-border-subtle, var(--color-warning)) !important;
+    background: var(--color-warning-bg-subtle, transparent) !important;
+    color: var(--color-warning-text-emphasis, var(--color-warning)) !important;
+}
+
+.w-badge[data-tone="danger"],
+.w-badge[data-tone="error"] {
+    border-color: var(--color-danger-border-subtle, var(--color-danger)) !important;
+    background: var(--color-danger-bg-subtle, transparent) !important;
+    color: var(--color-danger-text-emphasis, var(--color-danger)) !important;
+}
+
+.w-badge[data-tone="primary"],
+.w-badge[data-tone="info"] {
+    border-color: var(--color-primary-border-subtle, var(--color-border-default)) !important;
+    background: var(--color-primary-bg-subtle, transparent) !important;
+    color: var(--color-text) !important;
+}
+
+/* —— Account tabs / filter strips (orders status, address Shipping|Billing) ——
+ * theme.css ships no .w-tabs skin for the frontend pack, so provide it here for
+ * any tab strip a module injects into the account area. */
+body:has(.account-index) :is(.w-tabs__list, .account-orders__filters ul),
+.account-profile :is(.w-tabs__list, .w-nav),
+.account-orders__filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1.5rem;
+    padding: 0;
+    margin: 0 0 clamp(0.75rem, 1.6vw, 1.25rem);
+    border: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    list-style: none;
+}
+
+body:has(.account-index) :is(.w-tabs__tab, .w-nav a, .w-nav button),
+.account-profile :is(.w-tabs__tab, .w-nav a, .w-nav button) {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    padding: 0 0.125rem;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.9375rem;
+    text-decoration: none;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+body:has(.account-index) :is(.w-tabs__tab, .w-nav a, .w-nav button):hover,
+.account-profile :is(.w-tabs__tab, .w-nav a, .w-nav button):hover {
+    color: var(--color-text);
+}
+
+body:has(.account-index) :is(.w-tabs__tab, .w-nav a, .w-nav button):is([aria-selected="true"], .active, .is-active, [aria-current="page"]),
+.account-profile :is(.w-tabs__tab, .w-nav a, .w-nav button):is([aria-selected="true"], .active, .is-active, [aria-current="page"]) {
+    color: var(--color-text);
+    font-weight: 500;
+    box-shadow: inset 0 -2px 0 0 var(--color-primary);
+}
+
+body:has(.account-index) :is(.w-tabs__tab, .w-nav a, .w-nav button):focus-visible,
+.account-profile :is(.w-tabs__tab, .w-nav a, .w-nav button):focus-visible {
+    outline: var(--daocharms-focus-ring-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    outline-offset: 2px;
+}
+
+/* —— Profile / orders standalone layouts —— */
+.account-profile,
+.account-orders#account-orders {
+    background: var(--color-bg-canvas);
+    color: var(--color-text);
+}
+
+.account-profile__sidebar,
+.account-orders__sidebar {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+/* —— Responsive ——
+ * The stage grid here is more specific than the module media query, so the
+ * single-column collapse has to be re-declared at this specificity. */
+@media (max-width: 63.99rem) {
+    body.account-auth-layout .account-login-widget {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.5rem;
+        padding: 1.5rem 1rem 2.5rem;
+    }
+
+    body.account-auth-layout .account-login-widget__rail,
+    body.account-auth-layout .account-login-widget--has-image .account-login-widget__rail {
+        grid-column: 1;
+        align-self: auto;
+        align-content: start;
+        max-width: none;
+        padding: 0 0.25rem;
+        color: var(--color-text);
+    }
+
+    body.account-auth-layout .account-login-widget--has-image .account-login-widget__promo-title,
+    body.account-auth-layout .account-login-widget--has-image .account-login-widget__promo-subtitle,
+    body.account-auth-layout .account-login-widget--has-image .account-login-widget__promo-trust,
+    body.account-auth-layout .account-login-widget--has-image .account-login-widget__eyebrow {
+        color: var(--color-text);
+    }
+
+    body.account-auth-layout .account-login-widget__dock {
+        grid-column: 1;
+        justify-self: stretch;
+    }
+
+    body.account-auth-layout .account-login-widget .w-auth-login,
+    body.account-auth-layout .account-login-widget .w-auth-login--amazon {
+        border-inline-start: 0;
+        border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+        border-radius: var(--daocharms-radius-md) !important;
+        padding: clamp(1.25rem, 4vw, 2rem);
+    }
+}
+
+@media (max-width: 47.99rem) {
+    body.account-auth-layout .account-login-widget--wash .account-login-widget__backdrop {
+        background-image: none;
+        background-color: color-mix(in srgb, var(--color-bg-secondary) 42%, var(--color-bg-canvas));
+    }
+
+    body.account-auth-layout .w-auth-login__row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.account-auth-layout .w-auth-login__meta-tools {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    body.account-auth-layout [data-w-component="account-login"] .w-auth-login__remember {
+        flex: 1 1 auto !important;
+        max-width: none !important;
+    }
+
+    body.account-auth-layout [data-w-component="account-login"] .w-auth-login__forgot {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 47.99rem) {
+    /* Orders detail table falls back to stacked label/value rows (§7 no h-scroll). */
+    .account-order-detail__table {
+        min-width: 0;
+    }
+
+    .account-order-detail__row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.3rem;
+    }
+
+    .account-order-detail__row--head {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .account-order-detail__cell[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--color-text-secondary);
+        font-size: 0.75rem;
+        letter-spacing: var(--daocharms-label-tracking);
+    }
+
+    .storefront-wishlist__grid {
+        grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    }
+
+    .account-address-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .product-account-quotes {
+        overflow-x: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .account-sidebar,
+    .account-form__btn--primary,
+    .account-form__btn,
+    .storefront-wishlist__cta,
+    .account-orders__chevron,
+    .account-btn,
+    .account-address-panel__action,
+    .account-address-form__submit,
+    .account-orders__continue-pay,
+    .account-orders__detail-link {
+        transition: none;
+    }
+}
+
+
+/* —— DaoCharms auth mobile stack (ui/40-family) —— */
+@media (max-width: 47.99rem) {
+    body.account-auth-layout .account-login-widget {
+        grid-template-columns: 1fr !important;
+        min-height: 0;
+    }
+
+    body.account-auth-layout .account-login-widget__backdrop {
+        position: relative !important;
+        inset: auto !important;
+        width: 100% !important;
+        min-height: 12rem;
+        aspect-ratio: 16 / 10;
+    }
+
+    body.account-auth-layout .account-login-widget__rail {
+        padding: 1.25rem 1.25rem 0 !important;
+        color: var(--color-text) !important;
+        text-shadow: none !important;
+    }
+
+    body.account-auth-layout .account-login-widget--has-image .account-login-widget__promo-title,
+    body.account-auth-layout .account-login-widget--has-image .account-login-widget__promo-subtitle {
+        color: var(--color-text) !important;
+        border-color: var(--color-border-default) !important;
+        text-shadow: none !important;
+    }
+
+    body.account-auth-layout .account-login-widget__dock {
+        grid-column: 1;
+    }
+
+    body.account-auth-layout .account-login-widget .w-auth-login,
+    body.account-auth-layout .account-login-widget .w-auth-login--amazon {
+        border-inline-start: 0 !important;
+        border-block-start: var(--daocharms-rule-width) solid var(--color-border-default);
+    }
+}

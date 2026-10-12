@@ -11,9 +11,9 @@ final class BackendOrderLifecycleStageContractTest extends TestCase
     public function testStatusFlowAndEditExposeLifecycleTestids(): void
     {
         $root = dirname(__DIR__, 3);
-        $flow = (string)file_get_contents($root . '/view/templates/Backend/Order/partial/status-flow.phtml');
-        $edit = (string)file_get_contents($root . '/view/templates/Backend/Order/edit.phtml');
-        $index = (string)file_get_contents($root . '/view/templates/Backend/Order/index.phtml');
+        $flow = (string)file_get_contents($root . '/view/templates/backend/Order/partial/status-flow.phtml');
+        $edit = (string)file_get_contents($root . '/view/templates/backend/Order/edit.phtml');
+        $index = (string)file_get_contents($root . '/view/templates/backend/Order/index.phtml');
         self::assertStringContainsString('order-lifecycle-stage-flow', $flow);
         self::assertStringContainsString('order-edit-lifecycle-stage', $edit);
         self::assertStringContainsString('order-edit-hang-review-hint', $edit);

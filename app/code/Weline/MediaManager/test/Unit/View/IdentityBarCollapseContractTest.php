@@ -13,7 +13,7 @@ final class IdentityBarCollapseContractTest extends TestCase
 {
     public function testManagerTemplateDefaultsCollapsedWithToggle(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Manager/manager.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Manager/manager.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
 

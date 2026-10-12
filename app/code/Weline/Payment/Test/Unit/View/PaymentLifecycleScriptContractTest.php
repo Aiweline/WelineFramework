@@ -13,8 +13,8 @@ final class PaymentLifecycleScriptContractTest extends TestCase
         $root = \dirname(__DIR__, 3);
         $js = (string) \file_get_contents($root . '/view/statics/js/payment-lifecycle.js');
         $modules = (string) \file_get_contents($root . '/view/statics/frontend/weline.modules.js');
-        $success = (string) \file_get_contents($root . '/view/templates/Frontend/checkout/payment-success.phtml');
-        $handoff = (string) \file_get_contents($root . '/view/templates/Frontend/checkout/handoff.phtml');
+        $success = (string) \file_get_contents($root . '/view/templates/frontend/checkout/payment-success.phtml');
+        $handoff = (string) \file_get_contents($root . '/view/templates/frontend/checkout/handoff.phtml');
 
         self::assertStringContainsString('weline:payment:outcome', $js);
         self::assertStringContainsString('weline:payment:paid', $js);
@@ -36,7 +36,7 @@ final class PaymentLifecycleScriptContractTest extends TestCase
         self::assertStringContainsString('data-weline-load="cart,paymentLifecycle"', $handoff);
         self::assertStringContainsString('data-payment-outcome="pending"', $handoff);
 
-        $returnTpl = (string) \file_get_contents($root . '/view/templates/Frontend/checkout/return.phtml');
+        $returnTpl = (string) \file_get_contents($root . '/view/templates/frontend/checkout/return.phtml');
         self::assertStringContainsString('data-weline-load="cart,paymentLifecycle"', $returnTpl);
         self::assertStringContainsString('data-payment-lifecycle', $returnTpl);
         self::assertStringContainsString('payment-return-page', $returnTpl);

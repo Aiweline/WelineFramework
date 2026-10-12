@@ -55,7 +55,7 @@ class PixelStatisticsServiceShortWindowFlatAttributionTest extends TestCore
         self::assertStringContainsString("'utm_source' => (string)(\$parsed['detail']['utm']['source']", $insight);
 
         $tpl = (string)\file_get_contents(
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/PixelDashboard/index.phtml'
+            BP . '/app/code/Weline/Visitor/view/templates/backend/PixelDashboard/index.phtml'
         );
         self::assertStringContainsString('<lang>渠道码</lang>', $tpl);
         self::assertStringContainsString("\$row['channel_code']", $tpl);

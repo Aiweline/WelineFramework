@@ -727,40 +727,37 @@ class Pixel extends Model
         // A/B测试数据存储在PixelAdditional的total_event_data中
         // 假设total_event_data JSON中包含test_id和variant字段
         $model = w_obj(self::class);
+        $additional = w_obj(PixelAdditional::class);
         $connector = $model->getConnection()->getConnector();
-        $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
-        $tableName = $prefix . $model->getTable();
-        $additionalTableName = $prefix . 'w_pixel_additional';
-        
-        // 构建SQL查询（需要JOIN PixelAdditional表）
-        // 注意：MySQL的JSON_EXTRACT需要正确的JSON路径格式
+        $dialect = $connector->getSqlDialect();
+        $tableName = $connector->quoteTable((string)$model->getTable());
+        $additionalTableName = $connector->quoteTable((string)$additional->getTable());
+        $testIdExpr = $dialect->jsonExtractText('pa.total_event_data', 'testId');
+        $variantExpr = $dialect->jsonExtractText('pa.total_event_data', 'variant');
+
         $sql = "SELECT 
                     p.value,
                     p.event,
                     pa.total_event_data
-                FROM `{$tableName}` p
-                INNER JOIN `{$additionalTableName}` pa ON p.pixel_id = pa.pixel_id
+                FROM {$tableName} p
+                INNER JOIN {$additionalTableName} pa ON p.pixel_id = pa.pixel_id
                 WHERE p.website_id = :website_id
-                AND JSON_EXTRACT(pa.total_event_data, '$.testId') = :test_id";
-        
+                AND {$testIdExpr} = :test_id";
+
         if ($variant !== null) {
-            $sql .= " AND JSON_EXTRACT(pa.total_event_data, '$.variant') = :variant";
+            $sql .= " AND {$variantExpr} = :variant";
         }
-        
+
         try {
             $pdo = $connector->getLink();
             $stmt = $pdo->prepare($sql);
-            
-            // JSON_EXTRACT返回的是JSON值，需要正确转义
-            // 对于字符串值，JSON_EXTRACT会返回带引号的JSON字符串
-            // 所以我们需要匹配JSON字符串格式
-            $testIdJson = json_encode($testId);  // 这会自动添加引号和转义
+            // jsonExtractText 返回未加引号文本标量，绑定普通 PHP 字符串
             $params = [
                 ':website_id' => $websiteId,
-                ':test_id' => $testIdJson
+                ':test_id' => $testId,
             ];
             if ($variant !== null) {
-                $params[':variant'] = json_encode($variant);  // 自动添加引号和转义
+                $params[':variant'] = $variant;
             }
             $stmt->execute($params);
             

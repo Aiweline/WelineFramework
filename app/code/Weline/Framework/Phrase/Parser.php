@@ -578,10 +578,9 @@ class Parser
             $module_words = \array_merge($module_words, self::loadModuleWordsForLocaleChain($module_name, $lang));
         }
 
-        // Persistent Workers never materialize generated/language/{locale}.php.
-        // Misses resolve via module CSV + word-level Shared/DB (slow OK, OOM not OK).
+        // Persistent Workers：只合并区袋 shared∪requestArea，禁止整袋 {locale}.php。
         if (Runtime::isPersistent()) {
-            return $module_words;
+            return \array_merge(self::loadLocaleAreaBagsForWorker($lang), $module_words);
         }
 
         return \array_merge(self::loadLocaleWordsForLocaleChain($lang, $modules), $module_words);
@@ -1289,9 +1288,27 @@ class Parser
     }
 
     /**
-     * Non-persistent only: load generated/language/{locale}.php into a process bag.
-     * Persistent Workers MUST NOT include whole-locale files (request-must-not-die);
-     * they use module CSV + word-level Shared/DB instead.
+     * Persistent Worker：只 include `{locale}.shared.php` + `{locale}.{area}.php`。
+     * 禁止回退整袋 `{locale}.php`（OOM / request-must-not-die）。
+     *
+     * @return array<string, string>
+     */
+    private static function loadLocaleAreaBagsForWorker(string $lang): array
+    {
+        if (!\class_exists(\Weline\I18n\Service\LocaleAreaDictionaryLoader::class)) {
+            return [];
+        }
+        try {
+            return \Weline\I18n\Service\LocaleAreaDictionaryLoader::loadMerged($lang, null, false);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Non-persistent: load area bags (or legacy union) into a process bag.
+     * Persistent Workers MUST NOT include whole-locale `{locale}.php` (request-must-not-die);
+     * they load area bags via loadLocaleAreaBagsForWorker + module CSV.
      */
     private static function loadLocaleWords(string $lang, array $modules): array
     {
@@ -1304,7 +1321,7 @@ class Parser
             return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024, [$lang])[$cache_key];
         }
 
-        // Hard gate: never include 8–11MiB locale.php into a persistent Worker.
+        // Hard gate: never include whole {locale}.php into a persistent Worker；只吃区袋。
         if (Runtime::isPersistent()) {
             if (\class_exists(MemDiag::class, false) || \class_exists(MemDiag::class)) {
                 MemDiag::event('phrase_include_locale_php_skipped', [
@@ -1312,8 +1329,8 @@ class Parser
                     'reason' => 'persistent_worker_no_whole_locale_include',
                 ]);
             }
-
-            return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024, [$lang])[$cache_key] = [];
+            $areaMerged = self::loadLocaleAreaBagsForWorker($lang);
+            return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024, [$lang])[$cache_key] = $areaMerged;
         }
 
         // setup:upgrade 轻词典：跳过巨型 generated/language 文件 include。
@@ -1322,14 +1339,21 @@ class Parser
         }
 
         $words_file = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';
-        if (is_file($words_file)) {
+        // 优先区袋 shared∪requestArea；无区袋时回退整袋（LocaleAreaDictionaryLoader）
+        if (class_exists(\Weline\I18n\Service\LocaleAreaDictionaryLoader::class)
+            || is_file($words_file)
+            || is_file(Env::path_TRANSLATE_FILES_PATH . $lang . '.shared.php')
+        ) {
             try {
-                // 同代次 L1 已命中时不会到这里；只失效本次将读取的语言文件。
-                if (\function_exists('opcache_invalidate')) {
-                    @opcache_invalidate($words_file, true);
-                }
                 $beforeUsed = \memory_get_usage(false);
-                $lang_words = (array)include $words_file;
+                if (class_exists(\Weline\I18n\Service\LocaleAreaDictionaryLoader::class)) {
+                    $lang_words = \Weline\I18n\Service\LocaleAreaDictionaryLoader::loadMerged($lang);
+                } else {
+                    if (\function_exists('opcache_invalidate')) {
+                        @opcache_invalidate($words_file, true);
+                    }
+                    $lang_words = (array)include $words_file;
+                }
                 if (\class_exists(MemDiag::class, false) || \class_exists(MemDiag::class)) {
                     MemDiag::event('phrase_include_locale_php', [
                         'locale' => $lang,

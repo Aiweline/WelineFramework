@@ -170,14 +170,14 @@ final class PixelEcommerceFunnelServiceTest extends TestCase
         self::assertStringContainsString('PixelEcommerceFunnelService', $controller);
         self::assertStringContainsString('ecommerce_funnel', $controller);
 
-        $detail = (string)\file_get_contents($root . '/view/templates/Backend/PixelDashboard/detail.phtml');
+        $detail = (string)\file_get_contents($root . '/view/templates/backend/PixelDashboard/detail.phtml');
         self::assertStringContainsString('ecommerce-funnel', $detail);
         self::assertStringContainsString('电商漏斗', $detail);
         self::assertStringContainsString('view_item', $detail);
         self::assertStringContainsString('begin_checkout', $detail);
 
         // F05b：渠道详情可切换电商四步，但默认仍是营销简漏斗，且两套步骤定义互不污染
-        $channelDetail = (string)\file_get_contents($root . '/view/templates/Backend/TrafficChannel/detail.phtml');
+        $channelDetail = (string)\file_get_contents($root . '/view/templates/backend/TrafficChannel/detail.phtml');
         self::assertStringContainsString('<lang>营销简漏斗</lang>', $channelDetail);
         self::assertStringContainsString('<lang>电商四步</lang>', $channelDetail);
         self::assertStringNotContainsString('ecommerce-funnel', $channelDetail);

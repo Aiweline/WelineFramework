@@ -11,7 +11,7 @@ final class SecurityRulesReceiptWiringTest extends TestCase
     public function testServerMonitorEndpointRoundTripsRulesReceipt(): void
     {
         $controller = $this->source('Controller/Backend/ServerMonitor.php');
-        $template = $this->source('view/templates/Backend/ServerMonitor/security-rules.phtml');
+        $template = $this->source('view/templates/backend/ServerMonitor/security-rules.phtml');
 
         self::assertStringContainsString('getRulesState()', $controller);
         self::assertStringContainsString("'rulesGeneration'", $controller);
@@ -26,7 +26,7 @@ final class SecurityRulesReceiptWiringTest extends TestCase
 
     public function testServerMonitorEmbedsBrowserParseableRulesJsonWithoutHtmlEntities(): void
     {
-        $template = $this->source('view/templates/Backend/ServerMonitor/security-rules.phtml');
+        $template = $this->source('view/templates/backend/ServerMonitor/security-rules.phtml');
 
         self::assertStringNotContainsString('htmlspecialchars($rulesJson', $template);
         self::assertStringContainsString('JSON_HEX_TAG', $template);
@@ -36,7 +36,7 @@ final class SecurityRulesReceiptWiringTest extends TestCase
     public function testWlsPanelFormsRoundTripRulesReceipt(): void
     {
         $controller = $this->source('Controller/Backend/WlsPanel.php');
-        $template = $this->source('view/templates/Backend/WlsPanel/index.phtml');
+        $template = $this->source('view/templates/backend/WlsPanel/index.phtml');
 
         self::assertStringContainsString("'rules_generation'", $controller);
         self::assertStringContainsString("'rules_digest'", $controller);

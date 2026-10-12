@@ -33,12 +33,12 @@ return [
                 'module_mode' => [
                     'path' => 'extends/module/Weline_Sticker/{目标模块名}/{文件路径}',
                     'description' => '模块级 Sticker，直接修改指定模块的指定文件',
-                    'example' => 'extends/module/Weline_Sticker/Weline_Demo/view/templates/Backend/index.phtml'
+                    'example' => 'extends/module/Weline_Sticker/Weline_Demo/view/templates/backend/index.phtml'
                 ],
                 'theme_mode' => [
                     'path' => 'extends/theme/{主题名}/Weline_Sticker/{目标模块名}/{文件路径}',
                     'description' => '主题级 Sticker，基于主题覆盖其他模块的文件',
-                    'example' => 'extends/theme/default/Weline_Sticker/Weline_Demo/view/templates/Backend/index.phtml'
+                    'example' => 'extends/theme/default/Weline_Sticker/Weline_Demo/view/templates/backend/index.phtml'
                 ],
                 'rule_syntax' => [
                     'tags' => '<w:sticker action="replace|before|after" position="all|1|2-3">',

@@ -11,7 +11,7 @@ final class DevRelayTemplateContractTest extends TestCase
     public function testTemplateAndMenuExist(): void
     {
         $root = dirname(__DIR__, 3);
-        $tpl = file_get_contents($root . '/view/templates/Backend/DevRelay/index.phtml');
+        $tpl = file_get_contents($root . '/view/templates/backend/DevRelay/index.phtml');
         $ctrl = file_get_contents($root . '/Controller/Backend/DevRelay.php');
         $menu = file_get_contents($root . '/etc/backend/menu.xml');
         self::assertIsString($tpl);

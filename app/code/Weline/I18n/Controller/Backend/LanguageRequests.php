@@ -19,7 +19,7 @@ final class LanguageRequests extends BackendController
     {
         $this->assign('request_data', $this->directory->adminList());
         $this->assignWebsiteSelect('');
-        return $this->fetch('Weline_I18n::templates/Backend/LanguageRequests/index.phtml');
+        return $this->fetch('Weline_I18n::templates/backend/LanguageRequests/index.phtml');
     }
 
     private function assignWebsiteSelect(string $selectedValue): void

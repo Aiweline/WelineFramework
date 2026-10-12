@@ -65,7 +65,7 @@ class Compiler
      * 编译文件（应用 Sticker 规则）
      *
      * @param string $targetModule 目标模块
-     * @param string $targetFile 目标文件路径（相对路径，如：Weline/Demo/view/templates/Backend/index.phtml）
+     * @param string $targetFile 目标文件路径（相对路径，如：Weline/Demo/view/templates/backend/index.phtml）
      * @param string $sourceFilePath 源文件完整路径
      * @param string|null $type 类型 (module/theme)
      * @param string|null $themeName 主题名（如果是主题类型）

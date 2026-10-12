@@ -9,9 +9,11 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
+use Weline\I18n\Model\Dictionary as BaseDictionary;
 use Weline\I18n\Model\Locale\Dictionary;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\I18n\Service\Catalog\DisplayNameCartesianSeeder;
+use Weline\I18n\Service\DictionaryAreaPolicy;
 
 /**
  * I18n DDL 增量 + 已装激活语种展示名懒切片补洞。
@@ -23,8 +25,36 @@ final class Upgrade implements UpgradeInterface
     public function setup(Setup $setup, Context $context): void
     {
         $this->ensureNullSourceCoveringIndex();
+        $this->backfillDictionaryAreaFromIsBackend();
         $this->syncCatalogInventoryGaps();
         $this->backfillInstalledLocaleDisplayNames();
+    }
+
+    /**
+     * area 列空值 → shared；exclusive 权威交给全量 collect 路径证据重铺（禁 is_backend→frontend）。
+     */
+    private function backfillDictionaryAreaFromIsBackend(): void
+    {
+        try {
+            $modelSetup = ObjectManager::make(ModelSetup::class);
+            /** @var BaseDictionary $model */
+            $model = ObjectManager::getInstance(BaseDictionary::class);
+            $modelSetup->putModel($model);
+            if (!$modelSetup->tableExist()) {
+                return;
+            }
+            $connector = $modelSetup->getConnection()->getConnector();
+            $phys = self::physicalTableSql($connector, (string)$model->getTable());
+            $areaCol = $connector->quoteIdentifier(BaseDictionary::schema_fields_AREA);
+            $shared = $connector->quote(DictionaryAreaPolicy::AREA_SHARED);
+
+            // 禁止对 UPDATE 结果 fetch()：大表会触发 Unbounded SELECT 门禁并中断升级。
+            $connector->query(
+                "UPDATE {$phys} SET {$areaCol} = {$shared} WHERE {$areaCol} IS NULL OR TRIM({$areaCol}) = ''"
+            );
+        } catch (\Throwable $e) {
+            w_log_warning('I18n: dictionary area backfill skipped: ' . $e->getMessage(), [], 'i18n');
+        }
     }
 
     private function syncCatalogInventoryGaps(): void
@@ -103,5 +133,39 @@ final class Upgrade implements UpgradeInterface
         }
 
         return $table;
+    }
+
+    /**
+     * @param mixed $fetch Connector::fetch() 结果（关联行或行列表）
+     */
+    private static function scalarCountFromFetch(mixed $fetch): int
+    {
+        if (!\is_array($fetch) || $fetch === []) {
+            return 0;
+        }
+        $row = $fetch;
+        if (\array_is_list($fetch) && isset($fetch[0]) && \is_array($fetch[0])) {
+            $row = $fetch[0];
+        }
+        if (!\is_array($row)) {
+            return (int)$row;
+        }
+
+        return (int)($row['c'] ?? $row['C'] ?? \reset($row) ?: 0);
+    }
+
+    private static function physicalTableSql(object $connector, string $table): string
+    {
+        $table = \trim(\str_replace('"', '', $table));
+        if ($table === '') {
+            return $connector->quoteIdentifier('w_i18n_dictionary');
+        }
+        if (\str_contains($table, '.')) {
+            [$schema, $name] = \explode('.', $table, 2);
+
+            return $connector->quoteIdentifier($schema) . '.' . $connector->quoteIdentifier($name);
+        }
+
+        return $connector->quoteIdentifier($table);
     }
 }

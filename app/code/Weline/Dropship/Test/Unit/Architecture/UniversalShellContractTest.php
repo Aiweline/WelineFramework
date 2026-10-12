@@ -74,7 +74,7 @@ final class UniversalShellContractTest extends TestCase
 
     public function testWarehouseTemplateUsesGenericRemoteFields(): void
     {
-        $tpl = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Warehouse/index.phtml');
+        $tpl = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Warehouse/index.phtml');
         self::assertStringContainsString('country-name="remote_country_code"', $tpl);
         self::assertStringContainsString('name="remote_storage_id"', $tpl);
         self::assertStringNotContainsString('cj_country_code', $tpl);

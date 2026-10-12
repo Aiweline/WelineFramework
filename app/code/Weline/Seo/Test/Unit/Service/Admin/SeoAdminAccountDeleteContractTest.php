@@ -18,7 +18,7 @@ final class SeoAdminAccountDeleteContractTest extends TestCase
         $provider = $root . '/extends/module/Weline_Framework/Query/SeoAdminQueryProvider.php';
         $controller = $root . '/Controller/Backend/Account.php';
         $js = $root . '/view/statics/js/seo-admin.js';
-        $template = $root . '/view/templates/Backend/Account/index.phtml';
+        $template = $root . '/view/templates/backend/Account/index.phtml';
 
         foreach ([$service, $provider, $controller, $js, $template] as $path) {
             self::assertFileExists($path);

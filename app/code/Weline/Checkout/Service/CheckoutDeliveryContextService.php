@@ -82,7 +82,8 @@ final class CheckoutDeliveryContextService
                 ], $this->currentEmail()),
             ];
         } catch (\Throwable) {
-            $countryCode = self::normalizeCountryCode((string)($params['country_code'] ?? 'CN')) ?: 'CN';
+            $requested = self::normalizeCountryCode((string)($params['country_code'] ?? ''));
+            $countryCode = $requested !== '' ? $requested : self::resolveStorefrontFallbackCountry();
 
             return [
                 'country_code' => $countryCode,
@@ -1079,7 +1080,188 @@ final class CheckoutDeliveryContextService
             }
         }
 
+        // 无会话/Cookie 时按店面语种回落（en_US→US），禁止写死 CN 让跨境站默认成中式省市区。
+        return self::resolveStorefrontFallbackCountry();
+    }
+
+    /**
+     * 店面无配送国会话时的默认国家：当前语（须属本站启用语种）→ 站默认语 → CN。
+     * 例：DaoCharms default_language=en_US → US（State/ZIP schema）。
+     */
+    public static function resolveStorefrontFallbackCountry(): string
+    {
+        $enabled = self::currentWebsiteLanguageCodes();
+        $candidates = [];
+
+        try {
+            $lang = trim((string)\Weline\Framework\App\State::getLang());
+            if ($lang !== '') {
+                $candidates[] = $lang;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            $locale = trim((string)Cookie::getLangLocal());
+            // getLangLocal 可能含 currency 后缀；取语言段
+            if ($locale !== '' && str_contains($locale, '|')) {
+                $locale = trim((string)explode('|', $locale, 2)[0]);
+            }
+            if ($locale !== '') {
+                $candidates[] = $locale;
+            }
+        } catch (\Throwable) {
+        }
+
+        $websiteDefault = self::currentWebsiteDefaultLanguage();
+        if ($websiteDefault !== '') {
+            $candidates[] = $websiteDefault;
+        }
+
+        foreach ($candidates as $locale) {
+            $locale = trim(str_replace('-', '_', (string)$locale));
+            if ($locale === '') {
+                continue;
+            }
+            if ($enabled !== [] && !self::localeAllowedOnWebsite($locale, $enabled)) {
+                continue;
+            }
+            $code = self::defaultCountryFromLocale($locale);
+            if ($code !== '') {
+                return $code;
+            }
+        }
+
+        if ($websiteDefault !== '') {
+            $code = self::defaultCountryFromLocale($websiteDefault);
+            if ($code !== '') {
+                return $code;
+            }
+        }
+
         return 'CN';
+    }
+
+    /**
+     * Locale → ISO 国家码（结账地址 schema 选型）。未知语种回空串由调用方回落 CN。
+     */
+    public static function defaultCountryFromLocale(string $locale): string
+    {
+        $locale = trim(str_replace('-', '_', $locale));
+        if ($locale === '') {
+            return '';
+        }
+
+        $exact = [
+            'en_US' => 'US',
+            'en_GB' => 'GB',
+            'en_AU' => 'AU',
+            'en_CA' => 'CA',
+            'ja_JP' => 'JP',
+            'zh_Hans_CN' => 'CN',
+            'zh_CN' => 'CN',
+            'zh_Hant_TW' => 'TW',
+            'zh_Hant_HK' => 'HK',
+            'zh_TW' => 'TW',
+            'zh_HK' => 'HK',
+            'ko_KR' => 'KR',
+            'de_DE' => 'DE',
+            'fr_FR' => 'FR',
+            'es_ES' => 'ES',
+            'pt_BR' => 'BR',
+        ];
+        if (isset($exact[$locale])) {
+            return $exact[$locale];
+        }
+
+        if (preg_match('/^zh(_|$)/i', $locale) === 1) {
+            return 'CN';
+        }
+        if (preg_match('/^en(_|$)/i', $locale) === 1) {
+            return 'US';
+        }
+        if (preg_match('/^ja(_|$)/i', $locale) === 1) {
+            return 'JP';
+        }
+
+        // xx_YY / xx_Script_YY → 末段两字母当国家（排除 Hans/Hant 等 script）
+        if (preg_match('/_([A-Za-z]{2})$/', $locale, $m) === 1) {
+            $tail = strtoupper($m[1]);
+            if (!in_array($tail, ['ZH', 'EN', 'JA', 'KO', 'DE', 'FR', 'ES', 'PT', 'IT', 'RU', 'AR'], true)) {
+                return self::normalizeCountryCode($tail);
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function currentWebsiteLanguageCodes(): array
+    {
+        try {
+            $websiteId = (int)RequestContext::getWelineWebsiteId();
+            if ($websiteId <= 0 || !class_exists(\Weline\Websites\Model\Website::class)) {
+                return [];
+            }
+            /** @var \Weline\Websites\Model\Website $website */
+            $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $website->load($websiteId);
+            if (!(int)$website->getId()) {
+                return [];
+            }
+            $codes = $website->getLanguageCodes();
+            if (!is_array($codes)) {
+                return [];
+            }
+            $out = [];
+            foreach ($codes as $code) {
+                $normalized = trim(str_replace('-', '_', (string)$code));
+                if ($normalized !== '') {
+                    $out[] = $normalized;
+                }
+            }
+
+            return array_values(array_unique($out));
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    private static function currentWebsiteDefaultLanguage(): string
+    {
+        try {
+            $websiteId = (int)RequestContext::getWelineWebsiteId();
+            if ($websiteId <= 0 || !class_exists(\Weline\Websites\Model\Website::class)) {
+                return '';
+            }
+            /** @var \Weline\Websites\Model\Website $website */
+            $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $website->load($websiteId);
+            if (!(int)$website->getId()) {
+                return '';
+            }
+
+            return trim(str_replace('-', '_', (string)($website->getDefaultLanguage() ?? '')));
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * @param list<string> $enabled
+     */
+    private static function localeAllowedOnWebsite(string $locale, array $enabled): bool
+    {
+        $locale = trim(str_replace('-', '_', $locale));
+        foreach ($enabled as $code) {
+            if (strcasecmp($locale, $code) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function persistCountry(string $countryCode): void

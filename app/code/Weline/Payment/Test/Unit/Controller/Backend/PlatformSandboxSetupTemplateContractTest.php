@@ -14,18 +14,18 @@ final class PlatformSandboxSetupTemplateContractTest extends TestCase
     public function testControllerFetchesExistingTemplatesPath(): void
     {
         $controller = dirname(__DIR__, 4) . '/Controller/Backend/PlatformSandboxSetup.php';
-        $template = dirname(__DIR__, 4) . '/view/templates/Backend/PayPal/platform-sandbox-setup.phtml';
+        $template = dirname(__DIR__, 4) . '/view/templates/backend/PayPal/platform-sandbox-setup.phtml';
         self::assertFileExists($controller);
         self::assertFileExists($template);
 
         $src = file_get_contents($controller);
         self::assertIsString($src);
         self::assertStringContainsString(
-            "Weline_Payment::templates/Backend/PayPal/platform-sandbox-setup.phtml",
+            "Weline_Payment::templates/backend/PayPal/platform-sandbox-setup.phtml",
             $src
         );
         self::assertStringNotContainsString(
-            "Weline_Payment::Backend/PayPal/platform-sandbox-setup.phtml",
+            "Weline_Payment::backend/PayPal/platform-sandbox-setup.phtml",
             $src
         );
         self::assertStringContainsString('name="client_id"', (string) file_get_contents($template));

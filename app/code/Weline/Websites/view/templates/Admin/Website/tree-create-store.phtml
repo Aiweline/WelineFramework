@@ -36,7 +36,7 @@ $returnUrl = trim((string)($tree_return_url ?? ''));
         <?php
         $this->assign('display_type_value', '');
         $this->assign('display_type_inherit_label', __('继承网站 / 无特殊类型'));
-        echo $this->fetch('Weline_Websites::templates/Backend/partials/display-type-field.phtml');
+        echo $this->fetch('Weline_Websites::templates/backend/partials/display-type-field.phtml');
         ?>
         <div class="w-cluster" data-align="end" style="--w-span-md:12;">
             <button class="w-button" type="submit" data-tone="primary"><lang>创建商店</lang></button>

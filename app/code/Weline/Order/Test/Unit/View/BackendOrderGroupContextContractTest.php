@@ -11,7 +11,7 @@ final class BackendOrderGroupContextContractTest extends TestCase
     public function testGroupContextPartialExposesNavigationTestIds(): void
     {
         $path = dirname(__DIR__, 3)
-            . '/view/templates/Backend/Order/partial/group-context.phtml';
+            . '/view/templates/backend/Order/partial/group-context.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="order-group-context"', $source);
@@ -23,7 +23,7 @@ final class BackendOrderGroupContextContractTest extends TestCase
     public function testViewAndEditFetchGroupContextPartial(): void
     {
         foreach (['view.phtml', 'edit.phtml'] as $file) {
-            $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/' . $file;
+            $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/' . $file;
             $source = (string)file_get_contents($path);
             self::assertStringContainsString(
                 'Backend/Order/partial/group-context.phtml',
@@ -35,7 +35,7 @@ final class BackendOrderGroupContextContractTest extends TestCase
 
     public function testListExposesChildAndShipmentBadges(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/index.phtml';
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="order-list-child-badge"', $source);
         self::assertStringContainsString('data-testid="order-list-shipment-badge"', $source);

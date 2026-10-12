@@ -5,11 +5,11 @@ $entry = (array) ($this->getData('payment_guide_entry') ?? []);
 $policyRoute = (string) ($entry['policy_route'] ?? '');
 ?>
 
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
 
 <article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-policy-fake-card">
-    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+    <?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
 
     <header class="amazon-payment-guide-article__header">
         <p class="amazon-payment-guide-article__badge"><lang>政策</lang></p>
@@ -32,4 +32,4 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
         <p><lang>生产环境必须启用真实支付供应商，并下线或禁用本地测试支付方式。</lang></p>
     </section>
 </article>
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>

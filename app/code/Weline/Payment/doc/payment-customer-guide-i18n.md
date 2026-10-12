@@ -8,8 +8,8 @@
 | 交付物 | 路径 | 说明 |
 | --- | --- | --- |
 | Guide 注册类 | `extends/module/Weline_Payment/PaymentCustomerGuide/{Name}CustomerGuide.php` | 仅元数据：`getTitle()`、`getGuideTemplateCode()` 等，字符串须 `__()` |
-| 支付指南 | `view/templates/Frontend/guide/payment/{method_code}/guide.phtml` | **正文：`<lang>` 标签** |
-| 支付政策 | `view/templates/Frontend/guide/payment/{method_code}/policy.phtml` | **正文：`<lang>` 标签** |
+| 支付指南 | `view/templates/frontend/guide/payment/{method_code}/guide.phtml` | **正文：`<lang>` 标签** |
+| 支付政策 | `view/templates/frontend/guide/payment/{method_code}/policy.phtml` | **正文：`<lang>` 标签** |
 | 词典 | `{YourModule}/i18n/zh_Hans_CN.csv`、`en_US.csv` | `php bin/w i18n:collect YourModule` 生成/合并 |
 | 链接 | 模板内导航 | 使用 `@url{'guide/payment/...'}` / `@url{$guideRoute}`，禁止硬编码 `/guide/payment` |
 
@@ -34,7 +34,7 @@
 | CSV 落盘 | `php bin/w i18n:collect` → 各模块 `i18n/{locale}.csv`；**保留** CSV 已有但本次未扫到的词条 |
 | AI 翻译 | I18n 后台「AI 翻译」→ Queue → 扫描未译词 → 写入词典 → 发布语言包 |
 
-PayPal 指南模板已按此写法组织（见 `view/templates/Frontend/guide/payment/paypal/guide.phtml`）。
+PayPal 指南模板已按此写法组织（见 `view/templates/frontend/guide/payment/paypal/guide.phtml`）。
 
 ### 1.2 当前痛点
 
@@ -90,7 +90,7 @@ PayPal 指南模板已按此写法组织（见 `view/templates/Frontend/guide/pa
 ```text
 {Module}/
 ├─ extends/module/Weline_Payment/PaymentCustomerGuide/{Name}CustomerGuide.php
-└─ view/templates/Frontend/guide/payment/{method_code}/
+└─ view/templates/frontend/guide/payment/{method_code}/
    ├─ guide.phtml      # 客户支付指南
    └─ policy.phtml     # 支付政策
 ```

@@ -78,7 +78,7 @@ $payments = $recordsService->listForPayable('order', $orderUuid);
                     </span>
                     <span role="cell" data-label="<?= __('金额') ?>" data-testid="account-order-payment-amount"><?= $esc($currency . ' ' . $amount) ?></span>
                     <span role="cell" data-label="<?= __('状态') ?>" data-testid="account-order-payment-status">
-                        <?= $this->fetch('Weline_Payment::templates/Backend/partials/outcome-chip.phtml', [
+                        <?= $this->fetch('Weline_Payment::templates/backend/partials/outcome-chip.phtml', [
                             'chip' => $statusChip,
                             'testid' => 'account-order-payment-status-chip',
                         ]) ?>

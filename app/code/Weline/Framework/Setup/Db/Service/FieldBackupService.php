@@ -121,13 +121,19 @@ class FieldBackupService
             // 使用查询器查询字段数据（主键 + 字段值），避免手写 SQL 造成方言问题
             // 注意：字段值可能为 NULL，我们也要备份 NULL 值
             $query = $connector->getQuery();
-            $data = $query
+            // 大表禁止一次性 fetchArray（Unbounded SELECT）；流式迭代
+            $data = [];
+            foreach ($query
                 ->table($tableName)
                 ->fields([$primaryKey, $fieldName])
                 ->select()
-                ->fetchArray();
+                ->fetchIterator() as $row) {
+                if (\is_array($row)) {
+                    $data[] = $row;
+                }
+            }
             
-            if (empty($data)) {
+            if ($data === []) {
                 $this->printing->debug(__('字段 %{1}.%{2} 没有数据需要备份', [$tableName, $fieldName]));
                 return true;
             }

@@ -43,7 +43,7 @@ final class OrderListKeywordNormalizerTest extends TestCase
         self::assertStringContainsString('OrderListKeywordNormalizer::tokens', $service);
         self::assertStringContainsString('CHECKOUT_GROUP_UUID', $service);
 
-        $index = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Order/index.phtml');
+        $index = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Order/index.phtml');
         self::assertStringContainsString('order-list-keyword', $index);
         self::assertStringContainsString('order-list-group-display', $index);
         self::assertStringContainsString('G-xxx', $index);

@@ -56,20 +56,18 @@ class DictionaryCollectService
 
             $this->report($onProgress, (string) __('扫描源码 __()/lang 词条…'), 35);
             $this->i18n->convertToLanguageFile(false);
+            $compileSummary = I18n::pullCompileAfterSummary();
 
             $defaultLanguageCode = Env::default_LANGUAGE_CODE;
             if ($localeCode === '') {
                 $localeCode = $defaultLanguageCode;
             }
 
-            $words = $this->normalizeCollectedWords($this->i18n->getLocalWords($defaultLanguageCode));
-            $validatedWords = [];
-            foreach ($words as $word => $translate) {
-                $validatedWords[WordDictionary::assertWord($word)] = $translate;
-            }
-            $words = $validatedWords;
+            $collectedCount = (int)($compileSummary['count'] ?? 0);
+            $defaultLocaleCount = (int)($compileSummary['default_locale_count'] ?? 0);
+            $touched = (int)($compileSummary['touched'] ?? 0);
 
-            if ($words === []) {
+            if ($collectedCount === 0 && $touched === 0) {
                 return [
                     'success' => true,
                     'count' => 0,
@@ -79,18 +77,10 @@ class DictionaryCollectService
                 ];
             }
 
-            $this->report(
-                $onProgress,
-                (string) __('写入词典表，共 %{1} 条待处理…', [count($words)]),
-                55,
-            );
-
-            $persisted = $this->persistCollectedWords($words, '', $onProgress);
-            $collectedCount = (int) $persisted['count'];
-            $defaultLocaleCount = (int) $persisted['default_locale_count'];
+            $this->report($onProgress, (string) __('词典收集与分区已同步…'), 85);
 
             $queued = [];
-            if ($enqueueAiTranslation && $collectedCount > 0) {
+            if ($enqueueAiTranslation && ($collectedCount > 0 || $touched > 0)) {
                 $this->report($onProgress, (string) __('提交 AI 翻译队列…'), 95);
                 $queued = $this->aiTranslationQueueService->enqueueEnabledLocales('dictionary_collect');
             }
@@ -170,26 +160,46 @@ class DictionaryCollectService
 
     /**
      * 把源语言词写入 i18n_dictionary + 默认 locale 词典（只插缺失，不覆盖已有译文）。
+     * $collectBatch > 0 时分块打上当前批次（跳过 @meta::；减压：避免整集对账）。
      *
      * @param array<string, string> $words
-     * @return array{count: int, default_locale_count: int}
+     * @param array<string, string|null> $wordAreas word => frontend|backend|shared；缺省=本批无 exclusive 证据（不抬升已有区）
+     * @return array{count: int, default_locale_count: int, touched: int, collect_batch: int}
      */
-    public function persistCollectedWords(array $words, string $moduleName = '', ?callable $onProgress = null): array
-    {
+    public function persistCollectedWords(
+        array $words,
+        string $moduleName = '',
+        ?callable $onProgress = null,
+        ?int $collectBatch = null,
+        array $wordAreas = [],
+    ): array {
         $words = $this->normalizeCollectedWords($words);
         $validatedWords = [];
+        /** @var array<string, string|null> $validatedAreas */
+        $validatedAreas = [];
         foreach ($words as $word => $translate) {
             try {
-                $validatedWords[WordDictionary::assertWord((string)$word)] = $translate;
+                $safe = WordDictionary::assertWord((string)$word);
+                $validatedWords[$safe] = $translate;
+                $hasKey = \array_key_exists((string)$word, $wordAreas) || \array_key_exists($safe, $wordAreas);
+                if (!$hasKey) {
+                    $validatedAreas[$safe] = null;
+                } else {
+                    $raw = $wordAreas[(string)$word] ?? $wordAreas[$safe];
+                    $validatedAreas[$safe] = $raw === null || $raw === DictionaryAreaPolicy::EVIDENCE_NONE
+                        ? null
+                        : DictionaryAreaPolicy::normalize((string)$raw);
+                }
             } catch (\Throwable) {
                 continue;
             }
         }
         $words = $validatedWords;
         if ($words === []) {
-            return ['count' => 0, 'default_locale_count' => 0];
+            return ['count' => 0, 'default_locale_count' => 0, 'touched' => 0, 'collect_batch' => 0];
         }
 
+        $batch = max(0, (int)($collectBatch ?? 0));
         $defaultLanguageCode = Env::default_LANGUAGE_CODE;
         $moduleName = trim($moduleName);
         $wordCountBefore = (int) $this->dictionary->reset()->count();
@@ -207,27 +217,87 @@ class DictionaryCollectService
             foreach ((array) $records as $record) {
                 $word = (string) ($record[$this->dictionary::schema_fields_WORD] ?? '');
                 if ($word !== '') {
-                    $existingRecords[$word] = true;
+                    $existingRecords[$word] = $record;
                 }
             }
         }
 
         $insertData = [];
+        $existingToMark = [];
+        $areaUpgrades = [];
         foreach ($words as $word => $translate) {
+            if (str_starts_with($word, DictionaryStaleWordPruneService::META_PREFIX)) {
+                continue;
+            }
+            $targetArea = $validatedAreas[$word] ?? null;
             if (!isset($existingRecords[$word])) {
-                $insertData[] = [
+                $insertArea = $targetArea ?? DictionaryAreaPolicy::AREA_SHARED;
+                $row = [
                     $this->dictionary::schema_fields_WORD => $word,
-                    $this->dictionary::schema_fields_IS_BACKEND => 0,
+                    $this->dictionary::schema_fields_AREA => $insertArea,
+                    $this->dictionary::schema_fields_IS_BACKEND => $insertArea === DictionaryAreaPolicy::AREA_BACKEND ? 1 : 0,
                     $this->dictionary::schema_fields_MODULE => $moduleName,
                 ];
+                if ($batch > 0) {
+                    $row[$this->dictionary::schema_fields_COLLECT_BATCH] = $batch;
+                }
+                $insertData[] = $row;
+            } else {
+                $currentArea = (string)($existingRecords[$word][$this->dictionary::schema_fields_AREA] ?? '');
+                if ($currentArea === '') {
+                    $currentArea = DictionaryAreaPolicy::fromLegacyIsBackend(
+                        $existingRecords[$word][$this->dictionary::schema_fields_IS_BACKEND] ?? 0
+                    );
+                }
+                // 本批无 exclusive 证据：不改 area（避免 Service/CSV 把 FE/BE 抬成 shared）
+                if ($targetArea !== null) {
+                    $nextArea = DictionaryAreaPolicy::applyClassified($currentArea, $targetArea);
+                    if ($nextArea !== DictionaryAreaPolicy::normalize($currentArea)) {
+                        $areaUpgrades[$word] = $nextArea;
+                    }
+                }
+                if ($batch > 0) {
+                    $existingToMark[] = $word;
+                }
             }
         }
+        $touched = count($insertData) + count($existingToMark);
 
         if ($insertData !== []) {
             $this->report($onProgress, (string) __('批量插入新词条…'), 70);
             foreach (array_chunk($insertData, 999) as $insertDataItem) {
                 $this->dictionary->reset()
                     ->insert($insertDataItem, $this->dictionary::schema_fields_WORD)
+                    ->fetch();
+            }
+        }
+
+        // 单调升级 area（只升不降）；按目标区分块 UPDATE
+        if ($areaUpgrades !== []) {
+            $byArea = [];
+            foreach ($areaUpgrades as $word => $area) {
+                $byArea[$area][] = $word;
+            }
+            foreach ($byArea as $area => $areaWords) {
+                foreach (array_chunk($areaWords, 200) as $wordChunk) {
+                    $this->dictionary->reset()
+                        ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
+                        ->update([
+                            $this->dictionary::schema_fields_AREA => $area,
+                            $this->dictionary::schema_fields_IS_BACKEND => $area === DictionaryAreaPolicy::AREA_BACKEND ? 1 : 0,
+                        ])
+                        ->fetch();
+                }
+            }
+        }
+
+        // 分块 UPDATE 已存在行的批次标记（流水线减压：不整表、不对新插入行重复写）
+        if ($existingToMark !== []) {
+            $this->report($onProgress, (string) __('标记当前收集批次…'), 78);
+            foreach (array_chunk($existingToMark, 200) as $wordChunk) {
+                $this->dictionary->reset()
+                    ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
+                    ->update([$this->dictionary::schema_fields_COLLECT_BATCH => $batch])
                     ->fetch();
             }
         }
@@ -275,6 +345,8 @@ class DictionaryCollectService
                     ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
                     ->count() - $defaultLocaleCountBefore,
             ),
+            'touched' => $touched,
+            'collect_batch' => $batch,
         ];
     }
 

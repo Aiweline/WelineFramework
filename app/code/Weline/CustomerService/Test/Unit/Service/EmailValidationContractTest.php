@@ -65,7 +65,7 @@ final class EmailValidationContractTest extends TestCase
 
     public function testVerifyPageBroadcastsBoundEventForOpenerChat(): void
     {
-        $verify = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/Bind/verify.phtml');
+        $verify = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/Bind/verify.phtml');
         $bind = (string) file_get_contents(dirname(__DIR__, 3) . '/Controller/Frontend/Bind.php');
 
         $this->assertStringContainsString('weline-cs-email-bound', $verify);

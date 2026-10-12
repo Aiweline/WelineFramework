@@ -302,12 +302,12 @@ class TemplateFetchFile implements ObserverInterface
      */
     private function resolveAreaFromPath(string $module_file_path): ?string
     {
-        $pathNorm = str_replace('\\', '/', $module_file_path);
-        if (str_contains($pathNorm, 'theme/frontend')) {
-            return 'frontend';
-        }
-        if (str_contains($pathNorm, 'theme/backend')) {
+        $pathNorm = strtolower(str_replace('\\', '/', $module_file_path));
+        if (str_contains($pathNorm, 'theme/backend') || str_contains($pathNorm, 'templates/backend/')) {
             return 'backend';
+        }
+        if (str_contains($pathNorm, 'theme/frontend') || str_contains($pathNorm, 'templates/frontend/')) {
+            return 'frontend';
         }
         return null;
     }

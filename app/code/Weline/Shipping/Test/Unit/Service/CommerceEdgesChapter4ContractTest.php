@@ -130,7 +130,7 @@ final class CommerceEdgesChapter4ContractTest extends TestCase
     public function testAdminLaneIncotermEditable(): void
     {
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/ShippingService/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/ShippingService/index.phtml',
         );
         self::assertStringContainsString('name="incoterm"', $tpl);
         self::assertStringContainsString('saveIncoterm', $tpl);

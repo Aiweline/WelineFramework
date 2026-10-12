@@ -13,7 +13,7 @@ final class TrackingVendorAdminUiContractTest extends TestCase
 {
     private function template(): string
     {
-        $path = \dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/index.phtml';
+        $path = \dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/index.phtml';
         self::assertFileExists($path);
 
         return (string)\file_get_contents($path);
@@ -63,7 +63,7 @@ final class TrackingVendorAdminUiContractTest extends TestCase
     {
         $src = $this->template();
         self::assertStringContainsString('data-testid="tv-topbar"', $src);
-        self::assertStringContainsString("fetch('Weline_Visitor::templates/Backend/TrackingVendor/partials/scope-toolbar.phtml')", $src);
+        self::assertStringContainsString("fetch('Weline_Visitor::templates/backend/TrackingVendor/partials/scope-toolbar.phtml')", $src);
         self::assertStringContainsString('data-tab="scope"', $src);
         self::assertStringContainsString('路径过滤', $src);
         self::assertStringContainsString('配置范围', $src);
@@ -71,7 +71,7 @@ final class TrackingVendorAdminUiContractTest extends TestCase
         self::assertStringContainsString('路径过滤不是网站/店铺/渠道范围', $src);
         self::assertStringContainsString('tv-config-scope-summary', $src);
 
-        $toolbar = \dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/partials/scope-toolbar.phtml';
+        $toolbar = \dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/partials/scope-toolbar.phtml';
         self::assertFileExists($toolbar);
         $tb = (string)\file_get_contents($toolbar);
         self::assertStringContainsString('<w:scope', $tb);

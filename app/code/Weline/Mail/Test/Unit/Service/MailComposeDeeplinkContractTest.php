@@ -35,7 +35,7 @@ final class MailComposeDeeplinkContractTest extends TestCase
         self::assertStringContainsString('MailComposerService', $controller);
         self::assertStringContainsString('resolveSendAsAccountId', $controller);
 
-        $tpl = (string)file_get_contents(BP . 'app/code/Weline/Mail/view/templates/Backend/Index/enterprise.phtml');
+        $tpl = (string)file_get_contents(BP . 'app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml');
         self::assertStringContainsString('compose_open', $tpl);
         self::assertStringContainsString('compose_source', $tpl);
         self::assertStringContainsString('name="source"', $tpl);

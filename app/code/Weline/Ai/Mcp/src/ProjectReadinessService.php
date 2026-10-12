@@ -319,6 +319,10 @@ final class ProjectReadinessService
             'documents' => $snapshot['documents'],
             'refreshed' => $refreshed,
             'changed_paths' => $indexResult['changed_paths'] ?? [],
+            'deferred_refresh' => (bool) ($indexResult['deferred_refresh'] ?? false),
+            'index_refresh' => is_array($indexResult['index_refresh'] ?? null)
+                ? $indexResult['index_refresh']
+                : ['mode' => 'unknown'],
             'validated_at' => $record['validated_at'],
         ];
     }
@@ -370,6 +374,12 @@ final class ProjectReadinessService
             'documents_hash' => $snapshot['documents_hash'],
             'document_count' => count($snapshot['documents']),
             'freshness' => $indexResult['freshness'] ?? 'unknown',
+            'deferred_refresh' => (bool) ($indexResult['deferred_refresh'] ?? false),
+            'index' => [
+                'refresh' => is_array($indexResult['index_refresh'] ?? null)
+                    ? $indexResult['index_refresh']
+                    : ['mode' => 'unknown'],
+            ],
             'gate' => [
                 'development_allowed' => true,
                 'required_on_every_tool' => ['readiness_id', 'client_session_id'],
@@ -473,6 +483,7 @@ final class ProjectReadinessService
     private function refreshIndex(ProjectIndex $index, array $paths = [], bool $force = true): array
     {
         try {
+            $this->healAbandonedIndexing($index);
             $interval = $this->config->duration('index.refresh_interval');
             $state = $index->state();
             $lastCompletedAt = strtotime((string) ($state['last_completed_at'] ?? '')) ?: 0;
@@ -494,8 +505,36 @@ final class ProjectReadinessService
             }
             $paths = $targetPaths;
             $indexer = new ProjectIndexer($index, $this->config, $this->runner);
+            if ($fullRefresh && $index->revision() > 0) {
+                // Interactive STDIO must not block on whole-repo incremental refresh.
+                // Do NOT setState() here: committing metadata on multi-GB indexes can fsync for tens of seconds.
+                $schedule = IndexRefreshScheduler::scheduleFromStdio($this->config, $index->root());
+                $changedPaths = [];
+                $errors = [];
+                if ($paths !== []) {
+                    // Keep path-bounded sync for readiness document edits; whole-repo stays deferred.
+                    $targetResult = $indexer->indexPaths($paths);
+                    $changedPaths = is_array($targetResult['changed_paths'] ?? null)
+                        ? Text::uniqueStrings($targetResult['changed_paths'])
+                        : [];
+                    $errors = is_array($targetResult['errors'] ?? null)
+                        ? Text::uniqueStrings($targetResult['errors'], false)
+                        : [];
+                }
+
+                return [
+                    'freshness' => $errors === [] ? 'stale' : 'partial',
+                    'changed_paths' => $changedPaths,
+                    'errors' => $errors,
+                    'deferred_refresh' => true,
+                    'index_refresh' => [
+                        'mode' => $paths === [] ? 'deferred' : 'deferred_plus_sync_paths',
+                        'schedule' => $schedule,
+                    ],
+                ];
+            }
             if ($fullRefresh) {
-                $result = $indexer->index(['mode' => $index->revision() > 0 ? 'incremental' : 'full']);
+                $result = $indexer->index(['mode' => 'full']);
                 if ($paths !== []) {
                     // Periodic discovery uses stat shortcuts; explicit targets still need hashes.
                     $targetResult = $indexer->indexPaths($paths);
@@ -508,17 +547,27 @@ final class ProjectReadinessService
                         ?? ($result['status']['freshness'] ?? null)
                         ?? 'unknown';
                 }
+                $result['index_refresh'] = ['mode' => 'sync'];
             } elseif ($paths !== []) {
                 // Explicit paths are content-hashed even for same-size/same-mtime edits.
                 $result = $indexer->indexPaths($paths);
+                $result['index_refresh'] = ['mode' => 'sync_paths'];
             } else {
-                return ['freshness' => $index->state()['freshness'] ?? 'current', 'changed_paths' => [], 'errors' => []];
+                return [
+                    'freshness' => $index->state()['freshness'] ?? 'current',
+                    'changed_paths' => [],
+                    'errors' => [],
+                    'deferred_refresh' => false,
+                    'index_refresh' => ['mode' => 'reuse'],
+                ];
             }
         } catch (Throwable $exception) {
             return [
                 'freshness' => 'stale',
                 'changed_paths' => [],
                 'errors' => [Text::truncate($exception->getMessage(), 1_000)],
+                'deferred_refresh' => false,
+                'index_refresh' => ['mode' => 'error'],
             ];
         }
         $errors = is_array($result['errors'] ?? null) ? Text::uniqueStrings($result['errors'], false) : [];
@@ -529,7 +578,18 @@ final class ProjectReadinessService
                 ? Text::uniqueStrings($result['changed_paths'])
                 : [],
             'errors' => $errors,
+            'deferred_refresh' => false,
+            'index_refresh' => is_array($result['index_refresh'] ?? null)
+                ? $result['index_refresh']
+                : ['mode' => 'sync'],
         ];
+    }
+
+    private function healAbandonedIndexing(ProjectIndex $index): void
+    {
+        // Intentionally no-op on the interactive path. Writing project.sqlite metadata on multi-GB
+        // indexes can block STDIO for tens of seconds in commit/fsync. ProjectIndexer heals
+        // abandoned phase=indexing after it acquires the exclusive index lock.
     }
 
     /** @return array<string,mixed> */

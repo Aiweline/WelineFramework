@@ -125,6 +125,6 @@ final class Session extends BackendController
         }
         $this->assign('summary', $summary);
         $this->assign('summary_tiles', $summaryTiles);
-        return $this->fetch('Weline_Checkout::templates/Backend/Session/diagnostics.phtml');
+        return $this->fetch('Weline_Checkout::templates/backend/Session/diagnostics.phtml');
     }
 }

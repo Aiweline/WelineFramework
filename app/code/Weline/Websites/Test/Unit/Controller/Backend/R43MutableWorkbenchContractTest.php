@@ -27,7 +27,7 @@ final class R43MutableWorkbenchContractTest extends TestCase
             $moduleRoot . '/Test/e2e/backend/plan-p2c-copy.spec.js'
         );
         $this->backupTemplate = (string)file_get_contents(
-            $moduleRoot . '/view/templates/Backend/Backup/index.phtml'
+            $moduleRoot . '/view/templates/backend/Backup/index.phtml'
         );
         $this->backupService = (string)file_get_contents(
             $moduleRoot . '/Service/WebsiteBackupService.php'

@@ -15,11 +15,18 @@ use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\System\File\Data\File;
 use Weline\I18n\Config\Reader;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
+use Weline\I18n\Service\DictionaryAreaPolicy;
 use Weline\I18n\Service\TranslationCollector;
 
 class I18n
 {
     private const MODULE_COLLECTION_FIBER_LIMIT = 6;
+
+    /** @var array<string, array<string, bool>> 编译期区证据（static：compile / compile_after 须同一份） */
+    private static array $lastCompileWordAreaEvidence = [];
+
+    /** @var array{count: int, default_locale_count: int, touched: int}|null */
+    private static ?array $lastCompileAfterSummary = null;
     private const LOCALE_CACHE_TTL = 300;
     private const FALLBACK_LOCALE_NAMES = [
         'en' => 'English',
@@ -728,6 +735,11 @@ class I18n
         $moduleWords = [];
         foreach ($collector->collectLazy($directory, $module) as $original => $info) {
             $moduleWords[$original] = $original;
+            $this->recordExclusiveAreaEvidenceForWord(
+                (string)$original,
+                (string)($info['area'] ?? ''),
+                (string)($info['file'] ?? ''),
+            );
         }
 
         $this->refreshModuleLanguageCsvFiles($directory, $moduleWords);
@@ -1142,16 +1154,120 @@ class I18n
      * @param array<string, mixed> $wordsByModule
      * @param array<string, string> $sourceTranslations
      */
+    /**
+     * compile 扫描累积的区证据收口为 word=>area；供 dictionary_compile_after persist。
+     *
+     * @return array<string, string>
+     */
+    public function pullClassifiedCompileWordAreas(): array
+    {
+        $out = [];
+        foreach (self::$lastCompileWordAreaEvidence as $word => $set) {
+            $classified = DictionaryAreaPolicy::classifyFromEvidence(array_keys(array_filter($set)));
+            if ($classified === null) {
+                continue;
+            }
+            $out[(string)$word] = $classified;
+        }
+        self::$lastCompileWordAreaEvidence = [];
+
+        return $out;
+    }
+
+    /**
+     * @param array{count: int, default_locale_count: int, touched: int} $summary
+     */
+    public static function recordCompileAfterSummary(array $summary): void
+    {
+        self::$lastCompileAfterSummary = [
+            'count' => max(0, (int)($summary['count'] ?? 0)),
+            'default_locale_count' => max(0, (int)($summary['default_locale_count'] ?? 0)),
+            'touched' => max(0, (int)($summary['touched'] ?? 0)),
+        ];
+    }
+
+    /**
+     * @return array{count: int, default_locale_count: int, touched: int}
+     */
+    public static function pullCompileAfterSummary(): array
+    {
+        $summary = self::$lastCompileAfterSummary ?? [
+            'count' => 0,
+            'default_locale_count' => 0,
+            'touched' => 0,
+        ];
+        self::$lastCompileAfterSummary = null;
+
+        return $summary;
+    }
+
+    private function recordExclusiveAreaEvidenceForWord(string $word, string $areaHint, string $filePath): void
+    {
+        $area = $areaHint !== ''
+            ? $areaHint
+            : DictionaryAreaPolicy::evidenceFromPath($filePath);
+        if ($area === DictionaryAreaPolicy::EVIDENCE_NONE) {
+            return;
+        }
+        $area = DictionaryAreaPolicy::normalize($area);
+        if (!DictionaryAreaPolicy::isExclusiveArea($area)) {
+            return;
+        }
+        self::$lastCompileWordAreaEvidence[$word][$area] = true;
+    }
+
+    private function collectDesignThemeAreaEvidence(?string $moduleName, TranslationCollector $collector): void
+    {
+        if ($moduleName !== null && $moduleName !== '') {
+            return;
+        }
+
+        $designRoot = \BP . 'app/design';
+        if (!\is_dir($designRoot)) {
+            return;
+        }
+
+        foreach (new \DirectoryIterator($designRoot) as $vendorEntry) {
+            if ($vendorEntry->isDot() || !$vendorEntry->isDir()) {
+                continue;
+            }
+            foreach (new \DirectoryIterator($vendorEntry->getPathname()) as $themeEntry) {
+                if ($themeEntry->isDot() || !$themeEntry->isDir()) {
+                    continue;
+                }
+                foreach ([DictionaryAreaPolicy::AREA_FRONTEND, DictionaryAreaPolicy::AREA_BACKEND] as $areaDir) {
+                    $areaPath = $themeEntry->getPathname() . DS . $areaDir;
+                    if (!\is_dir($areaPath)) {
+                        continue;
+                    }
+                    $label = 'design_' . $vendorEntry->getFilename() . '_' . $themeEntry->getFilename() . '_' . $areaDir;
+                    foreach ($collector->collectLazy($areaPath, $label) as $original => $info) {
+                        $relative = str_replace('\\', '/', (string)($info['file'] ?? ''));
+                        $absolute = rtrim(str_replace('\\', '/', $areaPath), '/')
+                            . ($relative !== '' ? '/' . ltrim($relative, '/') : '');
+                        $this->recordExclusiveAreaEvidenceForWord(
+                            (string)$original,
+                            (string)($info['area'] ?? ''),
+                            $absolute,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     public function enrichDictionaryCompile(
         array &$localsWords,
         array &$wordsByModule,
         array &$sourceTranslations,
         ?string $moduleName = null,
     ): void {
+        self::$lastCompileWordAreaEvidence = [];
         $collector = ObjectManager::getInstance(TranslationCollector::class);
         $directories = $this->getActiveModuleDirectories($moduleName);
         RegistryProgress::count('I18n source scan', count($directories), 'modules');
         $sourceTranslations = $this->collectModuleTranslations($directories, $collector);
+        $this->collectDesignThemeAreaEvidence($moduleName, $collector);
         RegistryProgress::count('I18n source scan', count($sourceTranslations), 'source words');
 
         $defaultLocale = Env::default_LANGUAGE_CODE;

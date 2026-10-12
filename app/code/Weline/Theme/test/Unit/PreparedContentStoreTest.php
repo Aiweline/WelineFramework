@@ -127,7 +127,7 @@ final class PreparedContentStoreTest extends TestCase
             null,
             ['content' => ''],
             null,
-            'Weline_Queue::templates/Backend/Queue/content.phtml',
+            'Weline_Queue::templates/backend/Queue/content.phtml',
             static function (string $contentTemplate) use (&$called): string {
                 $called++;
                 self::assertNotSame('', $contentTemplate);

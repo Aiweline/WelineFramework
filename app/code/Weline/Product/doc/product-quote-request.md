@@ -31,7 +31,7 @@ PDP「提交询价」弹层含 `<w:theme:address postal="true" postal-lookup="tr
 
 ## 后台
 
-- 模板：`view/templates/Backend/QuoteRequest/index.phtml`（`fetch('index')`）
+- 模板：`view/templates/backend/QuoteRequest/index.phtml`（`fetch('index')`）
 - 操作：按可用流转按钮 POST `*/backend/quote-request/transition`；表单须 `w:form` + `csrf="auto"`
 - **企业邮箱回复 slot**（`Weline_Mail` 可选启用时）：
   - 普通客服：本人资料 email 命中本机 active 邮箱 →「企业邮箱回复」打开 `<w:mail-composer>` 浮层（`WelineMailComposer.open`）

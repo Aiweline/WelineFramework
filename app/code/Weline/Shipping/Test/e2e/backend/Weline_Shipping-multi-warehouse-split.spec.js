@@ -33,14 +33,14 @@ moduleDescribe(test, MODULE, '多仓拆单运费', () => {
       expect(split).toContain('buildRequestHash');
 
       const view = fs.readFileSync(
-        path.join(ROOT, 'view/templates/Backend/ShippingService/index.phtml'),
+        path.join(ROOT, 'view/templates/backend/ShippingService/index.phtml'),
         'utf8',
       );
       expect(view).toContain('copy-default-lanes-btn');
       expect(view).toContain('仓 ↔ 发货地址绑定');
 
       const rate = fs.readFileSync(
-        path.join(ROOT, 'view/templates/Backend/RateTemplate/index.phtml'),
+        path.join(ROOT, 'view/templates/backend/RateTemplate/index.phtml'),
         'utf8',
       );
       expect(rate).toContain('相加');

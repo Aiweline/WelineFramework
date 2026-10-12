@@ -23,7 +23,7 @@
       "instance_data": false
     },
     {
-      "template": "app/code/Weline/B2B/view/templates/Backend/widgets/backend-order-chat.phtml",
+      "template": "app/code/Weline/B2B/view/templates/backend/widgets/backend-order-chat.phtml",
       "kind": "widget-root",
       "declarations": {
         "source": [
@@ -200,7 +200,7 @@
       "instance_data": true
     },
     {
-      "template": "app/code/Weline/Currency/view/templates/Frontend/widgets/footer-currency-rates-link.phtml",
+      "template": "app/code/Weline/Currency/view/templates/frontend/widgets/footer-currency-rates-link.phtml",
       "kind": "widget-root",
       "declarations": {},
       "extracted_resources": [],
@@ -328,7 +328,7 @@
       "instance_data": false
     },
     {
-      "template": "app/code/Weline/CustomerService/view/templates/Frontend/widgets/footer-contact-service-link.phtml",
+      "template": "app/code/Weline/CustomerService/view/templates/frontend/widgets/footer-contact-service-link.phtml",
       "kind": "widget-root",
       "declarations": {
         "source": [
@@ -351,7 +351,7 @@
       "instance_data": true
     },
     {
-      "template": "app/code/Weline/CustomerService/view/templates/Frontend/widgets/header-contact-service-link.phtml",
+      "template": "app/code/Weline/CustomerService/view/templates/frontend/widgets/header-contact-service-link.phtml",
       "kind": "widget-root",
       "declarations": {
         "source": [
@@ -719,14 +719,14 @@
       "instance_data": false
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Backend/partials/outcome-chip.phtml",
+      "template": "app/code/Weline/Payment/view/templates/backend/partials/outcome-chip.phtml",
       "kind": "indirect-partial",
       "declarations": {},
       "extracted_resources": [],
       "instance_data": false
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Backend/widgets/backend-order-payment-records.phtml",
+      "template": "app/code/Weline/Payment/view/templates/backend/widgets/backend-order-payment-records.phtml",
       "kind": "widget-root",
       "declarations": {
         "source": [
@@ -743,7 +743,7 @@
       "instance_data": true
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Frontend/widgets/checkout-express-payment.phtml",
+      "template": "app/code/Weline/Payment/view/templates/frontend/widgets/checkout-express-payment.phtml",
       "kind": "widget-root",
       "declarations": {
         "source": [
@@ -772,14 +772,14 @@
       "instance_data": true
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Frontend/widgets/footer-payment-methods-link.phtml",
+      "template": "app/code/Weline/Payment/view/templates/frontend/widgets/footer-payment-methods-link.phtml",
       "kind": "widget-root",
       "declarations": {},
       "extracted_resources": [],
       "instance_data": false
     },
     {
-      "template": "app/code/Weline/Payment/view/templates/Frontend/widgets/product-express-payment.phtml",
+      "template": "app/code/Weline/Payment/view/templates/frontend/widgets/product-express-payment.phtml",
       "kind": "widget-root",
       "declarations": {
         "source": [
@@ -1027,7 +1027,7 @@
       "instance_data": true
     },
     {
-      "template": "app/code/Weline/Shipping/view/templates/Backend/widgets/backend-order-list-shipping.phtml",
+      "template": "app/code/Weline/Shipping/view/templates/backend/widgets/backend-order-list-shipping.phtml",
       "kind": "widget-root",
       "declarations": {
         "source": [
@@ -1044,7 +1044,7 @@
       "instance_data": true
     },
     {
-      "template": "app/code/Weline/Shipping/view/templates/Backend/widgets/backend-order-shipments.phtml",
+      "template": "app/code/Weline/Shipping/view/templates/backend/widgets/backend-order-shipments.phtml",
       "kind": "widget-root",
       "declarations": {
         "source": [
@@ -3637,10 +3637,10 @@
       "app/code/Weline/Checkout/view/theme/frontend/widgets/header/checkout-delivery-context/default.phtml",
       "app/code/Weline/Customer/view/templates/frontend/account/register.phtml",
       "app/code/Weline/Customer/view/templates/frontend/widgets/checkout-success-guest-convert.phtml",
-      "app/code/Weline/CustomerService/view/templates/Frontend/widgets/footer-contact-service-link.phtml",
-      "app/code/Weline/CustomerService/view/templates/Frontend/widgets/header-contact-service-link.phtml",
+      "app/code/Weline/CustomerService/view/templates/frontend/widgets/footer-contact-service-link.phtml",
+      "app/code/Weline/CustomerService/view/templates/frontend/widgets/header-contact-service-link.phtml",
       "app/code/Weline/Mail/view/templates/frontend/widgets/account-mail-register.phtml",
-      "app/code/Weline/Payment/view/templates/Frontend/widgets/checkout-express-payment.phtml",
+      "app/code/Weline/Payment/view/templates/frontend/widgets/checkout-express-payment.phtml",
       "app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml",
       "app/code/Weline/SiteSetupAssistant/view/templates/backend/widgets/site-setup-assistant-float.phtml",
       "app/code/Weline/StoreMusic/view/templates/frontend/widgets/store-music.phtml",

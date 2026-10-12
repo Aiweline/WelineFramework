@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Dictionary as WordDictionary;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
+use Weline\Meta\Helper\MetaTranslation;
+use Weline\Meta\Model\MetaLocal;
+use Weline\Meta\Service\MetaLocalWordParser;
 use Weline\Websites\Model\Website;
 
 /**
  * 远程协助翻译：取未译 / 录入（冲突跳过）+ publish。
- * type=phrase|meta；local_model 由 LocalModelTranslationService 处理。
+ * type=phrase → I18n 词典；type=meta → MetaLocal；local_model 另服务。
  */
 final class RemoteDictionaryAssistService
 {
@@ -18,6 +22,7 @@ final class RemoteDictionaryAssistService
     public const LIMIT_MAX = 200;
     public const ITEMS_MAX = 100;
     public const FIELD_MAX_LEN = 8000;
+    public const META_BASELINE_LOCALE = 'zh_Hans_CN';
 
     public const TYPE_PHRASE = 'phrase';
     public const TYPE_META = 'meta';
@@ -66,7 +71,9 @@ final class RemoteDictionaryAssistService
         $limit = max(1, min(self::LIMIT_MAX, $limit > 0 ? $limit : self::LIMIT_DEFAULT));
         $offset = $this->decodeCursor($cursor);
 
-        $items = $this->queryPendingUnion($allowed, $limit + 1, $offset, $type);
+        $items = $type === self::TYPE_META
+            ? $this->queryMetaPendingUnion($allowed, $limit + 1, $offset)
+            : $this->queryPhrasePendingUnion($allowed, $limit + 1, $offset);
         $hasMore = count($items) > $limit;
         if ($hasMore) {
             $items = array_slice($items, 0, $limit);
@@ -121,7 +128,7 @@ final class RemoteDictionaryAssistService
                 $invalidItems[] = ['index' => (int)$index, 'reason' => 'empty_source'];
                 continue;
             }
-            $isMetaKey = str_starts_with($source, '@meta::');
+            $isMetaKey = str_starts_with($source, MetaLocalWordParser::META_PREFIX);
             if ($type === self::TYPE_PHRASE && $isMetaKey) {
                 $invalid++;
                 $invalidItems[] = ['index' => (int)$index, 'reason' => 'wrong_shape_for_type'];
@@ -155,6 +162,21 @@ final class RemoteDictionaryAssistService
                 continue;
             }
             $seen[$batchKey] = true;
+
+            if ($type === self::TYPE_META) {
+                $existing = MetaTranslation::findTranslatedValueWithScope($source, 'default', $locale);
+                if ($existing !== null && trim($existing) !== '' && $existing !== $source) {
+                    $skipped++;
+                    continue;
+                }
+                if (!MetaTranslation::setTranslatedValueWithScope($source, $translation, 'default', $locale)) {
+                    $invalid++;
+                    $invalidItems[] = ['index' => (int)$index, 'reason' => 'empty_translation'];
+                    continue;
+                }
+                $written++;
+                continue;
+            }
 
             $existing = $this->findLocaleTranslate($source, $locale);
             if ($existing !== null && trim($existing) !== '' && $existing !== $source) {
@@ -248,7 +270,7 @@ final class RemoteDictionaryAssistService
      * @param list<string> $locales
      * @return list<array{source:string,module:string,locale:string}>
      */
-    private function queryPendingUnion(array $locales, int $limit, int $offset, string $type): array
+    private function queryPhrasePendingUnion(array $locales, int $limit, int $offset): array
     {
         $limit = max(1, $limit);
         $offset = max(0, $offset);
@@ -258,7 +280,7 @@ final class RemoteDictionaryAssistService
                 . $this->sqlQuote($locale) . ' AS locale FROM '
                 . $this->dictionary->getTable()
                 . ' d WHERE '
-                . $this->pendingWhereSql($locale, $type);
+                . $this->phrasePendingWhereSql($locale);
         }
         if ($parts === []) {
             return [];
@@ -283,14 +305,73 @@ final class RemoteDictionaryAssistService
         return $out;
     }
 
-    private function pendingWhereSql(string $targetLocale, string $type): string
+    /**
+     * MetaLocal pending：基线 locale 有值、目标 locale 无非空译文。
+     * source 仍以 @meta::… 形状返回，便于远程客户端兼容。
+     *
+     * @param list<string> $locales
+     * @return list<array{source:string,module:string,locale:string}>
+     */
+    private function queryMetaPendingUnion(array $locales, int $limit, int $offset): array
+    {
+        $limit = max(1, $limit);
+        $offset = max(0, $offset);
+        $baseline = self::META_BASELINE_LOCALE;
+        /** @var MetaLocal $metaLocal */
+        $metaLocal = ObjectManager::getInstance(MetaLocal::class);
+        $table = $metaLocal->getTable();
+        $parts = [];
+        foreach ($locales as $locale) {
+            if ($locale === $baseline) {
+                continue;
+            }
+            $parts[] = 'SELECT b.' . MetaLocal::schema_fields_META_IDENTIFY . ' AS meta_identify, '
+                . 'b.' . MetaLocal::schema_fields_CONFIG_KEY . ' AS config_key, '
+                . 'b.' . MetaLocal::schema_fields_SCOPE . ' AS scope, '
+                . $this->sqlQuote($locale) . ' AS locale FROM ' . $table . ' b '
+                . 'WHERE b.' . MetaLocal::schema_fields_LOCALE_CODE . ' = ' . $this->sqlQuote($baseline)
+                . ' AND TRIM(COALESCE(b.' . MetaLocal::schema_fields_CONFIG_VALUE . ', \'\')) <> \'\''
+                . ' AND NOT EXISTS (SELECT 1 FROM ' . $table . ' t WHERE '
+                . 't.' . MetaLocal::schema_fields_META_IDENTIFY . ' = b.' . MetaLocal::schema_fields_META_IDENTIFY
+                . ' AND t.' . MetaLocal::schema_fields_CONFIG_KEY . ' = b.' . MetaLocal::schema_fields_CONFIG_KEY
+                . ' AND t.' . MetaLocal::schema_fields_SCOPE . ' = b.' . MetaLocal::schema_fields_SCOPE
+                . ' AND t.' . MetaLocal::schema_fields_VERSION_ID . ' = b.' . MetaLocal::schema_fields_VERSION_ID
+                . ' AND t.' . MetaLocal::schema_fields_LOCALE_CODE . ' = ' . $this->sqlQuote($locale)
+                . ' AND TRIM(COALESCE(t.' . MetaLocal::schema_fields_CONFIG_VALUE . ', \'\')) <> \'\''
+                . ' AND t.' . MetaLocal::schema_fields_CONFIG_VALUE . ' <> b.' . MetaLocal::schema_fields_CONFIG_VALUE
+                . ')';
+        }
+        if ($parts === []) {
+            return [];
+        }
+
+        $sql = '(' . implode(') UNION ALL (', $parts) . ') ORDER BY meta_identify, config_key, locale LIMIT '
+            . $limit . ' OFFSET ' . $offset;
+
+        $out = [];
+        foreach ($this->fetchSql($sql) as $row) {
+            $identify = (string)($row['meta_identify'] ?? '');
+            $configKey = (string)($row['config_key'] ?? '');
+            $scope = (string)($row['scope'] ?? MetaLocal::DEFAULT_SCOPE);
+            $locale = (string)($row['locale'] ?? '');
+            if ($identify === '' || $configKey === '' || $locale === '') {
+                continue;
+            }
+            $out[] = [
+                'source' => MetaLocalWordParser::toDictionaryWord($identify, $configKey, $scope),
+                'module' => 'Weline_Meta',
+                'locale' => $locale,
+            ];
+        }
+
+        return $out;
+    }
+
+    private function phrasePendingWhereSql(string $targetLocale): string
     {
         $locale = $this->sqlQuote($targetLocale);
-        $metaFilter = $type === self::TYPE_META
-            ? 'd.word LIKE ' . $this->sqlQuote('@meta::%')
-            : 'd.word NOT LIKE ' . $this->sqlQuote('@meta::%');
 
-        return $metaFilter
+        return 'd.word NOT LIKE ' . $this->sqlQuote(MetaLocalWordParser::META_PREFIX . '%')
             . ' AND NOT EXISTS (SELECT 1 FROM '
             . $this->localeDictionary->getTable()
             . ' l WHERE l.locale_code = ' . $locale

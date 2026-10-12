@@ -58,9 +58,9 @@ $headerSaveLabel = match ($editorKind) {
     <?php elseif ($editorKind === 'website'): ?>
         <?php echo $this->fetch('Weline_Websites::templates/Admin/Website/form.phtml'); ?>
     <?php elseif ($editorKind === 'store'): ?>
-        <?php echo $this->fetch('Weline_Websites::templates/Backend/ScopeManagement/edit-store.phtml'); ?>
+        <?php echo $this->fetch('Weline_Websites::templates/backend/ScopeManagement/edit-store.phtml'); ?>
     <?php elseif ($editorKind === 'channel'): ?>
-        <?php echo $this->fetch('Weline_Websites::templates/Backend/ScopeManagement/edit-channel.phtml'); ?>
+        <?php echo $this->fetch('Weline_Websites::templates/backend/ScopeManagement/edit-channel.phtml'); ?>
     <?php elseif ($editorKind === 'new_store'): ?>
         <?php echo $this->fetch('Weline_Websites::templates/Admin/Website/tree-create-store.phtml'); ?>
     <?php elseif ($editorKind === 'new_channel'): ?>

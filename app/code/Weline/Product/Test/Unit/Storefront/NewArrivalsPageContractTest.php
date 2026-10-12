@@ -27,14 +27,24 @@ final class NewArrivalsPageContractTest extends TestCase
     public function testLocalizedSurfaceCarriesInternationalSeoContract(): void
     {
         $resolver = new StorefrontCatalogSurfaceResolver();
-        $zh = $resolver->resolveSupported('/new-arrivals', 'zh_Hans_CN');
-        $en = $resolver->resolveSupported('/new-arrivals', 'en_US');
-        $fallback = $resolver->resolveSupported('/new-arrivals', 'ar_SA');
+        $zh = $resolver->resolveSupported('/new-arrivals', 'zh_Hans_CN', 'hanfu');
+        $en = $resolver->resolveSupported('/new-arrivals', 'en_US', 'hanfu');
+        $fallback = $resolver->resolveSupported('/new-arrivals', 'ar_SA', 'hanfu');
 
         self::assertSame('新品上架', $zh['title'] ?? null);
         self::assertSame('New Hanfu Arrivals', $en['seo_title'] ?? null);
         self::assertSame('New Arrivals', $fallback['title'] ?? null);
         self::assertSame('new-arrivals', $en['public_route'] ?? null);
+    }
+
+    public function testControllerUsesPresentationNotWebsiteCodeBranches(): void
+    {
+        $source = (string)file_get_contents(
+            (new ReflectionClass(NewArrivals::class))->getFileName()
+        );
+        self::assertStringNotContainsString("websiteCode === 'daocharms'", $source);
+        self::assertStringContainsString("presentation['card_limit']", $source);
+        self::assertStringContainsString('show_filters', $source);
     }
 
     public function testProductCardsUseUrlHelperForWebsiteMountNotPrefixSplice(): void
@@ -87,8 +97,9 @@ final class NewArrivalsPageContractTest extends TestCase
         self::assertTrue($controller->hasMethod('index'));
         self::assertTrue($catalog->hasMethod('newArrivalCards'));
         self::assertStringContainsString("\$this->layoutType = 'products'", (string)$controllerSource);
-        self::assertStringContainsString('newArrivalCards(24, 3650)', (string)$controllerSource);
-        self::assertStringContainsString('cards(24)', (string)$controllerSource);
+        self::assertStringContainsString('newArrivalCards($cardLimit, 3650)', (string)$controllerSource);
+        self::assertStringContainsString('cards($cardLimit)', (string)$controllerSource);
+        self::assertStringContainsString("presentation['card_limit']", (string)$controllerSource);
         self::assertIsArray($catalogLines);
         $cardsSource = implode('', array_slice(
             $catalogLines,

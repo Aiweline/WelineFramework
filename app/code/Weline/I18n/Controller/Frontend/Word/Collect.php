@@ -57,9 +57,13 @@ class Collect extends \Weline\Framework\App\Controller\FrontendController
                     continue;
                 }
                 // word 可以是字符串或任意值，只要 key 存在就注册
+                $evidence = $this->request->isBackend()
+                    ? \Weline\I18n\Service\DictionaryAreaPolicy::AREA_BACKEND
+                    : \Weline\I18n\Service\DictionaryAreaPolicy::AREA_FRONTEND;
                 $insertData[] = [
                     $this->dictionary::schema_fields_WORD => Dictionary::assertWord($key),
-                    $this->dictionary::schema_fields_IS_BACKEND => $this->request->isBackend() ? 1 : 0,
+                    $this->dictionary::schema_fields_AREA => $evidence,
+                    $this->dictionary::schema_fields_IS_BACKEND => $evidence === \Weline\I18n\Service\DictionaryAreaPolicy::AREA_BACKEND ? 1 : 0,
                     $this->dictionary::schema_fields_MODULE => $this->request->getModuleName(),
                 ];
             }
@@ -77,10 +81,22 @@ class Collect extends \Weline\Framework\App\Controller\FrontendController
             // 逐词检查后再保存，兼容历史数据库中 word 尚未建立唯一约束的表。
             foreach ($insertData as $item) {
                 $word = $item[$this->dictionary::schema_fields_WORD];
+                $evidence = (string)$item[$this->dictionary::schema_fields_AREA];
                 $this->dictionary->reset()->load($this->dictionary::schema_fields_WORD, $word);
                 if ($this->dictionary->getId()) {
+                    $current = (string)$this->dictionary->getData($this->dictionary::schema_fields_AREA);
+                    if ($current === '') {
+                        $current = \Weline\I18n\Service\DictionaryAreaPolicy::fromLegacyIsBackend(
+                            $this->dictionary->getData($this->dictionary::schema_fields_IS_BACKEND)
+                        );
+                    }
+                    $next = \Weline\I18n\Service\DictionaryAreaPolicy::upgrade($current, $evidence);
                     $this->dictionary
-                        ->setData($this->dictionary::schema_fields_IS_BACKEND, $item[$this->dictionary::schema_fields_IS_BACKEND])
+                        ->setData($this->dictionary::schema_fields_AREA, $next)
+                        ->setData(
+                            $this->dictionary::schema_fields_IS_BACKEND,
+                            $next === \Weline\I18n\Service\DictionaryAreaPolicy::AREA_BACKEND ? 1 : 0
+                        )
                         ->setData($this->dictionary::schema_fields_MODULE, $item[$this->dictionary::schema_fields_MODULE])
                         ->save()
                         ->fetch();

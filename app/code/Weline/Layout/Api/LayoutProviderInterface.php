@@ -57,12 +57,12 @@ interface LayoutProviderInterface
      * [
      *     'grid' => [
      *         'name' => '网格布局',
-     *         'template' => 'WeShop_Product::Frontend/Product/list-grid.phtml',
+     *         'template' => 'WeShop_Product::frontend/Product/list-grid.phtml',
      *         'preview_image' => 'WeShop_Product::images/layout/grid.png'
      *     ],
      *     'list' => [
      *         'name' => '列表布局',
-     *         'template' => 'WeShop_Product::Frontend/Product/list-list.phtml',
+     *         'template' => 'WeShop_Product::frontend/Product/list-list.phtml',
      *         'preview_image' => 'WeShop_Product::images/layout/list.png'
      *     ]
      * ]

@@ -47,7 +47,7 @@ final class PaymentBrowserReturnLandingContractTest extends TestCase
         self::assertStringContainsString('decideCancel', $cancelSrc);
         self::assertStringNotContainsString('->decide(', $cancelSrc);
 
-        $returnTpl = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/checkout/return.phtml');
+        $returnTpl = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/checkout/return.phtml');
         self::assertStringContainsString('payment_return_cancelled', $returnTpl);
         self::assertStringContainsString('已取消成功', $returnTpl);
         self::assertStringContainsString('已取消', $returnTpl);

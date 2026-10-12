@@ -24,7 +24,7 @@ class LoginTemplateGoogleHostTest extends TestCase
         $this->assertStringContainsString('value="<?= $safe($redirectUrl) ?>"', $content);
 
         $this->assertStringContainsString('Weline_Customer::frontend::account::login::providers', $content);
-        $this->assertStringNotContainsString('WeShop_GoogleAuth::templates/Frontend/Auth/login-provider-button.phtml', $content);
+        $this->assertStringNotContainsString('WeShop_GoogleAuth::templates/frontend/Auth/login-provider-button.phtml', $content);
         $this->assertStringNotContainsString('getModuleStatus(\'WeShop_GoogleAuth\')', $content);
         $this->assertStringContainsString("@url{'customer/account/forgot-password'}", $content);
         $this->assertStringContainsString("@url{'customer/account/register'}", $content);

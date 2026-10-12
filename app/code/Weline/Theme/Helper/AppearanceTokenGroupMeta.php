@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
-use Weline\Framework\Phrase\DictionaryEvents;
-
 /**
  * Appearance token section-group Meta keys and comment parsing.
  *
  * Comment: /* ========== Label #optional-id ========== *\/
- * Dictionary: @meta::theme.{area}.appearance.token_group.{group_id}.name
+ * Storage: MetaLocal（theme.{area}.appearance.token_group.{group_id} / name）
  */
 final class AppearanceTokenGroupMeta
 {
@@ -65,14 +63,14 @@ final class AppearanceTokenGroupMeta
     }
 
     /**
-     * Register unique section groups into the phrase dictionary (zh source).
+     * Register unique section groups into MetaLocal (zh source).
      *
      * @param list<array<string, mixed>> $tokens
      */
     public static function registerGroupsFromTokens(string $area, array $tokens): void
     {
         $seen = [];
-        $entries = [];
+        $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
         foreach ($tokens as $token) {
             if (!\is_array($token)) {
                 continue;
@@ -86,16 +84,8 @@ final class AppearanceTokenGroupMeta
                 continue;
             }
             $seen[$id] = true;
-            $entries[] = [
-                'word' => self::dictionaryWord($area, $id),
-                'translate' => $label,
-                'module' => self::MODULE,
-            ];
+            MetaTranslation::setTranslatedValueWithScope(self::metaKey($area, $id), $label, 'default', $locale);
         }
-        if ($entries === []) {
-            return;
-        }
-        DictionaryEvents::register($entries, self::MODULE);
     }
 
     public static function translatedLabel(string $area, string $groupId, string $fallbackLabel): string

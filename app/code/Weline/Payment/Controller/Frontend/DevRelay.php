@@ -283,7 +283,7 @@ final class DevRelay extends FrontendController
         $prefillToken = trim((string) $this->request->getParam('token', ''));
         $probePath = '/payment/dev-relay/probe';
 
-        return $this->fetch('Weline_Payment::Frontend/dev-relay/demo.phtml', [
+        return $this->fetch('Weline_Payment::frontend/dev-relay/demo.phtml', [
             'prefill_token' => $prefillToken,
             'probe_path' => $probePath,
             'is_online_host' => $this->gate->isOnlineRelayHost(),

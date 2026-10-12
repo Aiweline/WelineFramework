@@ -10,7 +10,7 @@ final class ScheduleWindowFormTemplateContractTest extends TestCase
 {
     public function testCampaignFormDocumentsWebsiteTimezoneUtcStorage(): void
     {
-        $src = file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/campaign/form.phtml');
+        $src = file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/campaign/form.phtml');
         self::assertIsString($src);
         self::assertStringContainsString('datetime-local', $src);
         self::assertStringContainsString('按站点时区', $src);

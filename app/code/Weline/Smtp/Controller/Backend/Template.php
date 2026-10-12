@@ -124,7 +124,7 @@ class Template extends BackendController
         $this->assign('filter_locales', $returnState['locales']);
         $this->assign('focus_locale', $returnState['focus_locale']);
         $this->assignScopeVars($workScope);
-        return $this->fetch('Weline_Smtp::Backend/Template/listing');
+        return $this->fetch('Weline_Smtp::backend/Template/listing');
     }
 
     #[Acl('Weline_Smtp::smtp_template_edit', '编辑模板', 'edit', '编辑邮件模板', 'Weline_Smtp::system_smtp_template')]
@@ -228,7 +228,7 @@ class Template extends BackendController
             'store_code' => (string)$workScope['store_code'],
             'channel_code' => (string)$workScope['channel_code'],
         ]);
-        return $this->fetch('Weline_Smtp::Backend/Template/edit');
+        return $this->fetch('Weline_Smtp::backend/Template/edit');
     }
 
     #[Acl('Weline_Smtp::smtp_template_save', '保存模板', 'save', '保存邮件模板', 'Weline_Smtp::system_smtp_template')]

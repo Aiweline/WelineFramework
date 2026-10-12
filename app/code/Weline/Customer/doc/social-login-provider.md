@@ -26,8 +26,8 @@
 app/code/Vendor/WeChatLogin/
 ├─ extends/module/Weline_Customer/SocialLoginProvider/WeChatProvider.php
 ├─ extends/module/Weline_SystemConfig/Config/frontend/social-login-wechat.phtml
-├─ view/templates/Frontend/guide/social-login/wechat/guide.phtml
-├─ view/templates/Frontend/guide/social-login/wechat/policy.phtml
+├─ view/templates/frontend/guide/social-login/wechat/guide.phtml
+├─ view/templates/frontend/guide/social-login/wechat/policy.phtml
 ├─ etc/module.php
 ├─ i18n/zh_Hans_CN.csv
 ├─ i18n/en_US.csv
@@ -50,8 +50,8 @@ namespace Vendor\WeChatLogin\Extends\Module\Weline_Customer\SocialLoginProvider;
 
 模板路径：
 
-`{YourModule}::templates/Frontend/guide/social-login/{code}/guide.phtml`  
-`{YourModule}::templates/Frontend/guide/social-login/{code}/policy.phtml`
+`{YourModule}::templates/frontend/guide/social-login/{code}/guide.phtml`  
+`{YourModule}::templates/frontend/guide/social-login/{code}/policy.phtml`
 
 正文写在 phtml，用 `<lang>` / `@lang()`，不要在 Provider 类里拼大段 HTML。
 
@@ -88,4 +88,4 @@ php bin/w extends:rebuild
 ## 6. 内置样板
 
 `Weline_Customer/extends/module/Weline_Customer/SocialLoginProvider/`  
-与 `view/templates/Frontend/guide/social-login/{google,facebook,instagram}/`
+与 `view/templates/frontend/guide/social-login/{google,facebook,instagram}/`

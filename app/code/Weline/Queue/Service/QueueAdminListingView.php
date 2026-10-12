@@ -139,12 +139,12 @@ final class QueueAdminListingView
         try {
             $this->template->unsetData();
             $statsHtml = (string)$this->template->fetchHtml(
-                'Weline_Queue::templates/Backend/Queue/partials/stats.phtml',
+                'Weline_Queue::templates/backend/Queue/partials/stats.phtml',
                 ['stats' => $state['stats']],
             );
             $this->template->unsetData();
             $listingHtml = (string)$this->template->fetchHtml(
-                'Weline_Queue::templates/Backend/Queue/partials/listing.phtml',
+                'Weline_Queue::templates/backend/Queue/partials/listing.phtml',
                 $state,
             );
         } finally {

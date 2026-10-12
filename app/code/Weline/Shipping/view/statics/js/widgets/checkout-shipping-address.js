@@ -6,7 +6,7 @@
      * HelpPay / dialog embeds fetch the phtml without bake — mount must attach CSS.
      */
     function resolveCheckoutShippingAddressCssHref() {
-        var modulePath = 'Weline_Shipping::css/widgets/checkout-shipping-address.css?v=20261007-address-pay-local';
+        var modulePath = 'Weline_Shipping::css/widgets/checkout-shipping-address.css?v=20261012-name-split1';
         var loader = window.Weline && window.Weline.loader;
         if (loader && typeof loader.resolveStaticPath === 'function') {
             var resolved = loader.resolveStaticPath(modulePath);
@@ -31,7 +31,7 @@
                 return sibling;
             }
         }
-        return '/static/Weline/Shipping/css/widgets/checkout-shipping-address.css?v=20261007-address-pay-local';
+        return '/static/Weline/Shipping/css/widgets/checkout-shipping-address.css?v=20261012-name-split1';
     }
 
     function ensureCheckoutShippingAddressCss() {
@@ -114,6 +114,157 @@
 
     function text(v) {
         return v == null ? '' : String(v);
+    }
+
+    function joinNameParts(scope) {
+        scope = scope || editor || root;
+        var first = scope.querySelector('[data-name-part="first"]');
+        var last = scope.querySelector('[data-name-part="last"]');
+        var joined = scope.querySelector('[data-name-joined]');
+        if (!joined) {
+            return text((scope.querySelector('[data-name-single] [name="name"], [data-shipping-field][name="name"]') || {}).value).trim();
+        }
+        var parts = [text(first && first.value).trim(), text(last && last.value).trim()].filter(Boolean);
+        joined.value = parts.join(' ');
+        return joined.value;
+    }
+
+    function splitNameIntoParts(full, scope) {
+        scope = scope || editor || root;
+        var first = scope.querySelector('[data-name-part="first"]');
+        var last = scope.querySelector('[data-name-part="last"]');
+        if (!first && !last) {
+            return;
+        }
+        var raw = text(full).trim();
+        var parts = raw ? raw.split(/\s+/) : [];
+        if (first) {
+            first.value = parts[0] || '';
+        }
+        if (last) {
+            last.value = parts.slice(1).join(' ') || '';
+        }
+        joinNameParts(scope);
+    }
+
+    function applyCheckoutNameMode(nextMode, labels, scope) {
+        scope = scope || editor || root;
+        if (!scope) {
+            return;
+        }
+        var isSplit = text(nextMode) === 'split';
+        var grid = scope.querySelector('[data-name-mode]') || scope;
+        var splitBox = scope.querySelector('[data-name-split]');
+        var singleBox = scope.querySelector('[data-name-single]');
+        if (grid && grid.setAttribute) {
+            grid.setAttribute('data-name-mode', isSplit ? 'split' : 'single');
+        }
+        if (splitBox) {
+            splitBox.hidden = !isSplit;
+        }
+        if (singleBox) {
+            singleBox.hidden = isSplit;
+        }
+        var first = scope.querySelector('[data-name-part="first"]');
+        var last = scope.querySelector('[data-name-part="last"]');
+        var joined = scope.querySelector('[data-name-joined]');
+        var singleInput = singleBox ? singleBox.querySelector('input.w-input') : null;
+        if (labels && typeof labels === 'object') {
+            var firstLab = scope.querySelector('[data-name-label="first"]');
+            var lastLab = scope.querySelector('[data-name-label="last"]');
+            if (firstLab && text(labels.first_name)) {
+                firstLab.textContent = text(labels.first_name);
+            }
+            if (lastLab && text(labels.last_name)) {
+                lastLab.textContent = text(labels.last_name);
+            }
+            if (first && text(labels.first_name)) {
+                first.setAttribute('placeholder', text(labels.first_name));
+            }
+            if (last && text(labels.last_name)) {
+                last.setAttribute('placeholder', text(labels.last_name));
+            }
+        }
+        if (isSplit) {
+            if (first) {
+                first.setAttribute('name', 'first_name');
+                first.setAttribute('data-shipping-field', '');
+                if (!first.value && singleInput && singleInput.value) {
+                    splitNameIntoParts(singleInput.value, scope);
+                }
+            }
+            if (last) {
+                last.setAttribute('name', 'last_name');
+                last.setAttribute('data-shipping-field', '');
+            }
+            if (!joined && splitBox) {
+                joined = document.createElement('input');
+                joined.type = 'hidden';
+                joined.name = 'name';
+                joined.setAttribute('data-name-joined', '');
+                joined.setAttribute('data-shipping-field', '');
+                splitBox.appendChild(joined);
+            }
+            if (joined) {
+                joined.setAttribute('name', 'name');
+                joined.setAttribute('data-shipping-field', '');
+            }
+            if (singleInput) {
+                singleInput.removeAttribute('name');
+                singleInput.removeAttribute('data-shipping-field');
+                singleInput.removeAttribute('required');
+                singleInput.disabled = true;
+            }
+            joinNameParts(scope);
+        } else {
+            if (first) {
+                first.removeAttribute('name');
+                first.removeAttribute('data-shipping-field');
+                first.removeAttribute('required');
+            }
+            if (last) {
+                last.removeAttribute('name');
+                last.removeAttribute('data-shipping-field');
+                last.removeAttribute('required');
+            }
+            if (joined) {
+                if (singleInput && !text(singleInput.value) && text(joined.value)) {
+                    singleInput.value = joined.value;
+                }
+                joined.removeAttribute('name');
+                joined.removeAttribute('data-shipping-field');
+            }
+            if (singleInput) {
+                singleInput.setAttribute('name', 'name');
+                singleInput.setAttribute('data-shipping-field', '');
+                singleInput.disabled = false;
+            }
+        }
+    }
+
+    // Bind early (before bootAddress) so First/Last keystrokes always join into hidden name.
+    if (editor && !editor.getAttribute('data-name-split-bound')) {
+        editor.setAttribute('data-name-split-bound', '1');
+        editor.addEventListener('input', function (event) {
+            var part = event.target && event.target.getAttribute
+                ? event.target.getAttribute('data-name-part')
+                : '';
+            if (part === 'first' || part === 'last') {
+                joinNameParts(editor);
+            }
+        });
+        document.addEventListener('weline:address:schema-labels', function (event) {
+            var detail = (event && event.detail) || {};
+            var code = text(detail.code || '');
+            if (code && code !== ADDRESS_CODE && code.indexOf('checkout-shipping') < 0) {
+                return;
+            }
+            applyCheckoutNameMode(detail.name_mode || 'single', detail.labels || null, editor);
+        });
+        var gridMode0 = text((editor.querySelector('[data-name-mode]') || {}).getAttribute
+            ? editor.querySelector('[data-name-mode]').getAttribute('data-name-mode')
+            : 'single');
+        applyCheckoutNameMode(gridMode0 || 'single', null, editor);
     }
 
     function mode() {
@@ -2205,6 +2356,10 @@
             window.WelineThemeAddress.boot();
         }
         var seed = selectedCardPayload() || initial;
+        var gridMode = text((editor && editor.querySelector('[data-name-mode]'))
+            ? editor.querySelector('[data-name-mode]').getAttribute('data-name-mode')
+            : 'single');
+        applyCheckoutNameMode(gridMode || 'single', null, editor);
         return Promise.resolve(applyCascade(seed)).then(function () {
             // Collapsed saved-card mode: keep editor fields aligned with the visible card
             // so currency reload / getData never quotes the cascade default (CN).

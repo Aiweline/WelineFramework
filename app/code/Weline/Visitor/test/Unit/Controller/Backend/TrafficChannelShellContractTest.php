@@ -65,14 +65,14 @@ final class TrafficChannelShellContractTest extends TestCase
             $ref->getMethod('postToggleEnabled')->getAttributes(Acl::class)[0]->newInstance()->getData('source_id')
         );
 
-        $index = (string)\file_get_contents($root . '/view/templates/Backend/TrafficChannel/index.phtml');
+        $index = (string)\file_get_contents($root . '/view/templates/backend/TrafficChannel/index.phtml');
         self::assertStringContainsString('traffic-channel/getEdit', $index);
         self::assertStringContainsString('traffic-channel/getDetail', $index);
         self::assertStringContainsString('postToggleEnabled', $index);
         self::assertStringContainsString('停用', $index);
         self::assertStringContainsString('详情', $index);
 
-        $form = (string)\file_get_contents($root . '/view/templates/Backend/TrafficChannel/form.phtml');
+        $form = (string)\file_get_contents($root . '/view/templates/backend/TrafficChannel/form.phtml');
         self::assertStringContainsString('code_readonly', $form);
         self::assertStringContainsString('渠道码创建后不可修改', $form);
         self::assertStringContainsString('readonly', $form);

@@ -63,7 +63,7 @@ final class EmbargoReasonLocalModelContractTest extends TestCase
         self::assertStringContainsString('reason_options', $ctl);
 
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/SystemEmbargo/index.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/SystemEmbargo/index.phtml',
         );
         self::assertStringContainsString('system-embargo-reason-card', $tpl);
         self::assertStringContainsString('system-embargo-tabs', $tpl);

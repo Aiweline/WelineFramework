@@ -1076,7 +1076,7 @@ class LanguageSwitcher implements TaglibInterface
         if (isset($dictionary[$source]) && $dictionary[$source] !== '') {
             return $dictionary[$source];
         }
-        // 模块 CSV 仅 zh/en；非中英语种 chrome 走全局词典预取（WLS 热路径不读整本 language 包）。
+        // 官方框架模块 CSV Git 瘦身仅 zh/en；非中英语种 chrome 走全局词典预取（WLS 热路径不读整本 language 包）。
         // 调用方须先 Parser::prefetchWords($chromeSources) 批量预取；禁止此处单词语 prefetch（N× exact_dictionary_batch）。
         try {
             $prefetched = \trim((string)(Parser::getPrefetchedGlobalWord($locale, $source) ?? ''));

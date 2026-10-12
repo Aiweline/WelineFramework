@@ -100,7 +100,7 @@ class PixelStatisticsServiceExportAttributionTest extends TestCore
         self::assertStringNotContainsString("\$defaultHeaders", $controller);
 
         $listTpl = (string)\file_get_contents(
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/PixelDashboard/list.phtml'
+            BP . '/app/code/Weline/Visitor/view/templates/backend/PixelDashboard/list.phtml'
         );
         self::assertStringContainsString('pixel-dashboard/export', $listTpl);
         self::assertStringContainsString("'format' => 'csv'", $listTpl);

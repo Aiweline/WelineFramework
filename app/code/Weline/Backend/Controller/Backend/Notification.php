@@ -70,7 +70,7 @@ class Notification extends BackendController
         if (!$notification) {
             $this->assign('error', __('通知不存在或无权查看'));
             $this->assignDetailPageTitle();
-            return $this->fetch('Weline_Backend::templates/Backend/Notification/error.phtml');
+            return $this->fetch('Weline_Backend::templates/backend/Notification/error.phtml');
         }
 
         // Peek first. Browser may prefetch/prerender「下一条」—those requests must NOT

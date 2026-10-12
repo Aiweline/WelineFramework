@@ -25,7 +25,7 @@ final class ProductQuoteMailReplySlotContractTest extends TestCase
 
     public function testAdminTemplateHasMailReplySlot(): void
     {
-        $tpl = (string)file_get_contents(BP . 'app/code/Weline/Product/view/templates/Backend/QuoteRequest/index.phtml');
+        $tpl = (string)file_get_contents(BP . 'app/code/Weline/Product/view/templates/backend/QuoteRequest/index.phtml');
         self::assertStringContainsString('mail_reply', $tpl);
         self::assertStringContainsString('企业邮箱回复', $tpl);
         self::assertStringContainsString('外部邮件客户端', $tpl);

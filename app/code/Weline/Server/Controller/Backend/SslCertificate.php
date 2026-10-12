@@ -112,7 +112,7 @@ class SslCertificate extends BackendController
         $this->assign('stats', $stats);
         $this->assign('title', __('SSL 证书管理'));
         
-        return $this->fetch('Weline_Server::templates/Backend/SslCertificate/index.phtml');
+        return $this->fetch('Weline_Server::templates/backend/SslCertificate/index.phtml');
     }
     
     /**

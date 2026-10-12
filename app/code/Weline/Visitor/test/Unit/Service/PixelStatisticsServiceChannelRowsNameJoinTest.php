@@ -84,7 +84,7 @@ class PixelStatisticsServiceChannelRowsNameJoinTest extends TestCore
     public function testIndexTemplateRendersTrafficChannelSectionWithName(): void
     {
         $tpl = (string)\file_get_contents(
-            BP . '/app/code/Weline/Visitor/view/templates/Backend/PixelDashboard/index.phtml'
+            BP . '/app/code/Weline/Visitor/view/templates/backend/PixelDashboard/index.phtml'
         );
         self::assertStringContainsString('<lang>流量渠道</lang>', $tpl);
         self::assertStringContainsString('<lang>渠道名称</lang>', $tpl);

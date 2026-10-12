@@ -164,7 +164,7 @@ class PixelChannelFunnelServiceTest extends TestCore
             \Weline\Visitor\Service\PixelChannelFunnelMode::normalize(null)
         );
 
-        $detail = (string)\file_get_contents($root . '/view/templates/Backend/TrafficChannel/detail.phtml');
+        $detail = (string)\file_get_contents($root . '/view/templates/backend/TrafficChannel/detail.phtml');
         self::assertStringContainsString('channel-funnel', $detail);
         self::assertStringContainsString('<lang>营销简漏斗</lang>', $detail);
         self::assertStringContainsString('data-funnel-mode-switch', $detail);

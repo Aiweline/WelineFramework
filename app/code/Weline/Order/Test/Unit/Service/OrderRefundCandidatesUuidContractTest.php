@@ -36,7 +36,7 @@ final class OrderRefundCandidatesUuidContractTest extends TestCase
         self::assertStringContainsString('provider_refund_id', $svc);
         self::assertStringContainsString('schema_fields_METHOD_CODE', $svc);
         $tpl = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Order/panel/refund.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Order/panel/refund.phtml'
         );
         self::assertStringContainsString('order-edit-refund-history', $tpl);
         self::assertStringContainsString('provider_refund_id', $tpl);

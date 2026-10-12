@@ -4,11 +4,11 @@
 $entry = (array) ($this->getData('payment_guide_entry') ?? []);
 ?>
 
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
 
 <article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-policy-stripe">
-    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+    <?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
 
     <header class="amazon-payment-guide-article__header">
         <p class="amazon-payment-guide-article__badge"><lang>政策</lang></p>
@@ -36,4 +36,4 @@ $entry = (array) ($this->getData('payment_guide_entry') ?? []);
         <p><lang>请仅在本站结账流程或 Stripe 官方域名完成付款与验证，勿向他人泄露卡号、验证码或一次性密码。</lang></p>
     </section>
 </article>
-<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>

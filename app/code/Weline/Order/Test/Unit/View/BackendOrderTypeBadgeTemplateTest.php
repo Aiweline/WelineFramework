@@ -10,7 +10,7 @@ final class BackendOrderTypeBadgeTemplateTest extends TestCase
 {
     public function testBackendOrderListRendersTypeBadgeWithDataTone(): void
     {
-        $template = dirname(__DIR__, 3) . '/view/templates/Backend/Order/index.phtml';
+        $template = dirname(__DIR__, 3) . '/view/templates/backend/Order/index.phtml';
         self::assertFileExists($template);
         $source = (string) file_get_contents($template);
 
@@ -31,7 +31,7 @@ final class BackendOrderTypeBadgeTemplateTest extends TestCase
 
     public function testBackendOrderViewRendersTypeHeaderBadgeWithDataTone(): void
     {
-        $template = dirname(__DIR__, 3) . '/view/templates/Backend/Order/view.phtml';
+        $template = dirname(__DIR__, 3) . '/view/templates/backend/Order/view.phtml';
         self::assertFileExists($template);
         $source = (string) file_get_contents($template);
 

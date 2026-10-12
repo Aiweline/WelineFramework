@@ -14,7 +14,7 @@ final class AccountFormAutoSubmitDefaultsContractTest extends TestCase
     public function testNewAccountFormDefaultsCronSwitchesOn(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = $root . '/view/templates/Backend/Account/form.phtml';
+        $template = $root . '/view/templates/backend/Account/form.phtml';
         $model = $root . '/Model/SeoAccount.php';
         $adminService = $root . '/Service/Admin/SeoAdminAccountService.php';
 

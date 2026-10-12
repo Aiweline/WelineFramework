@@ -608,6 +608,17 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'requirement-scan-architecture-smell-gate.mdc')),
         false,
     ),
+    'hard_constraints include business_forbids_sql_dialect' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'business_forbids_sql_dialect'
+            && str_contains((string) ($rule['summary'] ?? ''), 'SERIOUS')
+            && str_contains((string) ($rule['summary'] ?? ''), 'ORM database bottom layer')
+            && str_contains((string) ($rule['summary'] ?? ''), 'ON CONFLICT')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Connection/Adapter')
+            && str_contains((string) ($rule['summary'] ?? ''), 'business-forbids-sql-dialect.mdc')),
+        false,
+    ),
     'mcpInstructions carry architecture_grade_change_only' => str_contains(
         (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
         'architecture_grade_change_only'
@@ -619,6 +630,10 @@ $checks = [
     'mcpInstructions carry requirement_scan_architecture_smell_gate' => str_contains(
         (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
         'requirement_scan_architecture_smell_gate'
+    ),
+    'mcpInstructions carry business_forbids_sql_dialect' => str_contains(
+        (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
+        'business_forbids_sql_dialect'
     ),
     'hard_constraints include requirement_framework_scrutiny' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
@@ -930,6 +945,16 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), '任何需求都要用例闭环验收')
             && str_contains((string) ($rule['summary'] ?? ''), '实际真机测试闭环')
             && str_contains((string) ($rule['summary'] ?? ''), 'WB-OP')),
+        false,
+    ),
+    'hard_constraints include real_machine_usecases_not_unit_tests' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'real_machine_usecases_not_unit_tests'
+            && str_contains((string) ($rule['summary'] ?? ''), 'UT≠交付')
+            && str_contains((string) ($rule['summary'] ?? ''), 'PHPUnit')
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT substitute')
+            && str_contains((string) ($rule['summary'] ?? ''), 'real-machine-usecases-not-unit-tests.mdc')),
         false,
     ),
     'hard_constraints include requirement_fe_be_scope_analysis' => array_reduce(
@@ -2290,6 +2315,14 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'requirement-scan-architecture-smell-gate.mdc')),
         false,
     ),
+    'global_rules_dual_write mentions business_forbids_sql_dialect mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'business_forbids_sql_dialect')
+            && str_contains((string) ($rule['summary'] ?? ''), 'business-forbids-sql-dialect.mdc')),
+        false,
+    ),
     'global_rules_dual_write mentions user_facing_verdict_last mirror' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -2382,7 +2415,10 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'Website::ID_DEFAULT')
             && str_contains((string) ($rule['summary'] ?? ''), 'never stop at en_US')
             && str_contains((string) ($rule['summary'] ?? ''), 'system dictionary')
-            && str_contains((string) ($rule['summary'] ?? ''), 'ONLY store zh_Hans_CN.csv and en_US.csv')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'git-slim')
+            && str_contains((string) ($rule['summary'] ?? ''), 'zh_Hans_CN.csv')
+            && str_contains((string) ($rule['summary'] ?? ''), 'en_US.csv')
+            && str_contains((string) ($rule['summary'] ?? ''), 'NOT a ban on non-framework')),
         false,
     ),
     'hard_constraints include module_i18n_chinese_source_default' => array_reduce(

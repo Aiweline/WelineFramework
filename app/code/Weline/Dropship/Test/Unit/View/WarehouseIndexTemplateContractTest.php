@@ -14,7 +14,7 @@ final class WarehouseIndexTemplateContractTest extends TestCase
     public function testWarehouseIndexUsesProviderCoverageBoardVariantA(): void
     {
         $root = dirname(__DIR__, 3);
-        $path = $root . '/view/templates/Backend/Warehouse/index.phtml';
+        $path = $root . '/view/templates/backend/Warehouse/index.phtml';
         self::assertFileExists($path);
         $tpl = (string)file_get_contents($path);
 

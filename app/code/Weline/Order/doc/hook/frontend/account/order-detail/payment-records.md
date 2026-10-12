@@ -7,4 +7,4 @@
 ## 实现路径示例
 
 - `Weline_Payment/view/hooks/Weline_Order/frontend/account/order-detail/payment-records.phtml`
-- 模板：`Weline_Payment::templates/Frontend/account/order-payment-records.phtml`
+- 模板：`Weline_Payment::templates/frontend/account/order-payment-records.phtml`

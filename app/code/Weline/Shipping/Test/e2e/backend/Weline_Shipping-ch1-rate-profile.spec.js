@@ -76,7 +76,7 @@ moduleDescribe(test, MODULE, '第1章阶梯表与Profile真行为通路', () => 
       test.setTimeout(180000);
       fs.mkdirSync(EVIDENCE, { recursive: true });
       const adminTpl = fs.readFileSync(
-        path.join(ROOT_DIR, 'app/code/Weline/Shipping/view/templates/Backend/RateTemplate/index.phtml'),
+        path.join(ROOT_DIR, 'app/code/Weline/Shipping/view/templates/backend/RateTemplate/index.phtml'),
         'utf8',
       );
       expect(adminTpl).toMatch(/max_weight_kg/);

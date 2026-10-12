@@ -29,6 +29,6 @@ class Detail extends Block
         
         // Block 的 fetchHtml 方法会使用 'blocks' 类型查找模板，但我们的模板在 'templates' 目录
         // 所以使用 fetchTagHtml 方法，指定 'templates' 类型
-        return $this->fetchTagHtml('templates', 'Weline_Hook::Backend/Hook/detail-content.phtml');
+        return $this->fetchTagHtml('templates', 'Weline_Hook::backend/Hook/detail-content.phtml');
     }
 }

@@ -238,7 +238,7 @@ const MAX_PAGE_BUTTONS = 7;
 ## 相关文件
 
 **模板文件：**
-- `app/code/Weline/Seo/view/templates/Backend/Sitemap/index.phtml`
+- `app/code/Weline/Seo/view/templates/backend/Sitemap/index.phtml`
 
 **样式 / 脚本：**
 - `app/code/Weline/Seo/view/statics/css/seo-admin.css`

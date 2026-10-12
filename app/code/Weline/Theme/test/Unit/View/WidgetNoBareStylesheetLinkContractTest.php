@@ -27,7 +27,7 @@ final class WidgetNoBareStylesheetLinkContractTest extends TestCase
                 'store-music',
             ],
             [
-                $modules . '/CustomerService/view/templates/Frontend/widgets/customer-service-float.phtml',
+                $modules . '/CustomerService/view/templates/frontend/widgets/customer-service-float.phtml',
                 'customer-service-float',
             ],
         ];

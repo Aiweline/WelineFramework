@@ -26,9 +26,9 @@ class ExtendsScannerStickerTest extends TestCase
     {
         $testCases = [
             [
-                'input' => 'extends/module/Weline_Sticker/Weline/Demo/view/templates/Backend/index.phtml',
+                'input' => 'extends/module/Weline_Sticker/Weline/Demo/view/templates/backend/index.phtml',
                 'expected_target_module' => 'Weline_Demo',
-                'expected_file_path' => 'view/templates/Backend/index.phtml',
+                'expected_file_path' => 'view/templates/backend/index.phtml',
                 'is_sticker' => true,
             ],
             [
@@ -57,7 +57,7 @@ class ExtendsScannerStickerTest extends TestCase
     public function testModuleLevelStickerExtensionIdentification(): void
     {
         $moduleStickerPaths = [
-            'extends/module/Weline_Sticker/Weline/Demo/view/templates/Backend/index.phtml',
+            'extends/module/Weline_Sticker/Weline/Demo/view/templates/backend/index.phtml',
             'extends/module/Weline_Sticker/Weline/Admin/view/templates/index.phtml',
             'extends/module/Weline_Sticker/Weline/User/view/frontend/layout/default.xml',
         ];
@@ -73,7 +73,7 @@ class ExtendsScannerStickerTest extends TestCase
     public function testThemeLevelStickerExtensionIdentification(): void
     {
         $themeStickerPaths = [
-            'extends/theme/default/Weline_Sticker/Weline/Demo/view/templates/Backend/index.phtml',
+            'extends/theme/default/Weline_Sticker/Weline/Demo/view/templates/backend/index.phtml',
             'extends/theme/dark/Weline_Sticker/Weline/Admin/view/templates/index.phtml',
             'extends/theme/modern/Weline_Sticker/Weline/User/view/frontend/layout/default.xml',
         ];
@@ -104,8 +104,8 @@ class ExtendsScannerStickerTest extends TestCase
     public function testFileTypeIdentification(): void
     {
         $testFiles = [
-            'view/templates/Backend/index.phtml' => 'Template',
-            'view/templates/Frontend/index.html' => 'HTML',
+            'view/templates/backend/index.phtml' => 'Template',
+            'view/templates/frontend/index.html' => 'HTML',
             'view/static/css/style.css' => 'CSS',
             'view/static/js/app.js' => 'JavaScript',
             'etc/config.xml' => 'XML',
@@ -123,7 +123,7 @@ class ExtendsScannerStickerTest extends TestCase
     public function testExtensionComplexityCalculation(): void
     {
         $testFiles = [
-            'view/templates/Backend/index.phtml' => 'complex',
+            'view/templates/backend/index.phtml' => 'complex',
             'etc/config.xml' => 'medium',
             'view/static/css/style.css' => 'medium',
             'README.md' => 'simple',
@@ -140,7 +140,7 @@ class ExtendsScannerStickerTest extends TestCase
         $testFiles = [
             'etc/di.xml' => 'critical',
             'config/system.xml' => 'critical',
-            'view/templates/Backend/index.phtml' => 'global',
+            'view/templates/backend/index.phtml' => 'global',
             'view/static/css/style.css' => 'local',
         ];
 

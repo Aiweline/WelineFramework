@@ -13,26 +13,26 @@ final class PaymentGuideTemplateContractTest extends TestCase
         $moduleRoot = dirname(__DIR__, 3);
         $providers = [
             'fake_card' => [
-                'guide' => $moduleRoot . '/view/templates/Frontend/guide/payment/fake_card/guide.phtml',
-                'policy' => $moduleRoot . '/view/templates/Frontend/guide/payment/fake_card/policy.phtml',
-                'agreement' => $moduleRoot . '/view/templates/Frontend/guide/payment/fake_card/agreement.phtml',
+                'guide' => $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/guide.phtml',
+                'policy' => $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/policy.phtml',
+                'agreement' => $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/agreement.phtml',
                 'guide_class' => $moduleRoot . '/extends/module/Weline_Payment/PaymentCustomerGuide/FakeCardCustomerGuide.php',
             ],
             'paypal' => [
-                'guide' => $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/guide.phtml',
-                'policy' => $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/policy.phtml',
-                'agreement' => $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/agreement.phtml',
+                'guide' => $moduleRoot . '/view/templates/frontend/guide/payment/paypal/guide.phtml',
+                'policy' => $moduleRoot . '/view/templates/frontend/guide/payment/paypal/policy.phtml',
+                'agreement' => $moduleRoot . '/view/templates/frontend/guide/payment/paypal/agreement.phtml',
                 'guide_class' => $moduleRoot . '/extends/module/Weline_Payment/PaymentCustomerGuide/PayPalCustomerGuide.php',
             ],
             'stripe' => [
-                'guide' => $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/guide.phtml',
-                'policy' => $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/policy.phtml',
-                'agreement' => $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/agreement.phtml',
+                'guide' => $moduleRoot . '/view/templates/frontend/guide/payment/stripe/guide.phtml',
+                'policy' => $moduleRoot . '/view/templates/frontend/guide/payment/stripe/policy.phtml',
+                'agreement' => $moduleRoot . '/view/templates/frontend/guide/payment/stripe/agreement.phtml',
                 'guide_class' => $moduleRoot . '/extends/module/Weline_Payment/PaymentCustomerGuide/StripeCustomerGuide.php',
             ],
         ];
 
-        self::assertFileExists($moduleRoot . '/view/templates/Frontend/guide/payment/index.phtml');
+        self::assertFileExists($moduleRoot . '/view/templates/frontend/guide/payment/index.phtml');
 
         foreach ($providers as $methodCode => $paths) {
             self::assertFileExists($paths['guide'], 'Missing guide template for ' . $methodCode);
@@ -46,7 +46,7 @@ final class PaymentGuideTemplateContractTest extends TestCase
     public function testHubTemplateUsesGuideEntryLinks(): void
     {
         $moduleRoot = dirname(__DIR__, 3);
-        $hubTemplate = (string) file_get_contents($moduleRoot . '/view/templates/Frontend/guide/payment/index.phtml');
+        $hubTemplate = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/index.phtml');
 
         self::assertStringContainsString('payment_guide_entries', $hubTemplate);
         self::assertStringContainsString('amazon-payment-guide-listing', $hubTemplate);
@@ -59,7 +59,7 @@ final class PaymentGuideTemplateContractTest extends TestCase
     public function testSidebarUsesProviderArticleHierarchy(): void
     {
         $sidebar = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Frontend/guide/payment/partials/amazon-sidebar.phtml',
+            dirname(__DIR__, 3) . '/view/templates/frontend/guide/payment/partials/amazon-sidebar.phtml',
         );
 
         self::assertStringContainsString('amazon-payment-guide-layout__nav-group', $sidebar);
@@ -85,7 +85,7 @@ final class PaymentGuideTemplateContractTest extends TestCase
             'fake_card/agreement.phtml',
         ] as $relativePath) {
             $content = (string) file_get_contents(
-                dirname(__DIR__, 3) . '/view/templates/Frontend/guide/payment/' . $relativePath,
+                dirname(__DIR__, 3) . '/view/templates/frontend/guide/payment/' . $relativePath,
             );
             self::assertStringContainsString('amazon-breadcrumb.phtml', $content, $relativePath);
         }
@@ -95,17 +95,17 @@ final class PaymentGuideTemplateContractTest extends TestCase
     {
         $moduleRoot = dirname(__DIR__, 3);
         $templates = [
-            $moduleRoot . '/view/templates/Frontend/guide/payment/index.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/guide.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/policy.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/paypal/agreement.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/guide.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/policy.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/stripe/agreement.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/fake_card/guide.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/fake_card/policy.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/fake_card/agreement.phtml',
-            $moduleRoot . '/view/templates/Frontend/guide/payment/partials/amazon-sidebar.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/index.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/paypal/guide.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/paypal/policy.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/paypal/agreement.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/stripe/guide.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/stripe/policy.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/stripe/agreement.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/guide.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/policy.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/agreement.phtml',
+            $moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-sidebar.phtml',
         ];
 
         foreach ($templates as $template) {
@@ -118,14 +118,14 @@ final class PaymentGuideTemplateContractTest extends TestCase
     public function testGuideTemplatesUseUrlTagForNavigationLinks(): void
     {
         $moduleRoot = dirname(__DIR__, 3);
-        $sidebar = (string) file_get_contents($moduleRoot . '/view/templates/Frontend/guide/payment/partials/amazon-sidebar.phtml');
+        $sidebar = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-sidebar.phtml');
         self::assertStringContainsString("@url{'guide/payment'}", $sidebar);
         self::assertStringContainsString('@url{$guideRoute}', $sidebar);
         self::assertStringContainsString('@url{$policyRoute}', $sidebar);
         self::assertStringContainsString('@url{$agreementRoute}', $sidebar);
         self::assertDoesNotMatchRegularExpression('/href="\/guide\/payment/', $sidebar);
 
-        $index = (string) file_get_contents($moduleRoot . '/view/templates/Frontend/guide/payment/index.phtml');
+        $index = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/index.phtml');
         self::assertStringContainsString('@url{$guideRoute}', $index);
         self::assertStringContainsString('@url{$policyRoute}', $index);
         self::assertStringContainsString('@url{$agreementRoute}', $index);
@@ -142,12 +142,12 @@ final class PaymentGuideTemplateContractTest extends TestCase
             'fake_card/policy.phtml',
             'fake_card/agreement.phtml',
         ] as $relativePath) {
-            $content = (string) file_get_contents($moduleRoot . '/view/templates/Frontend/guide/payment/' . $relativePath);
+            $content = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/' . $relativePath);
             self::assertStringContainsString('amazon-breadcrumb.phtml', $content, $relativePath);
             self::assertStringNotContainsString('payment_guide_hub_url', $content, $relativePath);
         }
 
-        $breadcrumb = (string) file_get_contents($moduleRoot . '/view/templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml');
+        $breadcrumb = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-breadcrumb.phtml');
         self::assertStringContainsString("@url{'guide/payment'}", $breadcrumb);
         self::assertStringContainsString('@url{$guideRoute}', $breadcrumb);
         self::assertDoesNotMatchRegularExpression('/href="\/guide\/payment/', $breadcrumb);
@@ -170,9 +170,9 @@ final class PaymentGuideTemplateContractTest extends TestCase
         fclose($fp);
 
         $files = array_unique(array_merge(
-            glob($moduleRoot . '/view/templates/Frontend/guide/payment/**/*.phtml') ?: [],
-            glob($moduleRoot . '/view/templates/Frontend/guide/payment/*.phtml') ?: [],
-            glob($moduleRoot . '/view/templates/Frontend/guide/payment/partials/*.phtml') ?: [],
+            glob($moduleRoot . '/view/templates/frontend/guide/payment/**/*.phtml') ?: [],
+            glob($moduleRoot . '/view/templates/frontend/guide/payment/*.phtml') ?: [],
+            glob($moduleRoot . '/view/templates/frontend/guide/payment/partials/*.phtml') ?: [],
             glob($moduleRoot . '/extends/module/Weline_Payment/PaymentCustomerGuide/*.php') ?: [],
         ));
 
@@ -218,8 +218,8 @@ final class PaymentGuideTemplateContractTest extends TestCase
 
         self::assertFileExists($themeRoot . '/view/statics/css/widgets/amazon-payment-guide.css');
         self::assertFileExists($moduleRoot . '/view/theme/frontend/layouts/payment_guide/default.phtml');
-        self::assertFileExists($moduleRoot . '/view/templates/Frontend/guide/payment/partials/amazon-sidebar.phtml');
-        self::assertFileExists($moduleRoot . '/view/templates/Frontend/guide/payment/partials/amazon-shell-open.phtml');
+        self::assertFileExists($moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-sidebar.phtml');
+        self::assertFileExists($moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-shell-open.phtml');
 
         $layout = (string) file_get_contents($moduleRoot . '/view/theme/frontend/layouts/payment_guide/default.phtml');
         self::assertStringContainsString('amazon-payment-guide.css', $layout);

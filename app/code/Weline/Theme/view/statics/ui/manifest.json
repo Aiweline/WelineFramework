@@ -798,7 +798,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Acl/view/templates/Backend/Acl/Role/assign.phtml"
+                "app/code/Weline/Acl/view/templates/backend/Acl/Role/assign.phtml"
             ]
         },
         "acl.role.index": {
@@ -808,7 +808,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Acl/view/templates/Backend/Acl/Role/index.phtml"
+                "app/code/Weline/Acl/view/templates/backend/Acl/Role/index.phtml"
             ]
         },
         "admin.dashboard": {
@@ -828,7 +828,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Ai/view/templates/Backend/DefaultModel/index.phtml"
+                "app/code/Weline/Ai/view/templates/backend/DefaultModel/index.phtml"
             ]
         },
         "api.user.permissions": {
@@ -839,7 +839,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Api/view/templates/Backend/User/assign_permissions.phtml"
+                "app/code/Weline/Api/view/templates/backend/User/assign_permissions.phtml"
             ]
         },
         "api.worker-smoke": {
@@ -861,7 +861,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Cms/view/templates/Backend/Page/edit.phtml"
+                "app/code/Weline/Cms/view/templates/backend/Page/edit.phtml"
             ]
         },
         "component.offcanvas.result": {
@@ -882,7 +882,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/CustomerService/view/templates/Backend/Agent/index.phtml"
+                "app/code/Weline/CustomerService/view/templates/backend/Agent/index.phtml"
             ]
         },
         "customer.account.recovery": {
@@ -1014,7 +1014,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Eav/view/templates/Backend/Manager/index.phtml"
+                "app/code/Weline/Eav/view/templates/backend/Manager/index.phtml"
             ]
         },
         "editor-manager.ckeditor": {
@@ -1034,7 +1034,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/I18n/view/templates/Backend/Dictionary.phtml"
+                "app/code/Weline/I18n/view/templates/backend/Dictionary.phtml"
             ]
         },
         "i18n.language-support-request": {
@@ -1045,7 +1045,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/I18n/view/templates/Frontend/language-support-request.phtml"
+                "app/code/Weline/I18n/view/templates/frontend/language-support-request.phtml"
             ]
         },
         "maintenance.frontend": {
@@ -1067,7 +1067,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Queue/view/templates/Backend/Queue/content.phtml"
+                "app/code/Weline/Queue/view/templates/backend/Queue/content.phtml"
             ]
         },
         "queue.diagnostics": {
@@ -1077,7 +1077,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Queue/view/templates/Backend/Diagnostics/index.phtml"
+                "app/code/Weline/Queue/view/templates/backend/Diagnostics/index.phtml"
             ]
         },
         "queue.form": {
@@ -1088,7 +1088,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Queue/view/templates/Backend/Queue/form.phtml"
+                "app/code/Weline/Queue/view/templates/backend/Queue/form.phtml"
             ]
         },
         "queue.index": {
@@ -1099,9 +1099,9 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Queue/view/templates/Backend/Queue/index.phtml",
-                "app/code/Weline/Queue/view/templates/Backend/Queue/partials/stats.phtml",
-                "app/code/Weline/Queue/view/templates/Backend/Queue/partials/listing.phtml"
+                "app/code/Weline/Queue/view/templates/backend/Queue/index.phtml",
+                "app/code/Weline/Queue/view/templates/backend/Queue/partials/stats.phtml",
+                "app/code/Weline/Queue/view/templates/backend/Queue/partials/listing.phtml"
             ]
         },
         "queue.show": {
@@ -1111,7 +1111,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Queue/view/templates/Backend/Queue/show.phtml"
+                "app/code/Weline/Queue/view/templates/backend/Queue/show.phtml"
             ]
         },
         "queue.type.index": {
@@ -1122,7 +1122,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Queue/view/templates/Backend/Type/index.phtml"
+                "app/code/Weline/Queue/view/templates/backend/Type/index.phtml"
             ]
         },
         "queue.type.show": {
@@ -1132,7 +1132,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Queue/view/templates/Backend/Type/show.phtml"
+                "app/code/Weline/Queue/view/templates/backend/Type/show.phtml"
             ]
         },
         "seo.embed.detail": {
@@ -1143,7 +1143,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Seo/view/templates/Backend/Embed/detail.phtml"
+                "app/code/Weline/Seo/view/templates/backend/Embed/detail.phtml"
             ]
         },
         "seo.embed.index": {
@@ -1154,7 +1154,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Seo/view/templates/Backend/Embed/index.phtml"
+                "app/code/Weline/Seo/view/templates/backend/Embed/index.phtml"
             ]
         },
         "system-config.index": {
@@ -1205,7 +1205,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Websites/view/templates/Backend/WebsiteAclGrant/edit.phtml"
+                "app/code/Weline/Websites/view/templates/backend/WebsiteAclGrant/edit.phtml"
             ]
         },
         "websites.site-builder.v1": {
@@ -1216,7 +1216,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/index-v1.phtml"
+                "app/code/Weline/Websites/view/templates/backend/SiteBuilderAgent/index-v1.phtml"
             ]
         },
         "websites.site-builder.workspace": {
@@ -1227,7 +1227,7 @@
             ],
             "engines": [],
             "templates": [
-                "app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/workspace.phtml"
+                "app/code/Weline/Websites/view/templates/backend/SiteBuilderAgent/workspace.phtml"
             ]
         },
         "websites.website.form": {

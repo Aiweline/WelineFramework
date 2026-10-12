@@ -168,9 +168,11 @@ moduleDescribe(test, MODULE, 'e2e-closeout and e2e-plan-suite controller-extra-f
     expect(out).toMatch(/BUMP_OK product_search_projection/);
     expect(out).toMatch(/BUMP_OK catalog_category/);
     expect(out).toMatch(/BUMP_OK theme_layout/);
+    expect(out).toMatch(/BUMP_OK theme_layout:policy/);
     expect(out).toMatch(/BUMP_OK blog\.post/);
     expect(out).toMatch(/BUMP_OK cms_page/);
     expect(out).toMatch(/DISK_PURGE_OK/);
+    expect(out).toMatch(/CONTROL_HIT_OK/);
   });
 
   moduleCase(test, { module: MODULE, id: 'e2e-plan-suite' }, '完整功能通路 e2e 汇总：Extra/FPC/Changed', async () => {

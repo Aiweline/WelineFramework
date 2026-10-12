@@ -665,7 +665,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('cartServicePreference($params)', $cartQueryContent);
         self::assertStringContainsString('removeItem($scope, $itemId, $guestToken, $customerId, $preference)', $cartQueryContent);
 
-        $hangAdmin = self::bp('app/code/Weline/B2B/view/templates/Backend/ControlCenter/index.phtml');
+        $hangAdmin = self::bp('app/code/Weline/B2B/view/templates/backend/ControlCenter/index.phtml');
         self::assertFileExists($hangAdmin);
         $hangAdminContent = (string)file_get_contents($hangAdmin);
         self::assertStringContainsString('data-testid="b2b-copy-balance-pay-link"', $hangAdminContent);

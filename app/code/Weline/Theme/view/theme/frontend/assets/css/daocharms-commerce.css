@@ -1,0 +1,4452 @@
+/**
+ * DaoCharms commerce / discovery skin — gray-green natural.
+ * Scope: listing · search empty · compare · cart · checkout · payment · currency.
+ * Prefer module DOM hooks; no fake prices / healing copy / product-image swaps.
+ * Contracts: page-state.v1 · theme-tokens.v1
+ */
+
+/* —— Shared reading measure for commerce hubs —— */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) :is(
+    .products-layout__main,
+    .storefront-search,
+    .storefront-compare,
+    .weline-cart-shell,
+    .weline-checkout,
+    .amazon-payment-guide-layout__shell,
+    .w-currency-guide
+),
+body:has(.weline-cart-shell) .weline-cart-shell,
+body:has(.weline-checkout) .weline-checkout,
+body:has([data-compare-page]) .storefront-compare,
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__shell,
+body:has(.w-currency-guide) .w-currency-guide {
+    color: var(--color-text);
+}
+
+/* —— Products / arrivals / category listing —— */
+body.daocharms-products,
+body.theme-layout-products,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)):has(.products-layout__main) {
+    background: var(--color-bg-canvas);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__main,
+body.daocharms-products .products-layout__main {
+    background: var(--color-bg-canvas);
+}
+
+/* Filter rail — flush on canvas, one hairline divider, no panel chrome (design 03/05) */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__sidebar,
+body.daocharms-products .products-layout__sidebar {
+    background: transparent;
+    border-inline-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    padding-inline-end: 1.25rem;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__sidebar-title,
+body.daocharms-products .products-layout__sidebar-title {
+    letter-spacing: var(--daocharms-label-tracking);
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__filter-toggle,
+body.daocharms-products .products-layout__filter-toggle {
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+    min-height: var(--daocharms-control-height);
+    box-shadow: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__filter-toggle[aria-expanded="true"],
+body.daocharms-products .products-layout__filter-toggle[aria-expanded="true"] {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__toolbar,
+body.daocharms-products .products-layout__toolbar {
+    border-block-end: 0;
+    background: transparent;
+}
+
+/* —— Listing page intro: heading + result count / sort share one row (design 03) —— */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    column-gap: clamp(1rem, 3vw, 2.5rem);
+    row-gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+    padding-block-end: clamp(2rem, 4vw, 3rem);
+    color: var(--color-text);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__header {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__header h1 {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__lede {
+    margin: 0.75rem 0 0;
+    max-inline-size: 36rem;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__toolbar {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    padding: 0 0 0.4rem;
+    border-block-end: 0;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__count,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__count-hint {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__sort-select {
+    min-height: 2.5rem;
+    padding: 0.35rem 2rem 0.35rem 0.75rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background-color: var(--color-bg-primary);
+    color: var(--color-text);
+    box-shadow: none;
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+/* UI 03 desktop：Sort by: Featured 面文案 + 透明 select 覆盖（手机 pill 仍走 responsive） */
+@media (min-width: 768px) {
+    body.daocharms-products .product-storefront__sort--daocharms-face {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-height: 2.5rem;
+        padding: 0.35rem 2rem 0.35rem 0.75rem;
+        border: var(--daocharms-rule-width) solid var(--color-border-default);
+        border-radius: var(--daocharms-radius-sm);
+        background: var(--color-bg-primary);
+        color: var(--color-text);
+        font-size: 0.875rem;
+    }
+
+    body.daocharms-products .product-storefront__sort--daocharms-face .product-storefront__sort-face {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip: auto;
+        pointer-events: none;
+        z-index: 1;
+        color: var(--color-text);
+        white-space: nowrap;
+    }
+
+    body.daocharms-products .product-storefront__sort--daocharms-face::after {
+        content: "";
+        width: 0.4rem;
+        height: 0.4rem;
+        margin-inline-start: 0.15rem;
+        border-right: 1.5px solid currentColor;
+        border-bottom: 1.5px solid currentColor;
+        transform: rotate(45deg) translateY(-0.08rem);
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0.75;
+    }
+
+    body.daocharms-products .product-storefront__sort--daocharms-face .product-storefront__sort-select {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        border: 0 !important;
+        background: transparent;
+        appearance: none;
+        -webkit-appearance: none;
+        opacity: 0;
+        cursor: pointer;
+        z-index: 2;
+        color: transparent;
+    }
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__notice {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__grid,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__pager,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__empty,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__cart {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+    body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 0.9rem;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__header,
+    body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__toolbar {
+        grid-column: 1;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__header {
+        grid-row: 1;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__toolbar {
+        grid-row: 2;
+        justify-content: flex-start;
+        padding-block-end: 0.65rem;
+        border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    }
+}
+
+/* Product grid: clear repeating rhythm, generous space between groups (design 03/04) */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(1.75rem, 3vw, 2.75rem) clamp(1rem, 2.2vw, 1.75rem);
+    align-items: start;
+}
+
+@media (max-width: 1023px) {
+    body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Product cards — image, name, price grouped tightly; no card chrome, no elevation */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) :is(
+    .weline-product-card,
+    .wpc-listing-card,
+    .product-storefront__card,
+    .wpc-card
+) {
+    --wpc-price: var(--color-text);
+    --wpc-ink: var(--color-text);
+    --wpc-muted: var(--color-text-secondary);
+    --wpc-link: var(--color-text);
+    --wpc-link-hover: var(--color-primary);
+    --wpc-border: transparent;
+    --wpc-surface: transparent;
+    --wpc-shadow: none;
+    --wpc-shadow-hover: none;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transition: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) :is(
+    .weline-product-card:hover,
+    .wpc-listing-card:hover,
+    .product-storefront__card:hover,
+    .wpc-card:hover
+) {
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-media {
+    border-radius: var(--daocharms-radius-sm);
+    overflow: hidden;
+    background: var(--color-bg-secondary);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card:hover .wpc-image {
+    transform: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-body {
+    gap: 0.35rem;
+    padding: 0.85rem 0 0;
+    flex: 0 0 auto;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-title,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card.density-shelf .wpc-title,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card.density-compact .wpc-title {
+    min-height: 0;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--color-text);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-title a,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-title a:any-link {
+    color: var(--color-text);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-title a:hover,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-title a:focus-visible {
+    color: var(--color-primary);
+}
+
+/* 上线污染清理（差异清单 §8 ①）：面向顾客的列表卡不暴露供应商式 SKU 编号。
+   模块侧 product-card.phtml 的 show_sku 默认已是 false，仅 catalog/category 模板显式打开；
+   主题侧先统一隐藏，模块侧收敛（show_sku=false）列为后续项。 */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-sku {
+    display: none;
+}
+
+/* 04-arrivals 用的是模块自有卡片标记（.new-arrivals-page__*），不经 .weline-product-card，
+   故其 SKU 需单独隐藏（同一口径：面向顾客的列表不暴露采购编号）。 */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .new-arrivals-page__sku {
+    display: none;
+}
+
+/* 空 0 星评价行：规范 §8 禁止编造评价数据，无评论时不显示该行（比「0 星 + (0)」更干净）。
+   aria-label 由 product-card.phtml 服务端输出为「评分 (评论数)」，故只隐藏 0.0 (0)；
+   该商品一旦有真实评论，aria-label 变化即自动恢复显示。 */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-rating[aria-label="0.0 (0)"] {
+    display: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-price-now,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card.density-shelf .wpc-price-now,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card.density-compact .wpc-price-now {
+    color: var(--color-text);
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta {
+    margin-block-start: 0.65rem;
+    padding-block-start: 0;
+}
+
+/* One action row per card: add-to-cart carries the primary weight, buy-now stays quiet. */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .wpc-cart-wrap,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .product-card-purchase-actions,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .product-purchase-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta :is(.btn-add-to-cart, .wpc-cart-btn, .wpc-detail-link) {
+    flex: 1 1 8rem;
+    min-height: var(--daocharms-control-height);
+    padding: 0.3rem 0.9rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-decoration: none;
+    box-shadow: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta :is(.btn-add-to-cart, .wpc-cart-btn, .wpc-detail-link):hover,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta :is(.btn-add-to-cart, .wpc-cart-btn, .wpc-detail-link):focus-visible {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .btn-buy-now {
+    flex: 1 1 6rem;
+    min-height: var(--daocharms-control-height);
+    padding: 0.3rem 0.9rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: transparent;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    box-shadow: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .btn-buy-now:hover,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .btn-buy-now:focus-visible {
+    border-color: var(--color-primary);
+    background: transparent;
+    color: var(--color-primary);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .btn-add-to-cart:disabled,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .btn-add-to-cart[aria-disabled="true"] {
+    border-color: var(--color-border-default);
+    background: color-mix(in srgb, var(--color-bg-secondary) 45%, var(--color-bg-primary));
+    color: var(--color-text-secondary);
+    opacity: 1;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) :is(.wpc-name, .product-storefront__title) {
+    color: var(--color-text);
+    letter-spacing: 0.01em;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__price {
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+/* —— DaoCharms amz-filter rail (UI 03): INTENT/SYMBOL… + square checks —— */
+body.daocharms-products .amz-filter--daocharms {
+    color: var(--color-text);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+body.daocharms-products .amz-filter--daocharms .amz-filter__section + .amz-filter__section {
+    margin-top: 0.9rem;
+    padding-top: 1rem;
+    border-top: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+body.daocharms-products .amz-filter--daocharms .amz-filter__heading {
+    margin: 0 0 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-products .amz-filter--daocharms .amz-filter__dept-child {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 2.25rem;
+    padding: 0;
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+body.daocharms-products .amz-filter--daocharms .amz-filter__dept-child:hover {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+body.daocharms-products .amz-filter--daocharms .amz-filter__check {
+    flex: 0 0 auto;
+    inline-size: 1rem;
+    block-size: 1rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+}
+
+body.daocharms-products .amz-filter--daocharms .amz-filter__price-item {
+    color: var(--color-text);
+}
+
+body.daocharms-products .amz-filter--daocharms .amz-filter__radio {
+    border-radius: var(--daocharms-radius-sm);
+    border-color: var(--color-border-default);
+}
+
+body.daocharms-products .amz-filter--daocharms .amz-filter__price-item.is-active .amz-filter__radio {
+    border-color: var(--color-primary);
+    box-shadow: inset 0 0 0 3px var(--color-primary);
+}
+
+/* —— Filter rail groups (design 03/05): uppercase heading + chevron, hairline per group —— */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters,
+body.daocharms-products .w-filters {
+    color: var(--color-text);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__section,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__disclosure {
+    padding-block: 0.9rem 1.1rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__section:first-child,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__disclosure:first-child {
+    padding-block-start: 0;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__summary,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0 0 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 2.25rem;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option.is-active,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option[aria-current="true"],
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:has(input:checked) {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+/* Selected state must be unmistakable: filled control + weight, never pale colour alone. */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option.is-active :is(.w-filters__label, .w-filters__link),
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option[aria-current="true"] :is(.w-filters__label, .w-filters__link),
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:has(input:checked) :is(.w-filters__label, .w-filters__link) {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+/* The rail renders a presentational marker; it must read as a real checkbox (UI 03 square). */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__check,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__radio,
+body.daocharms-products .w-filters--daocharms .w-filters__check {
+    position: relative;
+    flex: 0 0 auto;
+    inline-size: 1rem;
+    block-size: 1rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+    box-sizing: border-box;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:is(.is-active, [aria-current="true"]) .w-filters__check,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:has(input:checked) .w-filters__check,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:is(.is-active, [aria-current="true"]) .w-filters__radio,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:has(input:checked) .w-filters__radio {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:is(.is-active, [aria-current="true"]) .w-filters__check::after,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:is(.is-active, [aria-current="true"]) .w-filters__radio::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    inline-size: 0.42rem;
+    block-size: 0.42rem;
+    border-radius: 1px;
+    background: var(--color-on-primary);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters :is(input[type="checkbox"], input[type="radio"]) {
+    inline-size: 1.05rem;
+    block-size: 1.05rem;
+    accent-color: var(--color-primary);
+    flex: 0 0 auto;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__dept .w-filters__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__dept .w-filters__link:hover,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__dept .w-filters__link:focus-visible {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__dept.is-active .w-filters__link,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__dept[aria-current="true"] .w-filters__link {
+    color: var(--color-text);
+    font-weight: 600;
+    box-shadow: inset 2px 0 0 var(--color-primary);
+    padding-inline-start: 0.6rem;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__clear-row,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__current {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__clear,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__link {
+    color: var(--color-link, var(--color-text));
+    text-underline-offset: 0.2em;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__clear {
+    min-height: 2.25rem;
+    padding: 0.15rem 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__count,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__dept,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__empty {
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
+}
+
+/* —— Listing / search / category empty state (design 05/06): explanation + next step —— */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__placeholder[data-placeholder="list-grid"],
+body.daocharms-products .products-layout__placeholder[data-placeholder="list-grid"],
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__placeholder:not(.slot-placeholder) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    min-block-size: 0;
+    margin-block: clamp(1.5rem, 4vw, 3rem);
+    padding: clamp(2.5rem, 6vw, 4.5rem) 1.25rem;
+    text-align: center;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__placeholder-title,
+body.daocharms-products .products-layout__placeholder-title {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.25rem, 2.4vw, 1.6rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__placeholder-text,
+body.daocharms-products .products-layout__placeholder-text {
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    font-size: 0.95rem;
+    max-inline-size: 30rem;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__placeholder-icon,
+body.daocharms-products .products-layout__placeholder-icon {
+    color: var(--daocharms-ink-slate);
+    opacity: 0.85;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__placeholder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-block-start: 0.5rem;
+}
+
+/* Filtered-to-zero state rendered by the catalog template (design 05/06). */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-block: clamp(1.5rem, 4vw, 3rem);
+    padding: clamp(2.5rem, 6vw, 4.5rem) 1.25rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    text-align: center;
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+/* —— Search empty / error —— */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search,
+body:has(.storefront-search) .storefront-search {
+    background: var(--color-bg-canvas);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__title,
+body:has(.storefront-search) .storefront-search__title {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 400;
+    color: var(--color-text);
+}
+
+/* No-results state (design 06): short explanation, clear next step, no dead end. */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__empty,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__section-empty,
+body:has(.storefront-search) .storefront-search__empty,
+body:has(.storefront-search) .storefront-search__section-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-block: clamp(1rem, 3vw, 2rem);
+    padding: clamp(2.5rem, 6vw, 4.5rem) 1.5rem;
+    text-align: center;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.7;
+    box-shadow: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__empty :is(h2, h3, p:first-child),
+body:has(.storefront-search) .storefront-search__section-empty :is(h2, h3, p:first-child) {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.25rem, 2.4vw, 1.6rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__empty :is(a, .w-button, button),
+body:has(.storefront-search) .storefront-search__section-empty :is(a, .w-button, button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--daocharms-control-height);
+    padding: 0.35rem 1.25rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    text-decoration: none;
+    letter-spacing: var(--daocharms-label-tracking);
+    font-size: 0.9rem;
+    box-shadow: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__empty :is(a, .w-button, button):hover,
+body:has(.storefront-search) .storefront-search__section-empty :is(a, .w-button, button):hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search :is(h1, h2, h3, h4, .storefront-search__section-title) {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__empty::before,
+body:has(.storefront-search) .storefront-search__empty::before {
+    content: none;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .storefront-search__error,
+body:has(.storefront-search) .storefront-search__error {
+    border-radius: var(--daocharms-radius-md);
+    border-color: var(--color-danger-border, var(--color-border-default));
+    background: color-mix(in srgb, var(--color-danger, #b42318) 6%, var(--color-bg-primary));
+}
+
+/* —— Compare —— */
+body:has([data-compare-page]),
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)):has(.storefront-compare) {
+    background: var(--color-bg-canvas);
+}
+
+.storefront-compare,
+[data-compare-page] {
+    color: var(--color-text);
+}
+
+.storefront-compare__title,
+.storefront-compare .storefront-compare__header h1 {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+.storefront-compare__meta,
+[data-compare-page-meta] {
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+    letter-spacing: 0;
+}
+
+.storefront-compare__header {
+    margin-block-end: clamp(1.25rem, 3vw, 2rem);
+    padding-block-end: 0;
+    border-block-end: 0;
+}
+
+.storefront-compare__empty,
+[data-compare-page-empty] {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: clamp(2.5rem, 6vw, 4.5rem) 1.25rem;
+    text-align: center;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    box-shadow: none;
+}
+
+.storefront-compare__cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--daocharms-control-height);
+    padding: 0.35rem 1.25rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-weight: 500;
+    font-size: 0.9rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-decoration: none;
+    box-shadow: none;
+}
+
+.storefront-compare__cta:hover,
+.storefront-compare__cta:focus-visible {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
+}
+
+/* 2026-09-26 修「隐形文字」族 A：模块模板
+ * app/code/Weline/Compare/view/templates/frontend/compare/index.phtml 的内联 <style>
+ * 把 .storefront-compare__cta 的 color 硬编码为 #111（Amazon 黄底时代遗留），
+ * 而内联块排在主题 CSS 之后 → 同特异性下反超主题的 on-primary，于是「深字压深底」。
+ * 这里用高一档特异性（body + 类）收口，不改模块；根治仍需模块侧去掉硬编码 #111。 */
+body .storefront-compare__cta {
+    color: var(--color-on-primary);
+}
+
+body .storefront-compare__cta:hover,
+body .storefront-compare__cta:focus-visible {
+    color: var(--color-on-primary);
+}
+
+/* Compare grid (design 08): hairline rows, sticky label column, no card chrome. */
+.storefront-compare .storefront-compare__table-wrap,
+[data-compare-page] .storefront-compare__table-wrap {
+    border: 0;
+    border-radius: 0;
+    overflow-x: auto;
+}
+
+.storefront-compare .storefront-compare__table,
+[data-compare-page] .storefront-compare__table {
+    border: 0;
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: 0;
+    background: transparent;
+}
+
+.storefront-compare .storefront-compare__table th,
+.storefront-compare .storefront-compare__table td,
+[data-compare-page] .storefront-compare__table th,
+[data-compare-page] .storefront-compare__table td {
+    padding: 0.9rem 1.1rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-inline-start: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+    vertical-align: middle;
+    background: transparent;
+}
+
+.storefront-compare .storefront-compare__table th:first-child,
+.storefront-compare .storefront-compare__table td:first-child,
+[data-compare-page] .storefront-compare__table th:first-child,
+[data-compare-page] .storefront-compare__table td:first-child {
+    background: var(--color-bg-canvas);
+    box-shadow: none;
+    color: var(--color-text-secondary);
+    font-weight: 400;
+}
+
+.storefront-compare .storefront-compare__table thead th,
+[data-compare-page] .storefront-compare__table thead th {
+    background: transparent;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    font-weight: 400;
+    text-align: center;
+    color: var(--color-text);
+}
+
+.storefront-compare .storefront-compare__table thead th:first-child,
+[data-compare-page] .storefront-compare__table thead th:first-child {
+    background: var(--color-bg-canvas);
+}
+
+.storefront-compare .storefront-compare__table td:not(:first-child),
+[data-compare-page] .storefront-compare__table td:not(:first-child) {
+    text-align: center;
+    color: var(--color-text);
+}
+
+.storefront-compare .storefront-compare__table thead th :is(a, span),
+[data-compare-page] .storefront-compare__table thead th :is(a, span) {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.05rem;
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+.storefront-compare .storefront-compare__section th,
+[data-compare-page] .storefront-compare__section th {
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.72rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    font-weight: 500;
+}
+
+.storefront-compare .storefront-compare__thumb,
+[data-compare-page] .storefront-compare__thumb {
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-secondary);
+}
+
+.storefront-compare .storefront-compare__remove,
+[data-compare-page] .storefront-compare__remove {
+    min-height: 2.25rem;
+    padding: 0.15rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+}
+
+.storefront-compare .storefront-compare__remove:hover,
+.storefront-compare .storefront-compare__remove:focus-visible,
+[data-compare-page] .storefront-compare__remove:hover {
+    color: var(--color-primary);
+}
+
+.storefront-compare .storefront-compare__label--hit,
+.storefront-compare .storefront-compare__cell--hit,
+[data-compare-page] :is(.storefront-compare__label--hit, .storefront-compare__cell--hit) {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.storefront-compare .storefront-compare__cell--best-price,
+[data-compare-page] .storefront-compare__cell--best-price {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.w-compare-bar {
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+.w-compare-bar .w-button[data-variant="outline"],
+.w-compare-bar button[data-compare-clear] {
+    border-radius: var(--daocharms-radius-sm);
+    border-color: var(--color-border-default);
+    color: var(--color-text);
+}
+
+/* —— Cart (design 09): flush item rows on canvas, one paper summary panel —— */
+.weline-cart-shell,
+.weline-cart-shell--amazon {
+    color: var(--color-text);
+    background: transparent;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__header h1 {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__subtitle {
+    margin-block-start: 0.5rem;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__items-card {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__summary {
+    padding: clamp(1.25rem, 2.5vw, 1.75rem);
+    border: 0;
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+/* Item line: image + details, hairline separated, generous vertical rhythm. */
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line {
+    display: grid;
+    grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+    padding-block: 1.35rem;
+    border: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line:first-child {
+    padding-block-start: 0;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line-media img {
+    width: 100%;
+    height: auto;
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-secondary);
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line-details {
+    display: grid;
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+    color: var(--color-text);
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon :is(
+    .weline-cart-shell__line-sku,
+    .weline-cart-shell__line-meta,
+    .weline-cart-shell__line-unit
+) {
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
+    letter-spacing: 0;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line-price-now {
+    color: var(--color-text);
+    font-size: 1.05rem;
+    font-weight: 500;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line-price-was {
+    color: var(--color-text-secondary);
+}
+
+/* Quantity stepper: distinct control, selected value stays legible. */
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__qty {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+    overflow: hidden;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__qty button {
+    inline-size: 2.5rem;
+    block-size: var(--daocharms-control-height);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 1rem;
+    line-height: 1;
+    box-shadow: none;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__qty button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-bg-secondary) 45%, var(--color-bg-primary));
+    color: var(--color-primary);
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__qty button:disabled {
+    color: var(--color-text-secondary);
+    opacity: 0.5;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__qty-input {
+    inline-size: 3rem;
+    min-height: var(--daocharms-control-height);
+    padding: 0;
+    border: 0;
+    border-inline: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text);
+    text-align: center;
+    font: inherit;
+    font-size: 0.95rem;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__action--remove {
+    min-height: 2.25rem;
+    padding: 0.15rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__action--remove:hover {
+    color: var(--color-primary);
+}
+
+/* Unavailable / out-of-stock must not read as "just pale". */
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line.is-unavailable {
+    padding-inline-start: 0.9rem;
+    border-inline-start: 3px solid var(--color-warning, var(--color-border-default));
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line.is-unavailable .weline-cart-shell__line-title,
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__line-issue {
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__state--error,
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__message.is-error {
+    border: var(--daocharms-rule-width) solid var(--color-danger, var(--color-border-default));
+    background: color-mix(in srgb, var(--color-danger, var(--color-border-default)) 6%, var(--color-bg-primary));
+    color: var(--color-text);
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon h2,
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__price-head {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon :is(
+    .weline-cart-shell__summary-row,
+    .weline-cart-shell__summary-list > *
+) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.65rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    color: var(--color-text-secondary);
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon :is(
+    .weline-cart-shell__summary-row,
+    .weline-cart-shell__summary-list > *
+):last-child {
+    border-block-end: 0;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__summary-row--payable {
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__summary-note {
+    margin-block-start: 0.75rem;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.65;
+}
+
+/* "Continue shopping" under the checkout CTA reads as a quiet link, not a second CTA. */
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__summary-continue {
+    min-height: 2.25rem;
+    padding: 0.35rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-link, var(--color-text));
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    letter-spacing: 0;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__summary-continue:hover,
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__summary-continue:focus-visible {
+    background: transparent;
+    border-color: transparent;
+    color: var(--color-primary);
+}
+
+.weline-cart-shell__state[data-cart-state="empty"],
+.weline-cart-shell[data-cart-view="empty"] > [data-cart-state="empty"] {
+    padding: clamp(2rem, 4vw, 3rem) 1.25rem;
+    text-align: center;
+    border: var(--daocharms-rule-width) dashed var(--color-border-default);
+    border-radius: var(--daocharms-radius-md);
+    background: color-mix(in srgb, var(--color-bg-primary) 88%, var(--color-bg-secondary));
+}
+
+.weline-cart-shell__empty-lead {
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+}
+
+.weline-cart-shell__continue,
+.weline-cart-shell__empty-actions a.weline-cart-shell__continue {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    padding: 0.35rem 1.25rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-primary);
+    /* 全局 body a:not(…) 链接规则特异性极高（多枚 :not），实心按钮必须 !important 才不吃成深字 */
+    color: var(--color-on-primary) !important;
+    text-decoration: none;
+    letter-spacing: var(--daocharms-label-tracking);
+    box-shadow: none;
+}
+
+/* 设计稿 09：结算 CTA 之下的「继续购物」是沙色卡上的**安静下划线链接**，不是第二枚实心钮。
+   ⚠ 上面那条 !important 连它一起命中（同一元素双类），且模块 .weline-cart-shell--amazon
+   .weline-cart-shell__continue 把 bg/border 洗成透明后，浅字落在沙底上≈隐形
+   （2026-09-26 实测 computed color #E9EFEB on rgb(245,243,236)）。此块以更高特异性
+   (0,3,1) + !important 夺回颜色与透明表面；空态的 .weline-cart-shell__continue（无
+   --amazon 祖先钮）不受影响，仍走上面的实心皮肤。 */
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__summary-continue {
+    display: inline-block;
+    min-height: 2.25rem;
+    padding: 0.35rem 0;
+    border: 0 !important;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--color-link) !important;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    letter-spacing: 0;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__summary-continue:hover,
+body:has(.weline-cart-shell) .weline-cart-shell--amazon .weline-cart-shell__summary-continue:focus-visible {
+    background: transparent !important;
+    color: var(--color-link-hover) !important;
+}
+
+.weline-cart-shell__continue:hover,
+.weline-cart-shell__continue:focus-visible {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary) !important;
+}
+
+.weline-cart-shell__checkout {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    border: var(--daocharms-rule-width) solid var(--color-primary) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary) !important;
+    letter-spacing: var(--daocharms-label-tracking);
+    font-weight: 500;
+    text-decoration: none;
+    box-shadow: none !important;
+}
+
+.weline-cart-shell__checkout:hover,
+.weline-cart-shell__checkout:focus-visible {
+    background: var(--color-primary-hover) !important;
+    border-color: var(--color-primary-hover) !important;
+    color: var(--color-on-primary) !important;
+}
+
+.weline-cart-shell__checkout.is-disabled,
+.weline-cart-shell__checkout[aria-disabled="true"] {
+    opacity: 0.55;
+}
+
+/* —— Checkout (design 10): compact paper panels, sectioned fields, labelled options —— */
+.weline-checkout {
+    color: var(--color-text);
+}
+
+.weline-checkout__eyebrow {
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    font-size: 0.72rem;
+}
+
+body:has(.weline-checkout) .weline-checkout__header-title,
+body:has(.weline-checkout) .weline-checkout :is(h1, .weline-checkout__title) {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+.weline-checkout__back {
+    min-height: 2.25rem;
+    color: var(--color-link, var(--color-text));
+    text-underline-offset: 0.2em;
+    text-decoration: underline;
+}
+
+.weline-checkout__panel,
+.weline-checkout__summary {
+    padding: clamp(1.15rem, 2.5vw, 1.6rem);
+    border: 0;
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+/* Section rhythm inside the details panel: hairline between task groups. */
+body:has(.weline-checkout) .weline-checkout__panel :is(h2, h3, .weline-checkout__section-title) {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.1rem;
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body:has(.weline-checkout) .weline-checkout__fields {
+    display: grid;
+    gap: 0.9rem 1rem;
+}
+
+body:has(.weline-checkout) .weline-checkout__fields .w-field {
+    min-width: 0;
+}
+
+/* Errors stay adjacent to their field and never rely on colour alone. */
+body:has(.weline-checkout) .weline-checkout .w-field__error,
+body:has(.weline-checkout) .weline-checkout [role="alert"].error {
+    margin-block-start: 0.3rem;
+    color: var(--color-danger, var(--color-text));
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+body:has(.weline-checkout) .weline-checkout .w-field.is-invalid .w-input,
+body:has(.weline-checkout) .weline-checkout :is(input, select, textarea)[aria-invalid="true"] {
+    border-color: var(--color-danger, var(--color-border-default));
+    border-inline-start-width: 3px;
+}
+
+.weline-checkout__empty-state,
+.weline-checkout__payment-recovery {
+    padding: clamp(1.5rem, 3vw, 2.5rem);
+    border: 0;
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+/* Shipping / payment method rows: whole row is the control, selected state is explicit. */
+body:has(.weline-checkout) .weline-checkout__option,
+body:has(.weline-checkout) .weline-checkout :is(
+    [data-shipping-methods] label,
+    [data-payment-methods] label
+) {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+    box-shadow: none;
+    cursor: pointer;
+}
+
+body:has(.weline-checkout) .weline-checkout__option:has(input:checked),
+body:has(.weline-checkout) .weline-checkout :is(
+    [data-shipping-methods] label,
+    [data-payment-methods] label
+):has(input:checked) {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-primary));
+}
+
+body:has(.weline-checkout) .weline-checkout__option:has(input:checked),
+body:has(.weline-checkout) .weline-checkout :is(
+    [data-shipping-methods] label,
+    [data-payment-methods] label
+):has(input:checked) {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-primary));
+    font-weight: 500;
+}
+
+body:has(.weline-checkout) .weline-checkout__option:focus-within,
+body:has(.weline-checkout) .weline-checkout :is(
+    [data-shipping-methods] label,
+    [data-payment-methods] label
+):focus-within {
+    outline: var(--daocharms-focus-ring-width) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    outline-offset: 1px;
+}
+
+/* Unavailable methods: dashed edge + muted copy, never pale colour alone. */
+body:has(.weline-checkout) .weline-checkout__option:has(input:disabled),
+body:has(.weline-checkout) .weline-checkout :is(
+    [data-shipping-methods] label,
+    [data-payment-methods] label
+):has(input:disabled) {
+    border-style: dashed;
+    background: color-mix(in srgb, var(--color-bg-secondary) 35%, var(--color-bg-primary));
+    color: var(--color-text-secondary);
+    cursor: not-allowed;
+}
+
+body:has(.weline-checkout) .weline-checkout__totals,
+body:has(.weline-checkout) .weline-checkout__grand {
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+body:has(.weline-checkout) .weline-checkout__summary :is(h2, .weline-checkout__summary-title) {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.15rem;
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body:has(.weline-checkout) .weline-checkout__item {
+    padding-block: 0.85rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    color: var(--color-text-secondary);
+}
+
+body:has(.weline-checkout) .weline-checkout__item-title {
+    color: var(--color-text);
+    font-weight: 400;
+}
+
+body:has(.weline-checkout) .weline-checkout__item-thumb {
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-secondary);
+}
+
+body:has(.weline-checkout) .weline-checkout__submit,
+body:has(.weline-checkout) .weline-checkout__submit button {
+    width: 100%;
+    min-height: var(--daocharms-control-height);
+    border: var(--daocharms-rule-width) solid var(--color-primary) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary) !important;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking);
+    box-shadow: none !important;
+}
+
+.weline-checkout__empty-state,
+.weline-checkout__payment-recovery {
+    padding: clamp(1.5rem, 3vw, 2.5rem);
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-md);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+.weline-checkout__empty-primary,
+.weline-checkout button.weline-checkout__empty-primary,
+.weline-checkout [data-checkout-place-order],
+.weline-checkout .weline-checkout__place,
+.weline-checkout button[type="submit"]:not([data-variant="ghost"]):not([data-variant="outline"]) {
+    border: var(--daocharms-rule-width) solid var(--color-primary) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary) !important;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    box-shadow: none !important;
+    letter-spacing: var(--daocharms-label-tracking);
+}
+
+.weline-checkout__empty-primary:hover,
+.weline-checkout button.weline-checkout__empty-primary:hover,
+.weline-checkout [data-checkout-place-order]:hover {
+    background: var(--color-primary-hover) !important;
+    border-color: var(--color-primary-hover) !important;
+}
+
+.weline-checkout__empty-secondary,
+.weline-checkout__back {
+    color: var(--color-link);
+    text-underline-offset: 0.15em;
+}
+
+.weline-checkout__options {
+    gap: 0.65rem;
+}
+
+.weline-checkout__options label,
+.weline-checkout [data-shipping-methods] label,
+.weline-checkout [data-payment-methods] label {
+    border: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+    box-shadow: none;
+}
+
+/* —— Payment guide (design 38): reading rows + link column, restrained hierarchy —— */
+.amazon-payment-guide-layout,
+.amazon-payment-guide-layout__body-root {
+    background: var(--color-bg-canvas);
+    color: var(--color-text);
+}
+
+.amazon-payment-guide-layout__shell,
+.amazon-payment-guide-layout__main {
+    max-inline-size: var(--weline-layout-content-max-width, 72rem);
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline, 1rem);
+}
+
+.amazon-payment-guide-layout :is(h1, h2, .amazon-payment-guide-layout__title) {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 400;
+    color: var(--color-text);
+}
+
+.amazon-payment-guide-layout :is(aside, .amazon-payment-guide-layout__aside, .payment-guide-nav) {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.amazon-payment-guide-layout a:not(.btn):not(.w-button) {
+    color: var(--color-link, var(--color-text));
+}
+
+.amazon-payment-guide-layout a:not(.btn):not(.w-button):hover {
+    color: var(--color-link-hover, var(--color-primary));
+}
+
+.amazon-payment-guide-listing__header {
+    margin-block-end: clamp(1.5rem, 3vw, 2.25rem);
+    padding-block-end: 0;
+    border-block-end: 0;
+}
+
+.amazon-payment-guide-listing__title {
+    margin: 0;
+    font-size: clamp(1.6rem, 3vw, 2.1rem);
+}
+
+.amazon-payment-guide-listing__subtitle,
+.amazon-payment-guide-listing__meta {
+    margin: 0.5rem 0 0;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.7;
+    max-inline-size: 42rem;
+}
+
+/* Each method becomes a reading row: copy left, guide links right, hairline between. */
+.amazon-payment-guide-listing__grid {
+    display: block;
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+.amazon-payment-guide-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 13rem);
+    column-gap: clamp(1rem, 3vw, 2.5rem);
+    row-gap: 0.4rem;
+    align-items: start;
+    padding: clamp(1.1rem, 2.5vw, 1.6rem) 0;
+    border: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.amazon-payment-guide-card__title {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.15rem;
+    font-weight: 400;
+    color: var(--color-text);
+}
+
+.amazon-payment-guide-card__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.55rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: color-mix(in srgb, var(--color-bg-secondary) 40%, var(--color-bg-primary));
+    color: var(--color-text-secondary);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+}
+
+.amazon-payment-guide-card__summary {
+    grid-column: 1;
+    grid-row: 2;
+    margin: 0;
+    max-inline-size: 40rem;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+.amazon-payment-guide-card__actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    padding-block-start: 0.15rem;
+}
+
+.amazon-payment-guide-card__actions :is(a, .amazon-payment-guide-card__link, button) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    text-decoration-color: var(--color-border-default);
+}
+
+.amazon-payment-guide-card__actions :is(a, .amazon-payment-guide-card__link, button):hover,
+.amazon-payment-guide-card__actions :is(a, .amazon-payment-guide-card__link, button):focus-visible {
+    color: var(--color-primary);
+    text-decoration-color: var(--color-primary);
+}
+
+.amazon-payment-guide-card__link--muted {
+    color: var(--color-text-secondary);
+}
+
+.amazon-payment-guide-listing__empty {
+    padding: clamp(2rem, 5vw, 3.5rem) 1rem;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    text-align: center;
+}
+
+@media (max-width: 720px) {
+    .amazon-payment-guide-card {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .amazon-payment-guide-card__actions {
+        grid-column: 1;
+        grid-row: 3;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.35rem 1.25rem;
+        padding-block-start: 0.35rem;
+    }
+}
+
+/* —— Currency guide (design 39): readable rate table, restrained type scale —— */
+.w-currency-guide {
+    width: min(100%, var(--weline-layout-content-max-width, 72rem));
+    margin-inline: auto;
+    padding: clamp(2rem, 4vw, 3rem) var(--weline-layout-content-padding-inline, 1rem) clamp(3rem, 6vw, 4.5rem);
+    color: var(--color-text);
+    background: transparent;
+}
+
+.w-currency-guide__title {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 400;
+    color: var(--color-text);
+}
+
+.w-currency-guide__subtitle,
+.w-currency-guide__policy-list,
+.w-currency-guide__empty {
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+}
+
+.w-currency-guide__subtitle {
+    max-inline-size: 42rem;
+    font-size: 0.95rem;
+}
+
+.w-currency-guide__header {
+    margin-block-end: clamp(1.5rem, 3vw, 2.25rem);
+    padding-block-end: 0;
+    border-block-end: 0;
+}
+
+.w-currency-guide__section-title {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.15rem, 2vw, 1.4rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+    margin-block: 0 0.75rem;
+}
+
+.w-currency-guide__policy {
+    margin-block-end: clamp(1.75rem, 3.5vw, 2.5rem);
+}
+
+.w-currency-guide__policy-list {
+    margin: 0;
+    padding-inline-start: 1.15rem;
+    max-inline-size: 42rem;
+    font-size: 0.95rem;
+}
+
+.w-currency-guide__policy-list li + li {
+    margin-block-start: 0.45rem;
+}
+
+/* Card grid → aligned rate rows (currency · name · symbol · role). */
+.w-currency-guide__grid {
+    display: block;
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+.w-currency-guide__card {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr) 5rem minmax(0, 10rem);
+    align-items: center;
+    column-gap: 1rem;
+    padding: 0.85rem 0;
+    border: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.w-currency-guide__card-code {
+    letter-spacing: var(--daocharms-label-tracking);
+    color: var(--color-text);
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.w-currency-guide__card-name {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+    font-weight: 400;
+}
+
+.w-currency-guide__card-symbol {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.95rem;
+}
+
+.w-currency-guide__badge {
+    grid-column: 4;
+    justify-self: start;
+    display: inline-flex;
+    margin: 0;
+    padding: 0.15rem 0.55rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: color-mix(in srgb, var(--color-bg-secondary) 40%, var(--color-bg-primary));
+    color: var(--color-text-secondary);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+}
+
+@media (max-width: 640px) {
+    .w-currency-guide__card {
+        grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    }
+
+    .w-currency-guide__badge {
+        grid-column: 3;
+    }
+
+    .w-currency-guide__card-symbol {
+        display: none;
+    }
+}
+
+/* —— Category page (design 05) ——
+   The category route renders through its own module layout (no theme body class), so it is
+   scoped with :has() rather than a body class. */
+body:has(.amz-plp) .amz-plp,
+body:has(.category-layout__main) .category-layout__main {
+    color: var(--color-text);
+}
+
+body:has(.amz-plp) .amz-plp__banner {
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-secondary);
+}
+
+body:has(.amz-plp) :is(.amz-plp__heading, .amz-plp__title) {
+    margin: 0 0 0.6rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body:has(.amz-plp) :is(.amz-plp__summary, .amz-plp__intro-text) {
+    margin: 0;
+    max-inline-size: 42rem;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+body:has(.amz-plp) .amz-plp__crumb,
+body:has(.amz-plp) .amz-plp__crumb a {
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+
+body:has(.amz-plp) .amz-plp__results-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin: 0 0 clamp(1rem, 2.5vw, 1.75rem);
+    padding: 0 0 0.75rem;
+    border: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+}
+
+body:has(.amz-plp) :is(.amz-plp__results-text, .amz-plp__results-query, .amz-plp__results-hint) {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+}
+
+body:has(.amz-plp) .amz-plp__results-query {
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+body:has(.amz-plp) .amz-plp__sort-select {
+    min-height: 2.5rem;
+    padding: 0.35rem 2rem 0.35rem 0.75rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background-color: var(--color-bg-primary);
+    color: var(--color-text);
+    box-shadow: none;
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+/* Empty collection: centred explanation, no dashed box (design 05). */
+body:has(.amz-plp) .amz-plp__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-block-size: 12rem;
+    margin-block: clamp(1.5rem, 4vw, 3rem);
+    padding: clamp(2.5rem, 6vw, 4.5rem) 1.25rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    text-align: center;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.15rem, 2.2vw, 1.5rem);
+    line-height: 1.5;
+}
+
+body:has(.amz-plp) .amz-plp__child {
+    border-radius: var(--daocharms-radius-sm);
+    border-color: var(--color-border-subtle);
+    color: var(--color-text);
+}
+
+/* Category rail shares the listing rail language. */
+body:has(.category-layout__main) .category-layout__sidebar {
+    background: transparent;
+    border-inline-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    padding-inline-end: 1.25rem;
+}
+
+body:has(.category-layout__main) .category-layout__sidebar-title {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+/* Mobile-only skin: the module layout hides the toggle on desktop (display:none, ≤900px shows it).
+   Keep that breakpoint here too — an unconditional display would make the toggle a third grid item
+   in .category-layout__container and collapse the content column to the 220px sidebar track. */
+@media screen and (max-width: 900px) {
+    body:has(.category-layout__main) .category-layout__filter-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        min-height: var(--daocharms-control-height);
+        padding: 0.35rem 1rem;
+        border: var(--daocharms-rule-width) solid var(--color-border-default);
+        border-radius: var(--daocharms-radius-sm);
+        background: var(--color-bg-primary);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 0.875rem;
+        box-shadow: none;
+    }
+
+    body:has(.category-layout__main) .category-layout__filter-toggle[aria-expanded="true"] {
+        border-color: var(--color-primary);
+        color: var(--color-primary);
+    }
+}
+
+body:has(.category-layout__main) .category-layout__placeholder {
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+}
+
+/* —— Shop collections hub (design 02) ——
+   Image + text composition per collection cell, hairline grid separators,
+   one solid primary action for the live collection and a quiet link for later waves. */
+body.daocharms-shop-hub .daocharms-shop-hub__inner {
+    width: min(100%, var(--weline-layout-content-max-width, 72rem));
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__hero {
+    margin-bottom: clamp(1.75rem, 3.5vw, 2.75rem);
+    padding-bottom: 0;
+    border-block-end: 0;
+    text-align: center;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__hero h1 {
+    margin: 0 0 0.6rem;
+    font-size: clamp(2rem, 4.4vw, 3rem);
+    letter-spacing: var(--daocharms-heading-tracking);
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__eyebrow,
+body.daocharms-shop-hub .daocharms-page__eyebrow {
+    justify-content: center;
+    margin-inline: auto;
+    text-align: center;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__lede {
+    margin-inline: auto;
+    max-width: 44rem;
+    text-align: center;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-inline-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+@media (min-width: 720px) {
+    body.daocharms-shop-hub .daocharms-shop-hub__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card,
+body.daocharms-shop-hub .daocharms-shop-hub__card--later {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    padding: 1.15rem;
+    border: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-inline-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+/* Only split media/body once the collection cell has room for a text column. */
+@media (min-width: 1024px) {
+    body.daocharms-shop-hub .daocharms-shop-hub__card,
+    body.daocharms-shop-hub .daocharms-shop-hub__card--later {
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+        align-items: center;
+    }
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__media {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    margin-bottom: 0;
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-secondary);
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__status,
+body.daocharms-shop-hub .daocharms-shop-hub__status--live {
+    margin: 0;
+    font-size: 0.72rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card-title {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.3rem, 2.2vw, 1.7rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card-body {
+    margin: 0;
+    flex: 0 1 auto;
+    max-width: 26rem;
+    line-height: 1.65;
+    font-size: 0.95rem;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card-actions {
+    margin-block-start: 0.4rem;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    padding: 0.3rem 1.15rem;
+    border: var(--daocharms-rule-width) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-primary);
+    /* 同 .weline-cart-shell__continue：全局 body a:not(…) 链接规则特异性极高，须 !important */
+    color: var(--color-on-primary) !important;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card-cta:hover,
+body.daocharms-shop-hub .daocharms-shop-hub__card-cta:focus-visible {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary) !important;
+}
+
+/* Later waves: capability is unchanged, only the visual weight is lowered. */
+body.daocharms-shop-hub .daocharms-shop-hub__card--later .daocharms-shop-hub__card-cta {
+    min-height: 2rem;
+    padding: 0 0 0.15rem;
+    border: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text);
+    text-underline-offset: 0.2em;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card--later .daocharms-shop-hub__card-cta:hover,
+body.daocharms-shop-hub .daocharms-shop-hub__card--later .daocharms-shop-hub__card-cta:focus-visible {
+    border-block-end-color: var(--color-primary);
+    color: var(--color-primary);
+    background: transparent;
+}
+
+/* UI 02：五行测验横条 */
+body.daocharms-shop-hub .daocharms-shop-hub__quiz {
+    display: grid;
+    grid-template-columns: minmax(8rem, 12rem) 1fr auto;
+    gap: var(--weline-space-4, 1rem);
+    align-items: center;
+    margin-block: clamp(2rem, 4vw, 3.5rem) 0;
+    padding: clamp(1rem, 2vw, 1.35rem) clamp(1rem, 2.5vw, 1.75rem);
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    background: var(--color-bg-canvas);
+    color: var(--color-text) !important;
+    text-decoration: none;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__quiz:hover,
+body.daocharms-shop-hub .daocharms-shop-hub__quiz:focus-visible {
+    border-color: var(--color-primary);
+    color: var(--color-text) !important;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__quiz-kicker {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__quiz-copy {
+    display: grid;
+    gap: 0.2rem;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__quiz-copy strong {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-weight: 400;
+    font-size: 1.05rem;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__quiz-copy span {
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__quiz-arrow {
+    font-size: 1.25rem;
+    color: var(--color-primary);
+}
+
+@media (max-width: 719px) {
+    body.daocharms-shop-hub .daocharms-shop-hub__quiz {
+        grid-template-columns: 1fr auto;
+    }
+
+    body.daocharms-shop-hub .daocharms-shop-hub__quiz-kicker {
+        grid-column: 1 / -1;
+    }
+}
+
+/* ==========================================================================
+   商品卡竖向节奏对齐（PLP / 搜索 / 相关商品 / 首页货架共用同一张 canonical 卡）
+   --------------------------------------------------------------------------
+   症状：同一行内标题折两行的卡，价签与按钮比单行标题的邻卡低一行（实测 23px），
+        整行底部参差；带真实评价的卡会再低一行（评分行高度）。
+   根因：① 本主题把 `.wpc-title` 的 min-height 归零（模块默认保留两行，
+           见 ProductCardVerticalRhythmContractTest「避免网格内价签/CTA 上下错位」）；
+        ② 0 评价的评分行 display:none（规范 §8 禁空星）→ 同行「有/无评价」两态不等高；
+        ③ 动作区两层外层容器 flex:0 1 auto → 按钮只占约 230/266，右侧留死白。
+   做法：把卡内信息切成等高「带」，同行逐带对齐。不改模块模板，只在本主题收口。
+   ========================================================================== */
+
+/* 带 1 · 标题：恒定占两行（2lh = 2 × 行高，随字号/行高自适应，与 -webkit-line-clamp:2 一致）。
+   必须带上 density-shelf / density-compact 变体：上面那条 min-height:0 的规则里
+   `.weline-product-card.density-shelf .wpc-title` 特异性比裸 `.wpc-title` 高一档，
+   首页货架卡正是 density-shelf —— 只写裸选择器会在首页失效。 */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-title,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card.density-shelf .wpc-title,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card.density-compact .wpc-title {
+    min-height: 2lh;
+}
+
+/* 折两行时按词均衡断行，避免末行只剩一个词（如 "… / Pendant" 孤行） */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-title a {
+    text-wrap: balance;
+}
+
+/* 带 2 · 评分：空评价行仍按规范 §8 隐藏；但同一网格里只要有卡带真实评价，
+   空评价行改为「占位不可见」（visibility 保留盒子），同行价签/按钮继续对齐。 */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) :is(.products-grid, .product-storefront__grid, .storefront-search__grid, .amz-plp__grid):has(.weline-product-card .wpc-rating:not([aria-label="0.0 (0)"])) .weline-product-card .wpc-rating[aria-label="0.0 (0)"] {
+    display: inline-flex;
+    visibility: hidden;
+}
+
+/* 带 3 · 动作行：两个动作外层按 3:2 撑满整行（主 CTA 略宽），消除右侧死白 */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta :is(.product-card-purchase-actions, .product-purchase-actions) {
+    align-items: stretch;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .weline-cart-product-card-add-to-cart,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .weline-checkout-product-card-buy-now {
+    display: flex;
+    min-width: 0;
+    flex: 3 1 0;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .weline-checkout-product-card-buy-now {
+    flex: 2 1 0;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta :is(.weline-cart-product-card-add-to-cart, .weline-checkout-product-card-buy-now) :is(button, a) {
+    width: 100%;
+}
+
+/* 兜底「查看详情」CTA（无报价/不可售）：原 flex-basis 落在纵向 → 365×128 实心深绿块，
+   且字色与填充同色（对比度 1.00:1，属「隐形文字」族 A 的新实例，此前清单未记录）。
+   收敛为一行高的整宽主按钮，并按同族先例补 !important 浅色字。 */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-cta .wpc-detail-link {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: var(--daocharms-control-height);
+    color: var(--color-on-primary) !important;
+}
+
+
+/* ============================================================================
+ * 39-currency 币种说明（差异清单 §8 ③ / §2 #3，2026-09-26）
+ *
+ * 模块模板输出的是 `repeat(auto-fill, minmax(12rem,1fr))` 卡片网格，结构上装不下
+ * 设计稿的 CURRENCY/SYMBOL/ROLE 三列（模块没有 ROLE 列）⇒ 已由主题 override 重写为
+ * 「左三列表格 + 右栏（配图 + 3 段说明）」：
+ *   app/design/Weline/daocharms/Weline/Currency/view/templates/Frontend/currency/index.phtml
+ * 本块只做皮肤。模块自己的 currency-guide.css 仍被模板加载，故容器/空态要就地覆盖。
+ *
+ * 色值来自对设计稿 ui/39-currency.webp 的逐点取样（像素通道，非目测）：
+ *   画布 #ECF1ED ≈ --color-bg-canvas(#E9EFEB)
+ *   行/表头分隔线 #D7DCD8、竖发丝线 #D4D9D5 ≈ --color-border-subtle(#D5DCD6)
+ *   表头行与数据行**无底色**（与画布同色；原清单记的「浅白带」是 webp 压缩噪声）
+ *
+ * ⚠️ 版心：模块给 `.w-currency-guide` 的是 width:100% / max-width:100% ⇒ 1440 下实测贴边
+ *   （x=0），设计稿左右各 48px。这里补内边距（与政策壳同口径，不用
+ *   --weline-layout-content-padding-inline：它在 ≥1440 时求值为 0）。
+ * ⚠️ 链接色必须 !important：全局 `body a:not(…)`（11 枚 :not，特异性 (0,11,2)，
+ *   见 daocharms-ritual.css）会把所有链接刷成 --color-link。本主题既定做法即 !important。
+ * ========================================================================== */
+
+body:has(.w-currency-guide) .w-currency-guide {
+    padding: 0;
+}
+
+body:has(.w-currency-guide) :is(.daocharms-currency__header, .daocharms-currency__body, .daocharms-currency__policy) {
+    width: min(100%, var(--weline-layout-content-max-width, 90rem));
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 3.4vw, 3rem);
+}
+
+/* 设计稿：导语之下 ≈45px 处是**表头自带的那条**横向发丝线（x 52→819，只跨表格列）。
+   ⚠️ 不要再给 __header 加 border-block-end：padding-inline 不会内缩边框，会得到一条
+   通栏（x 0→1440）的线，和表头线叠成"双线"（2026-09-26 实测踩过）。
+   模块 __header 自带 margin-bottom:2rem，这里清零后由 padding-block-end 独占控制这段距离。 */
+body:has(.w-currency-guide) .daocharms-currency__header {
+    padding-block: clamp(2rem, 4vw, 3.25rem) clamp(2.5rem, 3.2vw, 2.9rem);
+    margin-block-end: 0;
+}
+
+body:has(.w-currency-guide) .daocharms-currency__eyebrow {
+    margin: 0 0 .6rem;
+    font-family: var(--font-family-base);
+    font-size: .72rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking, .07em);
+    text-transform: uppercase;
+    color: var(--color-text-secondary, #53665B);
+}
+
+body:has(.w-currency-guide) .w-currency-guide__title {
+    margin: 0 0 .85rem;
+    font-family: var(--font-family-display);
+    font-size: clamp(1.85rem, 4.4vw, 3.1rem);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    color: var(--color-text);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__lede {
+    margin: 0;
+    max-inline-size: 52rem;
+    font-size: 1rem;
+    line-height: 1.65;
+    color: var(--color-text-secondary, #53665B);
+}
+
+/* 两栏骨架。设计稿 1440：表格 48→820、竖线 856、右栏 895→1390（≈808 : 495）。 */
+body:has(.w-currency-guide) .daocharms-currency__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(2rem, 4vw, 3.25rem);
+    align-items: start;
+    padding-block-end: clamp(2rem, 4vw, 3rem);
+}
+
+@media (min-width: 60rem) {
+    body:has(.w-currency-guide) .daocharms-currency__body {
+        grid-template-columns: minmax(0, 1.62fr) minmax(15rem, 1fr);
+        column-gap: clamp(1.75rem, 2.7vw, 2.5rem);
+    }
+
+    body:has(.w-currency-guide) .daocharms-currency__table-wrap {
+        border-inline-end: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+        padding-inline-end: clamp(2rem, 2.6vw, 2.4rem);
+    }
+}
+
+/* 表格块顶部留白由模块 `.w-currency-guide__list` 自带（实测 32px，正好等于设计稿
+   「横向发丝线 → 表头 ≈32px」）⇒ 此处**不要**再加 padding-block-start，否则会叠成 64px。 */
+
+body:has(.w-currency-guide) .daocharms-currency__section-title {
+    margin: 0 0 clamp(.85rem, 1.6vw, 1.15rem);
+    font-family: var(--font-family-display);
+    font-size: clamp(1.25rem, 1.7vw, 1.5rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    color: var(--color-text);
+}
+
+/* ---------- 表格 ---------- */
+
+body:has(.w-currency-guide) .daocharms-currency__table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-family: var(--font-family-base);
+    font-size: 1rem;
+    color: var(--color-text);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__table :is(th, td) {
+    padding-block: clamp(.7rem, 1.5vw, 1rem);
+    padding-inline: 0;
+    text-align: start;
+    vertical-align: baseline;
+    font-weight: 400;
+}
+
+body:has(.w-currency-guide) .daocharms-currency__table thead th {
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+    border-block-end: var(--daocharms-rule-width, 1px) solid var(--color-border-default, #C7D0C8);
+    font-size: .72rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking, .07em);
+    text-transform: uppercase;
+    color: var(--color-text-secondary, #53665B);
+}
+
+/* 列宽按设计稿 368 / 176 / 228（合 772）折算。table-layout:fixed ⇒ 只认首行宽度。 */
+body:has(.w-currency-guide) .daocharms-currency__table thead th:nth-child(1) {
+    inline-size: 48%;
+}
+
+body:has(.w-currency-guide) .daocharms-currency__table thead th:nth-child(2) {
+    inline-size: 23%;
+}
+
+body:has(.w-currency-guide) .daocharms-currency__table thead th:nth-child(3) {
+    inline-size: 29%;
+}
+
+body:has(.w-currency-guide) .daocharms-currency__row {
+    border-block-end: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+}
+
+/* 货币代码与名称同格两栏（设计稿 code@48 / name@94）。 */
+body:has(.w-currency-guide) .daocharms-currency__code {
+    display: inline-block;
+    min-inline-size: 3rem;
+    font-weight: 500;
+    letter-spacing: .02em;
+    color: var(--color-text);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__name {
+    color: var(--color-text-secondary, #53665B);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__cell--symbol {
+    color: var(--color-text);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__cell--role {
+    color: var(--color-text-secondary, #53665B);
+}
+
+/* ---------- 右栏 ---------- */
+
+body:has(.w-currency-guide) .daocharms-currency__rail {
+    display: grid;
+    /* 设计稿：配图底 → 第一条发丝线 → 块标题 ≈18px。间距全部由各块自己的
+       border-block-start + padding 提供，故栏内不留 gap（否则会叠成 36px+）。 */
+    gap: 0;
+    align-content: start;
+}
+
+body:has(.w-currency-guide) .daocharms-currency__figure {
+    margin: 0;
+    overflow: hidden;
+    border-radius: var(--daocharms-radius-sm, 2px);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__figure-img {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+    aspect-ratio: 495 / 290;
+    object-fit: cover;
+    object-position: center;
+}
+
+body:has(.w-currency-guide) .daocharms-currency__note {
+    /* 设计稿实测块内上留白 ≈18–20px（原为 clamp 到 28px，偏大）。 */
+    padding-block-start: clamp(1.05rem, 1.5vw, 1.25rem);
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__note-title {
+    margin: 0 0 .5rem;
+    font-family: var(--font-family-display);
+    font-size: clamp(1.15rem, 1.5vw, 1.4rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    color: var(--color-text);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__note p {
+    margin: 0;
+    font-size: .95rem;
+    line-height: 1.65;
+    color: var(--color-text-secondary, #53665B);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__note-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    margin-block-start: .6rem;
+    min-block-size: var(--daocharms-control-height, 2.75rem); /* §7 点击目标 ≥44px */
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    font-weight: 500;
+    color: var(--color-text) !important;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: .22em;
+    text-decoration-color: color-mix(in srgb, var(--color-text) 40%, transparent);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__note-link:hover,
+body:has(.w-currency-guide) .daocharms-currency__note-link:focus-visible {
+    color: var(--color-primary-hover, #162A25) !important;
+    text-decoration-color: currentColor;
+}
+
+/* ---------- 汇率政策（真实内容，放两栏之下、次级呈现） ---------- */
+
+body:has(.w-currency-guide) .daocharms-currency__policy {
+    padding-block: clamp(1.5rem, 3vw, 2.25rem) clamp(2.5rem, 5vw, 4rem);
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+}
+
+body:has(.w-currency-guide) .daocharms-currency__policy-list {
+    margin: 0;
+    padding-inline-start: 1.15rem;
+    display: grid;
+    gap: .55rem;
+    max-inline-size: 52rem;
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    line-height: 1.65;
+    color: var(--color-text-secondary, #53665B);
+}
+
+/* 窄屏：代码与名称改为上下两行，避免「Norwegian Krone」在 44% 列里折成三行。 */
+@media (max-width: 40rem) {
+    body:has(.w-currency-guide) .daocharms-currency__table {
+        font-size: .92rem;
+    }
+
+    body:has(.w-currency-guide) .daocharms-currency__code {
+        display: block;
+        min-inline-size: 0;
+    }
+
+    body:has(.w-currency-guide) .daocharms-currency__table thead th:nth-child(1) {
+        inline-size: 42%;
+    }
+
+    body:has(.w-currency-guide) .daocharms-currency__table thead th:nth-child(2) {
+        inline-size: 26%;
+    }
+
+    body:has(.w-currency-guide) .daocharms-currency__table thead th:nth-child(3) {
+        inline-size: 32%;
+    }
+}
+
+
+/* ============================================================================
+ * 38-payment 支付方式指南（差异清单 §8 ③ / §2 #4，2026-09-26）
+ *
+ * 模块模板只有「H1 + 副标题 + 3 栏卡片网格」，缺设计稿的 hero 与
+ * 「PayPal: what to expect」面板 ⇒ 已由主题 override 重写：
+ *   app/design/Weline/daocharms/Weline/Payment/view/templates/Frontend/guide/payment/index.phtml
+ * 本块负责：撤销模块的亚马逊皮肤、把卡片网格改成纵向方法行、给 hero 与面板上色。
+ *
+ * 模块自带皮肤（全部脱离本主题灰绿色盘，须就地撤销）：
+ *   .weline-page-wrapper…{ background:#eaeded; color:#0f1111 }
+ *   侧栏/主体 { background:#fff; border:1px solid #d5d9d9; border-radius:lg }
+ *   激活项 { background:#f7f8f8; border-left:3px solid #e77600（琥珀，非色板内） }
+ *   设计规范 §4「减少容器嵌套和无意义卡片」⇒ 去卡片化。
+ *
+ * 色值来自对设计稿 ui/38-payment.webp 的逐点取样（像素通道）：
+ *   主体/侧栏底色 #F6F9F6（近白冷调）≈ color-mix(#fff 55%, --color-bg-canvas) → 实测 (245,248,246)
+ *   面板暖白 #F4F3EC ≈ --color-bg-primary(#F5F3EC)（实测逐通道差 ≤1）
+ *   发丝线 #D7DCD8 / 竖线 #E2E2E2 ≈ --color-border-subtle(#D5DCD6)
+ *   激活竖条 #203B34 = --color-primary；胶囊底 #E7E1D8 ≈ --color-bg-secondary 45% 混画布
+ * ========================================================================== */
+
+body:has(.amazon-payment-guide-layout) .weline-page-wrapper.amazon-payment-guide-layout {
+    background: var(--color-bg-canvas);
+    color: var(--color-text);
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__shell {
+    /* 设计稿 1440：侧栏自 x=52 起 ⇒ 版心内边距 52px（与 39-currency 同口径） */
+    --daocharms-payment-gutter: clamp(1rem, 3.6vw, 3.25rem);
+    padding-inline: var(--daocharms-payment-gutter);
+    padding-block: 0 clamp(2.5rem, 5vw, 4rem);
+}
+
+/* ---------- hero ---------- */
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__hero {
+    position: relative;
+    margin-inline: calc(-1 * var(--daocharms-payment-gutter));
+    border-block-end: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+    overflow: hidden;
+    isolation: isolate;
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__hero-img {
+    display: block;
+    inline-size: 100%;
+    block-size: clamp(10rem, 14.1vw, 12.75rem); /* 设计稿 62→265 ≈ 203px @1440 */
+    object-fit: cover;
+    object-position: center;
+}
+
+/* 设计稿：左侧约一半有一层由不透明渐隐到透明的雾，保证标题可读（最密处实测 #EDF1EC）。 */
+body:has(.amazon-payment-guide-layout) .daocharms-payment__hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(
+        90deg,
+        var(--color-bg-canvas) 0%,
+        var(--color-bg-canvas) 28%,
+        color-mix(in srgb, var(--color-bg-canvas) 88%, transparent) 40%,
+        color-mix(in srgb, var(--color-bg-canvas) 48%, transparent) 50%,
+        transparent 62%
+    );
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__hero-inner {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: .5rem;
+    max-inline-size: 40rem;
+    padding-inline: var(--daocharms-payment-gutter);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__hero-title {
+    margin: 0;
+    font-family: var(--font-family-display);
+    font-size: clamp(1.9rem, 3.35vw, 3rem); /* 设计稿 ≈48px @1440 */
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    color: var(--color-text);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__hero-lede {
+    margin: 0;
+    font-family: var(--font-family-base);
+    font-size: 1rem;
+    line-height: 1.5;
+    color: var(--color-text-secondary, #53665B);
+}
+
+/* 窄屏：横条被压窄后左侧渐变盖不住整行标题 ⇒ 改为低透明度底图 + 纯画布底，保证 ≥4.5:1。 */
+@media (max-width: 48rem) {
+    body:has(.amazon-payment-guide-layout) .daocharms-payment__hero {
+        background: var(--color-bg-canvas);
+    }
+
+    body:has(.amazon-payment-guide-layout) .daocharms-payment__hero-img {
+        opacity: .25;
+    }
+
+    body:has(.amazon-payment-guide-layout) .daocharms-payment__hero::before {
+        background: none;
+    }
+}
+
+/* ---------- 侧栏 + 主体：去卡片化 ---------- */
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(2rem, 4vw, 3rem);
+    align-items: start;
+    margin-block-start: clamp(1.75rem, 3.5vw, 2.75rem);
+}
+
+@media (min-width: 60rem) {
+    body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__body {
+        /* 设计稿 1440：侧栏 163 | 间距 87 | 主体 1088 */
+        grid-template-columns: minmax(9rem, 10.25rem) minmax(0, 1fr);
+        column-gap: clamp(2.5rem, 6vw, 5.5rem);
+    }
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__sidebar,
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__main {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+}
+
+/* 侧栏标题：设计稿没有（P1「多出两行 PAYMENT METHODS 标题，与主标题抢位」） */
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__sidebar-title {
+    display: none;
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav {
+    gap: .125rem;
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-link {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--daocharms-control-height, 2.75rem); /* §7 ≥44px */
+    padding: .35rem .5rem .35rem .85rem;
+    border-inline-start: 2px solid transparent;
+    border-radius: 0;
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    line-height: 1.45;
+    color: var(--color-text-secondary, #53665B) !important;
+    text-decoration: none;
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-link:hover,
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-link:focus-visible {
+    background: none;
+    color: var(--color-text) !important;
+}
+
+/* 激活态：短竖条 + 深墨绿加重（设计稿）。模块的白胶囊 + 琥珀条一并撤销。 */
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-link.is-active {
+    background: none;
+    border-inline-start-color: var(--color-primary);
+    color: var(--color-text) !important;
+    font-weight: 500;
+}
+
+/* 供应商子页（guide/policy/agreement）用的展开态，一并收敛到同一套皮肤 */
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-group-label {
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-group-children {
+    border-inline-start-color: var(--color-border-subtle, #D5DCD6);
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-article {
+    display: flex;
+    align-items: center;
+    min-block-size: 2.5rem;
+    border-radius: 0;
+    font-family: var(--font-family-base);
+    font-size: .88rem;
+    font-weight: 400;
+    color: var(--color-text-secondary, #53665B) !important;
+    text-decoration: none;
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-article:hover,
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-article:focus-visible {
+    background: none;
+    color: var(--color-text) !important;
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-layout__nav-article.is-active {
+    background: none;
+    border-inline-start-color: var(--color-primary);
+    color: var(--color-text) !important;
+    font-weight: 500;
+}
+
+/* ---------- 主体标题 ---------- */
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-listing__header {
+    margin-block-end: clamp(1.25rem, 2.5vw, 1.75rem);
+    padding-block-end: clamp(1rem, 2vw, 1.5rem);
+    border-block-end: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__title {
+    margin: 0 0 .5rem;
+    font-family: var(--font-family-display);
+    font-size: clamp(1.5rem, 2.35vw, 2.125rem); /* 设计稿 ≈34px */
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    color: var(--color-text);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__lede {
+    margin: 0;
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    line-height: 1.6;
+    color: var(--color-text-secondary, #53665B);
+}
+
+/* ---------- 纵向方法行（3 栏卡片网格 → 行） ---------- */
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__rows {
+    display: block;
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__row {
+    display: grid;
+    /* 设计稿 1440：左文 302→1007、竖线 1007、右链接列 1052→1390（≈704 : 384） */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+    column-gap: 0;
+    /* ⚠️ 必须显式清零：模块的 `.amazon-payment-guide-card` 带 gap: var(--weline-space-2)，
+       不清会把「标题↔摘要」撑到 36px（设计稿 ≈9px，两者应读作一个整块）。 */
+    row-gap: 0;
+    align-items: start;
+    min-height: 0;
+    padding: clamp(1.25rem, 2.4vw, 1.75rem) 0;
+    border: 0;
+    border-block-end: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    transition: none;
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__row:first-child {
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__row:hover {
+    border-color: var(--color-border-subtle, #D5DCD6);
+    box-shadow: none;
+}
+
+/* 渠道徽标与标题重复（原清单 §B P2）⇒ 视觉隐藏，DOM 保留。 */
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-card__badge {
+    display: none;
+}
+
+/* 文字块（标题 + 摘要）作为一个整体占第 1 列第 1 行。
+   见模板注释：拆成两行会被右侧跨行的链接列撑开行高，标题↔摘要凭空多 ~29px。 */
+body:has(.amazon-payment-guide-layout) .daocharms-payment__row-main {
+    grid-column: 1;
+    grid-row: 1;
+    min-inline-size: 0;
+    padding-inline-end: 1.5rem;
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__row-title {
+    margin: 0;
+    font-family: var(--font-family-display);
+    font-size: clamp(1.35rem, 1.85vw, 1.65rem); /* 设计稿 ≈26px */
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    color: var(--color-text);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__row-summary {
+    margin: 0;
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    line-height: 1.6;
+    color: var(--color-text-secondary, #53665B);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__row-actions {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .125rem;
+    margin: 0;
+    border-inline-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+    padding-inline-start: clamp(1.25rem, 3.1vw, 2.8rem);
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-card__link {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    min-block-size: var(--daocharms-control-height, 2.75rem); /* §7 ≥44px（设计稿更紧，规范优先） */
+    font-family: var(--font-family-base);
+    font-size: .9rem;
+    font-weight: 400;
+    color: var(--color-text-secondary, #53665B) !important;
+    text-decoration: none;
+}
+
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-card__link:hover,
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-card__link:focus-visible {
+    color: var(--color-text) !important;
+    text-decoration: underline;
+    text-underline-offset: .2em;
+}
+
+/* 模块给后两条链接加了 --muted(#565959)：设计稿三条同色，撤销。 */
+body:has(.amazon-payment-guide-layout) .amazon-payment-guide-card__link--muted {
+    color: var(--color-text-secondary, #53665B) !important;
+    font-weight: 400;
+}
+
+/* ---------- PayPal 步骤说明面板（§2 #4 的 P0） ---------- */
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect {
+    display: grid;
+    /* 设计稿：面板内左列 660 | 间距 52 | 右列 316 */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 19.75rem);
+    column-gap: clamp(2rem, 3.6vw, 3.25rem);
+    margin-block-start: clamp(2rem, 4vw, 3rem);
+    padding: clamp(1.75rem, 2.8vw, 2.5rem) clamp(1.5rem, 2.1vw, 1.9rem);
+    border-radius: var(--weline-theme-radius-lg, 8px);
+    background: var(--color-bg-primary);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-eyebrow {
+    margin: 0 0 .5rem;
+    font-family: var(--font-family-base);
+    font-size: .7rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking, .07em);
+    text-transform: uppercase;
+    color: var(--color-text-secondary, #53665B);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-title {
+    margin: 0 0 .4rem;
+    font-family: var(--font-family-display);
+    font-size: clamp(1.5rem, 2.35vw, 2.125rem);
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    color: var(--color-text);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-lede {
+    margin: 0 0 clamp(1.5rem, 2.6vw, 2rem);
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    line-height: 1.6;
+    color: var(--color-text-secondary, #53665B);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__steps {
+    --daocharms-step-gap: clamp(1.5rem, 3.2vw, 2.75rem);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--daocharms-step-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__step {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: .6rem;
+    align-items: start;
+}
+
+/* 步骤之间的 → 是设计稿里的装饰箭头（对齐标题行）。纯装饰：步骤序号由 <ol> 承担。 */
+body:has(.amazon-payment-guide-layout) .daocharms-payment__step:not(:last-child)::after {
+    content: "\2192";
+    position: absolute;
+    inset-block-start: .1rem;
+    inset-inline-end: calc(-1 * var(--daocharms-step-gap));
+    inline-size: var(--daocharms-step-gap);
+    text-align: center;
+    font-size: .9rem;
+    color: var(--color-text-secondary, #53665B);
+    pointer-events: none;
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__step-num {
+    grid-column: 1;
+    grid-row: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: 999px;
+    /* 设计稿是 #8E9578 淡鼠尾草圆盘；该色不在色盘内，按设计规范 §2「映射到官方主题变量」
+       用 --color-primary 与 --color-bg-primary 混出同族色（实测对比度 4.59:1，见验收记录）。 */
+    background: color-mix(in srgb, var(--color-primary) 72%, var(--color-bg-primary));
+    color: var(--color-bg-primary);
+    font-family: var(--font-family-display);
+    font-size: .95rem;
+    line-height: 1;
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__step-title {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0 0 .3rem;
+    font-family: var(--font-family-display);
+    font-size: 1.05rem;
+    font-weight: 400;
+    line-height: 1.3;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    color: var(--color-text);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__step-text {
+    grid-column: 2;
+    grid-row: 2;
+    margin: 0;
+    font-family: var(--font-family-base);
+    font-size: .875rem;
+    line-height: 1.6;
+    color: var(--color-text-secondary, #53665B);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-note {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: .75rem;
+    align-items: start;
+    margin-block-start: clamp(1.5rem, 2.8vw, 2rem);
+    padding-block-start: clamp(1.25rem, 2.4vw, 1.75rem);
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #D5DCD6);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-note-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    border: var(--daocharms-rule-width, 1px) solid var(--color-text-secondary, #53665B);
+    border-radius: 999px;
+    font-family: var(--font-family-base);
+    font-size: .8rem;
+    line-height: 1;
+    color: var(--color-text-secondary, #53665B);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-note-title {
+    margin: 0 0 .25rem;
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-note-text {
+    margin: 0;
+    font-family: var(--font-family-base);
+    font-size: .875rem;
+    line-height: 1.6;
+    color: var(--color-text-secondary, #53665B);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-figure {
+    margin: 0;
+    display: grid;
+    gap: .75rem;
+    align-content: start;
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-img {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+    aspect-ratio: 318 / 180;
+    object-fit: cover;
+    object-position: center 45%;
+    border-radius: var(--weline-theme-radius-lg, 8px);
+}
+
+body:has(.amazon-payment-guide-layout) .daocharms-payment__expect-caption {
+    font-family: var(--font-family-base);
+    font-size: .875rem;
+    line-height: 1.55;
+    color: var(--color-text-secondary, #53665B);
+}
+
+/* 本地测试渠道的「仅供开发」胶囊（设计稿给 Local Test Payment 行）。 */
+body:has(.amazon-payment-guide-layout) .daocharms-payment__pill {
+    display: inline-block;
+    margin-inline-start: .5rem;
+    padding: .15rem .6rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-bg-secondary) 45%, var(--color-bg-canvas));
+    font-family: var(--font-family-base);
+    font-size: .72rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    vertical-align: middle;
+    color: var(--color-text);
+}
+
+/* 窄屏：行与面板都收成单栏，箭头取消。 */
+@media (max-width: 60rem) {
+    body:has(.amazon-payment-guide-layout) .daocharms-payment__row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body:has(.amazon-payment-guide-layout) .daocharms-payment__row-actions {
+        grid-column: 1;
+        grid-row: 2; /* 单栏时文字块在第 1 行，链接列落到第 2 行 */
+        align-self: auto;
+        margin-block-start: .75rem;
+        border-inline-start: 0;
+        padding-inline-start: 0;
+    }
+
+    body:has(.amazon-payment-guide-layout) .daocharms-payment__expect {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: clamp(1.5rem, 3vw, 2rem);
+    }
+
+    body:has(.amazon-payment-guide-layout) .daocharms-payment__steps {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body:has(.amazon-payment-guide-layout) .daocharms-payment__step:not(:last-child)::after {
+        content: none;
+    }
+}
+
+/* ==========================================================================
+   New Arrivals 页标题字体（N3，2026-09-26 实测）
+   --------------------------------------------------------------------------
+   症状：/daocharms/new-arrivals 的 H1「New Arrivals」渲染成无衬线 `Inter`，
+        与全站其它页的衬线展示体（Cormorant Garamond，规范 §3）不一致。
+   根因：**模块模板内联样式引用了全仓从未定义的变量** ——
+        app/code/Weline/Product/view/templates/frontend/new-arrivals/index.phtml:166
+            .new-arrivals-page__title { font-family: var(--weline-font-family-heading) }
+        `--weline-font-family-heading` 全仓仅此一处出现、无任何定义
+        ⇒ 变量无效 ⇒ 回落继承 body 的 Inter。
+        同页其它标题（/products 的 .product-storefront__header h1、
+        /lounge 的 .daocharms-lounge-hub__hero h1）走的是本主题 --font-family-display，正常。
+   做法：主题侧补一条同族规则（同 hanfu 主题先例 hanfu-commerce.css:10 —— 把
+        `.new-arrivals-page__title` 与其它页标题列在一处）。特异性 (0,2,1) 胜过
+        模块内联规则的 (0,1,0)。**只改字体，不动字号/字重/颜色**（那些由模块规则给出）。
+   ★ 作用域：**必须带本主题守卫**，不得写成裸 `body …` 或 `body:has(.new-arrivals-page) …`
+        —— 后者会越过本主题、影响全局。本页 body 实测为
+        `daocharms-page daocharms-storefront daocharms-products …` ⇒ 已被守卫命中，
+        无需再加 `:has(.new-arrivals-page)` 这种全局兜底选择器。
+   ========================================================================== */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .new-arrivals-page__title {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+}
+
+/* —— UI 04 new-arrivals：居中眉题 + 三列卡 + 文链 CTA + Explore —— */
+/* 图集无 PLP 侧栏/推荐货架：本页收起 products 布局壳上的这些块 */
+body.daocharms-products:has(.new-arrivals-page--daocharms) .products-layout__sidebar,
+body.daocharms-products:has(.new-arrivals-page--daocharms) .products-layout__filter-toggle,
+body.daocharms-products:has(.new-arrivals-page--daocharms) .products-layout__toolbar,
+body.daocharms-products:has(.new-arrivals-page--daocharms) .products-layout__recommendations,
+body.daocharms-products:has(.new-arrivals-page--daocharms) [data-widget-code="recommended-products"] {
+    display: none !important;
+}
+
+body.daocharms-products:has(.new-arrivals-page--daocharms) .products-layout__container {
+    display: block;
+}
+
+body.daocharms-products:has(.new-arrivals-page--daocharms) .products-layout__content,
+body.daocharms-products:has(.new-arrivals-page--daocharms) .products-layout__main {
+    max-width: none;
+    width: 100%;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms {
+    gap: clamp(2rem, 4vw, 3rem);
+    padding-block: clamp(2rem, 4vw, 3.5rem) clamp(3rem, 6vw, 5rem);
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__hero {
+    max-width: none;
+    justify-items: center;
+    text-align: center;
+    gap: 0.65rem;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__eyebrow {
+    color: var(--color-text-secondary);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__title {
+    font-size: clamp(2.25rem, 5vw, 3.5rem);
+    line-height: 1.1;
+    color: var(--color-text);
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__lede {
+    max-width: 28rem;
+    color: var(--color-text-secondary);
+    font-size: 1.05rem;
+    line-height: 1.6;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(1.25rem, 3vw, 2rem);
+    max-width: 72rem;
+    margin-inline: auto;
+    width: 100%;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__card {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__card:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__media {
+    display: block;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: var(--color-bg-secondary);
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__body {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.85rem 0 0;
+    justify-items: start;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__badge {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: var(--daocharms-radius-sm);
+    background: color-mix(in srgb, var(--color-bg-secondary) 70%, var(--color-bg-canvas));
+    color: var(--color-text);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__name,
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__name a {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__price {
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__action {
+    margin-block-start: 0.15rem;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    background: none;
+    border: 0;
+    padding: 0;
+    min-height: 0;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__rss-wrap {
+    margin: 0;
+    text-align: center;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__rss {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__explore {
+    display: grid;
+    gap: 0.85rem;
+    justify-items: center;
+    margin-inline: calc(-1 * clamp(1rem, 4vw, 2.5rem));
+    padding-block: clamp(1.75rem, 3.5vw, 2.75rem);
+    padding-inline: clamp(1rem, 4vw, 2.5rem);
+    border-block-start: 0;
+    background: color-mix(in srgb, var(--color-bg-secondary) 82%, var(--color-bg-canvas));
+    text-align: center;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__explore-title {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.25rem, 2.5vw, 1.65rem);
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__explore-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__explore-list li:not(:last-child)::after {
+    content: "|";
+    margin-inline-start: 1rem;
+    color: var(--color-border-default);
+}
+
+body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__explore-list a {
+    color: var(--color-text);
+    font-size: 0.95rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+@media (max-width: 56rem) {
+    body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 36rem) {
+    body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* —— UI 05 category rail：意图导航（无方勾）+ By Symbol 手风琴 —— */
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__section--intent-nav {
+    padding-block-end: 0.85rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__section--intent-nav .w-filters__option--nav {
+    display: flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding-inline-start: 0.75rem;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    border-inline-start: 2px solid transparent;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__dept.is-current {
+    display: flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding-inline-start: 0.75rem;
+    border-inline-start: 2px solid var(--color-text);
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__dept.is-current .w-filters__current {
+    border: 0;
+    padding: 0;
+    font-weight: inherit;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__disclosure > .w-filters__summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__disclosure > .w-filters__summary::-webkit-details-marker {
+    display: none;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__disclosure > .w-filters__summary::after {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg);
+    opacity: 0.7;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__disclosure[open] > .w-filters__summary::after {
+    transform: rotate(-135deg) translateY(0.1rem);
+}
+
+/* UI 05 Sort: Default 面文案 */
+.amz-plp--daocharms .amz-plp__sort--daocharms-face {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 2rem 0.35rem 0.75rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+    font-size: 0.875rem;
+}
+
+.amz-plp--daocharms .amz-plp__sort--daocharms-face .amz-plp__sort-face {
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.amz-plp--daocharms .amz-plp__sort--daocharms-face::after {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg) translateY(-0.08rem);
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.amz-plp--daocharms .amz-plp__sort--daocharms-face .amz-plp__sort-select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+/* —— UI 05 category：Hero 左文右 Banner · objects 工具栏 · 空态 —— */
+body:has(.amz-plp--daocharms) .category-layout__sidebar-title,
+body:has(.amz-plp--daocharms) .category-layout__filter-toggle {
+    letter-spacing: var(--daocharms-label-tracking);
+}
+
+body:has(.amz-plp--daocharms) .category-layout__sidebar :is(.w-filters__label, .w-filters__option, .w-filters__current) {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    line-height: 1.35;
+}
+
+.amz-plp--daocharms {
+    display: grid;
+    gap: clamp(1.25rem, 2.5vw, 2rem);
+    color: var(--color-text);
+}
+
+.amz-plp--daocharms .amz-plp__crumb {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+}
+
+.amz-plp--daocharms .amz-plp__crumb a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.amz-plp--daocharms .amz-plp__crumb-sep {
+    opacity: 0.55;
+}
+
+.amz-plp--daocharms .amz-plp__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: clamp(1.25rem, 3vw, 2.5rem);
+    align-items: end;
+}
+
+.amz-plp--daocharms .amz-plp__hero-copy {
+    display: grid;
+    gap: 0.65rem;
+    align-content: end;
+    padding-block-end: 0.35rem;
+}
+
+.amz-plp--daocharms .amz-plp__heading {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(2rem, 4.5vw, 3rem);
+    font-weight: 500;
+    line-height: 1.12;
+    color: var(--color-text);
+}
+
+.amz-plp--daocharms .amz-plp__summary {
+    margin: 0;
+    max-width: 28rem;
+    color: var(--color-text-secondary);
+    font-size: 1.05rem;
+    line-height: 1.55;
+}
+
+.amz-plp--daocharms .amz-plp__banner {
+    margin: 0;
+    border-radius: 0;
+    overflow: hidden;
+    background: var(--color-bg-secondary);
+    max-height: none;
+}
+
+.amz-plp--daocharms .amz-plp__banner img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.amz-plp--daocharms .amz-plp__results-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1.25rem;
+    margin: 0;
+    padding: 0.85rem 0;
+    border-block: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    background: transparent;
+}
+
+.amz-plp--daocharms .amz-plp__results-text {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+}
+
+.amz-plp--daocharms .amz-plp__sort {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+}
+
+.amz-plp--daocharms .amz-plp__sort-select {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--color-text);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+    min-height: auto;
+    padding: 0.15rem 1.25rem 0.15rem 0.15rem;
+}
+
+.amz-plp--daocharms .amz-plp__grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(1.25rem, 3vw, 2rem);
+}
+
+.amz-plp--daocharms .amz-plp__empty {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    padding: clamp(2.5rem, 6vw, 4.5rem) 1rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text);
+    text-align: center;
+}
+
+.amz-plp--daocharms .amz-plp__empty-mark {
+    display: grid;
+    place-items: center;
+    color: var(--color-text-secondary);
+    opacity: 0.85;
+}
+
+.amz-plp--daocharms .amz-plp__empty-title {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.15rem, 2vw, 1.35rem);
+    font-weight: 500;
+}
+
+.amz-plp--daocharms .amz-plp__empty-lede {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+}
+
+.amz-plp--daocharms .amz-plp__empty-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-block-start: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.65rem 1.35rem;
+    border-radius: var(--daocharms-radius-sm, 2px);
+    background: var(--color-primary, #2f4f3e);
+    color: var(--color-on-primary, #fff);
+    font-size: 0.95rem;
+    text-decoration: none;
+}
+
+.amz-plp--daocharms .amz-plp__empty-cta:hover {
+    filter: brightness(1.05);
+}
+
+@media (max-width: 56rem) {
+    .amz-plp--daocharms .amz-plp__hero {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .amz-plp--daocharms .amz-plp__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 36rem) {
+    .amz-plp--daocharms .amz-plp__grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* —— UI 06 search：hero · tabs · empty · explore —— */
+body:has(.storefront-search--daocharms) .search-layout__body--with-sidebar {
+    display: block;
+}
+
+body:has(.storefront-search--daocharms) .search-layout__sidebar,
+body:has(.storefront-search--daocharms) [data-slot-id="search-type-filter"],
+body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-filter"] {
+    display: none !important;
+}
+
+.storefront-search--daocharms {
+    display: grid;
+    gap: clamp(1.25rem, 2.5vw, 2rem);
+    color: var(--color-text);
+}
+
+.storefront-search--daocharms .storefront-search__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
+    gap: clamp(1.25rem, 3vw, 2.5rem);
+    align-items: end;
+    padding-block-end: clamp(1rem, 2vw, 1.5rem);
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+.storefront-search--daocharms .storefront-search__hero-copy {
+    display: grid;
+    gap: 1.35rem;
+    align-content: end;
+}
+
+.storefront-search--daocharms .storefront-search__title {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(2rem, 4.5vw, 3rem);
+    font-weight: 500;
+    line-height: 1.12;
+    color: var(--color-text);
+}
+
+.storefront-search--daocharms .storefront-search__hero-form {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0;
+    align-items: stretch;
+    max-width: 34rem;
+}
+
+.storefront-search--daocharms .storefront-search__hero-field {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-height: 2.85rem;
+    padding: 0 0.95rem;
+    border: 1px solid var(--color-border-subtle, #d5d0c8);
+    background: var(--color-bg-canvas, #fff);
+}
+
+.storefront-search--daocharms .storefront-search__hero-input {
+    flex: 1 1 auto;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    outline: none;
+}
+
+.storefront-search--daocharms .storefront-search__hero-submit {
+    flex: 0 0 auto;
+    min-height: 2.85rem;
+    padding: 0 1.45rem;
+    border: 0;
+    background: var(--color-primary, #2f4f3e);
+    color: var(--color-on-primary, #fff);
+    font: inherit;
+    cursor: pointer;
+}
+
+.storefront-search--daocharms .storefront-search__hero-aside {
+    display: grid;
+    gap: 0.85rem;
+    justify-items: start;
+}
+
+.storefront-search--daocharms .storefront-search__hero-aside-text {
+    margin: 0;
+    max-width: 14rem;
+    color: var(--color-text);
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.05rem;
+    line-height: 1.45;
+    text-decoration: none;
+    border-block-end: 1px solid var(--color-text);
+    padding-block-end: 0.45rem;
+}
+
+.storefront-search--daocharms .storefront-search__hero-media {
+    overflow: hidden;
+    width: 100%;
+    max-width: 22rem;
+    background: var(--color-bg-secondary);
+}
+
+.storefront-search--daocharms .storefront-search__hero-media img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    object-position: center 35%;
+}
+
+.storefront-search--daocharms .storefront-search__tabs {
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+.storefront-search--daocharms .storefront-search__tab-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.storefront-search--daocharms .storefront-search__tab {
+    display: inline-block;
+    padding: 0.65rem 0;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    border-block-end: 2px solid transparent;
+}
+
+.storefront-search--daocharms .storefront-search__tab.is-active {
+    color: var(--color-text);
+    border-block-end-color: var(--color-text);
+    font-weight: 500;
+}
+
+.storefront-search--daocharms .storefront-search__meta {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+}
+
+.storefront-search--daocharms .storefront-search__empty {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    padding: clamp(2rem, 5vw, 3.5rem) 1rem;
+    text-align: center;
+}
+
+.storefront-search--daocharms .storefront-search__empty-mark {
+    color: var(--color-text-secondary);
+}
+
+.storefront-search--daocharms .storefront-search__empty-title {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.2rem, 2vw, 1.45rem);
+    font-weight: 500;
+}
+
+.storefront-search--daocharms .storefront-search__empty-lede {
+    margin: 0;
+    color: var(--color-text-secondary);
+}
+
+.storefront-search--daocharms .storefront-search__empty-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-block-start: 0.35rem;
+    min-height: 2.75rem;
+    padding: 0.65rem 1.35rem;
+    background: var(--color-primary, #2f4f3e);
+    color: var(--color-on-primary, #fff);
+    text-decoration: none;
+}
+
+.storefront-search--daocharms .storefront-search__explore {
+    display: grid;
+    gap: 1rem;
+}
+
+.storefront-search--daocharms .storefront-search__explore-title {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.25rem, 2.5vw, 1.65rem);
+    font-weight: 500;
+}
+
+.storefront-search--daocharms .storefront-search__explore-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(0.85rem, 2vw, 1.25rem);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.storefront-search--daocharms .storefront-search__explore-card {
+    position: relative;
+    display: block;
+    aspect-ratio: 960 / 370;
+    min-height: 9.5rem;
+    overflow: hidden;
+    color: var(--color-text);
+    text-decoration: none;
+    background: var(--color-bg-secondary);
+}
+
+.storefront-search--daocharms .storefront-search__explore-card img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+.storefront-search--daocharms .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 56rem) {
+    .storefront-search--daocharms .storefront-search__hero {
+        grid-template-columns: 1fr;
+    }
+
+    .storefront-search--daocharms .storefront-search__explore-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* —— UI 08 compare：hero + 清表格 —— */
+.storefront-compare--daocharms .storefront-compare__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem 1.5rem;
+    margin-block-end: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+.storefront-compare--daocharms .storefront-compare__eyebrow {
+    margin: 0 0 0.45rem;
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary, #565959);
+}
+
+.storefront-compare--daocharms .storefront-compare__title {
+    margin: 0 0 0.35rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.75rem, 3.2vw, 2.35rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking, 0.01em);
+    color: var(--color-text, #262422);
+}
+
+.storefront-compare--daocharms .storefront-compare__lede {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.05rem;
+    color: var(--color-text-secondary, #565959);
+}
+
+.storefront-compare--daocharms .storefront-compare__add {
+    color: var(--color-text, #262422);
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.22em;
+    text-decoration-thickness: 1px;
+}
+
+.storefront-compare--daocharms .storefront-compare__loading,
+.storefront-compare--daocharms .storefront-compare__empty {
+    border: 1px solid var(--color-border-subtle, #e5e2df);
+    border-radius: var(--daocharms-radius-sm, 2px);
+    background: transparent;
+    color: var(--color-text-secondary, #565959);
+}
+
+.storefront-compare--daocharms .storefront-compare__cta {
+    background: var(--color-primary);
+    color: var(--color-on-primary, #E9EFEB);
+    border-radius: var(--daocharms-radius-sm, 2px);
+    font-weight: 500;
+}
+
+.storefront-compare--daocharms .storefront-compare__table {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.storefront-compare--daocharms .storefront-compare__table thead th,
+.storefront-compare--daocharms .storefront-compare__table th:first-child,
+.storefront-compare--daocharms .storefront-compare__table td:first-child {
+    background: transparent;
+    box-shadow: none;
+}
+
+.storefront-compare--daocharms .storefront-compare__table th,
+.storefront-compare--daocharms .storefront-compare__table td {
+    border-bottom: 1px solid var(--color-border-subtle, #e5e2df);
+    font-size: 0.9rem;
+}
+
+.storefront-compare--daocharms .storefront-compare__table thead th {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-weight: 400;
+    font-size: 1rem;
+}
+
+.storefront-compare--daocharms .storefront-compare__section th {
+    background: transparent;
+    color: var(--color-text-secondary, #565959);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+}
+
+.storefront-compare--daocharms .storefront-compare__remove {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--color-text-secondary, #565959);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+/* UI 08 — cards row (no label gutter) + attribute matrix below */
+.storefront-compare--daocharms .dc-compare {
+    --dc-compare-label-col: 6.5rem;
+    --dc-compare-gap: clamp(1.5rem, 4vw, 3rem);
+    width: 100%;
+    max-width: 48rem;
+}
+
+.storefront-compare--daocharms .dc-compare-cards {
+    display: grid;
+    grid-template-columns: repeat(var(--dc-compare-cols, 2), minmax(0, 1fr));
+    column-gap: var(--dc-compare-gap);
+    margin-inline-start: var(--dc-compare-label-col);
+    margin-block-end: 0.35rem;
+}
+
+.storefront-compare--daocharms .dc-compare-matrix {
+    display: grid;
+    grid-template-columns: var(--dc-compare-label-col) repeat(var(--dc-compare-cols, 2), minmax(0, 1fr));
+    column-gap: var(--dc-compare-gap);
+    align-items: stretch;
+}
+
+.storefront-compare--daocharms .dc-compare-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.55rem;
+    margin-block-end: 1.35rem;
+    min-width: 0;
+}
+
+.storefront-compare--daocharms .dc-compare-card__media {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--color-surface-muted, #eef1ed) 70%, transparent);
+}
+
+.storefront-compare--daocharms .dc-compare-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.storefront-compare--daocharms .dc-compare-card__name {
+    margin: 0.35rem 0 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking, 0.01em);
+    line-height: 1.35;
+    color: var(--color-text, #262422);
+}
+
+.storefront-compare--daocharms .dc-compare-card__name a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.storefront-compare--daocharms .dc-compare-card__price {
+    margin: 0;
+    font-family: var(--font-family-ui, Inter, sans-serif);
+    font-size: 0.95rem;
+    color: var(--color-text, #262422);
+}
+
+.storefront-compare--daocharms .dc-compare-card__bag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: min(100%, 12.5rem);
+    min-height: 2.65rem;
+    margin-block-start: 0.35rem;
+    padding: 0.55rem 1.1rem;
+    border: 0;
+    border-radius: var(--daocharms-radius-sm, 2px);
+    background: var(--color-primary, #203B34);
+    color: var(--color-on-primary, #E9EFEB);
+    font-family: var(--font-family-ui, Inter, sans-serif);
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+}
+
+.storefront-compare--daocharms .dc-compare-card__bag:hover,
+.storefront-compare--daocharms .dc-compare-card__bag:focus-visible {
+    filter: brightness(1.06);
+}
+
+.storefront-compare--daocharms .dc-compare-card__remove {
+    background: none;
+    border: 0;
+    padding: 0.15rem 0;
+    color: var(--color-text-secondary, #565959);
+    font-family: var(--font-family-ui, Inter, sans-serif);
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.22em;
+    cursor: pointer;
+}
+
+.storefront-compare--daocharms .dc-compare-grid__label,
+.storefront-compare--daocharms .dc-compare-grid__cell {
+    padding-block: 0.85rem;
+    border-top: 1px solid var(--color-border-subtle, #e5e2df);
+    font-family: var(--font-family-ui, Inter, sans-serif);
+    font-size: 0.9rem;
+    color: var(--color-text, #262422);
+    line-height: 1.45;
+}
+
+.storefront-compare--daocharms .dc-compare-grid__label {
+    color: var(--color-text-secondary, #565959);
+    font-weight: 400;
+}
+
+.storefront-compare--daocharms .dc-compare-grid__cell {
+    text-align: left;
+    min-width: 0;
+}
+
+@media (max-width: 720px) {
+    .storefront-compare--daocharms .dc-compare {
+        --dc-compare-label-col: 4.5rem;
+        --dc-compare-gap: 0.85rem;
+    }
+
+    .storefront-compare--daocharms .dc-compare-cards {
+        margin-inline-start: 0;
+    }
+
+    .storefront-compare--daocharms .dc-compare-card__bag {
+        width: 100%;
+        min-height: 2.4rem;
+        font-size: 0.8125rem;
+    }
+}
+
+/* —— UI 09 cart：Your bag hero · Retail/Wholesale tabs · service strip —— */
+.weline-cart-shell--daocharms .weline-cart-shell__header {
+    display: grid;
+    gap: 1rem;
+    margin-block-end: clamp(1.25rem, 2.5vw, 1.75rem);
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__eyebrow {
+    margin: 0 0 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary, #565959);
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__heading h1 {
+    margin: 0;
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__lede {
+    display: block;
+    margin-block-start: 0.45rem;
+    color: var(--color-text-secondary, #565959);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+/* UI 09：件数进 Retail 标签，不另占副标题行 */
+.weline-cart-shell--daocharms .weline-cart-shell__subtitle {
+    display: none !important;
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__type-host {
+    border-block-end: 1px solid var(--color-border-subtle, #e5e2df);
+    padding-block-end: 0;
+}
+
+.weline-cart-shell--daocharms .b2b-cart-page-type-seg,
+.weline-cart-shell--daocharms [data-testid="cart-page-type-segment"] {
+    display: flex;
+    gap: 1.25rem;
+    background: transparent;
+    border: 0;
+    padding: 0;
+}
+
+.weline-cart-shell--daocharms .b2b-mini-cart-type-option,
+.weline-cart-shell--daocharms [data-cart-type-option] {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0.55rem 0;
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-text-secondary, #565959);
+    border-block-end: 2px solid transparent;
+    cursor: pointer;
+}
+
+.weline-cart-shell--daocharms .b2b-mini-cart-type-option.is-selected,
+.weline-cart-shell--daocharms [data-cart-type-option][aria-pressed="true"] {
+    color: var(--color-text, #262422);
+    border-block-end-color: var(--color-text, #262422);
+    font-weight: 500;
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__checkout {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: var(--daocharms-control-height, 2.75rem);
+    border-radius: var(--daocharms-radius-sm, 2px);
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary, #E9EFEB) !important;
+    border: 0 !important;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__summary-continue {
+    display: inline-block;
+    margin-block-start: 0.85rem;
+    text-align: center;
+    width: 100%;
+    color: var(--color-text, #262422);
+    text-decoration: underline;
+    text-underline-offset: 0.22em;
+    font-size: 0.9rem;
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__service {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin-block-start: clamp(2rem, 4vw, 3rem);
+    border-block-start: 1px solid var(--color-border-subtle, #e5e2df);
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__service-item {
+    display: grid;
+    gap: 0.35rem;
+    padding: 1.25rem 1.1rem;
+    text-decoration: none;
+    color: inherit;
+    border-inline-end: 1px solid var(--color-border-subtle, #e5e2df);
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__service-item:last-child {
+    border-inline-end: 0;
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__service-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--color-text, #262422);
+}
+
+.weline-cart-shell--daocharms .weline-cart-shell__service-body {
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: var(--color-text-secondary, #565959);
+}
+
+@media (max-width: 768px) {
+    .weline-cart-shell--daocharms .weline-cart-shell__service {
+        grid-template-columns: 1fr;
+    }
+
+    .weline-cart-shell--daocharms .weline-cart-shell__service-item {
+        border-inline-end: 0;
+        border-block-end: 1px solid var(--color-border-subtle, #e5e2df);
+    }
+
+    .weline-cart-shell--daocharms .weline-cart-shell__service-item:last-child {
+        border-block-end: 0;
+    }
+}
+
+/* —— UI 10 checkout：Back to bag · steps · secure · Continue —— */
+.weline-checkout--daocharms .weline-checkout__header {
+    display: grid;
+    gap: 1rem;
+    margin-block-end: clamp(1.25rem, 2.5vw, 1.75rem);
+}
+
+.weline-checkout--daocharms .weline-checkout__back {
+    justify-self: start;
+    color: var(--color-text-secondary, #565959);
+    font-size: 0.875rem;
+    text-decoration: none;
+}
+
+.weline-checkout--daocharms .weline-checkout__back:hover {
+    color: var(--color-text, #262422);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.weline-checkout--daocharms .weline-checkout__header-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem 1.5rem;
+}
+
+.weline-checkout--daocharms .weline-checkout__header-title h1 {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.9rem, 3.6vw, 2.6rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking, 0.01em);
+}
+
+.weline-checkout--daocharms .weline-checkout__lede {
+    margin: 0.45rem 0 0;
+    color: var(--color-text-secondary, #565959);
+    font-size: 0.95rem;
+    line-height: 1.65;
+}
+
+.weline-checkout--daocharms .weline-checkout__secure {
+    margin: 0;
+    max-width: 14rem;
+    text-align: end;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--color-text-secondary, #565959);
+}
+
+.weline-checkout--daocharms .weline-checkout__steps {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem 0.85rem;
+    margin: 0.25rem 0 0;
+    padding: 0;
+}
+
+.weline-checkout--daocharms .weline-checkout__step {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--color-text-secondary, #565959);
+    font-size: 0.85rem;
+}
+
+.weline-checkout--daocharms .weline-checkout__step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.55rem;
+    height: 1.55rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-bg-secondary) 55%, var(--color-bg-primary));
+    color: var(--color-text, #262422);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.weline-checkout--daocharms .weline-checkout__step.is-active {
+    color: var(--color-text, #262422);
+}
+
+.weline-checkout--daocharms .weline-checkout__step.is-active .weline-checkout__step-num {
+    background: var(--color-primary);
+    color: var(--color-on-primary, #E9EFEB);
+}
+
+.weline-checkout--daocharms .weline-checkout__step:not(:last-child)::after {
+    content: "";
+    display: inline-block;
+    width: 2rem;
+    height: 1px;
+    margin-inline-start: 0.35rem;
+    background: var(--color-border-subtle, #e5e2df);
+}
+
+.weline-checkout--daocharms [data-checkout-submit],
+.weline-checkout--daocharms .weline-checkout__submit,
+.weline-checkout--daocharms button[type="submit"].weline-checkout__primary {
+    min-height: var(--daocharms-control-height, 2.75rem);
+    border-radius: var(--daocharms-radius-sm, 2px);
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary, #E9EFEB) !important;
+    border: 0 !important;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+}
+
+/* UI 09/10：稿面无 HelpPay「Ask a friend」折页 → 购物袋/结账全隐 */
+body:has(.weline-cart-shell) .w-helppay-cta,
+body:has(.weline-cart-shell) .helppay-cta,
+body:has(.weline-cart-shell) [class*="helppay-cta"],
+body:has(.weline-checkout) .w-helppay-cta,
+body:has(.weline-checkout) .helppay-cta,
+body:has(.weline-checkout) [class*="helppay-cta"],
+body:has(.weline-checkout) button:has([data-helppay-open]),
+.weline-cart-shell .w-helppay-cta,
+.weline-cart-shell [data-helppay-open],
+.weline-checkout .w-helppay-cta,
+.weline-checkout [data-helppay-open] {
+    display: none !important;
+}

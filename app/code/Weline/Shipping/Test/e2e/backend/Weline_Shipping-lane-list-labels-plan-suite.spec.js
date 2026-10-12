@@ -22,7 +22,7 @@ moduleDescribe(test, MODULE, '航线列表名称计划链路', () => {
     '完整功能通路 e2e 组：名称映射模板 + 契约测试文件',
     async () => {
       const tpl = fs.readFileSync(
-        path.join(ROOT, 'view/templates/Backend/ShippingService/index.phtml'),
+        path.join(ROOT, 'view/templates/backend/ShippingService/index.phtml'),
         'utf8',
       );
       const ut = fs.readFileSync(

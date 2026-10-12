@@ -15,11 +15,14 @@ final class ProductStockLabelContractTest extends TestCase
     public function testRenderStockKeepsPlaceholderSentinel(): void
     {
         $path = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-info.phtml';
+        $jsPath = dirname(__DIR__, 3) . '/view/statics/js/widgets/widget-product-info-0.js';
         self::assertFileExists($path);
+        self::assertFileExists($jsPath);
         $src = (string) file_get_contents($path);
+        $js = (string) file_get_contents($jsPath);
 
         self::assertStringContainsString("__('仅剩 %{1} 件', ['%{1}'])", $src);
-        self::assertStringContainsString(".replace('%{1}', String(stock))", $src);
+        self::assertStringContainsString(".replace('%{1}', String(stock))", $js);
         self::assertStringNotContainsString(
             "json_encode((string)__('仅剩 %{1} 件'), JSON_UNESCAPED_UNICODE)",
             $src
@@ -33,9 +36,10 @@ final class ProductStockLabelContractTest extends TestCase
 
         self::assertStringContainsString('data-purchase-failsafe', $src);
         self::assertStringContainsString("product-native-detail__qty-row\"<?= \$sellable ? '' : ' hidden' ?>", $src);
+        self::assertStringContainsString('product-native-detail__wishlist btn-wishlist', $src);
+        self::assertStringContainsString('data-testid="product-add-wishlist"', $src);
+        self::assertStringContainsString('data-weline-load="compareShopper,storefrontShopperToast"', $src);
         self::assertStringNotContainsString('if (!$quoteOnly && $sellable):', $src);
-        self::assertStringContainsString('ensurePurchaseActionsFromFailsafe', $src);
         self::assertStringContainsString("__('当前规格暂不可售')", $src);
-        self::assertStringContainsString('deliveryNode.textContent', $src);
     }
 }

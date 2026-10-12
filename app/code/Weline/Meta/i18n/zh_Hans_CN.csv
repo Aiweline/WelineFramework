@@ -198,7 +198,6 @@ OK,OK
 "MetaConfig 原子建件后的可选 owner 身份不再唯一。","MetaConfig 原子建件后的可选 owner 身份不再唯一。"
 "MetaConfig 身份指纹碰撞，config_id=%{1}","MetaConfig 身份指纹碰撞，config_id=%{1}"
 "MetaConfig 迁移窗口发现重复身份，config_id=%{1}","MetaConfig 迁移窗口发现重复身份，config_id=%{1}"
-"MetaConfig 原子建件不支持当前数据库类型。","MetaConfig 原子建件不支持当前数据库类型。"
 模块不存在：%1,模块不存在：%1
 扫描路径不存在：%1,扫描路径不存在：%1
 文件不存在：%1,文件不存在：%1
@@ -207,8 +206,8 @@ OK,OK
 "文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2","文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2"
 "元数据缺少必需字段 type：%1","元数据缺少必需字段 type：%1"
 "元数据缺少必需字段 @meta.%1.info.name：%2","元数据缺少必需字段 @meta.%1.info.name：%2"
+"MetaLocal stale GC: scanned=%{1}, orphan_version=%{2}, stale_preview=%{3}, orphan_meta=%{4}, stopped_by_limit=%{5}","MetaLocal stale GC: scanned=%{1}, orphan_version=%{2}, stale_preview=%{3}, orphan_meta=%{4}, stopped_by_limit=%{5}"
 "Meta 自动翻译：I18n AI 未启用，已跳过","Meta 自动翻译：I18n AI 未启用，已跳过"
-"@meta:: %{1}: translated=%{2}","@meta:: %{1}: translated=%{2}"
 "MetaLocal: translated=%{1}, skipped=%{2}","MetaLocal: translated=%{1}, skipped=%{2}"
 模块不存在：%{1},模块不存在：%{1}
 "未指定模块，将扫描所有扩展了 Meta 模块的模块...","未指定模块，将扫描所有扩展了 Meta 模块的模块..."
@@ -272,6 +271,8 @@ OK,OK
 使用完整命令名,使用完整命令名
 详细输出,详细输出
 简短参数,简短参数
+"MetaConfig 原子建件不支持当前数据库类型。","MetaConfig 原子建件不支持当前数据库类型。"
+"@meta:: %{1}: translated=%{2}","@meta:: %{1}: translated=%{2}"
 元数据配置管理,元数据配置管理
 配置管理,配置管理
 "编辑元数据 #%1","编辑元数据 #%1"

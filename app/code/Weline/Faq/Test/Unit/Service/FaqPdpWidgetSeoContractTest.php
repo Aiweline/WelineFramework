@@ -36,7 +36,7 @@ final class FaqPdpWidgetSeoContractTest extends TestCase
 
     public function testBackendItemEditHasScopeAndFaqKey(): void
     {
-        $edit = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Item/edit.phtml');
+        $edit = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Item/edit.phtml');
         self::assertStringContainsString('store_code', $edit);
         self::assertStringContainsString('channel_code', $edit);
         self::assertStringContainsString('faq_key', $edit);

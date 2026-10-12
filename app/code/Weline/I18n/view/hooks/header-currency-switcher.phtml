@@ -372,6 +372,6 @@ $currencySwitcherId = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency
 $assetsFlagKey = 'view.i18n.header_choice_assets_rendered';
 if (!\Weline\Framework\Runtime\RequestContext::get($assetsFlagKey)) {
     \Weline\Framework\Runtime\RequestContext::set($assetsFlagKey, true);
-    echo $this->fetch('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml');
+    echo $this->fetch('Weline_I18n::templates/frontend/header-choice-selector-assets.phtml');
 }
 ?>

@@ -59,7 +59,7 @@ HMAC 签名 token（`PaymentBrowserCallbackTokenService`），解码得 `method_
 
 1. `extends/module/Weline_Payment/PaymentProvider/{X}Provider.php`
 2. `extends/module/Weline_SystemConfig/Config/backend/{method_code}.phtml`
-3. （推荐）`view/templates/Frontend/checkout/{method_code}.phtml` + CustomerGuide
+3. （推荐）`view/templates/frontend/checkout/{method_code}.phtml` + CustomerGuide
 
 `getCode()`、config 文件名、`checkout_template_code` 三者一致。细节见 [provider-development.md](provider-development.md)。
 

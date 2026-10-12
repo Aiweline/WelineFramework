@@ -11,7 +11,7 @@ final class BackendConsoleSessionAccordionContractTest extends TestCase
     public function testSessionGroupsAreExclusiveAccordion(): void
     {
         $jsFile = dirname(__DIR__, 3) . '/view/statics/js/backend-console.js';
-        $tplFile = dirname(__DIR__, 3) . '/view/templates/Backend/Console/index.phtml';
+        $tplFile = dirname(__DIR__, 3) . '/view/templates/backend/Console/index.phtml';
         $js = (string)file_get_contents($jsFile);
         $tpl = (string)file_get_contents($tplFile);
 

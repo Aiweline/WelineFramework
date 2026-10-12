@@ -2,6 +2,17 @@
 
 > **硬规则**：任何模块交付用户可见文案时，必须维护齐全的基础中英文 CSV，并在每次改动后执行 `i18n:collect`。只改 CSV 不 collect，运行时**不会生效**。
 
+## 官方框架模块 vs 非框架模块（CSV 语种范围）
+
+| 范围 | 策略 | 原因 |
+|------|------|------|
+| **官方框架模块**（本仓 `app/code` 下官方 Vendor，如 `Weline_*`） | `i18n/` **仅**维护 `zh_Hans_CN.csv` + `en_US.csv`；其它语种默认进**系统词典** | **Git 瘦身**：避免几十个 locale CSV 撑爆框架仓 |
+| **非框架 / 第三方模块**（站柜私有包、外部 Vendor、非本仓官方模块等） | **可以**自备其它 locale CSV（如 `ja_JP.csv`）；仍建议保留中英基线 | 不受框架仓 Git 瘦身策略约束 |
+
+**禁止误读**：把「官方模块仅中英 CSV」写成「全世界模块都不能写其它语言 CSV」，或写成「其它语种默认不做」。
+
+Agent 在本仓改官方模块时：中英写模块 CSV；默认站其它已选语种仍须译完整，落**系统词典**（或归属实体），不是跳过。
+
 ## 前端开发成员约定（硬，写在最前）
 
 **前端开发语言默认简体中文。** 模板 / 菜单 / ACL / `__()` / `@lang` / `<lang>` 的用户可见源串必须写中文；多语言靠 **中英 CSV**（`zh_Hans_CN.csv` + `en_US.csv`）翻译，**不是 CSS、也不是把模板改成英文**。
@@ -9,7 +20,7 @@
 | 约定 | 要求 |
 |------|------|
 | 开发语言 | 源串默认简体中文（正确且强制） |
-| 双语载体 | 模块 `i18n/zh_Hans_CN.csv` + `i18n/en_US.csv`（禁止其它 locale CSV） |
+| 双语载体（官方框架模块） | 模块 `i18n/zh_Hans_CN.csv` + `i18n/en_US.csv`（**Git 瘦身**：官方模块禁止其它 locale CSV；非框架模块不受此禁） |
 | zh 第二列 | 中文身份译（通常与 source 同字；禁止塞英文） |
 | en 第二列 | **真实英文**（禁止留空、禁止把中文 source 原样当英文） |
 | 改后必做 | `php bin/w i18n:collect` + 抽检当前后台/前台 locale（**单飞**：同机同时只允许一路 collect；重复拉起立即 BUSY / 退出码 75） |
@@ -143,11 +154,11 @@ MCP 规则 id：`user_mentions_translation_all_default_website_locales`。
    - `WebsiteLanguage::getWebsiteLanguageCodes(Website::ID_DEFAULT)`（`website_id = 0`）
    - 始终保留基线 `zh_Hans_CN` + `en_US`
 2. 对**每一个**已选 locale 写入**真实目标语译文**（不得把中文 source 原样留下）：
-   - **模块 CSV 仅允许** `i18n/zh_Hans_CN.csv` 与 `i18n/en_US.csv`（`I18nCsvCodec::MODULE_CSV_LOCALES`）
-   - **其它语种禁止新建/写回模块 CSV**；译文只进**系统收集词典**（`LocaleDictionary` / `ai:import-csv` / AI 翻译落库 + `publishLocale`）
+   - **官方框架模块**：模块 CSV **仅** `i18n/zh_Hans_CN.csv` 与 `i18n/en_US.csv`（`I18nCsvCodec::MODULE_CSV_LOCALES`，Git 瘦身）；其它语种进**系统词典**（`LocaleDictionary` / `ai:import-csv` / AI 翻译落库 + `publishLocale`）
+   - **非框架 / 第三方模块**：**允许**其它 locale CSV；也可仍走系统词典——由该模块交付约定决定
 3. **禁止**只译 `en_US` 就宣称完成。用户可在本回合显式收窄语种。
-4. 默认由 Agent **直接写译文**（中英写 CSV，其它写词典）；**未要求时禁止启动 Ollama**。
-5. 改完中英 CSV 后必须 `php bin/w i18n:collect {Module}`；其它语种以词典/发布为准，再抽检目标 locale 店面。
+4. 默认由 Agent **直接写译文**（官方模块：中英写 CSV、其它写词典）；**未要求时禁止启动 Ollama**。
+5. 改完中英 CSV 后必须 `php bin/w i18n:collect {Module}`；其它语种以词典/发布（或非框架模块自有 CSV）为准，再抽检目标 locale 店面。
 
 解析示例（本机）：
 
@@ -160,8 +171,9 @@ MCP 规则 id：`user_mentions_translation_all_default_website_locales`。
 
 - **模板 / 菜单 / ACL / `__()` 用英文当默认用户可见源串**（违反 `module_i18n_chinese_source_default`）
 - 交付模块只有 `zh_Hans_CN.csv` 没有 `en_US.csv`（或 en 列大量仍为中文）
-- 在模块 `i18n/` 下新增或维护非中英 locale CSV（如 `ja_JP.csv`、`hi_IN.csv`）
-- 用户说「翻译」却只补 `en_US`、不覆盖默认网站已选语言（其它语种须进系统词典）
+- **在官方框架模块** `i18n/` 下新增或维护非中英 locale CSV（如 `ja_JP.csv`、`hi_IN.csv`）——会撑爆框架 Git；**不**禁止非框架模块自备
+- 把「官方模块仅中英 CSV」误写成「非框架模块也禁止其它 locale CSV」或「其它语种默认不做」
+- 用户说「翻译」却只补 `en_US`、不覆盖默认网站已选语言（官方模块其它语种须进系统词典）
 - 前台加了词、后台 CSV 不补
 - 改完 CSV 宣称「已翻译」但未执行 `i18n:collect`
 - 用 `cache:clear` 代替 `i18n:collect`（collect 内含扫描 + 缓存失效，二者不等价）
@@ -172,8 +184,8 @@ MCP 规则 id：`user_mentions_translation_all_default_website_locales`。
 - [ ] `i18n/zh_Hans_CN.csv` 与 `i18n/en_US.csv` 存在
 - [ ] 本次新增/修改的 source 在两文件中均有行，且 source 为中文
 - [ ] `en_US.csv` 译文为英文（非空、非中文占位）
-- [ ] 模块 `i18n/` 下**没有**非中英 locale CSV
-- [ ] 用户提到「翻译」时：默认网站已选非中英语种已写入系统词典并抽检店面（第二列/展示 ≠ 中文 source）
+- [ ] **官方框架模块** `i18n/` 下**没有**非中英 locale CSV（非框架模块可有）
+- [ ] 用户提到「翻译」时：默认网站已选非中英语种已写入系统词典（或非框架模块自有 CSV）并抽检店面（第二列/展示 ≠ 中文 source）
 - [ ] 已执行 `php bin/w i18n:collect Weline_YourModule` 且无报错（中英 CSV 有改动时）
 - [ ] 开发日志记录 collect/词典导入与 locale 抽检结果
 

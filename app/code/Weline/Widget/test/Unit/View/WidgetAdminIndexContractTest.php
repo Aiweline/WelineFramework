@@ -10,7 +10,7 @@ final class WidgetAdminIndexContractTest extends TestCase
 {
     public function testAdminIndexShowsTypeCodeNameAndGroupedList(): void
     {
-        $path = BP . '/app/code/Weline/Widget/view/templates/Backend/Widget/index.phtml';
+        $path = BP . '/app/code/Weline/Widget/view/templates/backend/Widget/index.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
 
@@ -25,7 +25,7 @@ final class WidgetAdminIndexContractTest extends TestCase
 
     public function testAdminIndexWiresVisualPreviewStageAndSafePreviewGate(): void
     {
-        $path = BP . '/app/code/Weline/Widget/view/templates/Backend/Widget/index.phtml';
+        $path = BP . '/app/code/Weline/Widget/view/templates/backend/Widget/index.phtml';
         $source = (string)file_get_contents($path);
 
         self::assertStringContainsString("@backend-url{'widget/backend/preview/widget'}", $source);

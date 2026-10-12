@@ -3,7 +3,7 @@
 席位：`Team:原型:` · 2026-09-22  
 client_session_id：`team-mail-ui-proto-20260922`  
 审图权威：[`ui-shentu-mailbox-20260922.md`](./ui-shentu-mailbox-20260922.md)（E/F/G 均 fail）  
-主模板：`Mail/view/templates/Backend/Index/enterprise.phtml`（`$view === 'mailbox'`）  
+主模板：`Mail/view/templates/backend/Index/enterprise.phtml`（`$view === 'mailbox'`）  
 对照 throwaway：`Mail/view/email/_prototype/mailbox-variants.html`（**PROTOTYPE · 禁止当生产**）
 
 > 问题：企业邮箱「邮箱」页信息架构过碎，主 Tab / 文件夹 / 写邮件 CTA / 双栏空态层级撞车，店主不知道下一步做什么。

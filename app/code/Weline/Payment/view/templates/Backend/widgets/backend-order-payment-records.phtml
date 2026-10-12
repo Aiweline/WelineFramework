@@ -106,7 +106,7 @@ $payments = $recordsService->listForOrderId($orderId);
                                 <td><?= $esc((string)($payment['currency'] ?? 'CNY')) ?> <?= number_format((float)($payment['amount'] ?? 0), 2) ?></td>
                                 <td><?= $esc((string)($payment['transaction_id'] ?? '')) ?></td>
                                 <td data-testid="payment-record-status">
-                                    <?= $this->fetch('Weline_Payment::templates/Backend/partials/outcome-chip.phtml', [
+                                    <?= $this->fetch('Weline_Payment::templates/backend/partials/outcome-chip.phtml', [
                                         'chip' => $statusChip,
                                         'testid' => 'payment-record-status-chip',
                                     ]) ?>

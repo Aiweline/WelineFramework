@@ -19,7 +19,7 @@ final class AiTranslationProgressContractTest extends TestCase
     {
         $service = $this->read('app/code/Weline/I18n/Service/AiTranslationProgressService.php');
         $controller = $this->read('app/code/Weline/I18n/Controller/Backend/AiTranslation.php');
-        $template = $this->read('app/code/Weline/I18n/view/templates/Backend/AiTranslation/index.phtml');
+        $template = $this->read('app/code/Weline/I18n/view/templates/backend/AiTranslation/index.phtml');
         $css = $this->read('app/code/Weline/I18n/view/statics/css/backend-admin.css');
 
         self::assertStringContainsString('class AiTranslationProgressService', $service);

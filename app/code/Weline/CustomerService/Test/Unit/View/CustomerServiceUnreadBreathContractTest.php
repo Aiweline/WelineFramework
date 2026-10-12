@@ -82,7 +82,7 @@ final class CustomerServiceUnreadBreathContractTest extends TestCase
     public function testWidgetLoadsOnlyAfterWindowLoadPlusThreeSeconds(): void
     {
         $hook = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml'
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/customer-service-float.phtml'
         );
         $this->assertStringContainsString('CS_POST_LOAD_DELAY_MS = 3000', $hook);
         $this->assertStringContainsString("addEventListener('load', scheduleCustomerServiceWidget", $hook);

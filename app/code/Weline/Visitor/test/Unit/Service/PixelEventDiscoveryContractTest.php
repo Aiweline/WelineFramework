@@ -184,7 +184,7 @@ final class PixelEventDiscoveryContractTest extends TestCase
 
     public function testAdminTemplateHasPickerAndAccumulate(): void
     {
-        $path = \dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/index.phtml';
+        $path = \dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/index.phtml';
         $src = (string)\file_get_contents($path);
         self::assertStringContainsString('tv-start-picker', $src);
         self::assertStringContainsString('tv-map-accumulate', $src);
@@ -334,7 +334,7 @@ final class PixelEventDiscoveryContractTest extends TestCase
         self::assertStringContainsString('本范围自定义事件', $src);
         self::assertStringContainsString('custom_events_url', $src);
         self::assertStringContainsString('refreshCustomEvents', $src);
-        $scopeToolbar = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/Backend/TrackingVendor/partials/scope-toolbar.phtml');
+        $scopeToolbar = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/templates/backend/TrackingVendor/partials/scope-toolbar.phtml');
         self::assertStringContainsString('tv-work-scope-custom-tip', $scopeToolbar);
         self::assertStringContainsString('自定义事件不随范围继承', $scopeToolbar);
         $discoveredSrc = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/DiscoveredEventService.php');

@@ -106,7 +106,7 @@ try {
 ?>
 <section class="commerce-control-center" data-testid="b2b-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
     <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
-        <?= $this->fetch('Weline_B2B::templates/Backend/partials/scope-toolbar.phtml') ?>
+        <?= $this->fetch('Weline_B2B::templates/backend/partials/scope-toolbar.phtml') ?>
         <span class="w-badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span>
     </div>
     <div class="w-alert" role="status" data-tone="info"><?php

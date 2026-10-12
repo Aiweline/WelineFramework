@@ -965,7 +965,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     background: var(--color-bg-primary);
     align-items: center;
 }
-@media (min-width: var(--size-content-640)) {
+@media (min-width: 640px) {
     .product-native-detail__description-body .weline-detail-feature {
         grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     }
@@ -1058,7 +1058,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     align-items: stretch;
     background: var(--color-bg-primary);
 }
-@media (min-width: var(--size-content-640)) {
+@media (min-width: 640px) {
     .product-native-detail__description-body .weline-detail-feature--poem-aside {
         grid-template-columns: minmax(var(--token-size-4-5rem), 0.32fr) minmax(0, 1.68fr);
     }
@@ -1191,7 +1191,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     max-width: 100%;
     margin-inline: 0;
 }
-@media (min-width: var(--size-content-640)) {
+@media (min-width: 640px) {
     .product-native-detail__description-body .weline-detail-figure-row--triptych {
         grid-template-columns: 1fr !important;
     }
@@ -1301,7 +1301,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
 .product-native-detail__description-body .weline-detail-bento__card--large p {
     color: var(--color-text-secondary);
 }
-@media (max-width: var(--size-content-640)) {
+@media (max-width: 640px) {
     .product-native-detail__description-body .weline-detail-bento {
         padding: var(--spacing-md) 0;
     }
@@ -1351,7 +1351,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
 .product-native-detail__description-body .weline-detail-prose--macro h4:first-of-type {
     margin-top: var(--weline-space-2);
 }
-@media (min-width: var(--size-content-640)) {
+@media (min-width: 640px) {
     .product-native-detail__description-body .weline-detail-figure-row--pair {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         /* 顶对齐保留各自原比例，禁止为齐高而 cover 裁切 */
@@ -1728,7 +1728,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     border-top: var(--border-width-thin) solid var(--color-border-subtle);
     background: var(--color-bg-primary);
 }
-@media (max-width: var(--size-content-720)) {
+@media (max-width: 720px) {
     .product-native-detail__description-body .weline-detail-text__columns {
         grid-template-columns: 1fr;
     }
@@ -1755,7 +1755,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     }
 }
 @supports not (container-type: inline-size) {
-    @media (min-width: var(--size-content-720)) {
+    @media (min-width: 720px) {
         .product-native-detail__spec-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
@@ -1859,7 +1859,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     color: var(--color-primary-hover);
     text-decoration: underline;
 }
-@media (max-width: var(--breakpoint-lg)) {
+@media (max-width: 992px) {
     .product-native-detail__hero-grid { grid-template-columns: 1fr; }
     .product-native-detail__buy-column { grid-template-columns: 1fr; }
     .product-native-detail__buybox { max-width: var(--size-panel-360); }
@@ -1867,7 +1867,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     .product-native-detail__zoom-lens,
     .product-native-detail__zoom-result { display: none !important; }
 }
-@media (max-width: var(--size-content-640)) {
+@media (max-width: 640px) {
     .product-native-detail__gallery,
     .product-native-detail__gallery:has(.product-native-detail__thumbs) {
         display: flex;
@@ -2184,7 +2184,7 @@ html.has-product-sticky-purchase {
 html.has-product-sticky-purchase body {
     padding-bottom: calc(var(--weline-product-sticky-purchase-clearance) + env(safe-area-inset-bottom, 0));
 }
-@media (max-width: var(--size-content-640)) {
+@media (max-width: 640px) {
     .product-native-detail__sticky-purchase-inner {
         align-items: center;
         gap: var(--spacing-sm);
@@ -2310,7 +2310,7 @@ html.has-product-sticky-purchase body {
 }
 /* 手机：诗意包装降级。竖排 + 厚底卡在窄屏占满首屏、过于突兀；
    ≤640px 一律横排可读导语 + 轻量底，桌面（≥640）仍保留 CJK 竖排诗笺。 */
-@media (max-width: var(--size-content-640)) {
+@media (max-width: 640px) {
     .product-native-detail__description-body .weline-detail-prose--verse-vertical {
         writing-mode: horizontal-tb;
         text-orientation: normal;
@@ -2369,7 +2369,7 @@ html.has-product-sticky-purchase body {
     line-height: 1.8;
     overflow-wrap: anywhere;
 }
-@media (min-width: var(--size-content-640)) {
+@media (min-width: 640px) {
     /* 等宽两栏。原先是为绕开 CSS 压缩器「吞掉相邻 minmax() 之间空白」的缺陷才写成 1fr 1fr；
        该缺陷已于 2026-10-02 修复（见交接文档第 5 节），此处保留 1fr 1fr 只是为了不动已验证版式。
        注意：1fr 的最小值是 auto（内容撑），若要「可压到 0」需改回 minmax(0, 1fr) minmax(0, 1fr)。 */

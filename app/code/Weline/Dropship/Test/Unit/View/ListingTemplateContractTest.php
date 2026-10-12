@@ -14,7 +14,7 @@ final class ListingTemplateContractTest extends TestCase
     public function testListingIndexUsesTabsForListedAndPick(): void
     {
         $root = dirname(__DIR__, 3);
-        $tpl = (string)file_get_contents($root . '/view/templates/Backend/Listing/index.phtml');
+        $tpl = (string)file_get_contents($root . '/view/templates/backend/Listing/index.phtml');
         $ctrl = (string)file_get_contents($root . '/Controller/Backend/Listing.php');
 
         self::assertStringContainsString('w-tabs', $tpl);

@@ -164,7 +164,7 @@ final class PixelPathExplorationServiceTest extends TestCase
         self::assertStringContainsString('path_exploration', $controller);
         self::assertStringContainsString('buildPathExploration', $controller);
 
-        $detail = (string)\file_get_contents($root . '/view/templates/Backend/PixelDashboard/detail.phtml');
+        $detail = (string)\file_get_contents($root . '/view/templates/backend/PixelDashboard/detail.phtml');
         self::assertStringContainsString('path-exploration', $detail);
         self::assertStringContainsString('路径探索', $detail);
         self::assertStringContainsString('Top 落地页 → 次页', $detail);

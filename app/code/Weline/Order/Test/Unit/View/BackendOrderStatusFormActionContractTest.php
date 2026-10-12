@@ -49,7 +49,7 @@ final class BackendOrderStatusFormActionContractTest extends TestCase
     public function testViewUpdateStatusFormUsesKebabRoute(): void
     {
         $html = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Order/view.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/Order/view.phtml',
         );
         self::assertStringContainsString(
             "@backend-url{'order/backend/order/update-status'}",
@@ -64,7 +64,7 @@ final class BackendOrderStatusFormActionContractTest extends TestCase
     public function testEditUpdateStatusAndAddCommentFormsUseKebabRoutes(): void
     {
         $html = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml',
+            dirname(__DIR__, 3) . '/view/templates/backend/Order/edit.phtml',
         );
         self::assertStringContainsString(
             "@backend-url{'order/backend/order/update-status'}",

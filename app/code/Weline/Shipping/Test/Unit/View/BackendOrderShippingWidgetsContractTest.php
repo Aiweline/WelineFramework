@@ -11,14 +11,14 @@ final class BackendOrderShippingWidgetsContractTest extends TestCase
     public function testWidgetRegistrationPinsOrderShipmentSlots(): void
     {
         $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Shipping/widget.php';
-        $shipmentsTpl = 'Weline_Shipping::templates/Backend/widgets/backend-order-shipments.phtml';
-        $listTpl = 'Weline_Shipping::templates/Backend/widgets/backend-order-list-shipping.phtml';
+        $shipmentsTpl = 'Weline_Shipping::templates/backend/widgets/backend-order-shipments.phtml';
+        $listTpl = 'Weline_Shipping::templates/backend/widgets/backend-order-list-shipping.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $shipmentsTpl));
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $listTpl));
-        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/widgets/backend-order-shipments.phtml');
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/widgets/backend-order-shipments.phtml');
         self::assertStringContainsString('@widget.code {backend-order-shipments}', $src);
         self::assertStringContainsString('"required":true', $src);
-        $listSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/widgets/backend-order-list-shipping.phtml');
+        $listSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/widgets/backend-order-list-shipping.phtml');
         self::assertStringContainsString('@widget.code {backend-order-list-shipping}', $listSrc);
     }
 
@@ -32,11 +32,11 @@ final class BackendOrderShippingWidgetsContractTest extends TestCase
             $root . '/view/hooks/Weline_Order/backend/order/list/shipping.phtml'
         );
         self::assertStringContainsString(
-            'Weline_Shipping::templates/Backend/widgets/backend-order-shipments.phtml',
+            'Weline_Shipping::templates/backend/widgets/backend-order-shipments.phtml',
             $detailHook
         );
         self::assertStringContainsString(
-            'Weline_Shipping::templates/Backend/widgets/backend-order-list-shipping.phtml',
+            'Weline_Shipping::templates/backend/widgets/backend-order-list-shipping.phtml',
             $listHook
         );
     }
@@ -45,10 +45,10 @@ final class BackendOrderShippingWidgetsContractTest extends TestCase
     {
         $root = dirname(__DIR__, 3);
         $detail = (string)file_get_contents(
-            $root . '/view/templates/Backend/widgets/backend-order-shipments.phtml'
+            $root . '/view/templates/backend/widgets/backend-order-shipments.phtml'
         );
         $list = (string)file_get_contents(
-            $root . '/view/templates/Backend/widgets/backend-order-list-shipping.phtml'
+            $root . '/view/templates/backend/widgets/backend-order-list-shipping.phtml'
         );
         self::assertStringContainsString('BackendOrderShipmentsService', $detail);
         self::assertStringContainsString('@widget.default_injections', $detail);

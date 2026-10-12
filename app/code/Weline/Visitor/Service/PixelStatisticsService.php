@@ -375,9 +375,7 @@ class PixelStatisticsService
                 }
             }
 
-            $limitSql = self::getPdoDriver() === 'mysql'
-                ? "LIMIT {$offset}, {$pageSize}"
-                : "LIMIT {$pageSize} OFFSET {$offset}";
+            $limitSql = trim(self::sqlDialect()->limitOffset((int)$pageSize, (int)$offset));
 
             $rawRows = self::fetchRows(
                 'SELECT ' . implode(",\n                ", $select) . "
@@ -527,9 +525,7 @@ class PixelStatisticsService
                 }
             }
 
-            $limitSql = self::getPdoDriver() === 'mysql'
-                ? "LIMIT 0, {$limit}"
-                : "LIMIT {$limit} OFFSET 0";
+            $limitSql = trim(self::sqlDialect()->limitOffset((int)$limit, 0));
 
             $rawRows = self::fetchRows(
                 'SELECT ' . implode(",\n                ", $select) . "
@@ -2003,30 +1999,28 @@ class PixelStatisticsService
             return $identifier;
         }
 
-        $quote = self::getPdoDriver() === 'mysql' ? '`' : '"';
-        $escapedQuote = $quote . $quote;
+        $dialect = self::sqlDialect();
         $parts = explode('.', $identifier);
-        $quotedParts = array_map(
-            static fn(string $part): string => $quote . str_replace($quote, $escapedQuote, $part) . $quote,
-            $parts
-        );
-        return implode('.', $quotedParts);
+
+        return implode('.', array_map(
+            static fn(string $part): string => $dialect->quoteIdentifier($part),
+            $parts,
+        ));
     }
 
     private static function getTimeSlotExpression(string $createdAtField, int $intervalMinutes): string
     {
-        $intervalMinutes = max(1, (int)$intervalMinutes);
-        $driver = self::getPdoDriver();
-        if ($driver === 'pgsql') {
-            return "TO_CHAR(DATE_TRUNC('hour', {$createdAtField}) + FLOOR(EXTRACT(MINUTE FROM {$createdAtField}) / {$intervalMinutes}) * INTERVAL '{$intervalMinutes} minutes', 'YYYY-MM-DD HH24:MI:SS')";
-        }
-        if ($driver === 'sqlite') {
-            return "strftime('%Y-%m-%d %H:', {$createdAtField})"
-                . " || printf('%02d', (CAST(strftime('%M', {$createdAtField}) AS INTEGER) / {$intervalMinutes}) * {$intervalMinutes})"
-                . " || ':00'";
-        }
+        return self::sqlDialect()->timeBucketExpression($createdAtField, max(1, (int)$intervalMinutes));
+    }
 
-        return "DATE_FORMAT(DATE_SUB({$createdAtField}, INTERVAL MINUTE({$createdAtField}) % {$intervalMinutes} MINUTE), '%Y-%m-%d %H:%i:00')";
+    private static function pixelConnector(): \Weline\Framework\Database\Connection\Api\ConnectorInterface
+    {
+        return w_obj(Pixel::class)->getConnection()->getConnector();
+    }
+
+    private static function sqlDialect(): \Weline\Framework\Database\Compiler\Dialect\DialectInterface
+    {
+        return self::pixelConnector()->getSqlDialect();
     }
     
     /**
@@ -2056,12 +2050,12 @@ class PixelStatisticsService
 
     private static function getPixelPdo(): \PDO
     {
-        return w_obj(Pixel::class)->getConnection()->getConnector()->getLink();
+        return self::pixelConnector()->getLink();
     }
 
     private static function getPdoDriver(): string
     {
-        return (string)self::getPixelPdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        return self::sqlDialect()->getDriverType();
     }
 
     private static function getPixelTableName(): string

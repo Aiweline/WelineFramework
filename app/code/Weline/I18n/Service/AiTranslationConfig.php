@@ -179,6 +179,47 @@ class AiTranslationConfig
         return array_values(array_unique($enabled));
     }
 
+    /**
+     * collect / 词典导出要写 generated/language/{locale}.php 的语种列表。
+     * 含源语；成员与 AI 目标集同口径，但**不依赖** AI 总开关（getEnabledLocaleCodes 关总开关会空）。
+     *
+     * @return list<string>
+     */
+    public function getDictionaryPublishLocaleCodes(): array
+    {
+        $sourceLocale = $this->normalizeLocaleCode($this->getSourceLocale());
+        $codes = [];
+
+        if ($this->tracksWebsiteLocaleUnion()) {
+            foreach ($this->getWebsiteAssignedLocaleCodes() as $localeCode) {
+                $localeCode = $this->normalizeLocaleCode((string)$localeCode);
+                if ($localeCode === '' || $localeCode === $sourceLocale) {
+                    continue;
+                }
+                if ($this->isInstalledActiveLocale($localeCode)) {
+                    $codes[] = $localeCode;
+                }
+            }
+        } else {
+            $config = $this->getConfig();
+            foreach ((array)($config['locales'] ?? []) as $localeCode => $localeConfig) {
+                $localeCode = $this->normalizeLocaleCode((string)$localeCode);
+                if ($localeCode === '' || $localeCode === $sourceLocale) {
+                    continue;
+                }
+                if (!empty($localeConfig['enabled']) && $this->isInstalledActiveLocale($localeCode)) {
+                    $codes[] = $localeCode;
+                }
+            }
+        }
+
+        if ($sourceLocale !== '') {
+            array_unshift($codes, $sourceLocale);
+        }
+
+        return array_values(array_unique($codes));
+    }
+
     public function getSourceLocale(): string
     {
         return (string)($this->getConfig()['source_locale'] ?? self::DEFAULT_SOURCE_LOCALE);

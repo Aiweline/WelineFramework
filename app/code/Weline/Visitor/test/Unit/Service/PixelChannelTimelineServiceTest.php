@@ -115,7 +115,7 @@ class PixelChannelTimelineServiceTest extends TestCore
         self::assertStringContainsString('PixelChannelTimelineService', $controller);
         self::assertStringContainsString('timeline_days', $controller);
 
-        $detail = (string)\file_get_contents($root . '/view/templates/Backend/TrafficChannel/detail.phtml');
+        $detail = (string)\file_get_contents($root . '/view/templates/backend/TrafficChannel/detail.phtml');
         self::assertStringContainsString('channel-timeline', $detail);
         self::assertStringContainsString('<lang>事件轨迹</lang>', $detail);
         self::assertStringContainsString('timeline_days', $detail);

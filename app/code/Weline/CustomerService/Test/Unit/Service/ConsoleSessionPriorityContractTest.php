@@ -47,7 +47,7 @@ final class ConsoleSessionPriorityContractTest extends TestCase
         $ctrl = (string)file_get_contents($base . '/Controller/Backend/Console.php');
         $service = (string)file_get_contents($base . '/Service/ChatService.php');
         $proto = (string)file_get_contents($base . '/view/statics/prototype/console-session-priority-logic.html');
-        $tpl = (string)file_get_contents($base . '/view/templates/Backend/Console/index.phtml');
+        $tpl = (string)file_get_contents($base . '/view/templates/backend/Console/index.phtml');
 
         self::assertStringContainsString('autoSelectPreferredSession', $js);
         self::assertStringContainsString('notifyIncomingMessage', $js);

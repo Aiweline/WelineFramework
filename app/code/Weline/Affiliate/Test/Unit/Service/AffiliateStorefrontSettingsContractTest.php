@@ -31,7 +31,7 @@ final class AffiliateStorefrontSettingsContractTest extends TestCase
         self::assertStringContainsString('SystemConfigTargetScopeService', $configController);
         self::assertStringContainsString("Weline_Affiliate::config", $configController);
 
-        $configTemplate = (string)file_get_contents($moduleRoot . '/view/templates/Backend/Config/index.phtml');
+        $configTemplate = (string)file_get_contents($moduleRoot . '/view/templates/backend/Config/index.phtml');
         self::assertStringContainsString('<w:config:embed', $configTemplate);
         self::assertStringContainsString('product_share_enabled', $configTemplate);
         self::assertStringContainsString('module="Weline_Affiliate"', $configTemplate);

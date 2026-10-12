@@ -47,25 +47,14 @@ final class DeliveryRetryPolicy
 
     private function databaseUtcTimestamp(): int
     {
-        $connection = $this->deliveryModel->getConnection();
-        $dbType = strtolower(trim((string)$connection->getConfigProvider()->getDbType()));
-        $sql = match ($dbType) {
-            'mysql', 'mariadb' => 'SELECT UNIX_TIMESTAMP(UTC_TIMESTAMP())',
-            'pgsql', 'postgres', 'postgresql' => 'SELECT CAST(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) AS BIGINT)',
-            'sqlite', 'sqlite3' => "SELECT CAST(strftime('%s','now') AS INTEGER)",
-            default => 'SELECT CURRENT_TIMESTAMP',
-        };
-        $statement = $connection->getConnector()->getWrappedConnection()->prepare($sql);
+        $connector = $this->deliveryModel->getConnection()->getConnector();
+        $sql = 'SELECT ' . $connector->getSqlDialect()->unixEpochExpression(true);
+        $statement = $connector->getWrappedConnection()->prepare($sql);
         if (!$statement->execute()) {
             throw new \RuntimeException((string)__('无法读取数据库 UTC 当前时间'));
         }
         $value = $statement->fetchColumn();
-        if (is_numeric($value)) {
-            $timestamp = (int)$value;
-        } else {
-            $parsed = strtotime((string)$value . ' UTC');
-            $timestamp = $parsed === false ? 0 : $parsed;
-        }
+        $timestamp = is_numeric($value) ? (int)$value : 0;
         if ($timestamp < 1) {
             throw new \RuntimeException((string)__('数据库 UTC 当前时间无效'));
         }

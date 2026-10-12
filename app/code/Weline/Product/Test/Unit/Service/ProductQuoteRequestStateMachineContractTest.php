@@ -60,8 +60,8 @@ final class ProductQuoteRequestStateMachineContractTest extends TestCase
         self::assertStringContainsString("fetch('index')", $controller);
         self::assertStringContainsString('function transition', $controller);
         self::assertStringContainsString('transitionStatus', $controller);
-        self::assertFileExists(BP . 'app/code/Weline/Product/view/templates/Backend/QuoteRequest/index.phtml');
-        $tpl = (string)file_get_contents(BP . 'app/code/Weline/Product/view/templates/Backend/QuoteRequest/index.phtml');
+        self::assertFileExists(BP . 'app/code/Weline/Product/view/templates/backend/QuoteRequest/index.phtml');
+        $tpl = (string)file_get_contents(BP . 'app/code/Weline/Product/view/templates/backend/QuoteRequest/index.phtml');
         self::assertStringContainsString('available_transitions', $tpl);
         self::assertStringContainsString('quote-request/transition', $tpl);
         self::assertStringContainsString('w:form', $tpl);

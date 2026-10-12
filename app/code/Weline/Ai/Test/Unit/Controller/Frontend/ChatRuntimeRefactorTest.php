@@ -18,7 +18,7 @@ final class ChatRuntimeRefactorTest extends TestCase
     public function testFrontendStartsAndSubscribesThroughTheRuntimeApiOnly(): void
     {
         $moduleRoot = dirname(__DIR__, 4);
-        $template = (string)file_get_contents($moduleRoot . '/view/templates/Frontend/Chat/index.phtml');
+        $template = (string)file_get_contents($moduleRoot . '/view/templates/frontend/Chat/index.phtml');
         $provider = (string)file_get_contents($moduleRoot . '/Extends/module/Weline_Framework/Query/AiQueryProvider.php');
 
         self::assertStringContainsString("resource('runtime_task')", $template);

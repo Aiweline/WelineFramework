@@ -167,7 +167,7 @@ app/code/Weline/Deploy/
 ├── i18n/
 │   ├── zh_Hans_CN.csv                    # 中文翻译
 │   └── en_US.csv                         # 英文翻译
-└── view/templates/Backend/
+└── view/templates/backend/
     ├── Config/index.phtml                # 后台配置模板
     └── Release/index.phtml               # 发布历史模板
 ```

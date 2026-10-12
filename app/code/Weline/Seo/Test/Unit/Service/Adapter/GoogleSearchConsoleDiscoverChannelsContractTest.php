@@ -49,7 +49,7 @@ final class GoogleSearchConsoleDiscoverChannelsContractTest extends TestCase
     public function testFormRendersConfigSectionsAndChannelGrid(): void
     {
         $root = dirname(__DIR__, 4);
-        $template = (string)file_get_contents($root . '/view/templates/Backend/Account/form.phtml');
+        $template = (string)file_get_contents($root . '/view/templates/backend/Account/form.phtml');
         self::assertStringContainsString("type === 'section'", $template);
         self::assertStringContainsString('seo-config-section', $template);
         self::assertStringContainsString('seo-config-channel-grid', $template);

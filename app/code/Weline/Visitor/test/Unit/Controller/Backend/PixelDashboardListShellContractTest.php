@@ -29,7 +29,7 @@ final class PixelDashboardListShellContractTest extends TestCase
     public function testListTemplateSupportsPaginationAndChannelFilters(): void
     {
         $root = dirname(__DIR__, 4);
-        $listTpl = $root . '/view/templates/Backend/PixelDashboard/list.phtml';
+        $listTpl = $root . '/view/templates/backend/PixelDashboard/list.phtml';
         self::assertFileExists($listTpl);
 
         $src = (string)\file_get_contents($listTpl);
@@ -78,7 +78,7 @@ final class PixelDashboardListShellContractTest extends TestCase
         self::assertStringContainsString('traffic_type_options', $controller);
         self::assertStringContainsString('buildListDisplayFilters', $controller);
 
-        $index = (string)\file_get_contents($root . '/view/templates/Backend/PixelDashboard/index.phtml');
+        $index = (string)\file_get_contents($root . '/view/templates/backend/PixelDashboard/index.phtml');
         self::assertStringContainsString('pixel-dashboard/list', $index);
         self::assertStringContainsString('<lang>事件列表</lang>', $index);
         self::assertStringContainsString('w:websites:website:select', $index);
@@ -91,7 +91,7 @@ final class PixelDashboardListShellContractTest extends TestCase
     {
         $root = dirname(__DIR__, 4);
         foreach (['index.phtml', 'list.phtml', 'detail.phtml'] as $file) {
-            $src = (string)\file_get_contents($root . '/view/templates/Backend/PixelDashboard/' . $file);
+            $src = (string)\file_get_contents($root . '/view/templates/backend/PixelDashboard/' . $file);
             self::assertStringContainsString('pixel-dashboard/', $src, $file);
             self::assertStringNotContainsString('pixel_dashboard/', $src, $file . ' 不得使用下划线路由');
         }

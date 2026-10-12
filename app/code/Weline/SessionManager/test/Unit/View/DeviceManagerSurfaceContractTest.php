@@ -23,7 +23,7 @@ final class DeviceManagerSurfaceContractTest extends TestCase
         foreach ([
             'view/hooks/account.sidebar.group.security.phtml',
             'view/hooks/account.sidebar.content.phtml',
-            'view/templates/Backend/Device/index.phtml',
+            'view/templates/backend/Device/index.phtml',
             'view/templates/device/manager.phtml',
         ] as $path) {
             self::assertStringNotContainsString('declare(strict_types=1)', $this->read($path), $path);
@@ -52,7 +52,7 @@ final class DeviceManagerSurfaceContractTest extends TestCase
     public function testSharedSurfaceUsesAreaThemeTokensAndOverridesHeadingColors(): void
     {
         $css = $this->read('view/statics/css/device-manager.css');
-        $backend = $this->read('view/templates/Backend/Device/index.phtml');
+        $backend = $this->read('view/templates/backend/Device/index.phtml');
 
         self::assertStringContainsString('--weline-theme-', $css);
         self::assertStringContainsString('[data-device-manager="backend"]', $css);

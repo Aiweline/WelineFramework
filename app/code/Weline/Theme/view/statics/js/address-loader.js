@@ -3,7 +3,7 @@
 
     var moduleName = 'themeAddress';
     // Bust token lives on Module:: path so PROD resolveStaticPath / flat publish picks it up.
-    var modulePath = 'Weline_Theme::js/address.js?v=20260924-no-dev-fallback1';
+    var modulePath = 'Weline_Theme::js/address.js?v=20261012-seed-country1';
 
     function resolveAddressUrl() {
         var loader = window.Weline && window.Weline.loader;

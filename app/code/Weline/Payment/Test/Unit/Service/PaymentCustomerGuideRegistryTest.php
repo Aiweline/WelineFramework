@@ -59,7 +59,7 @@ final class PaymentCustomerGuideRegistryTest extends TestCase
         $registry = $this->registry();
         $paypalGuide = new PayPalCustomerGuide();
 
-        $expectedGuideTemplate = 'Weline_Payment::templates/Frontend/guide/payment/'
+        $expectedGuideTemplate = 'Weline_Payment::templates/frontend/guide/payment/'
             . $paypalGuide->getMethodCode() . '/'
             . $paypalGuide->getGuideTemplateCode() . '.phtml';
 

@@ -178,7 +178,7 @@ final class PixelEcommerceItemPerformanceServiceTest extends TestCase
         $controller = (string)\file_get_contents($root . '/Controller/Backend/PixelDashboard.php');
         self::assertStringContainsString('PixelEcommerceItemPerformanceService', $controller);
         self::assertStringContainsString('ecommerce_items', $controller);
-        $detail = (string)\file_get_contents($root . '/view/templates/Backend/PixelDashboard/detail.phtml');
+        $detail = (string)\file_get_contents($root . '/view/templates/backend/PixelDashboard/detail.phtml');
         self::assertStringContainsString('ecommerce-items', $detail);
         self::assertStringContainsString('商品表现', $detail);
     }

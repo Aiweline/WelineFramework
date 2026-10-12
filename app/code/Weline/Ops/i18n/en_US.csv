@@ -113,6 +113,7 @@ ID,ID
 状态,状态
 操作,操作
 完成,Done
+再次批准外发,"Retry approve outbound"
 批准外发,"Approve outbound"
 暂无任务,"""No tasks yet"""
 登记任务,"""Register task"""
@@ -174,7 +175,6 @@ ID,ID
 调整筛选条件，或先到运营台提交配置派工。,"Adjust filters, or submit a dispatch from the ops desk first."
 暂无运行日志,"No run logs yet"
 选定网站后，分析与草稿事件会出现在这里。,"After you pick a website, analysis and draft events show up here."
-再次批准外发,"Retry approve outbound"
 "Ops 任务调度队列","Ops 任务调度队列"
 "按 OpsTask 指派智能体异步执行；外发须审批闸门。","按 OpsTask 指派智能体异步执行；外发须审批闸门。"
 "缺少 task_id","缺少 task_id"

@@ -1302,6 +1302,10 @@
             }
             return data.default || data;
         }
+        function profileHasSchemaLabels(profile) {
+            return !!(profile && profile.labels && typeof profile.labels === 'object'
+                && Object.keys(profile.labels).length > 0);
+        }
         if (!window.Weline || !window.Weline.Api) {
             return Promise.resolve(null);
         }
@@ -1309,19 +1313,135 @@
         if (countryCode) {
             params.country_code = countryCode;
         }
-        return callRegion('country_profile', params).then(normalizeProfile).catch(function () {
+        // Stale worker/L1 country_profile may predate labels+field_order; one bypass refreshes cache.
+        return callRegion('country_profile', params).then(normalizeProfile).then(function (profile) {
+            if (profileHasSchemaLabels(profile)) {
+                return profile;
+            }
+            return getRegionApi().then(function (RegionApi) {
+                if (!RegionApi || typeof RegionApi.country_profile !== 'function') {
+                    return profile;
+                }
+                return RegionApi.country_profile(params, {silent: true, bypassCache: true})
+                    .then(normalizeProfile)
+                    .then(function (fresh) {
+                        return profileHasSchemaLabels(fresh) ? fresh : profile;
+                    });
+            }).catch(function () {
+                return profile;
+            });
+        }).catch(function () {
             return null;
         });
     }
 
     function applyCountryProfile(group, profile) {
-        if (!group || !profile || !Array.isArray(profile.levels)) {
+        if (!group || !profile) {
             return;
         }
-        group.autocomplete = profile.autocomplete !== false;
-        group.profileLevels = profile.levels.slice();
-        syncLevelVisibility(group);
+        if (Array.isArray(profile.levels)) {
+            group.autocomplete = profile.autocomplete !== false;
+            group.profileLevels = profile.levels.slice();
+            syncLevelVisibility(group);
+        }
+        applySchemaLabels(group, profile);
         syncMetadata(group);
+    }
+
+    /**
+     * AddressSchemaProvider 标签（State / ZIP code 等）刷到级联控件与同表单邮编字段。
+     */
+    function applySchemaLabels(group, profile) {
+        if (!group || !profile || !profile.labels || typeof profile.labels !== 'object') {
+            return;
+        }
+        var schemaLabels = profile.labels;
+        group.labels = group.labels || Object.assign({}, defaultLabels);
+        ['country', 'province', 'city', 'district', 'street'].forEach(function (level) {
+            var label = text(schemaLabels[level] || '');
+            if (!label) {
+                return;
+            }
+            group.labels[level] = label;
+            if (level === 'province') {
+                group.labels.selectProvince = label;
+                group.labels.selectProvinceFirst = label;
+                group.labels.searchProvince = label;
+            } else if (level === 'city') {
+                group.labels.selectCity = label;
+                group.labels.selectCityFirst = label;
+                group.labels.searchCity = label;
+            } else if (level === 'district') {
+                group.labels.selectDistrict = label;
+                group.labels.selectDistrictFirst = label;
+                group.labels.searchDistrict = label;
+            } else if (level === 'street') {
+                group.labels.selectStreet = label;
+                group.labels.enterStreet = label;
+                group.labels.searchStreet = label;
+            } else if (level === 'country') {
+                group.labels.selectCountry = label;
+                group.labels.searchCountry = label;
+            }
+        });
+        var postalLabel = text(schemaLabels.postal_code || '');
+        if (postalLabel) {
+            group.labels.postal_code = postalLabel;
+        }
+        Object.keys(group.controls || {}).forEach(function (level) {
+            var control = group.controls[level];
+            if (!control || !control.item) {
+                return;
+            }
+            var lab = control.item.querySelector('.w-field__label');
+            if (lab && text(group.labels[level] || '')) {
+                lab.textContent = group.labels[level];
+            }
+            if (control.input && !text(control.input.value) && !control.input.disabled) {
+                control.input.placeholder = placeholderFor(group, level);
+            }
+        });
+        paintExternalPostalLabel(group, postalLabel);
+        try {
+            document.dispatchEvent(new CustomEvent('weline:address:schema-labels', {
+                detail: {
+                    code: group.code || '',
+                    country_code: text(profile.country_code || ''),
+                    labels: schemaLabels,
+                    name_mode: text(profile.name_mode || 'single') || 'single',
+                    field_order: Array.isArray(profile.field_order) ? profile.field_order.slice() : []
+                }
+            }));
+        } catch (e) {
+        }
+    }
+
+    function paintExternalPostalLabel(group, postalLabel) {
+        postalLabel = text(postalLabel || '');
+        if (!postalLabel) {
+            return;
+        }
+        var root = null;
+        Object.keys(group.controls || {}).some(function (level) {
+            if (group.controls[level] && group.controls[level].root) {
+                root = group.controls[level].root;
+                return true;
+            }
+            return false;
+        });
+        var scope = (root && (root.closest('[data-w-address-shell]') || root.closest('form') || root.parentElement)) || document;
+        var postalInput = scope.querySelector('[data-postal-first], [data-w-address-postal], input[name="' + text(group.postalName || 'postal_code') + '"]');
+        if (!postalInput) {
+            return;
+        }
+        var field = postalInput.closest('.w-field, .w-shipping-checkout-address__field, .account-address-form__field, .w-address__postal');
+        var lab = field && field.querySelector('.w-field__label, label');
+        if (lab) {
+            lab.textContent = postalLabel;
+        }
+        if (postalInput.getAttribute('placeholder')) {
+            postalInput.setAttribute('placeholder', postalLabel);
+        }
     }
 
     /**
@@ -1747,7 +1867,13 @@
         if (!group.state.country && group.controls.country && !group.controls.country.field.value) {
             // 邮编多国待选时不要自动落国，等用户点选
             // 全球国家单选（如供应商申请）也不要默认 CN，避免看起来像站点支持地区列表。
-            if (!(Array.isArray(group.postalCountryFilter) && group.postalCountryFilter.length)
+            // 表单已有 country_code 种子（账户/结账 storefront fallback）时禁止回落 CN——
+            // regions 未就绪时先 synthesize，等 loadRegions 后再对齐真实节点。
+            var seededCountry = metadataValue(group, 'country_code');
+            if (seededCountry) {
+                group.state.country = findRegion(group, 'country', seededCountry)
+                    || synthesizeCountry(seededCountry, metadataValue(group, 'country') || seededCountry);
+            } else if (!(Array.isArray(group.postalCountryFilter) && group.postalCountryFilter.length)
                 && !(group.catalog === 'global' && group.controls.country)) {
                 group.state.country = findRegion(group, 'country', 'CN') || firstAllowed(group, 'country');
             }
@@ -3912,9 +4038,20 @@
         }
         if (form && !form.dataset.wAddressRefreshBound) {
             form.dataset.wAddressRefreshBound = 'true';
-            form.addEventListener('weline:address:refresh', function () {
+            form.addEventListener('weline:address:refresh', function (event) {
+                var detail = (event && event.detail) || {};
+                var hasSeed = !!(text(detail.country_code) || text(detail.country)
+                    || text(detail.province) || text(detail.city) || text(detail.district)
+                    || text(detail.postal_code) || text(detail.street) || text(detail.address1));
                 Object.keys(groups).forEach(function (key) {
-                    updateGroup(groups[key]);
+                    var group = groups[key];
+                    // Account/checkout seed country via CustomEvent detail — must applyValues
+                    // so country_profile → State/ZIP (updateGroup alone keeps SSR CN labels).
+                    if (hasSeed) {
+                        applyValues(group.code || key, detail);
+                    } else {
+                        updateGroup(group);
+                    }
                 });
             });
         }
@@ -4077,7 +4214,13 @@
                     ensureCountryInRegions(group, countryCode, countryName || countryCode);
                     return loadChildren(null, countryCode, 500).then(function (rows) {
                         mergeRegions(group, rows);
-                        return finish();
+                        // Schema labels (State/ZIP) + field depth live on country_profile — applyValues must apply them.
+                        return loadCountryProfile(countryCode).then(function (profile) {
+                            if (profile) {
+                                applyCountryProfile(group, profile);
+                            }
+                            return finish();
+                        });
                     });
                 });
             });

@@ -29,6 +29,7 @@ use Weline\Theme\Model\ThemeScopeReleaseBatch;
 use Weline\Theme\Model\ThemeScopeRevision;
 use Weline\Theme\Model\ThemeScopeWorkspace;
 use Weline\Theme\Service\LayoutContentValidationRegistry;
+use Weline\Theme\Service\ThemePageTypeResolver;
 
 /** Canonical per-path draft, merge and immutable release service. */
 final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, ThemePublishedSnapshotReaderInterface
@@ -3105,6 +3106,27 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         if ($contentRevision !== null && $contentRevision > 0) {
             $after['content_revision'] = $contentRevision;
         }
+        $urls = ['/'];
+        if ($resourceType === 'theme_layout') {
+            try {
+                /** @var ThemePageTypeResolver $resolver */
+                $resolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
+                $previewPath = $resolver->getPreviewPathByPageType(
+                    (string)$context->layoutType,
+                    (string)($context->layoutOption ?: 'default'),
+                );
+                $previewPath = \trim((string)$previewPath);
+                if ($previewPath !== '') {
+                    $urls = [$previewPath];
+                    // Homepage layout still invalidates locale roots when present as `/`.
+                    if ($previewPath === '/') {
+                        $urls = ['/'];
+                    }
+                }
+            } catch (\Throwable) {
+                $urls = ['/'];
+            }
+        }
         $change = ObjectManager::getInstance(ResourceChangeFactory::class)->create(
             resourceType: $resourceType,
             resourceId: $resourceId,
@@ -3117,7 +3139,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             changedFields: ['published_release', 'static_version', 'theme_version_id'],
             impact: [
                 'namespaces' => $namespaces,
-                'urls' => ['/'],
+                'urls' => $urls,
             ],
             origin: ['entry' => $entry],
             siteId: null,

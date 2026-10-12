@@ -856,7 +856,12 @@ trait TraitTemplate
     private function resolveThemeCacheKeyForFetchFile(string $filename): string
     {
         $path = str_replace('\\', '/', $filename);
-        $area = str_contains($path, '/backend/') ? 'backend' : 'frontend';
+        $norm = str_replace('\\', '/', strtolower((string)$path));
+        $area = (
+            str_contains($norm, '/templates/backend/')
+            || str_contains($norm, '/theme/backend/')
+            || str_contains($norm, '/backend/')
+        ) ? 'backend' : 'frontend';
         $baseKey = 'area:' . $area;
 
         // 交由外部模块（如 Theme）通过事件回填主题/预览相关后缀，Framework 自身不感知具体实现。

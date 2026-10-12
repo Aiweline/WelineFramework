@@ -21,12 +21,12 @@ final class BackendOrderRouterPrefixContractTest extends TestCase
             'Controller/Backend/Shipment.php',
             'Controller/Backend/Refund.php',
             'Controller/Backend/Invoice.php',
-            'view/templates/Backend/Records/index.phtml',
-            'view/templates/Backend/Invoice/index.phtml',
-            'view/templates/Backend/Refund/index.phtml',
-            'view/templates/Backend/Shipment/index.phtml',
-            'view/templates/Backend/Status/edit.phtml',
-            'view/templates/Backend/Status/index.phtml',
+            'view/templates/backend/Records/index.phtml',
+            'view/templates/backend/Invoice/index.phtml',
+            'view/templates/backend/Refund/index.phtml',
+            'view/templates/backend/Shipment/index.phtml',
+            'view/templates/backend/Status/edit.phtml',
+            'view/templates/backend/Status/index.phtml',
             'Test/e2e/backend/Weline_Order-r43-menu.spec.js',
         ];
     }

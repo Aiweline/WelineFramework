@@ -61,12 +61,18 @@ $service->assertReady($index, $session + ['paths' => [$target]]);
 $check($fileHash($target) === '', 'deleted explicit targets leave no stale index entry');
 
 usleep(1_100_000);
-$service->assertReady($index, $session);
-$check($fileHash('src/Unrelated.php') !== '', 'periodic discovery still indexes newly added files');
+$expired = $service->assertReady($index, $session);
+$check(($expired['deferred_refresh'] ?? false) === true, 'expired interval defers whole-repo discovery instead of blocking STDIO');
+$check(
+    str_starts_with((string) ($expired['index_refresh']['mode'] ?? ''), 'deferred'),
+    'expired assertReady reports deferred refresh mode',
+);
+// Explicit path/directory targets remain synchronous and bounded.
+$service->assertReady($index, $session + ['paths' => ['src']]);
+$check($fileHash('src/Unrelated.php') !== '', 'directory discovery still indexes children for explicit path targets');
 mkdir($root . '/outside');
 file_put_contents($root . '/outside/Unrequested.php', "<?php\nfunction outside(): bool { return true; }\n");
 $service->assertReady($index, $session + ['paths' => ['src']]);
-$check($fileHash('src/Unrelated.php') !== '', 'directory discovery preserves indexed child files');
 $check($fileHash('outside/Unrequested.php') === '', 'directory requests do not discover files outside their scope');
 $index->close();
 $remove = static function (string $path) use (&$remove): void {

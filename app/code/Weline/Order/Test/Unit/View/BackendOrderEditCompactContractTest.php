@@ -11,7 +11,7 @@ final class BackendOrderEditCompactContractTest extends TestCase
     public function testEditCustomerAdjustLivesInOpsTabNotScrollStub(): void
     {
         $src = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Order/edit.phtml'
         );
         self::assertNotSame('', $src);
         self::assertStringContainsString('data-testid="order-edit-ops-panel-customer"', $src);
@@ -31,7 +31,7 @@ final class BackendOrderEditCompactContractTest extends TestCase
     public function testCreateStillUsesCollapsedWritableDisclosure(): void
     {
         $src = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Order/edit.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Order/edit.phtml'
         );
         self::assertStringContainsString('data-testid="order-edit-writable-toggle"', $src);
         self::assertStringContainsString('data-testid="order-edit-writable-summary"', $src);
@@ -43,7 +43,7 @@ final class BackendOrderEditCompactContractTest extends TestCase
     public function testCustomerAdjustFormPartialHasCoreFields(): void
     {
         $src = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Order/partial/customer-adjust-form.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Order/partial/customer-adjust-form.phtml'
         );
         self::assertNotSame('', $src);
         self::assertStringContainsString('data-testid="order-edit-customer-select"', $src);

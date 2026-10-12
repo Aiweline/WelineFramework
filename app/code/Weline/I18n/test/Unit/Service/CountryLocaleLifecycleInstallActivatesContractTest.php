@@ -81,13 +81,13 @@ final class CountryLocaleLifecycleInstallActivatesContractTest extends TestCase
     public function testInstallAsyncFormsReloadToFirstPage(): void
     {
         $localeTpl = (string)file_get_contents(
-            \BP . 'app/code/Weline/I18n/view/templates/Backend/Countries/Locales/getIndex.phtml'
+            \BP . 'app/code/Weline/I18n/view/templates/backend/Countries/Locales/getIndex.phtml'
         );
         $countryTpl = (string)file_get_contents(
-            \BP . 'app/code/Weline/I18n/view/templates/Backend/Countries/index.phtml'
+            \BP . 'app/code/Weline/I18n/view/templates/backend/Countries/index.phtml'
         );
         $localizationTpl = (string)file_get_contents(
-            \BP . 'app/code/Weline/I18n/view/templates/Backend/Localization/index.phtml'
+            \BP . 'app/code/Weline/I18n/view/templates/backend/Localization/index.phtml'
         );
         $js = (string)file_get_contents(
             \BP . 'app/code/Weline/I18n/view/statics/js/backend-admin.js'

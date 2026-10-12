@@ -10,7 +10,7 @@ class AffiliateIndexTemplateTest extends TestCase
 {
     public function testAffiliateIndexTemplateContainsKeyElements(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertIsString($content);
@@ -28,7 +28,7 @@ class AffiliateIndexTemplateTest extends TestCase
 
     public function testAffiliateIndexTemplateUsesI18n(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('__(\'Affiliate Management\')', $content);
@@ -63,7 +63,7 @@ class AffiliateIndexTemplateTest extends TestCase
 
     public function testAffiliateIndexTemplateHasSummaryCards(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('summary', $content);
@@ -75,7 +75,7 @@ class AffiliateIndexTemplateTest extends TestCase
 
     public function testAffiliateIndexTemplateHasFormAndTableStructure(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('<form', $content);
@@ -89,7 +89,7 @@ class AffiliateIndexTemplateTest extends TestCase
 
     public function testAffiliateIndexTemplateHasPagination(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('pageCount', $content);
@@ -100,7 +100,7 @@ class AffiliateIndexTemplateTest extends TestCase
 
     public function testAffiliateIndexTemplateDoesNotEmbedPhpInTaglibAttributes(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         // Taglib 禁止在 <w:*> 属性内写短标签 echo，否则编译产物会泄漏为页面原文

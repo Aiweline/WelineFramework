@@ -56,7 +56,7 @@ class DevRelay extends BackendController
         $cjSandboxHook = $onlineBase . '/dropship/frontend/callback/notify?endpoint_code=' . rawurlencode('cj.sandbox.default');
         $cjLiveHook = $onlineBase . '/dropship/frontend/callback/notify?endpoint_code=' . rawurlencode('cj.prod.default');
 
-        return $this->fetch('Weline_Dropship::templates/Backend/DevRelay/index.phtml', [
+        return $this->fetch('Weline_Dropship::templates/backend/DevRelay/index.phtml', [
             'page_title' => (string)__('货源 Webhook 中继'),
             'payment_relay_url' => $paymentRelayUrl,
             'relay_ready' => $relayReady,

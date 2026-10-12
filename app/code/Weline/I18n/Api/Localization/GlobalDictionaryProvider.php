@@ -178,29 +178,12 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
     private function loadLocaleFileWords(string $locale): ?array
     {
         try {
-            $path = Env::path_TRANSLATE_FILES_PATH . $locale . '.php';
+            $words = \Weline\I18n\Service\LocaleAreaDictionaryLoader::loadMerged($locale);
         } catch (\Throwable) {
             return null;
-        }
-        if (!\is_file($path)) {
-            return null;
-        }
-        try {
-            if (\function_exists('opcache_invalidate')) {
-                @\opcache_invalidate($path, true);
-            }
-            $raw = (array)include $path;
-        } catch (\Throwable) {
-            return null;
-        }
-        $words = [];
-        foreach ($raw as $word => $translate) {
-            if (\is_string($word) && \is_string($translate) && $word !== '' && $translate !== '') {
-                $words[$word] = $translate;
-            }
         }
 
-        return $words;
+        return $words === [] ? null : $words;
     }
 
     /** @param array<string, string> $words */

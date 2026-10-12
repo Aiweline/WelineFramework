@@ -21,7 +21,7 @@ class Handoff extends FrontendController
         $this->assign('checkout_session_code', $checkoutSessionCode);
         $this->assign('handoff_max_wait_ms', PaymentBrowserHandoffReadinessService::HANDOFF_MAX_WAIT_MS);
 
-        return $this->fetch('Weline_Payment::templates/Frontend/checkout/handoff.phtml');
+        return $this->fetch('Weline_Payment::templates/frontend/checkout/handoff.phtml');
     }
 
     public function status()

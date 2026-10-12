@@ -11,7 +11,7 @@ use Weline\I18n\Api\Translation\TranslationResolverInterface;
 /**
  * 客服浮层 chrome 译包。
  *
- * 模块 CSV 仅允许 zh_Hans_CN / en_US；其它默认站语种必须从系统词典解析。
+ * 官方框架模块 CSV Git 瘦身仅 zh_Hans_CN / en_US；其它默认站语种必须从系统词典解析。
  * 2026-09-21 删除非中英 CSV 后若仍只读模块 CSV，bn/ar/hi 等会落到 en_US 或源串简中。
  */
 class WidgetTranslationService

@@ -54,6 +54,22 @@ final class ThemeLayoutChangedType implements ChangedTypeInterface
         }
         $action = $change->action();
         if ($action === 'publish' || $action === 'unpublish') {
+            $impact = $change->toArray()['impact'] ?? [];
+            $urls = array_merge(
+                is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
+                is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
+            );
+            // Scoped layout publish with concrete storefront URLs → selective purge
+            // (policy/home/etc). Whole-theme disaster with empty urls keeps purge_all.
+            if ($urls !== []) {
+                return [
+                    new InvalidationEffect(InvalidationEffect::CODE_BUMP_NAMESPACES, InvalidationEffect::PHASE_SYNC),
+                    new InvalidationEffect(InvalidationEffect::CODE_PURGE_FPC_URLS, InvalidationEffect::PHASE_AFTER_COMMIT),
+                    new InvalidationEffect(InvalidationEffect::CODE_THEME_RUNTIME_CLEAR, InvalidationEffect::PHASE_AFTER_COMMIT),
+                    new InvalidationEffect(InvalidationEffect::CODE_CDN_PURGE, InvalidationEffect::PHASE_AFTER_COMMIT),
+                ];
+            }
+
             return [
                 new InvalidationEffect(InvalidationEffect::CODE_BUMP_NAMESPACES, InvalidationEffect::PHASE_SYNC),
                 new InvalidationEffect(

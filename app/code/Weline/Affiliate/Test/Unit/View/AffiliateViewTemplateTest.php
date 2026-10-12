@@ -10,7 +10,7 @@ class AffiliateViewTemplateTest extends TestCase
 {
     public function testAffiliateViewTemplateContainsKeyElements(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertIsString($content);
@@ -24,7 +24,7 @@ class AffiliateViewTemplateTest extends TestCase
 
     public function testAffiliateViewTemplateUsesI18n(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('\__(\'Affiliate Details\')', $content);
@@ -39,7 +39,7 @@ class AffiliateViewTemplateTest extends TestCase
 
     public function testAffiliateViewTemplateHasCommissionSummary(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('total_commission', $content);
@@ -53,7 +53,7 @@ class AffiliateViewTemplateTest extends TestCase
 
     public function testAffiliateViewTemplateHasCopyFunctionality(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('data-copy-value', $content);
@@ -67,7 +67,7 @@ class AffiliateViewTemplateTest extends TestCase
 
     public function testAffiliateViewTemplateHasProgressBar(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('progress', $content);
@@ -77,7 +77,7 @@ class AffiliateViewTemplateTest extends TestCase
 
     public function testAffiliateViewTemplateEnablesEditModeForValidAffiliate(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('$isEditMode = $affiliateId > 0;', $content);
@@ -87,7 +87,7 @@ class AffiliateViewTemplateTest extends TestCase
 
     public function testAffiliateViewTemplateShowsDecimalCommissionRateWithoutPercentInputSuffix(): void
     {
-        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('$commissionRateInput = number_format($commissionRate, 2, \'.\', \'\');', $content);

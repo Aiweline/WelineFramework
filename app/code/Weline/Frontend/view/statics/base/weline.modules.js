@@ -271,8 +271,8 @@
             description: "结账收货地址部件"
         },
         shippingAccountAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/frontend/js/account-address-v3.js?v=20260916-purpose-tags2"],
-            paths: ["Weline_Shipping::frontend/js/account-address-v3.js?v=20260916-purpose-tags2"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/frontend/js/account-address-v3.js?v=20261012-default-country2"],
+            paths: ["Weline_Shipping::frontend/js/account-address-v3.js?v=20261012-default-country2"],
             globalVar: null,
             description: "账户中心发货/收货地址维护"
         },

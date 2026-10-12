@@ -56,7 +56,9 @@ class AddressSchemaProvider
         'US' => [
             'country_code' => 'US',
             'locale' => 'en_US',
-            'field_order' => ['contact_name', 'street', 'city', 'province', 'postal_code', 'country'],
+            // split：店面 First/Last 分栏，落库仍合并为 contact_name / name
+            'name_mode' => 'split',
+            'field_order' => ['first_name', 'last_name', 'street', 'city', 'province', 'postal_code', 'country'],
             'required_fields' => ['contact_name', 'contact_phone', 'street', 'city', 'province'],
             'labels' => [
                 'country' => 'Country',
@@ -66,6 +68,8 @@ class AddressSchemaProvider
                 'street' => 'Street address',
                 'postal_code' => 'ZIP code',
                 'contact_name' => 'Recipient',
+                'first_name' => 'First name',
+                'last_name' => 'Last name',
                 'contact_phone' => 'Phone',
             ],
             'postal_code_pattern' => '/^\\d{5}(-\\d{4})?$/',

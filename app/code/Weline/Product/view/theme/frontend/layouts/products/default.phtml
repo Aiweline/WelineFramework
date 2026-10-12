@@ -15,6 +15,7 @@
  * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
  * @param showFilters {default=true,name="是否显示筛选器",description="是否显示左侧筛选器"}
  * @param showToolbar {default=true,name="是否显示工具栏",description="是否显示排序/视图切换工具栏"}
+ * @param showRecommendations {default=true,name="是否显示推荐区",description="是否显示列表下方推荐产品区域"}
  * @param filterDrawerTitle {default="筛选条件",name="筛选抽屉标题",description="移动端筛选抽屉的标题文字"}
  * @param gridColumns {default=4,type=number,name="网格列数",description="桌面端每行显示的产品卡片数量"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
@@ -35,6 +36,8 @@ $showFooter = $meta['showFooter'] ?? $this->getData('showFooter') ?? true;
 $showBreadcrumb = $meta['showBreadcrumb'] ?? $this->getData('showBreadcrumb') ?? true;
 $showFilters = $meta['showFilters'] ?? $this->getData('showFilters') ?? true;
 $showToolbar = $meta['showToolbar'] ?? $this->getData('showToolbar') ?? true;
+$showRecommendations = $meta['showRecommendations'] ?? $this->getData('showRecommendations') ?? true;
+$showRecommendations = !in_array($showRecommendations, [false, 0, '0', 'false', 'off'], true);
 $filterDrawerTitle = \Weline\Theme\Helper\WidgetI18n::label(
     (string)($meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? '筛选条件')
 );
@@ -51,6 +54,7 @@ $meta['showFooter'] = $showFooter;
 $meta['showBreadcrumb'] = $showBreadcrumb;
 $meta['showFilters'] = $showFilters;
 $meta['showToolbar'] = $showToolbar;
+$meta['showRecommendations'] = $showRecommendations;
 $meta['filterDrawerTitle'] = $filterDrawerTitle;
 $meta['gridColumns'] = $gridColumns;
 
@@ -299,6 +303,7 @@ $this->assign('meta', $meta);
                     </div>
 
                     <!-- ========== 推荐产品区域（与列表同容器宽度对齐） ========== -->
+                    <if condition="meta.showRecommendations">
                     <w:slot id="list-recommendations"
                             name="推荐产品区域"
                             accept="layout-products-recommendations,recommended-products,featured-products,bestsellers,new-arrivals,recently-viewed,you-may-like,product-carousel"
@@ -310,6 +315,7 @@ $this->assign('meta', $meta);
                         <w:hook>Weline_Theme::frontend::layouts::products::recommendations-before</w:hook>
                         <w:hook>Weline_Theme::frontend::layouts::products::recommendations-after</w:hook>
                     </w:slot>
+                    </if>
                 </div>
                 <?php endif; ?>
             </main>

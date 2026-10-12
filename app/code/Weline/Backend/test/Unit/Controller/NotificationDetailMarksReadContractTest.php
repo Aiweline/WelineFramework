@@ -18,7 +18,7 @@ final class NotificationDetailMarksReadContractTest extends TestCase
             dirname(__DIR__, 3) . '/Controller/Backend/Notification.php'
         );
         $template = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Backend/Notification/detail.phtml'
+            dirname(__DIR__, 3) . '/view/templates/backend/Notification/detail.phtml'
         );
         $script = (string) file_get_contents(
             dirname(__DIR__, 3) . '/view/statics/js/notification-center.js'

@@ -129,7 +129,7 @@ class Dashboard extends BackendPageController
         $this->assign('keywords', $keywords);
         $this->assign('suggestion', $suggestion->getId() ? $suggestion->getData() : null);
         
-        return $this->fetch('Weline_Seo::templates/Backend/Dashboard/subject_detail.phtml');
+        return $this->fetch('Weline_Seo::templates/backend/Dashboard/subject_detail.phtml');
     }
 
     /**
@@ -178,7 +178,7 @@ class Dashboard extends BackendPageController
         $this->assign('search', $search);
         $this->assign('status', $status);
         
-        return $this->fetch('Weline_Seo::templates/Backend/Dashboard/subject.phtml');
+        return $this->fetch('Weline_Seo::templates/backend/Dashboard/subject.phtml');
     }
 
     /**

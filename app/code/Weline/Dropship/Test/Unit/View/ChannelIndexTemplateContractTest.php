@@ -13,7 +13,7 @@ final class ChannelIndexTemplateContractTest extends TestCase
 {
     public function testChannelIndexUsesThemeComponentsAndHumanLabels(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Channel/index.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Channel/index.phtml';
         self::assertFileExists($path);
         $tpl = (string)file_get_contents($path);
 
@@ -70,7 +70,7 @@ final class ChannelIndexTemplateContractTest extends TestCase
     public function testCredentialsActionUsesProviderDeepLinkNotShellConfig(): void
     {
         $root = dirname(__DIR__, 3);
-        $tpl = (string)file_get_contents($root . '/view/templates/Backend/Channel/index.phtml');
+        $tpl = (string)file_get_contents($root . '/view/templates/backend/Channel/index.phtml');
         $ctrl = (string)file_get_contents($root . '/Controller/Backend/Channel.php');
         $builder = (string)file_get_contents($root . '/Service/DropshipChannelConfigDeepLinkBuilder.php');
 

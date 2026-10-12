@@ -34,7 +34,7 @@ final class WlsPanelHostEmbedContractTest extends TestCase
 
     public function testHostTemplateHasIframeAndModeHooks(): void
     {
-        $path = $this->moduleRoot() . '/view/templates/Backend/WlsPanel/host.phtml';
+        $path = $this->moduleRoot() . '/view/templates/backend/WlsPanel/host.phtml';
         self::assertFileExists($path);
         $src = (string)\file_get_contents($path);
         self::assertStringContainsString('data-testid="wls-panel-host-frame"', $src);
@@ -76,7 +76,7 @@ final class WlsPanelHostEmbedContractTest extends TestCase
 
     public function testStandaloneShellUsesMainColumnScrollport(): void
     {
-        $path = $this->moduleRoot() . '/view/templates/Backend/WlsPanel/index.phtml';
+        $path = $this->moduleRoot() . '/view/templates/backend/WlsPanel/index.phtml';
         self::assertFileExists($path);
         $src = (string)\file_get_contents($path);
         self::assertStringContainsString("panelEmbedded ? ' is-embedded' : ''", $src);

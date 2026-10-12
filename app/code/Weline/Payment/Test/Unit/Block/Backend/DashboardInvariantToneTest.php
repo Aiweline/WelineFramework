@@ -51,7 +51,7 @@ final class DashboardInvariantToneTest extends TestCase
     public function testDashboardTemplateBindsThemeToneAttributes(): void
     {
         $template = file_get_contents(
-            dirname(__DIR__, 4) . '/view/templates/Backend/Dashboard/index.phtml'
+            dirname(__DIR__, 4) . '/view/templates/backend/Dashboard/index.phtml'
         );
         self::assertIsString($template);
         self::assertStringContainsString('\\Weline\\Payment\\Block\\Backend\\Dashboard::resolveInvariantTones', $template);

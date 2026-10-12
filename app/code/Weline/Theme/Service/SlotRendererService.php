@@ -1148,7 +1148,15 @@ class SlotRendererService
 
     /**
      * Storefront safety-net: fill empty nested shared-chrome slots (float layer)
-     * from chrome_payload without re-entering full page getLayoutData trees.
+     * and blank exclusive root header/footer from chrome_payload without re-entering
+     * full page getLayoutData trees.
+     *
+     * Storefront hard-cut skips processSlots/mergeSharedChrome — nested floats were
+     * already healed here, but exclusive `footer` stayed empty when Partials HotCache
+     * / module footer won over entity-baked renderResolved (first hit no footer,
+     * refresh OK after a warm bag). Root refill is skipped when the page already
+     * carries footer-container / header-container anywhere (avoid double chrome).
+     *
      * No-op when entity bake / prior fill already left widget-wrappers in the slot.
      */
     public function fillEmptyNestedChromeSlots(
@@ -1177,6 +1185,22 @@ class SlotRendererService
             }
             $targets[$slotId] = $widgets;
         }
+
+        // Exclusive root chrome: hard-cut never mergeSharedChrome — refill blank shells.
+        foreach (['footer', 'header'] as $rootSlotId) {
+            $widgets = $chrome[$rootSlotId] ?? [];
+            if ($widgets === [] || $this->htmlSlotInnerHasWidgetCode($html, $rootSlotId)) {
+                continue;
+            }
+            if ($rootSlotId === 'footer' && $this->htmlHasRootChromeWidgetCode($html, 'footer-container')) {
+                continue;
+            }
+            if ($rootSlotId === 'header' && $this->htmlHasRootChromeWidgetCode($html, 'header-container')) {
+                continue;
+            }
+            $targets[$rootSlotId] = $widgets;
+        }
+
         if ($targets === []) {
             return $html;
         }
@@ -1195,6 +1219,19 @@ class SlotRendererService
                 fn(): string => $this->processSlotsWithBoundaries($html, $targets, false, ''),
             ),
         );
+    }
+
+    /** True when a root chrome host widget is already rendered anywhere on the page. */
+    private function htmlHasRootChromeWidgetCode(string $html, string $widgetCode): bool
+    {
+        $widgetCode = \trim($widgetCode);
+        if ($html === '' || $widgetCode === '') {
+            return false;
+        }
+
+        return \str_contains($html, 'data-widget-code="' . $widgetCode . '"')
+            || \str_contains($html, "data-widget-code='" . $widgetCode . "'")
+            || \str_contains($html, 'data-testid="' . $widgetCode . '"');
     }
 
     /**

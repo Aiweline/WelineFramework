@@ -147,7 +147,7 @@ Theme 等渲染层需要当前后台页面标题和面包屑时，使用
 
 1. 新增后台功能时，先补 `etc/backend/menu.xml`，确认父级 source 合法。
 2. 新增控制器时补 `#[Acl]`，并在需要的动作上补更细粒度子权限。
-3. 页面模板放到 `view/templates/Backend/*` 或命中的源模板目录。
+3. 页面模板放到 `view/templates/backend/*` 或命中的源模板目录。
 4. 运行 `php bin/w setup:upgrade --route`，必要时再跑完整 `php bin/w setup:upgrade` 触发菜单收集。
 5. 如果要扩展后台头部、面板或 dashboard，优先命中已有 hook 文档和扩展入口。
 

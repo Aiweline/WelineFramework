@@ -298,8 +298,8 @@ class ThemeDirectoryResolver
             $relativeDs = str_replace('/', DS, $relativePath);
             // email 等非 area 资源也走 frontend 继承链（店面发信）
             $overrideArea = 'frontend';
-            if (preg_match('#^(?:view/)?templates/(frontend|backend)/#', $relativeNormalized, $areaMatch) === 1) {
-                $overrideArea = $areaMatch[1];
+            if (preg_match('#^(?:view/)?templates/(frontend|backend)/#i', $relativeNormalized, $areaMatch) === 1) {
+                $overrideArea = strtolower($areaMatch[1]);
             }
 
             foreach ($this->getThemeChain($theme, $overrideArea) as $layerTheme) {
@@ -365,6 +365,15 @@ class ThemeDirectoryResolver
         // 处理 app\code\Vendor\Module\view\templates\... 格式
         // 提取 Vendor_Module::templates/... 部分
         if (preg_match('/app[\\\\\/]code[\\\\\/]([A-Za-z0-9_]+[\\\\\/][A-Za-z0-9_]+)[\\\\\/]view[\\\\\/](templates[\\\\\/].+)$/i', $absolutePath, $matches)) {
+            $moduleName = str_replace(DS, '_', $matches[1]);
+            $templatePath = str_replace(DS, '/', $matches[2]);
+            return $moduleName . '::' . $templatePath;
+        }
+
+        // 处理 app\code\Vendor\Module\view\{frontend|backend}\... → Vendor_Module::{frontend|backend}/...
+        // Template::convertFetchFileName 先把 Module::frontend/... 解析成绝对 view 路径再走
+        // fetch_file；若不回写成 Module:: 记号，design/{theme}/Weline_Checkout/frontend/... 覆写永远命不中。
+        if (preg_match('/app[\\\\\/]code[\\\\\/]([A-Za-z0-9_]+[\\\\\/][A-Za-z0-9_]+)[\\\\\/]view[\\\\\/]((?:frontend|backend)[\\\\\/].+)$/i', $absolutePath, $matches)) {
             $moduleName = str_replace(DS, '_', $matches[1]);
             $templatePath = str_replace(DS, '/', $matches[2]);
             return $moduleName . '::' . $templatePath;

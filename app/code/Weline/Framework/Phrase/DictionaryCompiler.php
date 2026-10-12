@@ -8,11 +8,12 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryProgress;
-use Weline\Framework\System\File\Io\File;
 use Weline\Framework\System\File\Scanner;
 
 /**
- * Framework 词典编译：从模块 CSV 构建 generated/language/*。
+ * Framework 词典编译：从模块 CSV 构建收集侧产物（words.php / *_total.csv）。
+ * `generated/language/{locale}.php` 不由本类写出——唯一写入权威是 I18n
+ * `AiTranslationPublisher::publishLocale`（dictionary_compile_after 触发）。
  * 源码扫描 / DB 合并由 dictionary_compile Observer（如 I18n）增强。
  */
 class DictionaryCompiler
@@ -27,11 +28,11 @@ class DictionaryCompiler
      * @return array<string, array<string, string>>
      * @throws DictionaryCollectBusyException when another collect already holds the single-flight lock
      */
-    public function compile(?string $moduleName = null, bool $useCache = false): array
+    public function compile(?string $moduleName = null, bool $useCache = false, bool $pruneStale = true): array
     {
         DictionaryCollectGate::acquire($moduleName);
         try {
-            return $this->compileLocked($moduleName, $useCache);
+            return $this->compileLocked($moduleName, $useCache, $pruneStale);
         } finally {
             DictionaryCollectGate::release();
         }
@@ -40,7 +41,7 @@ class DictionaryCompiler
     /**
      * @return array<string, array<string, string>>
      */
-    private function compileLocked(?string $moduleName, bool $useCache): array
+    private function compileLocked(?string $moduleName, bool $useCache, bool $pruneStale = true): array
     {
         $_prevMemLimit = ini_get('memory_limit');
         $currentLimit = $this->parseMemoryLimit((string)$_prevMemLimit);
@@ -109,6 +110,8 @@ class DictionaryCompiler
             'locale_count' => count($localsWords),
             'source_translations' => $sourceTranslations,
             'collected_words' => $this->flattenSourceCollectedWords($localsWords, $sourceTranslations),
+            // 全量 collect 后由 I18n Observer 按原词 diff 剥离短语冗余；单模块 / --no-prune-stale 为 false
+            'prune_stale' => $pruneStale,
         ];
         $this->eventsManager->dispatch(DictionaryEvents::EVENT_DICTIONARY_COMPILE_AFTER, $afterPayload);
 
@@ -116,7 +119,9 @@ class DictionaryCompiler
     }
 
     /**
-     * Source-locale (zh_Hans_CN) keys from CSV + source scan, for I18n DB persist.
+     * 收集原词集（默认语=中文）：中文 CSV 原词 ∪ 源码扫描原词。
+     * 供 I18n persist 与短语 stale prune；不以 en_US 等其它语 CSV 键保活。
+     * 不在此二源中的原词视为冗余，按原词删全部语种行（含泰语等）。
      *
      * @param array<string, array<string, string>> $localsWords
      * @param array<string, string> $sourceTranslations
@@ -125,6 +130,7 @@ class DictionaryCompiler
     private function flattenSourceCollectedWords(array $localsWords, array $sourceTranslations): array
     {
         $collected = [];
+        // 源码扫描原词（同样视为中文原词）
         foreach ($sourceTranslations as $word => $translate) {
             if (!is_string($word) && !is_int($word)) {
                 continue;
@@ -135,6 +141,7 @@ class DictionaryCompiler
             }
             $collected[$word] = is_scalar($translate) ? (string)$translate : $word;
         }
+        // 仅默认语（中文）CSV 原词；其它语 CSV 是译文袋，键应与中文原词一致，不单独扩 alive
         $defaultLocale = Env::default_LANGUAGE_CODE;
         $defaultWords = $localsWords[$defaultLocale] ?? [];
         if (is_array($defaultWords)) {
@@ -346,30 +353,8 @@ class DictionaryCompiler
             w_log_warning(__('警告：无法写入翻译文件 %{file}', ['file' => $wordsFile]), [], 'phrase');
         }
 
-        foreach ($wordsByModule as $locale => $moduleWordsData) {
-            if ($locale === 'all_words' || !is_array($moduleWordsData)) {
-                continue;
-            }
-
-            $wordsFilename = Env::path_TRANSLATE_FILES_PATH . $locale . '.php';
-            $wordsDir = dirname($wordsFilename);
-            if (!is_dir($wordsDir)) {
-                mkdir($wordsDir, 0755, true);
-            }
-
-            $file = new File();
-            $file->open($wordsFilename, File::mode_w);
-            try {
-                $file->write('<?php return ' . var_export($moduleWordsData, true) . ';?>');
-            } catch (\Throwable $throwable) {
-                w_log_warning(
-                    __('警告：无法写入语言文件 %{file}', ['file' => $wordsFilename]) . ': ' . $throwable->getMessage(),
-                    [],
-                    'phrase',
-                );
-            }
-            $file->close();
-        }
+        // 不写 generated/language/{locale}.php：避免与 AiTranslationPublisher 双写/冲库。
+        // locale 袋由 I18n dictionary_compile_after → publishLocale 从系统词典导出。
 
         foreach ($wordsByModule as $locale => $moduleWordsData) {
             if ($locale === 'all_words' || !is_array($moduleWordsData)) {

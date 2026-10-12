@@ -13,8 +13,8 @@
 
 必须覆盖：身份 code、展示（含 Logo SVG）、OAuth 两方法；以及客户指南/政策元数据（抽象类有默认值）并提供：
 
-`view/templates/Frontend/guide/social-login/{code}/guide.phtml`  
-`view/templates/Frontend/guide/social-login/{code}/policy.phtml`
+`view/templates/frontend/guide/social-login/{code}/guide.phtml`  
+`view/templates/frontend/guide/social-login/{code}/policy.phtml`
 
 公开导航：`/guide/social-login`、`/guide/social-login/{code}`、`/guide/social-login/{code}/policy`。
 

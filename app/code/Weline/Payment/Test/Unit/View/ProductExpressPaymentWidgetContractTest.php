@@ -11,9 +11,9 @@ final class ProductExpressPaymentWidgetContractTest extends TestCase
     public function testProductExpressRegistersDefaultInjection(): void
     {
         $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Payment/widget.php';
-        $tpl = 'Weline_Payment::templates/Frontend/widgets/product-express-payment.phtml';
+        $tpl = 'Weline_Payment::templates/frontend/widgets/product-express-payment.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
-        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/product-express-payment.phtml');
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-express-payment.phtml');
         self::assertStringContainsString('@widget.code {product-express-payment}', $src);
         self::assertStringContainsString('@widget.slot {product-express-payment}', $src);
         self::assertStringContainsString('"layout_type":"product"', $src);
@@ -27,7 +27,7 @@ final class ProductExpressPaymentWidgetContractTest extends TestCase
     public function testProductExpressTemplateUsesShellAndPdpBridge(): void
     {
         $tpl = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/product-express-payment.phtml'
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-express-payment.phtml'
         );
         self::assertStringContainsString('data-testid="product-express-payment"', $tpl);
         self::assertStringContainsString('LegacyMediaUrl::sanitize', $tpl);

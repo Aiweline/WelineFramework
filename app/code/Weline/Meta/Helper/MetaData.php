@@ -15,7 +15,6 @@ use Weline\Framework\App\State;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\Meta\Model\Meta;
 
 /**
@@ -272,19 +271,26 @@ class MetaData
                 $currentLocale = $locale ?? Cookie::getLangLocal() ?? 'zh_Hans_CN';
                 $defaultLocale = 'zh_Hans_CN';
                 
-                // 从I18n Dictionary获取翻译
+                // 从 MetaLocal 获取翻译
                 try {
-                    $dictionary = self::dictionaryRepository();
-                    // 先尝试当前语言
-                    $translation = $dictionary->getEntry($translationKey, $currentLocale)?->translation;
-                    if (!empty($translation)) {
+                    $translation = MetaTranslation::getTranslatedValueWithScope(
+                        $translationKey,
+                        'default',
+                        $currentLocale,
+                        '',
+                    );
+                    if ($translation !== '') {
                         return $translation;
                     }
                     
-                    // 如果当前语言没有翻译，尝试默认语言
                     if ($currentLocale !== $defaultLocale) {
-                        $translation = $dictionary->getEntry($translationKey, $defaultLocale)?->translation;
-                        if (!empty($translation)) {
+                        $translation = MetaTranslation::getTranslatedValueWithScope(
+                            $translationKey,
+                            'default',
+                            $defaultLocale,
+                            '',
+                        );
+                        if ($translation !== '') {
                             return $translation;
                         }
                     }
@@ -460,19 +466,26 @@ class MetaData
                     $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
                     $defaultLocale = 'zh_Hans_CN';
                     
-                    // 从I18n Dictionary获取翻译
+                    // 从 MetaLocal 获取翻译
                     try {
-                        $dictionary = self::dictionaryRepository();
-                        // 先尝试当前语言
-                        $translation = $dictionary->getEntry($translationKey, $locale)?->translation;
-                        if (!empty($translation)) {
+                        $translation = MetaTranslation::getTranslatedValueWithScope(
+                            $translationKey,
+                            'default',
+                            $locale,
+                            '',
+                        );
+                        if ($translation !== '') {
                             return $translation;
                         }
                         
-                        // 如果当前语言没有翻译，尝试默认语言
                         if ($locale !== $defaultLocale) {
-                            $translation = $dictionary->getEntry($translationKey, $defaultLocale)?->translation;
-                            if (!empty($translation)) {
+                            $translation = MetaTranslation::getTranslatedValueWithScope(
+                                $translationKey,
+                                'default',
+                                $defaultLocale,
+                                '',
+                            );
+                            if ($translation !== '') {
                                 return $translation;
                             }
                         }
@@ -911,17 +924,19 @@ class MetaData
             ];
         }
         
-        // 批量查询数据库（只查询缓存中没有的）
+        // 批量查询 MetaLocal（只查询缓存中没有的）
         if (!empty($missingKeys)) {
             try {
-                $repository = self::dictionaryRepository();
-                $words = array_keys($missingKeys);
-                $localeEntries = $repository->getEntries($words, $locale);
                 $defaultWords = [];
 
                 foreach ($missingKeys as $translationKey => $info) {
-                    $translation = $localeEntries[$translationKey]->translation ?? '';
-                    if (!empty($translation)) {
+                    $translation = MetaTranslation::getTranslatedValueWithScope(
+                        $translationKey,
+                        'default',
+                        $locale,
+                        '',
+                    );
+                    if ($translation !== '') {
                         self::$translationCache[$locale][$translationKey] = $translation;
                         $translations[$translationKey] = $translation;
                         continue;
@@ -934,13 +949,14 @@ class MetaData
                     }
                 }
 
-                // 当前语言缺失时才批量查询默认语言，常态仅一次查询。
-                $defaultEntries = $defaultWords !== []
-                    ? $repository->getEntries($defaultWords, $defaultLocale)
-                    : [];
                 foreach ($defaultWords as $translationKey) {
-                    $translation = $defaultEntries[$translationKey]->translation ?? '';
-                    if (!empty($translation)) {
+                    $translation = MetaTranslation::getTranslatedValueWithScope(
+                        $translationKey,
+                        'default',
+                        $defaultLocale,
+                        '',
+                    );
+                    if ($translation !== '') {
                         self::$translationCache[$defaultLocale][$translationKey] = $translation;
                         $translations[$translationKey] = $translation;
                         continue;
@@ -1184,17 +1200,21 @@ class MetaData
                         $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
                     }
                     
-                    // 设置翻译值
+                    // 设置翻译值 → MetaLocal（禁止再 upsert 词典 @meta::）
                     try {
-                        if (!self::dictionaryRepository()->upsert($translationKey, $locale, $value)) {
+                        if (!\Weline\Meta\Helper\MetaTranslation::setTranslatedValueWithScope(
+                            $translationKey,
+                            (string)$value,
+                            'default',
+                            $locale,
+                        )) {
                             return false;
                         }
-                        
-                        // 清除翻译缓存
+
                         if (isset(self::$translationCache[$locale])) {
                             unset(self::$translationCache[$locale][$translationKey]);
                         }
-                        
+
                         return true;
                     } catch (\Exception $e) {
                         return false;
@@ -1404,17 +1424,6 @@ class MetaData
         return null;
     }
 
-    private static function dictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$provider instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-
-        return $provider;
-    }
-    
     /**
      * 切换性能缓存的 key
      * 

@@ -125,7 +125,7 @@ final class PostalCountriesEmbargoContractTest extends TestCase
         $ctrl = (string)file_get_contents(dirname(__DIR__, 3) . '/Controller/Backend/Region.php');
         self::assertStringContainsString('saveCountrySort', $ctrl);
         self::assertStringContainsString('country_sort_rows', $ctrl);
-        $view = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Backend/Region/index.phtml');
+        $view = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/Region/index.phtml');
         self::assertStringContainsString('shipping-country-sort-card', $view);
         self::assertStringContainsString('热门国家排序', $view);
         $admin = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/ShippingConfigurationAdminService.php');

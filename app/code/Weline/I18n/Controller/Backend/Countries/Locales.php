@@ -119,7 +119,7 @@ class Locales extends BaseController
 
         // 国家列表「区域」弹窗：返回 HTML 片段 JSON，不跳整页。
         if ($this->wantsLocalesPanel()) {
-            $html = (string)$this->template('Weline_I18n::templates/Backend/Countries/Locales/panel.phtml');
+            $html = (string)$this->template('Weline_I18n::templates/backend/Countries/Locales/panel.phtml');
 
             return $this->fetchJson([
                 'success' => true,

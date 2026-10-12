@@ -12,10 +12,9 @@ declare(strict_types=1);
 namespace Weline\Theme\Taglib;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\View\Template;
 use Weline\Framework\View\Data\DataInterface;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
+use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Framework\Taglib\TaglibInterface;
 
@@ -248,22 +247,22 @@ class ThemeTemplate implements TaglibInterface
                 continue;
             }
 
-            // 否则，尝试从 I18n Dictionary 获取翻译（原有逻辑）
+            // MetaLocal（禁止再读 I18n 词典 @meta::）
             try {
-                // 如果翻译键不是以@meta::开头，自动添加
                 if (!str_starts_with($translationKey, '@meta::')) {
                     $translationKey = '@meta::' . $translationKey;
                 }
-
-                // 验证翻译键格式
                 if (preg_match('/^@meta::(.+)$/', $translationKey, $keyMatches)) {
                     $keyParts = explode('.', $keyMatches[1]);
                     if (count($keyParts) >= 5) {
-                        // 获取当前语言
                         $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
-
-                        $translation = self::dictionaryRepository()->getEntry($translationKey, $locale)?->translation;
-                        if (!empty($translation)) {
+                        $translation = MetaTranslation::getTranslatedValueWithScope(
+                            $translationKey,
+                            'default',
+                            $locale,
+                            '',
+                        );
+                        if ($translation !== '') {
                             $path = str_replace($fullMatch, $translation, $path);
                             continue;
                         }
@@ -278,16 +277,6 @@ class ThemeTemplate implements TaglibInterface
         }
 
         return $path;
-    }
-
-    private static function dictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$provider instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-        return $provider;
     }
 
     private static function readThemeTemplateSource(Template $template, string $filePath): string|false

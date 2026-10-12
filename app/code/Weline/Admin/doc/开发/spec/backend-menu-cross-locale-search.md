@@ -11,7 +11,7 @@ updated: 2026-09-22
 ## 实现（2026-09-22）
 
 - **禁止**渲染热路径全语 `prefetchWords` / `data-search-text` HTML 烘焙（曾导致 WLS 后台 10–20s）。
-- **必须**在 `renderMenu` 缓存未命中时对**当前 UI locale** 批量 `Parser::prefetchWords(菜单标题)`，否则非中英语种侧栏会回退中文 source（模块 CSV 仅 zh/en）。
+- **必须**在 `renderMenu` 缓存未命中时对**当前 UI locale** 批量 `Parser::prefetchWords(菜单标题)`，否则非中英语种侧栏会回退中文 source（官方框架模块 CSV Git 瘦身仅 zh/en，其它语种靠系统词典预取）。
 - 交叉可搜词离线写入 `Weline_Search` `SearchProviderDocument`（indexer=`backend_menu`），对齐 Faq Provider。
 - 顶栏 / 侧栏查询走 `SearchProviderIndexService::search`；侧栏 `nav-filter` 非空查询 debounce 调 `search.search`，按 `source_id` 显隐。
 - ACL：全量索引 + execute 与当前角色菜单树求交。

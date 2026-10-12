@@ -1,0 +1,373 @@
+/**
+ * DaoCharms PDP (design_theme) — product chrome + story band.
+ * Tokens from colors/_daocharms-ritual.css + variables/_daocharms-ritual.css.
+ * Do not invent parallel palettes; keep add-to-cart chrome intact.
+ */
+
+body.daocharms-pdp {
+    color: var(--color-text, #262422);
+    background: var(--color-bg-canvas);
+}
+
+/*
+ * 背景切割（审图 2026-10-11）：
+ * main 全宽刷 --color-bg-primary（暖石白），内层 .product-native-detail 版心
+ * 刷 canvas 灰绿 ⇒ 左右各露出 ~48px 奶油边（用户红箭头）。
+ * 原型：通栏 canvas；纸面只落在 summary / stage 等局部，不造第二层全宽底。
+ */
+body.daocharms-pdp .product-detail-layout__main {
+    padding-block: clamp(var(--spacing-3, 0.75rem), 2vw, var(--spacing-6, 1.5rem)) 0;
+    background: var(--color-bg-canvas);
+}
+
+body.daocharms-pdp .product-detail-layout__container {
+    background: transparent;
+}
+
+body.daocharms-pdp .product-detail-layout__wrapper {
+    gap: clamp(var(--spacing-5, 1.25rem), 3vw, var(--spacing-8, 2rem));
+}
+
+/* Soften Amazon-leaning buy chrome toward ritual storefront */
+body.daocharms-pdp .product-native-detail--amazon,
+body.daocharms-pdp .product-native-detail {
+    color: var(--color-text, #262422);
+    /* Remap Amazon buybox tokens → design 07 hierarchy: primary = add to bag (solid moss). */
+    --amz-btn-cart: var(--color-primary) !important;
+    --amz-btn-cart-hover: var(--color-primary-hover) !important;
+    --amz-btn-buy: color-mix(in srgb, var(--color-bg-secondary) 55%, var(--color-bg-primary)) !important;
+    --amz-btn-buy-hover: color-mix(in srgb, var(--color-bg-secondary) 75%, var(--color-bg-primary)) !important;
+    --color-primary-dark: var(--color-primary-border) !important;
+    --pdp-radius: var(--daocharms-radius-sm, 2px) !important;
+    --amz-border: var(--color-border-subtle, #e5e2df) !important;
+    --pdp-paper: var(--color-bg-primary) !important;
+    --pdp-canvas: var(--color-bg-canvas) !important;
+    background: transparent !important;
+}
+
+body.daocharms-pdp .product-native-detail__title {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    line-height: 1.2;
+    color: var(--color-text);
+}
+
+body.daocharms-pdp .product-native-detail__price,
+body.daocharms-pdp .product-native-detail__price-current {
+    color: var(--color-text);
+    font-size: 1.35rem;
+    font-weight: 500;
+}
+
+body.daocharms-pdp .product-native-detail__stage,
+body.daocharms-pdp .product-native-detail__stage-wrap {
+    border-radius: var(--daocharms-radius-md, 0.35rem);
+    background: var(--color-bg-primary, #f7f7f6);
+    border: 1px solid var(--color-border-subtle, #d8d2c6);
+}
+
+body.daocharms-pdp .product-native-detail__thumb.is-active {
+    border-color: var(--daocharms-brass-accent);
+}
+
+/* —— Buybox：坐落在暖石白纸面上，无面板描边 + 墨绿主次 CTA（design 07） —— */
+body.daocharms-pdp .product-native-detail__buybox {
+    gap: var(--daocharms-ritual-spacing, 1.25rem);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+body.daocharms-pdp .product-native-detail__qty-row {
+    gap: 0.75rem;
+    align-items: center;
+}
+
+body.daocharms-pdp .product-native-detail__qty-label {
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking, 0.07em);
+    color: var(--daocharms-ink-slate, #4a5560);
+    font-size: 0.8125rem;
+}
+
+body.daocharms-pdp .product-native-detail__qty-select {
+    min-height: 2.25rem;
+    min-width: 4.5rem;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--color-border-default, #d9d6d4);
+    border-radius: var(--daocharms-radius-sm, 2px);
+    background: var(--color-bg-primary, #f7f7f6);
+    box-shadow: none;
+    color: var(--color-text, #262422);
+    font-size: 0.875rem;
+    letter-spacing: 0.02em;
+    transition: border-color var(--daocharms-transition-out, 140ms ease-out),
+        background-color var(--daocharms-transition-out, 140ms ease-out);
+}
+
+body.daocharms-pdp .product-native-detail__qty-select:hover {
+    border-color: color-mix(in srgb, var(--daocharms-brass-accent) 45%, var(--color-border-default, #d9d6d4));
+}
+
+body.daocharms-pdp .product-native-detail__qty-select:focus {
+    outline: var(--daocharms-focus-ring-width, 2px) solid
+        color-mix(in srgb, var(--daocharms-brass-accent) 55%, transparent);
+    outline-offset: 1px;
+    border-color: var(--daocharms-brass-accent);
+}
+
+/* Tertiary：找朋友代付 — 安静链接，不占 CTA 权重 */
+body.daocharms-pdp .w-helppay-cta--quiet {
+    margin-block: 0.15rem 0.35rem;
+}
+
+body.daocharms-pdp .w-helppay-cta--quiet .w-helppay-cta__link {
+    color: var(--color-link, #4a5560);
+    font-size: 0.875rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.22em;
+    text-decoration-color: color-mix(in srgb, var(--color-link, #4a5560) 35%, transparent);
+    transition: color var(--daocharms-transition-out, 140ms ease-out),
+        text-decoration-color var(--daocharms-transition-out, 140ms ease-out);
+}
+
+body.daocharms-pdp .w-helppay-cta--quiet .w-helppay-cta__link:hover {
+    color: var(--color-link-hover, #3a424c);
+    text-decoration-color: var(--daocharms-brass-accent);
+}
+
+body.daocharms-pdp .product-native-detail__actions {
+    gap: 0.65rem;
+}
+
+body.daocharms-pdp .product-native-detail__add,
+body.daocharms-pdp .product-native-detail__buy-now,
+body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__add,
+body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__buy-now {
+    min-height: var(--daocharms-control-height, 2.75rem);
+    border-radius: var(--daocharms-radius-sm, 2px);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    box-shadow: none;
+    transition:
+        background-color var(--daocharms-transition, 220ms cubic-bezier(0.22, 1, 0.36, 1)),
+        border-color var(--daocharms-transition, 220ms cubic-bezier(0.22, 1, 0.36, 1)),
+        color var(--daocharms-transition, 220ms cubic-bezier(0.22, 1, 0.36, 1)),
+        transform var(--daocharms-transition-out, 140ms ease-out);
+}
+
+/* Primary：加入购物袋 — 唯一实心墨绿 + on-primary（design 07） */
+body.daocharms-pdp .product-native-detail__buybox .product-native-detail__add,
+body.daocharms-pdp .product-native-detail__actions .product-native-detail__add,
+body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__add,
+body.daocharms-pdp .weline-cart-product-add-to-cart .product-native-detail__add,
+body.daocharms-pdp .product-native-detail [data-action="add"],
+body.daocharms-pdp .product-native-detail [data-action="add-to-cart"],
+body.daocharms-pdp .product-native-detail [data-testid*="add-to-cart"],
+body.daocharms-pdp .product-native-detail [data-testid*="addtocart"] {
+    border-color: var(--color-primary-border) !important;
+    background: var(--color-primary) !important;
+    color: var(--color-on-primary, #E9EFEB) !important;
+}
+
+body.daocharms-pdp .product-native-detail__buybox .product-native-detail__add:hover:not(:disabled),
+body.daocharms-pdp .product-native-detail__actions .product-native-detail__add:hover:not(:disabled),
+body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__add:hover:not(:disabled),
+body.daocharms-pdp .weline-cart-product-add-to-cart .product-native-detail__add:hover:not(:disabled),
+body.daocharms-pdp .product-native-detail [data-action="add"]:hover:not(:disabled),
+body.daocharms-pdp .product-native-detail [data-action="add-to-cart"]:hover:not(:disabled) {
+    border-color: var(--color-primary-hover) !important;
+    background: var(--color-primary-hover) !important;
+    color: var(--color-on-primary, #f7f7f6) !important;
+}
+
+/* Secondary：去结算 — 静音砂底，不抢主 CTA（design 07） */
+body.daocharms-pdp .product-native-detail__buybox .product-native-detail__buy-now,
+body.daocharms-pdp .product-native-detail__actions .product-native-detail__buy-now,
+body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__buy-now,
+body.daocharms-pdp .weline-checkout-product-buy-now .product-native-detail__buy-now,
+body.daocharms-pdp .product-native-detail [data-action="buy-now"],
+body.daocharms-pdp .product-native-detail [data-testid="product-buy-now"] {
+    border-color: transparent !important;
+    background: color-mix(in srgb, var(--color-bg-secondary) 55%, var(--color-bg-primary)) !important;
+    color: var(--color-text) !important;
+}
+
+body.daocharms-pdp .product-native-detail__buybox .product-native-detail__buy-now:hover:not(:disabled),
+body.daocharms-pdp .product-native-detail__actions .product-native-detail__buy-now:hover:not(:disabled),
+body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__buy-now:hover:not(:disabled),
+body.daocharms-pdp .weline-checkout-product-buy-now .product-native-detail__buy-now:hover:not(:disabled),
+body.daocharms-pdp .product-native-detail [data-action="buy-now"]:hover:not(:disabled) {
+    border-color: var(--color-border-default) !important;
+    background: color-mix(in srgb, var(--color-bg-secondary) 78%, var(--color-bg-primary)) !important;
+    color: var(--color-text) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    body.daocharms-pdp .product-native-detail__buybox .product-native-detail__buy-now:hover:not(:disabled),
+    body.daocharms-pdp .product-native-detail__actions .product-native-detail__buy-now:hover:not(:disabled) {
+        transform: translateY(var(--daocharms-hover-shift, -0.08rem));
+    }
+}
+
+/* Express：PayPal 保留品牌黄，与商家 CTA 用细线隔开 */
+body.daocharms-pdp .w-payment-express--pdp {
+    margin-block-start: 0.35rem;
+    padding-block-start: 0.85rem;
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #e5e2df);
+}
+
+body.daocharms-pdp .w-payment-express--pdp .w-payment-express__paypal {
+    border-radius: var(--daocharms-radius-sm, 2px);
+    min-height: var(--daocharms-control-height, 2.75rem);
+}
+
+body.daocharms-pdp .w-payment-express--pdp .w-payment-express__more-label {
+    color: var(--daocharms-ink-slate, #4a5560);
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.daocharms-pdp .product-native-detail__add,
+    body.daocharms-pdp .product-native-detail__buy-now,
+    body.daocharms-pdp .product-native-detail__qty-select,
+    body.daocharms-pdp .w-helppay-cta--quiet .w-helppay-cta__link {
+        transition: none;
+        transform: none;
+    }
+}
+
+body.daocharms-pdp .product-native-detail__description {
+    margin-block-start: var(--spacing-6, 1.5rem);
+    padding: clamp(1rem, 2.5vw, 1.5rem);
+    border: 1px solid var(--color-border-subtle, #d8d2c6);
+    border-radius: var(--daocharms-radius-md, 0.35rem);
+    background: color-mix(in srgb, var(--color-bg-secondary, #ede9e1) 45%, transparent);
+}
+
+body.daocharms-pdp .product-native-detail__description-body {
+    line-height: 1.7;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+body.daocharms-pdp .product-detail-layout__reviews,
+body.daocharms-pdp .product-detail-layout__faq,
+body.daocharms-pdp .product-detail-layout__related,
+body.daocharms-pdp .product-detail-layout__personalization {
+    padding-block: clamp(var(--spacing-5, 1.25rem), 2.5vw, var(--spacing-8, 2rem));
+}
+
+/* —— Story band (design 07): long-form, comfortable reading measure, no card chrome —— */
+.daocharms-pdp-story {
+    width: 100%;
+    padding-block: clamp(2.5rem, 5vw, 4.5rem);
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-block-end: 0;
+    background: var(--color-bg-canvas);
+}
+
+.daocharms-pdp-story__inner {
+    width: min(100%, 46rem);
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline, 1rem);
+    box-sizing: border-box;
+}
+
+.daocharms-pdp-story__eyebrow {
+    margin: 0 0 0.5rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
+
+.daocharms-pdp-story__heading {
+    margin: 0 0 clamp(1.5rem, 3vw, 2.25rem);
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.5rem, 2.8vw, 2rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+.daocharms-pdp-story__grid {
+    display: block;
+}
+
+.daocharms-pdp-story__card,
+.daocharms-pdp-story__policies {
+    padding: 1.25rem 0;
+    border: 0;
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+    border-radius: 0;
+    background: transparent;
+}
+
+.daocharms-pdp-story__title {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--color-text);
+}
+
+.daocharms-pdp-story__body {
+    margin: 0;
+    line-height: 1.8;
+    font-size: 0.95rem;
+    color: var(--color-text-secondary);
+}
+
+.daocharms-pdp-story__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.25rem;
+    margin-top: 0.9rem;
+}
+
+.daocharms-pdp-story__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding: 0.15rem 0;
+    border: 0;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: 0;
+    text-decoration: none;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    background: transparent;
+    text-underline-offset: 0.2em;
+    transition: border-color var(--daocharms-transition-out, 140ms ease-out),
+        color var(--daocharms-transition-out, 140ms ease-out);
+}
+
+.daocharms-pdp-story__link:hover,
+.daocharms-pdp-story__link:focus-visible {
+    border-block-end-color: var(--color-primary);
+    color: var(--color-primary);
+    background: transparent;
+}
+
+.daocharms-pdp-story__disclaimer {
+    margin-top: 1.5rem;
+    padding: 1.1rem 1.25rem;
+    border: 0;
+    border-inline-start: 3px solid var(--color-border-default);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--color-bg-secondary) 40%, var(--color-bg-canvas));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .daocharms-pdp-story__link {
+        transition: none;
+    }
+}

@@ -171,6 +171,20 @@ chart,chart
 显示帮助,"Show help"
 "重建全部 Provider 索引","Rebuild all provider indexes"
 "仅重建 Blog 索引","Rebuild Blog index only"
+"Dao Notes","Dao Notes"
+按符号,"By Symbol"
+按形状,"By Shape"
+按材质,"By Material"
+寻找有意义的物件。,"Find something meaningful."
+黑曜石,"Black Obsidian"
+为更从容、更审慎的生活而备的物件。,"Objects for a calmer, more considered life."
+搜索范围,"Search scope"
+"%{1} 条结果，关键词“%{2}”","%{1} results for “%{2}”"
+暂无匹配物件。,"No matching objects yet."
+换个词试试，或浏览全部仪式物件。,"Try another word or explore all ritual objects."
+"浏览全部物件 →","Browse all objects →"
+按分类探索,"Explore by category"
+探索,EXPLORE
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。

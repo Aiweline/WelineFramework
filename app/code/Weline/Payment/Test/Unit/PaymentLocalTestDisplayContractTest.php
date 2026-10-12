@@ -15,7 +15,7 @@ final class PaymentLocalTestDisplayContractTest extends TestCase
             $moduleRoot . '/extends/module/Weline_Payment/PaymentProvider/FakeProvider.php'
         );
         $template = (string)file_get_contents(
-            $moduleRoot . '/view/templates/Frontend/checkout/fake.phtml'
+            $moduleRoot . '/view/templates/frontend/checkout/fake.phtml'
         );
         $english = (string)file_get_contents($moduleRoot . '/i18n/en_US.csv');
         $chinese = (string)file_get_contents($moduleRoot . '/i18n/zh_Hans_CN.csv');

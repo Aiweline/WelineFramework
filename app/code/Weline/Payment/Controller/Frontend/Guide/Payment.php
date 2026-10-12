@@ -45,7 +45,7 @@ final class Payment extends FrontendController
         $this->assign('payment_guide_page_type', 'hub');
         $this->assign('showSidebar', true);
 
-        return (string) $this->fetch('Weline_Payment::templates/Frontend/guide/payment/index.phtml');
+        return (string) $this->fetch('Weline_Payment::templates/frontend/guide/payment/index.phtml');
     }
 
     public function view(): string

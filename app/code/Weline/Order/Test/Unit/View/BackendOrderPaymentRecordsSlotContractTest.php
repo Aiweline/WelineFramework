@@ -10,7 +10,7 @@ final class BackendOrderPaymentRecordsSlotContractTest extends TestCase
 {
     public function testOrderDetailProvidesEmptyPaymentRecordsSlotWithoutHardcodedPaymentTable(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/templates/Backend/Order/view.phtml';
+        $path = dirname(__DIR__, 3) . '/view/templates/backend/Order/view.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
 

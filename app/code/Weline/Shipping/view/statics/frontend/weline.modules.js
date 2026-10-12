@@ -16,7 +16,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     shippingAccountAddress: {
         paths: [
             // Sticky Frontend assetVersion alone does not bust this module; bump ?v= when delete/confirm logic changes.
-            "Weline_Shipping::frontend/js/account-address-v3.js?v=20260916-purpose-tags2"
+            "Weline_Shipping::frontend/js/account-address-v3.js?v=20261012-default-country2"
         ],
         globalVar: null,
         description: "账户中心发货/收货地址维护"

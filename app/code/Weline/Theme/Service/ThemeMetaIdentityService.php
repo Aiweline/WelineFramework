@@ -7,11 +7,11 @@ namespace Weline\Theme\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\State;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
-use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\Meta\Api\Data\MetaConfigIdentity;
 use Weline\Meta\Api\Data\MetaConfigSearch;
 use Weline\Meta\Api\Data\MetaConfigWrite;
 use Weline\Meta\Api\MetaConfigRepositoryInterface;
+use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
@@ -208,16 +208,15 @@ class ThemeMetaIdentityService
     private function getStoredParamTranslation(string $identify, string $paramName, string $scope, string $locale): ?string
     {
         $metaKey = $identify . '.param.' . $paramName . '.value';
-        $repository = $this->dictionaryRepository();
         foreach ($this->scopeReadChain($scope) as $candidateScope) {
-            $translationKey = '@meta::' . $metaKey;
-            if ($candidateScope !== 'default') {
-                $translationKey .= '|scope:' . $candidateScope;
-            }
             foreach (array_values(array_unique([$locale, 'zh_Hans_CN'], SORT_STRING)) as $candidateLocale) {
-                $entry = $repository->getEntry($translationKey, $candidateLocale);
-                if ($entry !== null) {
-                    return $entry->translation;
+                $found = MetaTranslation::findTranslatedValueWithScope(
+                    $metaKey,
+                    $candidateScope,
+                    $candidateLocale,
+                );
+                if ($found !== null) {
+                    return $found;
                 }
             }
         }
@@ -235,16 +234,6 @@ class ThemeMetaIdentityService
         } catch (\Throwable) {
             return [$scope];
         }
-    }
-
-    private function dictionaryRepository(): DictionaryRepositoryInterface
-    {
-        $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
-            ->resolve(DictionaryRepositoryInterface::class);
-        if (!$provider instanceof DictionaryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n dictionary repository provider is unavailable.');
-        }
-        return $provider;
     }
 
     private function metaConfigRepository(): MetaConfigRepositoryInterface

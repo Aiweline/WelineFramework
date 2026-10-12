@@ -1765,6 +1765,7 @@ class Dictionary extends BaseController
                 // 如果基础词典表中没有记录，创建新记录
                 $this->dictionary->reset()->setData([
                     $this->dictionary::schema_fields_WORD => $word,
+                    $this->dictionary::schema_fields_AREA => \Weline\I18n\Service\DictionaryAreaPolicy::AREA_SHARED,
                     $this->dictionary::schema_fields_IS_BACKEND => 0,
                     $this->dictionary::schema_fields_MODULE => '',
                     'translation_status' => !empty($translate) && $translate !== $word ? 'translated' : 'untranslated',

@@ -25,7 +25,7 @@ final class BackendMessageRendererOwnershipTest extends TestCore
 
         foreach (['listing.phtml', 'edit.phtml'] as $pageTemplate) {
             $pageSource = (string)file_get_contents(
-                BP . '/app/code/Weline/Cms/view/templates/Backend/Page/' . $pageTemplate
+                BP . '/app/code/Weline/Cms/view/templates/backend/Page/' . $pageTemplate
             );
             $compiledPage = $taglib->parse($template, 'cms-backend-' . $pageTemplate, $pageSource);
 

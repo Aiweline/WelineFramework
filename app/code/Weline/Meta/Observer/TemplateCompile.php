@@ -13,32 +13,38 @@ namespace Weline\Meta\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Phrase\DictionaryEvents;
+use Weline\Meta\Helper\MetaTranslation;
 
 /**
  * 模板编译观察者
- * 在模板编译时提取 w:meta type="translate" 标签并提交翻译
+ * 在模板编译时提取 w:meta type="translate" 标签并写入 MetaLocal（禁止再灌词典）
  */
 class TemplateCompile implements ObserverInterface
 {
     public function execute(Event &$event): void
     {
-        // 获取模板内容和文件路径
         $content = $event->getData('content');
         $tplFile = $event->getData('tplFile');
-        
+
         if (empty($content) || empty($tplFile)) {
             return;
         }
-        
-        // 提取 w:meta type="translate" 标签
+
         $metaTranslations = $this->extractMetaTranslations($content, $tplFile);
-        
         if (empty($metaTranslations)) {
             return;
         }
-        
-        DictionaryEvents::register($metaTranslations, 'Weline_Meta');
+
+        $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        foreach ($metaTranslations as $row) {
+            $word = (string)($row['word'] ?? '');
+            $translate = (string)($row['translate'] ?? '');
+            $scope = (string)($row['scope'] ?? 'default');
+            if ($word === '' || $translate === '') {
+                continue;
+            }
+            MetaTranslation::setTranslatedValueWithScope($word, $translate, $scope, $locale);
+        }
     }
     
     /**
@@ -89,9 +95,10 @@ class TemplateCompile implements ObserverInterface
             $defaultValue = $tagContent; // 使用原始内容作为默认值
             
             $translations[] = [
-                'word' => $metaKey, // 完整的 meta key，确保包含 @meta:: 命名空间
-                'translate' => $defaultValue, // 使用原始内容作为默认翻译值
-                'module' => $moduleName ?: 'Weline_Meta'
+                'word' => $metaKey,
+                'translate' => $defaultValue,
+                'scope' => $scope,
+                'module' => $moduleName ?: 'Weline_Meta',
             ];
         }
         
