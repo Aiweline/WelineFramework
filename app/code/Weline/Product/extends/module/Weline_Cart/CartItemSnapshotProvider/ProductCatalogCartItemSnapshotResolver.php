@@ -7,6 +7,8 @@ namespace Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider;
 use Weline\Cart\Api\CartSelectionHash;
 use Weline\Cart\Api\Data\CartItemSnapshot;
 use Weline\Cart\Api\Data\OfferIdentity;
+use Weline\Cart\Api\ProductTypeRequiresShippingResolverInterface;
+use Weline\Cart\Service\RequiresShippingFlag;
 use Weline\Eav\Api\Metadata\AttributeMetadata;
 use Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface;
 use Weline\Eav\Api\Metadata\AttributeOptionMetadata;
@@ -214,7 +216,10 @@ final class ProductCatalogCartItemSnapshotResolver
         $campaignUrl = $dealPrice['campaign_url'];
 
         $productType = $this->productType($websiteId, $storeId, $productId, $locale);
-        $requiresShipping = (bool)$offer->getData(Offer::schema_fields_REQUIRES_SHIPPING);
+        $requiresShipping = $this->resolveRequiresShippingFlag(
+            $offer->getData(Offer::schema_fields_REQUIRES_SHIPPING),
+            $productType,
+        );
         $weightMinor = $this->weightMinorFromCatalog($websiteId, $storeId, $productId, $locale);
         $shippingProfileCode = trim((string)$offer->getData(Offer::schema_fields_SHIPPING_PROFILE_CODE));
         $shippingHazardClass = trim((string)$offer->getData(Offer::schema_fields_SHIPPING_HAZARD_CLASS));
@@ -1681,5 +1686,21 @@ final class ProductCatalogCartItemSnapshotResolver
             sourceModule: 'Weline_Product',
             sourceApp: 'Weline',
         );
+    }
+
+    /**
+     * Offer column first; absent → ProductTypeDefinition via Cart SPI; unknown → physical true.
+     * Do not cast null Offer to false (that incorrectly treated missing as digital).
+     */
+    private function resolveRequiresShippingFlag(mixed $offerRaw, string $productType): bool
+    {
+        if (!RequiresShippingFlag::isAbsent($offerRaw)) {
+            return RequiresShippingFlag::coercePresent($offerRaw);
+        }
+        /** @var ProductTypeRequiresShippingResolverInterface $resolver */
+        $resolver = ObjectManager::getInstance()->get(ProductTypeRequiresShippingResolverInterface::class);
+        $fromType = $resolver->requiresShippingForProductType($productType);
+
+        return $fromType ?? true;
     }
 }

@@ -7,6 +7,7 @@ namespace Weline\Cart\Service;
 use Weline\Cart\Api\CartSelectionHash;
 use Weline\Cart\Api\CheckoutCartSnapshotInterface;
 use Weline\Cart\Api\Data\OfferIdentity;
+use Weline\Cart\Api\ProductTypeRequiresShippingResolverInterface;
 use Weline\Framework\Runtime\ScopeIdentity;
 
 /**
@@ -24,6 +25,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
 
     public function __construct(
         private readonly CartService $cart,
+        private readonly ProductTypeRequiresShippingResolverInterface $typeRequiresShipping = new LegacyProductTypeRequiresShippingResolver(),
     ) {
     }
 
@@ -113,8 +115,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
                 );
             }
             $cartCurrency = $lineCurrency;
-            $requiresShipping = $snapshot->requiresShipping
-                ?? !in_array(strtolower($snapshot->productType), ['virtual', 'digital', 'downloadable'], true);
+            $requiresShipping = $this->resolveRequiresShipping($snapshot->requiresShipping, $snapshot->productType);
             $lineUuid = trim((string)($line['item_id'] ?? ''));
             if ($lineUuid === '') {
                 $lineUuid = 'line-' . substr($serverSelectionHash, 0, 24);
@@ -172,5 +173,18 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
                 json_encode($canonical, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '',
             ),
         ];
+    }
+
+    /**
+     * Offer/snapshot flag first; else ProductTypeDefinition via SPI; else physical true.
+     */
+    private function resolveRequiresShipping(?bool $fromSnapshot, string $productType): bool
+    {
+        if ($fromSnapshot !== null) {
+            return $fromSnapshot;
+        }
+        $fromType = $this->typeRequiresShipping->requiresShippingForProductType($productType);
+
+        return $fromType ?? true;
     }
 }
