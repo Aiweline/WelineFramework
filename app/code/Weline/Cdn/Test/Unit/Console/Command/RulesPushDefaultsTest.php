@@ -62,7 +62,7 @@ class RulesPushDefaultsTest extends TestCase
         $this->assertIsString($content);
         $rules = \json_decode($content, true);
         $this->assertIsArray($rules, 'default-rules.json must decode as JSON array');
-        $this->assertGreaterThanOrEqual(6, \count($rules), 'default-rules.json should keep at least 6 rules');
+        $this->assertGreaterThanOrEqual(5, \count($rules), 'default-rules.json should keep at least 5 rules');
 
         $expressions = \array_column($rules, 'expression');
         $this->assertNotEmpty($expressions);
@@ -71,22 +71,73 @@ class RulesPushDefaultsTest extends TestCase
 
         $this->assertStringContainsString('x-weline-cache-bypass', $joined, 'cache bypass header rule missing');
         $this->assertStringContainsString('x-weline-idempotent', $joined, 'idempotent header rule missing');
-        $this->assertStringContainsString('bypass_by_default', \strtolower(\json_encode($rules) ?: ''), 'storefront FPC→CF bridge mode missing');
+        $this->assertStringContainsString('bypass_by_default', \strtolower(\json_encode($rules) ?: ''), 'storefront/API FPC→CF bridge mode missing');
         $this->assertStringNotContainsString('http.response.', $joined, 'request-phase rules must not use response fields');
         $this->assertStringNotContainsString('cache_reserve', \strtolower(\json_encode($rules) ?: ''), 'cache_reserve is not a Cache Rules action');
+        $this->assertFalse(
+            $this->hasBlanketApiCacheFalse($rules),
+            'must not blanket-forbid /api/ with cache:false; controller @Cdn / origin headers must be able to apply'
+        );
     }
 
     public function testStaticAndAdminRulesArePreservedForCompatibility(): void
     {
         $rulesFile = $this->resolveRulesFilePath();
         $rules = \json_decode((string)\file_get_contents($rulesFile), true);
+        $this->assertIsArray($rules);
 
         $expressions = \implode("\n", \array_column($rules, 'expression'));
         $this->assertStringContainsString('/static/', $expressions, 'should keep static asset rule');
         $this->assertStringContainsString('/admin/', $expressions, 'should keep backend bypass rule');
-        $this->assertStringContainsString('/api/', $expressions, 'should keep api bypass rule');
         $this->assertStringContainsString('starts_with', $expressions, 'Free/Pro Cache Rules must use starts_with not matches');
         $this->assertStringNotContainsString(' matches ', ' ' . $expressions . ' ', 'matches operator requires Business plan');
+        $this->assertFalse(
+            $this->hasBlanketApiCacheFalse($rules),
+            'API must not be blanket cache:false in defaults'
+        );
+
+        $bridge = null;
+        foreach ($rules as $rule) {
+            if (!\is_array($rule)) {
+                continue;
+            }
+            $action = $rule['action']['cache'] ?? null;
+            if (\is_array($action) && ($action['mode'] ?? '') === 'bypass_by_default') {
+                $bridge = $rule;
+                break;
+            }
+        }
+        $this->assertIsArray($bridge, 'bypass_by_default bridge rule missing');
+        $bridgeExpr = (string)($bridge['expression'] ?? '');
+        $this->assertStringNotContainsString(
+            'not starts_with(http.request.uri.path, "/api/")',
+            $bridgeExpr,
+            'bridge must include /api/ under bypass_by_default (origin/controller headers decide)'
+        );
+        $this->assertStringContainsString('/admin/', $bridgeExpr, 'bridge must still exclude admin');
+    }
+
+    /**
+     * @param list<mixed> $rules
+     */
+    private function hasBlanketApiCacheFalse(array $rules): bool
+    {
+        foreach ($rules as $rule) {
+            if (!\is_array($rule)) {
+                continue;
+            }
+            $expr = \trim((string)($rule['expression'] ?? ''));
+            $cache = $rule['action']['cache'] ?? null;
+            if ($cache !== false) {
+                continue;
+            }
+            // Sole path guard on /api/ with hard no-cache (no method/header qualifiers beyond starts_with).
+            if (\preg_match('/^starts_with\(http\.request\.uri\.path,\s*"\/api\/"\)$/', $expr) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function testStaticMediaRuleUsesOneYearEdgeAndBrowserTtl(): void

@@ -93,14 +93,13 @@ class RuleManager
         $apiRules = $this->getApiRules(null);
         
         // 4. 合并规则（优先级：API规则 > 域名规则 > 默认规则）
+        // Cloudflare Cache Rules 先匹配先生效，故注解/覆盖须前置 defaults。
         // 这些规则是通用的，所有适配器都可以使用
-        $mergedRules = array_merge(
-            $defaultRules,
+        return array_merge(
+            $apiRules,
             $overrideRules,
-            $apiRules
+            $defaultRules
         );
-        
-        return $mergedRules;
     }
 
     /**
@@ -232,7 +231,7 @@ class RuleManager
 
     /**
      * 计划推送到边缘的规则集（闸门后）。
-     * Free：仅 default-rules；付费：defaults + 预算内 override/api（表达式已消毒）。
+     * Free：仅 default-rules；付费：预算内 api/override 前置 + defaults（CF 先匹配先生效）。
      *
      * @return list<array<string, mixed>>
      */
@@ -258,7 +257,8 @@ class RuleManager
             foreach ($overrides as $index => &$rule) { $rule['_weline_identity'] = 'domain:' . $domain->getId() . ':override:' . $index; }
             unset($rule);
         }
-        $extra = \array_merge($overrides, $this->getApiRules(null, $includeIdentity));
+        // API 注释优先于域名覆盖；二者均前置 defaults（先匹配先生效）。
+        $extra = \array_merge($this->getApiRules($triggerType, $includeIdentity), $overrides);
         $accepted = [];
         foreach ($extra as $rule) {
             if (!\is_array($rule)) {
@@ -274,7 +274,7 @@ class RuleManager
             }
         }
 
-        return \array_merge($defaults, $accepted);
+        return \array_merge($accepted, $defaults);
     }
 
     /**

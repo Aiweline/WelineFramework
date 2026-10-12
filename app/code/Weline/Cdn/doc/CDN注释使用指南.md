@@ -11,7 +11,8 @@
 
 - 想让**新路由被 FPC 识别**：必须在控制器上声明 **`@Extra type=fpc`**，再经路由收集 / `setup:upgrade` 进 Extra 侧车。  
 - **只写 `@Cdn`、不写 Extra** ≠ 已启用源站 FPC。  
-- Cloudflare Free 下，店面页进边缘通常靠：已推送的 `default-rules`（`bypass_by_default`）+ FPC HIT 出站 `CDN-Cache-Control`，不必为每条店面路径再推一条 `@Cdn` 规则。  
+- Cloudflare Free 下，店面与 **API** 的 GET/HEAD 进边缘通常靠：已推送的 `default-rules`（`bypass_by_default`，**不再**整类禁 `/api/`）+ 源站出站 `Cache-Control` / `CDN-Cache-Control`（店面多为 FPC HIT）；不必为每条路径再推一条 `@Cdn` 规则。  
+- 控制器 `@Cdn` / BinQuery 可缓存规则在付费容量下会**前置**于 defaults 推送（CF 先匹配先生效）；Free 仍以 defaults + 源站头为主。  
 - CDN 后台「开发模式」（按 Scope）是**临时旁路 FPC**，不改写、不删除控制器上的 Extra 声明。
 
 FPC Extra 写法示例与失效（`w_changed`）见：
