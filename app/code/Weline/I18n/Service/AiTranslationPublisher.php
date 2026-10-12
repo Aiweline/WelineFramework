@@ -20,7 +20,10 @@ class AiTranslationPublisher
     ) {
     }
 
-    public function publishLocale(string $localeCode): bool
+    /**
+     * @param array<string, string>|null $areaByWord word => area；批量 republish 时由调用方一次加载传入
+     */
+    public function publishLocale(string $localeCode, ?array $areaByWord = null): bool
     {
         $localeCode = trim(str_replace('-', '_', $localeCode));
         if ($localeCode === '') {
@@ -30,18 +33,95 @@ class AiTranslationPublisher
         $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
         $connection = $this->localeDictionary->getConnection();
         if ($transactions->isActive($connection)) {
-            $transactions->afterCommit($connection, 'i18n.publish_locale.' . $localeCode, function () use ($localeCode): void {
-                if (!$this->publishCommittedLocale($localeCode)) {
+            $transactions->afterCommit($connection, 'i18n.publish_locale.' . $localeCode, function () use ($localeCode, $areaByWord): void {
+                if (!$this->publishCommittedLocale($localeCode, $areaByWord)) {
                     throw new \RuntimeException('i18n_locale_file_publish_failed');
                 }
             });
             return true;
         }
 
-        return $this->publishCommittedLocale($localeCode);
+        return $this->publishCommittedLocale($localeCode, $areaByWord);
     }
 
-    private function publishCommittedLocale(string $localeCode): bool
+    /**
+     * 批量导出：area 映射只加载一次。
+     *
+     * @param list<string> $localeCodes
+     * @param array<string, string>|null $areaByWord
+     * @return array{published: int, unchanged: int, failed: int}
+     */
+    public function publishLocales(array $localeCodes, ?array $areaByWord = null): array
+    {
+        $areaByWord ??= $this->loadBaseWordAreas();
+        $published = 0;
+        $unchanged = 0;
+        $failed = 0;
+        foreach ($localeCodes as $localeCode) {
+            $localeCode = trim(str_replace('-', '_', (string)$localeCode));
+            if ($localeCode === '') {
+                continue;
+            }
+            try {
+                $before = $this->localeFileFingerprint($localeCode);
+                $ok = $this->publishLocale($localeCode, $areaByWord);
+                if (!$ok) {
+                    ++$failed;
+                    continue;
+                }
+                $after = $this->localeFileFingerprint($localeCode);
+                if ($before !== null && $after !== null && $before === $after) {
+                    ++$unchanged;
+                } else {
+                    ++$published;
+                }
+            } catch (\Throwable $throwable) {
+                ++$failed;
+                w_log_error(
+                    'I18n locale republish failed for ' . $localeCode . ': ' . $throwable->getMessage(),
+                    [],
+                    'i18n',
+                );
+            }
+        }
+
+        return [
+            'published' => $published,
+            'unchanged' => $unchanged,
+            'failed' => $failed,
+        ];
+    }
+
+    /**
+     * @return array<string, string> word => area
+     */
+    public function loadBaseWordAreas(): array
+    {
+        /** @var WordDictionary $base */
+        $base = ObjectManager::getInstance(WordDictionary::class);
+        $map = [];
+        $query = (clone $base)->clear()->reset()->select();
+        foreach ($query->fetchIterator() as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $word = (string)($row[WordDictionary::schema_fields_WORD] ?? '');
+            if ($word === '') {
+                continue;
+            }
+            $area = (string)($row[WordDictionary::schema_fields_AREA] ?? '');
+            $map[$word] = $area === ''
+                ? DictionaryAreaPolicy::AREA_SHARED
+                : DictionaryAreaPolicy::normalize($area);
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param array<string, string>|null $areaByWord
+     */
+    private function publishCommittedLocale(string $localeCode, ?array $areaByWord = null): bool
     {
         $this->ensurePublishMemoryCeiling();
         $dir = Env::path_TRANSLATE_FILES_PATH;
@@ -55,10 +135,11 @@ class AiTranslationPublisher
         $previousByPath = [];
         $mode = 0644;
         $replaced = false;
+        $areaByWord ??= $this->loadBaseWordAreas();
 
         return ObjectManager::getInstance(I18nResourceChangePublisher::class)->publishLocaleFile(
             $localeCode,
-            function () use ($localeCode, $unionFile, $areaFiles, &$previousByPath, &$mode, &$replaced): array {
+            function () use ($localeCode, $unionFile, $areaFiles, $areaByWord, &$previousByPath, &$mode, &$replaced): array {
                 foreach ([$unionFile, ...array_values($areaFiles)] as $path) {
                     clearstatcache(true, $path);
                     if (is_file($path)) {
@@ -73,7 +154,6 @@ class AiTranslationPublisher
                     }
                 }
 
-                $areaByWord = $this->loadBaseWordAreas();
                 $bags = [
                     DictionaryAreaPolicy::AREA_SHARED => [],
                     DictionaryAreaPolicy::AREA_FRONTEND => [],
@@ -104,26 +184,54 @@ class AiTranslationPublisher
                     ], 'i18n');
                     $replaced = false;
 
-                    return ['content_sha256' => hash('sha256', (string)$previousByPath[$unionFile])];
+                    return [
+                        'content_sha256' => hash('sha256', (string)$previousByPath[$unionFile]),
+                        'unchanged' => true,
+                    ];
                 }
 
                 $hashes = [];
                 $union = [];
+                /** @var array<string, string> $contentsByPath */
+                $contentsByPath = [];
                 foreach ($bags as $area => $words) {
                     ksort($words, SORT_STRING);
                     $contents = '<?php return ' . var_export($words, true) . ';?>';
                     $hashes[$area] = hash('sha256', $contents);
-                    $this->replaceFile($areaFiles[$area], $contents, $mode);
+                    $contentsByPath[$areaFiles[$area]] = $contents;
                     $union += $words;
                 }
                 ksort($union, SORT_STRING);
                 $unionContents = '<?php return ' . var_export($union, true) . ';?>';
-                $this->replaceFile($unionFile, $unionContents, $mode);
+                $contentsByPath[$unionFile] = $unionContents;
+                $contentSha = hash('sha256', implode('|', $hashes) . '|' . hash('sha256', $unionContents));
+
+                $unchanged = true;
+                foreach ($contentsByPath as $path => $contents) {
+                    if (($previousByPath[$path] ?? null) !== $contents) {
+                        $unchanged = false;
+                        break;
+                    }
+                }
+                if ($unchanged) {
+                    $replaced = false;
+
+                    return [
+                        'content_sha256' => $contentSha,
+                        'area_sha256' => $hashes,
+                        'unchanged' => true,
+                    ];
+                }
+
+                foreach ($contentsByPath as $path => $contents) {
+                    $this->replaceFile($path, $contents, $mode);
+                }
                 $replaced = true;
 
                 return [
-                    'content_sha256' => hash('sha256', implode('|', $hashes) . '|' . hash('sha256', $unionContents)),
+                    'content_sha256' => $contentSha,
                     'area_sha256' => $hashes,
+                    'unchanged' => false,
                 ];
             },
             function () use ($areaFiles, $unionFile, &$previousByPath, &$mode, &$replaced): void {
@@ -143,30 +251,28 @@ class AiTranslationPublisher
         );
     }
 
-    /**
-     * @return array<string, string> word => area
-     */
-    private function loadBaseWordAreas(): array
+    private function localeFileFingerprint(string $localeCode): ?string
     {
-        /** @var WordDictionary $base */
-        $base = ObjectManager::getInstance(WordDictionary::class);
-        $map = [];
-        $query = (clone $base)->clear()->reset()->select();
-        foreach ($query->fetchIterator() as $row) {
-            if (!\is_array($row)) {
+        $dir = Env::path_TRANSLATE_FILES_PATH;
+        $paths = [
+            $dir . $localeCode . '.php',
+            $dir . DictionaryAreaPolicy::localeBagBasename($localeCode, DictionaryAreaPolicy::AREA_SHARED),
+            $dir . DictionaryAreaPolicy::localeBagBasename($localeCode, DictionaryAreaPolicy::AREA_FRONTEND),
+            $dir . DictionaryAreaPolicy::localeBagBasename($localeCode, DictionaryAreaPolicy::AREA_BACKEND),
+        ];
+        $parts = [];
+        foreach ($paths as $path) {
+            clearstatcache(true, $path);
+            if (!is_file($path)) {
+                $parts[] = 'missing';
                 continue;
             }
-            $word = (string)($row[WordDictionary::schema_fields_WORD] ?? '');
-            if ($word === '') {
-                continue;
-            }
-            $area = (string)($row[WordDictionary::schema_fields_AREA] ?? '');
-            $map[$word] = $area === ''
-                ? DictionaryAreaPolicy::AREA_SHARED
-                : DictionaryAreaPolicy::normalize($area);
+            $mtime = (string)filemtime($path);
+            $size = (string)filesize($path);
+            $parts[] = $mtime . ':' . $size;
         }
 
-        return $map;
+        return hash('sha256', implode('|', $parts));
     }
 
     private function replaceFile(string $filename, string $contents, int $mode): void

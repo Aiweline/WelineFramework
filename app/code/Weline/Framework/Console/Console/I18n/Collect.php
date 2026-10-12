@@ -34,19 +34,43 @@ final class Collect implements CommandInterface
             && (($data['no-prune-stale'] ?? false) !== true)
             && (($data['prune_stale'] ?? true) !== false);
 
+        $republishAll = in_array('--republish-all', $args, true)
+            || (($data['republish_all'] ?? false) === true);
+
+        $rewriteCsv = !in_array('--no-rewrite-csv', $args, true)
+            && (($data['no-rewrite-csv'] ?? false) !== true)
+            && (($data['rewrite_csv'] ?? true) !== false);
+
         if ($moduleName !== null && $moduleName !== '') {
             $this->printing->note(__('正在收集模块：%{1}', [$moduleName]));
             // 单模块永不剥离（避免误删其它模块原词）
             $pruneStale = false;
+            if (!$republishAll) {
+                $this->printing->note(__('单模块默认只导出源语+en_US；全量导出请加 --republish-all'));
+            }
         } else {
             $this->printing->note(__('正在收集所有模块的翻译词...'));
             if (!$pruneStale) {
                 $this->printing->note(__('已跳过短语冗余原词剥离（--no-prune-stale）'));
             }
+            // 全量本身导出全部发布语种
+            $republishAll = true;
+        }
+
+        if (!$rewriteCsv) {
+            $this->printing->note(__('已跳过模块 CSV 回写（--no-rewrite-csv）'));
         }
 
         try {
-            $this->compiler->compile($moduleName !== '' ? $moduleName : null, false, $pruneStale);
+            $this->compiler->compile(
+                $moduleName !== '' ? $moduleName : null,
+                false,
+                $pruneStale,
+                [
+                    'republish_all' => $republishAll,
+                    'rewrite_csv' => $rewriteCsv,
+                ],
+            );
             $this->printing->success(
                 $moduleName
                     ? __('模块 %{1} 语言包收集成功！', [$moduleName])
@@ -107,6 +131,8 @@ final class Collect implements CommandInterface
                 '-h, --help' => __('显示帮助信息'),
                 '--module, -m' => __('仅收集指定模块'),
                 '--no-prune-stale' => __('全量收集后不剥离不在收集集中的短语冗余原词'),
+                '--republish-all' => __('单模块收集时仍导出全部发布语种（默认仅源语+en_US）'),
+                '--no-rewrite-csv' => __('源码扫描后不回写模块 i18n/*.csv'),
             ],
             [],
             [],

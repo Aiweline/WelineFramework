@@ -64,11 +64,15 @@ final class I18nResourceChangePublisher
             throw new \LogicException('i18n_file_publication_requires_committed_dictionary');
         }
         return $transactions->run($connection, function () use ($localeCode, $publishFile, $restoreFile): bool {
-            // next 的锁定读取/CAS 写入持有到外层事务结束，后来的发布者不能先读取旧词典。
-            $revision = $this->revisions->next('i18n_pack', $localeCode);
+            // 先锁行不推进版本；内容相同则 no-op（不写盘、不 bump revision、不广播）。
+            $this->revisions->lockForUpdate('i18n_pack', $localeCode);
             try {
                 $payload = $publishFile();
                 $payload['locale_code'] = $localeCode;
+                if (($payload['unchanged'] ?? false) === true) {
+                    return true;
+                }
+                $revision = $this->revisions->next('i18n_pack', $localeCode);
                 $this->publishInTransaction('dictionary-file-publish', $payload, $revision, $localeCode);
                 return true;
             } catch (\Throwable $failure) {

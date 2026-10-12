@@ -27,6 +27,10 @@ class I18n
 
     /** @var array{count: int, default_locale_count: int, touched: int}|null */
     private static ?array $lastCompileAfterSummary = null;
+
+    /** compile 期间是否回写模块 i18n/*.csv（可由 --no-rewrite-csv 关闭） */
+    private bool $rewriteModuleCsvDuringCompile = true;
+
     private const LOCALE_CACHE_TTL = 300;
     private const FALLBACK_LOCALE_NAMES = [
         'en' => 'English',
@@ -742,7 +746,10 @@ class I18n
             );
         }
 
-        $this->refreshModuleLanguageCsvFiles($directory, $moduleWords);
+        if ($this->rewriteModuleCsvDuringCompile) {
+            $this->refreshModuleLanguageCsvFiles($directory, $moduleWords);
+        }
+
         return $moduleWords;
     }
 
@@ -1261,14 +1268,39 @@ class I18n
         array &$wordsByModule,
         array &$sourceTranslations,
         ?string $moduleName = null,
+        bool $rewriteCsv = true,
     ): void {
         self::$lastCompileWordAreaEvidence = [];
-        $collector = ObjectManager::getInstance(TranslationCollector::class);
-        $directories = $this->getActiveModuleDirectories($moduleName);
-        RegistryProgress::count('I18n source scan', count($directories), 'modules');
-        $sourceTranslations = $this->collectModuleTranslations($directories, $collector);
-        $this->collectDesignThemeAreaEvidence($moduleName, $collector);
-        RegistryProgress::count('I18n source scan', count($sourceTranslations), 'source words');
+        $this->rewriteModuleCsvDuringCompile = $rewriteCsv;
+        try {
+            $collector = ObjectManager::getInstance(TranslationCollector::class);
+            $directories = $this->getActiveModuleDirectories($moduleName);
+            RegistryProgress::count('I18n source scan', count($directories), 'modules');
+            $sourceTranslations = $this->collectModuleTranslations($directories, $collector);
+            $this->collectDesignThemeAreaEvidence($moduleName, $collector);
+            RegistryProgress::count('I18n source scan', count($sourceTranslations), 'source words');
+            $this->mergeEnrichDictionaryCompileWords(
+                $localsWords,
+                $wordsByModule,
+                $sourceTranslations,
+                $collector,
+            );
+        } finally {
+            $this->rewriteModuleCsvDuringCompile = true;
+        }
+    }
+
+    /**
+     * @param array<string, array<string, string>> $localsWords
+     * @param array<string, mixed> $wordsByModule
+     * @param array<string, string> $sourceTranslations
+     */
+    private function mergeEnrichDictionaryCompileWords(
+        array &$localsWords,
+        array &$wordsByModule,
+        array $sourceTranslations,
+        TranslationCollector $collector,
+    ): void {
 
         $defaultLocale = Env::default_LANGUAGE_CODE;
         if ($sourceTranslations !== [] && isset($localsWords[$defaultLocale])) {

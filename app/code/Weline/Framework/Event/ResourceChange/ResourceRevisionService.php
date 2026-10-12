@@ -19,24 +19,31 @@ final class ResourceRevisionService
     ) {
     }
 
+    /**
+     * 锁定资源修订行（FOR UPDATE）但不推进版本号。
+     * 供「内容相同则跳过写盘/广播」在比较期间串行化发布者。
+     */
+    public function lockForUpdate(string $resourceType, string|int $resourceId): int
+    {
+        [$resourceKey, $resourceType, $resourceId] = $this->assertIdentity($resourceType, $resourceId);
+        $this->assertSoleActiveTransaction();
+        $this->ensureRow($resourceKey, $resourceType, $resourceId);
+        $current = $this->find($resourceKey, true);
+        if ($current === null) {
+            throw new \RuntimeException(__('资源修订版原子建件后无法回读'));
+        }
+        if ((string)$current->getData(ResourceRevision::schema_fields_RESOURCE_TYPE) !== $resourceType
+            || (string)$current->getData(ResourceRevision::schema_fields_RESOURCE_ID) !== $resourceId) {
+            throw new \RuntimeException(__('资源键 SHA-256 碰撞，已拒绝锁定修订版'));
+        }
+
+        return (int)$current->getData(ResourceRevision::schema_fields_REVISION);
+    }
+
     public function next(string $resourceType, string|int $resourceId): int
     {
-        $resourceType = strtolower(trim($resourceType));
-        $resourceId = (string)$resourceId;
-        if (!preg_match('/^[a-z][a-z0-9._-]{0,63}$/', $resourceType) || $resourceId === '' || strlen($resourceId) > 191) {
-            throw new \InvalidArgumentException(__('资源修订版身份无效'));
-        }
-
-        $connection = $this->revisionModel->getConnection();
-        $connector = $connection->getConnector();
-        if (!$this->transactions->isActive($connection)
-            || !TransactionContext::isSoleActiveConnector($connector)) {
-            throw new UnsupportedAsyncTransactionConnectionException(
-                __('可靠资源变更要求 Framework 默认主库是唯一活动事务连接')
-            );
-        }
-
-        $resourceKey = hash('sha256', $resourceType . "\0" . $resourceId);
+        [$resourceKey, $resourceType, $resourceId] = $this->assertIdentity($resourceType, $resourceId);
+        $this->assertSoleActiveTransaction();
         $this->ensureRow($resourceKey, $resourceType, $resourceId);
         for ($attempt = 0; $attempt < self::MAX_CAS_ATTEMPTS; $attempt++) {
             $current = $this->find($resourceKey, true);
@@ -65,6 +72,32 @@ final class ResourceRevisionService
         }
 
         throw new \RuntimeException(__('资源修订版 CAS 冲突超过 %{1} 次', [self::MAX_CAS_ATTEMPTS]));
+    }
+
+    /**
+     * @return array{0:string,1:string,2:string} resourceKey, resourceType, resourceId
+     */
+    private function assertIdentity(string $resourceType, string|int $resourceId): array
+    {
+        $resourceType = strtolower(trim($resourceType));
+        $resourceId = (string)$resourceId;
+        if (!preg_match('/^[a-z][a-z0-9._-]{0,63}$/', $resourceType) || $resourceId === '' || strlen($resourceId) > 191) {
+            throw new \InvalidArgumentException(__('资源修订版身份无效'));
+        }
+
+        return [hash('sha256', $resourceType . "\0" . $resourceId), $resourceType, $resourceId];
+    }
+
+    private function assertSoleActiveTransaction(): void
+    {
+        $connection = $this->revisionModel->getConnection();
+        $connector = $connection->getConnector();
+        if (!$this->transactions->isActive($connection)
+            || !TransactionContext::isSoleActiveConnector($connector)) {
+            throw new UnsupportedAsyncTransactionConnectionException(
+                __('可靠资源变更要求 Framework 默认主库是唯一活动事务连接')
+            );
+        }
     }
 
     /**

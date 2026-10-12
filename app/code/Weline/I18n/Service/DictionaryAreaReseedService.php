@@ -138,7 +138,7 @@ final class DictionaryAreaReseedService
             if ($words === []) {
                 continue;
             }
-            foreach (array_chunk($words, 200) as $chunk) {
+            foreach (array_chunk($words, 500) as $chunk) {
                 $this->dictionary->reset()
                     ->where($this->dictionary::schema_fields_WORD, $chunk, 'IN')
                     ->update([

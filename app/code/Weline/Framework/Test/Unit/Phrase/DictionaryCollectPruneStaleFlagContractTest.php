@@ -16,8 +16,13 @@ final class DictionaryCollectPruneStaleFlagContractTest extends TestCase
         $collectSrc = (string)file_get_contents($collect);
         self::assertStringContainsString('bool $pruneStale = true', $compilerSrc);
         self::assertStringContainsString("'prune_stale' => \$pruneStale", $compilerSrc);
+        self::assertStringContainsString("'republish_all' => \$republishAll", $compilerSrc);
+        self::assertStringContainsString("'rewrite_csv' => \$rewriteCsv", $compilerSrc);
         self::assertStringContainsString('--no-prune-stale', $collectSrc);
-        self::assertStringContainsString('compile($moduleName !== \'\' ? $moduleName : null, false, $pruneStale)', $collectSrc);
+        self::assertStringContainsString('--republish-all', $collectSrc);
+        self::assertStringContainsString('--no-rewrite-csv', $collectSrc);
+        self::assertStringContainsString("'republish_all' => \$republishAll", $collectSrc);
+        self::assertStringContainsString("'rewrite_csv' => \$rewriteCsv", $collectSrc);
     }
 
     public function testFlattenCollectedWordsUsesChineseCsvPlusSourceScanOnly(): void

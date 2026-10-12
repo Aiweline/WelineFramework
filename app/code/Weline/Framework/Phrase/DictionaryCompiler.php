@@ -25,24 +25,39 @@ class DictionaryCompiler
     }
 
     /**
+     * @param array{
+     *     republish_all?: bool,
+     *     rewrite_csv?: bool
+     * } $options
      * @return array<string, array<string, string>>
      * @throws DictionaryCollectBusyException when another collect already holds the single-flight lock
      */
-    public function compile(?string $moduleName = null, bool $useCache = false, bool $pruneStale = true): array
-    {
+    public function compile(
+        ?string $moduleName = null,
+        bool $useCache = false,
+        bool $pruneStale = true,
+        array $options = [],
+    ): array {
         DictionaryCollectGate::acquire($moduleName);
         try {
-            return $this->compileLocked($moduleName, $useCache, $pruneStale);
+            return $this->compileLocked($moduleName, $useCache, $pruneStale, $options);
         } finally {
             DictionaryCollectGate::release();
         }
     }
 
     /**
+     * @param array{republish_all?: bool, rewrite_csv?: bool} $options
      * @return array<string, array<string, string>>
      */
-    private function compileLocked(?string $moduleName, bool $useCache, bool $pruneStale = true): array
-    {
+    private function compileLocked(
+        ?string $moduleName,
+        bool $useCache,
+        bool $pruneStale = true,
+        array $options = [],
+    ): array {
+        $republishAll = ($options['republish_all'] ?? false) === true;
+        $rewriteCsv = ($options['rewrite_csv'] ?? true) !== false;
         $_prevMemLimit = ini_get('memory_limit');
         $currentLimit = $this->parseMemoryLimit((string)$_prevMemLimit);
         if ($currentLimit > 0 && $currentLimit < 512 * 1024 * 1024) {
@@ -99,6 +114,7 @@ class DictionaryCompiler
             'words_by_module' => &$wordsByModule,
             'source_translations' => &$sourceTranslations,
             'error_count' => $errorCount,
+            'rewrite_csv' => $rewriteCsv,
         ];
         $this->eventsManager->dispatch(DictionaryEvents::EVENT_DICTIONARY_COMPILE, $payload);
 
@@ -112,6 +128,7 @@ class DictionaryCompiler
             'collected_words' => $this->flattenSourceCollectedWords($localsWords, $sourceTranslations),
             // 全量 collect 后由 I18n Observer 按原词 diff 剥离短语冗余；单模块 / --no-prune-stale 为 false
             'prune_stale' => $pruneStale,
+            'republish_all' => $republishAll,
         ];
         $this->eventsManager->dispatch(DictionaryEvents::EVENT_DICTIONARY_COMPILE_AFTER, $afterPayload);
 

@@ -38,8 +38,9 @@ final class DictionaryObserverContractTest extends TestCase
         self::assertStringContainsString('collected_words', $source);
         self::assertStringContainsString('I18n::clearLocalWordsCache', $source);
         self::assertStringContainsString('AiTranslationPublisher', $source);
-        self::assertStringContainsString('publishLocale', $source);
-        self::assertStringContainsString('getDictionaryPublishLocaleCodes', $source);
+        self::assertStringContainsString('publishLocales', $source);
+        self::assertStringContainsString('DictionaryExportLocaleResolver', $source);
+        self::assertStringContainsString('DictionaryDirtyLocaleSet', $source);
         self::assertStringContainsString('republishEnabledLocalesFromDictionary', $source);
         self::assertStringContainsString('DictionaryCollectBatchService', $source);
         self::assertStringContainsString('pullClassifiedCompileWordAreas', $source);
@@ -51,11 +52,15 @@ final class DictionaryObserverContractTest extends TestCase
         self::assertStringContainsString('DictionaryStaleWordPruneService', $source);
         self::assertStringContainsString('pruneNotCurrentBatch', $source);
         self::assertStringContainsString('prune_stale', $source);
+        self::assertStringContainsString('republish_all', $source);
         self::assertStringContainsString('collectBatch', $source);
-        // 导出集独立于 AI 目标集；禁止再依赖 getEnabledLocaleCodes（总开关关会空）
+        // 导出集经 Resolver；禁止 Observer 直接依赖 getEnabledLocaleCodes
         self::assertStringNotContainsString('getEnabledLocaleCodes', $source);
         self::assertStringNotContainsString('=== $source', $source);
         self::assertStringContainsString('唯一导出入口', $source);
+        // 单模块不跑全表 area reseed
+        self::assertStringContainsString("if (\$moduleName === '')", $source);
+        self::assertStringContainsString('reseedFromPathEvidence', $source);
     }
 
     public function testPublishLocaleCallersOnlyGoThroughAiTranslationPublisher(): void
@@ -74,7 +79,7 @@ final class DictionaryObserverContractTest extends TestCase
                 continue;
             }
             $src = (string) file_get_contents($path);
-            if (!str_contains($src, 'publishLocale(')) {
+            if (!str_contains($src, 'publishLocale(') && !str_contains($src, 'publishLocales(')) {
                 continue;
             }
             $rel = substr($path, strlen($root) + 1);
@@ -91,7 +96,7 @@ final class DictionaryObserverContractTest extends TestCase
                 'Service/RemoteDictionaryAssistService.php',
             ],
             $hits,
-            'publishLocale( must stay on AiTranslationPublisher + known callers only',
+            'publishLocale(s) must stay on AiTranslationPublisher + known callers only',
         );
     }
 }

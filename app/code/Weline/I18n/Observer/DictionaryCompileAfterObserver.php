@@ -8,18 +8,22 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Parser as I18nParser;
-use Weline\I18n\Service\AiTranslationConfig;
 use Weline\I18n\Service\AiTranslationPublisher;
 use Weline\I18n\Service\AiTranslationQueueService;
 use Weline\I18n\Service\DictionaryAreaReseedService;
 use Weline\I18n\Service\DictionaryCollectBatchService;
 use Weline\I18n\Service\DictionaryCollectService;
+use Weline\I18n\Service\DictionaryDirtyLocaleSet;
+use Weline\I18n\Service\DictionaryExportLocaleResolver;
 use Weline\I18n\Service\DictionaryStaleWordPruneService;
 
 /**
  * dictionary_compile_after：源语言入公共词典；全量时打当前批次后删「非当前批次」短语；
  * 用 DB 词典 republish 写出 generated/language/{locale}.php（含源语；唯一写入权威）；
  * 新词入队空缺翻译。
+ *
+ * Export 与 Collect 分层：area map 一次加载；单模块默认只导出源语+en_US；
+ * --republish-all / 全量仍导出全部发布语种。
  */
 class DictionaryCompileAfterObserver implements ObserverInterface
 {
@@ -29,8 +33,8 @@ class DictionaryCompileAfterObserver implements ObserverInterface
         private readonly DictionaryStaleWordPruneService $staleWordPruneService,
         private readonly AiTranslationQueueService $aiTranslationQueueService,
         private readonly AiTranslationPublisher $aiTranslationPublisher,
-        private readonly AiTranslationConfig $aiTranslationConfig,
         private readonly DictionaryAreaReseedService $areaReseedService,
+        private readonly DictionaryExportLocaleResolver $exportLocaleResolver,
         private readonly I18n $i18n,
     ) {
     }
@@ -42,6 +46,8 @@ class DictionaryCompileAfterObserver implements ObserverInterface
         $moduleName = is_string($module) ? $module : '';
         $pruneStale = $event->getData('prune_stale');
         $pruneStale = $pruneStale !== false && $pruneStale !== 0 && $pruneStale !== '0';
+        $republishAll = $event->getData('republish_all');
+        $republishAll = $republishAll === true || $republishAll === 1 || $republishAll === '1';
         $created = 0;
         $touched = 0;
 
@@ -74,6 +80,7 @@ class DictionaryCompileAfterObserver implements ObserverInterface
             $touched = (int)($persisted['touched'] ?? 0);
             $defaultLocaleCount = (int)($persisted['default_locale_count'] ?? 0);
 
+            // 全量才重铺 area；单模块只走 persist 内单调升级，避免整表 demote
             if ($moduleName === '') {
                 $this->areaReseedService->reseedFromPathEvidence(
                     $wordAreas,
@@ -114,10 +121,16 @@ class DictionaryCompileAfterObserver implements ObserverInterface
                     w_log_error('I18n phrase stale prune failed: ' . $throwable->getMessage(), [], 'i18n');
                 }
             }
+
+            $exportLocales = $this->exportLocaleResolver->resolveForCollect(
+                $moduleName !== '' ? $moduleName : null,
+                $republishAll,
+            );
+            DictionaryDirtyLocaleSet::markMany($exportLocales);
         }
 
         // Framework Compiler 不再写 {locale}.php；此处为唯一导出入口（含源语）。
-        $this->republishEnabledLocalesFromDictionary();
+        $this->republishEnabledLocalesFromDictionary($moduleName, $republishAll);
 
         if ($created > 0 || $touched > 0) {
             try {
@@ -137,14 +150,17 @@ class DictionaryCompileAfterObserver implements ObserverInterface
         I18nParser::clearWorkerCaches();
     }
 
-    private function republishEnabledLocalesFromDictionary(): void
+    private function republishEnabledLocalesFromDictionary(string $moduleName, bool $republishAll): void
     {
-        try {
-            // 导出集 ≠ AI 目标集：含源语，且不因 AI 总开关关闭而空跑。
-            $locales = $this->aiTranslationConfig->getDictionaryPublishLocaleCodes();
-        } catch (\Throwable $throwable) {
-            w_log_error('I18n locale republish list failed: ' . $throwable->getMessage(), [], 'i18n');
+        $locales = DictionaryDirtyLocaleSet::drain();
+        if ($locales === []) {
+            $locales = $this->exportLocaleResolver->resolveForCollect(
+                $moduleName !== '' ? $moduleName : null,
+                $republishAll,
+            );
+        }
 
+        if ($locales === []) {
             return;
         }
 
@@ -165,21 +181,16 @@ class DictionaryCompileAfterObserver implements ObserverInterface
         }
 
         try {
-            foreach ($locales as $localeCode) {
-                $localeCode = trim((string)$localeCode);
-                if ($localeCode === '') {
-                    continue;
-                }
-                try {
-                    $this->aiTranslationPublisher->publishLocale($localeCode);
-                } catch (\Throwable $throwable) {
-                    w_log_error(
-                        'I18n locale republish failed for ' . $localeCode . ': ' . $throwable->getMessage(),
-                        [],
-                        'i18n',
-                    );
-                }
-            }
+            // area map 一次；各 locale 复用，避免 O(locales×N_base)
+            $stats = $this->aiTranslationPublisher->publishLocales($locales);
+            w_log_info('I18n dictionary compile_after export', [
+                'module' => $moduleName,
+                'republish_all' => $republishAll,
+                'locale_count' => count($locales),
+                'published' => (int)($stats['published'] ?? 0),
+                'unchanged' => (int)($stats['unchanged'] ?? 0),
+                'failed' => (int)($stats['failed'] ?? 0),
+            ], 'i18n');
         } finally {
             if ($prevMem !== '') {
                 @\ini_set('memory_limit', $prevMem);

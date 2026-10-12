@@ -50,13 +50,14 @@ class DictionaryCollectService
         }
 
         try {
-            $this->report($onProgress, (string) __('开始扫描模块 CSV 语言包…'), 5);
+            // 单次 compile：CSV 读 + 源码扫描 + persist/reseed/prune/republish 均在
+            // dictionary_compile / dictionary_compile_after 内完成。禁止再经
+            // getLocalsWords 触发二次 compile（同进程 Gate 重入不 BUSY，整链≈×2）。
+            $this->report($onProgress, (string) __('开始收集词典（CSV + 源码扫描）…'), 5);
             $this->compiler->compile();
             $this->compiler->clearTranslationCaches();
-
-            $this->report($onProgress, (string) __('扫描源码 __()/lang 词条…'), 35);
-            $this->i18n->convertToLanguageFile(false);
             $compileSummary = I18n::pullCompileAfterSummary();
+            $this->report($onProgress, (string) __('收集入库与分区导出已同步…'), 70);
 
             $defaultLanguageCode = Env::default_LANGUAGE_CODE;
             if ($localeCode === '') {
@@ -77,11 +78,10 @@ class DictionaryCollectService
                 ];
             }
 
-            $this->report($onProgress, (string) __('词典收集与分区已同步…'), 85);
-
             $queued = [];
+            // compile_after 已入队；此处仅在显式要求且摘要有增量时补一次（后台 SSE 路径）
             if ($enqueueAiTranslation && ($collectedCount > 0 || $touched > 0)) {
-                $this->report($onProgress, (string) __('提交 AI 翻译队列…'), 95);
+                $this->report($onProgress, (string) __('提交 AI 翻译队列…'), 90);
                 $queued = $this->aiTranslationQueueService->enqueueEnabledLocales('dictionary_collect');
             }
 
@@ -209,7 +209,7 @@ class DictionaryCollectService
 
         $wordKeys = array_keys($words);
         $existingRecords = [];
-        foreach (array_chunk($wordKeys, 200) as $wordChunk) {
+        foreach (array_chunk($wordKeys, 500) as $wordChunk) {
             $records = $this->dictionary->reset()
                 ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
                 ->select()
@@ -279,7 +279,7 @@ class DictionaryCollectService
                 $byArea[$area][] = $word;
             }
             foreach ($byArea as $area => $areaWords) {
-                foreach (array_chunk($areaWords, 200) as $wordChunk) {
+                foreach (array_chunk($areaWords, 500) as $wordChunk) {
                     $this->dictionary->reset()
                         ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
                         ->update([
@@ -294,7 +294,7 @@ class DictionaryCollectService
         // 分块 UPDATE 已存在行的批次标记（流水线减压：不整表、不对新插入行重复写）
         if ($existingToMark !== []) {
             $this->report($onProgress, (string) __('标记当前收集批次…'), 78);
-            foreach (array_chunk($existingToMark, 200) as $wordChunk) {
+            foreach (array_chunk($existingToMark, 500) as $wordChunk) {
                 $this->dictionary->reset()
                     ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
                     ->update([$this->dictionary::schema_fields_COLLECT_BATCH => $batch])
@@ -303,7 +303,7 @@ class DictionaryCollectService
         }
 
         $this->report($onProgress, (string) __('同步默认语言译文…'), 85);
-        foreach (array_chunk($wordKeys, 200) as $wordChunk) {
+        foreach (array_chunk($wordKeys, 500) as $wordChunk) {
             $existingLocaleWords = [];
             $localeRecords = $this->localeDictionary->reset()
                 ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)

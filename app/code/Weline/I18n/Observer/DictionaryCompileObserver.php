@@ -33,7 +33,15 @@ class DictionaryCompileObserver implements ObserverInterface
         }
 
         $moduleName = isset($data['module']) && is_string($data['module']) ? $data['module'] : null;
-        $this->i18n->enrichDictionaryCompile($localsWords, $wordsByModule, $sourceTranslations, $moduleName);
+        $rewriteCsvRaw = $data['rewrite_csv'] ?? true;
+        $rewriteCsv = $rewriteCsvRaw !== false && $rewriteCsvRaw !== 0 && $rewriteCsvRaw !== '0';
+        $this->i18n->enrichDictionaryCompile(
+            $localsWords,
+            $wordsByModule,
+            $sourceTranslations,
+            $moduleName,
+            $rewriteCsv,
+        );
         $event->setData($data);
     }
 }
