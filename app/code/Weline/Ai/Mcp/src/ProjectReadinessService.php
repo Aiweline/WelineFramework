@@ -619,10 +619,16 @@ final class ProjectReadinessService
                 if (!is_dir($moduleRoot) || is_link($moduleRoot)) {
                     continue;
                 }
+                // Inventory only real modules: register.php runtime modules, or
+                // composer packages. Accidental trees (e.g. app/code/var/process from
+                // bad path joins) must not trigger three-doc auto-repair.
+                if (!$this->isInventoriableModuleRoot($moduleRoot)) {
+                    continue;
+                }
                 $relativeRoot = 'app/code/' . $vendor . '/' . $module;
                 $moduleName = $vendor . '_' . $module;
-                $type = is_file($moduleRoot . DIRECTORY_SEPARATOR . 'composer.json')
-                    && !is_file($moduleRoot . DIRECTORY_SEPARATOR . 'register.php')
+                $hasRegister = is_file($moduleRoot . DIRECTORY_SEPARATOR . 'register.php');
+                $type = is_file($moduleRoot . DIRECTORY_SEPARATOR . 'composer.json') && !$hasRegister
                     ? 'composer_package'
                     : 'runtime_module';
                 $modules[] = [
@@ -677,6 +683,18 @@ final class ProjectReadinessService
                 'conflicts' => $conflicts,
             ])),
         ];
+    }
+
+    /**
+     * True when a directory under app/code/{Vendor}/{Module} is a real module root.
+     *
+     * Runtime modules carry register.php; composer packages may carry only composer.json.
+     * Bare directories (runtime leftovers, mistaken path joins) are ignored.
+     */
+    private function isInventoriableModuleRoot(string $moduleRoot): bool
+    {
+        return is_file($moduleRoot . DIRECTORY_SEPARATOR . 'register.php')
+            || is_file($moduleRoot . DIRECTORY_SEPARATOR . 'composer.json');
     }
 
     /** @param array<string,mixed> $snapshot

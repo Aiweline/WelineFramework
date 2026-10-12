@@ -259,6 +259,26 @@ try {
     }
     readinessCheck($missingAfterReadyRejected, 'document removal invalidates readiness before knowledge access');
 
+    // Accidental app/code/var/process (no register.php / composer.json) must not become var_process.
+    mkdir($repository . '/app/code/var/process/view/tpl', 0700, true);
+    $pseudoPrepare = $service->prepare($index, ['client_session_id' => 'session-pseudo-var']);
+    readinessCheck(($pseudoPrepare['status'] ?? '') === 'ready', 'pseudo app/code/var/process still allows ready prepare');
+    $pseudoListed = false;
+    foreach ($pseudoPrepare['modules'] ?? [] as $moduleRow) {
+        if (($moduleRow['path'] ?? '') === 'app/code/var/process' || ($moduleRow['name'] ?? '') === 'var_process') {
+            $pseudoListed = true;
+            break;
+        }
+    }
+    readinessCheck(!$pseudoListed, 'inventory skips accidental app/code/var/process without register.php');
+    readinessCheck(
+        !is_file($repository . '/app/code/var/process/doc/README.md')
+            && !is_file($repository . '/app/code/var/process/doc/需求.md')
+            && !is_file($repository . '/app/code/var/process/doc/开发日志.md'),
+        'auto repair does not create docs under accidental app/code/var/process',
+    );
+    readinessRemoveTree($repository . '/app/code/var');
+
     $gitProject = $temporary . DIRECTORY_SEPARATOR . 'git-branch-project';
     mkdir($gitProject . '/app/code/Acme/Demo/doc', 0700, true);
     file_put_contents($gitProject . '/app/code/Acme/Demo/register.php', "<?php\n");

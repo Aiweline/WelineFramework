@@ -50,7 +50,7 @@ final class ToolService
             self::tool(
                 'prepare_project',
                 'Prepare Weline project knowledge',
-                'Mandatory session entry. Scan app/code/*/*, verify the three-document contract and dev-branch policy, return project-readiness.v1 with hard_constraints/mcp_skills. Whole-repo index refresh for revision>0 is deferred (sidecar/detached worker) so STDIO stays responsive; path-bounded refreshes stay synchronous.',
+                'Mandatory session entry. Inventory inventoriable app/code/{Vendor}/{Module} roots (register.php or composer.json only—skip accidental trees), verify the three-document contract and dev-branch policy, return project-readiness.v1 with hard_constraints/mcp_skills. Whole-repo index refresh for revision>0 is deferred (sidecar/detached worker) so STDIO stays responsive; path-bounded refreshes stay synchronous.',
                 self::objectSchema($scope + [
                     'client_session_id' => self::stringSchema('Stable identifier for the current AI client session.'),
                 ], ['repository', 'client_session_id']),
