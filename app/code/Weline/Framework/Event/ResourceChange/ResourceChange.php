@@ -176,11 +176,18 @@ final readonly class ResourceChange
         self::assertObjectKeys(
             $data['impact'],
             ['namespaces', 'previous_namespaces', 'urls', 'previous_urls'],
-            ['cache_ops'],
+            ['cache_ops', 'website_ids', 'url_matrix_ready'],
             'impact',
         );
         foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls'] as $key) {
             self::assertStringList($data['impact'][$key], 'impact.' . $key);
+        }
+        if (array_key_exists('website_ids', $data['impact'])) {
+            self::assertNonNegativeIntList($data['impact']['website_ids'], 'impact.website_ids');
+        }
+        if (array_key_exists('url_matrix_ready', $data['impact'])
+            && !is_bool($data['impact']['url_matrix_ready'])) {
+            throw new AsyncEventValidationException(__('impact.url_matrix_ready 必须是布尔值'));
         }
         if (array_key_exists('cache_ops', $data['impact'])) {
             self::assertCacheOps($data['impact']['cache_ops']);
@@ -282,6 +289,18 @@ final readonly class ResourceChange
         foreach ($value as $item) {
             if (!is_string($item) || trim($item) === '' || strlen($item) > 2048) {
                 throw new AsyncEventValidationException(__('%{1} 必须只包含非空字符串', [$label]));
+            }
+        }
+    }
+
+    private static function assertNonNegativeIntList(mixed $value, string $label): void
+    {
+        if (!is_array($value) || !array_is_list($value)) {
+            throw new AsyncEventValidationException(__('%{1} 必须是列表', [$label]));
+        }
+        foreach ($value as $item) {
+            if (!is_int($item) || $item < 0) {
+                throw new AsyncEventValidationException(__('%{1} 必须只包含非负整数', [$label]));
             }
         }
     }

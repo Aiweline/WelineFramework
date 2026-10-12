@@ -52,7 +52,10 @@ final class MediaReferenceIdentityBuilderContractTest extends TestCase
             dirname(__DIR__, 3) . '/Event/Changed/UrlMatrixExpander.php'
         );
         self::assertStringContainsString("w_query('websites', 'getWebsiteLanguageCodes'", $src);
+        self::assertStringContainsString("w_query('websites', 'getWebsiteById'", $src);
         self::assertStringNotContainsString('Websites\\Model\\WebsiteLanguage', $src);
+        self::assertStringNotContainsString('_wl=', $src);
+        self::assertStringContainsString('withPathVariant', $src);
     }
 
     public function testResourceChangeFactoryResolvesMediaScopeInterface(): void

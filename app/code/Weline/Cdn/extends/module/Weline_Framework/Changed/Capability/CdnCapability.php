@@ -57,10 +57,17 @@ final class CdnCapability implements ChangedCapabilityInterface
             return;
         }
 
+        $siteIds = $this->siteIdsForChange($change);
+        if ($siteIds === []) {
+            return;
+        }
+
         /** @var Domain $domainModel */
         $domainModel = ObjectManager::getInstance(Domain::class);
+        // Product cross-site identity may attach absolute URLs for every member website; load CDN
+        // domains for impact.website_ids ∪ change.websiteId (not mutation site alone).
         $domains = (clone $domainModel)->reset()
-            ->where(Domain::schema_fields_SITE_ID, $change->websiteId())
+            ->where(Domain::schema_fields_SITE_ID, $siteIds, 'in')
             ->where(Domain::schema_fields_ENABLED, 1)
             ->select()
             ->fetch()
@@ -92,6 +99,31 @@ final class CdnCapability implements ChangedCapabilityInterface
                 throw new \RuntimeException(__('CDN 资源变更清理失败'));
             }
         }
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function siteIdsForChange(ResourceChange $change): array
+    {
+        $impact = $change->toArray()['impact'] ?? [];
+        $ids = [];
+        if (is_array($impact['website_ids'] ?? null)) {
+            foreach ($impact['website_ids'] as $id) {
+                $id = (int)$id;
+                if ($id >= 0) {
+                    $ids[$id] = $id;
+                }
+            }
+        }
+        if ($change->hasWebsiteContext()) {
+            $wid = (int)$change->websiteId();
+            if ($wid >= 0) {
+                $ids[$wid] = $wid;
+            }
+        }
+
+        return array_values($ids);
     }
 
     /** @param array<int,mixed> $urls @return list<string> */

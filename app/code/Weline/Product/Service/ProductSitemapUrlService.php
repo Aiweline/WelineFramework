@@ -40,6 +40,87 @@ final class ProductSitemapUrlService
         return $product === null ? [] : $this->collect($websiteId, [$product->getData()], $storeId);
     }
 
+    /**
+     * Public locs on every website shard that carries this global_product_uuid.
+     * Pass $onlyWebsiteId to stay single-website (store-local / scoped reads).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function getUrlsForGlobalProduct(
+        string $globalUuid,
+        ?int $onlyWebsiteId = null,
+        ?int $onlyStoreId = null,
+    ): array {
+        $globalUuid = trim($globalUuid);
+        if ($globalUuid === '') {
+            return [];
+        }
+        $out = [];
+        foreach ($this->websites->all() as $website) {
+            if ($onlyWebsiteId !== null && $website->id !== $onlyWebsiteId) {
+                continue;
+            }
+            $product = $this->products->findByGlobalUuid($website->id, $globalUuid);
+            if ($product === null) {
+                continue;
+            }
+            foreach ($this->getUrlsForProduct($website->id, (int)$product->getId(), $onlyStoreId) as $row) {
+                $row['website_id'] = $website->id;
+                $out[] = $row;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Website ids that have a product row for this global uuid (any status).
+     *
+     * @return list<int>
+     */
+    public function listWebsiteIdsForGlobalProduct(string $globalUuid): array
+    {
+        $globalUuid = trim($globalUuid);
+        if ($globalUuid === '') {
+            return [];
+        }
+        $ids = [];
+        foreach ($this->websites->all() as $website) {
+            if ($this->products->findByGlobalUuid($website->id, $globalUuid) !== null) {
+                $ids[] = $website->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Absolute home + /products listing URLs for each member website.
+     *
+     * @return list<string>
+     */
+    public function getCatalogListingUrlsForGlobalProduct(string $globalUuid): array
+    {
+        $locs = [];
+        foreach ($this->listWebsiteIdsForGlobalProduct($globalUuid) as $websiteId) {
+            foreach ($this->websites->all() as $website) {
+                if ($website->id !== $websiteId) {
+                    continue;
+                }
+                $base = rtrim(trim((string)$website->url), '/');
+                if ($base === '' || !in_array(strtolower((string)parse_url($base, PHP_URL_SCHEME)), ['http', 'https'], true)
+                    || !parse_url($base, PHP_URL_HOST)) {
+                    break;
+                }
+                $locs[$base . '/'] = $base . '/';
+                $locs[$base . '/products'] = $base . '/products';
+                break;
+            }
+        }
+
+        return array_values($locs);
+    }
+
     /** @param list<array<string,mixed>> $products @return list<array<string,mixed>> */
     private function collect(int $websiteId, array $products, ?int $onlyStoreId = null, bool $sameOriginOnly = false): array
     {

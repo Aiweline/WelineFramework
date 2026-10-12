@@ -28,4 +28,15 @@ final class CdnCapabilityZeroSiteTest extends TestCase
         $path = dirname(__DIR__, 4) . '/Observer/ResourceChanged.php';
         self::assertFileDoesNotExist($path);
     }
+
+    public function testCapabilityLoadsDomainsForImpactWebsiteIdsNotMutationSiteAlone(): void
+    {
+        $path = (new \ReflectionClass(CdnCapability::class))->getFileName();
+        self::assertNotFalse($path);
+        $src = (string)file_get_contents((string)$path);
+        self::assertStringContainsString('siteIdsForChange', $src);
+        self::assertStringContainsString("impact['website_ids']", $src);
+        self::assertStringContainsString("schema_fields_SITE_ID, \$siteIds, 'in'", $src);
+        self::assertStringContainsString('impact.website_ids', $src);
+    }
 }

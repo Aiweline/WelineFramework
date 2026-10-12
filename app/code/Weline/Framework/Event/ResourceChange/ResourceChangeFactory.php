@@ -23,6 +23,8 @@ final class ResourceChangeFactory
      *   previous_namespaces?:list<string>,
      *   urls?:list<string>,
      *   previous_urls?:list<string>,
+     *   website_ids?:list<int>,
+     *   url_matrix_ready?:bool,
      *   cache_ops?:list<array{pool:string,keys:list<string>}>
      * } $impact
      * @param array<string,mixed> $origin
@@ -70,6 +72,12 @@ final class ResourceChangeFactory
         foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls'] as $key) {
             $normalizedImpact[$key] = $this->stringList((array)($impact[$key] ?? []));
             sort($normalizedImpact[$key], SORT_STRING);
+        }
+        if (array_key_exists('website_ids', $impact)) {
+            $normalizedImpact['website_ids'] = $this->nonNegativeIntList((array)$impact['website_ids']);
+        }
+        if (array_key_exists('url_matrix_ready', $impact)) {
+            $normalizedImpact['url_matrix_ready'] = (bool)$impact['url_matrix_ready'];
         }
         if (array_key_exists('cache_ops', $impact)) {
             $normalizedImpact['cache_ops'] = $this->normalizeCacheOps((array)$impact['cache_ops']);
@@ -137,6 +145,28 @@ final class ResourceChangeFactory
             }
         }
         return array_values($result);
+    }
+
+    /** @return list<int> */
+    private function nonNegativeIntList(array $values): array
+    {
+        $result = [];
+        foreach ($values as $value) {
+            if (is_int($value)) {
+                $id = $value;
+            } elseif (is_string($value) && preg_match('/^-?\d+$/D', trim($value)) === 1) {
+                $id = (int)$value;
+            } else {
+                continue;
+            }
+            if ($id >= 0) {
+                $result[$id] = $id;
+            }
+        }
+        $list = array_values($result);
+        sort($list, SORT_NUMERIC);
+
+        return $list;
     }
 
     /**
