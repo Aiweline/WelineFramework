@@ -18,6 +18,7 @@ final class StorefrontWarmupOrchestrator
     private const LOCK_NAME = 'storefront_warmup_orchestrator.lock';
     private const DEFAULT_SHARD = 6;
     private const DEFAULT_WALL_MS = 45000;
+    private const OFFER_DRAIN_PER_SLICE = 3;
 
     public function __construct(
         private readonly StorefrontWarmupProgressLedger $ledger = new StorefrontWarmupProgressLedger(),
@@ -25,6 +26,7 @@ final class StorefrontWarmupOrchestrator
         private readonly StorefrontWarmupExcludeGate $excludeGate = new StorefrontWarmupExcludeGate(),
         private readonly StorefrontWarmupHttpClient $http = new StorefrontWarmupHttpClient(),
         private readonly StorefrontWarmupSitemapParser $sitemapParser = new StorefrontWarmupSitemapParser(),
+        private readonly StorefrontWarmupOfferQueue $offerQueue = new StorefrontWarmupOfferQueue(),
     ) {
     }
 
@@ -98,6 +100,34 @@ final class StorefrontWarmupOrchestrator
             $failed = 0;
             $samples = [];
 
+            // Priority: Changed / event ad-hoc offers before phased A–D crawl.
+            $offerBudget = self::OFFER_DRAIN_PER_SLICE;
+            while ($offerBudget > 0 && $warmed + $skipped + $failed < $shard) {
+                if ($this->elapsedMs($startedAt) >= $wallMs) {
+                    break;
+                }
+                $offerStep = $this->drainOneOffer();
+                if ($offerStep === null) {
+                    break;
+                }
+                $offerBudget--;
+                $samples[] = $offerStep['sample'];
+                $state['last_url'] = (string)($offerStep['sample']['url'] ?? '');
+                $state['last_status'] = (string)($offerStep['sample']['status'] ?? '');
+                $state['last_reason'] = (string)($offerStep['sample']['reason'] ?? '');
+                if ($offerStep['sample']['status'] === 'ok') {
+                    $warmed++;
+                    $state['ok'] = (int)$state['ok'] + 1;
+                } elseif ($offerStep['sample']['status'] === 'skip') {
+                    $skipped++;
+                    $state['skip'] = (int)$state['skip'] + 1;
+                } elseif ($offerStep['sample']['status'] === 'fail') {
+                    $failed++;
+                    $state['fail'] = (int)$state['fail'] + 1;
+                }
+                $this->ledger->write($state);
+            }
+
             while ($warmed + $skipped + $failed < $shard) {
                 if ($this->elapsedMs($startedAt) >= $wallMs) {
                     break;
@@ -141,6 +171,7 @@ final class StorefrontWarmupOrchestrator
                 'warmed' => $warmed,
                 'skipped' => $skipped,
                 'failed' => $failed,
+                'offer_pending' => $this->offerQueue->pendingCount(),
                 'samples' => \array_slice($samples, 0, 12),
                 'busy' => $busy,
                 'elapsed_ms' => $this->elapsedMs($startedAt),
@@ -148,6 +179,54 @@ final class StorefrontWarmupOrchestrator
         } finally {
             $this->releaseLock($lock);
         }
+    }
+
+    /**
+     * @return array{sample:array<string,mixed>}|null
+     */
+    private function drainOneOffer(): ?array
+    {
+        $taken = $this->offerQueue->take(1);
+        if ($taken === []) {
+            return null;
+        }
+        $row = $taken[0];
+        $url = (string)($row['url'] ?? '');
+        if ($url === '') {
+            return [
+                'sample' => ['status' => 'skip', 'url' => '', 'reason' => 'offer_empty', 'phase' => 'offer'],
+            ];
+        }
+        // Absolute URLs skip excludeGate path-only rules; relative paths still gate.
+        if (\preg_match('#^https?://#i', $url) !== 1) {
+            $gate = $this->excludeGate->evaluate($url);
+            if (!$gate['allow']) {
+                return [
+                    'sample' => [
+                        'status' => 'skip',
+                        'url' => $url,
+                        'reason' => $gate['reason'],
+                        'phase' => 'offer',
+                        'source' => (string)($row['source'] ?? ''),
+                    ],
+                ];
+            }
+            $fetch = $this->http->get($gate['path'], false);
+        } else {
+            $fetch = $this->http->getAbsolute($url, false);
+        }
+
+        return [
+            'sample' => [
+                'status' => $fetch['ok'] ? 'ok' : 'fail',
+                'url' => $url,
+                'reason' => $fetch['ok']
+                    ? ($fetch['fpc'] !== '' ? $fetch['fpc'] : 'http_ok')
+                    : $fetch['reason'],
+                'phase' => 'offer',
+                'source' => (string)($row['source'] ?? ''),
+            ],
+        ];
     }
 
     /**

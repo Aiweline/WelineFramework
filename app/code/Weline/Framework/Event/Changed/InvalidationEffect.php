@@ -17,6 +17,7 @@ final readonly class InvalidationEffect
     public const CODE_BUMP_NAMESPACES = 'bump_namespaces';
     public const CODE_PURGE_FPC_URLS = 'purge_fpc_urls';
     public const CODE_PURGE_FPC_ALL = 'purge_fpc_all';
+    public const CODE_WARM_FPC_URLS = 'warm_fpc_urls';
     public const CODE_CDN_PURGE = 'cdn_purge';
     public const CODE_CACHE_OPS_DELETE = 'cache_ops_delete';
     public const CODE_THEME_RUNTIME_CLEAR = 'theme_runtime_clear';

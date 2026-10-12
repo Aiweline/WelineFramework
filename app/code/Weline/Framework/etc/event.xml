@@ -102,4 +102,13 @@
                   sort="140"/>
     </event>
 
+    <!-- Ad-hoc origin FPC warm URL offer (Changed purge refill + modules); not CDN Warmup. -->
+    <event name="Weline_Framework::storefront_warmup_offer">
+        <observer name="Weline_Framework_Cache::storefront_warmup_offer"
+                  instance="Weline\Framework\Cache\Observer\StorefrontWarmupOfferObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
 </config>

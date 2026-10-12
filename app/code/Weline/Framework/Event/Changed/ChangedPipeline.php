@@ -184,6 +184,23 @@ class ChangedPipeline
         }
         if ($effect->code === InvalidationEffect::CODE_PURGE_FPC_URLS) {
             $effect = $this->expandUrlMatrix($effect, $change);
+            $capability->execute($effect, $change);
+            // Closed loop: enqueue the *expanded* payload (not raw impact) for StorefrontWarmup.
+            // Recipe must not also declare warm_fpc_urls — OfferQueue dedupes if ever double-fired.
+            $expandedUrls = is_array($effect->payload['urls'] ?? null) ? $effect->payload['urls'] : [];
+            if ($expandedUrls !== []) {
+                $warm = new InvalidationEffect(
+                    InvalidationEffect::CODE_WARM_FPC_URLS,
+                    $effect->phase,
+                    ['urls' => array_values(array_map('strval', $expandedUrls))],
+                );
+                $warmCap = $this->capabilities->forEffect(InvalidationEffect::CODE_WARM_FPC_URLS);
+                if ($warmCap !== null) {
+                    $warmCap->execute($warm, $change);
+                }
+            }
+
+            return;
         }
         $capability->execute($effect, $change);
     }
@@ -196,6 +213,15 @@ class ChangedPipeline
             is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
             is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
         )));
+        // Product (and similar) may pre-expand × each member website's locale/currency so foreign hosts
+        // are not expanded with the mutation website's defaults.
+        if (!empty($impact['url_matrix_ready'])) {
+            $payload = $effect->payload;
+            $payload['urls'] = $base;
+            $payload['degraded'] = false;
+
+            return new InvalidationEffect($effect->code, $effect->phase, $payload);
+        }
         $expanded = $change->hasWebsiteContext()
             ? $this->urlMatrix->expand($base, $change->websiteId())
             : ['urls'=>$base, 'degraded'=>false];
@@ -290,7 +316,7 @@ class ChangedPipeline
     private function mergeImpact(array $derived, array $explicit): array
     {
         $out = $derived;
-        foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls', 'cache_ops'] as $key) {
+        foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls', 'cache_ops', 'website_ids'] as $key) {
             if (!array_key_exists($key, $explicit)) {
                 continue;
             }
@@ -300,6 +326,9 @@ class ChangedPipeline
             } elseif (!array_key_exists($key, $out)) {
                 $out[$key] = $val;
             }
+        }
+        if (array_key_exists('url_matrix_ready', $explicit)) {
+            $out['url_matrix_ready'] = (bool)$explicit['url_matrix_ready'];
         }
         return $out;
     }
@@ -322,6 +351,25 @@ class ChangedPipeline
         }
         if (array_key_exists('cache_ops', $impact)) {
             $data['impact']['cache_ops'] = $impact['cache_ops'];
+        }
+        if (array_key_exists('website_ids', $impact)) {
+            $ids = [];
+            foreach ((array)$impact['website_ids'] as $id) {
+                $id = (int)$id;
+                if ($id >= 0) {
+                    $ids[$id] = $id;
+                }
+            }
+            $sorted = array_values($ids);
+            sort($sorted, SORT_NUMERIC);
+            $data['impact']['website_ids'] = $sorted;
+        } else {
+            unset($data['impact']['website_ids']);
+        }
+        if (array_key_exists('url_matrix_ready', $impact)) {
+            $data['impact']['url_matrix_ready'] = (bool)$impact['url_matrix_ready'];
+        } else {
+            unset($data['impact']['url_matrix_ready']);
         }
         return ResourceChange::fromArray($data);
     }

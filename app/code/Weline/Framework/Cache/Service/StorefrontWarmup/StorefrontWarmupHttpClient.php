@@ -107,6 +107,62 @@ final class StorefrontWarmupHttpClient
     }
 
     /**
+     * Warm an absolute http(s) URL or a storefront path (Changed offer queue).
+     *
+     * @return array{ok:bool,status:int,body:string,fpc:string,reason:string,url:string}
+     */
+    public function getAbsolute(string $url, bool $needBody = false): array
+    {
+        $url = \trim($url);
+        if ($url === '') {
+            return ['ok' => false, 'status' => 0, 'body' => '', 'fpc' => '', 'reason' => 'empty_url', 'url' => ''];
+        }
+        if (\preg_match('#^https?://#i', $url) !== 1) {
+            return $this->get($url, $needBody);
+        }
+        $parts = \parse_url($url);
+        if ($parts === false || empty($parts['host'])) {
+            return ['ok' => false, 'status' => 0, 'body' => '', 'fpc' => '', 'reason' => 'bad_url', 'url' => $url];
+        }
+        $scheme = \strtolower((string)($parts['scheme'] ?? 'https'));
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            $scheme = 'https';
+        }
+        $host = \strtolower((string)$parts['host']);
+        $port = (int)($parts['port'] ?? ($scheme === 'http' ? 80 : 443));
+        $path = (string)($parts['path'] ?? '/');
+        if ($path === '') {
+            $path = '/';
+        }
+        if (!empty($parts['query'])) {
+            $path .= '?' . (string)$parts['query'];
+        }
+        $requestHost = $host;
+        if (!(($scheme === 'https' && $port === 443) || ($scheme === 'http' && $port === 80))) {
+            $requestHost .= ':' . $port;
+        }
+
+        // Prefer local WLS targets with Host: virtual-host (multi-site FPC keys).
+        $last = ['ok' => false, 'status' => 0, 'body' => '', 'fpc' => '', 'reason' => 'no_target', 'url' => $url];
+        foreach ($this->resolveTargets() as $target) {
+            $last = $this->httpGet(
+                $target['connect'],
+                $target['port'],
+                $requestHost,
+                $path,
+                $target['scheme'],
+                $needBody,
+            );
+            if ($last['ok']) {
+                return $last;
+            }
+        }
+
+        // Fallback: direct absolute fetch (production / foreign host).
+        return $this->httpGet($host, $port, $requestHost, $path, $scheme, $needBody);
+    }
+
+    /**
      * @return array{ok:bool,status:int,body:string,fpc:string,reason:string,url:string}
      */
     private function httpGet(
