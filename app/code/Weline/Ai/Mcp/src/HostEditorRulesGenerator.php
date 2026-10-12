@@ -41,6 +41,22 @@ alwaysApply: true
 2. 宿主 **Read** 仓内 `dev/ai-command/**` + `app/code/*/doc/ai/skills/**/SKILL.md`（Store 薄镜像只指路）。
 3. 同回合若另有框架 Theme/PHP 编码，仅编码切片走下方工程门禁。
 
+## 需求分级（硬 · `requirement_engineering_grade_gate`）
+
+每条用户需求提出后，**先**用专业工程视角（归属、扩展点、爆炸半径、耦合、验收面）判定 `request_grade`：
+
+| 分级 | 去向 |
+|------|------|
+| `engineering` | 下方工程任务 + **架构级参与**（`architecture_grade_change_only`）；**禁止**当补丁/热修捷径 |
+| `content_ops` | 上方内容运营（跳过 MCP） |
+| `chat` | 非工程（可跳过 MCP） |
+
+误把会改码/改耐久文档的需求判成 chat/content_ops → **必须重判为 engineering**。
+
+## 需求扫码顺带架构隐患（硬 · `requirement_scan_architecture_smell_gate`）
+
+工程需求讨论/分析与为此扫码时：**AOCI 须参与**相关结构认知；扫描需求路径时**顺带**标周边架构级 vs 补丁级隐患；疑点用 Weline MCP 读模块 `doc/` 索引对比正确做法；面向用户汇报「架构隐患/周边发现」，**由用户决定是否顺带处理**——禁止擅自扩大修范围。
+
 ## 工程任务（强制）
 
 改代码 / 模块文档 / 诊断评审 / 部署规划 / 功能验收收口（不含上一节内容运营技能）：
@@ -59,7 +75,7 @@ alwaysApply: true
 
 ## 非工程
 
-闲聊 / 概念问答可跳过 MCP。打招呼 `hi`/`你好`/`hello` 或「提取技能」须列 MCP 技能+指令。
+闲聊 / 概念问答可跳过 MCP（须先经 `requirement_engineering_grade_gate` 判为 `chat`）。打招呼 `hi`/`你好`/`hello` 或「提取技能」须列 MCP 技能+指令。
 
 ## 编码路径
 

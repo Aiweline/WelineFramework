@@ -20,6 +20,31 @@ MCP 是**知识面**（技能索引 / 代码地图 / 领域硬规则下发），
 
 **同回合混合任务**：既有内容运营又有框架 Theme/PHP 编码时，**只有编码切片**走 MCP；内容运营切片仍只读仓内技能/指令。
 
+## 1a. 需求工程分级（`requirement_engineering_grade_gate`）
+
+每条用户需求提出后，**先**用专业工程视角（归属、扩展点、爆炸半径、耦合、验收面）判定 `request_grade`，**禁止**只看表面措辞直接当补丁下手：
+
+| `request_grade` | 含义 | 后续 |
+|-----------------|------|------|
+| `engineering` | 将改框架/模块代码、耐久模块文档、本仓诊断评审、部署规划、功能验收收口 | 强制 MCP 工程主链 + **架构级参与**（`architecture_first_for_requirements` / `architecture_design_structured` / `architecture_grade_change_only`）；禁止「想怎么写就怎么写」贴补丁 |
+| `content_ops` | 内容运营技能族（产品优化/详情优化/翻译优化/主图优化/新建文章/规格修复等） | `content_ops_skills_skip_mcp` |
+| `chat` | 纯闲聊 / 身份与概念问答、不改仓 | 可跳过 MCP |
+
+**误判门禁**：只要会改码或改耐久文档，却被标成 `chat`/`content_ops` → **必须重判为 `engineering`**。`engineering` 之后再跑 `work_kind=feature|non_feature`（`requirement_feature_kind_gate`）。
+
+宿主常带：`~/.cursor/rules/requirement-engineering-grade-gate.mdc`（与 MCP 双写，见 `global_rules_dual_write_mcp_and_host`）。细则：[规则/10 §2](./10-工程流程与验收.md)。
+
+## 1a′. 需求扫码顺带架构隐患（`requirement_scan_architecture_smell_gate`）
+
+工程需求**讨论/分析**与为此进行的**代码扫描**时（`request_grade=engineering`）：
+
+1. **AOCI 须参与**：相关/周边结构认知走 AOCI（合同缺失先 `aoci_rules`；相关对象用 scoped search/get_entries；完整认知不可靠再 overview）——讨论阶段也不得把 AOCI 当可选。
+2. **扫码顺带分级**：为完成需求而扫描的文件/周边逻辑，同时判定是**架构级隐患**还是**补丁级写法**（如绕开 Taglib、Runtime 业务硬编码、未文档化事件、跨模块 new Service/Model、归属错位等）——不只扫主路径。
+3. **疑点对照模块 doc 索引**：发现可能不合理处，须调 Weline MCP（`resolve_task_context` / `search_project_knowledge` / `get_indexed_document`）读模块 `doc/` 与框架索引，对比正确做法并记下证据路径。
+4. **汇报由用户裁决**：分析收口必须含「**架构隐患/周边发现**」小节（无则写「无」）；**是否顺带处理由用户决定**——禁止擅自扩大实现范围、静默顺手修周边。
+
+EXEMPT：内容运营与纯闲聊。宿主常带：`~/.cursor/rules/requirement-scan-architecture-smell-gate.mdc`。细则：[规则/10 §2](./10-工程流程与验收.md)。
+
 ## 1b. AOCI 与 Weline MCP 互补（`aoci_complements_weline_mcp`）
 
 AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_intelligence`）**并列挂载**，定位互补，**不互替**。对**编码/工程任务**，AOCI 认知是 **HARD DEFAULT USE（强制）**，不是可选辅助层。

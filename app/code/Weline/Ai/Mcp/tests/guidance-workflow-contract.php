@@ -586,9 +586,39 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 're-call prepare_project')),
         false,
     ),
+    'hard_constraints include requirement_engineering_grade_gate' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_engineering_grade_gate'
+            && str_contains((string) ($rule['summary'] ?? ''), 'request_grade')
+            && str_contains((string) ($rule['summary'] ?? ''), 'engineering|content_ops|chat')
+            && str_contains((string) ($rule['summary'] ?? ''), 'architecture-level')
+            && str_contains((string) ($rule['summary'] ?? ''), 'quick patch')
+            && str_contains((string) ($rule['summary'] ?? ''), 'requirement-engineering-grade-gate.mdc')),
+        false,
+    ),
+    'hard_constraints include requirement_scan_architecture_smell_gate' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'requirement_scan_architecture_smell_gate'
+            && str_contains((string) ($rule['summary'] ?? ''), 'AOCI MUST participate')
+            && str_contains((string) ($rule['summary'] ?? ''), 'patch-grade')
+            && str_contains((string) ($rule['summary'] ?? ''), '架构隐患/周边发现')
+            && str_contains((string) ($rule['summary'] ?? ''), 'USER decides')
+            && str_contains((string) ($rule['summary'] ?? ''), 'requirement-scan-architecture-smell-gate.mdc')),
+        false,
+    ),
     'mcpInstructions carry architecture_grade_change_only' => str_contains(
         (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
         'architecture_grade_change_only'
+    ),
+    'mcpInstructions carry requirement_engineering_grade_gate' => str_contains(
+        (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
+        'requirement_engineering_grade_gate'
+    ),
+    'mcpInstructions carry requirement_scan_architecture_smell_gate' => str_contains(
+        (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
+        'requirement_scan_architecture_smell_gate'
     ),
     'hard_constraints include requirement_framework_scrutiny' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
@@ -2242,6 +2272,22 @@ $checks = [
             && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_complete_self_review_then_implement')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan-complete-self-review-then-implement.mdc')),
+        false,
+    ),
+    'global_rules_dual_write mentions requirement_engineering_grade_gate mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'requirement_engineering_grade_gate')
+            && str_contains((string) ($rule['summary'] ?? ''), 'requirement-engineering-grade-gate.mdc')),
+        false,
+    ),
+    'global_rules_dual_write mentions requirement_scan_architecture_smell_gate mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'requirement_scan_architecture_smell_gate')
+            && str_contains((string) ($rule['summary'] ?? ''), 'requirement-scan-architecture-smell-gate.mdc')),
         false,
     ),
     'global_rules_dual_write mentions user_facing_verdict_last mirror' => array_reduce(

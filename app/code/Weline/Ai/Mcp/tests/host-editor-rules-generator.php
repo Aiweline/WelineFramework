@@ -23,6 +23,16 @@ $checks['coldstart mdc carries architecture_grade_change_only'] = str_contains($
     && str_contains($mdc, '架构级改动')
     && str_contains($mdc, 'runtime_orchestrator_no_business_hardcode')
     && str_contains($mdc, '禁止凭记忆继续改码');
+$checks['coldstart mdc carries requirement_engineering_grade_gate'] = str_contains($mdc, 'requirement_engineering_grade_gate')
+    && str_contains($mdc, '需求分级')
+    && str_contains($mdc, 'request_grade')
+    && str_contains($mdc, 'engineering')
+    && str_contains($mdc, '禁止')
+    && str_contains($mdc, '补丁');
+$checks['coldstart mdc carries requirement_scan_architecture_smell_gate'] = str_contains($mdc, 'requirement_scan_architecture_smell_gate')
+    && str_contains($mdc, '架构隐患')
+    && str_contains($mdc, 'AOCI')
+    && str_contains($mdc, '用户决定');
 $checks['coldstart mdc carries machine_shared_side_effects_require_workspace_scope'] = str_contains($mdc, 'machine_shared_side_effects_require_workspace_scope')
     && str_contains($mdc, '整机共享态')
     && str_contains($mdc, 'LEARNING_MCP_BOUND_REPOSITORY')
