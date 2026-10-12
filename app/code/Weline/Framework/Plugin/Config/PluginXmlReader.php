@@ -184,9 +184,32 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
             $pluginClass = $plugin['_attribute']['class'];
             $value = $plugin['_value'] ?? [];
             $valueFirstKey = array_key_first($value);
+            // 数值键列表时，子节点可能是 interceptor 包装；统一走 collectInterceptors，禁止把原始 XML 节点原样塞进注册表
             if ($valueFirstKey !== null && is_int($valueFirstKey)) {
                 foreach ($value as $item_interceptor) {
-                    $module_plugin_interceptors[$pluginName][] = $item_interceptor;
+                    if (!is_array($item_interceptor)) {
+                        continue;
+                    }
+                    if (isset($item_interceptor['interceptor'])) {
+                        $this->collectInterceptors(
+                            $item_interceptor['interceptor'],
+                            $pluginName,
+                            $pluginClass,
+                            $moduleName,
+                            $module_plugin_interceptors,
+                            $module_and_file
+                        );
+                        continue;
+                    }
+                    // 单个 interceptor 节点（带 _attribute）
+                    $this->collectInterceptors(
+                        $item_interceptor,
+                        $pluginName,
+                        $pluginClass,
+                        $moduleName,
+                        $module_plugin_interceptors,
+                        $module_and_file
+                    );
                 }
             } else {
                 $this->collectInterceptors($value['interceptor'] ?? null, $pluginName, $pluginClass, $moduleName, $module_plugin_interceptors, $module_and_file);

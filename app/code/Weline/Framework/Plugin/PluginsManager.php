@@ -53,16 +53,23 @@ class PluginsManager implements ProcessSharedInterface
     public function scanPlugins(bool $cache = true): array
     {
         $cache_key = 'plugins_data';
-        // 避免重复加载
+        // 避免重复加载（含已扫描的 processed 形态）
         if ($this->plugins) {
-            return $this->plugins;
+            if ($this->isProcessedPluginsMap($this->plugins)) {
+                return $this->plugins;
+            }
+            // 内存里若仍是 raw 拦截器列表，继续走下方反射编排；勿把 processed 子结构当拦截器扫
         }
         // 检测插件缓存
         if ($cache && $plugins = $this->pluginCache->get($cache_key)) {
-            $this->plugins = $plugins;
-            return $this->plugins;
+            if (is_array($plugins) && $this->isProcessedPluginsMap($plugins)) {
+                $this->plugins = $plugins;
+                return $this->plugins;
+            }
+            // 缓存形态异常时丢弃，强制从 plugin.xml 重建
         }
-        if (empty($this->plugins)) {
+        if (!$this->isRawInterceptorMap($this->plugins)) {
+            $this->plugins = [];
             $env = \Weline\Framework\App\Env::getInstance();
             
             // 合并相同类的拦截器
@@ -76,17 +83,29 @@ class PluginsManager implements ProcessSharedInterface
                 
                 foreach ($pluginInstances as $key => $instances) {
                     foreach ($instances as $k => $instance) {
+                        if (!is_array($instance)) {
+                            continue;
+                        }
+                        $targetClass = trim((string)($instance['class'] ?? ''));
+                        $pluginAttrs = $instance['plugins'] ?? null;
+                        if ($targetClass === '' || !is_array($pluginAttrs)) {
+                            continue;
+                        }
+                        $pluginInstance = trim((string)($pluginAttrs['instance'] ?? ''));
+                        if ($pluginInstance === '') {
+                            continue;
+                        }
                         // 检查插件是否被禁用
-                        if (isset($instance['plugins']['disabled']) && 'true' === $instance['plugins']['disabled']) {
+                        if (isset($pluginAttrs['disabled']) && 'true' === $pluginAttrs['disabled']) {
                             unset($instances[$k]);
                             continue;
                         }
                         
                         // 检查模块状态（双重检查，确保安全）
-                        $pluginModuleName = $instance['plugins']['module'] ?? $moduleName;
+                        $pluginModuleName = $pluginAttrs['module'] ?? $moduleName;
                         if (!empty($pluginModuleName)) {
-                            if (isset($instance['plugins']['module_status'])) {
-                                if (!$instance['plugins']['module_status']) {
+                            if (isset($pluginAttrs['module_status'])) {
+                                if (!$pluginAttrs['module_status']) {
                                     unset($instances[$k]);
                                     continue; // 模块被禁用，跳过
                                 }
@@ -99,7 +118,7 @@ class PluginsManager implements ProcessSharedInterface
                             }
                         }
                         
-                        $this->plugins[$instance['class']][] = $instance['plugins'];
+                        $this->plugins[$targetClass][] = $pluginAttrs;
                     }
                 }
             }
@@ -111,6 +130,20 @@ class PluginsManager implements ProcessSharedInterface
         //）
         // 反射所有插件类方法
         foreach ($this->plugins as $type => $type_plugins) {
+            if (!is_string($type) || $type === '' || !is_array($type_plugins)) {
+                continue;
+            }
+            // 防御：processed 形态误入重建环时跳过，避免 Class "" / 缺 instance
+            if (isset($type_plugins['methods_plugins']) || isset($type_plugins['plugins_methods'])) {
+                continue;
+            }
+            // 只保留带非空 instance 的拦截器属性行
+            $type_plugins = array_values(array_filter($type_plugins, static function ($row): bool {
+                return is_array($row) && trim((string)($row['instance'] ?? '')) !== '';
+            }));
+            if ($type_plugins === []) {
+                continue;
+            }
             // 插件类排序 二维数组根据sort字段排序（使用数字比较确保正确排序）
             usort($type_plugins, function ($a, $b) {
                 $sortA = (int)($a['sort'] ?? 10000);
@@ -138,10 +171,23 @@ class PluginsManager implements ProcessSharedInterface
             $types_plugins_info[$type]['methods'] = $type_methods;
 
             foreach ($type_plugins as $type_plugin) {
+                $pluginInstanceClass = trim((string)($type_plugin['instance'] ?? ''));
+                if ($pluginInstanceClass === '') {
+                    continue;
+                }
                 try {
-                    $typePluginRef = new \ReflectionClass($type_plugin['instance']);
+                    $typePluginRef = new \ReflectionClass($pluginInstanceClass);
                 } catch (\ReflectionException $e) {
-                    throw new \Error($e->getMessage(), $e->getCode(), $e);
+                    throw new \Error(
+                        __('插件目标类 %{type} 的拦截器 instance 无效：%{instance}（%{message}）', [
+                            'type' => $type,
+                            'instance' => $pluginInstanceClass,
+                            'message' => $e->getMessage(),
+                            'name' => (string)($type_plugin['name'] ?? ''),
+                        ]),
+                        $e->getCode(),
+                        $e
+                    );
                 }
                 if ($typePluginRef->isFinal()) {
                     throw new \Error(__('插件名称：%{name},' . PHP_EOL . '无法动态代理final类:%{instance}' . PHP_EOL . '状态：%{disabled}' . PHP_EOL . '排序：%sort', $type_plugin));
@@ -474,5 +520,60 @@ class PluginsManager implements ProcessSharedInterface
                 }
             }
         }
+    }
+
+    /**
+     * plugins_data 缓存 / 内存终态：type => {methods, plugins_methods, methods_plugins, ...}
+     */
+    private function isProcessedPluginsMap(array $plugins): bool
+    {
+        if ($plugins === []) {
+            return false;
+        }
+        foreach ($plugins as $type => $payload) {
+            if (!is_string($type) || $type === '' || !is_array($payload)) {
+                return false;
+            }
+            if (isset($payload['methods_plugins']) || isset($payload['plugins_methods'])) {
+                return true;
+            }
+            // 首个有效条目即可判定；若皆非 processed 则返回 false
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
+     * 重建前的 raw 形态：type => list&lt;interceptor attrs with instance&gt;
+     */
+    private function isRawInterceptorMap(array $plugins): bool
+    {
+        if ($plugins === []) {
+            return false;
+        }
+        foreach ($plugins as $type => $rows) {
+            if (!is_string($type) || $type === '' || !is_array($rows)) {
+                return false;
+            }
+            if (isset($rows['methods_plugins']) || isset($rows['plugins_methods'])) {
+                return false;
+            }
+            $sawInterceptor = false;
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    return false;
+                }
+                if (trim((string)($row['instance'] ?? '')) === '') {
+                    return false;
+                }
+                $sawInterceptor = true;
+            }
+            if (!$sawInterceptor) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
