@@ -75,6 +75,7 @@ class OrderMailNotifier
             );
         }
         $vars = $this->localizeStatusVars($vars, $scopeCtx['locale']);
+        $vars = $this->enrichMailVars($order, $channel, $vars);
 
         try {
             $result = w_query('smtp', 'send', [
@@ -301,6 +302,33 @@ class OrderMailNotifier
         $raw = trim($raw);
 
         return $raw !== '' && preg_match('/^-?\d+(\.\d+)?$/', $raw) === 1;
+    }
+
+    /**
+     * Allow Extends modules to append fulfillment copy / deep links into mail vars.
+     *
+     * @param array<string, mixed> $vars
+     * @return array<string, mixed>
+     */
+    private function enrichMailVars(Order $order, string $channel, array $vars): array
+    {
+        try {
+            /** @var \Weline\Framework\Event\EventsManager $events */
+            $events = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            $payload = [
+                'order' => $order,
+                'channel' => $channel,
+                'vars' => $vars,
+            ];
+            $events->dispatch('Weline_Order::order_mail_vars', $payload);
+            if (\is_array($payload['vars'] ?? null)) {
+                return $payload['vars'];
+            }
+        } catch (\Throwable $e) {
+            w_log_warning('OrderMailNotifier enrichMailVars: ' . $e->getMessage(), [], 'order_mail');
+        }
+
+        return $vars;
     }
 
     private function buildItemsHtml(Order $order, string $currency, string $storageScope): string

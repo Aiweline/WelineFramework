@@ -268,6 +268,15 @@ final class PlayingInChinaCatalogSeeder
             throw new \RuntimeException('product/offer creation failed for ' . $sku);
         }
 
+        // Decision packs are digital: never require shipping weight/quote theatre.
+        $productType = strtolower(trim((string)($item['product_type'] ?? 'simple')));
+        if ($productType === 'travel_route') {
+            $expectedVersion = (int)$offer->getData('publish_version');
+            $offer = $this->offers->updateVersioned($websiteId, $offerId, $expectedVersion, [
+                'requires_shipping' => 0,
+            ]);
+        }
+
         $this->writeCopy($websiteId, $productId, $item);
         $this->prices->writeExplicit($websiteId, 0, $offerId, $currency, (int)$item['price_minor']);
         $stats['media'] += $this->writeMedia($websiteId, $sku, $productId, (string)$item['image'], (array)$item['gallery']);

@@ -123,6 +123,9 @@ final class CheckoutStorefrontSsrService
             ]),
             'shipping_methods' => $shippingMethods,
             'payment_methods' => $paymentMethods,
+            'requires_shipping' => array_key_exists('requires_shipping', $data)
+                ? (bool)$data['requires_shipping']
+                : $this->cartItemsRequireShipping($items),
             'shipping_methods_html' => $shippingHtml,
             'payment_methods_html' => $paymentHtml,
             'items_html' => $itemsHtml,
@@ -132,6 +135,23 @@ final class CheckoutStorefrontSsrService
             'quote_token' => trim((string)($data['quote_token'] ?? '')),
             'tax_estimate' => \is_array($data['tax_estimate'] ?? null) ? $data['tax_estimate'] : null,
         ]);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $items
+     */
+    private function cartItemsRequireShipping(array $items): bool
+    {
+        if ($items === []) {
+            return true;
+        }
+        foreach ($items as $item) {
+            if (\is_array($item) && (bool)($item['requires_shipping'] ?? true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -179,6 +199,32 @@ final class CheckoutStorefrontSsrService
         $paymentDelta = $this->defaultPaymentMoneyDelta($methods);
         $grand = max(0.0, $grand - $paymentDelta['incentive_major'] + $paymentDelta['cod_major']);
         $mode = $this->sellingMode();
+        $requiresShipping = $this->cartItemsRequireShipping($items);
+        $shippingMethods = [];
+        $shippingHtml = '';
+        if ($items !== [] && !$requiresShipping) {
+            $shippingMethods = [[
+                'code' => 'none',
+                'label' => (string)__('无需配送'),
+                'title' => (string)__('无需配送'),
+                'description' => (string)__('电子交付'),
+                'amount' => 0.0,
+                'fee' => 0.0,
+                'amount_minor' => 0,
+                'source' => 'virtual_only',
+                'is_free' => true,
+                'free_reason' => 'virtual_only',
+            ]];
+            $shippingHtml = $html->renderMethodOptions(
+                $shippingMethods,
+                'shipping_method',
+                $currency,
+                '',
+                true,
+                '',
+                '',
+            );
+        }
 
         return $this->applyMoneySummaryPolicy([
             'ready' => $items !== [] || $paymentHtml !== '',
@@ -191,9 +237,10 @@ final class CheckoutStorefrontSsrService
                 'grand_total' => $grand,
                 'currency' => $currency,
             ]),
-            'shipping_methods' => [],
+            'shipping_methods' => $shippingMethods,
             'payment_methods' => $methods,
-            'shipping_methods_html' => '',
+            'requires_shipping' => $requiresShipping,
+            'shipping_methods_html' => $shippingHtml,
             'payment_methods_html' => $paymentHtml,
             'items_html' => $itemsHtml,
             'goods_text' => $this->money($currency, $subtotal),
@@ -244,6 +291,7 @@ final class CheckoutStorefrontSsrService
             ],
             'shipping_methods' => [],
             'payment_methods' => [],
+            'requires_shipping' => true,
             'shipping_methods_html' => '',
             'payment_methods_html' => '',
             'items_html' => '',

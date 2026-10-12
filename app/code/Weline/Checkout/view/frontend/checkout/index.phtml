@@ -63,6 +63,7 @@ $ssrShippingMethods = \is_array($this->getData('checkout_ssr_shipping_methods'))
 $ssrPaymentMethods = \is_array($this->getData('checkout_ssr_payment_methods'))
     ? $this->getData('checkout_ssr_payment_methods')
     : [];
+$ssrRequiresShipping = (bool)($this->getData('checkout_ssr_requires_shipping') ?? true);
 $ssrBootStateJson = json_encode(
     [
         'currency' => $ssrCurrency,
@@ -72,6 +73,7 @@ $ssrBootStateJson = json_encode(
         // SSR 跳过 getData 时 renderTotals 仍须扣支付激励/COD/运费扁字段。
         'shipping_methods' => $ssrShippingMethods,
         'payment_methods' => $ssrPaymentMethods,
+        'requires_shipping' => $ssrRequiresShipping,
     ],
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 );
@@ -157,7 +159,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 </w:slot>
             </div>
 
-            <section class="weline-checkout__panel" weline-code="checkout.checkout.index.section_2">
+            <section class="weline-checkout__panel" data-checkout-address-panel weline-code="checkout.checkout.index.section_2"<?= !$ssrRequiresShipping ? ' hidden' : '' ?>>
                 <h2><?= __('收货信息') ?></h2>
                 <w:slot id="checkout-shipping-address"
                         name="<?= __('结账收货地址') ?>"
@@ -185,7 +187,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 </w:slot>
             </section>
 
-            <section class="weline-checkout__panel" weline-code="checkout.checkout.index.section_3">
+            <section class="weline-checkout__panel" data-checkout-shipping-panel weline-code="checkout.checkout.index.section_3"<?= !$ssrRequiresShipping ? ' hidden' : '' ?>>
                 <h2><?= __('配送方式') ?></h2>
                 <w:hook>Weline_Checkout::frontend::layouts::checkout::shipping-methods-before</w:hook>
                 <div class="weline-checkout__options" data-shipping-methods>
@@ -1427,6 +1429,8 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         shippingMethods: [],
         paymentMethods: [],
         taxEstimate: null,
+        // Align with Express: pure-digital carts do not gate Submit on shipping lanes.
+        requiresShipping: true,
         identity: {
             checkout_mode: 'guest',
             is_guest_checkout: true,
@@ -1512,7 +1516,42 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         if (Array.isArray(boot.payment_methods)) {
             checkoutState.paymentMethods = boot.payment_methods;
         }
+        if (typeof boot.requires_shipping === 'boolean') {
+            checkoutState.requiresShipping = boot.requires_shipping;
+        }
+        syncDigitalFulfillmentPanels();
         return true;
+    }
+
+    function cartRequiresShipping() {
+        return checkoutState.requiresShipping !== false;
+    }
+
+    function syncDigitalFulfillmentPanels() {
+        const needsShip = cartRequiresShipping();
+        const addressPanel = root.querySelector('[data-checkout-address-panel]');
+        const shippingPanel = root.querySelector('[data-checkout-shipping-panel]');
+        if (addressPanel) {
+            addressPanel.hidden = !needsShip;
+            // Hidden HTML5-required fields still fail form.reportValidity() — strip while digital.
+            addressPanel.querySelectorAll('input,select,textarea').forEach(function (el) {
+                if (!el || !el.setAttribute) {
+                    return;
+                }
+                if (!needsShip) {
+                    if (el.hasAttribute('required')) {
+                        el.setAttribute('data-digital-was-required', '1');
+                        el.removeAttribute('required');
+                    }
+                } else if (el.getAttribute('data-digital-was-required') === '1') {
+                    el.setAttribute('required', 'required');
+                    el.removeAttribute('data-digital-was-required');
+                }
+            });
+        }
+        if (shippingPanel) {
+            shippingPanel.hidden = !needsShip;
+        }
     }
 
     function mergeDiscountPreviewIntoCart(cart, preview, clearDiscount) {
@@ -3383,6 +3422,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             : applyPendingDiscountToCart(normalizeCartMoney(data.cart || {}));
         checkoutState.shippingMethods = Array.isArray(data.shipping_methods) ? data.shipping_methods : [];
         checkoutState.paymentMethods = Array.isArray(data.payment_methods) ? data.payment_methods : [];
+        checkoutState.requiresShipping = data.requires_shipping !== false;
         checkoutState.taxEstimate = isContinuePayMode()
             ? null
             : (data.tax_estimate && typeof data.tax_estimate === 'object'
@@ -3394,6 +3434,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             guest_allowed: true,
             requires_guest_email: true,
         };
+        syncDigitalFulfillmentPanels();
         const hangPurpose = (function () {
             try {
                 const params = new URLSearchParams(window.location.search || '');
@@ -3515,7 +3556,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 submitButton.disabled = hangPurpose
                     || cartIsEmpty
                     || checkoutBlocked
-                    || !checkoutState.shippingMethods.length
+                    || (cartRequiresShipping() && !checkoutState.shippingMethods.length)
                     || !checkoutState.paymentMethods.length;
             }
         }
@@ -3550,7 +3591,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         document.querySelectorAll('.weline-checkout__panel').forEach(function (panel) {
             panel.classList.remove('is-method-blocked');
         });
-        if (shippingBox) {
+        if (shippingBox && cartRequiresShipping()) {
             const shippingPanel = shippingBox.closest('.weline-checkout__panel');
             if (shippingPanel) {
                 shippingPanel.classList.toggle(
@@ -3571,7 +3612,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
 
     function readMethodBlockMessage() {
-        const shippingAlert = shippingBox
+        const shippingAlert = (shippingBox && cartRequiresShipping())
             ? shippingBox.querySelector('[data-checkout-method-empty="shipping_method"] .weline-checkout__method-alert-body')
             : null;
         if (shippingAlert && text(shippingAlert.textContent).trim()) {
@@ -3940,7 +3981,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         // Always run shipping validation for embargo (even express soft path).
         // Prior bug: validateShippingFields is async but was not awaited, so !Promise never blocked.
         if (!(await validateCheckoutShippingFields(address, {
-            skipRequired: !requireFormValidity,
+            skipRequired: !requireFormValidity || !cartRequiresShipping(),
         }))) {
             // 显式提示：此前此处静默 return，用户点支付后页面毫无反馈（自动化也会误判「已取消」）。
             // 校验器可能已写 embargo / 字段级提示，只在通知区为空时兜底，避免覆盖更具体的文案。
@@ -3950,7 +3991,8 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             focusFirstInvalidCheckoutField();
             return { cancelled: true, reason: 'shipping_fields' };
         }
-        if (requireFormValidity && !form.reportValidity()) {
+        // Pure-digital: address panel is hidden; do not let leftover required attrs block submit.
+        if (requireFormValidity && cartRequiresShipping() && !form.reportValidity()) {
             throw new Error(copy.required);
         }
 
@@ -4029,11 +4071,14 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 }
             }
         }
-        if (!shippingMethod || !paymentMethod) {
+        if (!shippingMethod && !cartRequiresShipping()) {
+            shippingMethod = 'none';
+        }
+        if ((!shippingMethod && cartRequiresShipping()) || !paymentMethod) {
             const zeroCash = window.WelineB2BCheckoutTob
                 && typeof window.WelineB2BCheckoutTob.cashDepositMinor === 'function'
                 && window.WelineB2BCheckoutTob.cashDepositMinor() === 0;
-            if (!(zeroCash && shippingMethod)) {
+            if (!(zeroCash && (shippingMethod || !cartRequiresShipping()))) {
                 throw new Error(copy.required);
             }
             // 资产结算（授信覆盖全额定金）不经过 Provider，空 payment_method 才是真实值。
@@ -4152,13 +4197,14 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                     setMessage(copy.required, 'error');
                     return;
                 }
-            } else if (!shippingMethod || (!paymentMethod && !zeroCashDeposit)) {
+            } else if ((cartRequiresShipping() && !shippingMethod) || (!paymentMethod && !zeroCashDeposit)) {
                 setMessage(copy.required, 'error');
                 return;
             }
             // Validate shipping/embargo BEFORE flipping the button to "submitting".
+            // Pure-digital: no address theatre (parity with Express requires_shipping=false).
             if (!(await validateCheckoutShippingFields(formAddress(), {
-                skipRequired: isContinuePayMode(),
+                skipRequired: isContinuePayMode() || !cartRequiresShipping(),
             }))) {
                 return;
             }

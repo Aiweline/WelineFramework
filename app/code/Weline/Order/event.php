@@ -57,6 +57,11 @@ return [
         'description' => \__('订单支付后触发，可用于处理支付后的相关操作。'),
         'doc' => 'order_paid.md',
     ],
+    'Weline_Order::order_mail_vars' => [
+        'name' => \__('订单邮件变量组装后'),
+        'description' => \__('OrderMailNotifier 发信前触发；观察者可增补 vars（如数字履约深链）。禁止改写网关/支付事实。'),
+        'doc' => 'order_mail_vars.md',
+    ],
     'Weline_Order::order_shipped' => [
         'name' => \__('订单发货后'),
         'description' => \__('订单发货后触发，可用于处理发货后的相关操作。'),

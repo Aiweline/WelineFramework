@@ -1038,24 +1038,44 @@ class CheckoutQueryProvider implements QueryProviderInterface
             $blockingMessage = (string)__('购物车中有不可结算的商品，请移除后重试');
         }
         $shippingAddress = $this->shippingAddressResolver->resolve($shippingAddress, $params);
+        // Pure-digital carts (all requires_shipping=false): Shipping listOptions returns []
+        // by design (no embargo theatre). Storefront still needs a selectable lane so
+        // Submit is not stuck on "No shipping options" — inject virtual_only / none.
+        $requiresShipping = $this->cartItemsRequireShipping($items);
         $shippingQuoted = $checkoutBlocked
-            ? ['methods' => [], 'quote_diagnostics' => []]
-            : $this->loadShippingMethods($shippingAddress, $items, $currency);
+            ? ['methods' => [], 'quote_diagnostics' => [], 'quote_lines' => []]
+            : (
+                $items !== [] && !$requiresShipping
+                    ? [
+                        'methods' => [$this->virtualOnlyShippingMethod($currency)],
+                        'quote_diagnostics' => [],
+                        'quote_lines' => $this->quoteLinesFromCartItems($items),
+                    ]
+                    : $this->loadShippingMethods($shippingAddress, $items, $currency)
+            );
         $shippingMethods = \is_array($shippingQuoted['methods'] ?? null) ? $shippingQuoted['methods'] : [];
         $quoteDiagnostics = \is_array($shippingQuoted['quote_diagnostics'] ?? null)
             ? $shippingQuoted['quote_diagnostics']
             : [];
-        $shippingEmpty = $checkoutBlocked
-            ? [
+        if ($checkoutBlocked) {
+            $shippingEmpty = [
                 'title' => (string)__('暂无法结账'),
                 'message' => $blockingMessage,
                 'reason_code' => 'checkout_blocked',
-            ]
-            : $this->shippingUnavailablePresenter()->present(
+            ];
+        } elseif ($items !== [] && !$requiresShipping) {
+            $shippingEmpty = [
+                'title' => '',
+                'message' => '',
+                'reason_code' => '',
+            ];
+        } else {
+            $shippingEmpty = $this->shippingUnavailablePresenter()->present(
                 $quoteDiagnostics,
                 \is_array($shippingQuoted['quote_lines'] ?? null) ? $shippingQuoted['quote_lines'] : [],
                 (string)($shippingAddress['country_code'] ?? $quoteDiagnostics['country_code'] ?? ''),
             );
+        }
         $shippingEmptyMessage = (string)($shippingEmpty['message'] ?? '');
         $shippingEmptyTitle = (string)($shippingEmpty['title'] ?? '');
         $shippingEmptyReason = (string)($shippingEmpty['reason_code'] ?? '');
@@ -1203,6 +1223,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'tax_amount' => (float)($cart['tax_amount'] ?? round(max(0, (int)($cart['tax_amount_minor'] ?? 0)) / 100, 2)),
             ],
             'items' => $items,
+            'requires_shipping' => $requiresShipping,
             'shipping_methods' => $shippingMethods,
             'shipping_quote_diagnostics' => $quoteDiagnostics,
             'shipping_unavailable' => $shippingEmpty,
@@ -1911,6 +1932,75 @@ class CheckoutQueryProvider implements QueryProviderInterface
         }
 
         return ['ok' => true];
+    }
+
+    /**
+     * Empty cart defaults to true (conservative); non-empty pure-digital → false.
+     *
+     * @param list<array<string, mixed>> $items
+     */
+    private function cartItemsRequireShipping(array $items): bool
+    {
+        if ($items === []) {
+            return true;
+        }
+        foreach ($items as $item) {
+            if (\is_array($item) && (bool)($item['requires_shipping'] ?? true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Storefront lane for virtual_only freeze (service_code=none; amount 0).
+     *
+     * @return array<string, mixed>
+     */
+    private function virtualOnlyShippingMethod(string $currency): array
+    {
+        $label = (string)__('无需配送');
+
+        return [
+            'code' => 'none',
+            'label' => $label,
+            'title' => $label,
+            'description' => (string)__('电子交付'),
+            'eta_label' => '',
+            'amount' => 0.0,
+            'fee' => 0.0,
+            'amount_minor' => 0,
+            'incoterm' => '',
+            'duty_notice' => '',
+            'source' => 'virtual_only',
+            'is_free' => true,
+            'free_reason' => 'virtual_only',
+            'currency' => $currency !== '' ? $currency : 'CNY',
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $cartItems
+     * @return list<array<string, mixed>>
+     */
+    private function quoteLinesFromCartItems(array $cartItems): array
+    {
+        $lines = [];
+        foreach ($cartItems as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $lines[] = [
+                'requires_shipping' => (bool)($item['requires_shipping'] ?? true),
+                'qty_minor' => max(1, (int)($item['qty_minor'] ?? $item['qty'] ?? 1)),
+                'weight_minor' => max(0, (int)($item['weight_minor'] ?? 0)),
+                'offer_id' => (int)($item['offer_id'] ?? 0),
+                'product_id' => (int)($item['product_id'] ?? $item['id'] ?? 0),
+            ];
+        }
+
+        return $lines;
     }
 
     /**

@@ -783,7 +783,7 @@ final class CheckoutGroupSubmitService
                     'tax_class_code' => $item['tax_class_code'] ?? 'standard',
                     'weight_minor' => max(0, (int) ($item['weight_minor'] ?? 0)),
                     'volume_minor' => max(0, (int) ($item['volume_minor'] ?? 0)),
-                ], $this->pricingChromeFromLine($item));
+                ], $this->pricingChromeFromLine($item), $this->catalogIdentityFromLine($item));
                 if ((bool)($item['requires_shipping'] ?? true)) {
                     $offerId = (int)($item['offer_id'] ?? 0);
                     if ($offerId <= 0 && $inventory !== null) {
@@ -1352,6 +1352,36 @@ final class CheckoutGroupSubmitService
     }
 
     /**
+     * Forward durable catalog identity into checkout buckets / OrderFacade lines.
+     * Without product_type + slug, digital fulfillers (travel_route) cannot rebuild deep links.
+     *
+     * @param array<string, mixed> $line
+     * @return array<string, mixed>
+     */
+    private function catalogIdentityFromLine(array $line): array
+    {
+        $out = [];
+        $productType = trim((string)($line['product_type'] ?? $line['type'] ?? ''));
+        if ($productType !== '') {
+            $out['product_type'] = $productType;
+        }
+        $slug = trim((string)($line['slug'] ?? ''));
+        if ($slug !== '') {
+            $out['slug'] = $slug;
+        }
+        $providerCode = trim((string)($line['provider_code'] ?? ''));
+        if ($providerCode !== '') {
+            $out['provider_code'] = $providerCode;
+        }
+        $meta = $line['fulfillment_metadata'] ?? null;
+        if (\is_array($meta) && $meta !== []) {
+            $out['fulfillment_metadata'] = $meta;
+        }
+
+        return $out;
+    }
+
+    /**
      * Dropship 可选 enrichment：listing.local_warehouse_id → preferred_warehouse_id。
      *
      * @param list<array<string, mixed>> $lines
@@ -1513,7 +1543,7 @@ final class CheckoutGroupSubmitService
                 'tax_class_code' => (string) ($line['tax_class_code'] ?? 'standard'),
                 'weight_minor' => max(0, (int) ($line['weight_minor'] ?? 0)),
                 'volume_minor' => max(0, (int) ($line['volume_minor'] ?? 0)),
-            ], $this->pricingChromeFromLine($line));
+            ], $this->pricingChromeFromLine($line), $this->catalogIdentityFromLine($line));
             $buckets[$split]['subtotal_minor'] += $row;
             if ($requires) {
                 $buckets[$split]['requires_shipping'] = true;

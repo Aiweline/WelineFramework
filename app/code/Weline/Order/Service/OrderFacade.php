@@ -1203,6 +1203,14 @@ final class OrderFacade implements OrderFacadeInterface
             if ($image !== '') {
                 $plannedItem['image'] = $image;
             }
+            $productType = trim((string)($line['product_type'] ?? $line['type'] ?? ''));
+            if ($productType !== '') {
+                $plannedItem['product_type'] = $productType;
+            }
+            $slug = trim((string)($line['slug'] ?? ''));
+            if ($slug !== '') {
+                $plannedItem['slug'] = $slug;
+            }
             $buckets[$split]['items'][] = $plannedItem;
             $buckets[$split]['subtotal_minor'] = $this->checkedAdd(
                 (int)$buckets[$split]['subtotal_minor'],

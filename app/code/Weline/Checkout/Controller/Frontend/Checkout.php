@@ -84,6 +84,10 @@ class Checkout extends FrontendController
             \is_array($payload['payment_methods'] ?? null) ? $payload['payment_methods'] : []
         );
         $this->assign(
+            'checkout_ssr_requires_shipping',
+            array_key_exists('requires_shipping', $payload) ? (bool)$payload['requires_shipping'] : true
+        );
+        $this->assign(
             'checkout_ssr_tax_estimate',
             \is_array($payload['tax_estimate'] ?? null) ? $payload['tax_estimate'] : null
         );
