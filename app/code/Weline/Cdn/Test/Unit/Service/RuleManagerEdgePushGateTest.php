@@ -71,7 +71,7 @@ final class RuleManagerEdgePushGateTest extends TestCase
     }
 
     /**
-     * A3：Free + pack 开 → plan 含 pack identity（≤3），无逐条 Demo description。
+     * A3：Free + pack 开 → plan 含 pack identity（≤3），无逐条源注解 description。
      * ObjectManager::getInstance 为静态，故以子类覆盖 getEnabledApiRuleModels 注入模型。
      */
     public function testPackOnFreePlanContainsPackIdentity(): void
@@ -81,16 +81,16 @@ final class RuleManagerEdgePushGateTest extends TestCase
             static fn(string $key) => match ($key) {
                 ApiRule::schema_fields_ENABLED => 1,
                 ApiRule::schema_fields_MODULE => 'Weline_Cdn',
-                ApiRule::schema_fields_CLASS => 'Weline\\Cdn\\Controller\\Api\\DemoTtl',
+                ApiRule::schema_fields_CLASS => 'Weline\\Cdn\\Controller\\Api\\FixtureSpecialTtl',
                 ApiRule::schema_fields_METHOD => 'index',
-                ApiRule::schema_fields_ROUTE => '/api/cdn/demo-ttl-api',
-                ApiRule::schema_fields_EXPRESSION => 'starts_with(http.request.uri.path, "/api/__weline_cdn_demo_ttl_api")',
-                ApiRule::schema_fields_DESCRIPTION => 'WELINE_DEMO_TTL_777_API',
+                ApiRule::schema_fields_ROUTE => '/api/__fixture_special_ttl_api',
+                ApiRule::schema_fields_EXPRESSION => 'starts_with(http.request.uri.path, "/api/__fixture_special_ttl_api")',
+                ApiRule::schema_fields_DESCRIPTION => 'FIXTURE_SPECIAL_TTL_API',
                 default => null,
             }
         );
         $apiRule->method('getActionArray')->willReturn([
-            'cache' => ['ttl' => 777, 'status_code' => [200], 'mode' => 'override_origin'],
+            'cache' => ['ttl' => 900, 'status_code' => [200], 'mode' => 'override_origin'],
         ]);
 
         $manager = $this->newManagerWithApiRules(packEnabled: true, apiRuleItems: [$apiRule]);
@@ -100,7 +100,7 @@ final class RuleManagerEdgePushGateTest extends TestCase
         $planned = $manager->planRulesForEdgePush($domain, null, true);
 
         $packIdentities = [];
-        $hasDemoDescription = false;
+        $hasSourceDescription = false;
         foreach ($planned as $rule) {
             if (!\is_array($rule)) {
                 continue;
@@ -109,17 +109,17 @@ final class RuleManagerEdgePushGateTest extends TestCase
             $desc = (string)($rule['description'] ?? '');
             if (\str_starts_with($identity, 'pack:')) {
                 $packIdentities[] = $identity;
-                self::assertStringContainsString('__weline_cdn_demo_ttl_api', (string)($rule['expression'] ?? ''));
+                self::assertStringContainsString('__fixture_special_ttl_api', (string)($rule['expression'] ?? ''));
                 self::assertStringStartsWith('Weline pack:', $desc);
             }
-            if (\str_contains($desc, 'WELINE_DEMO_TTL_777_API')) {
-                $hasDemoDescription = true;
+            if (\str_contains($desc, 'FIXTURE_SPECIAL_TTL_API')) {
+                $hasSourceDescription = true;
             }
         }
 
         self::assertNotEmpty($packIdentities, 'Free+pack plan must contain pack:{surface}:{ordinal}');
         self::assertLessThanOrEqual(3, \count($packIdentities));
-        self::assertFalse($hasDemoDescription, 'Free+pack plan must not keep per-rule demo descriptions');
+        self::assertFalse($hasSourceDescription, 'Free+pack plan must not keep per-rule source descriptions');
 
         $defaultCount = \count($manager->getDefaultRules());
         $tail = \array_slice($planned, -$defaultCount);

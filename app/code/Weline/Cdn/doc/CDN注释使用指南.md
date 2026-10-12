@@ -43,16 +43,16 @@ Cloudflare Free Cache Rules 约 **10** 条；模块 `default-rules.json` 已占�
 | 项 | 说明 |
 |----|------|
 | **开关** | SystemConfig `cdn/rules/pack_annotations`（bool，**默认 `1`**）；解析器 `AnnotationPackFlagResolver`；模板 `extends/.../cdn-rules-pack-annotations.phtml` |
-| **开（默认）** | 无论 Free/付费，注解侧走 **打包**（付费也不再默认细推，避免双语义）→ plan ≈ `fidelity(≤1) + packs(≤3，同面可拆) + overrides(预算内) + defaults` |
+| **开（默认）** | 无论 Free/付费，注解侧走 **例外打包** → plan ≈ `fidelity(≤1) + forbid packs + special-TTL packs + overrides + defaults` |
 | **关 + capacity≤10** | 闸门不允许注解 → plan **仅 defaults** |
 | **关 + capacity>10** | 细推：未打包 api 规则 + overrides（预算截断）+ defaults |
 | **闸门** | `annotationsAllowedOnEdge` = `(capacity > 10) OR packEnabled` |
-| **三面** | `api` / `backend` / `frontend`；同面可缓存路径 OR；TTL=同面中位数；identity=`pack:{surface}:{ordinal}` |
-| **保真车道（硬）** | BinQuery 等带 `POST` + `__wq_cache` / custom `cache_key` 的规则标 `lane=predicate_fidelity`；**禁止**进 path-OR pack。planned 压成 ≤1 条 `fidelity:binquery:0`（保留 method+marker+cache_key）。预算不够 → **安全缺席**，禁止降级为 `starts_with(/bin/query)` |
-| **永不缓存边缘硬拒绝** | 可缓存 pack 不得含交易/账户/搜索等前缀（`/checkout` `/cart` `/payment` `/search` `/admin`…，见 `AnnotationRulePacker::NEVER_CACHE_EDGE_PREFIXES`）；与源站 FPC 永不共享清单对齐。`/guide/*` 公开说明页放行 |
+| **心智（反转）** | **默认可缓存** = defaults `bypass_by_default` + 源站头/FPC HIT。注解只推两类例外：① `@Cdn cache=false` → `pack:forbid:{surface}` ② 显式特殊 TTL → `pack:ttl:{surface}` |
+| **保真车道（硬）** | BinQuery → `fidelity:binquery:0`（POST+marker；Free 边缘不加 custom cache_key）；**禁止**降级 path-OR |
+| **特殊 TTL 安全网** | `pack:ttl:*` 不得含交易/账户/搜索等前缀；这些面应走 **forbid** 或源站禁缓存，禁止 `override_origin` 强缓存 |
 | **生效** | 改开关后须再执行一次 CDN 规则推送才会写到 Cloudflare |
 
-Demo / 回归：`Test/Regression/DemoTtlAnnotationEdgePush.script.php`（无凭证 SKIP；有凭证 dry-run plan 可见 `pack:`）；保真契约 `BinQueryFidelityEdgePlanContractTest`。冻结验收条目见 `dev/team/cdn-annotation-pack/align-freeze.md` §8（A1–A10）与下文 §11。
+契约：`AnnotationRulePackerContractTest` / `RuleManagerEdgePushGateTest` / `BinQueryFidelityEdgePlanContractTest`（合成夹具验证 pack；无线上 Demo TTL 探针）。冻结验收条目见 `dev/team/cdn-annotation-pack/align-freeze.md` §8（A1–A10）与下文 §11。
 
 ---
 
@@ -62,13 +62,14 @@ Demo / 回归：`Test/Regression/DemoTtlAnnotationEdgePush.script.php`（无凭�
 
 | 对齐项 | CDN 约定 |
 |--------|----------|
-| **TTL 双轨** | 源站 FPC TTL 与边缘 `@Cdn`/pack **同量级**。Search：源站短 TTL（如 1h）时边缘保持 **`@Cdn cache=false`**（已声明），**禁止** pack 把 `/search` 抬到一年 |
-| **永不缓存面** | 结账/支付/HelpPay/账户/Compare 等：源站 Extra `enabled=false`；边缘 **不进可缓存 pack**（Packer 硬拒绝前缀） |
-| **BinQuery 保真** | `fidelity:binquery:*` 车道冻结；禁止压成 `starts_with(/bin/query)` |
-| **预热** | Sitemap→源站 FPC 归 Framework Orchestrator；**禁止**用 CDN WarmupUrl / `FpcExtraDeclaredUrls` 冒充全量桥 |
-| **改完再推** | FPC Extra / 注解变更后 → 重算 `planRulesForEdgePush` → 再 PUT Cloudflare |
+| **反转心智** | 源站 FPC 与边缘 CDN 同向：**默认可缓存，例外才声明**。边缘例外 = 禁止 + 特殊 TTL（+ BinQuery 保真） |
+| **Search** | `@Cdn cache=false` → 必须进 **forbid pack**（不能只靠 inventory）；禁止用特殊 TTL 把 `/search` 抬到一年 |
+| **交易/账户等** | 源站 Extra `enabled=false`；边缘用 forbid 或根本不写可缓存 `@Cdn`；`pack:ttl` 硬拒绝这些前缀 |
+| **BinQuery 保真** | `fidelity:` 冻结；禁止 `starts_with(/bin/query)` |
+| **预热** | Sitemap→源站 FPC 归 Framework；禁止 CDN Warmup 冒充 |
+| **改完再推** | 重算 plan → PUT Cloudflare |
 
-一句话：**源站 FPC 怎么定，边缘禁缓存/TTL 就跟；保真车道别动；预热别越界。**
+一句话：**默认可缓存靠 defaults+源站；推上去的是禁止与特殊 TTL；保真车道别动。**
 
 ---
 

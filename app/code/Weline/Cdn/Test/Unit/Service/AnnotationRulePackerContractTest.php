@@ -47,13 +47,13 @@ final class AnnotationRulePackerContractTest extends TestCase
 
         self::assertCount(1, $packs);
         $pack = $packs[0];
-        self::assertSame('pack:api:0', $pack['_weline_identity']);
+        self::assertSame('pack:ttl:api:0', $pack['_weline_identity']);
         self::assertStringContainsString('/api/a', (string)$pack['expression']);
         self::assertStringContainsString('/api/b', (string)$pack['expression']);
         self::assertStringContainsString(' or ', (string)$pack['expression']);
         self::assertSame(200, (int)$pack['action']['cache']['ttl']);
         self::assertSame('override_origin', $pack['action']['cache']['mode']);
-        self::assertStringStartsWith('Weline pack:api ttl=200 n=', (string)$pack['description']);
+        self::assertStringStartsWith('Weline pack:ttl:api ttl=200 n=', (string)$pack['description']);
     }
 
     public function testCacheableAdminPathRejectedFromPackExpression(): void
@@ -165,11 +165,54 @@ final class AnnotationRulePackerContractTest extends TestCase
         ], 5);
 
         self::assertCount(2, $packs);
-        self::assertSame('pack:api:0', $packs[0]['_weline_identity']);
-        self::assertSame('pack:api:1', $packs[1]['_weline_identity']);
+        self::assertSame('pack:ttl:api:0', $packs[0]['_weline_identity']);
+        self::assertSame('pack:ttl:api:1', $packs[1]['_weline_identity']);
     }
 
-    public function testCacheableSearchAndCheckoutRejectedFromPackExpression(): void
+    public function testSearchCacheFalseEmitsForbidPackNotSpecialTtl(): void
+    {
+        $packer = new AnnotationRulePacker();
+        $packs = $packer->pack([
+            [
+                'enabled' => true,
+                'module' => 'Weline_Search',
+                'class' => 'Weline\\Search\\Controller\\Frontend\\Index',
+                'method' => 'index',
+                'route' => '/search',
+                'expression' => 'starts_with(http.request.uri.path, "/search")',
+                'action' => ['cache' => false],
+            ],
+            [
+                'enabled' => true,
+                'module' => 'Weline_Cdn',
+                'class' => 'Weline\\Cdn\\Controller\\Api\\FixtureSpecialTtl',
+                'method' => 'getProbe',
+                'route' => '/__fixture_special_ttl_api',
+                'expression' => 'starts_with(http.request.uri.path, "/__fixture_special_ttl_api")',
+                'action' => ['cache' => ['ttl' => 900, 'status_code' => [200], 'mode' => 'override_origin']],
+            ],
+        ], 5);
+
+        $forbid = null;
+        $ttl = null;
+        foreach ($packs as $pack) {
+            $id = (string)($pack['_weline_identity'] ?? '');
+            if (\str_starts_with($id, 'pack:forbid:')) {
+                $forbid = $pack;
+            }
+            if (\str_starts_with($id, 'pack:ttl:')) {
+                $ttl = $pack;
+            }
+        }
+        self::assertNotNull($forbid);
+        self::assertSame(false, $forbid['action']['cache']);
+        self::assertStringContainsString('/search', (string)$forbid['expression']);
+        self::assertNotNull($ttl);
+        self::assertSame(900, (int)$ttl['action']['cache']['ttl']);
+        self::assertStringContainsString('/__fixture_special_ttl_api', (string)$ttl['expression']);
+    }
+
+    public function testCacheableSearchAndCheckoutRejectedFromSpecialTtlPack(): void
     {
         $packer = new AnnotationRulePacker();
         $packs = $packer->pack([
@@ -214,14 +257,20 @@ final class AnnotationRulePackerContractTest extends TestCase
         self::assertNotEmpty($packs);
         foreach ($packs as $pack) {
             $expr = \strtolower((string)($pack['expression'] ?? ''));
-            self::assertStringNotContainsString('/search', $expr);
-            self::assertStringNotContainsString('/checkout', $expr);
-            self::assertStringNotContainsString('/payment', $expr);
+            $id = (string)($pack['_weline_identity'] ?? '');
+            if (\str_starts_with($id, 'pack:ttl:')) {
+                self::assertStringNotContainsString('/search', $expr);
+                self::assertStringNotContainsString('/checkout', $expr);
+                self::assertStringNotContainsString('/payment', $expr);
+            }
         }
-        self::assertStringContainsString('/product', (string)$packs[0]['expression']);
-        $src = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/AnnotationRulePacker.php');
-        self::assertStringContainsString('NEVER_CACHE_EDGE_PREFIXES', $src);
-        self::assertStringContainsString('/search', $src);
+        $ttlExpr = '';
+        foreach ($packs as $pack) {
+            if (\str_starts_with((string)($pack['_weline_identity'] ?? ''), 'pack:ttl:')) {
+                $ttlExpr = (string)$pack['expression'];
+            }
+        }
+        self::assertStringContainsString('/product', $ttlExpr);
     }
 
     public function testGuidePaymentNotRejectedAsNeverCacheEdge(): void

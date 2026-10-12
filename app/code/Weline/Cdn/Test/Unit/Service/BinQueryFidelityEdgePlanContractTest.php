@@ -59,18 +59,18 @@ final class BinQueryFidelityEdgePlanContractTest extends TestCase
             [
                 'enabled' => true,
                 'module' => 'Weline_Cdn',
-                'class' => 'Weline\\Cdn\\Controller\\Api\\DemoTtl',
+                'class' => 'Weline\\Cdn\\Controller\\Api\\FixtureSpecialTtl',
                 'method' => 'index',
-                'route' => '/api/__weline_cdn_demo_ttl_api',
+                'route' => '/api/__fixture_special_ttl_api',
                 'lane' => CdnRuleLane::PATH_PACKABLE,
-                'expression' => 'starts_with(http.request.uri.path, "/api/__weline_cdn_demo_ttl_api")',
-                'action' => ['cache' => ['ttl' => 777, 'status_code' => [200], 'mode' => 'override_origin']],
+                'expression' => 'starts_with(http.request.uri.path, "/api/__fixture_special_ttl_api")',
+                'action' => ['cache' => ['ttl' => 900, 'status_code' => [200], 'mode' => 'override_origin']],
             ],
         ], 5);
 
         self::assertCount(1, $packs);
         $expr = (string)($packs[0]['expression'] ?? '');
-        self::assertStringContainsString('__weline_cdn_demo_ttl_api', $expr);
+        self::assertStringContainsString('__fixture_special_ttl_api', $expr);
         self::assertStringNotContainsString('/bin/query', $expr);
         self::assertStringNotContainsString('query-bin', $expr);
     }
@@ -136,20 +136,20 @@ final class BinQueryFidelityEdgePlanContractTest extends TestCase
                 ],
             ],
         ]);
-        $demo = $this->mockApiRule([
+        $specialTtl = $this->mockApiRule([
             ApiRule::schema_fields_ENABLED => 1,
             ApiRule::schema_fields_MODULE => 'Weline_Cdn',
-            ApiRule::schema_fields_CLASS => 'Weline\\Cdn\\Controller\\Api\\DemoTtl',
+            ApiRule::schema_fields_CLASS => 'Weline\\Cdn\\Controller\\Api\\FixtureSpecialTtl',
             ApiRule::schema_fields_METHOD => 'index',
-            ApiRule::schema_fields_ROUTE => '/api/__weline_cdn_demo_ttl_api',
+            ApiRule::schema_fields_ROUTE => '/api/__fixture_special_ttl_api',
             ApiRule::schema_fields_LANE => CdnRuleLane::PATH_PACKABLE,
-            ApiRule::schema_fields_EXPRESSION => 'starts_with(http.request.uri.path, "/api/__weline_cdn_demo_ttl_api")',
-            ApiRule::schema_fields_DESCRIPTION => 'WELINE_DEMO_TTL_777_API',
+            ApiRule::schema_fields_EXPRESSION => 'starts_with(http.request.uri.path, "/api/__fixture_special_ttl_api")',
+            ApiRule::schema_fields_DESCRIPTION => 'FIXTURE_SPECIAL_TTL_API',
         ], [
-            'cache' => ['ttl' => 777, 'status_code' => [200], 'mode' => 'override_origin'],
+            'cache' => ['ttl' => 900, 'status_code' => [200], 'mode' => 'override_origin'],
         ]);
 
-        $manager = $this->newManagerWithApiRules([$binQuery, $demo]);
+        $manager = $this->newManagerWithApiRules([$binQuery, $specialTtl]);
         $domain = $this->freeDomain();
         $planned = $manager->planRulesForEdgePush($domain, null, true);
 
@@ -182,7 +182,7 @@ final class BinQueryFidelityEdgePlanContractTest extends TestCase
         }
 
         self::assertNotEmpty($fidelityExprs, 'plan must include fidelity:binquery edge');
-        self::assertNotEmpty($packExprs, 'plan must still pack DemoTtl path annotation');
+        self::assertNotEmpty($packExprs, 'plan must still pack special-TTL path annotation');
     }
 
     /**

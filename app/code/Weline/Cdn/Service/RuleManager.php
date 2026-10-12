@@ -261,8 +261,9 @@ class RuleManager
      * - 本方法 = 边缘计划（pack 开：packs + overrides(预算) + defaults；pack 关且容量>10：细推；不允许：仅 defaults）。
      * - 库内展开 = {@see getMergedRules()}（未打包注解 + override + defaults），≠ 本方法结果。
      *
-     * 顺序（pack 开）：fidelity(≤1) → path packs → overrides → defaults（CF 先匹配先生效）。
+     * 顺序（pack 开）：fidelity(≤1) → forbid packs → special-TTL packs → overrides → defaults（CF 先匹配先生效）。
      * 保真车道禁止降级进 path-OR；预算不够则安全缺席保真命中。
+     * 心智反转：默认可缓存靠 defaults；注解只推禁止与特殊 TTL。
      *
      * @return list<array<string, mixed>>
      */

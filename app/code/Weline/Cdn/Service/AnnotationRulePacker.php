@@ -10,9 +10,11 @@ use Weline\Cdn\Model\ApiRule;
  * 将启用中的 ApiRule 按三面（api|backend|frontend）打包成少量 Cloudflare Cache Rules。
  *
  * 输入必须直接读模型 class/route/expression/action——禁止只吃 toCloudflareRule() 后再猜面。
- * 可缓存谓词命中永不缓存边缘前缀（admin/交易/账户/搜索等，对齐源站 FPC 永不共享清单）时硬拒绝。
- * predicate_fidelity（BinQuery POST+marker 等）禁止进入 path-OR pack。
- * 与源站 FPC：`@Cdn` 只管边缘；禁止用 pack override_origin 把 Search 等抬到一年。
+ * 边缘心智（与源站 FPC 同向反转）：
+ * - 默认可缓存靠 defaults `bypass_by_default` + 源站头 / FPC HIT；
+ * - 注解只打包两类例外：① cache:false 禁止包 ② 显式特殊 TTL 包。
+ * 特殊 TTL 包不得含永不缓存前缀；禁止包则专门承载 /search 等。
+ * predicate_fidelity（BinQuery）禁止进入 path-OR pack。
  */
 final class AnnotationRulePacker
 {
@@ -31,8 +33,8 @@ final class AnnotationRulePacker
     public const TTL_RATIO_SPLIT = 4.0;
 
     /**
-     * 可缓存 pack 禁止的路径前缀（对齐 FPC 永不共享 / 短 TTL 面的边缘安全网）。
-     * Search 源站可为 1h，边缘约定保持 @Cdn cache=false，禁止进可缓存 pack。
+     * 特殊 TTL（可缓存）pack 禁止的路径前缀。
+     * 这些面若需边缘例外，应走 @Cdn cache=false → 禁止包，而不是 override_origin。
      *
      * @var list<string>
      */
@@ -105,14 +107,20 @@ final class AnnotationRulePacker
             $bySurface[$surface][] = $normalized;
         }
 
-        $packs = [];
+        // 先禁止包、后特殊 TTL（CF 先匹配：禁优先于强制缓存）。
+        $forbidPacks = [];
+        $specialPacks = [];
         foreach ([self::SURFACE_API, self::SURFACE_BACKEND, self::SURFACE_FRONTEND] as $surface) {
-            foreach ($this->buildSurfacePacks($surface, $bySurface[$surface]) as $pack) {
-                $packs[] = $pack;
+            [$forbids, $specials] = $this->buildSurfacePacks($surface, $bySurface[$surface]);
+            foreach ($forbids as $pack) {
+                $forbidPacks[] = $pack;
+            }
+            foreach ($specials as $pack) {
+                $specialPacks[] = $pack;
             }
         }
 
-        return $this->applyBudgetCap($packs, $budget);
+        return $this->applyBudgetCap(\array_merge($forbidPacks, $specialPacks), $budget);
     }
 
     /**
@@ -205,36 +213,120 @@ final class AnnotationRulePacker
 
     /**
      * @param list<array{module:string,class:string,method:string,route:string,expression:string,action:array<string,mixed>,description:string}> $rules
-     * @return list<array<string, mixed>>
+     * @return array{0:list<array<string,mixed>>,1:list<array<string,mixed>>} [forbidPacks, specialTtlPacks]
      */
     private function buildSurfacePacks(string $surface, array $rules): array
+    {
+        if ($rules === []) {
+            return [[], []];
+        }
+
+        $specialTtl = [];
+        $forbid = [];
+        foreach ($rules as $rule) {
+            if ($this->isCacheFalse($rule['action'])) {
+                $forbid[] = $rule;
+            } else {
+                $specialTtl[] = $rule;
+            }
+        }
+
+        $forbidPacks = $this->buildForbidPacks($surface, $forbid);
+        $specialPacks = $this->buildSpecialTtlPacks($surface, $specialTtl);
+
+        return [$forbidPacks, $specialPacks];
+    }
+
+    /**
+     * @param list<array{module:string,class:string,method:string,route:string,expression:string,action:array<string,mixed>,description:string}> $rules
+     * @return list<array<string, mixed>>
+     */
+    private function buildForbidPacks(string $surface, array $rules): array
+    {
+        if ($rules === []) {
+            return [];
+        }
+        // 仅 admin/backend 且已被 defaults 旁路覆盖 → 省预算不发
+        if ($this->allCacheFalseCoveredByAdminDefaults($rules)) {
+            return [];
+        }
+
+        $pathList = [];
+        foreach ($rules as $rule) {
+            $paths = $this->extractPathPrefixes($rule['route'], $rule['expression']);
+            if ($paths === []) {
+                continue;
+            }
+            foreach ($paths as $path) {
+                // defaults 已禁 admin/backend：禁止包里可省略，省表达式
+                if ($this->isAdminOrBackendOnlyPath($path)) {
+                    continue;
+                }
+                $pathList[$path] = $path;
+            }
+        }
+        $pathList = \array_values($pathList);
+        if ($pathList === []) {
+            return [];
+        }
+
+        return $this->forbidPacksFromPaths($surface, $pathList, \count($rules), 0);
+    }
+
+    /**
+     * @param list<string> $paths
+     * @return list<array<string, mixed>>
+     */
+    private function forbidPacksFromPaths(string $surface, array $paths, int $sourceCount, int $ordinal): array
+    {
+        if ($paths === []) {
+            return [];
+        }
+        $expression = $this->buildOrExpression($paths);
+        if (\strlen($expression) <= self::MAX_EXPRESSION_LENGTH) {
+            return [[
+                'expression' => $expression,
+                'action' => ['cache' => false],
+                'description' => "Weline pack:forbid:{$surface} n={$sourceCount}",
+                'enabled' => true,
+                '_weline_identity' => "pack:forbid:{$surface}:{$ordinal}",
+            ]];
+        }
+        if (\count($paths) < 2) {
+            if (\function_exists('w_log_warning')) {
+                w_log_warning(
+                    'CDN AnnotationRulePacker: forbid expression exceeds max; surface=' . $surface,
+                    [],
+                    'cdn'
+                );
+            }
+
+            return [];
+        }
+        $mid = (int)\ceil(\count($paths) / 2);
+        $left = $this->forbidPacksFromPaths($surface, \array_slice($paths, 0, $mid), $sourceCount, $ordinal);
+        $right = $this->forbidPacksFromPaths(
+            $surface,
+            \array_slice($paths, $mid),
+            $sourceCount,
+            $ordinal + \count($left)
+        );
+
+        return \array_merge($left, $right);
+    }
+
+    /**
+     * @param list<array{module:string,class:string,method:string,route:string,expression:string,action:array<string,mixed>,description:string}> $rules
+     * @return list<array<string, mixed>>
+     */
+    private function buildSpecialTtlPacks(string $surface, array $rules): array
     {
         if ($rules === []) {
             return [];
         }
 
-        $cacheable = [];
-        $cacheFalseOnly = [];
-        foreach ($rules as $rule) {
-            if ($this->isCacheFalse($rule['action'])) {
-                $cacheFalseOnly[] = $rule;
-            } else {
-                $cacheable[] = $rule;
-            }
-        }
-
-        if ($cacheable === []) {
-            if ($cacheFalseOnly !== [] && $this->allCacheFalseCoveredByAdminDefaults($cacheFalseOnly)) {
-                // 仅 cache:false 且已被 defaults admin 旁路覆盖 → 不发该面（省预算）
-                return [];
-            }
-
-            // cache:false 不进可缓存包；无剩余可缓存谓词则不发
-            return [];
-        }
-
         $predicates = [];
-        foreach ($cacheable as $rule) {
+        foreach ($rules as $rule) {
             $paths = $this->extractPathPrefixes($rule['route'], $rule['expression']);
             $keptPaths = [];
             foreach ($paths as $path) {
@@ -246,7 +338,6 @@ final class AnnotationRulePacker
             }
 
             if ($keptPaths === []) {
-                // 无可安全路径：若原文仍点名永不缓存面则整条丢弃
                 if ($this->expressionMentionsNeverCacheSurface($rule['expression'], $rule['route'])) {
                     $this->logNeverCacheReject($rule, '(expression/route)');
                 }
@@ -281,6 +372,16 @@ final class AnnotationRulePacker
         }
 
         return $packs;
+    }
+
+    private function isAdminOrBackendOnlyPath(string $path): bool
+    {
+        $normalized = '/' . \ltrim(\strtolower(\trim($path)), '/');
+
+        return $normalized === '/admin'
+            || $normalized === '/backend'
+            || \str_starts_with($normalized, '/admin/')
+            || \str_starts_with($normalized, '/backend/');
     }
 
     /**
@@ -416,9 +517,9 @@ final class AnnotationRulePacker
                     'mode' => 'override_origin',
                 ],
             ],
-            'description' => "Weline pack:{$surface} ttl={$ttl} n={$sourceCount}",
+            'description' => "Weline pack:ttl:{$surface} ttl={$ttl} n={$sourceCount}",
             'enabled' => true,
-            '_weline_identity' => "pack:{$surface}:{$ordinal}",
+            '_weline_identity' => "pack:ttl:{$surface}:{$ordinal}",
         ];
     }
 
@@ -451,6 +552,12 @@ final class AnnotationRulePacker
 
         $priority = \array_flip(self::SURFACE_BUDGET_PRIORITY);
         \usort($packs, static function (array $a, array $b) use ($priority): int {
+            // 禁止包优先于特殊 TTL（kind: forbid=0, ttl=1）
+            $ka = self::kindRankFromIdentity((string)($a['_weline_identity'] ?? ''));
+            $kb = self::kindRankFromIdentity((string)($b['_weline_identity'] ?? ''));
+            if ($ka !== $kb) {
+                return $ka <=> $kb;
+            }
             $sa = self::surfaceFromIdentity((string)($a['_weline_identity'] ?? ''));
             $sb = self::surfaceFromIdentity((string)($b['_weline_identity'] ?? ''));
             $pa = $priority[$sa] ?? 99;
@@ -479,11 +586,21 @@ final class AnnotationRulePacker
         return \array_values($kept);
     }
 
+    private static function kindRankFromIdentity(string $identity): int
+    {
+        // pack:forbid:{surface}:{n} → 0；pack:ttl:{surface}:{n} → 1
+        $parts = \explode(':', $identity);
+        $kind = $parts[1] ?? '';
+
+        return $kind === 'forbid' ? 0 : 1;
+    }
+
     private static function surfaceFromIdentity(string $identity): string
     {
-        // pack:{surface}:{ordinal}
+        // pack:forbid|{ttl}:{surface}:{ordinal}
         $parts = \explode(':', $identity);
-        return $parts[1] ?? '';
+
+        return $parts[2] ?? ($parts[1] ?? '');
     }
 
     /**
@@ -506,14 +623,15 @@ final class AnnotationRulePacker
         foreach ($rules as $rule) {
             $paths = $this->extractPathPrefixes($rule['route'], $rule['expression']);
             if ($paths === []) {
-                // 无路径可判时，若表达式/路由点名永不缓存面则视为已覆盖；否则不算全覆盖
-                if (!$this->expressionMentionsNeverCacheSurface($rule['expression'], $rule['route'])) {
+                // 无路径可判：仅当明确点名 admin/backend 才视为已被 defaults 覆盖
+                $hay = $rule['route'] . "\n" . $rule['expression'];
+                if (\preg_match('#/admin(/|"|\s|$)|/backend(/|"|\s|$)#i', $hay) !== 1) {
                     return false;
                 }
                 continue;
             }
             foreach ($paths as $path) {
-                if (!$this->isNeverCacheEdgePath($path)) {
+                if (!$this->isAdminOrBackendOnlyPath($path)) {
                     return false;
                 }
             }

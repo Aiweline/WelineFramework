@@ -153,7 +153,10 @@ class CdnRuleCollector
     {
         $collected = [];
         $className = $reflection->getName();
-        
+        // 类级 @Cdn（如 Search/Compare cache=false）继承到无方法级注解的公开动作。
+        $classDoc = (string)($reflection->getDocComment() ?: '');
+        $classHasCdn = $classDoc !== '' && \preg_match('/@Cdn\s+/', $classDoc) === 1;
+
         foreach ($reflection->getMethods() as $method) {
             // 只处理public方法
             if (!$method->isPublic()) {
@@ -164,13 +167,22 @@ class CdnRuleCollector
             if (str_starts_with($method->getName(), '__')) {
                 continue;
             }
-            
-            $docComment = $method->getDocComment();
-            if (empty($docComment)) {
+
+            // 仅本类声明的动作，避免父类 FrontendController 公开方法被类级 @Cdn 污染
+            if ($method->getDeclaringClass()->getName() !== $className) {
                 continue;
             }
             
-            // 解析@Cdn标签
+            $methodDoc = (string)($method->getDocComment() ?: '');
+            $docComment = $methodDoc;
+            if ($docComment === '' || \preg_match('/@Cdn\s+/', $docComment) !== 1) {
+                if (!$classHasCdn) {
+                    continue;
+                }
+                $docComment = $classDoc;
+            }
+            
+            // 解析@Cdn标签（方法级优先；否则继承类级）
             $rule = $this->parseCdnTag($docComment, $reflection, $method, $module);
             if (!$rule) {
                 continue;
@@ -211,11 +223,63 @@ class CdnRuleCollector
         // 解析配置参数
         $config = $this->parseCdnConfig($configString);
         
-        // 生成路由
-        $route = $this->generateRoute($reflection, $method, $module);
+        // 公开路径优先：@Cdn route= → 同类 @Extra public_path_patterns → generateRoute
+        $route = $this->resolvePublicRoute($config, $reflection, $method, $module);
         
         // 转换为Cloudflare标准格式
         return $this->convertToCloudflareFormat($config, $route);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function resolvePublicRoute(
+        array $config,
+        ReflectionClass $reflection,
+        ReflectionMethod $method,
+        array $module
+    ): string {
+        $explicit = \trim((string)($config['route'] ?? ''));
+        if ($explicit !== '') {
+            return $explicit[0] === '/' ? $explicit : '/' . $explicit;
+        }
+
+        $extraPaths = $this->extractExtraPublicPathPatterns($reflection);
+        if ($extraPaths !== []) {
+            $primary = $extraPaths[0];
+            $primary = \preg_replace('#/\*\*$#', '', $primary) ?? $primary;
+            $primary = \rtrim($primary, '/');
+            if ($primary === '') {
+                $primary = '/';
+            }
+
+            return $primary[0] === '/' ? $primary : '/' . $primary;
+        }
+
+        return $this->generateRoute($reflection, $method, $module);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractExtraPublicPathPatterns(ReflectionClass $reflection): array
+    {
+        $doc = (string)($reflection->getDocComment() ?: '');
+        if ($doc === '' || !\preg_match('/@Extra\b[^\n]*public_path_patterns\s*=\s*([^\s]+)/', $doc, $m)) {
+            return [];
+        }
+        $raw = \trim($m[1]);
+        $parts = \preg_split('/\s*,\s*/', $raw) ?: [];
+        $out = [];
+        foreach ($parts as $part) {
+            $part = \trim($part);
+            if ($part === '') {
+                continue;
+            }
+            $out[] = $part[0] === '/' ? $part : '/' . $part;
+        }
+
+        return $out;
     }
 
     /**
@@ -252,6 +316,14 @@ class CdnRuleCollector
         // 解析 description 参数
         if (preg_match('/description\s*=\s*"([^"]+)"/', $configString, $matches)) {
             $config['description'] = $matches[1];
+        }
+
+        // 显式公开路径（店面真实 URL；优先于 generateRoute / Extra patterns）
+        if (preg_match('/route\s*=\s*"([^"]+)"/', $configString, $matches)
+            || preg_match('/route\s*=\s*\'([^\']+)\'/', $configString, $matches)
+            || preg_match('/route\s*=\s*([^\s]+)/', $configString, $matches)
+        ) {
+            $config['route'] = \trim($matches[1]);
         }
         
         // 解析完整表达式（高级用法；优先单引号，避免路径内双引号被截断）
