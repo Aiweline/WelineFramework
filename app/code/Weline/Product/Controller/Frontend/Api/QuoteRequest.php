@@ -10,6 +10,7 @@ use Weline\Product\Api\ProductQuoteRequestSubmitInterface;
 
 /**
  * Storefront JSON endpoint for Product-owned quote_only submissions.
+ * @Extra type=fpc enabled=false
  */
 final class QuoteRequest extends FrontendController
 {

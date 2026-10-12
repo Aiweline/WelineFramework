@@ -24,6 +24,7 @@ use Weline\Payment\Service\PaymentShellCallbackUrlCatalog;
  * 支付统一回调入口：
  * - browser-return-entry：浏览器 OAuth / Provider 回跳（公网路径 callback/{method_code}）
  * - notify：服务端 Webhook Inbox（MOD-P2F-003）
+ * @Extra type=fpc enabled=false
  */
 class Callback extends FrontendController
 {

@@ -7,7 +7,8 @@ namespace Weline\Compare\Controller\Frontend;
 use Weline\Framework\App\Controller\FrontendController;
 
 /**
- * @Cdn cache=false description="商品对比页不边缘缓存"
+ * @Cdn cache=false route=/compare description="商品对比页不边缘缓存"
+ * @Extra type=fpc enabled=false public_path_patterns=/compare,/compare/**
  */
 final class Index extends FrontendController
 {

@@ -24,6 +24,7 @@ use Weline\Framework\App\Controller\FrontendController;
  * - 支持文本、图片、音频、视频等多媒体聊天
  * - 通过可恢复后台任务提供流式响应
  * - 聊天历史记录
+ * @Extra type=fpc enabled=false
  */
 class Chat extends FrontendController
 {

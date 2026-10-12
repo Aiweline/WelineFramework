@@ -10,6 +10,9 @@ use Weline\Product\Api\ProductDownloadEntitlementException;
 use Weline\Product\Api\ProductDownloadEntitlementInterface;
 use Weline\Product\Service\ProductCurrentCustomerResolver;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 final class Download extends FrontendController
 {
     public function __construct(

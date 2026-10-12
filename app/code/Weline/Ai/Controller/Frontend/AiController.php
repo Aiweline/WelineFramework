@@ -13,6 +13,7 @@ use Weline\Framework\App\Env;
 /**
  * 前端AI服务控制器
  * 处理前端用户的AI调用请求
+ * @Extra type=fpc enabled=false
  */
 class AiController extends FrontendController
 {

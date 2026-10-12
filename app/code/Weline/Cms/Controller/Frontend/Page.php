@@ -14,6 +14,9 @@ use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\Layout\LayoutStatus;
 use Weline\Theme\Api\Preview\PreviewContext;
 
+/**
+ * @Extra type=fpc ttl=31536000 namespaces=website/default/cms public_path_patterns=/cms/frontend/page,/cms/frontend/page/**
+ */
 class Page extends FrontendController
 {
     protected ?string $layoutType = CmsPage::LAYOUT_TYPE;

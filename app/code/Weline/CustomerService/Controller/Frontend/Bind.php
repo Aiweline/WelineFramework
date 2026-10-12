@@ -18,6 +18,7 @@ use Weline\Framework\Cache\SharedResponseCachePolicy;
 
 /**
  * 邮件绑定控制器
+ * @Extra type=fpc enabled=false
  */
 class Bind extends FrontendController
 {

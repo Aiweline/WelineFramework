@@ -13,6 +13,7 @@ use Weline\Framework\Runtime\RequestContext;
 
 /**
  * 个人中心控制器
+ * @Extra type=fpc enabled=false
  */
 class Index extends \Weline\Framework\App\Controller\FrontendController
 {

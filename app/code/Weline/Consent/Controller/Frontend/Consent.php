@@ -12,6 +12,7 @@ use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Consent accept / withdraw API（前台；浏览器应走 Weline.Api / bin-query，本控制器供 Query 或 http:request 验证）。
+ * @Extra type=fpc enabled=false
  */
 class Consent extends FrontendController
 {

@@ -14,6 +14,7 @@ use Weline\Framework\Manager\ObjectManager;
  * HARD: keep Theme Partials header/footer chrome (theme_seat_integrity).
  * First paint SSR: items / shipping / payment / money summary via CheckoutStorefrontSsrService.
  * Async getData only after shopper changes address / methods / cart.
+ * @Extra type=fpc enabled=false
  */
 class Index extends FrontendController
 {

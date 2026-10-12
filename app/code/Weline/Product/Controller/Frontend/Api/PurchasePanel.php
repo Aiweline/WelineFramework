@@ -11,6 +11,7 @@ use Weline\Product\Service\PurchasePanelService;
 /**
  * Thin REST shell for listing quick-add panel.
  * Storefront browsers must use BinQuery {@code product.getPurchasePanel} via Weline.Api.
+ * @Extra type=fpc enabled=false
  */
 class PurchasePanel extends FrontendController
 {

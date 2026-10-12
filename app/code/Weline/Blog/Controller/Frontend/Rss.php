@@ -14,6 +14,9 @@ use Weline\Framework\Xml\RssFeedWriter;
 use Weline\Theme\Helper\WidgetI18n;
 
 /** Reader RSS: /blog/rss.xml and /blog/category/{slug}/rss.xml */
+/**
+ * @Extra type=fpc ttl=3600 namespaces=global/storefront/blog public_path_patterns=/blog/rss.xml,/blog/rss,/blog/rss/**
+ */
 final class Rss extends FrontendController
 {
     private const LIMIT = 50;

@@ -8,6 +8,7 @@ use Weline\Framework\App\Controller\FrontendController;
 
 /**
  * theme:font 验收页：默认模块 / 显式模块 / chars 字符子集。
+ * @Extra type=fpc enabled=false
  */
 class Font extends FrontendController
 {

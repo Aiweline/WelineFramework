@@ -23,6 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 前端聊天控制器
+ * @Extra type=fpc enabled=false
  */
 class Chat extends FrontendController
 {

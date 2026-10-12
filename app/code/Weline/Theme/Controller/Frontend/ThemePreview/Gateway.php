@@ -17,6 +17,7 @@ use Weline\Theme\Service\ThemePreviewGenerator;
  *
  * URL: /theme/frontend/theme-preview/gateway?preview_theme=…
  * 退出预览: /theme/frontend/theme-preview/gateway?exit=1
+ * @Extra type=fpc enabled=false
  */
 class Gateway extends FrontendController
 {

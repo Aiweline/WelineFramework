@@ -19,6 +19,7 @@ use Weline\Multipass\Service\MultipassService;
 /**
  * 前端 Multipass 登录控制器
  * 处理来自第三方站点的 Multipass token 登录
+ * @Extra type=fpc enabled=false
  */
 class Multipass extends FrontendController
 {

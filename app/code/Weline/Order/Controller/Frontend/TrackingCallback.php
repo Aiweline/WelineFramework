@@ -10,6 +10,7 @@ use Weline\Order\Service\Tracking\OrderTrackingFeedbackReceiver;
 
 /**
  * 统一物流反馈入口（对齐 payment/frontend/callback/notify）。
+ * @Extra type=fpc enabled=false
  */
 class TrackingCallback extends FrontendController
 {

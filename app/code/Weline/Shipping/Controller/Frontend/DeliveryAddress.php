@@ -21,6 +21,7 @@ use Weline\Shipping\Service\DeliveryAddressService;
  * 配送地址前端API控制器
  * 
  * 提供配送地址的CRUD操作和session管理
+ * @Extra type=fpc enabled=false
  */
 class DeliveryAddress extends FrontendRestController
 {

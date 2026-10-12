@@ -12,6 +12,7 @@ use Weline\Order\Api\OrderFacadeInterface;
 
 /**
  * Storefront checkout success page at /checkout/success.
+ * @Extra type=fpc enabled=false
  */
 class Success extends FrontendController
 {

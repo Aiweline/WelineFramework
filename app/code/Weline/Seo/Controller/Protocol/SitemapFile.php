@@ -8,6 +8,9 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\Response;
 use Weline\Seo\Service\Protocol\SitemapProtocolRenderer;
 
+/**
+ * @Extra type=fpc ttl=3600 namespaces=website/default/seo public_path_patterns=/seo/protocol/sitemap-file,/seo/protocol/sitemap-file/**
+ */
 class SitemapFile extends FrontendController
 {
     public function __construct(

@@ -10,6 +10,7 @@ use Weline\Payment\Service\PaymentBrowserHandoffReadinessService;
 
 /**
  * Payment L2 handoff at /payment/handoff (+ /payment/handoff/status).
+ * @Extra type=fpc enabled=false
  */
 class Handoff extends FrontendController
 {

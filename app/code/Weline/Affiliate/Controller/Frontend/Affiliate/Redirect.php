@@ -7,6 +7,9 @@ namespace Weline\Affiliate\Controller\Frontend\Affiliate;
 use Weline\Affiliate\Service\AffiliateService;
 use Weline\Framework\App\Controller\FrontendController;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Redirect extends FrontendController
 {
     public function __construct(

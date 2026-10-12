@@ -23,6 +23,7 @@ use Weline\Framework\Manager\Message;
  * - 用户API密钥管理
  * - 使用统计查看
  * - 个人设置
+ * @Extra type=fpc enabled=false
  */
 class Center extends FrontendController
 {

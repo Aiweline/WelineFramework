@@ -9,6 +9,9 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Mail\Service\MailComposerService;
 use Weline\Mail\Service\MailCustomerAccountService;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 final class Composer extends FrontendController
 {
     public function thread(): string

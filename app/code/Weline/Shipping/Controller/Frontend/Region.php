@@ -7,6 +7,9 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Service\RegionService;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Region extends FrontendController
 {
     private RegionService $regionService;

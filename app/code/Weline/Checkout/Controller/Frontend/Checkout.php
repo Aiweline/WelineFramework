@@ -23,6 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
  *
  * The normal layout lifecycle selects captured body/chrome sources and wraps once.
  * First paint SSR: items / shipping / payment / money summary.
+ * @Extra type=fpc enabled=false
  */
 class Checkout extends FrontendController
 {

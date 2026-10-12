@@ -9,6 +9,9 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Mail\Service\MailCustomerAccountService;
 use Weline\Mail\Service\MailFrontendRegisterService;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 final class Register extends FrontendController
 {
     public function postApply(): string

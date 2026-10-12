@@ -11,6 +11,7 @@ use Weline\Order\Service\Tracking\OrderTrackingFeedbackReceiver;
 
 /**
  * 开发环境物流反馈中继（精简版，对齐 Payment DevRelay 思路）。
+ * @Extra type=fpc enabled=false
  */
 class DevRelay extends FrontendController
 {

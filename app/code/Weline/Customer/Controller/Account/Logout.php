@@ -11,6 +11,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 用户登出控制器
+ * @Extra type=fpc enabled=false
  */
 class Logout extends \Weline\Framework\App\Controller\FrontendController
 {

@@ -14,6 +14,9 @@ use Weline\Payment\Api\PaymentLinkServiceInterface;
 use Weline\Payment\Service\PaymentLinkService;
 use Weline\Theme\Model\ThemeLayout;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 final class Payer extends FrontendController
 {
     public function index(): string

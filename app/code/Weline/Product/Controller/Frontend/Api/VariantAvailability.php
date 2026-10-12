@@ -10,6 +10,7 @@ use Weline\Product\Service\StorefrontVariantAvailabilityService;
 
 /**
  * Live variant stock/sellability for CDN-cached product detail pages.
+ * @Extra type=fpc enabled=false
  */
 class VariantAvailability extends FrontendController
 {

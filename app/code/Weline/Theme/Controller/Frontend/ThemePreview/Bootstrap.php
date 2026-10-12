@@ -16,6 +16,7 @@ use Weline\Theme\Service\PreviewTokenService;
  * no longer writes HttpOnly cookies.
  *
  * URL: /theme/frontend/theme-preview/bootstrap?weline_preview_token=…
+ * @Extra type=fpc enabled=false
  */
 class Bootstrap extends FrontendController
 {

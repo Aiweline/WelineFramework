@@ -14,6 +14,7 @@ use Weline\Theme\Helper\WidgetI18n;
  *
  * Lines hydrate via QueryBin in the browser. The normal layout lifecycle selects
  * captured PHTML sources before the body renders, then wraps it once with chrome.
+ * @Extra type=fpc enabled=false
  */
 class Index extends FrontendController
 {

@@ -8,6 +8,7 @@ use Weline\Framework\App\Controller\FrontendController;
 
 /**
  * 前台资源/字体标签验收（复用已注册路由 theme/frontend/test/assets-test）。
+ * @Extra type=fpc enabled=false
  */
 class AssetsTest extends FrontendController
 {

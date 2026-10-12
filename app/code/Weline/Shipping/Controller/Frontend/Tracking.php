@@ -19,6 +19,7 @@ use Weline\Shipping\Service\TrackingService;
  * 前端物流跟踪查询API
  * 
  * @package Weline_Shipping
+ * @Extra type=fpc enabled=false
  */
 class Tracking extends FrontendController
 {

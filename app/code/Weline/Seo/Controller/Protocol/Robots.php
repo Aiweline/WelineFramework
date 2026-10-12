@@ -8,6 +8,9 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\Response;
 use Weline\Seo\Service\Protocol\RobotsTxtRenderer;
 
+/**
+ * @Extra type=fpc ttl=3600 namespaces=website/default/seo public_path_patterns=/robots.txt,/seo/protocol/robots
+ */
 class Robots extends FrontendController
 {
     public function __construct(

@@ -23,6 +23,7 @@ use Weline\Shipping\Model\Region;
  * 配送信息前端API控制器
  * 
  * 根据配送区域返回配送信息和价格规则
+ * @Extra type=fpc enabled=false
  */
 class ShippingInfo extends FrontendRestController
 {

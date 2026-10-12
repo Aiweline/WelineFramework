@@ -8,6 +8,9 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
+/**
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/catalog public_path_patterns=/best-sellers,/best-sellers/**
+ */
 final class BestSellers extends FrontendController
 {
     public function __construct(

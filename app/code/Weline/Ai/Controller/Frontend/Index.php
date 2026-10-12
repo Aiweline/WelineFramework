@@ -24,6 +24,7 @@ use Weline\Framework\App\Controller\FrontendController;
  * - 显示可用的AI模型列表
  * - 显示场景适配器说明
  * - 提供API使用指南
+ * @Extra type=fpc ttl=31536000 namespaces=website/default/theme public_path_patterns=/ai,/ai/frontend,/ai/frontend/index/**
  */
 class Index extends FrontendController
 {

@@ -12,6 +12,9 @@ use Weline\Multipass\Service\AccountFacadeResolver;
 use Weline\Multipass\Service\IdentityClientService;
 use Weline\Multipass\Service\IdentityBridgeService;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Identity extends FrontendController
 {
     protected ?string $layoutType = 'account.auth';

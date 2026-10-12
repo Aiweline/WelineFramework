@@ -18,6 +18,7 @@ use Weline\Shipping\Service\ShippingAddressService;
 
 /**
  * 发货地址前端控制器
+ * @Extra type=fpc enabled=false
  */
 class ShippingAddress extends FrontendController
 {

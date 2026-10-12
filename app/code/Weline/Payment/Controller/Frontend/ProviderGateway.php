@@ -10,6 +10,7 @@ use Weline\Payment\Service\PaymentProviderControllerDispatcher;
 
 /**
  * Thin shell dispatch for Provider controller* extension routes.
+ * @Extra type=fpc enabled=false
  */
 final class ProviderGateway extends FrontendController
 {

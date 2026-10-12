@@ -10,6 +10,9 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Marketing\Model\Campaign\Campaign;
 
 /** Storefront marketing campaigns hub: /marketing/campaign */
+/**
+ * @Extra type=fpc ttl=3600 namespaces=website/default/marketing public_path_patterns=/marketing/**,/campaigns,/campaigns/**
+ */
 final class Campaigns extends FrontendController
 {
     public function index(): string

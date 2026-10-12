@@ -19,6 +19,7 @@ use Weline\Framework\View\Template;
 
 /**
  * Public storefront sign-in for core customer accounts.
+ * @Extra type=fpc enabled=false
  */
 class Login extends \Weline\Framework\App\Controller\FrontendController
 {

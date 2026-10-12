@@ -15,6 +15,7 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * Unified webhook: dropship/frontend/callback/notify?endpoint_code={provider}.{env}.default
  * 生产开启支付 DevRelay「允许生产中转」后，会桥接到本机静默 worker 重放。
+ * @Extra type=fpc enabled=false
  */
 class Callback extends FrontendController
 {

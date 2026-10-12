@@ -15,6 +15,9 @@ namespace Weline\I18n\Controller\Frontend\Word;
 use Weline\Framework\App\Env;
 use Weline\I18n\Model\Dictionary;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Collect extends \Weline\Framework\App\Controller\FrontendController
 {
     /**

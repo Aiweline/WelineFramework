@@ -10,6 +10,9 @@ use Weline\Social\Service\SocialCreativeService;
 use Weline\Social\Service\SocialPublishService;
 use Weline\Social\Service\SocialWebsiteAccountService;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Social extends FrontendController
 {
     public function __construct(

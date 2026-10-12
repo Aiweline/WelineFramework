@@ -8,6 +8,9 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Mail\Service\MailCustomerAccountService;
 use Weline\Mail\Service\MailFakeMailboxService;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Mail extends FrontendController
 {
     public function postApply(): string

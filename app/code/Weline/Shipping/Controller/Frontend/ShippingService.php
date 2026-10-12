@@ -19,6 +19,7 @@ use Weline\Shipping\Service\ShippingServiceManager;
  * 前端配送服务查询API
  * 
  * @package Weline_Shipping
+ * @Extra type=fpc enabled=false
  */
 class ShippingService extends FrontendController
 {

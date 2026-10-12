@@ -15,6 +15,9 @@ use Weline\Framework\Controller\PcController;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Shared\Client\SharedStateClient;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class FiberConcurrencyProbe extends PcController
 {
     /**

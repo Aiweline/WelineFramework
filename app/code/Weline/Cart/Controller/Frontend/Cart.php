@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Controller\Frontend;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Cart extends \Weline\Cart\Controller\Index
 {
     public function index(): string

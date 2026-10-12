@@ -17,6 +17,9 @@ use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Service\TaglibLocalFormService;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Local extends \Weline\Framework\App\Controller\FrontendController
 {
     public function get()

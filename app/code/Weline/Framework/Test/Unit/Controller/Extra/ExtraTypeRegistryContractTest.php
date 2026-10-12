@@ -26,6 +26,10 @@ final class ExtraTypeRegistryContractTest extends TestCase
         self::assertSame(600, $normalized['ttl']);
         self::assertSame(['website/default/catalog'], $normalized['namespaces']);
         self::assertSame(['/catalog/product/*'], $normalized['public_path_patterns']);
+
+        $defaults = $type->normalize(['type' => 'fpc']);
+        self::assertTrue($defaults['enabled']);
+        self::assertSame(31536000, $defaults['ttl']);
     }
 
     public function testExtraTypeProviderInterfacePrefix(): void

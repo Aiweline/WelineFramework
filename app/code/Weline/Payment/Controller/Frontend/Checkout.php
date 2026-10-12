@@ -17,6 +17,9 @@ use Weline\Payment\Service\PaymentService;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Checkout extends FrontendController
 {
     private PaymentService $paymentService;

@@ -14,6 +14,9 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Connector extends FrontendController
 {
     public function __init(): void

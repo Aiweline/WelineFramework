@@ -5,6 +5,9 @@ namespace Weline\Index\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
 
+/**
+ * @Extra type=fpc ttl=31536000 namespaces=website/default/theme public_path_patterns=/
+ */
 class Index extends FrontendController
 {
     public function index(): string

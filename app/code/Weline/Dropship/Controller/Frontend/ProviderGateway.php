@@ -11,6 +11,7 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * Thin shell dispatch for Provider controller* extension routes.
  * URL: dropship/frontend/provider-gateway/dispatch?provider_code={code}&action={kebab}
+ * @Extra type=fpc enabled=false
  */
 final class ProviderGateway extends FrontendController
 {

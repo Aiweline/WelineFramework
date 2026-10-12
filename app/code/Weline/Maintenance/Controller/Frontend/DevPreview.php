@@ -15,6 +15,7 @@ use Weline\Maintenance\Service\MaintenanceStaticGenerator;
  *
  * URL: /maintenance/frontend/dev-preview
  * JSON: /maintenance/frontend/dev-preview?api=1&lang=en_US
+ * @Extra type=fpc enabled=false
  */
 class DevPreview extends FrontendController
 {

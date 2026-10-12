@@ -11,6 +11,9 @@ use Weline\Framework\Session\SessionFactory;
 use Weline\Shipping\Service\AddressFormatter;
 use Weline\Shipping\Service\DeliveryAddressService;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Delivery extends FrontendController
 {
     protected ?string $layoutType = 'account.dashboard';

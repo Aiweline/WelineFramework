@@ -25,6 +25,7 @@ use Weline\Framework\Ui\FormKey;
  * Web 安装器控制器
  * 
  * @DESC 提供 Web 界面的系统安装功能，包括环境检测、数据库配置、系统初始化
+ * @Extra type=fpc enabled=false
  */
 class Install extends FrontendController
 {

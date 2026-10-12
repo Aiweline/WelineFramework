@@ -24,6 +24,7 @@ use Weline\Payment\Service\WebhookEndpointDirectory;
 
 /**
  * 公网可达 Dev Relay：pair（Bearer 用户 Token）+ stream/event/ack（relay token）+ inbound。
+ * @Extra type=fpc enabled=false
  */
 final class DevRelay extends FrontendController
 {

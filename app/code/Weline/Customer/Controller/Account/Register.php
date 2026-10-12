@@ -13,6 +13,7 @@ use Weline\Framework\View\Template;
 
 /**
  * Public storefront registration for core customer accounts.
+ * @Extra type=fpc enabled=false
  */
 class Register extends \Weline\Framework\App\Controller\FrontendController
 {

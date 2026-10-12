@@ -30,6 +30,7 @@ use Weline\Widget\Api\Param\ParamFormRendererInterface;
  * reuses Backend ThemeEditor::postPublishAndExit after installing a request-scoped actor.
  *
  * URL: POST /theme/frontend/theme-preview/publish-and-exit
+ * @Extra type=fpc enabled=false
  */
 class PublishAndExit extends FrontendController
 {

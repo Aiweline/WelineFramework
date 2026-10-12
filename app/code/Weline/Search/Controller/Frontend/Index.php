@@ -13,6 +13,7 @@ use Weline\Search\Service\SearchProviderRegistry;
 /**
  * @Cdn cache=false description="万能搜索结果页不边缘缓存"
  * @Attack rate_limit=60/1m challenge=managed description="搜索页同IP限流"
+ * @Extra type=fpc ttl=3600 namespaces=website/default/search public_path_patterns=/search,/search/**
  */
 final class Index extends FrontendController
 {

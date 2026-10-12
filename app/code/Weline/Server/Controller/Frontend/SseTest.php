@@ -22,6 +22,7 @@ use Weline\Framework\Runtime\SchedulerSystem;
  * 测试路由：
  * - GET /server/sse-test/stream - 测试 SSE 流式输出
  * - GET /server/sse-test/index - SSE 测试页面
+ * @Extra type=fpc enabled=false
  */
 class SseTest extends PcController
 {

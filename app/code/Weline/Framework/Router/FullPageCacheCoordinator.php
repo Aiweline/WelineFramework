@@ -2791,15 +2791,51 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'delivery',
             'tax',
             'rma',
-            // Search results vary by q/type/category_id; never share one FPC body.
-            'search',
+            // Never-cache operable / private / token / webhook / tool surfaces (default-allow model).
+            // Search is NOT listed: it uses @Extra ttl=3600 with query variants.
+            'compare',
+            'payment',
+            'newsletter',
+            'affiliate',
+            'consent',
+            'captcha',
+            'customerservice',
+            'multipass',
+            'installer',
+            'weline_installer',
+            'maintenance',
+            'elfinder',
+            'mail',
+            'weline_mail',
+            'deploy',
+            'dropship',
+            'order',
+            'orders',
+            'visitor',
+            'agent',
+            'benchmark',
+            'datatable',
+            'theme-config',
+            'shipping',
+            'theme',
+            'i18n',
+            'server',
+            'weline_social',
+            'weline_consent',
+            'weline_captcha',
+            'weline_helppay',
+            'h',
+            's',
+            'q',
         ]);
         if ($firstSegment !== '' && \in_array($firstSegment, $blockedPrefixes, true)) {
             return true;
         }
 
         return \str_contains($path, '/workspace-preview')
-            || \str_contains($path, '/developer-workspace/');
+            || \str_contains($path, '/developer-workspace/')
+            || \str_contains($path, '/theme-preview/')
+            || \str_contains($path, '/social/smoke');
     }
 
     private function stripLocaleAndCurrencyPrefixes(string $path): string
@@ -4447,8 +4483,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             }
             $path = $policyPath ?? $this->policyPath($fullUri);
             $resolver = ObjectManager::getInstance(\Weline\Framework\Controller\Extra\ExtraPolicyResolver::class);
+            // Default-allow storefront HTML: one year unless @Extra type=fpc declares otherwise.
             $resolved = $resolver->resolveFpcForPath($path, $identity)
-                ?? ['enabled' => true, 'ttl' => 3600, 'policy_fingerprint' => 'not-applicable'];
+                ?? ['enabled' => true, 'ttl' => 31536000, 'policy_fingerprint' => 'not-applicable'];
             FpcDiag::event('fpc_policy', [
                 'fingerprint' => $resolved['policy_fingerprint'] ?? 'unknown',
                 'ttl' => $resolved['ttl'] ?? null,

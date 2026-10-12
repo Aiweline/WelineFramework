@@ -6,6 +6,9 @@ namespace Weline\Affiliate\Controller\Frontend\Affiliate;
 
 use Weline\Framework\App\Controller\FrontendController;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 class Index extends FrontendController
 {
     private const LOGIN_ROUTE = 'customer/account/login';

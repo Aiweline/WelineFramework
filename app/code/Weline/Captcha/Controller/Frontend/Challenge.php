@@ -14,6 +14,7 @@ use Weline\Framework\Manager\ObjectManager;
  * LocalImageCaptcha on every page (PASSWORD_DEFAULT alone is ~100–400ms).
  *
  * Route: weline_captcha/frontend/challenge (GET).
+ * @Extra type=fpc enabled=false
  */
 class Challenge extends FrontendController
 {

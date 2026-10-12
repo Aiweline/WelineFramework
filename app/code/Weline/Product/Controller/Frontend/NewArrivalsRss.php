@@ -13,6 +13,9 @@ use Weline\Product\Service\StorefrontCatalogSurfaceResolver;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 
 /** Reader RSS for new arrivals: /new-arrivals/rss.xml */
+/**
+ * @Extra type=fpc ttl=3600 namespaces=website/default/catalog public_path_patterns=/new-arrivals/rss.xml
+ */
 final class NewArrivalsRss extends FrontendController
 {
     public function __construct(

@@ -16,6 +16,7 @@ use Weline\Framework\App\Controller\FrontendController;
 
 /**
  * 前端订单控制器
+ * @Extra type=fpc enabled=false
  */
 class Order extends FrontendController
 {

@@ -7,6 +7,9 @@ namespace Weline\Promotion\Controller;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Promotion\Service\PromotionStorefrontPageService;
 
+/**
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/marketing public_path_patterns=/promotion,/promotion/**,/deals,/sale
+ */
 class Index extends FrontendController
 {
     protected ?string $layoutType = 'promotion.default';

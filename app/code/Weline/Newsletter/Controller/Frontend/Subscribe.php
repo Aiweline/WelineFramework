@@ -12,6 +12,7 @@ use Weline\Newsletter\Service\SubscribeService;
 /**
  * Progressive-enhancement shell for newsletter/subscribe.
  * Zero business logic — delegates to SubscribeService.
+ * @Extra type=fpc enabled=false
  */
 class Subscribe extends FrontendController
 {

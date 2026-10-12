@@ -10,6 +10,9 @@ use Weline\Payment\Api\PaymentLinkServiceInterface;
 use Weline\Payment\Service\PaymentLinkService;
 use Weline\Theme\Model\ThemeLayout;
 
+/**
+ * @Extra type=fpc enabled=false
+ */
 final class QuickPay extends FrontendController
 {
     public function index(): string

@@ -20,6 +20,7 @@ use Weline\Maintenance\Service\WaitGiftService;
  * - POST /maintenance/frontend/wait-gift/abandon
  * - POST /maintenance/frontend/wait-gift/redeem
  * - GET  /maintenance/frontend/wait-gift/wave
+ * @Extra type=fpc enabled=false
  */
 class WaitGift extends FrontendController
 {
