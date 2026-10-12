@@ -11,7 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["blog"]}
- * @widget.placement {layout}
+ * @widget.placement {injection}
  * @widget.supports {["layout-blog-reviews","blog-reviews","review","reviews"]}
  * @widget.source {Weline_Review::css/widgets/product-reviews.css}
  *
@@ -23,7 +23,7 @@
  * @param form_position {default="right",type="select",label="表单位置（左右布局）",options={"right":"表单在右","left":"表单在左"}}
  * @param form_collapsed {default="1",type="select",label="表单默认折叠",options={"1":"点击写评论后展开","0":"始终显示表单"}}
  *
- * @widget.default_injections {[]}
+ * @widget.default_injections {[{"layout_type":"blog","layout_option":"default","slot":"blog-reviews","area":"content","sort_order":10,"required":true,"reason":"博客详情评论槽空置；跨模块/design 重写布局只走拥有模块 JSON 注入，禁止 Theme/design 布局内嵌","config":[]}]}
  */
 
 use Weline\Framework\Env\WelineEnv;

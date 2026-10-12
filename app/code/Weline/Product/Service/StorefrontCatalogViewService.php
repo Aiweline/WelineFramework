@@ -85,8 +85,9 @@ final class StorefrontCatalogViewService
     public function publishedListingCandidates(int $limit = 1000, bool $includeListingDetails = false): array
     {
         $limit = max(1, min(self::MAX_CATALOG_PRODUCTS, $limit));
+        // Bound SQL cold path: never listAll() the whole website catalog into memory.
         $rows = $this->applyPostCacheOfferFilters(
-            $this->rememberPublishedOffers($includeListingDetails, false),
+            $this->rememberPublishedOffers($includeListingDetails, false, $limit),
         );
 
         return array_slice($rows, 0, $limit);
@@ -577,9 +578,14 @@ final class StorefrontCatalogViewService
         return is_array($result) ? $result : [];
     }
 
-    /** @return list<array<string, mixed>> */
-    private function rememberPublishedOffers(bool $includeListingDetails = true, bool $includeMedia = true): array
-    {
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function rememberPublishedOffers(
+        bool $includeListingDetails = true,
+        bool $includeMedia = true,
+        ?int $maxRows = null,
+    ): array {
         // A listing renders the full catalog before its recommendation slot.
         // Reuse that immutable request result for summary cards instead of
         // rebuilding the same 220-product snapshot under the summary policy.
@@ -598,10 +604,14 @@ final class StorefrontCatalogViewService
 
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
+        $boundMax = $maxRows === null
+            ? null
+            : max(1, min(self::MAX_CATALOG_PRODUCTS, $maxRows));
         // summary-card3: slug-from-SKU fallback + card-only payload (no description/meta/EAV facet fat).
         $logicalKey = $this->catalogCache->catalogOffersLogicalKey(
             $websiteId,
-            ($includeMedia ? '' : 'candidates-') . ($includeListingDetails ? 'full' : 'summary-card3'),
+            ($includeMedia ? '' : 'candidates-') . ($includeListingDetails ? 'full' : 'summary-card3')
+                . ($boundMax === null ? '' : '-max' . $boundMax),
         );
         $requestKey = serialize([
             $websiteId,
@@ -611,7 +621,8 @@ final class StorefrontCatalogViewService
             trim((string)RequestContext::getWelineUserLang()),
             $includeListingDetails,
             $includeMedia,
-            'offers-v1',
+            $boundMax,
+            'offers-v2-bounded',
         ]);
 
         /** @var list<array<string, mixed>> $rows */
@@ -631,12 +642,13 @@ final class StorefrontCatalogViewService
                             [],
                             true,
                             $includeListingDetails,
+                            $boundMax,
                             includeMedia: $includeMedia,
                         ),
-                        ['website_id' => $websiteId],
+                        ['website_id' => $websiteId, 'max_rows' => $boundMax],
                     ),
                 ),
-                ['website_id' => $websiteId],
+                ['website_id' => $websiteId, 'max_rows' => $boundMax],
             ),
         );
 

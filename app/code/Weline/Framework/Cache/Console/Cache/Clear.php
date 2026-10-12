@@ -11,6 +11,7 @@ namespace Weline\Framework\Cache\Console\Cache;
 
 use Weline\Framework\Cache\Scanner;
 use Weline\Framework\Cache\Service\CacheWarmerRegistry;
+use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupOrchestrator;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
@@ -157,15 +158,20 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         try {
             $registry = $this->cacheWarmerRegistry
                 ??= ObjectManager::getInstance(CacheWarmerRegistry::class);
-            // Owning modules register via provides cache.warmer.* (no Theme FQCN soft-pull).
-            $fpc = $registry->warmUp('fpc');
-            $fpcWarmed = (int)($fpc['warmed'] ?? 0);
+            // Framework Orchestrator owns storefront HTML FPC path warm (A→B→C→D ledger).
+            // Clear stays Framework-only (no Theme warmer FQCN soft-pull).
+            /** @var StorefrontWarmupOrchestrator $orchestrator */
+            $orchestrator = ObjectManager::getInstance(StorefrontWarmupOrchestrator::class);
+            $fpcSlice = $orchestrator->runAfterClear();
+            $fpcWarmed = (int)($fpcSlice['warmed'] ?? 0);
             if ($fpcWarmed > 0) {
                 $this->printing->successIcon(__('店面 FPC 已预热 %{1} 条路径', [$fpcWarmed]));
             } else {
                 $this->printing->warning(__('店面 FPC 预热未命中可暖路径（WLS 未就绪或主机不可达）'));
             }
-            $poolNotes[] = 'fpc:warmed=' . $fpcWarmed;
+            $poolNotes[] = 'fpc:warmed=' . $fpcWarmed
+                . ':phase=' . (string)($fpcSlice['phase'] ?? '')
+                . ':reason=' . (string)($fpcSlice['reason'] ?? '');
 
             // Website pool: store/channel catalog HotCache (soft-clear cold hit1 tax).
             $website = $registry->warmUp('website');

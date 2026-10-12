@@ -60,6 +60,8 @@ final class ModuleCodeSwitchService
                     'target_path' => $entry['target_path'],
                     'old_path' => $entry['old_path'],
                 ];
+                // rename() 换 inode 后同进程 require 仍可能命中旧 opcache（UC-MR-1 断言假阴性根因）。
+                $this->invalidatePhpOpcacheTree($entry['target_path']);
             }
             return $switched;
         } catch (\Throwable $e) {
@@ -97,6 +99,7 @@ final class ModuleCodeSwitchService
                 throw new \RuntimeException(__('无法恢复模块 %{1} 的原代码', $entry['module_name']));
             }
             $this->recursiveDelete($failed);
+            $this->invalidatePhpOpcacheTree($target);
         }
     }
 
@@ -468,5 +471,26 @@ PHP;
             @unlink($item->getPathname());
         }
         @rmdir($resolved);
+    }
+
+    /**
+     * Invalidate opcache for PHP files under a switched module tree so the
+     * current worker process cannot assert stale etc/module.php after rename().
+     */
+    private function invalidatePhpOpcacheTree(string $directory): void
+    {
+        clearstatcache(true);
+        if (!is_dir($directory) || !\function_exists('opcache_invalidate')) {
+            return;
+        }
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || !str_ends_with(strtolower($file->getFilename()), '.php')) {
+                continue;
+            }
+            @opcache_invalidate($file->getPathname(), true);
+        }
     }
 }

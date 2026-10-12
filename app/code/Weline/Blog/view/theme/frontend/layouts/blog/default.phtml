@@ -428,7 +428,7 @@ $this->assign('meta', $meta);
                                     wrapper="div"
                                     class="blog-layout__reviews-slot">
                                 <w:hook>Weline_Theme::frontend::layouts::blog::reviews-slot-content</w:hook>
-                                <w:widget type="comment" name="blog-reviews" />
+                                <!-- placement=injection XOR：空槽；blog-reviews 由本模块 default_injections 写入（design 重写布局同源） -->
                             </w:slot>
                             <w:hook>Weline_Theme::frontend::layouts::blog::reviews-after</w:hook>
                         </div>

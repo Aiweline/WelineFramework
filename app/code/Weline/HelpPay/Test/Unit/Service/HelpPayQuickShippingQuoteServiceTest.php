@@ -6,10 +6,44 @@ namespace Weline\HelpPay\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Checkout\Service\CheckoutQuoteLineWeightResolver;
+use Weline\HelpPay\Service\HelpPayOfferShippingResolver;
 use Weline\HelpPay\Service\HelpPayQuickShippingQuoteService;
 
 final class HelpPayQuickShippingQuoteServiceTest extends TestCase
 {
+    public function testBuildQuoteLinesResolvesRequiresShippingFromOfferLookup(): void
+    {
+        $svc = HelpPayQuickShippingQuoteService::forTesting(
+            CheckoutQuoteLineWeightResolver::forTesting(static fn (): int => 0),
+            [],
+            [],
+            HelpPayOfferShippingResolver::forTesting(static fn (int $productId, int $_websiteId): ?bool => $productId === 9001 ? false : true),
+        );
+        $lines = $svc->buildQuoteLines([
+            'product_id' => 9001,
+            'qty' => 1,
+            'goods_amount_minor' => 1299,
+        ]);
+        self::assertFalse((bool) ($lines[0]['requires_shipping'] ?? true));
+        self::assertSame(9001, (int) ($lines[0]['product_id'] ?? 0));
+    }
+
+    public function testBuildQuoteLinesDefaultsPhysicalWhenOfferUnknown(): void
+    {
+        $svc = HelpPayQuickShippingQuoteService::forTesting(
+            CheckoutQuoteLineWeightResolver::forTesting(static fn (): int => 0),
+            [],
+            [],
+            HelpPayOfferShippingResolver::forTesting(static fn (): ?bool => null),
+        );
+        $lines = $svc->buildQuoteLines([
+            'product_id' => 42,
+            'qty' => 1,
+            'goods_amount_minor' => 1000,
+        ]);
+        self::assertTrue((bool) ($lines[0]['requires_shipping'] ?? false));
+    }
+
     public function testMissingWeightHidesOptions(): void
     {
         $svc = HelpPayQuickShippingQuoteService::forTesting(

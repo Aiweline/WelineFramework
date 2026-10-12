@@ -70,3 +70,98 @@
     visibility: hidden !important;
   }
 }
+/*
+ * UI 07：Share & earn quiet 链
+ * 1) Affiliate 内联 .affiliate-share-guest[hidden]{display:none!important} 是 unlayered
+ * 2) 关闭态 <details> UA 会藏非 summary 子节点 —— 须强制 open 内容可见
+ */
+html body.daocharms-pdp .product-native-detail details.affiliate-share-disclosure {
+    display: block !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+html body.daocharms-pdp .product-native-detail details.affiliate-share-disclosure > summary.affiliate-share-summary {
+    display: none !important;
+}
+/* 关闭态 details 仍露出 body（quiet 链不靠用户展开） */
+html body.daocharms-pdp .product-native-detail details.affiliate-share-disclosure > .affiliate-share-disclosure-body,
+html body.daocharms-pdp .product-native-detail details.affiliate-share-disclosure:not([open]) > .affiliate-share-disclosure-body {
+    display: block !important;
+    visibility: visible !important;
+    content-visibility: visible !important;
+}
+
+html body.daocharms-pdp .product-native-detail .affiliate-share-disclosure-body,
+html body.daocharms-pdp .product-native-detail .affiliate-share-guest,
+html body.daocharms-pdp .product-native-detail .affiliate-share-guest[hidden] {
+    display: inline !important;
+    visibility: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    height: auto !important;
+    max-height: none !important;
+    width: auto !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+}
+
+/* buybox 改为 grid 后，Share 占列 2；此处压过模块 inline style / UA */
+html body.daocharms-pdp .product-native-detail__buybox {
+    display: grid !important;
+    grid-template-columns: max-content max-content minmax(0, 1fr) !important;
+    align-items: baseline !important;
+    row-gap: 0.75rem !important;
+    column-gap: 0 !important;
+}
+
+/* contents 下 Ask 包装器不是 buybox 元素树直系子 → 必须挂 actions > */
+html body.daocharms-pdp .product-native-detail__buybox > *,
+html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper {
+    grid-column: 1 / -1;
+}
+
+html body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__express,
+html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.w-helppay-cta):not(:has([class*="friend_help_pay"])):not(:has([data-testid="product-help-pay"])) {
+    display: none !important;
+}
+
+html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([data-testid="product-help-pay"]),
+html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([class*="friend_help_pay"]) {
+    grid-column: 1 !important;
+    width: max-content !important;
+    justify-self: start !important;
+}
+
+html body.daocharms-pdp .product-native-detail .affiliate-share-panel,
+html body.daocharms-pdp .product-native-detail [data-testid="affiliate-share-panel"],
+html body.daocharms-pdp .product-native-detail__buybox > .affiliate-share-panel {
+    display: inline-flex !important;
+    align-items: baseline !important;
+    visibility: visible !important;
+    height: auto !important;
+    width: max-content !important;
+    max-width: none !important;
+    overflow: visible !important;
+    vertical-align: baseline !important;
+    grid-column: 2 !important;
+    justify-self: start !important;
+    margin-inline-start: 0.85rem !important;
+    border-inline-start: 1px solid var(--color-border-subtle, #e5e2df) !important;
+    padding-inline-start: 0.85rem !important;
+}
+
+html body.daocharms-pdp .product-native-detail .affiliate-share-apply-cta {
+    display: inline-flex !important;
+    visibility: visible !important;
+    height: auto !important;
+    width: auto !important;
+    min-height: 1.1em !important;
+    min-width: 0 !important;
+}
+
+/* bump 1791808120 */
+
+/* bump 1791804340 */
+/* force-hash 1791804515808687000 */

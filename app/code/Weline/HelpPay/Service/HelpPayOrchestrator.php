@@ -18,6 +18,7 @@ final class HelpPayOrchestrator
         private readonly PaymentLinkServiceInterface $links,
         private readonly ShippingRedactionService $redaction = new ShippingRedactionService(),
         private readonly ?HelpPayQuickShippingQuoteService $quickShipping = null,
+        private readonly ?HelpPayOfferShippingResolver $offerShipping = null,
     ) {
     }
 
@@ -178,6 +179,22 @@ final class HelpPayOrchestrator
      */
     public function listQuickShippingOptions(array $input): array
     {
+        if (!$this->offerShipping()->resolveRequiresShipping($input)) {
+            $currency = trim((string) ($input['currency_code'] ?? $input['currency'] ?? 'CNY'));
+            if ($currency === '') {
+                $currency = 'CNY';
+            }
+
+            return [
+                'options' => [$this->virtualOnlyShippingOption($currency)],
+                'quote_diagnostics' => [
+                    'virtual_only' => true,
+                    'free_reason' => 'virtual_only',
+                ],
+                'missing_weight' => false,
+                'requires_shipping' => false,
+            ];
+        }
         $shipping = is_array($input['shipping_address'] ?? null) ? $input['shipping_address'] : [];
         if ($shipping === [] && is_array($input['address'] ?? null)) {
             $shipping = $input['address'];
@@ -192,13 +209,14 @@ final class HelpPayOrchestrator
             'options' => $quoted['options'],
             'quote_diagnostics' => $quoted['quote_diagnostics'],
             'missing_weight' => !empty($quoted['missing_weight']),
+            'requires_shipping' => true,
         ];
     }
 
     public function createQuickPay(array $input): array
     {
         $shipping = is_array($input['shipping_address'] ?? null) ? $input['shipping_address'] : [];
-        $this->redaction->assertCompleteShipping($shipping);
+        $requiresShipping = $this->offerShipping()->resolveRequiresShipping($input);
 
         $serviceCode = trim((string) ($input['service_code'] ?? $shipping['service_code'] ?? ''));
         $serviceLabel = trim((string) ($input['service_label'] ?? $shipping['service_label'] ?? $shipping['label'] ?? ''));
@@ -213,48 +231,85 @@ final class HelpPayOrchestrator
             $goodsMinor = max(0, $amountMinor - $shippingMinor);
         }
 
-        // Align with checkout: when shipping is selected, re-quote with real weight (no client invent).
-        if ($serviceCode !== '' || $shippingMinor > 0) {
-            $productId = max(0, (int) ($input['product_id'] ?? $shipping['product_id'] ?? 0));
-            if ($productId <= 0 && is_array($input['line_summary'] ?? null)) {
-                foreach ($input['line_summary'] as $row) {
-                    if (!is_array($row)) {
-                        continue;
-                    }
-                    $productId = max(0, (int) ($row['product_id'] ?? $row['id'] ?? 0));
-                    if ($productId > 0) {
-                        break;
+        if (!$requiresShipping) {
+            // Pure-digital: align Checkout virtual_only / none — no address theatre, no weight quote.
+            $serviceCode = 'none';
+            if ($serviceLabel === '') {
+                $serviceLabel = $this->virtualOnlyShippingLabel();
+            }
+            $shippingMinor = 0;
+            $amountMinor = $goodsMinor > 0 ? $goodsMinor : $amountMinor;
+            $snapshot = [
+                'service_code' => $serviceCode,
+                'service_label' => $serviceLabel,
+                'label' => $serviceLabel,
+                'shipping_amount_minor' => 0,
+                'source' => 'virtual_only',
+                'free_reason' => 'virtual_only',
+                'requires_shipping' => false,
+            ];
+        } else {
+            $this->redaction->assertCompleteShipping($shipping);
+
+            // Align with checkout: when shipping is selected, re-quote with real weight (no client invent).
+            if ($serviceCode !== '' || $shippingMinor > 0) {
+                $productId = max(0, (int) ($input['product_id'] ?? $shipping['product_id'] ?? 0));
+                if ($productId <= 0 && is_array($input['line_summary'] ?? null)) {
+                    foreach ($input['line_summary'] as $row) {
+                        if (!is_array($row)) {
+                            continue;
+                        }
+                        $productId = max(0, (int) ($row['product_id'] ?? $row['id'] ?? 0));
+                        if ($productId > 0) {
+                            break;
+                        }
                     }
                 }
+                if ($productId <= 0) {
+                    throw new \InvalidArgumentException('helppay_product_required');
+                }
+                $this->quickShipping()->assertSelectedShipping(
+                    [
+                        'product_id' => $productId,
+                        'qty' => max(1, (int) ($input['qty'] ?? $input['qty_minor'] ?? 1)),
+                        'goods_amount_minor' => $goodsMinor,
+                        'currency_code' => (string) ($input['currency_code'] ?? 'USD'),
+                        'shipping_address' => $shipping,
+                        'address' => $shipping,
+                        'line_summary' => $input['line_summary'] ?? [],
+                        'requires_shipping' => true,
+                    ],
+                    $serviceCode,
+                    $shippingMinor,
+                );
             }
-            if ($productId <= 0) {
-                throw new \InvalidArgumentException('helppay_product_required');
+
+            $snapshot = $shipping;
+            if ($serviceCode !== '') {
+                $snapshot['service_code'] = $serviceCode;
             }
-            $this->quickShipping()->assertSelectedShipping(
-                [
-                    'product_id' => $productId,
-                    'qty' => max(1, (int) ($input['qty'] ?? $input['qty_minor'] ?? 1)),
-                    'goods_amount_minor' => $goodsMinor,
-                    'currency_code' => (string) ($input['currency_code'] ?? 'USD'),
-                    'shipping_address' => $shipping,
-                    'address' => $shipping,
-                    'line_summary' => $input['line_summary'] ?? [],
-                ],
-                $serviceCode,
-                $shippingMinor,
-            );
+            if ($serviceLabel !== '') {
+                $snapshot['service_label'] = $serviceLabel;
+                $snapshot['label'] = $serviceLabel;
+            }
+            if ($shippingMinor > 0 || array_key_exists('shipping_amount_minor', $input) || array_key_exists('shipping_amount_minor', $shipping)) {
+                $snapshot['shipping_amount_minor'] = $shippingMinor;
+            }
+            $snapshot['requires_shipping'] = true;
         }
 
-        $snapshot = $shipping;
-        if ($serviceCode !== '') {
-            $snapshot['service_code'] = $serviceCode;
-        }
-        if ($serviceLabel !== '') {
-            $snapshot['service_label'] = $serviceLabel;
-            $snapshot['label'] = $serviceLabel;
-        }
-        if ($shippingMinor > 0 || array_key_exists('shipping_amount_minor', $input) || array_key_exists('shipping_amount_minor', $shipping)) {
-            $snapshot['shipping_amount_minor'] = $shippingMinor;
+        $lineSummary = is_array($input['line_summary'] ?? null) ? $input['line_summary'] : [];
+        if ($lineSummary === [] && !$requiresShipping) {
+            $productId = max(0, (int) ($input['product_id'] ?? 0));
+            if ($productId > 0) {
+                $qty = max(1, (int) ($input['qty'] ?? $input['qty_minor'] ?? 1));
+                $lineSummary = [[
+                    'product_id' => $productId,
+                    'qty' => $qty,
+                    'row_total_minor' => $goodsMinor,
+                    'requires_shipping' => false,
+                ]];
+            }
         }
 
         $created = $this->links->create([
@@ -274,7 +329,8 @@ final class HelpPayOrchestrator
                 'service_label' => $serviceLabel,
                 'goods_amount_minor' => $goodsMinor,
                 'shipping_amount_minor' => $shippingMinor,
-                'line_summary' => $input['line_summary'] ?? [],
+                'requires_shipping' => $requiresShipping,
+                'line_summary' => $lineSummary,
             ],
             // Align with help_pay default (7d): 1h TTL made验收/跨设备短链过早「链接不可用」。
             'ttl_seconds' => (int) ($input['ttl_seconds'] ?? 86400 * 7),
@@ -287,6 +343,7 @@ final class HelpPayOrchestrator
         $payload['shipping_amount_minor'] = $shippingMinor;
         $payload['service_code'] = $serviceCode;
         $payload['service_label'] = $serviceLabel;
+        $payload['requires_shipping'] = $requiresShipping;
 
         return $payload;
     }
@@ -878,7 +935,57 @@ final class HelpPayOrchestrator
         } catch (\Throwable) {
         }
 
-        return new HelpPayQuickShippingQuoteService();
+        return new HelpPayQuickShippingQuoteService(null, null, $this->offerShipping());
+    }
+
+    private function offerShipping(): HelpPayOfferShippingResolver
+    {
+        if ($this->offerShipping instanceof HelpPayOfferShippingResolver) {
+            return $this->offerShipping;
+        }
+        try {
+            $resolved = ObjectManager::getInstance(HelpPayOfferShippingResolver::class);
+            if ($resolved instanceof HelpPayOfferShippingResolver) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
+
+        return new HelpPayOfferShippingResolver();
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function virtualOnlyShippingLabel(): string
+    {
+        if (\function_exists('__')) {
+            return (string) __('无需配送');
+        }
+
+        return '无需配送';
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function virtualOnlyShippingOption(string $currency): array
+    {
+        $label = $this->virtualOnlyShippingLabel();
+
+        return [
+            'service_code' => 'none',
+            'code' => 'none',
+            'label' => $label,
+            'service_name' => $label,
+            'title' => $label,
+            'amount_minor' => 0,
+            'amount' => 0.0,
+            'currency' => $currency !== '' ? $currency : 'CNY',
+            'source' => 'virtual_only',
+            'is_free' => true,
+            'free_reason' => 'virtual_only',
+        ];
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Weline\Checkout\Service;
 use Weline\Checkout\Api\CheckoutSessionStoreInterface;
 use Weline\Checkout\Model\CheckoutSession;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Order\Api\Data\MoneySnapshot;
 use Weline\Order\Api\Data\OrderReadResult;
 use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Payment\Api\Data\PaymentTransactionRecord;
@@ -372,7 +373,8 @@ final class CheckoutOrderPaymentService
                             $order->orderUuid,
                             (string)$transaction->transactionNumber,
                         );
-                        $this->orders->notifyOrderPaid($order->orderUuid, [
+                        $this->ensureOrderMoneyConserved($order->orderUuid, $this->orders->get($order->orderUuid)->money);
+                        $this->notifyOrderPaidCaptured($order->orderUuid, [
                             'payment_method' => $transaction->methodCode,
                             'payment_transaction_id' => $transaction->id,
                             'payment_transaction_no' => $transaction->transactionNumber,
@@ -380,18 +382,34 @@ final class CheckoutOrderPaymentService
                             'hang_purpose' => 'balance',
                         ]);
                     } else {
-                        $this->orders->notifyOrderPaid($order->orderUuid, [
+                        $this->ensureOrderMoneyConserved($order->orderUuid, $this->orders->get($order->orderUuid)->money);
+                        $this->notifyOrderPaidCaptured($order->orderUuid, [
                             'payment_method' => $transaction->methodCode,
                             'payment_transaction_id' => $transaction->id,
                             'payment_transaction_no' => $transaction->transactionNumber,
                         ]);
                     }
-                } catch (\Throwable) {
-                    // The provider has already captured/accepted payment. Do
-                    // not report a retryable failure that could charge again;
-                    // keep the order in a reconciliation-pending state.
-                    $notificationPending = true;
-                    $hasPending = true;
+                } catch (\Throwable $e) {
+                    // Provider already captured. Never mark recoverable/failed (double-charge risk).
+                    // Log + one immediate retry; Success-page reconciler is the durable safety net.
+                    $this->logOrderPaidNotificationFailure($order->orderUuid, $transaction, $e);
+                    try {
+                        $retryMeta = [
+                            'payment_method' => $transaction->methodCode,
+                            'payment_transaction_id' => $transaction->id,
+                            'payment_transaction_no' => $transaction->transactionNumber,
+                            'notification_retry' => 1,
+                        ];
+                        if ($hangPurpose === 'balance') {
+                            $retryMeta['suppress_customer_paid_mail'] = true;
+                            $retryMeta['hang_purpose'] = 'balance';
+                        }
+                        $this->notifyOrderPaidCaptured($order->orderUuid, $retryMeta);
+                    } catch (\Throwable $retry) {
+                        $this->logOrderPaidNotificationFailure($order->orderUuid, $transaction, $retry, true);
+                        $notificationPending = true;
+                        $hasPending = true;
+                    }
                 }
             }
         }
@@ -435,35 +453,12 @@ final class CheckoutOrderPaymentService
      */
     private function syncOrderPaymentIncentive(OrderReadResult $order, array $paymentContext): void
     {
-        $newGrand = max(0, (int)($paymentContext['amount_minor'] ?? 0));
+        $gatewayAmountMinor = max(0, (int)($paymentContext['amount_minor'] ?? 0));
         $incentiveMinor = (int)($paymentContext['payment_method_incentive_amount_minor'] ?? 0);
         $lines = \is_array($paymentContext['discount_lines'] ?? null) ? $paymentContext['discount_lines'] : [];
-        $prevGrand = (int)($order->money['grand_total_minor'] ?? 0);
         if ($incentiveMinor >= 0 && $lines === []) {
-            return;
-        }
-        if ($newGrand <= 0 || $newGrand === $prevGrand) {
-            // 仍落盘 discount_lines，供下次支付幂等（保留 admin_adjustment）
-            if ($lines !== []) {
-                try {
-                    $mergedLines = $lines;
-                    if (
-                        class_exists(\Weline\Order\Service\DiscountLinesBySourceMerger::class)
-                        && \is_array($order->typePayload['discount_lines'] ?? null)
-                    ) {
-                        $mergedLines = \Weline\Order\Service\DiscountLinesBySourceMerger::merge(
-                            $order->typePayload['discount_lines'],
-                            $lines,
-                            [\Weline\Order\Service\DiscountLinesBySourceMerger::SOURCE_PAYMENT_INCENTIVE],
-                        );
-                    }
-                    $this->orders->mergeTypePayload($order->orderUuid, [
-                        'discount_lines' => $mergedLines,
-                        'payment_method_incentive_amount_minor' => $incentiveMinor,
-                    ]);
-                } catch (\Throwable) {
-                }
-            }
+            // Still repair any pre-existing non-conserved snapshot before charge/notify.
+            $this->ensureOrderMoneyConserved($order->orderUuid, $order->money);
 
             return;
         }
@@ -492,9 +487,21 @@ final class CheckoutOrderPaymentService
         $baseDiscount = max(0, $prevDiscount - $prevIncentiveAbs - $adminAbs);
         $discountAmountMinor = $baseDiscount + $adminAbs + $incentiveAbs;
         $money['discount_amount_minor'] = $discountAmountMinor;
-        $money['grand_total_minor'] = $newGrand;
         $money['payment_method_incentive_amount_minor'] = $incentiveMinor;
-        $toMajor = static fn (int $minor): float => round($minor / 100, 2);
+        // NEVER trust gateway amount_minor as snapshot grand — OrderPaidContext requires
+        // subtotal+shipping+tax+cod−discount === grand. UI/payable drift (e.g. tax omitted
+        // in chrome) previously wrote grand=19300 while tax stayed 1584 → notify threw
+        // order_paid_context_grand_total_mismatch → checkout_order_payment_notification_pending.
+        $conserved = MoneySnapshot::fromArray($money)->withComputedGrandTotal();
+        $money = array_replace($money, $conserved->toArray());
+        $computedGrand = $conserved->grandTotalMinor;
+        if ($gatewayAmountMinor > 0 && $gatewayAmountMinor !== $computedGrand && \function_exists('w_log_warning')) {
+            w_log_warning('checkout payment incentive gateway/order grand drift', [
+                'order_uuid' => $order->orderUuid,
+                'gateway_amount_minor' => $gatewayAmountMinor,
+                'computed_grand_minor' => $computedGrand,
+            ], 'checkout_payment');
+        }
 
         $mergedLines = $lines;
         if (
@@ -509,19 +516,7 @@ final class CheckoutOrderPaymentService
         }
 
         try {
-            /** @var \Weline\Order\Model\Order $row */
-            $row = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
-            $row->clear()->where(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $order->orderUuid)->find();
-            if (!$row->getId()) {
-                return;
-            }
-            $row->setData(\Weline\Order\Model\Order::schema_fields_DISCOUNT_AMOUNT, $toMajor($discountAmountMinor));
-            $row->setData(\Weline\Order\Model\Order::schema_fields_GRAND_TOTAL, $toMajor($newGrand));
-            $row->setData(
-                \Weline\Order\Model\Order::schema_fields_MONEY_SNAPSHOT_JSON,
-                json_encode($money, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            );
-            $row->save();
+            $this->persistOrderMoneySnapshot($order->orderUuid, $money);
             $this->orders->mergeTypePayload($order->orderUuid, [
                 'discount_lines' => $mergedLines,
                 'payment_method_incentive_amount_minor' => $incentiveMinor,
@@ -530,6 +525,65 @@ final class CheckoutOrderPaymentService
         } catch (\Throwable) {
             // 支付仍以 paymentContext 金额为准；同步失败不阻断扣款
         }
+    }
+
+    /**
+     * Repair money_snapshot so OrderPaidContext conservation holds before notifyOrderPaid.
+     *
+     * @param array<string, mixed> $money
+     */
+    private function ensureOrderMoneyConserved(string $orderUuid, array $money): void
+    {
+        $orderUuid = trim($orderUuid);
+        if ($orderUuid === '' || $money === []) {
+            return;
+        }
+        try {
+            $current = MoneySnapshot::fromArray($money);
+            $computed = $current->withComputedGrandTotal();
+            if ($current->grandTotalMinor === $computed->grandTotalMinor) {
+                return;
+            }
+            // Incomplete fixtures may only carry grand_total_minor; do not wipe them to 0.
+            $componentGross = $current->subtotalMinor
+                + $current->shippingAmountMinor
+                + $current->taxAmountMinor
+                + $current->codFeeAmountMinor;
+            if ($componentGross <= 0 && $current->discountAmountMinor <= 0) {
+                return;
+            }
+            $repaired = array_replace($money, $computed->toArray());
+            $this->persistOrderMoneySnapshot($orderUuid, $repaired);
+            if (\function_exists('w_log_warning')) {
+                w_log_warning('checkout repaired non-conserved order money before paid notify', [
+                    'order_uuid' => $orderUuid,
+                    'before_grand_minor' => $current->grandTotalMinor,
+                    'after_grand_minor' => $computed->grandTotalMinor,
+                ], 'checkout_payment');
+            }
+        } catch (\Throwable) {
+        }
+    }
+
+    /** @param array<string, mixed> $money */
+    private function persistOrderMoneySnapshot(string $orderUuid, array $money): void
+    {
+        $toMajor = static fn (int $minor): float => round($minor / 100, 2);
+        $discountAmountMinor = max(0, (int)($money['discount_amount_minor'] ?? 0));
+        $grandTotalMinor = max(0, (int)($money['grand_total_minor'] ?? 0));
+        /** @var \Weline\Order\Model\Order $row */
+        $row = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
+        $row->clear()->where(\Weline\Order\Model\Order::schema_fields_ORDER_UUID, $orderUuid)->find();
+        if (!$row->getId()) {
+            return;
+        }
+        $row->setData(\Weline\Order\Model\Order::schema_fields_DISCOUNT_AMOUNT, $toMajor($discountAmountMinor));
+        $row->setData(\Weline\Order\Model\Order::schema_fields_GRAND_TOTAL, $toMajor($grandTotalMinor));
+        $row->setData(
+            \Weline\Order\Model\Order::schema_fields_MONEY_SNAPSHOT_JSON,
+            json_encode($money, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        );
+        $row->save();
     }
 
     private function resolveHangPurpose(OrderReadResult $order, string $hangPurpose): string
@@ -871,5 +925,40 @@ final class CheckoutOrderPaymentService
             $session,
             gmdate('Y-m-d H:i:s', time() + CheckoutSession::TTL_SUBMITTED_SUCCESS_SECONDS),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    private function notifyOrderPaidCaptured(string $orderUuid, array $metadata): void
+    {
+        try {
+            $fresh = $this->orders->get($orderUuid);
+            $this->ensureOrderMoneyConserved($orderUuid, $fresh->money);
+        } catch (\Throwable) {
+        }
+        $this->orders->notifyOrderPaid($orderUuid, array_filter(
+            $metadata,
+            static fn (mixed $value): bool => $value !== null && $value !== '',
+        ));
+    }
+
+    private function logOrderPaidNotificationFailure(
+        string $orderUuid,
+        PaymentTransactionRecord $transaction,
+        \Throwable $e,
+        bool $isRetry = false,
+    ): void {
+        $message = ($isRetry ? 'retry ' : '') . 'checkout order paid notification failed: ' . $e->getMessage();
+        if (\function_exists('w_log_error')) {
+            w_log_error($message, [
+                'order_uuid' => $orderUuid,
+                'transaction_no' => (string)$transaction->transactionNumber,
+                'transaction_id' => (int)$transaction->id,
+                'method_code' => (string)$transaction->methodCode,
+                'exception' => $e::class,
+                'previous' => $e->getPrevious()?->getMessage(),
+            ], 'checkout_payment');
+        }
     }
 }

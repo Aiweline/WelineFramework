@@ -280,6 +280,61 @@ foreach ($backendRoutes as $caseId => $route) {
     $output = [];
 }
 
+// Deploy 栏隔离 harness（Git/工作树；≠ Schema 列）
+$runHarness = static function (string $relativeScript): array {
+    global $root;
+    $path = $root . '/' . $relativeScript;
+    if (!is_file($path)) {
+        return ['ok' => false, 'detail' => 'missing:' . $relativeScript];
+    }
+    $output = [];
+    $exitCode = 0;
+    // Harness JSON is on stdout; stderr may contain intentional noise
+    // (e.g. harness-post-deploy-fail). Do not merge streams — strrpos('{')
+    // on pretty JSON would also grab nested objects and false-fail.
+    exec(
+        'cd ' . escapeshellarg($root) . ' && ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($path) . ' 2>/dev/null',
+        $output,
+        $exitCode
+    );
+    $text = trim(implode("\n", $output));
+    $decoded = json_decode($text, true);
+    if (!is_array($decoded)) {
+        $start = strpos($text, '{');
+        if ($start !== false) {
+            $decoded = json_decode(substr($text, $start), true);
+        }
+    }
+    $payloadOk = is_array($decoded) && !empty($decoded['ok']);
+
+    return [
+        'ok' => $exitCode === 0 && $payloadOk,
+        'detail' => $exitCode === 0 && $payloadOk
+            ? 'ok'
+            : mb_substr($text !== '' ? $text : 'empty-stdout exit=' . $exitCode, 0, 240),
+    ];
+};
+
+$mid = $runHarness('app/code/Weline/Deploy/test/acceptance/auto-rollback-midflight-harness.php');
+record(
+    $results,
+    $failed,
+    'RM-DEPLOY-HARNESS-midflight',
+    '隔离仓中途失败自动回滚 harness（正式站回滚 / 开发跳过）',
+    $mid['ok'],
+    $mid['detail']
+);
+
+$history = $runHarness('app/code/Weline/Deploy/test/acceptance/history-cross-commit-rollback-harness.php');
+record(
+    $results,
+    $failed,
+    'RM-DEPLOY-HARNESS-history-cross-commit',
+    '隔离仓历史式跨 commit Orchestrator::rollback（c2→c1）',
+    $history['ok'],
+    $history['detail']
+);
+
 $passed = count($results) - $failed;
 echo json_encode([
     'summary' => [

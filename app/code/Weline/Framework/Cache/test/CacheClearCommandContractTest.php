@@ -44,7 +44,9 @@ final class CacheClearCommandContractTest extends TestCase
             dirname(__DIR__) . '/Console/Cache/Clear.php'
         );
         self::assertStringNotContainsString('StorefrontFpcWarmer', $source);
-        self::assertStringContainsString('warmUp(\'fpc\')', $source);
+        self::assertStringContainsString('StorefrontWarmupOrchestrator', $source);
+        self::assertStringContainsString('runAfterClear', $source);
+        self::assertStringNotContainsString('warmUp(\'fpc\')', $source);
         self::assertStringContainsString('warmUp(\'website\')', $source);
         self::assertStringContainsString(
             "warmUp('weline_theme_layout_entity_published_projection')",

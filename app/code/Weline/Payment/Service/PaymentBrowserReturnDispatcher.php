@@ -380,9 +380,17 @@ final class PaymentBrowserReturnDispatcher
                 $paidMeta['hang_purpose'] = 'balance';
             }
             $orders->notifyOrderPaid($orderUuid, $paidMeta);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // Capture already succeeded; leave order for reconciliation rather than
             // failing the browser return path and risking a double-charge retry.
+            if (\function_exists('w_log_error')) {
+                w_log_error('browser return order paid notification failed: ' . $e->getMessage(), [
+                    'order_uuid' => $orderUuid,
+                    'transaction_no' => $transactionNo,
+                    'exception' => $e::class,
+                    'previous' => $e->getPrevious()?->getMessage(),
+                ], 'checkout_payment');
+            }
         }
     }
 

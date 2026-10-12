@@ -18,6 +18,7 @@ use Weline\Framework\Database\Connection\Api\PhysicalViewSnapshotInterface;
 use Weline\Framework\Database\Connection\Api\Sql\PhysicalTableQueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Schema\SchemaCheckpointIdentity;
 use Weline\Framework\Setup\Model\MigrationBackup;
 use Weline\Framework\Output\Cli\Printing;
 
@@ -1621,6 +1622,102 @@ class BackupService
     public function getBackupsByMigrationId(int $migrationId): array
     {
         return $this->backupModel->getMigrationBackups($migrationId);
+    }
+
+    /**
+     * Prove a restore-eligible TYPE_COLUMN backup exists for migration_id + column + scope.
+     * Used by SchemaMigrationExecutor Lane R1/R2 selection so a missing newest backup
+     * cannot suppress an older qualified candidate.
+     *
+     * @param list<string> $tableNameCandidates optional table keys (canonical / format-2 / quoted).
+     *        Empty list: column-only match allowed (legacy probes).
+     *        Non-empty: table identity must hit a candidate (normalized); column-only forbidden (C-RA-1).
+     */
+    public function hasQualifiedColumnBackup(
+        int $migrationId,
+        string $columnName,
+        string $backupScope,
+        array $tableNameCandidates = [],
+    ): bool {
+        if ($migrationId <= 0 || trim($columnName) === '') {
+            return false;
+        }
+        $scope = $this->normalizeBackupScope($backupScope);
+        $items = (clone $this->backupModel)->reset()
+            ->where(MigrationBackup::schema_fields_MIGRATION_ID, $migrationId)
+            ->where(MigrationBackup::schema_fields_BACKUP_TYPE, MigrationBackup::TYPE_COLUMN)
+            ->where(MigrationBackup::schema_fields_BACKUP_SCOPE, $scope)
+            ->order(MigrationBackup::schema_fields_ID, 'DESC')
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        $tableKeys = [];
+        foreach ($tableNameCandidates as $candidate) {
+            foreach ($this->expandQualifiedTableKeyCandidates((string)$candidate) as $key) {
+                $tableKeys[$key] = true;
+            }
+        }
+
+        foreach ($items as $item) {
+            if (!$item instanceof MigrationBackup) {
+                continue;
+            }
+            $storedColumn = trim((string)$item->getData(MigrationBackup::schema_fields_COLUMN_NAME));
+            $columnMatch = ($storedColumn !== '' && strcasecmp($storedColumn, $columnName) === 0)
+                || ($storedColumn === '' && $this->backupContainsColumn($item, $columnName));
+            if (!$columnMatch) {
+                continue;
+            }
+            if ($tableKeys === []) {
+                return true;
+            }
+            $storedTable = trim((string)$item->getData(MigrationBackup::schema_fields_TABLE_NAME));
+            foreach ($this->expandQualifiedTableKeyCandidates($storedTable) as $storedKey) {
+                if (isset($tableKeys[$storedKey])) {
+                    return true;
+                }
+            }
+        }
+
+        // Non-empty candidates: never fall back to column-only (C-RA-1).
+        return false;
+    }
+
+    /**
+     * @return list<string> lowercase identity keys for matching
+     */
+    private function expandQualifiedTableKeyCandidates(string $raw): array
+    {
+        $trimmed = trim($raw);
+        if ($trimmed === '') {
+            return [];
+        }
+        $keys = [];
+        $push = static function (string $value) use (&$keys): void {
+            $key = strtolower(trim($value));
+            if ($key !== '') {
+                $keys[$key] = $key;
+            }
+        };
+        $push($trimmed);
+        foreach ([
+            SchemaCheckpointIdentity::tableName($trimmed, []),
+            SchemaCheckpointIdentity::legacyTableName($trimmed, []),
+            SchemaCheckpointIdentity::qualifiedTableName($trimmed),
+        ] as $normalized) {
+            if ($normalized !== '') {
+                $push($normalized);
+            }
+        }
+        // Bare last identifier so schema.table intersects unqualified candidates (same restore identity set).
+        $parts = preg_split('/\./', preg_replace('/[`"]+/', '', $trimmed) ?? $trimmed) ?: [];
+        $bare = trim((string)end($parts));
+        if ($bare !== '') {
+            $push($bare);
+        }
+
+        return array_values($keys);
     }
 
     public function getBackupStats(int $migrationId): array

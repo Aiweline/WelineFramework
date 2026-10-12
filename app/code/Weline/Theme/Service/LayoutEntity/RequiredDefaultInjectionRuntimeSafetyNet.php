@@ -47,6 +47,18 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
         if ($pageType === '') {
             $pageType = ThemeLayout::PAGE_TYPE_HOME;
         }
+        // Belt: if request identity missed layout name / SEO-rewrote /product/ away, infer PDP
+        // from storefront markup so product required XOR (help-pay) still runs.
+        if (
+            ($pageType === ThemeLayout::PAGE_TYPE_HOME || $pageType === 'default')
+            && (
+                str_contains($html, 'product-native-detail')
+                || str_contains($html, 'data-testid="storefront-product-detail"')
+                || str_contains($html, "data-testid='storefront-product-detail'")
+            )
+        ) {
+            $pageType = ThemeLayout::PAGE_TYPE_PRODUCT;
+        }
 
         $themeId = $this->resolveFrontendThemeId();
         $declarations = $this->loadDeclarations();
@@ -139,9 +151,34 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
         try {
             /** @var Request $request */
             $request = ObjectManager::getInstance(Request::class);
+            /** @var ThemePageTypeResolver $resolver */
+            $resolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
+
+            // Prefer solidified layout name (product.default) set by SolidifiedControllerTemplateResolver
+            // before finalizeFrontendHtml — SEO rewrites may drop /product/ from getUrlPath().
+            $layoutName = trim((string)\Weline\Framework\Runtime\RequestContext::get(
+                \Weline\Widget\Cache\WidgetOutputCache::REQUEST_LAYOUT_NAME_KEY,
+                '',
+            ));
+            if ($layoutName !== '' && str_contains($layoutName, '.')) {
+                $fromLayout = trim((string)explode('.', $layoutName, 2)[0]);
+                if ($fromLayout !== '') {
+                    $mapped = trim((string)$resolver->resolvePageType($fromLayout, null, $request, ''));
+
+                    return $mapped !== '' ? $mapped : $fromLayout;
+                }
+            }
+
             $layoutType = trim((string)$request->getParam('layout_type', ''));
             if ($layoutType === '') {
                 $path = trim((string)$request->getUrlPath());
+                // Canonical URI map — /product/{slug} must be product, not homepage fallback.
+                // Legacy heuristics below only covered list/category and silently returned '' for PDP,
+                // so ensure() coerced pageType→homepage and skipped product-help-pay XOR.
+                $fromUri = trim((string)$resolver->resolvePageTypeFromUri($path));
+                if ($fromUri !== '' && $fromUri !== 'default') {
+                    return $fromUri;
+                }
                 if ($path === '' || $path === '/') {
                     return ThemeLayout::PAGE_TYPE_HOME;
                 }
@@ -151,11 +188,13 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
                 if (str_contains($path, '/category') || preg_match('#^/?categor(?:y|ies)(?:/|$)#', $path) === 1) {
                     return ThemeLayout::PAGE_TYPE_CATEGORY;
                 }
+                // Explicit PDP path even when URI map returns default for bare slugs.
+                if (preg_match('#(^|/)product(?:/|$)#', $path) === 1) {
+                    return ThemeLayout::PAGE_TYPE_PRODUCT;
+                }
 
                 return '';
             }
-            /** @var ThemePageTypeResolver $resolver */
-            $resolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
 
             return trim((string)$resolver->resolvePageType($layoutType, null, $request, ''));
         } catch (\Throwable) {

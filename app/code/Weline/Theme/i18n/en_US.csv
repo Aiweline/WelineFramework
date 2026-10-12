@@ -887,43 +887,6 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
-商品,Products
-查看商品图,"View product image"
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-购物车是空的,"Shopping cart is empty"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-零售车,零售车
-批发车,批发车
-继续购物,"Continue shopping"
-小计,Subtotal
-去结算,"Proceed to Checkout"
-正在前往结算...,"Proceeding to checkout..."
-查看购物车,"View cart"
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-运费将在结算时计算,"Shipping calculated at checkout"
-税费,Tax
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-本次应付定金,"Deposit due now"
-本单共计,"Order total"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-收起明细,"Collapse details"
-展开明细,"Expand details"
-零售,Retail
-迷你购物车金额小计,"Mini-cart money summary"
-关闭通知,"Close notification"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1017,12 +980,16 @@ ERROR,ERROR
 语言,language
 货币,currency
 关闭菜单,"Close menu"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -1032,8 +999,12 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
+购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
+小计,Subtotal
+查看购物车,"View cart"
+去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1164,6 +1135,35 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
+商品,Products
+查看商品图,"View product image"
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+零售车,零售车
+批发车,批发车
+继续购物,"Continue shopping"
+正在前往结算...,"Proceeding to checkout..."
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+运费将在结算时计算,"Shipping calculated at checkout"
+税费,Tax
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+本次应付定金,"Deposit due now"
+本单共计,"Order total"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+收起明细,"Collapse details"
+展开明细,"Expand details"
+零售,Retail
+迷你购物车金额小计,"Mini-cart money summary"
+关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -2307,6 +2307,8 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
+"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。

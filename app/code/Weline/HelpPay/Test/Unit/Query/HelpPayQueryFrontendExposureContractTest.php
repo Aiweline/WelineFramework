@@ -68,6 +68,7 @@ final class HelpPayQueryFrontendExposureContractTest extends TestCase
         self::assertContains('product_id', $quickParams);
         self::assertContains('service_code', $quickParams);
         self::assertContains('shipping_amount_minor', $quickParams);
+        self::assertContains('requires_shipping', $quickParams);
 
         $registryFile = null;
         $walk = __DIR__;

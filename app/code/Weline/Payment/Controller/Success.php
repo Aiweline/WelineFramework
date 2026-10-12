@@ -17,6 +17,7 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
 
 /**
  * Payment L1 terminal success at /payment/success.
+ * @Extra type=fpc enabled=false
  */
 class Success extends FrontendController
 {
@@ -73,6 +74,9 @@ class Success extends FrontendController
         $order = null;
         if ($orderUuid !== '') {
             try {
+                if ($transaction->isSuccess()) {
+                    $this->reconcileCapturedOrderPaid($orders, $transaction, $orderUuid);
+                }
                 $order = $orders->get($orderUuid);
                 $this->assign('order_uuid', $orderUuid);
                 $this->assign('order_v2', $order->toArray());
@@ -99,6 +103,43 @@ class Success extends FrontendController
         $this->assign('shipping_method_label', $presentation['shipping_method_label']);
         if ($transaction->isSuccess()) {
             $this->assign('payment_return_status_only', false);
+        }
+    }
+
+    /**
+     * Safety net for fake_card / L1 landings: provider already captured but
+     * checkout notifyOrderPaid may have failed (money conservation / observer).
+     * Idempotent when order is already paid.
+     */
+    private function reconcileCapturedOrderPaid(
+        OrderFacadeInterface $orders,
+        PaymentTransaction $transaction,
+        string $orderUuid,
+    ): void {
+        try {
+            $order = $orders->get($orderUuid);
+        } catch (\Throwable) {
+            return;
+        }
+        $status = strtolower(trim((string)$order->status));
+        if (in_array($status, ['paid', 'fulfilled', 'completed'], true)) {
+            return;
+        }
+        try {
+            $orders->notifyOrderPaid($orderUuid, [
+                'payment_method' => (string)$transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE),
+                'payment_transaction_id' => (int)$transaction->getId(),
+                'payment_transaction_no' => (string)$transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO),
+                'reconcile_source' => 'payment_success_page',
+            ]);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('payment success page order paid reconcile failed: ' . $e->getMessage(), [
+                    'order_uuid' => $orderUuid,
+                    'transaction_no' => (string)$transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO),
+                    'exception' => $e::class,
+                ], 'checkout_payment');
+            }
         }
     }
 

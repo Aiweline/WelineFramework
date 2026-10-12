@@ -138,10 +138,11 @@ final class ModuleRollbackExecutor
             $this->assertFinalVersions($items);
 
             $this->phase($operation, 'projection_sync');
-            $this->eventsManager->dispatch(self::EVENT_STATE_COMMITTED, [
+            $stateCommittedEvent = [
                 'operation_id' => $operationId,
                 'modules' => $items,
-            ]);
+            ];
+            $this->eventsManager->dispatch(self::EVENT_STATE_COMMITTED, $stateCommittedEvent);
 
             $this->codeSwitchService->setMaintenanceMode($previousMaintenance);
             $journal['maintenance_changed'] = false;
@@ -156,10 +157,11 @@ final class ModuleRollbackExecutor
 
             $result = ['success' => true, 'operation_id' => $operationId, 'status' => ModuleVersionOperation::STATUS_SUCCEEDED];
             try {
-                $this->eventsManager->dispatch(self::EVENT_COMPLETED, [
+                $completedEvent = [
                     'operation_id' => $operationId,
                     'modules' => $items,
-                ]);
+                ];
+                $this->eventsManager->dispatch(self::EVENT_COMPLETED, $completedEvent);
             } catch (\Throwable $notificationFailure) {
                 $journal['completion_notification_error'] = $notificationFailure->getMessage();
                 $result['warning'] = $notificationFailure->getMessage();
@@ -342,10 +344,11 @@ final class ModuleRollbackExecutor
                 ModuleVersionOperationItem::schema_fields_STATUS => 'failed_recovered',
             ]);
         }
-        $this->eventsManager->dispatch(self::EVENT_RECOVERED, [
+        $recoveredEvent = [
             'operation_id' => (string)$plan['operation_id'],
             'modules' => $items,
-        ]);
+        ];
+        $this->eventsManager->dispatch(self::EVENT_RECOVERED, $recoveredEvent);
     }
 
     /** @return array{0: resource, 1: ModuleVersionOperation, 2: array<string, mixed>} */
@@ -422,12 +425,22 @@ final class ModuleRollbackExecutor
     /** @param list<array<string, mixed>> $items */
     private function assertTargetCodeAndRegistry(array $items): void
     {
-        $registry = is_file(Env::path_MODULES_FILE) ? (array)require Env::path_MODULES_FILE : [];
+        $registryPath = Env::path_MODULES_FILE;
+        clearstatcache(true, $registryPath);
+        if (\function_exists('opcache_invalidate') && is_file($registryPath)) {
+            @opcache_invalidate($registryPath, true);
+        }
+        $registry = is_file($registryPath) ? (array)require $registryPath : [];
         foreach ($items as $item) {
             $module = (string)$item['module_name'];
             $target = (string)$item['to_version'];
             $info = Env::getInstance()->getModuleInfo($module);
             $path = is_array($info) ? (string)($info['base_path'] ?? '') : '';
+            $manifestFile = rtrim($path, '/\\') . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'module.php';
+            clearstatcache(true, $manifestFile);
+            if (\function_exists('opcache_invalidate') && is_file($manifestFile)) {
+                @opcache_invalidate($manifestFile, true);
+            }
             $manifest = $this->manifestReader->read($path);
             $registered = (string)($registry[$module]['version'] ?? '');
             if ($manifest->version !== $target || $registered !== $target) {

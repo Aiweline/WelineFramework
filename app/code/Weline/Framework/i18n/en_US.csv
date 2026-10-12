@@ -969,6 +969,7 @@ operation：%{id},operation：%{id}
 缓存目录属主未能对齐到项目根（%{1}），但当前进程可写，已继续。,"The cache directory owner failed to align to the project root (%{1}), but the current process is writable and has continued."
 无法恢复缓存目录所有权：%{1},"Unable to restore cache directory ownership: %{1}"
 系统升级过程中发生错误：%{1},"An error occurred during the system upgrade: %{1}"
+"setup 成功释放 schema_diff operation_id 绑定失败：%{1}","setup 成功释放 schema_diff operation_id 绑定失败：%{1}"
 "WLS 实例 %{1} 已跳过维护同步：%{2}","WLS instance %{1} has skipped maintenance synchronization: %{2}"
 "WLS 维护模式已同步：%{1}","WLS maintenance mode has been synchronized: %{1}"
 "WLS 实例 %{1} 视为已死亡并跳过：%{2}","WLS instance %{1} is considered dead and skipped: %{2}"
@@ -1004,8 +1005,10 @@ operation：%{id},operation：%{id}
 用户选择退出升级,"User chose to exit upgrade"
 "环境依赖检测出错: %{1}","Environment Dependency Check Failed: %{1}"
 环境依赖检测出错：%{1}，继续执行升级...,"Environment Dependency Check Failed: %{1}, Continuing with Upgrade..."
+"升级意图为 schema-only stage profile：排除 category=frontend 规则（Theme 归属仍由完整 upgrade / frontend:check 覆盖）","升级意图为 schema-only stage profile：排除 category=frontend 规则（Theme 归属仍由完整 upgrade / frontend:check 覆盖）"
 框架约束规则系统错误：%{1},"Framework Constraint Rule System Error: %{1}"
 框架约束规则系统错误，无法继续升级。请检查规则系统配置。,"Framework Constraint Rule System Error, unable to continue upgrade. Please check the rule system configuration."
+"已释放 setup operation_id 在 %{1} 条 installed schema_diff 上的绑定","已释放 setup operation_id 在 %{1} 条 installed schema_diff 上的绑定"
 系统已设置为维护模式，开始执行升级...,"The system has been set to maintenance mode, starting upgrade..."
 检测到模块安装或升级，正在重新收集注册表信息...,"Detected module installation or upgrade, re-collecting registry information..."
 系统升级完成！,"System upgrade complete!"
@@ -1948,13 +1951,16 @@ Transport,Transport
 "✓ Taglib 增量更新完成。","✓ Taglib incremental update completed."
 "Taglib 增量更新失败: %{1}","Taglib Incremental update failed: %{1}"
 没有需要更新的模块，跳过注册表更新。,"No modules to update, skipping registry update."
-未发现任何框架约束规则。,"No framework constraint rules found."
-"正在验证框架约束规则（共 %{1} 条）...","Validating framework constraint rules (%{1} total)..."
+全部,all
+"validateCategories 需要至少一个 category","validateCategories 需要至少一个 category"
+"排除 %{1}","排除 %{1}"
+未发现任何框架约束规则（profile=%{1}）。,未发现任何框架约束规则（profile=%{1}）。
+"正在验证框架约束规则（profile=%{1}，共 %{2} 条）...","正在验证框架约束规则（profile=%{1}，共 %{2} 条）..."
 "验证规则：%{1} - %{2}","Validation rule: %{1} - %{2}"
 "✓ 通过","✓ Pass"
 "✗ 失败","✗ Failure"
 框架约束规则验证失败，请修复上述问题后重新运行系统更新命令。,"Framework Constraint Rule Validation Failed. Please fix the above issues and re-run the system update command."
-所有框架约束规则验证通过！,"All framework constraint rules validated successfully!"
+框架约束规则验证通过（profile=%{1}）！,框架约束规则验证通过（profile=%{1}）！
 ═══════════════════════════════════════════════════════════,═══════════════════════════════════════════════════════════
 框架约束规则验证失败,"Framework Constraint Rule Validation Failed"
 验证统计：,"Verification statistics:"
@@ -2049,11 +2055,12 @@ Transport,Transport
 系统正在升级维护，请稍后再试。,"The system is being upgraded and maintained, please try again later."
 请求超时，服务器响应时间过长，请稍后重试。,"Request timeout. Please try again later."
 请求处理失败，请稍后重试。,"Request failed. Please try again later."
-资源修订版身份无效,"Resource revision identity is invalid"
-"可靠资源变更要求 Framework 默认主库是唯一活动事务连接","Reliable resource changes require that the Framework default primary library is the only active transaction connection"
 资源修订版原子建件后无法回读,"Resource revision cannot be read back after atomic build"
+"资源键 SHA-256 碰撞，已拒绝锁定修订版","资源键 SHA-256 碰撞，已拒绝锁定修订版"
 "资源键 SHA-256 碰撞，已拒绝推进修订版","Resource key SHA-256 collision, refused to push revision"
 "资源修订版 CAS 冲突超过 %{1} 次","Resource revision CAS conflicts more than %{1} times"
+资源修订版身份无效,"Resource revision identity is invalid"
+"可靠资源变更要求 Framework 默认主库是唯一活动事务连接","Reliable resource changes require that the Framework default primary library is the only active transaction connection"
 资源修订版原子建件失败,"Resource revision atomic build failed"
 "资源变更异步载荷只接受不可变 ResourceChange DTO","Resource change asynchronous payload only accepts immutable ResourceChange DTO"
 "资源变更事件名或 schema 版本无效","Invalid resource change event name or schema version"
@@ -2440,8 +2447,10 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 "语种编译完成：%{n} 个产物","Locale compile finished: %{n} artifacts"
 "执行语种模板编译 job（进程池工人 / 调试用）","Run locale template compile job (process-pool worker / debug)"
 正在收集模块：%{1},"Collecting module: %{1}"
+"单模块默认只导出源语+en_US；全量导出请加 --republish-all","单模块默认只导出源语+en_US；全量导出请加 --republish-all"
 正在收集所有模块的翻译词...,"Collecting translation phrases for all modules..."
 已跳过短语冗余原词剥离（--no-prune-stale）,已跳过短语冗余原词剥离（--no-prune-stale）
+"已跳过模块 CSV 回写（--no-rewrite-csv）","已跳过模块 CSV 回写（--no-rewrite-csv）"
 "模块 %{1} 语言包收集成功！","Module %{1} language pack collected successfully!"
 语言包收集成功！,"Language packs collected successfully!"
 "模块 %{1} 语言包收集失败：%{2}","Module %{1} language pack collect failed: %{2}"
@@ -2452,6 +2461,8 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 收集翻译词,"Collect translation phrases"
 仅收集指定模块,"Collect only the specified module"
 全量收集后不剥离不在收集集中的短语冗余原词,全量收集后不剥离不在收集集中的短语冗余原词
+单模块收集时仍导出全部发布语种（默认仅源语+en_US）,单模块收集时仍导出全部发布语种（默认仅源语+en_US）
+"源码扫描后不回写模块 i18n/*.csv","源码扫描后不回写模块 i18n/*.csv"
 "已注册的 QueryProvider（%{1} 个）","Registered QueryProviders (%{1})"
 Provider：%{1}（%{2}）,Provider：%{1}（%{2}）
 名称：%{1},"Name: %{1}"
@@ -2505,6 +2516,9 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 路由路径,"Route path"
 HTTP方法,"HTTP method"
 控制器,Controller
+未发现任何框架约束规则。,"No framework constraint rules found."
+"正在验证框架约束规则（共 %{1} 条）...","Validating framework constraint rules (%{1} total)..."
+所有框架约束规则验证通过！,"All framework constraint rules validated successfully!"
 "警告：无法写入语言文件 %{file}","Warning: unable to write language file %{file}"
 "检测到运行中的 WLS 服务器，发送热重载信号...","Running WLS server detected, sending hot reload signal..."
 查询成功,"Query succeeded"
@@ -2754,7 +2768,6 @@ PHPUnit报告服务器已在后台启动,"PHPUnit reporting server has started i
 个文件,files
 个模块,modules
 搜索测试文件或方法...,"Search Test File or Method..."
-全部,all
 通过,pass
 失败,fail
 有错误,"Has errors"

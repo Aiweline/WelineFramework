@@ -1662,6 +1662,18 @@ class MigrationService
         }
         return $this->migrationModel->releaseRecoveredOperationBindingsFailClosed($operationId);
     }
+
+    /**
+     * Setup success path: release this setup operation_id from installed schema_diff
+     * records. Distinct from {@see releaseRecoveredOperationBindings()} (failed_recovered).
+     */
+    public function releaseSucceededSetupOperationBindings(string $operationId): int
+    {
+        if (trim($operationId) === '' || strlen($operationId) > 64) {
+            throw new \InvalidArgumentException(__('operation_id 无效'));
+        }
+        return $this->migrationModel->releaseSucceededSetupOperationBindingsFailClosed($operationId);
+    }
     
     /**
      * 回滚最近 N 个迁移

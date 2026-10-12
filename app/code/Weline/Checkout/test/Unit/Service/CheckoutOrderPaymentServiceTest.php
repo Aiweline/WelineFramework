@@ -32,7 +32,7 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
             customerId: 42,
         );
         $orders = $this->createMock(OrderFacadeInterface::class);
-        $orders->expects(self::once())->method('get')->with('order-uuid-1')->willReturn($order);
+        $orders->expects(self::atLeastOnce())->method('get')->with('order-uuid-1')->willReturn($order);
         $orders->expects(self::once())->method('notifyOrderPaid')->with(
             'order-uuid-1',
             self::callback(static fn(array $context): bool =>
@@ -306,7 +306,8 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
             storeId: 1,
             money: ['grand_total_minor' => 100],
         ));
-        $orders->method('notifyOrderPaid')->willThrowException(new \RuntimeException('order write unavailable'));
+        $orders->expects(self::exactly(2))->method('notifyOrderPaid')
+            ->willThrowException(new \RuntimeException('order write unavailable'));
 
         $payments = $this->createMock(PaymentFacadeInterface::class);
         $payments->method('tryCreatePayment')->willReturn(new PaymentTransactionRecord(

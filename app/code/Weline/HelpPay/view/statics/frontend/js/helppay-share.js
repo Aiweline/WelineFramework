@@ -1444,7 +1444,12 @@
         unit_price_minor: Number(item.unit_price_minor || 0) || 0,
         weight_minor: weightMinor,
         weight_per_unit: weightMinor > 0 ? 1 : 0,
-        requires_shipping: item.requires_shipping !== false,
+        requires_shipping: (function () {
+          var flag = item.requires_shipping;
+          if (flag === false || flag === 0 || flag === '0') return false;
+          if (flag === true || flag === 1 || flag === '1') return true;
+          return true;
+        })(),
       });
     });
     return lineSummary;
@@ -2024,6 +2029,32 @@
     return String(currency || 'CNY') + ' ' + n.toFixed(2);
   }
 
+  /**
+   * Pure-digital when Offer/PDP projects requires_shipping=false.
+   * Conservative default true (physical) when attribute missing.
+   */
+  function readRequiresShipping(btn) {
+    function parseFlag(raw) {
+      if (raw == null || raw === '') return null;
+      var s = String(raw).trim().toLowerCase();
+      if (s === '0' || s === 'false' || s === 'no' || s === 'off') return false;
+      if (s === '1' || s === 'true' || s === 'yes' || s === 'on') return true;
+      return null;
+    }
+    var fromBtn = parseFlag(
+      btn && (btn.getAttribute('data-requires-shipping') || (btn.dataset && btn.dataset.requiresShipping))
+    );
+    if (fromBtn !== null) return fromBtn;
+    var root =
+      (btn && btn.closest && btn.closest('.product-native-detail, [data-testid="storefront-product-detail"]')) ||
+      qs(d, '[data-testid="storefront-product-detail"], .product-native-detail');
+    if (root) {
+      var fromRoot = parseFlag(root.getAttribute('data-requires-shipping'));
+      if (fromRoot !== null) return fromRoot;
+    }
+    return true;
+  }
+
   function readQuickProductId(btn) {
     var fromBtn = Number((btn && (btn.dataset.productId || btn.getAttribute('data-product-id'))) || 0) || 0;
     if (fromBtn > 0) return fromBtn;
@@ -2285,13 +2316,20 @@
     setPaymentMessage(dialog, '');
     renderPaymentSummary(dialog);
     var state = dialog._helppayQuickState || {};
+    var digitalOnly = state.requires_shipping === false;
     var backBtn = qs(dialog, '[data-helppay-back-shipping]');
     var payBtn = qs(dialog, '[data-helppay-start-pay]');
     var cross = qs(dialog, '[data-helppay-cross-device]');
     if (backBtn) {
-      backBtn.onclick = function () {
-        showStep(dialog, 'shipping-pick');
-      };
+      if (digitalOnly) {
+        backBtn.hidden = true;
+        backBtn.onclick = null;
+      } else {
+        backBtn.hidden = false;
+        backBtn.onclick = function () {
+          showStep(dialog, 'shipping-pick');
+        };
+      }
     }
     if (payBtn) {
       payBtn.disabled = true;
@@ -2300,18 +2338,38 @@
     try {
       var addr = state.address || {};
       var goodsMinor = Number(state.goods_amount_minor || 0) || 0;
-      var shipMinor = Number(state.shipping_amount_minor || 0) || 0;
-      var result = await w.Weline.Api.resource('helpPay').createQuickPay({
+      var shipMinor = digitalOnly ? 0 : Number(state.shipping_amount_minor || 0) || 0;
+      var productId = readQuickProductId(dialog._helppayQuickBtn);
+      var qty = Math.max(1, readSelectedQty(dialog._helppayQuickBtn) || 1);
+      var serviceCode = digitalOnly ? 'none' : state.service_code || '';
+      var serviceLabel = digitalOnly
+        ? state.service_label || t('virtualOnlyShipping', '无需配送')
+        : state.service_label || '';
+      var payload = {
         // Keep top-level params within frontend worker whitelist.
         amount_minor: goodsMinor + shipMinor,
         currency_code: readCurrencyCode(),
-        product_id: readQuickProductId(dialog._helppayQuickBtn),
-        qty: Math.max(1, readSelectedQty(dialog._helppayQuickBtn) || 1),
-        service_code: state.service_code || '',
-        service_label: state.service_label || '',
+        product_id: productId,
+        qty: qty,
+        service_code: serviceCode,
+        service_label: serviceLabel,
         goods_amount_minor: goodsMinor,
         shipping_amount_minor: shipMinor,
-        shipping_address: {
+        requires_shipping: !digitalOnly,
+        cart_type: currentSellingMode(),
+      };
+      if (digitalOnly) {
+        payload.shipping_address = {};
+        payload.line_summary = [
+          {
+            product_id: productId,
+            qty: qty,
+            row_total_minor: goodsMinor,
+            requires_shipping: false,
+          },
+        ];
+      } else {
+        payload.shipping_address = {
           name: addr.name,
           line1: addr.line1,
           phone: addr.phone,
@@ -2321,14 +2379,14 @@
           city: addr.city || '',
           district: addr.district || '',
           postal_code: addr.postal_code || '',
-          service_code: state.service_code || '',
-          service_label: state.service_label || '',
-          label: state.service_label || '',
+          service_code: serviceCode,
+          service_label: serviceLabel,
+          label: serviceLabel,
           shipping_amount_minor: shipMinor,
           goods_amount_minor: goodsMinor,
-        },
-        cart_type: currentSellingMode(),
-      });
+        };
+      }
+      var result = await w.Weline.Api.resource('helpPay').createQuickPay(payload);
       if (!result || !result.url) {
         throw new Error(t('quickPayCreateFailed', '未返回付款入口，请稍后重试。'));
       }
@@ -2452,8 +2510,44 @@
     }
   }
 
+  async function openQuickDigitalPaymentFlow(btn) {
+    mergeShareI18n(btn);
+    var dialog = ensureDialog();
+    applyDialogFlow(dialog, 'quick');
+    dialog._helppayQuickBtn = btn;
+    revealDialog(dialog, btn);
+    try {
+      if (isPurchaseUnavailable()) {
+        throw new Error('当前规格暂不可售，无法生成快捷购买链接。');
+      }
+      var amount = readAmountMinor(btn);
+      if (!(amount > 0)) {
+        throw new Error('无法读取商品金额，请刷新后重试。');
+      }
+      dialog._helppayQuickState = {
+        address: null,
+        goods_amount_minor: amount,
+        shipping_amount_minor: 0,
+        service_code: 'none',
+        service_label: t('virtualOnlyShipping', '无需配送'),
+        shipping_methods: [],
+        requires_shipping: false,
+        spec: readCurrentSpecSummary(btn),
+      };
+      await openQuickPaymentStep(dialog);
+    } catch (err) {
+      showStep(dialog, 'error');
+      renderError(qs(dialog, '[data-helppay-step="error"]'), humanizeApiError(err, 'quick'));
+    }
+  }
+
   async function createQuickPayAndShow(btn) {
     if (btn.disabled) return;
+    // Pure-digital Offer: skip address-pick / shipping-pick (Checkout virtual_only parity).
+    if (!readRequiresShipping(btn)) {
+      await openQuickDigitalPaymentFlow(btn);
+      return;
+    }
     await openQuickPayAddressStep(btn);
   }
 

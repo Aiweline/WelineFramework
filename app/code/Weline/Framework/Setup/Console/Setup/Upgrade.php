@@ -716,6 +716,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             /** @var SetupOperationContext $operationContext */
             $operationContext = ObjectManager::getInstance(SetupOperationContext::class);
 
+            $upgradeSucceeded = false;
             try {
                 $this->setupOperationId = $operationContext->begin();
                 $this->metrics()->start($this->setupOperationId);
@@ -731,6 +732,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 if (!$this->checkSystemInstalled() && !$this->isRouteOnlyUpgradeRequest($args)) {
                     $this->releaseLock($lockHandle, $lockFile);
                     $exitCode = $this->handleSystemNotInstalled($args);
+                    $upgradeSucceeded = ($exitCode === 0);
                 } else {
                     // ========== 执行阶段 ==========
                     $this->metrics()->begin('executeUpgradeProcess');
@@ -747,6 +749,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     } finally {
                         $this->metrics()->end('completeUpgrade');
                     }
+                    $upgradeSucceeded = true;
                     // 代码重载改由 CliCommandExecutedObserver 在 cleanup 关闭维护之后触发，
                     // 禁止在仍处维护态时 SIGUSR1/重载（否则易留下 Direct Worker 粘性门禁）。
                 }
@@ -760,12 +763,29 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     // ========== 清理阶段 ==========
                     $this->cleanupUpgrade($lockHandle, $lockFile, $maintenanceEnabled);
                 } finally {
+                    $setupReleaseFailed = null;
+                    try {
+                        if ($upgradeSucceeded && $this->setupOperationId !== '') {
+                            $this->releaseSucceededSetupSchemaDiffBindings($this->setupOperationId);
+                        }
+                    } catch (\Throwable $releaseError) {
+                        // B1: release failure must not look like a green upgrade (C-RB-1).
+                        $setupReleaseFailed = $releaseError;
+                        $this->printing->error(__(
+                            'setup 成功释放 schema_diff operation_id 绑定失败：%{1}',
+                            [$releaseError->getMessage()]
+                        ));
+                    }
                     try {
                         $this->metrics()->printOverview();
                     } catch (\Throwable) {
                     }
+                    // Clear process context after release attempt; DB bindings stay if release failed.
                     $this->setupOperationId = '';
                     $operationContext->clear();
+                    if ($setupReleaseFailed instanceof \Throwable) {
+                        $exitCode = $exitCode === 0 ? 1 : $exitCode;
+                    }
                 }
             }
 
@@ -976,7 +996,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->requestForceMenuCollectIfNeeded($args);
 
         // 7. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
-        $this->validateFrameworkRules();
+        $this->validateFrameworkRules($args);
     }
 
     /**
@@ -1180,18 +1200,26 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     
     /**
      * 验证框架约束规则
-     * 
-     * 职责：调用规则管理器验证所有框架约束规则
-     * 
-     * @return void
+     *
+     * schema-only stage profile 排除 category=frontend；完整 upgrade 仍跑全部规则。
+     * 禁止产品级 --skip-frontend-rules 逃逸旗。
+     *
+     * @param array<string, mixed> $args
      * @throws Exception 如果有任何规则验证失败
      */
-    private function validateFrameworkRules(): void
+    private function validateFrameworkRules(array $args = []): void
     {
         try {
             /** @var RulesManager $rulesManager */
             $rulesManager = ObjectManager::getInstance(RulesManager::class);
-            $rulesManager->validateAll();
+            if ($this->isSchemaOnlyRulesProfile($args)) {
+                $this->printing->note(__(
+                    '升级意图为 schema-only stage profile：排除 category=frontend 规则（Theme 归属仍由完整 upgrade / frontend:check 覆盖）'
+                ));
+                $rulesManager->validateExcluding(['frontend']);
+            } else {
+                $rulesManager->validateAll();
+            }
         } catch (Exception $e) {
             // 规则验证失败，必须停止升级
             // 这是框架约束，不允许继续执行
@@ -1201,6 +1229,62 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 确保规则系统正常工作
             $this->printing->error(__('框架约束规则系统错误：%{1}', [$e->getMessage()]));
             throw new Exception(__('框架约束规则系统错误，无法继续升级。请检查规则系统配置。'));
+        }
+    }
+
+    /**
+     * Schema-only stage profile: --stage 已给出且每一项都属于 schema 强绑定子集。
+     *
+     * @param array<string, mixed> $args
+     */
+    private function isSchemaOnlyRulesProfile(array $args): bool
+    {
+        if (!isset($args['stage'])) {
+            return false;
+        }
+        $stageFilter = is_array($args['stage'])
+            ? $args['stage']
+            : array_map('trim', explode(',', (string)$args['stage']));
+        $stageFilter = array_values(array_filter($stageFilter, static fn($s) => $s !== ''));
+        if ($stageFilter === []) {
+            return false;
+        }
+        $schemaStages = [
+            self::STAGE_FRAMEWORK_DB_BOOTSTRAP,
+            self::STAGE_EAV_SCHEMA,
+            self::STAGE_SCHEMA_DIFF,
+            self::STAGE_MODULE_SETUP,
+            self::STAGE_DATABASE_UPDATE,
+        ];
+        foreach ($stageFilter as $stage) {
+            if (!in_array((string)$stage, $schemaStages, true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Non-hot setup success: release this setup operation_id from installed schema_diff.
+     */
+    private function releaseSucceededSetupSchemaDiffBindings(string $operationId): void
+    {
+        $migrationClass = '\\Weline\\Database\\Model\\Migration';
+        if (!class_exists($migrationClass)) {
+            return;
+        }
+        /** @var object $migration */
+        $migration = ObjectManager::getInstance($migrationClass, [], false);
+        if (!is_object($migration)
+            || !method_exists($migration, 'releaseSucceededSetupOperationBindingsFailClosed')) {
+            return;
+        }
+        $released = (int)$migration->releaseSucceededSetupOperationBindingsFailClosed($operationId);
+        if ($released > 0) {
+            $this->printing->note(__(
+                '已释放 setup operation_id 在 %{1} 条 installed schema_diff 上的绑定',
+                [(string)$released]
+            ));
         }
     }
     

@@ -279,7 +279,18 @@ final class HeaderCommerceData
                 'source' => 'catalog',
                 'is_demo' => false,
             ];
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                w_log_error(
+                    'HeaderCommerceData resolveCategoryNavItemsUncached failed: ' . $e->getMessage(),
+                    [
+                        'website_id' => self::resolveWebsiteId(),
+                        'exception' => $e::class,
+                    ],
+                    'theme'
+                );
+            }
+
             return [
                 'items' => self::maybePrependAllProductsItem([], $include, $label, $url),
                 'source' => $include ? 'products_catalog' : 'error',

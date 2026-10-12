@@ -6,6 +6,7 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CacheWarmerInterface;
+use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupOrchestrator;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Observer\WorkerBootstrapWarmup;
 
@@ -49,50 +50,22 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
 
     public function warm(): array
     {
-        /** @var WorkerBootstrapWarmup $bootstrap */
-        $bootstrap = ObjectManager::getInstance(WorkerBootstrapWarmup::class);
-        $hosts = $bootstrap->getFpcWarmupHosts();
-        $paths = $this->priorityPaths($bootstrap->getFpcWarmupPaths());
-        $workerPort = $this->resolvePublicPort();
-        $targets = $this->resolveWarmTargets($hosts, $workerPort);
-
-        $warmed = 0;
-        $skipped = 0;
-        $notes = [];
-        $primary = $targets[0] ?? null;
-        $primaryLabel = $primary === null
-            ? 'host=unresolved'
-            : ('scheme=' . $primary['scheme'] . ' connect=' . $primary['connect'] . ':' . $primary['port']
-                . ' host=' . $primary['host']);
-
-        foreach ($paths as $path) {
-            $result = ['ok' => false, 'status' => 0, 'fpc' => '', 'reason' => 'no_target'];
-            foreach ($targets as $target) {
-                $result = $this->httpGet(
-                    $target['connect'],
-                    $target['port'],
-                    $target['host'],
-                    $path,
-                    $target['scheme'],
-                );
-                if ($result['ok']) {
-                    break;
-                }
-            }
-            if ($result['ok']) {
-                $warmed++;
-                $notes[] = $path . '=' . $result['status'] . ':' . $result['fpc'];
-            } else {
-                $skipped++;
-                $notes[] = $path . '=fail:' . $result['reason'];
-            }
-        }
+        // Single entry with Framework Orchestrator (phases A→B→C→D + ledger).
+        /** @var StorefrontWarmupOrchestrator $orchestrator */
+        $orchestrator = ObjectManager::getInstance(StorefrontWarmupOrchestrator::class);
+        $report = $orchestrator->runAfterClear();
+        $warmed = (int)($report['warmed'] ?? 0);
+        $skipped = (int)($report['skipped'] ?? 0);
+        $failed = (int)($report['failed'] ?? 0);
 
         return [
             'warmed' => $warmed,
-            'skipped' => $skipped,
-            'message' => 'worker_port=' . $workerPort . ' ' . $primaryLabel . ' '
-                . \implode(';', \array_slice($notes, 0, 6)),
+            'skipped' => $skipped + $failed,
+            'message' => 'orchestrator phase=' . (string)($report['phase'] ?? '')
+                . ' reason=' . (string)($report['reason'] ?? '')
+                . ' warmed=' . $warmed
+                . ' skipped=' . $skipped
+                . ' failed=' . $failed,
         ];
     }
 

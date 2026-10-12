@@ -172,6 +172,26 @@ app/code/Weline/Deploy/
     └── Release/index.phtml               # 发布历史模板
 ```
 
+## 备份边界（C4 · 话术硬门槛）
+
+发布前「备份」与 Schema 升级「列备份」是两套互不替代的能力。验收与运维话术必须分栏，禁止混称。
+
+| 分栏 | 服务类 | 归属 | 对象 | 用途 |
+|------|--------|------|------|------|
+| **整站文件备份** | `Weline\Deploy\Service\DeploySiteBackupService` | `Weline_Deploy` | 工作树 / 整站 tar（常见落盘 `var/backup/deploy/`） | 发布失败自动回滚、正式站强制整站备份 |
+| **Schema 列备份** | `Weline\Framework\Database\Service\BackupService`（`Weline_Database` 可薄继承） | Framework / Database | 表·列·结构·分块 **`MigrationBackup`** | SchemaDiff `DROP`/`MODIFY`、module rollback 列保全与 R2 自动捞回 |
+
+**硬口径**
+
+- **Deploy harness PASS ≠ 列自动恢复 PASS**：`deploy:release` / 发布预检 / 部署 harness 通过，只证明发布与文件备份通路，**不得**宣称 Schema 列已自动恢复或 `module:rollback` 正式链通过。
+- **禁止合并**两类 Backup 为同一 Service；整站 tar **不覆盖**列级 `MigrationBackup` 语义。
+
+交叉链：
+
+- Framework 规格：[schema-column-restore-and-rollback-chain.md](../Framework/doc/开发/spec/schema-column-restore-and-rollback-chain.md)
+- Database 回滚责任边界：[模块代码与数据库一致性回滚.md](../Database/doc/开发/模块代码与数据库一致性回滚.md)
+- 发布需求 §4.4：[doc/发布管理-需求说明.md](doc/发布管理-需求说明.md)
+
 ## 文档
 
 | 文档 | 说明 |
@@ -181,6 +201,7 @@ app/code/Weline/Deploy/
 | [`doc/github-webhook.md`](doc/github-webhook.md) | GitHub Webhook 填表步骤 |
 | [`doc/gitee-webhook.md`](doc/gitee-webhook.md) | Gitee Webhook 填表步骤 |
 | [`使用说明.md`](使用说明.md) | 详细使用说明与故障排查 |
+| [`doc/发布管理-需求说明.md`](doc/发布管理-需求说明.md) | 发布管理需求；含整站备份与备份边界 |
 
 ## 许可证
 

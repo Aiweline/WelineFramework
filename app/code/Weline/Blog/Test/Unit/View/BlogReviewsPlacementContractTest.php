@@ -4,15 +4,27 @@ namespace Weline\Blog\Test\Unit\View;
 use PHPUnit\Framework\TestCase;
 final class BlogReviewsPlacementContractTest extends TestCase
 {
-    public function testNativeReviewsHaveOnlyLayoutPlacement(): void
+    public function testReviewsUseInjectionXorEmptyLayoutSlot(): void
     {
         $widgetPhp = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
         $tpl = 'Weline_Blog::templates/frontend/widgets/blog-reviews.phtml';
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
         $src = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/blog-reviews.phtml');
         self::assertStringContainsString('@widget.code {blog-reviews}', $src);
-        self::assertStringContainsString('@widget.placement {layout}', $src);
-        self::assertStringNotContainsString('@widget.default_injections', $src);
+        self::assertStringContainsString('@widget.placement {injection}', $src);
+        self::assertStringContainsString('"layout_type":"blog"', $src);
+        self::assertStringContainsString('"slot":"blog-reviews"', $src);
+        self::assertStringContainsString('"required":true', $src);
+        self::assertStringNotContainsString('@widget.placement {layout}', $src);
+
+        $layout = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/theme/frontend/layouts/blog/default.phtml'
+        );
+        self::assertStringContainsString('id="blog-reviews"', $layout);
+        self::assertDoesNotMatchRegularExpression(
+            '/<w:widget\b[^>]*name=["\']blog-reviews["\']/',
+            $layout
+        );
     }
 
     public function testReviewsLayoutShellDoesNotDoubleCardChrome(): void

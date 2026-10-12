@@ -98,7 +98,7 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
             "Env::get('wls.worker.dynamic_ready_gate_fail_open', '1')",
             $source,
         );
-        self::assertStringContainsString('storefront_deferred_warmup_enabled', $source);
+        self::assertStringContainsString('needsDeferredStorefrontWarmup', $source);
         self::assertStringContainsString('runStorefrontFpcWarmupInternal', $source);
         self::assertStringContainsString('ready:fpc-hit', $source);
         self::assertStringContainsString('logDeferredStorefrontWarmupStage', $source);
@@ -120,18 +120,14 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
             "Env::get('wls.worker.storefront_ready_gate_max_paths', 4)",
             $runtimeSource,
         );
-        self::assertStringContainsString(
-            "Env::get('wls.worker.storefront_deferred_warmup_enabled', '0')",
-            $runtimeSource,
-        );
+        // Storefront deferred / dynamic deferred warm moved to Framework Cron;
+        // Worker gates are hard-disabled (see WlsRuntimeNoStorefrontWarmScheduleContractTest).
         self::assertStringContainsString(
             "Env::get('wls.worker.backend_deferred_warmup_enabled', '0')",
             $runtimeSource,
         );
-        self::assertStringContainsString(
-            "Env::get('wls.worker.dynamic_deferred_warmup_enabled', '0')",
-            $runtimeSource,
-        );
+        self::assertStringContainsString('needsDeferredStorefrontWarmup', $runtimeSource);
+        self::assertStringContainsString('shouldRunDeferredDynamicFirstRenderWarmup', $runtimeSource);
         self::assertStringContainsString("'storefront_ready_gate_enabled' => false", $envSource);
         self::assertStringContainsString("'storefront_ready_gate_max_paths' => 4", $envSource);
         self::assertStringContainsString("'storefront_deferred_warmup_enabled' => false", $envSource);
@@ -190,20 +186,10 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
         $source = file_get_contents(self::RUNTIME);
 
         self::assertIsString($source);
-        self::assertStringContainsString('isHomepageReadyGateFailOpen()', $source);
+        // Fail-open must NOT force Worker deferred storefront warm anymore.
+        self::assertStringNotContainsString('homepageNeedsDeferredPrime', $source);
+        self::assertStringContainsString('Abolish fail-open forced deferred', $source);
         self::assertStringContainsString("\$paths['/'] = '/';", $source);
-        self::assertStringContainsString(
-            'left every Worker cold for the first anonymous homepage SSR',
-            $source,
-        );
-        self::assertStringContainsString(
-            'left catalog cold',
-            $source,
-        );
-        self::assertStringNotContainsString(
-            "if (\$path !== '/') {\n            \$paths[\$path] = \$path;\n        }",
-            $source,
-        );
     }
 
     public function testDeferredStorefrontWarmupRunsOnlyOnConfiguredOwnerWorker(): void
@@ -215,19 +201,17 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
 
         $previousRole = $_SERVER['WLS_PROCESS_ROLE'] ?? null;
         $previousWorkerId = $_SERVER['WLS_WORKER_ID'] ?? null;
-        $previousEnabled = \getenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED');
-        $previousOwner = \getenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID');
 
         $_SERVER['WLS_PROCESS_ROLE'] = 'worker';
         $_SERVER['WLS_WORKER_ID'] = '1';
         \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED=1');
-        \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID=2');
+        \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID=1');
 
         try {
+            // Hard-disabled regardless of owner / env flag.
             self::assertFalse($method->invoke($runtime));
-
             $_SERVER['WLS_WORKER_ID'] = '2';
-            self::assertTrue($method->invoke($runtime));
+            self::assertFalse($method->invoke($runtime));
         } finally {
             if ($previousRole === null) {
                 unset($_SERVER['WLS_PROCESS_ROLE']);
@@ -239,16 +223,8 @@ final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
             } else {
                 $_SERVER['WLS_WORKER_ID'] = $previousWorkerId;
             }
-            if ($previousEnabled === false) {
-                \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED');
-            } else {
-                \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED=' . $previousEnabled);
-            }
-            if ($previousOwner === false) {
-                \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID');
-            } else {
-                \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID=' . $previousOwner);
-            }
+            \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED');
+            \putenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID');
         }
     }
 

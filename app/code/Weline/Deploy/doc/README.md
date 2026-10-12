@@ -38,11 +38,21 @@
 - **CI 等待部署完成** → `php bin/w deploy:release:wait --expect=v1.0.0`
 - **发布历史** → 后台 `系统管理 > 系统维护 > 发布历史`
 
+## 备份边界（C4）
+
+| 分栏 | 服务 | 对象 | 验收口径 |
+|------|------|------|----------|
+| 整站文件 | `DeploySiteBackupService` | `var/backup/deploy/` 等工作树 tar | 发布 / 正式站强制备份 / 失败自动回滚 |
+| Schema 列 | Framework `BackupService` | `MigrationBackup`（列/表/结构/分块） | SchemaDiff 保全、R2 捞回、`module:rollback` |
+
+**Deploy harness PASS ≠ 列自动恢复 / 正式 rollback 链 PASS。** 详述见 [../README.md「备份边界」](../README.md)、[发布管理-需求说明.md](发布管理-需求说明.md) §4.4 与「备份边界」、Framework [schema-column-restore-and-rollback-chain.md](../../Framework/doc/开发/spec/schema-column-restore-and-rollback-chain.md)、Database [模块代码与数据库一致性回滚.md](../../Database/doc/开发/模块代码与数据库一致性回滚.md)。
+
 ## 模块边界
 
 - Webhook 路由缓存只能通过 `Weline\ModuleRouter\Api\RouteCache` 失效；Deploy 不得引用 ModuleRouter Observer。
 - 网站 URL 候选只通过可选的 `Weline\Websites\Api\DefaultWebsiteUrl` 读取；未安装 Websites 时返回空候选，不产生类加载错误。
 - WLS 面板扩展继续通过 `Integration/Server` Provider 注册，Deploy 不反向读取 Server 内部实现。
+- **备份命名**：`DeploySiteBackupService`（整站文件）≠ Framework `BackupService`（列 `MigrationBackup`）；禁止合并、禁止用整站 tar 冒充列保全。
 
 ## 机器可读只读计划
 

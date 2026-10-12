@@ -11,7 +11,6 @@
         "region-east-jiangnan"
     ],
     "798-art-district": [
-        "family",
         "food-culinary",
         "free-independent",
         "night-city",
@@ -136,12 +135,12 @@
         "history-heritage"
     ],
     "ao-men-wei-ni-si-ren": [
-        "night-city",
-        "region-south"
+        "region-south",
+        "classic-first-china"
     ],
     "ao-men-xin-hao-ying-hui": [
-        "night-city",
-        "region-south"
+        "region-south",
+        "classic-first-china"
     ],
     "archaeological-ruins-of-liangzhu-city": [
         "history-heritage",
@@ -191,8 +190,8 @@
         "region-north"
     ],
     "badaguan": [
-        "night-city",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "classic-first-china"
     ],
     "badaling": [
         "nature-landscape",
@@ -571,7 +570,6 @@
         "region-east-jiangnan"
     ],
     "central-street": [
-        "family",
         "winter",
         "free-independent",
         "night-city",
@@ -662,7 +660,6 @@
         "region-southwest"
     ],
     "cheng-dou-huan-le-gu": [
-        "family",
         "free-independent",
         "region-southwest"
     ],
@@ -768,8 +765,8 @@
         "history-heritage"
     ],
     "chimelong": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "china-dinosaurs-park": [
         "folkways",
@@ -838,6 +835,7 @@
         "region-north"
     ],
     "chongqing-zoo": [
+        "wildlife",
         "night-city",
         "region-southwest"
     ],
@@ -1722,14 +1720,13 @@
         "history-heritage"
     ],
     "guangzhou-chimelong-tourist-resort": [
-        "history-heritage",
-        "ancient-culture",
-        "folkways",
+        "family",
+        "wildlife",
         "region-south"
     ],
     "guangzhou-chimelong-tourist-resort-2": [
-        "folkways",
-        "region-south"
+        "region-south",
+        "family"
     ],
     "gubei": [
         "hiking-adventure",
@@ -1843,8 +1840,8 @@
         "region-northwest"
     ],
     "ha-er-bin-ji-de-guan": [
-        "family",
-        "region-northeast"
+        "region-northeast",
+        "family"
     ],
     "ha-mi-hui-wang-fu": [
         "region-northwest",
@@ -2174,8 +2171,8 @@
         "classic-first-china"
     ],
     "hongshan-forest-zoo": [
-        "region-northeast",
-        "family"
+        "wildlife",
+        "region-northeast"
     ],
     "hongya-cave": [
         "food-culinary",
@@ -2665,8 +2662,8 @@
         "history-heritage"
     ],
     "jingdezhen": [
-        "night-city",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "classic-first-china"
     ],
     "jinggang": [
         "region-east-jiangnan",
@@ -3461,6 +3458,7 @@
         "history-heritage",
         "ancient-jiangnan",
         "ancient-culture",
+        "folkways",
         "region-east-jiangnan"
     ],
     "longhu": [
@@ -3484,6 +3482,7 @@
     "longmen-grottoes": [
         "history-heritage",
         "ancient-culture",
+        "folkways",
         "region-central"
     ],
     "longmen-mountains": [
@@ -4073,7 +4072,6 @@
         "family"
     ],
     "nan-jing-lu-bu-xing-jie": [
-        "family",
         "free-independent",
         "night-city",
         "region-east-jiangnan"
@@ -4121,7 +4119,6 @@
         "ancient-jiangnan"
     ],
     "nanluoguxiang": [
-        "family",
         "food-culinary",
         "free-independent",
         "night-city",
@@ -4252,7 +4249,6 @@
     ],
     "oriental-pearl-tower-3": [
         "classic-first-china",
-        "family",
         "free-independent",
         "night-city",
         "region-east-jiangnan"
@@ -4571,6 +4567,7 @@
     ],
     "osm-node-10010518736": [
         "history-heritage",
+        "ancient-culture",
         "region-north"
     ],
     "osm-node-10011006390": [
@@ -4854,8 +4851,8 @@
         "region-southwest"
     ],
     "osm-node-10024814724": [
-        "region-southwest",
-        "silk-road"
+        "history-heritage",
+        "region-southwest"
     ],
     "osm-node-10024814726": [
         "region-southwest",
@@ -4976,8 +4973,8 @@
         "region-north"
     ],
     "osm-node-10031306047": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-10031306048": [
         "classic-first-china",
@@ -5286,8 +5283,8 @@
         "region-northeast"
     ],
     "osm-node-10060807295": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-10060807296": [
         "classic-first-china",
@@ -5372,8 +5369,8 @@
         "history-heritage"
     ],
     "osm-node-10075255810": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-10075255811": [
         "classic-first-china",
@@ -5411,16 +5408,16 @@
         "region-north"
     ],
     "osm-node-10075257604": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-10075257621": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-10075257895": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-10075258244": [
         "classic-first-china",
@@ -6288,8 +6285,8 @@
         "classic-first-china"
     ],
     "osm-node-10198894146": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-10199168104": [
         "winter",
@@ -7665,8 +7662,8 @@
         "classic-first-china"
     ],
     "osm-node-1039850022": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-1039851070": [
         "region-north",
@@ -7677,12 +7674,12 @@
         "classic-first-china"
     ],
     "osm-node-1039853851": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-1039854211": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-1039854424": [
         "region-north",
@@ -7693,16 +7690,16 @@
         "classic-first-china"
     ],
     "osm-node-1039854872": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-1039855033": [
         "region-north",
         "classic-first-china"
     ],
     "osm-node-1039855321": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-1040001104": [
         "region-north",
@@ -8514,8 +8511,9 @@
         "silk-road"
     ],
     "osm-node-10614232184": [
-        "region-northeast",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-northeast"
     ],
     "osm-node-10615271391": [
         "region-southwest",
@@ -12113,8 +12111,9 @@
         "ancient-jiangnan"
     ],
     "osm-node-11114408105": [
-        "region-northeast",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-northeast"
     ],
     "osm-node-11114475257": [
         "region-east-jiangnan",
@@ -12634,24 +12633,24 @@
         "region-northwest"
     ],
     "osm-node-11155150341": [
-        "nature-landscape",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "nature-landscape"
     ],
     "osm-node-11155279203": [
-        "nature-landscape",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "nature-landscape"
     ],
     "osm-node-11155324178": [
-        "nature-landscape",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "nature-landscape"
     ],
     "osm-node-11155353467": [
-        "nature-landscape",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "nature-landscape"
     ],
     "osm-node-11155355917": [
-        "nature-landscape",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "nature-landscape"
     ],
     "osm-node-11158439999": [
         "region-east-jiangnan",
@@ -12666,8 +12665,8 @@
         "history-heritage"
     ],
     "osm-node-11162408685": [
-        "nature-landscape",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "nature-landscape"
     ],
     "osm-node-11162424229": [
         "region-east-jiangnan",
@@ -12690,8 +12689,8 @@
         "history-heritage"
     ],
     "osm-node-11163552815": [
-        "nature-landscape",
-        "region-north"
+        "region-north",
+        "nature-landscape"
     ],
     "osm-node-11163552824": [
         "region-north",
@@ -12702,8 +12701,8 @@
         "history-heritage"
     ],
     "osm-node-11163554051": [
-        "nature-landscape",
-        "region-north"
+        "region-north",
+        "nature-landscape"
     ],
     "osm-node-11163554052": [
         "region-north",
@@ -12734,12 +12733,12 @@
         "ancient-jiangnan"
     ],
     "osm-node-11165833432": [
-        "nature-landscape",
-        "region-north"
+        "region-north",
+        "nature-landscape"
     ],
     "osm-node-11165881299": [
-        "nature-landscape",
-        "region-north"
+        "region-north",
+        "nature-landscape"
     ],
     "osm-node-11166635965": [
         "region-north",
@@ -12758,8 +12757,8 @@
         "region-northwest"
     ],
     "osm-node-11171713395": [
-        "nature-landscape",
-        "region-northwest"
+        "region-northwest",
+        "nature-landscape"
     ],
     "osm-node-11171949696": [
         "region-east-jiangnan",
@@ -12886,8 +12885,8 @@
         "history-heritage"
     ],
     "osm-node-11195660980": [
-        "nature-landscape",
-        "region-north"
+        "region-north",
+        "nature-landscape"
     ],
     "osm-node-11197016001": [
         "region-east-jiangnan",
@@ -12982,8 +12981,8 @@
         "region-southwest"
     ],
     "osm-node-11210067969": [
-        "nature-landscape",
-        "region-southwest"
+        "region-southwest",
+        "nature-landscape"
     ],
     "osm-node-11211432289": [
         "region-southwest",
@@ -12994,6 +12993,7 @@
         "history-heritage"
     ],
     "osm-node-11217093368": [
+        "family",
         "beach-island",
         "cycling-self-drive",
         "tropical",
@@ -13172,8 +13172,8 @@
         "silk-road"
     ],
     "osm-node-11247695186": [
-        "nature-landscape",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "nature-landscape"
     ],
     "osm-node-11247752753": [
         "region-south",
@@ -13360,8 +13360,8 @@
         "history-heritage"
     ],
     "osm-node-11253053348": [
-        "nature-landscape",
-        "region-central"
+        "region-central",
+        "nature-landscape"
     ],
     "osm-node-11256955742": [
         "region-east-jiangnan",
@@ -13388,8 +13388,8 @@
         "history-heritage"
     ],
     "osm-node-11262727943": [
-        "nature-landscape",
-        "region-south"
+        "region-south",
+        "nature-landscape"
     ],
     "osm-node-11262727944": [
         "region-south",
@@ -13408,7 +13408,6 @@
         "silk-road"
     ],
     "osm-node-11263923518": [
-        "nature-landscape",
         "snow-mountain",
         "region-southwest"
     ],
@@ -15247,8 +15246,9 @@
         "ancient-jiangnan"
     ],
     "osm-node-1259826992": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-node-1260457343": [
         "region-east-jiangnan",
@@ -15583,8 +15583,9 @@
         "history-heritage"
     ],
     "osm-node-1357231555": [
-        "region-southwest",
-        "silk-road"
+        "family",
+        "wildlife",
+        "region-southwest"
     ],
     "osm-node-1357238032": [
         "region-southwest",
@@ -15927,16 +15928,17 @@
         "history-heritage"
     ],
     "osm-node-1607522447": [
-        "region-northwest",
-        "silk-road"
+        "family",
+        "wildlife",
+        "region-northwest"
     ],
     "osm-node-1608062767": [
         "region-east-jiangnan",
         "ancient-jiangnan"
     ],
     "osm-node-1613130280": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "nature-landscape",
+        "region-east-jiangnan"
     ],
     "osm-node-1628340993": [
         "region-northeast",
@@ -16457,8 +16459,9 @@
         "ancient-jiangnan"
     ],
     "osm-node-1849129011": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-node-1849531985": [
         "region-east-jiangnan",
@@ -17804,8 +17807,9 @@
         "ancient-jiangnan"
     ],
     "osm-node-2265541144": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-node-2265668998": [
         "region-east-jiangnan",
@@ -18974,8 +18978,9 @@
         "ancient-jiangnan"
     ],
     "osm-node-2692380695": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-node-2692380698": [
         "region-east-jiangnan",
@@ -19138,8 +19143,8 @@
         "classic-first-china"
     ],
     "osm-node-2708229313": [
-        "region-south",
-        "history-heritage"
+        "wildlife",
+        "region-south"
     ],
     "osm-node-271287530": [
         "region-north",
@@ -19222,8 +19227,9 @@
         "ancient-jiangnan"
     ],
     "osm-node-2726790838": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-node-2726910974": [
         "region-east-jiangnan",
@@ -21936,7 +21942,7 @@
     ],
     "osm-node-3377402028": [
         "region-southwest",
-        "ethnic-culture"
+        "family"
     ],
     "osm-node-3377402059": [
         "region-south",
@@ -22143,8 +22149,9 @@
         "silk-road"
     ],
     "osm-node-3419292708": [
-        "region-southwest",
-        "silk-road"
+        "family",
+        "wildlife",
+        "region-southwest"
     ],
     "osm-node-3419489604": [
         "region-northwest",
@@ -22606,8 +22613,9 @@
         "history-heritage"
     ],
     "osm-node-3669581560": [
-        "region-northeast",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-northeast"
     ],
     "osm-node-3671971288": [
         "region-northwest",
@@ -23700,8 +23708,8 @@
         "ancient-jiangnan"
     ],
     "osm-node-3891415857": [
-        "region-south",
-        "nature-landscape"
+        "nature-landscape",
+        "region-south"
     ],
     "osm-node-3894681631": [
         "region-south",
@@ -25623,8 +25631,8 @@
         "silk-road"
     ],
     "osm-node-4355423495": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-node-4356764794": [
         "beach-island",
@@ -26525,8 +26533,10 @@
         "ancient-jiangnan"
     ],
     "osm-node-4532235193": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "wildlife",
+        "night-city",
+        "region-east-jiangnan"
     ],
     "osm-node-4533196261": [
         "region-east-jiangnan",
@@ -26595,8 +26605,8 @@
         "ancient-jiangnan"
     ],
     "osm-node-4539696469": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-node-4539973606": [
         "region-northwest",
@@ -27564,8 +27574,9 @@
         "nature-landscape"
     ],
     "osm-node-4735606623": [
-        "region-south",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-south"
     ],
     "osm-node-4735606624": [
         "region-south",
@@ -28609,8 +28620,9 @@
         "classic-first-china"
     ],
     "osm-node-4859469625": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-node-4859640021": [
         "region-northwest",
@@ -29662,8 +29674,9 @@
         "ancient-jiangnan"
     ],
     "osm-node-5044028915": [
-        "region-north",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-north"
     ],
     "osm-node-5044709890": [
         "region-northwest",
@@ -31510,8 +31523,8 @@
         "ancient-jiangnan"
     ],
     "osm-node-5241217583": [
-        "region-southwest",
-        "nature-landscape"
+        "nature-landscape",
+        "region-southwest"
     ],
     "osm-node-5242354721": [
         "region-southwest",
@@ -31542,8 +31555,8 @@
         "nature-landscape"
     ],
     "osm-node-5245365624": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "nature-landscape",
+        "region-east-jiangnan"
     ],
     "osm-node-5246669556": [
         "region-east-jiangnan",
@@ -32248,8 +32261,9 @@
         "history-heritage"
     ],
     "osm-node-5368804864": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-node-5371214072": [
         "region-south",
@@ -32679,8 +32693,9 @@
         "ethnic-culture"
     ],
     "osm-node-5436753948": [
-        "region-southwest",
-        "silk-road"
+        "family",
+        "wildlife",
+        "region-southwest"
     ],
     "osm-node-5436983736": [
         "region-east-jiangnan",
@@ -33139,8 +33154,8 @@
         "classic-first-china"
     ],
     "osm-node-5546986119": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-5546986120": [
         "region-north",
@@ -33504,24 +33519,24 @@
         "classic-first-china"
     ],
     "osm-node-560039380": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-560039384": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-560039389": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-560039394": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-560039396": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-560039404": [
         "region-north",
@@ -33540,8 +33555,8 @@
         "classic-first-china"
     ],
     "osm-node-560040721": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-560040740": [
         "region-north",
@@ -38346,8 +38361,9 @@
         "history-heritage"
     ],
     "osm-node-6636162285": [
-        "region-northeast",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-northeast"
     ],
     "osm-node-6636526556": [
         "region-south",
@@ -39010,8 +39026,9 @@
         "ancient-jiangnan"
     ],
     "osm-node-6832240788": [
-        "region-south",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-south"
     ],
     "osm-node-6832943440": [
         "region-south",
@@ -40419,8 +40436,9 @@
         "silk-road"
     ],
     "osm-node-7213979598": [
-        "region-northeast",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-northeast"
     ],
     "osm-node-7214045223": [
         "region-north",
@@ -40799,16 +40817,16 @@
         "classic-first-china"
     ],
     "osm-node-7377621837": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-7377622167": [
         "region-north",
         "classic-first-china"
     ],
     "osm-node-7377622195": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-7377622299": [
         "region-north",
@@ -40863,8 +40881,8 @@
         "classic-first-china"
     ],
     "osm-node-7407702785": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-7410257687": [
         "region-southwest",
@@ -42983,8 +43001,8 @@
         "classic-first-china"
     ],
     "osm-node-8232866217": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-8232916159": [
         "region-north",
@@ -44843,8 +44861,9 @@
         "history-heritage"
     ],
     "osm-node-8653281671": [
-        "region-north",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-north"
     ],
     "osm-node-8653746309": [
         "region-northeast",
@@ -48075,8 +48094,8 @@
         "classic-first-china"
     ],
     "osm-node-9217525046": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-9217525047": [
         "region-north",
@@ -49331,8 +49350,8 @@
         "classic-first-china"
     ],
     "osm-node-9333574622": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-node-9334027280": [
         "region-central",
@@ -49739,8 +49758,8 @@
         "classic-first-china"
     ],
     "osm-node-9410086944": [
-        "region-central",
-        "nature-landscape"
+        "nature-landscape",
+        "region-central"
     ],
     "osm-node-9410201813": [
         "region-south",
@@ -49851,8 +49870,9 @@
         "classic-first-china"
     ],
     "osm-node-9414752141": [
-        "region-north",
-        "classic-first-china"
+        "family",
+        "wildlife",
+        "region-north"
     ],
     "osm-node-9414752142": [
         "region-north",
@@ -53983,8 +54003,8 @@
         "history-heritage"
     ],
     "osm-node-9900880925": [
-        "region-central",
-        "history-heritage"
+        "wildlife",
+        "region-central"
     ],
     "osm-node-9901444249": [
         "region-south",
@@ -54723,7 +54743,6 @@
         "history-heritage"
     ],
     "osm-node-9997084304": [
-        "family",
         "wildlife",
         "region-north"
     ],
@@ -54892,8 +54911,8 @@
         "history-heritage"
     ],
     "osm-way-1000455160": [
-        "region-northwest",
-        "silk-road"
+        "wildlife",
+        "region-northwest"
     ],
     "osm-way-1000502435": [
         "region-east-jiangnan",
@@ -55288,8 +55307,9 @@
         "history-heritage"
     ],
     "osm-way-1004384248": [
-        "region-central",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1004384698": [
         "region-east-jiangnan",
@@ -56992,8 +57012,8 @@
         "silk-road"
     ],
     "osm-way-1018798243": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1018799819": [
         "region-east-jiangnan",
@@ -57364,8 +57384,8 @@
         "silk-road"
     ],
     "osm-way-1021912928": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1021961942": [
         "region-east-jiangnan",
@@ -57704,8 +57724,8 @@
         "ethnic-culture"
     ],
     "osm-way-1025421784": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1025422587": [
         "region-east-jiangnan",
@@ -57720,8 +57740,8 @@
         "food-culinary"
     ],
     "osm-way-1025487877": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1025600773": [
         "region-east-jiangnan",
@@ -57828,12 +57848,14 @@
         "ancient-jiangnan"
     ],
     "osm-way-1026675604": [
-        "region-central",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1026675605": [
-        "region-central",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-central"
     ],
     "osm-way-10266786": [
         "region-south",
@@ -58000,8 +58022,8 @@
         "silk-road"
     ],
     "osm-way-10286038": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1028662039": [
         "region-north",
@@ -58020,8 +58042,9 @@
         "ancient-jiangnan"
     ],
     "osm-way-10287996": [
-        "region-north",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1028829460": [
         "region-central",
@@ -58040,8 +58063,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1028860532": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "nature-landscape",
+        "region-east-jiangnan"
     ],
     "osm-way-1028861019": [
         "region-east-jiangnan",
@@ -58216,8 +58239,8 @@
         "nature-landscape"
     ],
     "osm-way-1029889558": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1029901220": [
         "region-north",
@@ -58468,8 +58491,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1031887153": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1031890432": [
         "region-north",
@@ -58948,8 +58971,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1036011238": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1036014565": [
         "region-southwest",
@@ -59312,8 +59335,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1040392696": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1040424803": [
         "region-east-jiangnan",
@@ -59328,12 +59351,12 @@
         "family"
     ],
     "osm-way-1040481026": [
-        "family",
+        "wildlife",
         "region-north"
     ],
     "osm-way-1040481026-2": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1040520028": [
         "region-southwest",
@@ -59404,8 +59427,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1041386326": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1041413120": [
         "region-northwest",
@@ -59436,8 +59459,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1041811011": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1041898153": [
         "region-northeast",
@@ -59576,8 +59599,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1044179534": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1044260426": [
         "region-south",
@@ -59680,8 +59703,8 @@
         "history-heritage"
     ],
     "osm-way-1046096912": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1046274091": [
         "region-east-jiangnan",
@@ -59784,8 +59807,8 @@
         "silk-road"
     ],
     "osm-way-1047666103": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1047666108": [
         "region-southwest",
@@ -60092,8 +60115,8 @@
         "ethnic-culture"
     ],
     "osm-way-1051182686": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1051188166": [
         "region-east-jiangnan",
@@ -60232,8 +60255,9 @@
         "classic-first-china"
     ],
     "osm-way-1052180379": [
-        "region-northeast",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-northeast"
     ],
     "osm-way-1052206414": [
         "region-south",
@@ -60332,8 +60356,8 @@
         "history-heritage"
     ],
     "osm-way-1052440551": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1052458988": [
         "region-central",
@@ -60400,8 +60424,8 @@
         "history-heritage"
     ],
     "osm-way-1053347102": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1053351530": [
         "region-southwest",
@@ -60544,8 +60568,8 @@
         "history-heritage"
     ],
     "osm-way-1054640497": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-1054653490": [
         "region-east-jiangnan",
@@ -60836,8 +60860,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1057477181": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1057501398": [
         "region-east-jiangnan",
@@ -60876,16 +60900,16 @@
         "history-heritage"
     ],
     "osm-way-1057852978": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1057864072": [
         "region-east-jiangnan",
         "ancient-jiangnan"
     ],
     "osm-way-1057952972": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1058059789": [
         "region-north",
@@ -60920,8 +60944,8 @@
         "silk-road"
     ],
     "osm-way-1058249921": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1058258528": [
         "region-southwest",
@@ -61028,8 +61052,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1059143599": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1059411817": [
         "region-northeast",
@@ -61088,12 +61112,12 @@
         "ancient-jiangnan"
     ],
     "osm-way-1060068278": [
-        "family",
+        "wildlife",
         "region-north"
     ],
     "osm-way-1060068278-2": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1060084439": [
         "region-east-jiangnan",
@@ -61584,8 +61608,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-106616871": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1066297763": [
         "region-southwest",
@@ -61672,8 +61696,8 @@
         "history-heritage"
     ],
     "osm-way-1067767679": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1067778108": [
         "region-north",
@@ -61812,12 +61836,12 @@
         "ancient-jiangnan"
     ],
     "osm-way-1069521584": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1069521585": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1069574866": [
         "region-east-jiangnan",
@@ -61884,8 +61908,8 @@
         "family"
     ],
     "osm-way-1070143513": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1070145129": [
         "region-north",
@@ -62234,7 +62258,7 @@
         "ancient-jiangnan"
     ],
     "osm-way-1073525468": [
-        "family",
+        "wildlife",
         "region-east-jiangnan"
     ],
     "osm-way-1073525486": [
@@ -62362,8 +62386,8 @@
         "snow-mountain"
     ],
     "osm-way-1075247610": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1075260847": [
         "region-central",
@@ -62430,8 +62454,8 @@
         "nature-landscape"
     ],
     "osm-way-1075811401": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1075935570": [
         "region-east-jiangnan",
@@ -62462,8 +62486,8 @@
         "ethnic-culture"
     ],
     "osm-way-1076097286": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1076164051": [
         "region-southwest",
@@ -63094,8 +63118,8 @@
         "history-heritage"
     ],
     "osm-way-1081670572": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1081678617": [
         "region-north",
@@ -63166,8 +63190,8 @@
         "silk-road"
     ],
     "osm-way-1082444234": [
-        "region-northwest",
-        "nature-landscape"
+        "wildlife",
+        "region-northwest"
     ],
     "osm-way-1082444236": [
         "region-northwest",
@@ -63274,8 +63298,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1083829996": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1083915345": [
         "region-southwest",
@@ -63658,8 +63682,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1087916905": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1087920681": [
         "region-south",
@@ -63846,8 +63870,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1090368340": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1090407004": [
         "region-central",
@@ -63906,8 +63930,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1091053909": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1091237891": [
         "region-east-jiangnan",
@@ -63974,8 +63998,8 @@
         "ethnic-culture"
     ],
     "osm-way-1092139521": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1092139549": [
         "region-southwest",
@@ -64234,8 +64258,8 @@
         "ethnic-culture"
     ],
     "osm-way-1094903372": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1094903377": [
         "region-east-jiangnan",
@@ -64274,8 +64298,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1095303318": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1095303329": [
         "region-east-jiangnan",
@@ -64474,8 +64498,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1098448050": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1098564839": [
         "region-east-jiangnan",
@@ -64506,8 +64530,8 @@
         "silk-road"
     ],
     "osm-way-1098979737": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1098980840": [
         "region-southwest",
@@ -64518,8 +64542,8 @@
         "food-culinary"
     ],
     "osm-way-1098994956": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1098997721": [
         "region-southwest",
@@ -64538,8 +64562,8 @@
         "nature-landscape"
     ],
     "osm-way-1099471287": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1099474588": [
         "region-east-jiangnan",
@@ -64550,8 +64574,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1099477821": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1099496589": [
         "region-north",
@@ -64622,8 +64646,8 @@
         "silk-road"
     ],
     "osm-way-1100561036": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1100574774": [
         "region-north",
@@ -64770,8 +64794,8 @@
         "ethnic-culture"
     ],
     "osm-way-1103110572": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1103114671": [
         "region-east-jiangnan",
@@ -64838,8 +64862,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1104332648": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1104392464": [
         "region-central",
@@ -64934,8 +64958,8 @@
         "classic-first-china"
     ],
     "osm-way-1105527331": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-1105527332": [
         "region-north",
@@ -65058,8 +65082,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1107843496": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1108115811": [
         "region-north",
@@ -65366,8 +65390,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1115491985": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1115504469": [
         "region-northeast",
@@ -65794,8 +65818,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1121150582": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1121175697": [
         "romantic",
@@ -65806,8 +65830,8 @@
         "history-heritage"
     ],
     "osm-way-1121201125": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1121252917": [
         "region-east-jiangnan",
@@ -65926,8 +65950,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1123224550": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1123259076": [
         "region-east-jiangnan",
@@ -66250,8 +66274,8 @@
         "history-heritage"
     ],
     "osm-way-1125975804": [
-        "region-northeast",
-        "nature-landscape"
+        "wildlife",
+        "region-northeast"
     ],
     "osm-way-1125982587": [
         "region-north",
@@ -66318,8 +66342,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1126004441": [
-        "region-northeast",
-        "nature-landscape"
+        "wildlife",
+        "region-northeast"
     ],
     "osm-way-1126124622": [
         "region-south",
@@ -66434,8 +66458,8 @@
         "nature-landscape"
     ],
     "osm-way-1127430958": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1127452715": [
         "region-east-jiangnan",
@@ -66530,8 +66554,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1128439397": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-11290417": [
         "region-east-jiangnan",
@@ -66550,8 +66574,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-11294219": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "nature-landscape",
+        "region-east-jiangnan"
     ],
     "osm-way-1130544875": [
         "region-north",
@@ -66578,8 +66602,9 @@
         "ancient-jiangnan"
     ],
     "osm-way-1130625132": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1130625149": [
         "region-east-jiangnan",
@@ -66710,8 +66735,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-11325336": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1132627826": [
         "region-east-jiangnan",
@@ -66818,8 +66843,9 @@
         "nature-landscape"
     ],
     "osm-way-1134255495": [
-        "region-north",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1134418143": [
         "region-east-jiangnan",
@@ -66934,8 +66960,8 @@
         "history-heritage"
     ],
     "osm-way-1136249387": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1136265484": [
         "region-north",
@@ -67062,8 +67088,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1138594084": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1138619368": [
         "region-northwest",
@@ -67354,8 +67380,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1147820092": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1147931901": [
         "region-north",
@@ -67398,8 +67424,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1149106203": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1149120817": [
         "region-south",
@@ -67474,8 +67500,8 @@
         "silk-road"
     ],
     "osm-way-1150097071": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1150141714": [
         "region-northwest",
@@ -67506,8 +67532,8 @@
         "history-heritage"
     ],
     "osm-way-1150328042": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1150363168": [
         "region-north",
@@ -67750,8 +67776,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1153639133": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1153650988": [
         "region-east-jiangnan",
@@ -68034,8 +68060,9 @@
         "silk-road"
     ],
     "osm-way-1158149301": [
-        "region-north",
-        "history-heritage"
+        "family",
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1158178208": [
         "region-central",
@@ -68078,8 +68105,8 @@
         "silk-road"
     ],
     "osm-way-1158736265": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1158933007": [
         "region-south",
@@ -68098,12 +68125,12 @@
         "history-heritage"
     ],
     "osm-way-1158996068": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1159122133": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1159184581": [
         "region-south",
@@ -68170,8 +68197,8 @@
         "history-heritage"
     ],
     "osm-way-1160101927": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1160115339": [
         "region-south",
@@ -68202,8 +68229,8 @@
         "history-heritage"
     ],
     "osm-way-1160242710": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1160245828": [
         "region-southwest",
@@ -68402,8 +68429,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1162334252": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1162376344": [
         "region-south",
@@ -68786,8 +68813,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1169773421": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1169773437": [
         "region-east-jiangnan",
@@ -68958,8 +68985,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1172646197": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1172689507": [
         "region-northeast",
@@ -69042,8 +69069,8 @@
         "nature-landscape"
     ],
     "osm-way-1173616470": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1173738504": [
         "region-central",
@@ -69322,8 +69349,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1178276023": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1178283324": [
         "region-east-jiangnan",
@@ -69378,8 +69405,8 @@
         "silk-road"
     ],
     "osm-way-1178630738": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1178713135": [
         "region-south",
@@ -69406,8 +69433,8 @@
         "history-heritage"
     ],
     "osm-way-1179768142": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1179798052": [
         "region-southwest",
@@ -69546,8 +69573,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1182151586": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1182151587": [
         "region-south",
@@ -69582,8 +69609,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1182399297": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1182401987": [
         "region-east-jiangnan",
@@ -69614,8 +69641,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1182500628": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1182591671": [
         "region-south",
@@ -69682,8 +69709,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1183821684": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1183850588": [
         "region-east-jiangnan",
@@ -69715,7 +69742,7 @@
     ],
     "osm-way-1184458071": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-1184458077": [
         "region-east-jiangnan",
@@ -69938,8 +69965,8 @@
         "silk-road"
     ],
     "osm-way-1186452741": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1186482477": [
         "region-east-jiangnan",
@@ -70178,8 +70205,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1190097004": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1190103980": [
         "region-east-jiangnan",
@@ -70210,8 +70237,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1190749367": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1190757066": [
         "region-southwest",
@@ -70358,8 +70385,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1192140354": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-119217269": [
         "region-central",
@@ -70430,8 +70457,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1192971228": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1192979770": [
         "region-east-jiangnan",
@@ -70594,8 +70621,8 @@
         "history-heritage"
     ],
     "osm-way-1194510183": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1194540370": [
         "ethnic-culture",
@@ -71146,8 +71173,8 @@
         "history-heritage"
     ],
     "osm-way-1201853196": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "wildlife",
+        "region-east-jiangnan"
     ],
     "osm-way-1201891680": [
         "region-northeast",
@@ -71306,8 +71333,8 @@
         "ethnic-culture"
     ],
     "osm-way-1203875652": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1203892879": [
         "region-north",
@@ -71358,8 +71385,10 @@
         "ethnic-culture"
     ],
     "osm-way-1205163216": [
-        "region-north",
-        "classic-first-china"
+        "family",
+        "wildlife",
+        "night-city",
+        "region-north"
     ],
     "osm-way-1205182209": [
         "region-north",
@@ -71591,8 +71620,8 @@
         "silk-road"
     ],
     "osm-way-1207989777": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-12080178": [
         "region-south",
@@ -71615,8 +71644,8 @@
         "silk-road"
     ],
     "osm-way-1208136956": [
-        "region-northeast",
-        "nature-landscape"
+        "wildlife",
+        "region-northeast"
     ],
     "osm-way-1208164476": [
         "region-south",
@@ -71855,8 +71884,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1210470192": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "nature-landscape",
+        "region-east-jiangnan"
     ],
     "osm-way-1210534377": [
         "region-northwest",
@@ -72027,8 +72056,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1212195526": [
-        "region-north",
-        "nature-landscape"
+        "wildlife",
+        "region-north"
     ],
     "osm-way-1212196222": [
         "region-south",
@@ -72920,7 +72949,7 @@
     ],
     "osm-way-1218789914": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-1218791460": [
         "region-east-jiangnan",
@@ -73099,8 +73128,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-1220549501": [
-        "region-south",
-        "nature-landscape"
+        "wildlife",
+        "region-south"
     ],
     "osm-way-1220579290": [
         "region-east-jiangnan",
@@ -73147,12 +73176,12 @@
         "history-heritage"
     ],
     "osm-way-1221469442": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-1221481856": [
-        "region-central",
-        "nature-landscape"
+        "wildlife",
+        "region-central"
     ],
     "osm-way-12214919": [
         "region-north",
@@ -73363,8 +73392,8 @@
         "history-heritage"
     ],
     "osm-way-12245294": [
-        "region-southwest",
-        "nature-landscape"
+        "wildlife",
+        "region-southwest"
     ],
     "osm-way-1224667981": [
         "region-east-jiangnan",
@@ -73411,8 +73440,8 @@
         "silk-road"
     ],
     "osm-way-1225122771": [
-        "region-southwest",
-        "silk-road"
+        "family",
+        "region-southwest"
     ],
     "osm-way-1225138141": [
         "region-east-jiangnan",
@@ -74311,8 +74340,8 @@
         "history-heritage"
     ],
     "osm-way-1233817684": [
-        "region-southwest",
-        "silk-road"
+        "family",
+        "region-southwest"
     ],
     "osm-way-1233850755": [
         "region-south",
@@ -74879,8 +74908,8 @@
         "classic-first-china"
     ],
     "osm-way-1278984429": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-12796044": [
         "region-north",
@@ -75087,8 +75116,9 @@
         "nature-landscape"
     ],
     "osm-way-12955557": [
-        "region-south",
-        "history-heritage"
+        "family",
+        "night-city",
+        "region-south"
     ],
     "osm-way-12981054": [
         "region-east-jiangnan",
@@ -75327,8 +75357,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-132732347": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-way-13273834": [
         "region-south",
@@ -75451,8 +75481,8 @@
         "history-heritage"
     ],
     "osm-way-13467082": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-134678671": [
         "region-east-jiangnan",
@@ -75575,8 +75605,8 @@
         "history-heritage"
     ],
     "osm-way-136057813": [
-        "region-south",
-        "history-heritage"
+        "family",
+        "region-south"
     ],
     "osm-way-136058562": [
         "region-south",
@@ -75740,7 +75770,7 @@
     ],
     "osm-way-13839035": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-138461154": [
         "region-south",
@@ -76103,8 +76133,8 @@
         "family"
     ],
     "osm-way-14367921": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-14370658": [
         "region-southwest",
@@ -77255,8 +77285,8 @@
         "history-heritage"
     ],
     "osm-way-16129378": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-161296938": [
         "region-north",
@@ -79471,8 +79501,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-208534087": [
-        "region-north",
-        "history-heritage"
+        "family",
+        "region-north"
     ],
     "osm-way-208562519": [
         "region-south",
@@ -79871,8 +79901,8 @@
         "silk-road"
     ],
     "osm-way-220702672": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-220732094": [
         "region-northwest",
@@ -79907,8 +79937,8 @@
         "history-heritage"
     ],
     "osm-way-221496135": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-221571283": [
         "region-southwest",
@@ -80063,8 +80093,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-224063464": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "nature-landscape",
+        "region-east-jiangnan"
     ],
     "osm-way-224068108": [
         "region-east-jiangnan",
@@ -80111,8 +80141,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-225103507": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-225103509": [
         "region-east-jiangnan",
@@ -80239,8 +80269,8 @@
         "history-heritage"
     ],
     "osm-way-228035340": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-way-228044516": [
         "region-north",
@@ -80615,8 +80645,8 @@
         "family"
     ],
     "osm-way-232729257": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-232729258": [
         "region-north",
@@ -81832,7 +81862,7 @@
     ],
     "osm-way-249696516": [
         "region-south",
-        "history-heritage"
+        "family"
     ],
     "osm-way-249928762": [
         "region-north",
@@ -82531,8 +82561,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-260402592": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-260404265": [
         "region-east-jiangnan",
@@ -82695,8 +82725,8 @@
         "silk-road"
     ],
     "osm-way-263043271": [
-        "region-southwest",
-        "silk-road"
+        "family",
+        "region-southwest"
     ],
     "osm-way-263045194": [
         "region-east-jiangnan",
@@ -83099,8 +83129,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-267927683": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-268219630": [
         "region-east-jiangnan",
@@ -83211,8 +83241,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-271102661": [
-        "region-central",
-        "history-heritage"
+        "family",
+        "region-central"
     ],
     "osm-way-271143407": [
         "region-central",
@@ -83459,8 +83489,8 @@
         "history-heritage"
     ],
     "osm-way-279938665": [
-        "region-northeast",
-        "history-heritage"
+        "family",
+        "region-northeast"
     ],
     "osm-way-279938666": [
         "region-northeast",
@@ -83991,8 +84021,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-292110019": [
-        "region-south",
-        "history-heritage"
+        "family",
+        "region-south"
     ],
     "osm-way-292129152": [
         "region-northwest",
@@ -84007,8 +84037,10 @@
         "family"
     ],
     "osm-way-29222967": [
-        "region-north",
-        "classic-first-china"
+        "family",
+        "wildlife",
+        "night-city",
+        "region-north"
     ],
     "osm-way-292246909": [
         "region-northwest",
@@ -84399,8 +84431,8 @@
         "history-heritage"
     ],
     "osm-way-297262698": [
-        "region-south",
-        "history-heritage"
+        "family",
+        "region-south"
     ],
     "osm-way-297321151": [
         "region-northwest",
@@ -84587,8 +84619,8 @@
         "history-heritage"
     ],
     "osm-way-298742813": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-way-298752450": [
         "region-east-jiangnan",
@@ -85559,8 +85591,8 @@
         "ethnic-culture"
     ],
     "osm-way-311069982": [
-        "region-northeast",
-        "history-heritage"
+        "family",
+        "region-northeast"
     ],
     "osm-way-311069983": [
         "region-northeast",
@@ -87043,8 +87075,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-337128065": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-337129561": [
         "region-south",
@@ -87263,8 +87295,8 @@
         "silk-road"
     ],
     "osm-way-340807628": [
-        "region-northeast",
-        "history-heritage"
+        "family",
+        "region-northeast"
     ],
     "osm-way-340825434": [
         "region-northeast",
@@ -87335,8 +87367,8 @@
         "history-heritage"
     ],
     "osm-way-342881095": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-342886857": [
         "region-east-jiangnan",
@@ -87371,8 +87403,8 @@
         "classic-first-china"
     ],
     "osm-way-34374887": [
-        "region-south",
-        "history-heritage"
+        "family",
+        "region-south"
     ],
     "osm-way-343878045": [
         "region-central",
@@ -87451,12 +87483,12 @@
         "history-heritage"
     ],
     "osm-way-346333489": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
-    ],
-    "osm-way-346466415": [
         "family",
         "region-east-jiangnan"
+    ],
+    "osm-way-346466415": [
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-way-346472257": [
         "region-east-jiangnan",
@@ -87855,8 +87887,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-35842505": [
-        "region-southwest",
-        "silk-road"
+        "family",
+        "region-southwest"
     ],
     "osm-way-35842536": [
         "region-southwest",
@@ -88479,8 +88511,8 @@
         "silk-road"
     ],
     "osm-way-369910080": [
-        "region-northwest",
-        "silk-road"
+        "family",
+        "region-northwest"
     ],
     "osm-way-370008963": [
         "region-northwest",
@@ -89875,8 +89907,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-396113576": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-way-396113577": [
         "region-east-jiangnan",
@@ -90657,7 +90689,7 @@
     ],
     "osm-way-408047557": [
         "region-northwest",
-        "silk-road"
+        "family"
     ],
     "osm-way-408047632": [
         "region-northwest",
@@ -90936,8 +90968,8 @@
         "food-culinary"
     ],
     "osm-way-412637991": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-412639479": [
         "region-east-jiangnan",
@@ -90996,8 +91028,8 @@
         "food-culinary"
     ],
     "osm-way-412904907": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-way-412931672": [
         "region-east-jiangnan",
@@ -91108,8 +91140,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-413555754": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-413677038": [
         "region-east-jiangnan",
@@ -92352,8 +92384,8 @@
         "food-culinary"
     ],
     "osm-way-433201647": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-way-433203248": [
         "region-southwest",
@@ -92408,8 +92440,8 @@
         "history-heritage"
     ],
     "osm-way-433998632": [
-        "region-north",
-        "nature-landscape"
+        "nature-landscape",
+        "region-north"
     ],
     "osm-way-434067133": [
         "region-south",
@@ -92737,7 +92769,7 @@
     ],
     "osm-way-437732061": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-437732068": [
         "region-east-jiangnan",
@@ -92836,8 +92868,8 @@
         "silk-road"
     ],
     "osm-way-438781645": [
-        "region-north",
-        "history-heritage"
+        "family",
+        "region-north"
     ],
     "osm-way-438781683": [
         "region-north",
@@ -92852,8 +92884,8 @@
         "history-heritage"
     ],
     "osm-way-439095249": [
-        "region-north",
-        "nature-landscape"
+        "nature-landscape",
+        "region-north"
     ],
     "osm-way-439168196": [
         "region-east-jiangnan",
@@ -92928,8 +92960,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-439962818": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-440002009": [
         "region-northwest",
@@ -93408,8 +93440,8 @@
         "silk-road"
     ],
     "osm-way-445895116": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-445896931": [
         "region-south",
@@ -94448,8 +94480,8 @@
         "history-heritage"
     ],
     "osm-way-458503680": [
-        "region-northwest",
-        "silk-road"
+        "family",
+        "region-northwest"
     ],
     "osm-way-458610793": [
         "region-south",
@@ -94884,8 +94916,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-464325923": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-464326472": [
         "region-east-jiangnan",
@@ -96452,8 +96484,9 @@
         "nature-landscape"
     ],
     "osm-way-488381186": [
-        "region-north",
-        "nature-landscape"
+        "nature-landscape",
+        "family",
+        "region-north"
     ],
     "osm-way-488469273": [
         "region-east-jiangnan",
@@ -97692,8 +97725,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-510708023": [
-        "region-central",
-        "nature-landscape"
+        "nature-landscape",
+        "region-central"
     ],
     "osm-way-510716699": [
         "region-central",
@@ -98408,8 +98441,8 @@
         "nature-landscape"
     ],
     "osm-way-520503071": [
-        "region-south",
-        "history-heritage"
+        "family",
+        "region-south"
     ],
     "osm-way-520503691": [
         "region-south",
@@ -100485,8 +100518,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-542184568": [
-        "region-north",
-        "classic-first-china"
+        "family",
+        "region-north"
     ],
     "osm-way-542328084": [
         "region-south",
@@ -101889,8 +101922,9 @@
         "ancient-jiangnan"
     ],
     "osm-way-554057348": [
-        "region-north",
-        "classic-first-china"
+        "family",
+        "night-city",
+        "region-north"
     ],
     "osm-way-554057379": [
         "region-north",
@@ -101937,8 +101971,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-554386947": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-554387756": [
         "region-east-jiangnan",
@@ -102153,8 +102187,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-556265629": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-556288175": [
         "region-east-jiangnan",
@@ -102513,8 +102547,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-560372910": [
-        "region-east-jiangnan",
-        "family"
+        "family",
+        "region-east-jiangnan"
     ],
     "osm-way-560385163": [
         "region-north",
@@ -103034,7 +103068,7 @@
     ],
     "osm-way-568516861": [
         "region-central",
-        "history-heritage"
+        "family"
     ],
     "osm-way-568590141": [
         "region-northeast",
@@ -103042,7 +103076,7 @@
     ],
     "osm-way-568601723": [
         "region-east-jiangnan",
-        "nature-landscape"
+        "family"
     ],
     "osm-way-568610210": [
         "region-east-jiangnan",
@@ -103337,8 +103371,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-572137210": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-way-572286975": [
         "region-southwest",
@@ -103710,7 +103744,7 @@
     ],
     "osm-way-580809758": [
         "region-northwest",
-        "silk-road"
+        "family"
     ],
     "osm-way-580872596": [
         "region-north",
@@ -104770,7 +104804,7 @@
     ],
     "osm-way-59387948": [
         "region-northeast",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-594412639": [
         "region-east-jiangnan",
@@ -106309,8 +106343,8 @@
         "silk-road"
     ],
     "osm-way-619132530": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-619172679": [
         "region-southwest",
@@ -106558,7 +106592,7 @@
     ],
     "osm-way-62344632": [
         "region-east-jiangnan",
-        "nature-landscape"
+        "family"
     ],
     "osm-way-623464449": [
         "region-north",
@@ -107130,7 +107164,7 @@
     ],
     "osm-way-631156662": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-631156663": [
         "region-east-jiangnan",
@@ -108765,8 +108799,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-653984456": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-653984456-2": [
         "region-north",
@@ -108862,7 +108896,7 @@
     ],
     "osm-way-655143436": [
         "region-south",
-        "history-heritage"
+        "family"
     ],
     "osm-way-655145303": [
         "region-south",
@@ -111201,8 +111235,9 @@
         "ancient-jiangnan"
     ],
     "osm-way-681051566": [
-        "region-north",
-        "classic-first-china"
+        "family",
+        "night-city",
+        "region-north"
     ],
     "osm-way-681069388": [
         "region-southwest",
@@ -111405,8 +111440,8 @@
         "family"
     ],
     "osm-way-683573580": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-683636154": [
         "region-south",
@@ -111589,8 +111624,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-685204370": [
-        "region-east-jiangnan",
-        "nature-landscape"
+        "nature-landscape",
+        "region-east-jiangnan"
     ],
     "osm-way-685215592": [
         "region-east-jiangnan",
@@ -111633,8 +111668,8 @@
         "family"
     ],
     "osm-way-685610036": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-685610069": [
         "region-north",
@@ -111694,7 +111729,7 @@
     ],
     "osm-way-686378017": [
         "region-south",
-        "history-heritage"
+        "family"
     ],
     "osm-way-686381622": [
         "region-north",
@@ -112314,7 +112349,7 @@
     ],
     "osm-way-691951921": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-691965485": [
         "region-east-jiangnan",
@@ -112654,7 +112689,7 @@
     ],
     "osm-way-695892250": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-695913183": [
         "region-southwest",
@@ -113165,8 +113200,8 @@
         "silk-road"
     ],
     "osm-way-700757536": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-700757536-2": [
         "region-north",
@@ -114126,7 +114161,7 @@
     ],
     "osm-way-710593688": [
         "region-south",
-        "history-heritage"
+        "family"
     ],
     "osm-way-710602581": [
         "region-central",
@@ -115602,7 +115637,7 @@
     ],
     "osm-way-734135114": [
         "region-south",
-        "history-heritage"
+        "family"
     ],
     "osm-way-734135152": [
         "region-south",
@@ -116861,8 +116896,8 @@
         "family"
     ],
     "osm-way-747007529": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-747007532": [
         "region-north",
@@ -117185,8 +117220,8 @@
         "history-heritage"
     ],
     "osm-way-755582017": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-755626378": [
         "region-south",
@@ -117774,7 +117809,7 @@
     ],
     "osm-way-763914806": [
         "region-southwest",
-        "silk-road"
+        "family"
     ],
     "osm-way-763946292": [
         "region-east-jiangnan",
@@ -118050,7 +118085,7 @@
     ],
     "osm-way-770420467": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-770656268": [
         "region-east-jiangnan",
@@ -118130,7 +118165,7 @@
     ],
     "osm-way-771670061": [
         "region-central",
-        "history-heritage"
+        "family"
     ],
     "osm-way-771670062": [
         "region-central",
@@ -118273,8 +118308,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-773630619": [
-        "region-north",
-        "nature-landscape"
+        "nature-landscape",
+        "region-north"
     ],
     "osm-way-773670104": [
         "region-east-jiangnan",
@@ -118750,7 +118785,7 @@
     ],
     "osm-way-779424037": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-779484573": [
         "region-north",
@@ -119374,7 +119409,7 @@
     ],
     "osm-way-790555686": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-790580700": [
         "region-east-jiangnan",
@@ -119506,7 +119541,7 @@
     ],
     "osm-way-793006978": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-793126579": [
         "region-southwest",
@@ -120210,7 +120245,7 @@
     ],
     "osm-way-806498731": [
         "region-southwest",
-        "silk-road"
+        "family"
     ],
     "osm-way-806653668": [
         "region-north",
@@ -120541,8 +120576,8 @@
         "family"
     ],
     "osm-way-813024934": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-813024960": [
         "region-north",
@@ -121217,12 +121252,12 @@
         "classic-first-china"
     ],
     "osm-way-818273777": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-818273779": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-818414383": [
         "region-east-jiangnan",
@@ -121349,8 +121384,8 @@
         "family"
     ],
     "osm-way-818976018": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-818976020": [
         "region-north",
@@ -121618,7 +121653,7 @@
     ],
     "osm-way-821932532": [
         "region-central",
-        "history-heritage"
+        "family"
     ],
     "osm-way-821948750": [
         "region-central",
@@ -122490,7 +122525,7 @@
     ],
     "osm-way-833103856": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-833214641": [
         "region-east-jiangnan",
@@ -122518,7 +122553,7 @@
     ],
     "osm-way-833447440": [
         "region-northeast",
-        "history-heritage"
+        "family"
     ],
     "osm-way-833450281": [
         "region-northeast",
@@ -122629,8 +122664,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-834502476": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-834502479": [
         "region-north",
@@ -122849,8 +122884,8 @@
         "family"
     ],
     "osm-way-836317117": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-836317667": [
         "region-east-jiangnan",
@@ -123885,8 +123920,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-848406848": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-848406848-2": [
         "region-north",
@@ -124266,7 +124301,7 @@
     ],
     "osm-way-857112756": [
         "region-north",
-        "history-heritage"
+        "family"
     ],
     "osm-way-85711367": [
         "region-east-jiangnan",
@@ -124745,8 +124780,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-862991913": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-863000663": [
         "region-northwest",
@@ -125177,8 +125212,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-871495608": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "osm-way-871561493": [
         "region-east-jiangnan",
@@ -125326,7 +125361,7 @@
     ],
     "osm-way-875056556": [
         "region-south",
-        "history-heritage"
+        "family"
     ],
     "osm-way-875057978": [
         "region-south",
@@ -126690,7 +126725,7 @@
     ],
     "osm-way-892593986": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-892599053": [
         "region-southwest",
@@ -127214,7 +127249,7 @@
     ],
     "osm-way-901248987": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-901510681": [
         "region-east-jiangnan",
@@ -127341,8 +127376,8 @@
         "family"
     ],
     "osm-way-903397245": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-903397248": [
         "region-north",
@@ -127814,7 +127849,7 @@
     ],
     "osm-way-909019198": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-909019199": [
         "region-east-jiangnan",
@@ -127957,8 +127992,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-910674876": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-910715140": [
         "region-south",
@@ -129386,7 +129421,7 @@
     ],
     "osm-way-933608461": [
         "region-north",
-        "history-heritage"
+        "family"
     ],
     "osm-way-933641045": [
         "region-south",
@@ -129457,8 +129492,8 @@
         "ancient-jiangnan"
     ],
     "osm-way-9348599": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-934886735": [
         "region-east-jiangnan",
@@ -129753,8 +129788,8 @@
         "family"
     ],
     "osm-way-939968502": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-940159547": [
         "region-south",
@@ -129950,7 +129985,7 @@
     ],
     "osm-way-9417468": [
         "region-northeast",
-        "nature-landscape"
+        "family"
     ],
     "osm-way-9417548": [
         "region-east-jiangnan",
@@ -130234,7 +130269,7 @@
     ],
     "osm-way-9464025": [
         "region-north",
-        "history-heritage"
+        "family"
     ],
     "osm-way-946653742": [
         "region-south",
@@ -131450,7 +131485,7 @@
     ],
     "osm-way-961075871": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-961095356": [
         "region-south",
@@ -133245,8 +133280,9 @@
         "ancient-jiangnan"
     ],
     "osm-way-979980228": [
-        "region-north",
-        "classic-first-china"
+        "family",
+        "night-city",
+        "region-north"
     ],
     "osm-way-979980520": [
         "region-east-jiangnan",
@@ -133285,8 +133321,8 @@
         "food-culinary"
     ],
     "osm-way-980488325": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-980490331": [
         "region-southwest",
@@ -133706,7 +133742,7 @@
     ],
     "osm-way-984234662": [
         "region-east-jiangnan",
-        "nature-landscape"
+        "family"
     ],
     "osm-way-984250350": [
         "region-north",
@@ -134078,7 +134114,7 @@
     ],
     "osm-way-987442155": [
         "region-central",
-        "history-heritage"
+        "family"
     ],
     "osm-way-987442173": [
         "region-central",
@@ -134606,7 +134642,7 @@
     ],
     "osm-way-993048463": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-993067515": [
         "region-east-jiangnan",
@@ -134634,7 +134670,7 @@
     ],
     "osm-way-993432674": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "osm-way-993491022": [
         "region-north",
@@ -134670,7 +134706,7 @@
     ],
     "osm-way-99465606": [
         "region-central",
-        "history-heritage"
+        "family"
     ],
     "osm-way-9947766": [
         "region-north",
@@ -135113,8 +135149,8 @@
         "silk-road"
     ],
     "osm-way-997649281": [
-        "region-northeast",
-        "nature-landscape"
+        "nature-landscape",
+        "region-northeast"
     ],
     "osm-way-997694120": [
         "region-central",
@@ -135169,8 +135205,8 @@
         "history-heritage"
     ],
     "osm-way-998685188": [
-        "family",
-        "region-north"
+        "region-north",
+        "family"
     ],
     "osm-way-998741825": [
         "region-south",
@@ -136263,7 +136299,7 @@
     ],
     "shang-hai-ye-sheng-dong-wu-yuan": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "shang-luo-niu-bei-liang": [
         "region-northwest",
@@ -136300,10 +136336,11 @@
         "ancient-jiangnan"
     ],
     "shanghai-natural-history-museum": [
-        "family",
-        "region-east-jiangnan"
+        "region-east-jiangnan",
+        "family"
     ],
     "shanghai-ocean-aquarium": [
+        "family",
         "night-city",
         "region-east-jiangnan"
     ],
@@ -137096,7 +137133,6 @@
     ],
     "tun-xi-lao-jie": [
         "free-independent",
-        "night-city",
         "region-east-jiangnan"
     ],
     "ulungur-lake": [
@@ -137202,7 +137238,7 @@
     ],
     "wd-q10566319": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q105888901": [
         "region-east-jiangnan",
@@ -137214,7 +137250,7 @@
     ],
     "wd-q106071028": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q106079842": [
         "region-east-jiangnan",
@@ -137294,7 +137330,7 @@
     ],
     "wd-q10902457": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q10904587": [
         "region-east-jiangnan",
@@ -137346,7 +137382,7 @@
     ],
     "wd-q10946033": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q109470168": [
         "region-east-jiangnan",
@@ -137382,7 +137418,7 @@
     ],
     "wd-q11062008": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q11062249": [
         "region-east-jiangnan",
@@ -137414,7 +137450,7 @@
     ],
     "wd-q11102420": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q11102470": [
         "region-east-jiangnan",
@@ -137426,7 +137462,7 @@
     ],
     "wd-q11102641": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q11103124": [
         "region-east-jiangnan",
@@ -137442,7 +137478,7 @@
     ],
     "wd-q11124472": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q11124693": [
         "region-east-jiangnan",
@@ -137510,7 +137546,7 @@
     ],
     "wd-q112979178": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q113671214": [
         "region-east-jiangnan",
@@ -137578,7 +137614,7 @@
     ],
     "wd-q123195444": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q123367272": [
         "region-east-jiangnan",
@@ -137637,8 +137673,8 @@
         "ancient-jiangnan"
     ],
     "wd-q130059294": [
-        "region-east-jiangnan",
-        "family"
+        "family",
+        "region-east-jiangnan"
     ],
     "wd-q130342159": [
         "region-east-jiangnan",
@@ -137734,19 +137770,19 @@
     ],
     "wd-q137556044": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q137571107": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q137571140": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q137970396": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q138351385": [
         "region-east-jiangnan",
@@ -137834,7 +137870,7 @@
     ],
     "wd-q140438971": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q141467630": [
         "region-east-jiangnan",
@@ -137865,8 +137901,8 @@
         "ancient-jiangnan"
     ],
     "wd-q14594862": [
-        "region-east-jiangnan",
-        "family"
+        "family",
+        "region-east-jiangnan"
     ],
     "wd-q1465660": [
         "winter",
@@ -137941,8 +137977,9 @@
         "nature-landscape"
     ],
     "wd-q15938016": [
-        "region-north",
-        "nature-landscape"
+        "nature-landscape",
+        "family",
+        "region-north"
     ],
     "wd-q15943627": [
         "region-east-jiangnan",
@@ -137954,7 +137991,7 @@
     ],
     "wd-q16258099": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q16303641": [
         "region-east-jiangnan",
@@ -137966,7 +138003,7 @@
     ],
     "wd-q16684080": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q1683260": [
         "region-east-jiangnan",
@@ -138014,7 +138051,7 @@
     ],
     "wd-q17016128": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q17019606": [
         "region-east-jiangnan",
@@ -138078,7 +138115,7 @@
     ],
     "wd-q18667200": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q18682996": [
         "region-east-jiangnan",
@@ -138098,7 +138135,7 @@
     ],
     "wd-q19607262": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q197132": [
         "region-east-jiangnan",
@@ -138134,15 +138171,15 @@
     ],
     "wd-q20669929": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q20819471": [
         "region-east-jiangnan",
         "ancient-jiangnan"
     ],
     "wd-q20984189": [
-        "region-east-jiangnan",
-        "family"
+        "family",
+        "region-east-jiangnan"
     ],
     "wd-q2118734": [
         "region-east-jiangnan",
@@ -138170,11 +138207,11 @@
     ],
     "wd-q220083": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q220207": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q22101008": [
         "region-central",
@@ -138234,11 +138271,11 @@
     ],
     "wd-q25058046": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q25109977": [
         "region-east-jiangnan",
-        "nature-landscape"
+        "family"
     ],
     "wd-q25380386": [
         "region-east-jiangnan",
@@ -138270,7 +138307,7 @@
     ],
     "wd-q26961754": [
         "region-central",
-        "history-heritage"
+        "family"
     ],
     "wd-q2735583": [
         "region-east-jiangnan",
@@ -138342,7 +138379,7 @@
     ],
     "wd-q2859205": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q29469142": [
         "region-east-jiangnan",
@@ -138350,7 +138387,7 @@
     ],
     "wd-q2963655": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q2963705": [
         "region-east-jiangnan",
@@ -138417,8 +138454,9 @@
         "ancient-jiangnan"
     ],
     "wd-q3182046": [
-        "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family",
+        "night-city",
+        "region-east-jiangnan"
     ],
     "wd-q31853425": [
         "region-east-jiangnan",
@@ -138538,7 +138576,7 @@
     ],
     "wd-q4467974": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q462372": [
         "region-east-jiangnan",
@@ -138670,7 +138708,7 @@
     ],
     "wd-q59255587": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q5925989": [
         "region-east-jiangnan",
@@ -138706,7 +138744,7 @@
     ],
     "wd-q6140007": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q614916": [
         "region-east-jiangnan",
@@ -138730,7 +138768,7 @@
     ],
     "wd-q62020000": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q6202332": [
         "region-east-jiangnan",
@@ -138758,7 +138796,7 @@
     ],
     "wd-q65117876": [
         "region-east-jiangnan",
-        "nature-landscape"
+        "family"
     ],
     "wd-q651278": [
         "region-east-jiangnan",
@@ -138802,7 +138840,7 @@
     ],
     "wd-q6963658": [
         "region-east-jiangnan",
-        "nature-landscape"
+        "family"
     ],
     "wd-q71229": [
         "region-east-jiangnan",
@@ -139062,7 +139100,7 @@
     ],
     "wd-q9097826": [
         "region-east-jiangnan",
-        "ancient-jiangnan"
+        "family"
     ],
     "wd-q910180": [
         "region-east-jiangnan",
@@ -139442,7 +139480,6 @@
     "xi-an-hui-min-jie": [
         "food-culinary",
         "free-independent",
-        "night-city",
         "region-northwest"
     ],
     "xi-an-lou-guan-tai": [
@@ -139451,7 +139488,7 @@
     ],
     "xi-an-qin-ling-ye-sheng-dong-wu-yuan": [
         "region-northwest",
-        "classic-first-china"
+        "family"
     ],
     "xi-an-xiao-yan-ta": [
         "region-northwest",
@@ -139916,7 +139953,6 @@
     ],
     "yang-shuo-xi-jie": [
         "free-independent",
-        "night-city",
         "region-south"
     ],
     "yang-shuo-yu-long-he": [
@@ -140254,7 +140290,6 @@
     "zhang-sha-tai-ping-lao-jie": [
         "food-culinary",
         "free-independent",
-        "night-city",
         "region-central"
     ],
     "zhang-shi-shuai-fu": [

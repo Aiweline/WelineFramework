@@ -56,6 +56,33 @@ final class RequiredDefaultInjectionRuntimeSafetyNetContractTest extends TestCas
         self::assertContains('storefront-float-start', $slots);
     }
 
+    public function testResolvePageTypeUsesUriMapForProductPdp(): void
+    {
+        $net = dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionRuntimeSafetyNet.php';
+        $src = (string)file_get_contents($net);
+        self::assertStringContainsString('resolvePageTypeFromUri', $src);
+        self::assertStringContainsString('REQUEST_LAYOUT_NAME_KEY', $src);
+        self::assertStringContainsString('product-native-detail', $src);
+        // Must not rely only on /products|/category heuristics (PDP would fall through to homepage).
+        $fnPos = strpos($src, 'private function resolvePageType()');
+        self::assertNotFalse($fnPos);
+        $layoutNamePos = strpos($src, 'REQUEST_LAYOUT_NAME_KEY', $fnPos);
+        $uriPos = strpos($src, 'resolvePageTypeFromUri', $fnPos);
+        self::assertNotFalse($layoutNamePos);
+        self::assertNotFalse($uriPos);
+        $productsPos = strpos($src, "str_contains(\$path, '/products')", $fnPos);
+        self::assertNotFalse($productsPos);
+        self::assertLessThan($uriPos, $layoutNamePos);
+        self::assertLessThan($productsPos, $uriPos);
+
+        $resolver = dirname(__DIR__, 3) . '/Service/LayoutEntity/SolidifiedControllerTemplateResolver.php';
+        $resolverSrc = (string)file_get_contents($resolver);
+        $forIdentityPos = strpos($resolverSrc, 'function resolveForIdentity(');
+        self::assertNotFalse($forIdentityPos);
+        $setPos = strpos($resolverSrc, 'REQUEST_LAYOUT_NAME_KEY', $forIdentityPos);
+        self::assertNotFalse($setPos);
+    }
+
     public function testWireUpUsesRuntimeSafetyNetAfterStrip(): void
     {
         $obs = dirname(__DIR__, 3) . '/Observer/LayoutSlotRenderer.php';

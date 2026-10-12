@@ -1336,12 +1336,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function homepageKeepWarmEnabled(): bool
     {
-        $raw = \getenv('WLS_WORKER_HOMEPAGE_KEEP_WARM_ENABLED');
-        if ($raw === false || \trim((string)$raw) === '') {
-            $raw = Env::get('wls.worker.homepage_keep_warm_enabled', '1');
-        }
-
-        return \in_array(\strtolower(\trim((string)$raw)), ['1', 'true', 'yes', 'on'], true);
+        // Storefront keep-warm moved to Framework Cache Cron (StorefrontWarmupOrchestrator).
+        // Workers must not schedule homepage HTML FPC warm in background Fibers.
+        return false;
     }
 
     private function homepageKeepWarmIntervalSeconds(): int
@@ -1469,32 +1466,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function needsDeferredStorefrontWarmup(): bool
     {
-        if (!$this->canRunDynamicFirstRenderWarmupForCurrentRole()) {
-            return false;
-        }
-
-        $rawFlag = \getenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.storefront_deferred_warmup_enabled', '0');
-        }
-
-        $flagEnabled = \in_array(
-            \strtolower(\trim((string)$rawFlag)),
-            ['1', 'true', 'yes', 'on', 'async', 'deferred'],
-            true
-        );
-
-        // Default homepage READY is fail-open: in-process `/` prime is skipped
-        // so template compile faults cannot kill the Worker. Deferred critical
-        // warmup is then the only path that can publish Process FPC before the
-        // first public hit. Force it on when homepage proof is not yet HIT
-        // (fail-open or missed strict prime), even if the explicit deferred
-        // flag stays at the historical default `0`. Strict mode with a HIT
-        // proof still honors the explicit flag only.
-        $homepageNeedsDeferredPrime = $this->isHomepageReadyGateFailOpen()
-            || !((bool)($this->readyGateHomepageFpcProof['hit'] ?? false));
-
-        return $flagEnabled || $homepageNeedsDeferredPrime;
+        // Storefront deferred/peer/idle_rank warm moved to Framework Cron.
+        // Abolish fail-open forced deferred that starved 2-core VPS CPUs.
+        return false;
     }
 
     /**
@@ -6758,27 +6732,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function shouldRunDeferredDynamicFirstRenderWarmup(): bool
     {
-        if (!$this->canRunDynamicFirstRenderWarmupForCurrentRole()) {
-            return false;
-        }
-        if ($this->readyGateDynamicFirstRenderWarmupCompleted) {
-            return false;
-        }
-
-        $rawFlag = \getenv('WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '0');
-        }
-
-        if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
-            return false;
-        }
-
-        return $this->isDynamicFirstRenderWarmupOwnerWorker(
-            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_OWNER_WORKER_ID',
-            'wls.worker.dynamic_deferred_warmup_owner_worker_id',
-            1
-        );
+        // Dynamic first-render storefront warm is Framework Cron owned.
+        return false;
     }
 
     private function runDeferredDynamicFirstRenderWarmup(): void
@@ -6824,34 +6779,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function shouldRunDeferredFpcBuildAheadWarmup(): bool
     {
-        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
-        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor'], true)) {
-            return false;
-        }
-        if (!$this->roleCanRunDeferredFpcBuildAhead($role)) {
-            return false;
-        }
-
-        $rawFlag = \getenv('WLS_WORKER_FPC_BUILDAHEAD_ENABLED');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.fpc_buildahead_enabled', null);
-        }
-        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            $rawFlag = '1';
-        }
-
-        $flag = \strtolower(\trim((string)$rawFlag));
-        if (!\in_array($flag, ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
-            return false;
-        }
-
-        $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
-        $ownerWorkerId = (int)(Env::get('wls.worker.fpc_buildahead_owner_worker_id', 1) ?: 1);
-        if ($workerId > 0 && $ownerWorkerId > 0 && $workerId !== $ownerWorkerId) {
-            return false;
-        }
-
-        return true;
+        // Storefront FPC build-ahead is Framework Cron owned; Worker must not warm.
+        return false;
     }
 
     private function roleCanRunDeferredFpcBuildAhead(string $role): bool
@@ -6886,20 +6815,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function shouldRunDeferredFpcProcessPullWarmup(): bool
     {
-        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
-        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
-            return false;
-        }
-
-        $rawFlag = \getenv('WLS_WORKER_FPC_PROCESS_PULL_ENABLED');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.fpc_process_pull_enabled', null);
-        }
-        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            return true;
-        }
-
-        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true);
+        // Process-pull hydrate of storefront FPC is Framework Cron owned.
+        return false;
     }
 
     private function runDeferredFpcBuildAheadWarmup(): void

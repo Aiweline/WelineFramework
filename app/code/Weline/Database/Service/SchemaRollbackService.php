@@ -11,6 +11,7 @@ use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Schema\SchemaCheckpointIdentity;
 use Weline\Framework\Database\Schema\SchemaDiffOp;
 use Weline\Framework\Setup\Model\MigrationBackup;
 
@@ -397,11 +398,13 @@ final class SchemaRollbackService
     ): array {
         $blockers = [];
         $groups = [];
+        $runtimeQualifiers = $this->checkpointRuntimeQualifiers();
         foreach ($operations as $operation) {
             $migrationId = (int)($operation['migration_id'] ?? 0);
             $version = trim((string)($operation['version'] ?? ''));
             $batchId = trim((string)($operation['batch_id'] ?? ''));
-            $tableName = trim((string)($operation['table_name'] ?? ''));
+            $rawTableName = trim((string)($operation['table_name'] ?? ''));
+            $tableName = $this->logicalCheckpointTableKey($rawTableName, $runtimeQualifiers);
             $before = strtolower(trim((string)($operation['schema_before_checksum'] ?? '')));
             $after = strtolower(trim((string)($operation['schema_after_checksum'] ?? '')));
             if ($migrationId <= 0 || $batchId === '' || $tableName === '') {
@@ -435,7 +438,11 @@ final class SchemaRollbackService
         }
 
         $absentFingerprint = hash('sha256', 'absent');
-        $simulated = $this->normalizeCheckpointTables((array)$currentCheckpoint['tables'], $absentFingerprint);
+        $simulated = $this->normalizeCheckpointTables(
+            (array)$currentCheckpoint['tables'],
+            $absentFingerprint,
+            $runtimeQualifiers,
+        );
         foreach ($groups as $group) {
             $tableName = (string)$group['table_name'];
             $actual = (string)($simulated[$tableName] ?? $absentFingerprint);
@@ -448,12 +455,17 @@ final class SchemaRollbackService
                 break;
             }
             $simulated[$tableName] = (string)$group['before'];
-            $simulated = $this->normalizeCheckpointTables($simulated, $absentFingerprint);
+            $simulated = $this->normalizeCheckpointTables(
+                $simulated,
+                $absentFingerprint,
+                $runtimeQualifiers,
+            );
         }
 
         $targetTables = $this->normalizeCheckpointTables(
             (array)$targetCheckpoint['tables'],
             $absentFingerprint,
+            $runtimeQualifiers,
         );
         if ($blockers === [] && $simulated !== $targetTables) {
             $changedTables = [];
@@ -471,12 +483,19 @@ final class SchemaRollbackService
         return array_values(array_unique($blockers));
     }
 
-    /** @param array<string, string> $tables @return array<string, string> */
-    private function normalizeCheckpointTables(array $tables, string $absentFingerprint): array
-    {
+    /**
+     * @param array<string, string> $tables
+     * @param list<string> $runtimeQualifiers
+     * @return array<string, string>
+     */
+    private function normalizeCheckpointTables(
+        array $tables,
+        string $absentFingerprint,
+        array $runtimeQualifiers = [],
+    ): array {
         $normalized = [];
         foreach ($tables as $tableName => $fingerprint) {
-            $tableName = trim((string)$tableName);
+            $tableName = $this->logicalCheckpointTableKey((string)$tableName, $runtimeQualifiers);
             $fingerprint = strtolower(trim((string)$fingerprint));
             if ($tableName !== '' && $this->isFingerprint($fingerprint) && !hash_equals($absentFingerprint, $fingerprint)) {
                 $normalized[$tableName] = $fingerprint;
@@ -484,6 +503,29 @@ final class SchemaRollbackService
         }
         ksort($normalized);
         return $normalized;
+    }
+
+    /** @return list<string> */
+    private function checkpointRuntimeQualifiers(): array
+    {
+        try {
+            return SchemaCheckpointIdentity::runtimeQualifiers(
+                $this->connectionFactory->getConnector(),
+            );
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** @param list<string> $runtimeQualifiers */
+    private function logicalCheckpointTableKey(string $tableName, array $runtimeQualifiers): string
+    {
+        $tableName = trim($tableName);
+        if ($tableName === '') {
+            return '';
+        }
+        $logical = SchemaCheckpointIdentity::tableName($tableName, $runtimeQualifiers);
+        return $logical !== '' ? $logical : $tableName;
     }
 
     /** @return array<string, mixed>|null */

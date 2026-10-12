@@ -102,6 +102,26 @@ final class SchemaCheckpointRollbackPlanTest extends TestCore
         self::assertNotSame([], $plan['warnings']);
     }
 
+    public function testCreatePlanNormalizesQuotedQualifiedTableNameAgainstFormat2CheckpointKey(): void
+    {
+        $module = self::MODULE_PREFIX . '_Identity';
+        $checkpointKey = 'w_checkpoint_identity';
+        $migrationTable = '"public"."w_checkpoint_identity"';
+        $before = hash('sha256', 'schema-v1-identity');
+        $after = hash('sha256', 'schema-v2-identity');
+        $this->migration->recordSchemaCheckpoint($module, '1.0.0', [$checkpointKey => $before]);
+        $migrationId = $this->recordInstalledSchemaDdl($module, $migrationTable, $before, $after);
+        $this->migration->recordSchemaCheckpoint($module, '1.1.0', [$checkpointKey => $after]);
+
+        $plan = $this->schemaRollbackService->createPlan($module, '1.0.0', '1.1.0');
+
+        $blockerText = implode("\n", $plan['blockers']);
+        self::assertStringNotContainsString('反向链', $blockerText);
+        self::assertSame([], $plan['blockers'], $blockerText);
+        self::assertCount(1, $plan['operations']);
+        self::assertSame($migrationId, $plan['operations'][0]['migration_id']);
+    }
+
     private function recordInstalledSchemaDdl(
         string $module,
         string $table,

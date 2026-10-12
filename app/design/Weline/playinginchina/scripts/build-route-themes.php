@@ -310,17 +310,25 @@ $themes = [
         'kind' => 'style',
         'name' => 'Wildlife & Pandas',
         'name_zh' => '熊猫与野生动物',
-        'pitch' => 'Giant pandas plus nature reserves — gentle days with strong photo and family overlap.',
-        'hubs' => ['Chengdu', 'Wolong', 'Xishuangbanna'],
+        'pitch' => 'Giant pandas, city zoos and safari parks — gentle days with strong photo and family overlap.',
+        'hubs' => ['Chengdu', 'Beijing', 'Guangzhou', 'Wolong'],
         'days_hint' => '3–6',
         'route_ids' => ['r2'],
-        'seed_dests' => ['panda-base'],
-        'match' => [
-            'types_any' => ['wildlife', 'nature'],
-            'scenery_any' => ['forest', 'wetlands', 'grassland'],
+        // Flagship zoos + panda base so wildlife shelf is not nature-reserve-only.
+        'seed_dests' => [
+            'panda-base',
+            'chimelong',
+            'osm-way-29222967', // Beijing Zoo
+            'hongshan-forest-zoo',
+            'chongqing-zoo',
         ],
-        'priority_boost' => 30,
-        'cap' => 60,
+        'match' => [
+            // Prefer typed wildlife; city zoos use scenery=city after reclassify.
+            'types_any' => ['wildlife'],
+            'scenery_any' => ['forest', 'wetlands', 'grassland', 'city', 'coast'],
+        ],
+        'priority_boost' => 40,
+        'cap' => 200,
     ],
     [
         'id' => 'cycling-self-drive',

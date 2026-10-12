@@ -382,7 +382,7 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
         $this->dispatchAfter($op);
         if (in_array($op->kind, [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
             && $op->payload instanceof ColumnDefinition) {
-            $this->restorePreviouslyRolledBackColumnData(
+            $this->restoreEligibleColumnDataAfterAdd(
                 $moduleName,
                 $op->tableName,
                 $op->payload,
@@ -607,6 +607,10 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
         return $payload;
     }
 
+    /**
+     * Thin delegate kept for call-site / test compatibility.
+     * Prefer {@see restoreEligibleColumnDataAfterAdd()}.
+     */
     private function restorePreviouslyRolledBackColumnData(
         string $moduleName,
         string $tableName,
@@ -616,39 +620,66 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
         ?string $modelClass,
         ?PhysicalTableIdentity $physicalIdentity = null,
     ): void {
-        $items = (clone $this->migrationModel)->reset()
-            ->where(Migration::schema_fields_MODULE, $moduleName)
-            ->where(Migration::schema_fields_FILE, 'schema_diff')
-            ->where(Migration::schema_fields_SCHEMA_TABLE_NAME, $tableName)
-            ->where(Migration::schema_fields_STATUS, Migration::STATUS_ROLLED_BACK)
-            ->order(Migration::schema_fields_ROLLBACK_AT, 'DESC')
-            ->select()
-            ->fetch()
-            ->getItems();
+        $this->restoreEligibleColumnDataAfterAdd(
+            $moduleName,
+            $tableName,
+            $column,
+            $currentMigrationId,
+            $connector,
+            $modelClass,
+            $physicalIdentity,
+        );
+    }
 
-        foreach ($items as $item) {
-            $migrationId = (int)$item->getId();
-            if ($migrationId <= 0 || $migrationId === $currentMigrationId) {
-                continue;
-            }
-            if (!in_array(
-                (string)$item->getData(Migration::schema_fields_OPERATION_KIND),
-                [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN],
-                true
+    /**
+     * After ADD/MODIFY, restore the newest eligible column backup:
+     * Lane R1 = rolled_back ADD/MODIFY (SCOPE_ROLLBACK);
+     * Lane R2 = drop_column with SCOPE_UPGRADE backup (installed or rolled_back DROP).
+     * Candidates without a proven TYPE_COLUMN MigrationBackup are skipped; next older
+     * qualified candidate is tried (migration_id DESC) — never silent restored:0 that
+     * suppresses an older Lane with a real backup.
+     *
+     * @return array{migration_id: int, backup_scope: string}|null selected candidate (for contract tests)
+     */
+    private function restoreEligibleColumnDataAfterAdd(
+        string $moduleName,
+        string $tableName,
+        ColumnDefinition $column,
+        int $currentMigrationId,
+        ConnectorInterface $connector,
+        ?string $modelClass,
+        ?PhysicalTableIdentity $physicalIdentity = null,
+    ): ?array {
+        $candidates = $this->listEligibleColumnRestoreCandidates(
+            $moduleName,
+            $tableName,
+            $column->name,
+            $currentMigrationId,
+            $connector,
+            $physicalIdentity,
+        );
+        $tableKeys = $this->columnRestoreTableNameCandidates($tableName, $connector, $physicalIdentity);
+
+        foreach ($candidates as $candidate) {
+            $migrationId = $candidate['migration_id'];
+            $backupScope = $candidate['backup_scope'];
+            // B: re-prove at restore time; missing backup → fail-forward to next DESC candidate.
+            if (!$this->backupService->hasQualifiedColumnBackup(
+                $migrationId,
+                $column->name,
+                $backupScope,
+                $tableKeys,
             )) {
                 continue;
             }
-            $payload = json_decode((string)$item->getData(Migration::schema_fields_OPERATION_PAYLOAD), true);
-            if (!is_array($payload) || (string)($payload['name'] ?? '') !== $column->name) {
-                continue;
-            }
+
             $result = $physicalIdentity !== null
                 ? $this->backupService->restorePhysicalColumnDataConflictSafe(
                     $physicalIdentity,
                     $column->name,
                     $migrationId,
                     $column->default,
-                    MigrationBackup::SCOPE_ROLLBACK,
+                    $backupScope,
                 )
                 : $this->backupService->restoreColumnDataConflictSafe(
                     $tableName,
@@ -657,7 +688,7 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
                     $connector,
                     $modelClass,
                     $column->default,
-                    MigrationBackup::SCOPE_ROLLBACK,
+                    $backupScope,
                 );
             if (($result['conflicts'] ?? 0) > 0) {
                 $this->eventsManager->dispatch('Weline_Framework_Schema::column_restore_conflict', new DataObject([
@@ -665,11 +696,226 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
                     'table_name' => $tableName,
                     'column_name' => $column->name,
                     'migration_id' => $migrationId,
+                    'backup_scope' => $backupScope,
                     'conflicts' => $result['conflicts'],
                 ]));
             }
-            break;
+
+            return $candidate;
         }
+
+        if ($candidates !== []) {
+            $this->eventsManager->dispatch('Weline_Framework_Schema::column_restore_miss', new DataObject([
+                'module_name' => $moduleName,
+                'table_name' => $tableName,
+                'column_name' => $column->name,
+                'candidate_count' => count($candidates),
+            ]));
+        }
+
+        return null;
+    }
+
+    /**
+     * Newest qualified candidate (TYPE_COLUMN + scope proved). Used by contract tests.
+     *
+     * @return array{migration_id: int, backup_scope: string}|null
+     */
+    private function selectEligibleColumnRestoreCandidate(
+        string $moduleName,
+        string $tableName,
+        string $columnName,
+        int $currentMigrationId,
+        ConnectorInterface $connector,
+        ?PhysicalTableIdentity $physicalIdentity = null,
+    ): ?array {
+        $candidates = $this->listEligibleColumnRestoreCandidates(
+            $moduleName,
+            $tableName,
+            $columnName,
+            $currentMigrationId,
+            $connector,
+            $physicalIdentity,
+        );
+
+        return $candidates[0] ?? null;
+    }
+
+    /**
+     * Lane R1/R2 candidates sorted by migration_id DESC, each proven to have a
+     * TYPE_COLUMN MigrationBackup at the Lane's backup_scope.
+     *
+     * @return list<array{migration_id: int, backup_scope: string}>
+     */
+    private function listEligibleColumnRestoreCandidates(
+        string $moduleName,
+        string $tableName,
+        string $columnName,
+        int $currentMigrationId,
+        ConnectorInterface $connector,
+        ?PhysicalTableIdentity $physicalIdentity = null,
+    ): array {
+        $qualifiers = SchemaCheckpointIdentity::runtimeQualifiers($connector);
+        $targetTableKey = SchemaCheckpointIdentity::tableName($tableName, $qualifiers);
+        if ($targetTableKey === '') {
+            $targetTableKey = trim($tableName);
+        }
+        $tableKeys = $this->columnRestoreTableNameCandidates($tableName, $connector, $physicalIdentity);
+
+        /** @var array<int, array{migration_id: int, backup_scope: string}> $candidates */
+        $candidates = [];
+
+        // Lane R1: rolled_back ADD/MODIFY for the same logical table+column → SCOPE_ROLLBACK.
+        foreach ($this->loadSchemaDiffMigrations(
+            $moduleName,
+            Migration::STATUS_ROLLED_BACK,
+        ) as $item) {
+            $migrationId = (int)$item->getId();
+            if ($migrationId <= 0 || $migrationId === $currentMigrationId) {
+                continue;
+            }
+            if (!in_array(
+                (string)$item->getData(Migration::schema_fields_OPERATION_KIND),
+                [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN],
+                true,
+            )) {
+                continue;
+            }
+            if (!$this->migrationMatchesColumnRestore(
+                $item,
+                $targetTableKey,
+                $columnName,
+                $qualifiers,
+            )) {
+                continue;
+            }
+            $candidates[$migrationId] = [
+                'migration_id' => $migrationId,
+                'backup_scope' => MigrationBackup::SCOPE_ROLLBACK,
+            ];
+        }
+
+        // Lane R2: drop_column → SCOPE_UPGRADE TYPE_COLUMN backup (installed or rolled_back).
+        foreach ([Migration::STATUS_INSTALLED, Migration::STATUS_ROLLED_BACK] as $status) {
+            foreach ($this->loadSchemaDiffMigrations($moduleName, $status) as $item) {
+                $migrationId = (int)$item->getId();
+                if ($migrationId <= 0 || $migrationId === $currentMigrationId) {
+                    continue;
+                }
+                if ((string)$item->getData(Migration::schema_fields_OPERATION_KIND)
+                    !== SchemaDiffOp::KIND_DROP_COLUMN) {
+                    continue;
+                }
+                if (!$this->migrationMatchesColumnRestore(
+                    $item,
+                    $targetTableKey,
+                    $columnName,
+                    $qualifiers,
+                )) {
+                    continue;
+                }
+                // Prefer newer R2 over older R1 when same id cannot collide across lanes.
+                if (!isset($candidates[$migrationId])
+                    || $candidates[$migrationId]['backup_scope'] === MigrationBackup::SCOPE_ROLLBACK) {
+                    $candidates[$migrationId] = [
+                        'migration_id' => $migrationId,
+                        'backup_scope' => MigrationBackup::SCOPE_UPGRADE,
+                    ];
+                }
+            }
+        }
+
+        if ($candidates === []) {
+            return [];
+        }
+        krsort($candidates, SORT_NUMERIC);
+
+        $qualified = [];
+        foreach ($candidates as $candidate) {
+            // A: prove MigrationBackup before selection (TYPE_COLUMN + Lane scope + migration/column).
+            if (!$this->backupService->hasQualifiedColumnBackup(
+                $candidate['migration_id'],
+                $columnName,
+                $candidate['backup_scope'],
+                $tableKeys,
+            )) {
+                continue;
+            }
+            $qualified[] = $candidate;
+        }
+
+        return $qualified;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function columnRestoreTableNameCandidates(
+        string $tableName,
+        ConnectorInterface $connector,
+        ?PhysicalTableIdentity $physicalIdentity = null,
+    ): array {
+        $keys = [];
+        $push = static function (string $value) use (&$keys): void {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return;
+            }
+            $keys[strtolower($trimmed)] = $trimmed;
+        };
+        $push($tableName);
+        $qualifiers = SchemaCheckpointIdentity::runtimeQualifiers($connector);
+        $normalized = SchemaCheckpointIdentity::tableName($tableName, $qualifiers);
+        if ($normalized !== '') {
+            $push($normalized);
+        }
+        if ($physicalIdentity !== null) {
+            $push($physicalIdentity->canonical());
+        } elseif ($connector instanceof PhysicalTableIdentityProviderInterface) {
+            try {
+                $push($connector->resolvePhysicalTableIdentity($tableName)->canonical());
+            } catch (\Throwable) {
+                // Soft: selection still works with logical/format-2 keys only.
+            }
+        }
+
+        return array_values($keys);
+    }
+
+    /**
+     * @param list<string> $runtimeQualifiers
+     */
+    private function migrationMatchesColumnRestore(
+        object $item,
+        string $targetTableKey,
+        string $columnName,
+        array $runtimeQualifiers,
+    ): bool {
+        $storedTable = trim((string)$item->getData(Migration::schema_fields_SCHEMA_TABLE_NAME));
+        $storedKey = SchemaCheckpointIdentity::tableName($storedTable, $runtimeQualifiers);
+        if ($storedKey === '') {
+            $storedKey = $storedTable;
+        }
+        if ($storedKey !== $targetTableKey) {
+            return false;
+        }
+        $payload = json_decode((string)$item->getData(Migration::schema_fields_OPERATION_PAYLOAD), true);
+        return is_array($payload) && (string)($payload['name'] ?? '') === $columnName;
+    }
+
+    /** @return list<object> */
+    private function loadSchemaDiffMigrations(string $moduleName, string $status): array
+    {
+        $items = (clone $this->migrationModel)->reset()
+            ->where(Migration::schema_fields_MODULE, $moduleName)
+            ->where(Migration::schema_fields_FILE, 'schema_diff')
+            ->where(Migration::schema_fields_STATUS, $status)
+            ->order(Migration::schema_fields_ID, 'DESC')
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        return is_array($items) ? array_values($items) : [];
     }
 
     private function dispatchBefore(SchemaDiffOp $op): void

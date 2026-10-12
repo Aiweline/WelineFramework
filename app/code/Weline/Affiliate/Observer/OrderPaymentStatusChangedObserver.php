@@ -35,8 +35,19 @@ class OrderPaymentStatusChangedObserver implements ObserverInterface
             return;
         }
 
-        $this->affiliateService->handlePaymentStatusChanged(
-            $this->payloadBuilder->buildPaymentPayload($data, $paymentStatus)
-        );
+        try {
+            $this->affiliateService->handlePaymentStatusChanged(
+                $this->payloadBuilder->buildPaymentPayload($data, $paymentStatus)
+            );
+        } catch (\Throwable $e) {
+            // Affiliate side effects must never roll back Order paid projection / mail.
+            if (\function_exists('w_log_error')) {
+                w_log_error('Affiliate order_paid side-effect failed: ' . $e->getMessage(), [
+                    'event' => $eventName,
+                    'payment_status' => $paymentStatus,
+                    'exception' => $e::class,
+                ], 'affiliate');
+            }
+        }
     }
 }

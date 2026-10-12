@@ -1,0 +1,14 @@
+{
+    "name": "weline/module-deploy-schema-demo",
+    "description": "SchemaDiff column backup/restore UC fixture",
+    "type": "weline-module",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\DeploySchemaDemo\\": ""
+        }
+    }
+}

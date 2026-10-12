@@ -65,6 +65,19 @@ final class SolidifiedControllerTemplateResolver
 
     public function resolveForIdentity(ThemeVersionIdentity $identity, string $layoutType, string $layoutOption = 'default', string $targetType = 'global', ?int $targetId = null): ?string
     {
+        $layoutType = \trim($layoutType);
+        $layoutOption = \trim($layoutOption);
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+        // Controllers that call resolveForIdentity directly (skipping resolveExecutableLayoutPath)
+        // still need current layout name for required-injection page-type resolution.
+        if ($layoutType !== '') {
+            RequestContext::set(
+                \Weline\Widget\Cache\WidgetOutputCache::REQUEST_LAYOUT_NAME_KEY,
+                $layoutType . '.' . $layoutOption,
+            );
+        }
         $snapshot = ThemeLayoutSourceSnapshot::capture($this->paths, $identity, $layoutType, $layoutOption, $targetType, $targetId);
         $snapshot->install(Template::getInstance());
         return $snapshot->pagePath();

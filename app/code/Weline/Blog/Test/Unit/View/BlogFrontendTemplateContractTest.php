@@ -62,8 +62,10 @@ final class BlogFrontendTemplateContractTest extends TestCase
         self::assertTrue(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, $tpl));
         $src = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/widgets/blog-reviews.phtml');
         self::assertStringContainsString('@widget.code {blog-reviews}', $src);
-        self::assertStringContainsString('@widget.placement {layout}', $src);
-        self::assertStringContainsString('@widget.default_injections {[]}', $src);
+        self::assertStringContainsString('@widget.placement {injection}', $src);
+        self::assertStringContainsString('"layout_type":"blog"', $src);
+        self::assertStringContainsString('"slot":"blog-reviews"', $src);
+        self::assertStringContainsString('"required":true', $src);
         self::assertStringContainsString('@widget.slot {blog-reviews}', $src);
     }
 

@@ -17,15 +17,19 @@ final class HelpPayQuickShippingQuoteService
 
     private readonly CheckoutQuoteLineWeightResolver $weights;
 
+    private readonly HelpPayOfferShippingResolver $shippingFlags;
+
     /**
      * @param (callable(array):mixed)|null $listQuoteOptions
      */
     public function __construct(
         ?CheckoutQuoteLineWeightResolver $weights = null,
         ?callable $listQuoteOptions = null,
+        ?HelpPayOfferShippingResolver $shippingFlags = null,
     ) {
         $this->weights = $weights ?? new CheckoutQuoteLineWeightResolver();
         $this->listQuoteOptions = $listQuoteOptions;
+        $this->shippingFlags = $shippingFlags ?? new HelpPayOfferShippingResolver();
     }
 
     /**
@@ -36,6 +40,7 @@ final class HelpPayQuickShippingQuoteService
         CheckoutQuoteLineWeightResolver $weights,
         array $options,
         array $diagnostics = [],
+        ?HelpPayOfferShippingResolver $shippingFlags = null,
     ): self {
         return new self(
             $weights,
@@ -46,6 +51,7 @@ final class HelpPayQuickShippingQuoteService
                     'quote_diagnostics' => $diagnostics,
                 ],
             ],
+            $shippingFlags,
         );
     }
 
@@ -182,8 +188,11 @@ final class HelpPayQuickShippingQuoteService
         $goodsMinor = max(0, (int) ($input['goods_amount_minor'] ?? 0));
         $unit = $qty > 0 ? (int) max(0, (int) round($goodsMinor / $qty)) : $goodsMinor;
         $weightMinor = max(0, (int) ($input['weight_minor'] ?? 0));
+        $requires = $this->shippingFlags->resolveRequiresShipping($input + [
+            'product_id' => $productId,
+        ]);
         $line = [
-            'requires_shipping' => true,
+            'requires_shipping' => $requires,
             'qty' => $qty,
             'qty_minor' => $qty,
             'unit_price_minor' => $unit,
@@ -232,9 +241,7 @@ final class HelpPayQuickShippingQuoteService
             } elseif (!empty($row['weight_is_line_total']) && $qty > 1 && $weightMinor > 0) {
                 $weightMinor = (int) max(0, (int) round($weightMinor / $qty));
             }
-            $requires = array_key_exists('requires_shipping', $row)
-                ? (bool) $row['requires_shipping']
-                : true;
+            $requires = $this->shippingFlags->lineRequiresShipping($row);
             if ($requires) {
                 ++$shippable;
             }

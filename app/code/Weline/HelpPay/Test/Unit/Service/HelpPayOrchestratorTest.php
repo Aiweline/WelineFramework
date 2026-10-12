@@ -6,6 +6,7 @@ namespace Weline\HelpPay\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Checkout\Service\CheckoutQuoteLineWeightResolver;
+use Weline\HelpPay\Service\HelpPayOfferShippingResolver;
 use Weline\HelpPay\Service\HelpPayOrchestrator;
 use Weline\HelpPay\Service\HelpPayQuickShippingQuoteService;
 use Weline\HelpPay\Service\ShippingRedactionService;
@@ -13,8 +14,10 @@ use Weline\Payment\Service\PaymentLinkService;
 
 final class HelpPayOrchestratorTest extends TestCase
 {
-    private function orch(?HelpPayQuickShippingQuoteService $shipping = null): HelpPayOrchestrator
-    {
+    private function orch(
+        ?HelpPayQuickShippingQuoteService $shipping = null,
+        ?HelpPayOfferShippingResolver $offerShipping = null,
+    ): HelpPayOrchestrator {
         $repo = new \Weline\Payment\Service\PaymentLinkRecordRepository(
             sys_get_temp_dir() . '/helppay-orch-' . uniqid('', true) . '.json'
         );
@@ -23,6 +26,7 @@ final class HelpPayOrchestratorTest extends TestCase
             new PaymentLinkService($repo),
             new ShippingRedactionService(),
             $shipping,
+            $offerShipping,
         );
     }
 
@@ -210,6 +214,65 @@ final class HelpPayOrchestratorTest extends TestCase
             'shipping_address' => [
                 'name' => 'Bob', 'line1' => 'St', 'phone' => '1', 'country' => 'US',
             ],
+            'public_origin' => 'https://demo.test.weline.com',
+        ]);
+    }
+
+    public function testCreateQuickPayPureDigitalSkipsAddressAndLocksVirtualOnly(): void
+    {
+        $orch = $this->orch(
+            $this->shippingStub(),
+            HelpPayOfferShippingResolver::forTesting(static fn (int $productId): ?bool => $productId === 7001 ? false : true),
+        );
+        $out = $orch->createQuickPay([
+            'product_id' => 7001,
+            'qty' => 1,
+            'goods_amount_minor' => 1299,
+            'amount_minor' => 1299,
+            'currency_code' => 'USD',
+            'public_origin' => 'https://demo.test.weline.com',
+        ]);
+        self::assertStringContainsString('/q/', (string) ($out['url'] ?? ''));
+        self::assertFalse((bool) ($out['requires_shipping'] ?? true));
+        self::assertSame('none', (string) ($out['service_code'] ?? ''));
+        self::assertSame(0, (int) ($out['shipping_amount_minor'] ?? -1));
+        self::assertSame(1299, (int) ($out['amount_minor'] ?? 0));
+        self::assertSame(1299, (int) ($out['goods_amount_minor'] ?? 0));
+    }
+
+    public function testListQuickShippingOptionsPureDigitalReturnsVirtualOnly(): void
+    {
+        $orch = $this->orch(
+            $this->shippingStub(),
+            HelpPayOfferShippingResolver::forTesting(static fn (): ?bool => false),
+        );
+        $out = $orch->listQuickShippingOptions([
+            'product_id' => 7001,
+            'qty' => 1,
+            'goods_amount_minor' => 1299,
+            'currency_code' => 'USD',
+        ]);
+        self::assertFalse((bool) ($out['requires_shipping'] ?? true));
+        self::assertFalse((bool) ($out['missing_weight'] ?? true));
+        self::assertSame('none', (string) ($out['options'][0]['service_code'] ?? ''));
+        self::assertSame(0, (int) ($out['options'][0]['amount_minor'] ?? -1));
+        self::assertSame('virtual_only', (string) ($out['options'][0]['free_reason'] ?? ''));
+    }
+
+    public function testCreateQuickPayPhysicalStillRequiresCompleteAddress(): void
+    {
+        $orch = $this->orch(
+            $this->shippingStub(),
+            HelpPayOfferShippingResolver::forTesting(static fn (): ?bool => true),
+        );
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('helppay_shipping_incomplete');
+        $orch->createQuickPay([
+            'product_id' => 11,
+            'qty' => 1,
+            'goods_amount_minor' => 1000,
+            'amount_minor' => 1000,
+            'shipping_address' => [],
             'public_origin' => 'https://demo.test.weline.com',
         ]);
     }

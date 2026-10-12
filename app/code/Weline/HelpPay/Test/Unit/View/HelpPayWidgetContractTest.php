@@ -202,6 +202,11 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('data-helppay-step="shipping-pick"', $js);
         self::assertStringContainsString('data-helppay-step="payment"', $js);
         self::assertStringContainsString('openQuickShippingStep', $js);
+        self::assertStringContainsString('readRequiresShipping', $js);
+        self::assertStringContainsString('openQuickDigitalPaymentFlow', $js);
+        self::assertStringContainsString("requires_shipping: false", $js);
+        self::assertStringContainsString("service_code: 'none'", $js);
+        self::assertStringContainsString('data-requires-shipping', $js);
         self::assertStringContainsString('openQuickPaymentStep', $js);
         self::assertStringContainsString('renderPaymentSummary', $js);
         self::assertStringContainsString('formatShipToLines', $js);

@@ -95,62 +95,104 @@ class Migration extends \Weline\Framework\Setup\Model\Migration implements \Weli
 
         return $transactions->run($connection, function () use ($connection, $operationId): int {
             $this->assertRecoveredOperation($operationId, 0, $connection, true);
-            $locked = (clone $this)->reset()->setConnection($connection)
-                ->where(self::schema_fields_STATUS, self::STATUS_INSTALLED)
-                ->where(self::schema_fields_OPERATION_ID, $operationId);
-            $locked->additional('FOR UPDATE');
-            $rows = $locked->select(self::schema_fields_ID)->fetchArray();
-
-            $migrationIds = [];
-            foreach ($rows as $row) {
-                $migrationId = (int)($row[self::schema_fields_ID] ?? 0);
-                if ($migrationId <= 0) {
-                    throw new \RuntimeException('operation_id binding record is invalid');
-                }
-                $migrationIds[$migrationId] = $migrationId;
-            }
-            $migrationIds = array_values($migrationIds);
-            sort($migrationIds, SORT_NUMERIC);
-
-            if ($migrationIds !== []) {
-                (clone $this)->reset()->setConnection($connection)
-                    ->where(self::schema_fields_ID, $migrationIds, 'IN')
-                    ->where(self::schema_fields_STATUS, self::STATUS_INSTALLED)
-                    ->where(self::schema_fields_OPERATION_ID, $operationId)
-                    ->update([self::schema_fields_OPERATION_ID => ''])
-                    ->fetch();
-
-                $verification = (clone $this)->reset()->setConnection($connection)
-                    ->where(self::schema_fields_ID, $migrationIds, 'IN');
-                $verification->additional('FOR UPDATE');
-                $verifiedRows = $verification->select(
-                    implode(',', [
-                        self::schema_fields_ID,
-                        self::schema_fields_STATUS,
-                        self::schema_fields_OPERATION_ID,
-                    ])
-                )->fetchArray();
-                $verified = [];
-                foreach ($verifiedRows as $row) {
-                    $migrationId = (int)($row[self::schema_fields_ID] ?? 0);
-                    if (!in_array($migrationId, $migrationIds, true)
-                        || ($row[self::schema_fields_STATUS] ?? null) !== self::STATUS_INSTALLED
-                        || (string)($row[self::schema_fields_OPERATION_ID] ?? '') !== '') {
-                        throw $this->operationBindingFailure($migrationId);
-                    }
-                    $verified[$migrationId] = true;
-                }
-                if (count($verified) !== count($migrationIds)) {
-                    throw $this->operationBindingFailure((int)($migrationIds[0] ?? 0));
-                }
-            }
-
-            // This is deliberately inside the same transaction. Trigger-driven
-            // or same-transaction owner mutations therefore roll the whole batch
-            // back instead of leaving a partial release.
+            $released = $this->clearInstalledOperationBindings(
+                $connection,
+                $operationId,
+                restrictToSchemaDiff: false,
+            );
+            // Keep owner assertion inside the same transaction so concurrent
+            // owner mutations cannot leave a partial release committed.
             $this->assertRecoveredOperation($operationId, 0, $connection, true);
-            return count($migrationIds);
+            return $released;
         });
+    }
+
+    /**
+     * Succeeded non-hot setup:upgrade release: clear this setup operation_id from
+     * installed schema_diff rows so a later module:rollback can bind a new owner.
+     * Does NOT require ModuleVersionOperation=failed_recovered.
+     */
+    public function releaseSucceededSetupOperationBindingsFailClosed(string $operationId): int
+    {
+        $this->assertOperationId($operationId, false);
+        $connection = $this->getConnection();
+        $transactions = ObjectManager::getInstance(TransactionCoordinator::class);
+
+        return $transactions->run($connection, function () use ($connection, $operationId): int {
+            return $this->clearInstalledOperationBindings(
+                $connection,
+                $operationId,
+                restrictToSchemaDiff: true,
+            );
+        });
+    }
+
+    /**
+     * @return int number of cleared bindings
+     */
+    private function clearInstalledOperationBindings(
+        ConnectionFactory $connection,
+        string $operationId,
+        bool $restrictToSchemaDiff,
+    ): int {
+        $locked = (clone $this)->reset()->setConnection($connection)
+            ->where(self::schema_fields_STATUS, self::STATUS_INSTALLED)
+            ->where(self::schema_fields_OPERATION_ID, $operationId);
+        if ($restrictToSchemaDiff) {
+            $locked->where(self::schema_fields_FILE, 'schema_diff');
+        }
+        $locked->additional('FOR UPDATE');
+        $rows = $locked->select(self::schema_fields_ID)->fetchArray();
+
+        $migrationIds = [];
+        foreach ($rows as $row) {
+            $migrationId = (int)($row[self::schema_fields_ID] ?? 0);
+            if ($migrationId <= 0) {
+                throw new \RuntimeException('operation_id binding record is invalid');
+            }
+            $migrationIds[$migrationId] = $migrationId;
+        }
+        $migrationIds = array_values($migrationIds);
+        sort($migrationIds, SORT_NUMERIC);
+
+        if ($migrationIds === []) {
+            return 0;
+        }
+
+        $update = (clone $this)->reset()->setConnection($connection)
+            ->where(self::schema_fields_ID, $migrationIds, 'IN')
+            ->where(self::schema_fields_STATUS, self::STATUS_INSTALLED)
+            ->where(self::schema_fields_OPERATION_ID, $operationId);
+        if ($restrictToSchemaDiff) {
+            $update->where(self::schema_fields_FILE, 'schema_diff');
+        }
+        $update->update([self::schema_fields_OPERATION_ID => ''])->fetch();
+
+        $verification = (clone $this)->reset()->setConnection($connection)
+            ->where(self::schema_fields_ID, $migrationIds, 'IN');
+        $verification->additional('FOR UPDATE');
+        $verifiedRows = $verification->select(
+            implode(',', [
+                self::schema_fields_ID,
+                self::schema_fields_STATUS,
+                self::schema_fields_OPERATION_ID,
+            ])
+        )->fetchArray();
+        $verified = [];
+        foreach ($verifiedRows as $row) {
+            $migrationId = (int)($row[self::schema_fields_ID] ?? 0);
+            if (!in_array($migrationId, $migrationIds, true)
+                || ($row[self::schema_fields_STATUS] ?? null) !== self::STATUS_INSTALLED
+                || (string)($row[self::schema_fields_OPERATION_ID] ?? '') !== '') {
+                throw $this->operationBindingFailure($migrationId);
+            }
+            $verified[$migrationId] = true;
+        }
+        if (count($verified) !== count($migrationIds)) {
+            throw $this->operationBindingFailure((int)($migrationIds[0] ?? 0));
+        }
+
+        return count($migrationIds);
     }
 
     private function compareAndSwapOperationId(

@@ -202,34 +202,83 @@ class RulesManager
     
     /**
      * 验证所有规则
-     * 
-     * @return void
+     *
      * @throws Exception 如果有任何规则验证失败
      */
     public function validateAll(): void
     {
-        $rules = $this->getAllRules();
-        
-        if (empty($rules)) {
-            $this->printing->warning(__('未发现任何框架约束规则。'));
+        $this->validateRuleSet($this->getAllRules(), __('全部'));
+    }
+
+    /**
+     * 仅验证给定 category 集合内的规则。
+     *
+     * @param list<string> $includeCategories
+     * @throws Exception
+     */
+    public function validateCategories(array $includeCategories): void
+    {
+        $include = $this->normalizeCategoryFilters($includeCategories);
+        if ($include === []) {
+            throw new Exception(__('validateCategories 需要至少一个 category'));
+        }
+        $rules = [];
+        foreach ($this->getAllRules() as $key => $rule) {
+            if (isset($include[$rule->getCategory()])) {
+                $rules[$key] = $rule;
+            }
+        }
+        $this->validateRuleSet($rules, implode(',', array_keys($include)));
+    }
+
+    /**
+     * 验证时排除给定 category（例如 schema-only profile 排除 frontend）。
+     *
+     * @param list<string> $excludeCategories
+     * @throws Exception
+     */
+    public function validateExcluding(array $excludeCategories): void
+    {
+        $exclude = $this->normalizeCategoryFilters($excludeCategories);
+        $rules = [];
+        foreach ($this->getAllRules() as $key => $rule) {
+            if (!isset($exclude[$rule->getCategory()])) {
+                $rules[$key] = $rule;
+            }
+        }
+        $label = $exclude === []
+            ? __('全部')
+            : __('排除 %{1}', [implode(',', array_keys($exclude))]);
+        $this->validateRuleSet($rules, $label);
+    }
+
+    /**
+     * @param array<string, RuleInterface> $rules
+     * @throws Exception
+     */
+    private function validateRuleSet(array $rules, string $profileLabel): void
+    {
+        if ($rules === []) {
+            $this->printing->warning(__('未发现任何框架约束规则（profile=%{1}）。', [$profileLabel]));
             return;
         }
-        
-        // 按优先级排序
-        uasort($rules, function (RuleInterface $a, RuleInterface $b) {
+
+        uasort($rules, static function (RuleInterface $a, RuleInterface $b) {
             return $a->getPriority() <=> $b->getPriority();
         });
-        
-        $this->printing->note(__('正在验证框架约束规则（共 %{1} 条）...', [count($rules)]));
+
+        $this->printing->note(__(
+            '正在验证框架约束规则（profile=%{1}，共 %{2} 条）...',
+            [$profileLabel, count($rules)]
+        ));
         echo PHP_EOL;
-        
+
         $failedRules = [];
         $passedCount = 0;
-        
-        // 先验证所有规则，收集所有失败信息
+
         foreach ($rules as $rule) {
             $this->printing->note(__('验证规则：%{1} - %{2}', [$rule->getName(), $rule->getBrief()]));
-            
+
             try {
                 $rule->validate();
                 $this->printing->success(__('  ✓ 通过'));
@@ -242,16 +291,31 @@ class RulesManager
                 $this->printing->error(__('  ✗ 失败'));
             }
         }
-        
+
         echo PHP_EOL;
-        
-        // 如果有失败的规则，统一展示所有失败信息并停止执行
-        if (!empty($failedRules)) {
+
+        if ($failedRules !== []) {
             $this->reportFailedRules($failedRules, count($rules), $passedCount);
             throw new Exception(__('框架约束规则验证失败，请修复上述问题后重新运行系统更新命令。'));
         }
-        
-        $this->printing->success(__('所有框架约束规则验证通过！'));
+
+        $this->printing->success(__('框架约束规则验证通过（profile=%{1}）！', [$profileLabel]));
+    }
+
+    /**
+     * @param list<string> $categories
+     * @return array<string, true>
+     */
+    private function normalizeCategoryFilters(array $categories): array
+    {
+        $normalized = [];
+        foreach ($categories as $category) {
+            $category = trim((string)$category);
+            if ($category !== '') {
+                $normalized[$category] = true;
+            }
+        }
+        return $normalized;
     }
     
     /**

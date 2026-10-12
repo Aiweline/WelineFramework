@@ -268,6 +268,32 @@ final class OperationBindingPersistenceTest extends TestCase
         }
     }
 
+    public function testSucceededSetupReleaseClearsSchemaDiffWithoutFailedRecoveredOwner(): void
+    {
+        $schemaDiffId = $this->createRealSchemaDiffMigration('setup-release-schema');
+        $scriptId = $this->createRealMigration('setup-release-script');
+        $operationId = 'setup-20261012150000-' . bin2hex(random_bytes(8));
+        $migration = ObjectManager::getInstance(Migration::class, [], false);
+        try {
+            $migration->bindOperationIdFailClosed($schemaDiffId, $operationId);
+            $migration->bindOperationIdFailClosed($scriptId, $operationId);
+
+            $service = $this->migrationService($migration);
+            self::assertSame(1, $service->releaseSucceededSetupOperationBindings($operationId));
+            self::assertSame('', $this->realMigrationOperationId($schemaDiffId));
+            // Non-schema_diff bindings are intentionally retained.
+            self::assertSame($operationId, $this->realMigrationOperationId($scriptId));
+
+            // failed_recovered gate must still block recovered-release for unbound owners.
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('failed_recovered');
+            $service->releaseRecoveredOperationBindings($operationId);
+        } finally {
+            $this->deleteRealMigration($schemaDiffId);
+            $this->deleteRealMigration($scriptId);
+        }
+    }
+
     public function testRecoveredOperationReleaseValidatesTerminalOwnerEvenWithoutBindings(): void
     {
         $operation = $this->createRealOperation('operation-empty-release', ModuleVersionOperation::STATUS_RUNNING);
@@ -391,6 +417,30 @@ final class OperationBindingPersistenceTest extends TestCase
             $this->deleteRealOperation($operation);
             $this->deleteRealMigration($migrationId);
         }
+    }
+
+    private function createRealSchemaDiffMigration(string $suffix): int
+    {
+        $migration = ObjectManager::getInstance(Migration::class, [], false);
+        $migrationId = $migration->recordSchemaDdl(
+            'Weline_OperationBindingTest',
+            'setup_release_' . $suffix,
+            'default',
+            'ALTER TABLE t ADD COLUMN c INT',
+            'ALTER TABLE t DROP COLUMN c',
+            self::class,
+            '1.0.0',
+            'setup-release-batch-' . bin2hex(random_bytes(3)),
+            1,
+            SchemaDiffOp::KIND_ADD_COLUMN,
+            hash('sha256', 'before-' . $suffix),
+            hash('sha256', 'after-' . $suffix),
+            '',
+            ['name' => 'c'],
+        );
+        self::assertGreaterThan(0, $migrationId);
+        self::assertTrue($migration->updateStatus(Migration::STATUS_INSTALLED));
+        return $migrationId;
     }
 
     private function createRealMigration(string $suffix): int
