@@ -6050,7 +6050,18 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         WelineEnv::set('request.query_string', $query, 'FPC canonical cache build');
         WelineEnv::set('origin_request_uri', $requestUri, 'FPC canonical cache build');
         WelineEnv::set('full_request_uri', $cacheKeyFullUri, 'FPC canonical cache build');
-        WelineEnv::replaceGet($filteredGet);
+        // Router process_uri_before injects internal layout routing keys into GET
+        // (layout_type / layout_option / page_type / theme_page_title). They must
+        // survive path-only FPC canonicalize — they are not visitor query and must
+        // not enter the cache key, but wiping them makes Policy::index fall back to
+        // policy/default ("Policy Page") for /terms|/faq|/policy/*.
+        $routingKeys = self::internalRouterGetParamKeys();
+        $preservedRouting = [];
+        foreach ($routingKeys as $routingKey) {
+            if (\array_key_exists($routingKey, $originalGet)) {
+                $preservedRouting[$routingKey] = $originalGet[$routingKey];
+            }
+        }
 
         RequestContext::set('fpc.canonicalized_request', true);
         RequestContext::set('fpc.raw_full_uri', $rawFullUri);
@@ -6058,6 +6069,20 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
         try {
             $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            // Prefer live Request bag when Env was not synced yet (legacy injectors).
+            foreach ($routingKeys as $routingKey) {
+                if (\array_key_exists($routingKey, $preservedRouting)) {
+                    continue;
+                }
+                if (!\method_exists($request, 'getParam')) {
+                    break;
+                }
+                $live = $request->getParam($routingKey, null);
+                if ($live !== null && $live !== '') {
+                    $preservedRouting[$routingKey] = $live;
+                }
+            }
+
             if (\method_exists($request, 'invalidateUriCache')) {
                 $request->invalidateUriCache();
             }
@@ -6069,9 +6094,38 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             if (\method_exists($request, 'unsetData')) {
                 $request->unsetData(\array_merge($removedKeys, ['params']));
             }
+
+            WelineEnv::replaceGet($filteredGet);
+            foreach ($preservedRouting as $routingKey => $routingValue) {
+                WelineEnv::setGet($routingKey, $routingValue);
+                if (\method_exists($request, 'setGet')) {
+                    $request->setGet($routingKey, $routingValue);
+                }
+            }
         } catch (\Throwable) {
             // Request may not be available in early observer contexts; Context/Env updates above are sufficient.
+            WelineEnv::replaceGet($filteredGet);
+            foreach ($preservedRouting as $routingKey => $routingValue) {
+                WelineEnv::setGet($routingKey, $routingValue);
+            }
         }
+    }
+
+    /**
+     * Internal GET keys injected by Theme/module routers during process_uri_before.
+     * Path-only FPC must keep them out of the cache key but restore them after
+     * canonicalize so controllers still see layout_type / layout_option.
+     *
+     * @return list<string>
+     */
+    private static function internalRouterGetParamKeys(): array
+    {
+        return [
+            'layout_type',
+            'layout_option',
+            'page_type',
+            'theme_page_title',
+        ];
     }
 
     /**

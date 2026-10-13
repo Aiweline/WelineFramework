@@ -15,6 +15,8 @@ declare(strict_types=1);
 namespace Weline\Theme\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\LayoutResolveService;
 
 /**
  * 政策/法律壳（店面）。
@@ -38,11 +40,92 @@ class Policy extends FrontendController
      */
     public function index()
     {
+        // FPC path-only canonicalize may wipe router-injected layout_type.
+        // Re-claim from the visitor public path via layout_resolve (1:1).
+        if ((string)$this->request->getParam('layout_type', '') === '') {
+            $this->hydrateLayoutParamsFromPublicPath();
+        }
+
         if ((string)$this->request->getParam('layout_type', '') !== '') {
             return $this->renderPublicThemeLayout();
         }
 
         return $this->renderPolicyLayout('default');
+    }
+
+    /**
+     * Recover layout_type/option when Theme Router rewrite params were lost
+     * (e.g. FPC canonicalize) but the visitor path still claims a Theme shell.
+     * Prefer WELINE_ORIGIN_REQUEST_URI — after rewrite REQUEST_URI is
+     * theme/frontend/policy and no longer encodes terms/faq/privacy.
+     */
+    private function hydrateLayoutParamsFromPublicPath(): void
+    {
+        $publicPath = $this->resolveVisitorPublicPath();
+        if ($publicPath === '' || str_starts_with($publicPath, 'theme/frontend/')) {
+            return;
+        }
+
+        try {
+            /** @var LayoutResolveService $layoutResolve */
+            $layoutResolve = ObjectManager::getInstance(LayoutResolveService::class);
+            $resolved = $layoutResolve->resolveFromPath($publicPath);
+        } catch (\Throwable) {
+            return;
+        }
+
+        if (!(bool)($resolved['claimed'] ?? false)
+            || (string)($resolved['layout_path'] ?? '') === ''
+            || trim((string)($resolved['entity_slug'] ?? '')) !== ''
+        ) {
+            return;
+        }
+
+        $layoutType = (string)$resolved['layout_path'];
+        $layoutOption = (string)($resolved['layout_option'] ?? 'default');
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+
+        $this->request->setGet('page_type', $layoutType);
+        $this->request->setGet('layout_type', $layoutType);
+        $this->request->setGet('layout_option', $layoutOption);
+    }
+
+    private function resolveVisitorPublicPath(): string
+    {
+        $candidates = [
+            (string)$this->request->getServer('WELINE_ORIGIN_REQUEST_URI', ''),
+            (string)$this->request->getServer('ORIGIN_REQUEST_URI', ''),
+            (string)(\Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '') ?? ''),
+        ];
+        try {
+            $candidates[] = (string)$this->request->getUrlPath();
+        } catch (\Throwable) {
+        }
+
+        foreach ($candidates as $candidate) {
+            $path = trim((string)(parse_url($candidate, PHP_URL_PATH) ?: $candidate), '/');
+            if ($path === '') {
+                continue;
+            }
+            $segments = array_values(array_filter(explode('/', $path), static fn(string $s): bool => $s !== ''));
+            if ($segments !== [] && class_exists(\Weline\Framework\App\State::class)) {
+                try {
+                    $loc = \Weline\Framework\App\State::resolveLocalizationFromPathSegments($segments);
+                    if (isset($loc['remaining']) && \is_array($loc['remaining'])) {
+                        $segments = array_values($loc['remaining']);
+                    }
+                } catch (\Throwable) {
+                }
+            }
+            $normalized = strtolower(implode('/', $segments));
+            if ($normalized !== '' && !str_starts_with($normalized, 'theme/frontend/')) {
+                return $normalized;
+            }
+        }
+
+        return '';
     }
     
     /**

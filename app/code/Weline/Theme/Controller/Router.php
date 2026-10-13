@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Controller;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Url;
@@ -332,8 +333,17 @@ class Router implements RouterInterface
     private static function applyQueryOverrides(?Request $request, array $queryOverrides): void
     {
         foreach ($queryOverrides as $key => $value) {
+            // Sync both Request ParameterBag and WelineEnv GET. Core collects
+            // router-generated params from w_env_get() after process_uri_before;
+            // ParameterBag-only writes are invisible to that collect and are
+            // wiped by FPC canonicalizeCurrentRequestForCacheBuild().
             if ($request) {
                 $request->setGet($key, $value);
+            }
+            try {
+                WelineEnv::setGet((string)$key, $value);
+            } catch (\Throwable) {
+                // Env may be unavailable in early bootstrap / unit isolation.
             }
         }
 

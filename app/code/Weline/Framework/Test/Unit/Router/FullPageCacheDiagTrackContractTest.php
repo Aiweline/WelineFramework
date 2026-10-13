@@ -74,6 +74,26 @@ final class FullPageCacheDiagTrackContractTest extends TestCase
         );
     }
 
+    public function testCanonicalizePreservesInternalRouterLayoutKeysOutOfCacheKey(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Router/FullPageCacheCoordinator.php'
+        );
+        self::assertStringContainsString('internalRouterGetParamKeys', $source);
+        self::assertStringContainsString("'layout_type'", $source);
+        self::assertStringContainsString("'layout_option'", $source);
+        self::assertStringContainsString("'theme_page_title'", $source);
+        // Must restore after path-only filter, not retain into cache identity.
+        self::assertMatchesRegularExpression(
+            '/function canonicalizeCurrentRequestForCacheBuild[\s\S]*internalRouterGetParamKeys/',
+            $source
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/function isCacheKeyRetainedQueryParam[\s\S]*layout_type/',
+            $source
+        );
+    }
+
     /**
      * @return array<string, bool>
      */

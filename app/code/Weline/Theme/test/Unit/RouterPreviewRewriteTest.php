@@ -197,4 +197,33 @@ class RouterPreviewRewriteTest extends TestCore
             $source
         );
     }
+
+    public function testApplyQueryOverridesSyncsWelineEnvGetForRouterGeneratedParams(): void
+    {
+        $source = (string)\file_get_contents(BP . '/app/code/Weline/Theme/Controller/Router.php');
+        self::assertStringContainsString('WelineEnv::setGet', $source);
+        self::assertMatchesRegularExpression(
+            '/function applyQueryOverrides[\s\S]*WelineEnv::setGet/',
+            $source
+        );
+    }
+
+    public function testTermsRewriteSetsLayoutTypeOnRequestAndEnv(): void
+    {
+        self::initRequest('/terms');
+
+        /** @var Request $request */
+        $request = ObjectManager::getInstance(Request::class);
+        $this->resetPreviewRequestState($request);
+        $_SERVER['REQUEST_URI'] = '/terms';
+        \Weline\Framework\Env\WelineEnv::replaceGet([]);
+
+        $path = 'terms';
+        $rule = [];
+        Router::rewriteDefaultThemePublicPage($path, $rule);
+
+        $this->assertSame('theme/frontend/policy', $path);
+        $this->assertSame('terms', (string)$request->getParam('layout_type', ''));
+        $this->assertSame('terms', (string)\Weline\Framework\Env\WelineEnv::getGet('layout_type', ''));
+    }
 }
