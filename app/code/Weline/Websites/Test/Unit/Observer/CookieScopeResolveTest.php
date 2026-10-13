@@ -169,6 +169,9 @@ final class CookieScopeResolveTest extends TestCase
     public function testHeaderCollectorEmitsIsolatedCookieAndKeepsProtocolExact(): void
     {
         $this->enterRequest(257, 'https://shop.test/aisite_accept_ok');
+        // Legacy Expire only when the inbound jar still carries the bare name.
+        $_COOKIE['WELINE_SESSID'] = 'legacy-sid';
+        Context::current()?->set('input.cookie', ['WELINE_SESSID' => 'legacy-sid']);
         $collector = HeaderCollector::getInstance();
         $collector->setCookie('WELINE_SESSID', 'abc123', 0, '/', '', true, true, 'Lax');
 
@@ -180,6 +183,7 @@ final class CookieScopeResolveTest extends TestCase
         self::assertSame('/aisite_accept_ok', $byName['WELINE_SESSID_w257']['path']);
         self::assertArrayHasKey('WELINE_SESSID', $byName);
         self::assertSame('', $byName['WELINE_SESSID']['value']);
+        unset($_COOKIE['WELINE_SESSID']);
 
         HeaderCollector::reset();
         $hostName = '__Host-Weline-Worker-Backend-Bootstrap-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcde';

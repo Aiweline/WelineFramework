@@ -527,7 +527,8 @@
         if (node && node.hasAttribute('data-website-mount')) {
             raw = String(node.getAttribute('data-website-mount') || '').trim();
         } else {
-            raw = String(readCookieValue('WELINE_WEBSITE_URL') || '').trim();
+            // No sticky WELINE_WEBSITE_URL — empty mount when SSR did not stamp data-website-mount.
+            raw = '';
         }
         if (!raw) {
             return '';

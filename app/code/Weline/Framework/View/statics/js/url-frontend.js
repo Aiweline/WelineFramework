@@ -204,6 +204,15 @@
         });
     }
 
+    function clearWebsiteStickyCookies() {
+        const past = 'Thu, 01 Jan 1970 00:00:00 GMT';
+        ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE', 'WELINE_WEBSITE_URL'].forEach((base) => {
+            preferenceCookieNames(base).forEach((name) => {
+                document.cookie = name + '=;expires=' + past + ';path=/;SameSite=Lax';
+            });
+        });
+    }
+
     /**
      * 字符串工具函数（如果不存在则定义）
      */
@@ -513,13 +522,17 @@
                 let host1s1 = host1s[0];
 
                 if (host1s1) {
-                    // 移除 website_code
-                    if (getCookie('WELINE_WEBSITE_CODE') && host1s1.startsWith(getCookie('WELINE_WEBSITE_CODE'))) {
+                    const config = getConfig();
+                    const site = window.site || {};
+                    const websiteCode = String(
+                        site.website_code || site.websiteCode || config.websiteCode || config.website_code || ''
+                    ).trim();
+
+                    // 移除 website_code（window.site / config，不读 sticky Cookie）
+                    if (websiteCode && host1s1.startsWith(websiteCode)) {
                         host1s.shift();
                         host1s1 = host1s[0];
                     }
-
-                    const config = getConfig();
 
                     // 移除 area
                     if (config.area && config.area === host1s1) {
@@ -532,19 +545,17 @@
                         host1s1 = host1s[0];
                     }
                     // 移除 api_admin_area（前端通常不需要，但保留兼容性）
-                    const apiAdminArea = getCookie('WELINE_API_ADMIN_AREA') || '';
+                    const apiAdminArea = String(config.apiAdminArea || config.api_admin_area || '').trim();
                     if (apiAdminArea && apiAdminArea === host1s1) {
                         host1s.shift();
                         host1s1 = host1s[0];
                     }
 
-                    // 移除 currency
-                    if (getCookie('WELINE_USER_CURRENCY') === host1s1) {
+                    // 移除 currency / lang（路径段形态，不读 sticky Cookie）
+                    if (isCurrencySegment(host1s1, config)) {
                         host1s.shift();
                         host1s1 = host1s[0];
                     }
-
-                    // 移除 lang（路径段形态，不再依赖 Cookie）
                     if (isLocalePathSegment(host1s1)) {
                         host1s.shift();
                     }
@@ -613,11 +624,8 @@
         }
         const site = window.site || {};
         const fromSite = site.website_url || site.websiteUrl || site.base_host || '';
-        const raw = String(
-            getCookie('WELINE_WEBSITE_URL')
-            || fromSite
-            || ''
-        ).trim();
+        // No sticky WELINE_WEBSITE_URL cookie — SSR data-website-mount / window.site only.
+        const raw = String(fromSite || '').trim();
         return normalizeWebsiteMountPath(raw, config || getConfig());
     }
 
@@ -707,8 +715,13 @@
             }
         }
 
-        const websiteCode = String(getCookie('WELINE_WEBSITE_CODE') || '').trim();
-        // Empty cookie must not match bare "/" — that used to lowercase the whole path.
+        const websiteCode = String(
+            (window.site && (window.site.website_code || window.site.websiteCode))
+            || config.websiteCode
+            || config.website_code
+            || ''
+        ).trim();
+        // Empty code must not match bare "/" — that used to lowercase the whole path.
         if (websiteCode !== '' && WelineString.startsWith(path, '/' + websiteCode)) {
             path = WelineString.replaceStartsWith(path, '/' + websiteCode, '/');
         }
@@ -975,6 +988,12 @@
             appPath: window.app_path,
             injectPath: window.inject_path,
         });
+    }
+
+    // Drop residual sticky website jars; identity is Host / data-website-mount / window.site.
+    try {
+        clearWebsiteStickyCookies();
+    } catch (_error) {
     }
 
 })(window, document);

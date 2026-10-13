@@ -161,26 +161,8 @@ final class CookieScopeResolve implements ObserverInterface
                 }
             }
 
-            $cookies = $context->get('input.cookie', []);
-            if (\is_array($cookies)) {
-                $direct = $cookies['WELINE_WEBSITE_ID'] ?? null;
-                if ($direct !== null && $direct !== '' && (\is_int($direct) || (\is_string($direct) && \ctype_digit((string)$direct)))) {
-                    return (int)$direct;
-                }
-                foreach ($cookies as $name => $value) {
-                    if (!\is_string($name) || \preg_match('/^WELINE_WEBSITE_ID_w(\d+)$/D', $name, $m) !== 1) {
-                        continue;
-                    }
-                    // Jar identity is the name suffix (_w0 / _w544). The cookie
-                    // *value* is the active Website id and often differs on
-                    // grocery hosts (WELINE_WEBSITE_ID_w0=544). Using the value
-                    // as CookieScope suffix remaps Session onto _w544 and
-                    // clears the admin _w0 login jar.
-                    unset($value);
-
-                    return (int)$m[1];
-                }
-            }
+            // Do not read WELINE_WEBSITE_ID* sticky cookies for jar identity —
+            // Host / Url::parser / RequestContext own website_id.
         }
 
         // Admin realm defaults to website 0 when the request has not frozen a site yet.

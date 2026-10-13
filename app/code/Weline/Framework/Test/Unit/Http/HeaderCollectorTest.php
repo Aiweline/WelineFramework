@@ -77,7 +77,7 @@ final class HeaderCollectorTest extends TestCase
         self::assertLessThan(\time(), (int)$byName['WELINE_SESSID_w0']['expire']);
     }
 
-    public function testQualifyFromUnscopedStillExpiresBareAliasesOnly(): void
+    public function testQualifyFromUnscopedSkipsBareExpireWhenRequestHasNoLegacyJar(): void
     {
         CookieScope::setPolicyResolverOverride(static fn(): array => [
             'active' => true,
@@ -85,8 +85,34 @@ final class HeaderCollectorTest extends TestCase
             'name_suffix_pattern' => '/_w\d+$/D',
             'mount_path' => '/',
             'expire_unscoped_aliases' => true,
-            'revision' => 'unscoped-legacy',
+            'revision' => 'unscoped-legacy-clean',
         ]);
+        unset($_COOKIE['WELINE_SESSID'], $_COOKIE['WELINE_SESSID_w0']);
+
+        $collector = HeaderCollector::getInstance();
+        $collector->setCookie('WELINE_SESSID', 'sid', \time() + 3600, '/', '', true, true, 'Lax');
+
+        $byName = [];
+        foreach ($collector->getCookies() as $cookie) {
+            $byName[(string)$cookie['name']] = $cookie;
+        }
+        self::assertArrayHasKey('WELINE_SESSID_w0', $byName);
+        self::assertSame('sid', (string)$byName['WELINE_SESSID_w0']['value']);
+        self::assertArrayNotHasKey('WELINE_SESSID', $byName);
+        self::assertArrayNotHasKey('WELINE_SESSID_w544', $byName);
+    }
+
+    public function testQualifyFromUnscopedExpiresBareAliasOnlyWhenRequestStillCarriesIt(): void
+    {
+        CookieScope::setPolicyResolverOverride(static fn(): array => [
+            'active' => true,
+            'name_suffix' => '_w0',
+            'name_suffix_pattern' => '/_w\d+$/D',
+            'mount_path' => '/',
+            'expire_unscoped_aliases' => true,
+            'revision' => 'unscoped-legacy-present',
+        ]);
+        $_COOKIE['WELINE_SESSID'] = 'legacy-sid';
 
         $collector = HeaderCollector::getInstance();
         $collector->setCookie('WELINE_SESSID', 'sid', \time() + 3600, '/', '', true, true, 'Lax');
@@ -100,6 +126,8 @@ final class HeaderCollectorTest extends TestCase
         self::assertArrayHasKey('WELINE_SESSID', $byName);
         self::assertSame('', (string)$byName['WELINE_SESSID']['value']);
         self::assertArrayNotHasKey('WELINE_SESSID_w544', $byName);
+
+        unset($_COOKIE['WELINE_SESSID']);
     }
 
     public function testClearCookiesDropsEveryPendingSetCookie(): void

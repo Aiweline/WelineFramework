@@ -1550,38 +1550,14 @@ class App
             return;
         }
 
-        // Path/query-only language + currency: expire legacy preference cookies.
+        // Site / lang / currency identity is Host + path/query + RequestContext —
+        // never sticky cookies. Expire residuals only (do not rewrite).
         $this->expireStorefrontLanguageCookies();
         $this->expireStorefrontCurrencyCookies();
+        $this->expireStorefrontWebsiteStickyCookies();
 
-        $defaultCookies = [
-            'WELINE_WEBSITE_ID',
-            'WELINE_WEBSITE_CODE',
-            'WELINE_WEBSITE_URL',
-        ];
-
-        $cookiesToSet = [];
-        foreach ($defaultCookies as $key) {
-            $value = $this->getContextServerValue($key, null);
-            if ($value === null) {
-                $value = \in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true) ? '' : null;
-            }
-            if ($value === null) {
-                throw new Exception(__('系统错误：%{1}', $key));
-            }
-
-            $value = (string)$value;
-            if (Cookie::get($key) !== $value) {
-                $cookiesToSet[$key] = $value;
-            }
-        }
-
-        foreach ($cookiesToSet as $key => $value) {
-            Cookie::set($key, $value, 3600 * 24 * 30, []);
-        }
-
-        // Website cookies flip CookieScope on; re-emit Session under the same wire
-        // name so login does not remain on an unscoped alias that later expires.
+        // CookieScope comes from RequestContext website_id; re-emit Session under
+        // the active scoped wire name so login does not stay on an unscoped alias.
         $this->reassertSessionCookieWire();
     }
 
@@ -1657,6 +1633,71 @@ class App
     }
 
     /**
+     * Clear residual WELINE_WEBSITE_ID / CODE / URL cookies (bare + website-scoped).
+     * Website identity is Host + Url::parser / RequestContext only.
+     */
+    private function expireStorefrontWebsiteStickyCookies(): void
+    {
+        $bases = ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE', 'WELINE_WEBSITE_URL'];
+        $candidates = $bases;
+        $websiteId = \trim((string)WelineEnv::get('website_id', ''));
+        if ($websiteId !== '' && \ctype_digit($websiteId)) {
+            foreach ($bases as $base) {
+                $candidates[] = $base . '_w' . $websiteId;
+            }
+        }
+
+        try {
+            $bag = \w_env('cookie', []);
+            if (\is_array($bag)) {
+                foreach (\array_keys($bag) as $key) {
+                    $key = (string)$key;
+                    foreach ($bases as $base) {
+                        if ($key === $base || \preg_match('/^' . \preg_quote($base, '/') . '_w\d+$/', $key) === 1) {
+                            $candidates[] = $key;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $options = ['httponly' => false];
+        foreach (\array_values(\array_unique($candidates)) as $name) {
+            if (!$this->requestCarriesExactCookieName($name)) {
+                continue;
+            }
+            Cookie::delete($name, $options);
+        }
+    }
+
+    /**
+     * Exact wire-name presence in the inbound cookie bag (no CookieScope qualify).
+     */
+    private function requestCarriesExactCookieName(string $name): bool
+    {
+        $name = \trim($name);
+        if ($name === '') {
+            return false;
+        }
+
+        try {
+            $bag = \w_env('cookie', []);
+            if (\is_array($bag) && \array_key_exists($name, $bag)) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        $cookies = $this->context->get('input.cookie', []);
+        if (\is_array($cookies) && \array_key_exists($name, $cookies)) {
+            return true;
+        }
+
+        return \is_array($_COOKIE ?? null) && \array_key_exists($name, $_COOKIE);
+    }
+
+    /**
      * Clear residual WELINE_USER_LANG cookies (bare + website-scoped).
      * Language identity is the request path / query only.
      */
@@ -1685,8 +1726,7 @@ class App
 
         $options = ['httponly' => false];
         foreach (\array_values(\array_unique($candidates)) as $name) {
-            $current = Cookie::get($name);
-            if ($current === null || $current === '') {
+            if (!$this->requestCarriesExactCookieName($name)) {
                 continue;
             }
             Cookie::delete($name, $options);
@@ -1722,8 +1762,7 @@ class App
 
         $options = ['httponly' => false];
         foreach (\array_values(\array_unique($candidates)) as $name) {
-            $current = Cookie::get($name);
-            if ($current === null || $current === '') {
+            if (!$this->requestCarriesExactCookieName($name)) {
                 continue;
             }
             Cookie::delete($name, $options);

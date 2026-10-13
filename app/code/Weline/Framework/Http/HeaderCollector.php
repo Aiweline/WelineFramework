@@ -210,10 +210,15 @@ class HeaderCollector implements HeaderCollectorInterface
             $sameSite = 'Lax';
         }
 
-        // Expire legacy unscoped aliases (Path=/) when a module asks for it.
+        // Expire legacy unscoped aliases (Path=/) only when the browser still
+        // carries that exact name. Blind Expire doubles Set-Cookie on clean jars
+        // (WELINE_*_w0 write + empty WELINE_* delete) with no migration value.
         // Cross-website exact writes must not expire sibling _wN jars.
         if (!$protocolCookie && !$crossWebsiteScoped && CookieScope::shouldExpireUnscopedAliases()) {
             foreach (self::legacyCookieAliases($originalName, $name) as $legacyName) {
+                if (!self::requestCarriesCookieName($legacyName)) {
+                    continue;
+                }
                 $legacyKey = $this->getCookieStorageKey($legacyName, '/', $domain);
                 $this->cookies[$legacyKey] = [
                     'name' => $legacyName,
@@ -240,6 +245,31 @@ class HeaderCollector implements HeaderCollectorInterface
             'sameSite' => $sameSite,
         ];
         return $this;
+    }
+
+    /**
+     * True when the inbound Cookie header (or request Context bag) includes
+     * this exact wire name — used to skip speculative legacy Expire headers.
+     */
+    private static function requestCarriesCookieName(string $name): bool
+    {
+        $name = \trim($name);
+        if ($name === '') {
+            return false;
+        }
+
+        try {
+            $context = \Weline\Framework\Context::getCurrent();
+            if ($context !== null) {
+                $all = $context->cookie();
+                if (\is_array($all) && \array_key_exists($name, $all)) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return \is_array($_COOKIE ?? null) && \array_key_exists($name, $_COOKIE);
     }
 
     /**

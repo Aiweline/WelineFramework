@@ -17,15 +17,11 @@ final class UrlFrontendMountCookieIsolationContractTest extends TestCase
         $source = $this->read('View/statics/js/url-frontend.js');
         $at = \strpos($source, 'function resolveWebsiteMountPath');
         self::assertNotFalse($at);
-        $body = \substr($source, $at, 1200);
+        $body = \substr($source, $at, 1400);
         self::assertStringContainsString("hasAttribute('data-website-mount')", $body);
         self::assertStringContainsString('SSR-authoritative', $body);
-        // Cookie fallback only after the attribute-presence gate.
-        $attrGate = \strpos($body, "hasAttribute('data-website-mount')");
-        $cookieCall = \strpos($body, "getCookie('WELINE_WEBSITE_URL')");
-        self::assertNotFalse($attrGate);
-        self::assertNotFalse($cookieCall);
-        self::assertGreaterThan($attrGate, $cookieCall);
+        self::assertStringNotContainsString("getCookie('WELINE_WEBSITE_URL')", $body);
+        self::assertStringContainsString('No sticky WELINE_WEBSITE_URL', $body);
     }
 
     public function testI18nResolveWebsiteMountPathHonorsEmptyDomAttribute(): void
@@ -36,11 +32,8 @@ final class UrlFrontendMountCookieIsolationContractTest extends TestCase
         $body = \substr($source, $at, 1200);
         self::assertStringContainsString("hasAttribute('data-website-mount')", $body);
         self::assertStringContainsString('SSR-authoritative', $body);
-        $attrGate = \strpos($body, "hasAttribute('data-website-mount')");
-        $cookieCall = \strpos($body, "readCookieValue('WELINE_WEBSITE_URL')");
-        self::assertNotFalse($attrGate);
-        self::assertNotFalse($cookieCall);
-        self::assertGreaterThan($attrGate, $cookieCall);
+        self::assertStringNotContainsString("readCookieValue('WELINE_WEBSITE_URL')", $body);
+        self::assertStringContainsString('No sticky WELINE_WEBSITE_URL', $body);
     }
 
     private function read(string $relative): string
