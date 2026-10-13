@@ -66,7 +66,7 @@ class DeployOrchestratorService
         $gitCheckout = $params['git_checkout'] ?? null;
         $gitTag = $params['git_tag'] ?? null;
         $force = $params['force'] ?? false;
-        $noBackup = $params['no_backup'] ?? false;
+        $noBackup = (bool)($params['no_backup'] ?? true);
         $backupTrigger = trim((string)($params['backup_trigger'] ?? 'release'));
         $runtimeConfig = is_array($params['config'] ?? null) ? $params['config'] : [];
         $releaseContext = $this->releaseContextFromParams($params, $runtimeConfig);
@@ -220,7 +220,7 @@ class DeployOrchestratorService
     {
         $runtimeConfig = is_array($params['config'] ?? null) ? $params['config'] : [];
         $releaseContext = $this->releaseContextFromParams($params, $runtimeConfig);
-        $noBackup = (bool)($params['no_backup'] ?? false);
+        $noBackup = (bool)($params['no_backup'] ?? true);
         $backupTrigger = trim((string)($params['backup_trigger'] ?? 'rollback'));
         /** @var Printing|null $printer */
         $printer = $params['printer'] ?? null;
@@ -688,10 +688,8 @@ class DeployOrchestratorService
 
     private function shouldRunBackup(bool $noBackup): bool
     {
-        if ($this->isProductionDeploy()) {
-            return true;
-        }
-
+        // Git-versioned release/rollback: restore = checkout prior commit/tag via Deploy history.
+        // Site tar is opt-in only (`no_backup=false` / CLI `--backup`). Never force on prod.
         return !$noBackup;
     }
 
@@ -764,6 +762,10 @@ class DeployOrchestratorService
         return true;
     }
 
+    /**
+     * Snapshot only git-tracked files under DEPLOY_PROTECTED_RELATIVE_PATHS (via git ls-files).
+     * Untracked / ignored paths are never copied; whole-tree recursion of live protect roots is forbidden.
+     */
     private function snapshotProtectedPaths(string $deployRoot): string
     {
         $snapshotId = 'snap_' . date('Y-m-d_H-i-s') . '_' . substr(md5((string)microtime(true)), 0, 8);
@@ -773,17 +775,25 @@ class DeployOrchestratorService
         }
 
         foreach (self::DEPLOY_PROTECTED_RELATIVE_PATHS as $relativePath) {
-            $source = $deployRoot . DS . str_replace('/', DS, $relativePath);
-            if (!file_exists($source)) {
-                continue;
+            $tracked = $this->listTrackedFilesUnder($deployRoot, $relativePath);
+            foreach ($tracked as $relFile) {
+                $source = $deployRoot . DS . str_replace('/', DS, $relFile);
+                if (!is_file($source) && !is_link($source)) {
+                    continue;
+                }
+                $target = $snapshotRoot . str_replace('/', DS, $relFile);
+                $this->copyPath($source, $target);
             }
-            $target = $snapshotRoot . str_replace('/', DS, $relativePath);
-            $this->copyPath($source, $target);
         }
 
         return $snapshotId;
     }
 
+    /**
+     * Restore tracked-file snapshots file-by-file. Never removePath() a protect root tree.
+     * Tracked files present after checkout but absent from the snapshot are unlinked individually;
+     * untracked / ignored paths are left untouched. Only the snapshot directory may be removePath'd.
+     */
     private function restoreProtectedPaths(string $deployRoot, string $snapshotId): void
     {
         if ($snapshotId === '') {
@@ -796,18 +806,126 @@ class DeployOrchestratorService
         }
 
         foreach (self::DEPLOY_PROTECTED_RELATIVE_PATHS as $relativePath) {
-            $source = $snapshotRoot . str_replace('/', DS, $relativePath);
-            if (!file_exists($source)) {
-                continue;
+            $snapshotFiles = $this->listSnapshotFilesUnder($snapshotRoot, $relativePath);
+            $snapshotSet = array_fill_keys($snapshotFiles, true);
+
+            foreach ($snapshotFiles as $relFile) {
+                $source = $snapshotRoot . str_replace('/', DS, $relFile);
+                if (!is_file($source) && !is_link($source)) {
+                    continue;
+                }
+                $target = $deployRoot . DS . str_replace('/', DS, $relFile);
+                $this->copyPath($source, $target);
             }
-            $target = $deployRoot . DS . str_replace('/', DS, $relativePath);
-            if (is_dir($source)) {
-                $this->removePath($target);
+
+            $currentTracked = $this->listTrackedFilesUnder($deployRoot, $relativePath);
+            foreach ($currentTracked as $relFile) {
+                if (isset($snapshotSet[$relFile])) {
+                    continue;
+                }
+                $path = $deployRoot . DS . str_replace('/', DS, $relFile);
+                if (is_file($path) || is_link($path)) {
+                    @unlink($path);
+                }
             }
-            $this->copyPath($source, $target);
         }
 
         $this->removePath($snapshotRoot);
+    }
+
+    /**
+     * Fail-closed: non-zero git ls-files must throw; never fall back to whole-tree copy.
+     *
+     * @return list<string> repo-relative paths (forward slashes)
+     */
+    private function listTrackedFilesUnder(string $deployRoot, string $relativePath): array
+    {
+        $relativePath = str_replace('\\', '/', trim($relativePath));
+        $relativePath = trim($relativePath, '/');
+        if ($relativePath === '' || !is_dir($deployRoot)) {
+            throw new \RuntimeException((string)__(
+                '无法列出发布保护路径的已跟踪文件：%{1}',
+                [$relativePath !== '' ? $relativePath : '(empty)']
+            ));
+        }
+
+        $command = ['git', 'ls-files', '-z', '--', $relativePath];
+        $descriptors = [
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = proc_open(
+            $command,
+            $descriptors,
+            $pipes,
+            $deployRoot,
+            null,
+            ['bypass_shell' => true]
+        );
+        if (!is_resource($process)) {
+            throw new \RuntimeException((string)__(
+                '无法执行 git ls-files 以快照保护路径：%{1}',
+                [$relativePath]
+            ));
+        }
+
+        $stdout = (string)stream_get_contents($pipes[1]);
+        $stderr = (string)stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = (int)proc_close($process);
+        if ($exitCode !== 0) {
+            throw new \RuntimeException((string)__(
+                'git ls-files 失败（exit %{1}）保护路径 %{2}：%{3}',
+                [$exitCode, $relativePath, trim($stderr) !== '' ? trim($stderr) : 'no stderr']
+            ));
+        }
+
+        if ($stdout === '') {
+            return [];
+        }
+
+        $files = [];
+        foreach (explode("\0", $stdout) as $part) {
+            $part = str_replace('\\', '/', trim($part));
+            if ($part === '') {
+                continue;
+            }
+            $files[] = $part;
+        }
+
+        return $files;
+    }
+
+    /**
+     * Enumerate files already copied into the snapshot (not the live protect tree).
+     *
+     * @return list<string> repo-relative paths (forward slashes)
+     */
+    private function listSnapshotFilesUnder(string $snapshotRoot, string $relativePath): array
+    {
+        $base = rtrim(str_replace(['/', '\\'], DS, $snapshotRoot), DS) . DS;
+        $dir = $base . str_replace('/', DS, $relativePath);
+        if (!is_dir($dir)) {
+            return [];
+        }
+
+        $files = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $item) {
+            if (!$item->isFile() && !$item->isLink()) {
+                continue;
+            }
+            $rel = substr($item->getPathname(), strlen($base));
+            $rel = str_replace('\\', '/', (string)$rel);
+            if ($rel !== '') {
+                $files[] = $rel;
+            }
+        }
+
+        return $files;
     }
 
     private function copyPath(string $source, string $target): void

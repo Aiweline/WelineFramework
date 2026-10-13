@@ -19,7 +19,9 @@ use Weline\Websites\Model\Website;
 class LocalDescription extends LocalModel
 {
     public const schema_table = 'weline_websites_website_local';
-    public const schema_primary_key = Website::schema_fields_ID;
+    // Physical MySQL PRIMARY is (website_id, local_code). A lone schema_primary_key=website_id
+    // makes SchemaDiff refuse silent rewrite and blocks setup:upgrade / webhook deploy.
+    public const schema_primary_keys = [Website::schema_fields_ID, self::schema_fields_local_code];
     public const indexer = 'websites_website_local';
 
     #[Col(type: 'int', nullable: false, primaryKey: true, comment: '网站ID')]

@@ -17,6 +17,11 @@ final class SchemaDiffOp
     public const KIND_DROP_INDEX = 'drop_index';
     public const KIND_ADD_FOREIGN_KEY = 'add_foreign_key';
     public const KIND_DROP_FOREIGN_KEY = 'drop_foreign_key';
+    /**
+     * Promote declared primary key onto a physical table that lacks matching PRIMARY.
+     * payload={@see PrimaryKeyPromotionDefinition}; uses structure backup, never column backup.
+     */
+    public const KIND_PROMOTE_PRIMARY_KEY = 'promote_primary_key';
     /** 仅修改表注释；payload=新注释(string)，rollbackPayload=旧注释(string) */
     public const KIND_MODIFY_TABLE_COMMENT = 'modify_table_comment';
 

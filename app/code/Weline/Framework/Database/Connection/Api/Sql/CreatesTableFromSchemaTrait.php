@@ -44,6 +44,11 @@ trait CreatesTableFromSchemaTrait
                 }
             }
         }
+        if ($pkColumns === []) {
+            throw new \RuntimeException(
+                'declarative createTableFromSchema requires a complete primary key; table=' . $tableName
+            );
+        }
         $hasCompositePk = count($pkColumns) > 1;
 
         /** @var CreateInterface $create */

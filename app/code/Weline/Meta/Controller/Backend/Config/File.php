@@ -8,7 +8,6 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Api\Localization\InstalledLocaleCatalog;
 use Weline\Meta\Helper\MetaTranslation;
-use Weline\Meta\Model\MetaLocal;
 use Weline\Meta\Model\Meta as MetaModel;
 use Weline\Meta\Model\MetaConfig;
 use Weline\Meta\Service\ParamDefinitionNormalizer;
@@ -695,14 +694,6 @@ class File extends BackendController
 
             $locales = ObjectManager::getInstance(InstalledLocaleCatalog::class)->list($currentLocale);
 
-            /** @var MetaModel $metaModelForId */
-            $metaModelForId = ObjectManager::getInstance(MetaModel::class);
-            $metaForId = $metaModelForId->reset()
-                ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify)
-                ->find()
-                ->fetch();
-            $metaId = $metaForId->getId() ? (int)$metaForId->getId() : null;
-
             $configKey = $paramName;
             if ($paramName !== 'name' && $paramName !== 'description') {
                 $configKey = 'param.' . $paramName;
@@ -714,27 +705,18 @@ class File extends BackendController
                 $localeCode = (string)($locale['code'] ?? '');
                 if ($localeCode) {
                     $localeName = (string)($locale['name'] ?? $localeCode);
-                    
-                    // 从 w_meta_local 表获取翻译值
-                    /** @var MetaLocal $localModel */
-                    $localModel = ObjectManager::getInstance(MetaLocal::class);
-                    
-                    $translatedValue = '';
-                    if ($metaId) {
-                        $localModel->reset()
-                            ->where(MetaLocal::schema_fields_META_ID, $metaId)
-                            ->where(MetaLocal::schema_fields_LOCALE_CODE, $localeCode)
-                            ->where(MetaLocal::schema_fields_CONFIG_KEY, $configKey)
-                            ->find()
-                            ->fetch();
-                        
-                        if ($localModel->getMetaId()) {
-                            $translatedValue = $localModel->getConfigValue() ?? '';
-                        }
-                    }
+                    $translatedValue = MetaTranslation::getTranslatedValue(
+                        $metaIdentify,
+                        $configKey,
+                        $localeCode,
+                        '',
+                        (string)$scope,
+                    );
                     
                     if ($localeCode === $currentLocale) {
-                        $currentLocaleValue = $translatedValue ?: (is_scalar($defaultValue) ? (string)$defaultValue : '');
+                        $currentLocaleValue = $translatedValue !== ''
+                            ? $translatedValue
+                            : (is_scalar($defaultValue) ? (string)$defaultValue : '');
                     }
                     
                     $translations[] = [
@@ -774,7 +756,6 @@ class File extends BackendController
         $translations = (array)$this->request->getPost('translations', []);
 
         try {
-            // 获取 meta_id
             /** @var MetaModel $metaModel */
             $metaModel = ObjectManager::getInstance(MetaModel::class);
             $meta = $metaModel->reset()
@@ -786,54 +767,33 @@ class File extends BackendController
                 return $this->fetchJson($this->error(__('未找到对应的 Meta 配置：%{meta_identify}', ['meta_identify' => $metaIdentify])));
             }
             
-            $metaId = (int)$meta->getId();
-            
-            // 确定配置键
             // name/description 直接作为 config_key，参数则为 param.{paramName}
             $configKey = $paramName;
             if ($paramName !== 'name' && $paramName !== 'description') {
                 $configKey = 'param.' . $paramName;
             }
             
-            // 保存所有语言的翻译到 w_meta_local 表（每个语言一行）
             $savedCount = 0;
             foreach ($translations as $localeCode => $value) {
                 $localeCode = trim((string)$localeCode);
                 $value = trim((string)$value);
                 
-                if ($localeCode === '') {
+                if ($localeCode === '' || $value === '') {
                     continue;
                 }
                 
-                // 如果值为空，跳过（不保存空翻译）
-                if ($value === '') {
-                    continue;
+                if (!MetaTranslation::setTranslatedValue(
+                    $metaIdentify,
+                    $configKey,
+                    $localeCode,
+                    $value,
+                    (string)$scope,
+                )) {
+                    return $this->fetchJson($this->error(__(
+                        '保存翻译失败：%{locale}',
+                        ['locale' => $localeCode],
+                    )));
                 }
-                
-                /** @var MetaLocal $localModel */
-                $localModel = ObjectManager::getInstance(MetaLocal::class);
-                
-                // 加载现有记录（按 meta_id + locale_code + config_key 查找）
-                $localModel->reset()
-                    ->where(MetaLocal::schema_fields_META_ID, $metaId)
-                    ->where(MetaLocal::schema_fields_LOCALE_CODE, $localeCode)
-                    ->where(MetaLocal::schema_fields_CONFIG_KEY, $configKey)
-                    ->find()
-                    ->fetch();
-                
-                if (!$localModel->getMetaId()) {
-                    // 记录不存在，创建新记录
-                    $localModel = ObjectManager::make(MetaLocal::class);
-                    $localModel->setMetaId($metaId);
-                    $localModel->setMetaIdentify($metaIdentify);
-                    $localModel->setLocaleCode($localeCode);
-                    $localModel->setConfigKey($configKey);
-                }
-                
-                // 设置翻译值
-                $localModel->setConfigValue($value);
-                
-                $localModel->forceCheck()->save();
                 $savedCount++;
             }
             
@@ -884,8 +844,6 @@ class File extends BackendController
                 return $this->fetchJson($this->error(__('未找到对应的 Meta 配置：%{meta_identify}', ['meta_identify' => $metaIdentify])));
             }
             
-            $metaId = (int)$metaRecord->getId();
-            
             // 获取字段的默认值
             $fieldMeta = $metaModel->reset()
                 ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify . '.' . $field)
@@ -915,21 +873,13 @@ class File extends BackendController
                 $localeCode = (string)($locale['code'] ?? '');
                 if ($localeCode) {
                     $localeName = (string)($locale['name'] ?? $localeCode);
-                    
-                    // 从 w_meta_local 表获取翻译值
-                    /** @var MetaLocal $metaLocalModel */
-                    $metaLocalModel = ObjectManager::getInstance(MetaLocal::class);
-                    $metaLocalModel->reset()
-                        ->where(MetaLocal::schema_fields_META_ID, $metaId)
-                        ->where(MetaLocal::schema_fields_LOCALE_CODE, $localeCode)
-                        ->where(MetaLocal::schema_fields_CONFIG_KEY, $field)
-                        ->find()
-                        ->fetch();
-                    
-                    $translatedValue = '';
-                    if ($metaLocalModel->getMetaId()) {
-                        $translatedValue = $metaLocalModel->getConfigValue() ?? '';
-                    }
+                    $translatedValue = MetaTranslation::getTranslatedValue(
+                        $metaIdentify,
+                        $field,
+                        $localeCode,
+                        '',
+                        (string)$scope,
+                    );
                     
                     $translations[] = [
                         'code' => $localeCode,
@@ -980,8 +930,6 @@ class File extends BackendController
                 return $this->fetchJson($this->error(__('未找到对应的 Meta 配置：%{meta_identify}', ['meta_identify' => $metaIdentify])));
             }
             
-            $metaId = (int)$metaRecord->getId();
-            
             // 验证字段是否支持翻译
             $fieldMeta = $metaModel->reset()
                 ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify . '.' . $field)
@@ -996,52 +944,33 @@ class File extends BackendController
             $fieldMetaDataValue = $fieldMeta->getData(MetaModel::schema_fields_META_DATA);
             $metaData = (!empty($fieldMetaDataValue) && is_string($fieldMetaDataValue)) ? (json_decode($fieldMetaDataValue, true) ?? []) : [];
             $attributes = $metaData['attributes'] ?? [];
-            $defaultValue = $attributes['default'] ?? $attributes['name'] ?? '';
             $isTranslatable = !empty($attributes['translate']) || !empty($attributes['translatable']);
             
             if (!$isTranslatable) {
                 return $this->fetchJson($this->error(__('该字段未启用多语言：%{field}', ['field' => $field])));
             }
             
-            // 保存翻译到 w_meta_local 表
             $savedCount = 0;
             foreach ($translations as $localeCode => $value) {
                 $localeCode = trim((string)$localeCode);
                 $value = trim((string)$value);
                 
-                if ($localeCode === '') {
+                if ($localeCode === '' || $value === '') {
                     continue;
                 }
                 
-                // 如果值为空，跳过（不保存空翻译）
-                if ($value === '') {
-                    continue;
+                if (!MetaTranslation::setTranslatedValue(
+                    $metaIdentify,
+                    $field,
+                    $localeCode,
+                    $value,
+                    (string)$scope,
+                )) {
+                    return $this->fetchJson($this->error(__(
+                        '保存翻译失败：%{locale}',
+                        ['locale' => $localeCode],
+                    )));
                 }
-                
-                /** @var MetaLocal $metaLocalModel */
-                $metaLocalModel = ObjectManager::getInstance(MetaLocal::class);
-                
-                // 加载现有记录（按 meta_id + locale_code + config_key 查找）
-                $metaLocalModel->reset()
-                    ->where(MetaLocal::schema_fields_META_ID, $metaId)
-                    ->where(MetaLocal::schema_fields_LOCALE_CODE, $localeCode)
-                    ->where(MetaLocal::schema_fields_CONFIG_KEY, $field)
-                    ->find()
-                    ->fetch();
-                
-                if (!$metaLocalModel->getMetaId()) {
-                    // 记录不存在，创建新记录
-                    $metaLocalModel = ObjectManager::make(MetaLocal::class);
-                    $metaLocalModel->setMetaId($metaId);
-                    $metaLocalModel->setMetaIdentify($metaIdentify);
-                    $metaLocalModel->setLocaleCode($localeCode);
-                    $metaLocalModel->setConfigKey($field);
-                }
-                
-                // 保存翻译值
-                $metaLocalModel->setConfigValue($value);
-                
-                $metaLocalModel->forceCheck()->save();
                 $savedCount++;
             }
             

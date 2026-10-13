@@ -211,6 +211,19 @@ interface ConnectorInterface
     public function buildDropIndexSql(string $table, string $indexName): string;
 
     /**
+     * Promote a PRIMARY KEY onto an existing table (optionally dropping UNIQUE indexes
+     * that already cover the same columns). $table is an exact physical target.
+     *
+     * @param list<string> $primaryKeyColumns
+     * @param list<string> $dropUniqueIndexNames
+     */
+    public function buildPromotePrimaryKeySql(
+        string $table,
+        array $primaryKeyColumns,
+        array $dropUniqueIndexNames = [],
+    ): string;
+
+    /**
      * Generate ADD FOREIGN KEY DDL for the exact physical target. $table is
      * never prefixed or moved; referencesTable deliberately remains a logical
      * name and is resolved by the adapter. Other keys: name, columns,

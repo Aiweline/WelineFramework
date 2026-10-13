@@ -42,7 +42,7 @@
 
 | 分栏 | 服务 | 对象 | 验收口径 |
 |------|------|------|----------|
-| 整站文件 | `DeploySiteBackupService` | `var/backup/deploy/` 等工作树 tar | 发布 / 正式站强制备份 / 失败自动回滚 |
+| 整站文件 | `DeploySiteBackupService` | `var/backup/deploy/` 等工作树 tar | 可选 `--backup` / `update:core`；发布默认靠 Git 回滚 |
 | Schema 列 | Framework `BackupService` | `MigrationBackup`（列/表/结构/分块） | SchemaDiff 保全、R2 捞回、`module:rollback` |
 
 **Deploy harness PASS ≠ 列自动恢复 / 正式 rollback 链 PASS。** 详述见 [../README.md「备份边界」](../README.md)、[发布管理-需求说明.md](发布管理-需求说明.md) §4.4 与「备份边界」、Framework [schema-column-restore-and-rollback-chain.md](../../Framework/doc/开发/spec/schema-column-restore-and-rollback-chain.md)、Database [模块代码与数据库一致性回滚.md](../../Database/doc/开发/模块代码与数据库一致性回滚.md)。

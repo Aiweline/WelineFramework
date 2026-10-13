@@ -37,11 +37,13 @@ class Release extends CommandAbstract
                 '-r, --ref=<ref>'        => 'Git ref（如 refs/tags/v1.0.0）',
                 '-v, --version=<版本>'   => '覆盖 deploy_version（默认自动检测）',
                 '-f, --force'            => '强制拉取',
-                '--no-backup'            => '跳过备份',
+                '--no-backup'            => '跳过整站 tar（默认；Git 版本即回滚面）',
+                '--backup'               => '发布前额外打整站 tar（可选，非默认）',
                 '-h, --help'             => '显示帮助信息',
             ],
             [
                 '版本策略' => '分支发布：版本=commit 短 SHA；tag 发布：版本=tag 名',
+                '回滚' => '失败回到历史 commit/tag，不依赖整站 tar',
                 '探测' => '发布后 GET /deploy/version 查看当前版本',
             ],
             [
@@ -59,7 +61,11 @@ class Release extends CommandAbstract
         $ref         = $args['ref']     ?? $args['r'] ?? '';
         $versionHint = $args['version'] ?? $args['v'] ?? null;
         $force       = isset($args['force']) || isset($args['f']);
-        $noBackup    = isset($args['no-backup']);
+        // Default: skip site tar — Deploy is git-versioned; restore = prior commit/tag.
+        $noBackup    = !isset($args['backup']);
+        if (isset($args['no-backup'])) {
+            $noBackup = true;
+        }
 
         // 解析 ref 类型
         $refInfo = $this->refResolver->resolve($ref, [

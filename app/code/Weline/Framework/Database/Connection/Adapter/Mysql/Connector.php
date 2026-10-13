@@ -994,6 +994,30 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     }
 
     /** @inheritDoc */
+    public function buildPromotePrimaryKeySql(
+        string $table,
+        array $primaryKeyColumns,
+        array $dropUniqueIndexNames = [],
+    ): string {
+        if ($primaryKeyColumns === []) {
+            throw new \InvalidArgumentException('promote primary key requires columns; table=' . $table);
+        }
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $parts = [];
+        foreach ($dropUniqueIndexNames as $indexName) {
+            $indexName = trim((string)$indexName);
+            if ($indexName === '') {
+                continue;
+            }
+            $parts[] = 'DROP INDEX ' . $d->quoteIdentifier($indexName);
+        }
+        $cols = array_map(static fn(string $c): string => $d->quoteIdentifier($c), $primaryKeyColumns);
+        $parts[] = 'ADD PRIMARY KEY (' . implode(',', $cols) . ')';
+        return 'ALTER TABLE ' . $t . ' ' . implode(', ', $parts);
+    }
+
+    /** @inheritDoc */
     public function buildAddForeignKeySql(string $table, array $fk): string
     {
         $d = $this->getDialect();

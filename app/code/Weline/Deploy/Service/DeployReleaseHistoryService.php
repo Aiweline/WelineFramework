@@ -14,6 +14,17 @@ use Weline\Framework\Manager\ObjectManager;
 class DeployReleaseHistoryService
 {
     /**
+     * Hard caps for failure-column writes.
+     *
+     * Schema declares error_message / output_tail as unbounded text, but some production
+     * schemas still use short VARCHAR. Overflow masks the real failure with
+     * "Data too long for column …". Cap both; prefer the error-summary first segment.
+     */
+    public const ERROR_MESSAGE_MAX_CHARS = 500;
+
+    public const OUTPUT_TAIL_MAX_CHARS = 1000;
+
+    /**
      * Create a running release record.
      *
      * @param array<string, mixed> $context
@@ -94,15 +105,67 @@ class DeployReleaseHistoryService
             return;
         }
 
+        $messages = $this->truncateFailedMessages($errorMessage, $outputTail);
         $startedAt = (int)$model->getData(DeployRelease::schema_fields_STARTED_AT);
         $model->setData([
             DeployRelease::schema_fields_STATUS        => 'failed',
             DeployRelease::schema_fields_FINISHED_AT   => $now,
             DeployRelease::schema_fields_DURATION_MS   => ($startedAt > 0) ? (int)(($now - $startedAt) * 1000) : null,
-            DeployRelease::schema_fields_ERROR_MESSAGE => $errorMessage,
-            DeployRelease::schema_fields_OUTPUT_TAIL   => $outputTail,
+            DeployRelease::schema_fields_ERROR_MESSAGE => $messages['error_message'],
+            DeployRelease::schema_fields_OUTPUT_TAIL   => $messages['output_tail'],
         ]);
         $model->save();
+    }
+
+    /**
+     * Cap error_message and output_tail for short production VARCHAR columns.
+     * Prefer the error-summary first segment in both fields (never park unbounded logs).
+     *
+     * @return array{error_message:string,output_tail:string}
+     */
+    public function truncateFailedMessages(string $errorMessage, string $outputTail = ''): array
+    {
+        $errorMessage = trim($errorMessage);
+        $outputTail = trim($outputTail);
+        $errorMax = self::ERROR_MESSAGE_MAX_CHARS;
+        $tailMax = self::OUTPUT_TAIL_MAX_CHARS;
+
+        $shortError = $this->clipUtf8($errorMessage, $errorMax);
+
+        if (mb_strlen($errorMessage, 'UTF-8') <= $errorMax) {
+            return [
+                'error_message' => $shortError,
+                'output_tail' => $this->clipUtf8($outputTail, $tailMax),
+            ];
+        }
+
+        // Overflow: merge context into output_tail, then hard-cap (prefer summary first segment).
+        if ($outputTail === '' || str_contains($errorMessage, $outputTail)) {
+            $tail = $errorMessage;
+        } elseif (mb_strlen($outputTail, 'UTF-8') > mb_strlen($errorMessage, 'UTF-8')) {
+            $tail = str_contains($outputTail, $errorMessage)
+                ? $outputTail
+                : ($errorMessage . "\n---\n" . $outputTail);
+        } else {
+            $tail = $errorMessage . "\n---\n" . $outputTail;
+        }
+
+        return [
+            'error_message' => $shortError,
+            'output_tail' => $this->clipUtf8($tail, $tailMax),
+        ];
+    }
+
+    private function clipUtf8(string $value, int $maxChars): string
+    {
+        if ($value === '' || $maxChars <= 0) {
+            return '';
+        }
+        if (mb_strlen($value, 'UTF-8') <= $maxChars) {
+            return $value;
+        }
+
+        return mb_substr($value, 0, $maxChars, 'UTF-8');
     }
 
     /**

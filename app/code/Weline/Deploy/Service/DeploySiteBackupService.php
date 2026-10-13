@@ -7,7 +7,9 @@ namespace Weline\Deploy\Service;
 use Weline\Framework\App\Env;
 
 /**
- * 正式站强制整站备份（业务 + 核心代码），供发布/回滚/核心更新前使用。
+ * 可选整站 tar（业务 + 核心代码）。
+ * Git 版本发布/回滚默认不调用本服务——恢复面是历史 commit/tag；
+ * 仍可供 `update:core` 或显式 `--backup` 使用。
  */
 class DeploySiteBackupService
 {
@@ -81,6 +83,7 @@ class DeploySiteBackupService
             '*\\var\\cache*',
             '*\\var\\session*',
             '*\\var\\log*',
+            '*\\var\\backup*',
             '*\\.git*',
             '*\\vendor*',
             '*\\node_modules*',
@@ -99,9 +102,10 @@ class DeploySiteBackupService
 
     private function backupWithTar(string $deployRoot, string $backupPath): void
     {
+        // Exclude var/backup so successive site tars do not re-pack prior archives (size explosion).
         $command = 'cd ' . escapeshellarg($deployRoot)
             . " && tar --exclude='var/cache' --exclude='var/session' --exclude='var/log'"
-            . " --exclude='.git' --exclude='vendor' --exclude='node_modules'"
+            . " --exclude='var/backup' --exclude='.git' --exclude='vendor' --exclude='node_modules'"
             . ' -czf ' . escapeshellarg($backupPath . '.tar.gz') . ' . 2>&1';
         exec($command, $output, $exitCode);
         if ($exitCode !== 0) {

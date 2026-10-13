@@ -56,6 +56,29 @@ final class SchemaParserTest extends TestCase
         self::assertFalse($columns['path']->autoIncrement);
         self::assertArrayNotHasKey('id', $columns);
     }
+
+    /**
+     * Acl strategy A: schema_primary_key=acl_id wins; schema_fields_ID=source_id stays UNIQUE business key.
+     */
+    public function testSchemaPrimaryKeyWinsOverBusinessIdField(): void
+    {
+        $parser = new SchemaParser();
+        $schema = $parser->parse(SchemaParserPhysicalPkBusinessIdModel::class);
+
+        self::assertNotNull($schema);
+
+        $columns = [];
+        foreach ($schema->columns as $column) {
+            $columns[$column->name] = $column;
+        }
+
+        self::assertArrayHasKey('acl_id', $columns);
+        self::assertArrayHasKey('source_id', $columns);
+        self::assertTrue($columns['acl_id']->primaryKey);
+        self::assertFalse($columns['source_id']->primaryKey);
+        self::assertTrue($columns['source_id']->unique);
+        self::assertArrayNotHasKey('id', $columns);
+    }
 }
 
 class SchemaParserNoOwnColumnsModel extends Model
@@ -82,4 +105,17 @@ class SchemaParserExplicitCustomIdModel extends Model
 
     #[Col(type: 'varchar', length: 10, nullable: false, default: 'pc', comment: 'Type')]
     public const schema_fields_TYPE = 'type';
+}
+
+class SchemaParserPhysicalPkBusinessIdModel extends Model
+{
+    public const schema_table = 'schema_parser_physical_pk_business_id';
+    public const schema_primary_key = 'acl_id';
+    public const schema_fields_ID = 'source_id';
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'Surrogate PK')]
+    public const schema_fields_ACL_ID = 'acl_id';
+
+    #[Col(type: 'varchar', length: 127, nullable: false, unique: true, comment: 'Business key')]
+    public const schema_fields_SOURCE_ID = 'source_id';
 }

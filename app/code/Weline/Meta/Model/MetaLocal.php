@@ -13,6 +13,11 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 /** Meta 本地化模型 - 存储 Meta 的多语言翻译数据（含 scope / version_id） */
 #[Table(comment: 'Meta本地化翻译表')]
+/**
+ * Declared natural key includes scope+version_id.
+ * Legacy DBs only have UNIQUE(meta_identify,locale_code,config_key); SchemaDiff promotes via
+ * subset-UNIQUE path (DROP 3-col UNIQUE + ADD 5-col PRIMARY).
+ */
 #[Index(name: 'uk_meta_local_identify_locale_key_scope_version', columns: ['meta_identify', 'locale_code', 'config_key', 'scope', 'version_id'], type: 'UNIQUE')]
 #[Index(name: 'idx_meta_id', columns: ['meta_id'])]
 #[Index(name: 'idx_meta_identify', columns: ['meta_identify'])]
@@ -22,7 +27,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 class MetaLocal extends AbstractModel
 {
     public const schema_table = 'w_meta_local';
-    public const schema_primary_keys = ['meta_id', 'locale_code', 'config_key', 'scope', 'version_id'];
+    public const schema_primary_keys = ['meta_identify', 'locale_code', 'config_key', 'scope', 'version_id'];
     public const DEFAULT_SCOPE = 'default';
     public const DEFAULT_VERSION_ID = 0;
 
@@ -41,8 +46,32 @@ class MetaLocal extends AbstractModel
     #[Col('int', nullable: false, default: self::DEFAULT_VERSION_ID, comment: '主题版本ID，0=非版本绑定')]
     public const schema_fields_VERSION_ID = 'version_id';
 
-    public array $_unit_primary_keys = ['meta_id', 'locale_code', 'config_key', 'scope', 'version_id'];
-    public array $_index_sort_keys = ['meta_id', 'locale_code', 'config_key', 'scope', 'version_id'];
+    public array $_unit_primary_keys = ['meta_identify', 'locale_code', 'config_key', 'scope', 'version_id'];
+    public array $_index_sort_keys = ['meta_identify', 'locale_code', 'config_key', 'scope', 'version_id'];
+
+    /**
+     * Natural key matching schema_primary_keys / physical PRIMARY after promote.
+     * Prefer this over meta_id triples so version_id=0 and scope are never dropped.
+     */
+    public function whereNaturalKey(
+        string $metaIdentify,
+        string $localeCode,
+        string $configKey,
+        string $scope = self::DEFAULT_SCOPE,
+        int $versionId = self::DEFAULT_VERSION_ID,
+    ): static {
+        $scope = trim($scope);
+        if ($scope === '') {
+            $scope = self::DEFAULT_SCOPE;
+        }
+        $this->where(self::schema_fields_META_IDENTIFY, $metaIdentify)
+            ->where(self::schema_fields_LOCALE_CODE, $localeCode)
+            ->where(self::schema_fields_CONFIG_KEY, $configKey)
+            ->where(self::schema_fields_SCOPE, $scope)
+            ->where(self::schema_fields_VERSION_ID, max(0, $versionId));
+
+        return $this;
+    }
 
     public function getMetaId(): ?int
     {

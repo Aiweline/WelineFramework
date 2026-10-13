@@ -9,7 +9,7 @@ class DeployWebhookReleaseService
     public function __construct(
         private readonly DeployConfigService $configService,
         private readonly DeployWebhookRefResolver $refResolver,
-        private readonly DeployOrchestratorService $orchestrator,
+        private readonly DeployWebhookAsyncDispatcher $asyncDispatcher,
         private readonly DeployProjectProfileService $profileService,
         private readonly DeployReleaseRuntimeService $runtimeService
     ) {
@@ -151,35 +151,50 @@ class DeployWebhookReleaseService
         }
 
         $force = (string)($effectiveConfig['DEPLOY_FORCE_RESET'] ?? '0') === '1';
-        $result = $this->orchestrator->release([
-            'trigger' => 'webhook',
-            'ref_type' => $refInfo['type'],
-            'ref' => $refInfo['ref'],
-            'deploy_version_hint' => $refInfo['deploy_version_hint'] ?? null,
-            'git_checkout' => $refInfo['git_checkout'] ?? null,
-            'git_tag' => ($refInfo['type'] === DeployWebhookRefResolver::TYPE_TAG) ? ($refInfo['deploy_version_hint'] ?? null) : null,
-            'force' => $force,
-            'no_backup' => false,
-            'printer' => null,
-            'config' => $effectiveConfig,
-            'context' => $releaseContext,
-        ]);
+        // HTTP must ACK within platform read timeouts (e.g. Gitee ~15s). Full release
+        // (prod site backup + git + setup:upgrade) runs detached via deploy:release.
+        $dispatched = $this->asyncDispatcher->dispatchRelease(
+            (string)$refInfo['ref'],
+            $force,
+            true
+        );
+        if (empty($dispatched['ok'])) {
+            return [
+                'status' => 500,
+                'payload' => [
+                    'ok' => false,
+                    'accepted' => false,
+                    'async' => true,
+                    'error' => 'async_dispatch_failed',
+                    'message' => (string)($dispatched['error'] ?? 'spawn_failed'),
+                    'deploy_version_hint' => $refInfo['deploy_version_hint'],
+                    'git_ref_type' => $refInfo['type'],
+                    'git_ref' => $refInfo['ref'],
+                    'profile_key' => $releaseContext['profile_key'],
+                    'project_id' => $releaseContext['project_id'],
+                    'domain' => $releaseContext['domain'],
+                    'log_path' => (string)($dispatched['log_path'] ?? ''),
+                ],
+            ];
+        }
 
         return [
-            'status' => !empty($result['success']) ? 200 : 500,
+            'status' => 202,
             'payload' => [
-                'ok' => !empty($result['success']),
-                'exit_code' => !empty($result['success']) ? 0 : 1,
-                'release_id' => (string)($result['release_id'] ?? ''),
-                'deploy_version' => (string)($result['deploy_version'] ?? ''),
+                'ok' => true,
+                'accepted' => true,
+                'async' => true,
+                'pid' => $dispatched['pid'],
+                'job_id' => (string)($dispatched['job_id'] ?? ''),
+                'transport' => (string)($dispatched['transport'] ?? 'queue'),
+                'log_path' => (string)($dispatched['log_path'] ?? ''),
                 'deploy_version_hint' => $refInfo['deploy_version_hint'],
                 'git_ref_type' => $refInfo['type'],
                 'git_ref' => $refInfo['ref'],
                 'profile_key' => $releaseContext['profile_key'],
                 'project_id' => $releaseContext['project_id'],
                 'domain' => $releaseContext['domain'],
-                'message' => (string)($result['message'] ?? ''),
-                'output_tail' => !empty($result['success']) ? [] : [(string)($result['message'] ?? '')],
+                'message' => 'release_queued',
             ],
         ];
     }

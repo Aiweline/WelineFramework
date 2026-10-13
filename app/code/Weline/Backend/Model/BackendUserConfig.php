@@ -25,8 +25,9 @@ use Weline\Framework\Session\Auth\Device\AuthenticatedDeviceRegistryInterface;
 #[Index(name: 'idx_name', columns: ['name'], comment: '配置名')]
 class BackendUserConfig extends Model
 {
+    /** Natural key matches physical UNIQUE `idx_user_key`; legacy `id` is non-PK surrogate. */
     public const schema_primary_keys = ['user_id', 'key'];
-    #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
+    #[Col('int', 0, nullable: false, comment: 'Legacy surrogate id (not PRIMARY)')]
     public const schema_fields_ID = 'id';
     #[Col('int', 0, nullable: false, default: 0, comment: '管理员ID')]
     public const schema_fields_user_id = 'user_id';

@@ -17,7 +17,9 @@ use Weline\Framework\Manager\ObjectManager;
 #[Index(name: 'uk_source', columns: ['source'], type: 'UNIQUE', comment: '资源唯一')]
 class Menu extends Model
 {
-    public const schema_primary_keys = ['menu_id', 'source'];
+    // Physical MySQL: PRIMARY(menu_id) + UNIQUE(source). Do not declare composite PK
+    // (menu_id,source) — SchemaDiff refuses silent PK rewrite and blocks setup:upgrade/deploy.
+    public const schema_primary_key = 'menu_id';
     #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
     public const schema_fields_ID = 'menu_id';
     #[Col('varchar', 60, nullable: false, comment: '菜单名')]
@@ -48,7 +50,7 @@ class Menu extends Model
     public const schema_fields_IS_ENABLE = 'is_enable';
     #[Col('int', 1, default: 1, comment: '是否后台菜单')]
     public const schema_fields_IS_BACKEND = 'is_backend';
-    public array $_unit_primary_keys = [self::schema_fields_ID, self::schema_fields_SOURCE];
+    public array $_unit_primary_keys = [self::schema_fields_ID];
     public array $_index_sort_keys = ['menu_id', 'source'];
     private Url $url;
     public function __init()

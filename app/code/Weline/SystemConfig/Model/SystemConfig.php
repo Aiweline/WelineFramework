@@ -41,7 +41,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
 
     public const schema_table = 'system_config';
     /** @var list<string> */
-    public const schema_primary_keys = ['key', 'module', 'area', 'scope', 'locale'];
+    /** Column order matches physical UNIQUE `idx_system_config_identity` for promote. */
+    public const schema_primary_keys = ['module', 'area', 'key', 'scope', 'locale'];
 
     #[Col('varchar', 120, nullable: false, comment: 'Config key')]
     public const schema_fields_KEY = 'key';
@@ -86,7 +87,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public const area_FRONTEND = 'frontend';
 
     public array $_index_sort_keys = ['module', 'area', 'scope', 'locale', 'key'];
-    public array $_unit_primary_keys = ['key', 'module', 'area', 'scope', 'locale'];
+    public array $_unit_primary_keys = ['module', 'area', 'key', 'scope', 'locale'];
 
     /**
      * 进程级 module rows：area → module → rowsCacheKey → rows。

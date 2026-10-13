@@ -150,9 +150,10 @@ class DeployReleaseControlService
 
         $remote = trim((string)($settings['project_remote'] ?? 'origin')) ?: 'origin';
         $force = (string)($settings['deploy_force_reset'] ?? '0') === '1';
+        // Git version deploy: prior commit is the restore point. Site tar only when explicitly enabled.
         $backupSetting = strtolower(trim((string)($settings['backup_before_deploy'] ?? '')));
         $backupEnabled = !in_array($backupSetting, ['', '0', 'false', 'no', 'off'], true);
-        $noBackup = !$backupEnabled && !$this->isProductionSite();
+        $noBackup = !$backupEnabled;
 
         $refType = strtolower(trim($refType));
         $ref = trim($ref);

@@ -18,6 +18,11 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * 物理 PRIMARY KEY = acl_id（schema_primary_key → SchemaParser/Diff 对齐物理表）。
+ * 运行时业务键仍是 source_id：schema_fields_ID + 钉死 `_primary_key`，load/getId 不走整型 acl_id。
+ * Diff 禁止静默改写已有物理 PK；策略 A 声明对齐物理，不做自然键迁移。
+ */
 #[Table(comment: 'ACL权限表')]
 #[Index(name: 'idx_source_id', columns: ['source_id'], type: 'UNIQUE', comment: 'ACL资源ID唯一')]
 #[Index(name: 'idx_acl_access_mode', columns: ['access_mode'], comment: 'ACL访问模式')]
@@ -26,8 +31,10 @@ use Weline\Framework\Manager\ObjectManager;
 class Acl extends \Weline\Framework\Database\Model
 {
 
-    public const schema_primary_key = 'source_id';
+    /** Diff/DDL 物理主键（与库表一致） */
+    public const schema_primary_key = 'acl_id';
 
+    /** 业务查找键（UNIQUE），非物理 PK */
     #[Col(type: 'varchar', length: 127, nullable: false, unique: true, comment: 'ACL资源ID')]
     public const schema_fields_ID = 'source_id';
     #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ACL权限ID')]
@@ -88,6 +95,12 @@ class Acl extends \Weline\Framework\Database\Model
     public const acl_origin_system_operation = 'system_operation';
     public const ACCESS_MODE_READ = 'read';
     public const ACCESS_MODE_EDIT = 'edit';
+
+    /**
+     * 钉死 ORM 默认 load/getId 业务键为 source_id（避免 schema_primary_key=acl_id 把 bare load 绑到整型 PK）。
+     * SchemaParser 仍只读 schema_primary_key 常量，不受本字段影响。
+     */
+    public string $_primary_key = self::schema_fields_SOURCE_ID;
 
     public array $_unit_primary_keys = [self::schema_fields_SOURCE_ID];
 

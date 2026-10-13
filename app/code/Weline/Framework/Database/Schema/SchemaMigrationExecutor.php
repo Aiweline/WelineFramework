@@ -48,17 +48,18 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
             ?? $this->migrationModel->getLatestSchemaCheckpointBefore($moduleName, $moduleVersion);
     }
 
-    /** 先加列，再 DROP 旧外键/索引，再 ADD 新索引/外键，最后 DROP 列；同名索引可先删后建。回滚按 sequence 倒序。 */
+    /** 先加列，再收敛 PRIMARY，再列 MODIFY；随后 DROP 旧外键/索引 → ADD 索引/外键 → DROP 列。 */
     private const KIND_PRIORITY = [
         SchemaDiffOp::KIND_CREATE_TABLE => 0,
         SchemaDiffOp::KIND_ADD_COLUMN => 1,
-        SchemaDiffOp::KIND_MODIFY_COLUMN => 2,
-        SchemaDiffOp::KIND_DROP_FOREIGN_KEY => 3,
-        SchemaDiffOp::KIND_DROP_INDEX => 4,
-        SchemaDiffOp::KIND_ADD_INDEX => 5,
-        SchemaDiffOp::KIND_ADD_FOREIGN_KEY => 6,
-        SchemaDiffOp::KIND_DROP_COLUMN => 7,
-        SchemaDiffOp::KIND_MODIFY_TABLE_COMMENT => 8,
+        SchemaDiffOp::KIND_PROMOTE_PRIMARY_KEY => 2,
+        SchemaDiffOp::KIND_MODIFY_COLUMN => 3,
+        SchemaDiffOp::KIND_DROP_FOREIGN_KEY => 4,
+        SchemaDiffOp::KIND_DROP_INDEX => 5,
+        SchemaDiffOp::KIND_ADD_INDEX => 6,
+        SchemaDiffOp::KIND_ADD_FOREIGN_KEY => 7,
+        SchemaDiffOp::KIND_DROP_COLUMN => 8,
+        SchemaDiffOp::KIND_MODIFY_TABLE_COMMENT => 9,
     ];
 
     /**
@@ -137,6 +138,7 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
                     SchemaDiffOp::KIND_MODIFY_COLUMN,
                     SchemaDiffOp::KIND_DROP_INDEX,
                     SchemaDiffOp::KIND_DROP_FOREIGN_KEY,
+                    SchemaDiffOp::KIND_PROMOTE_PRIMARY_KEY,
                 ],
                 true,
             );
@@ -321,7 +323,11 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
             );
         } elseif (in_array(
             $op->kind,
-            [SchemaDiffOp::KIND_DROP_INDEX, SchemaDiffOp::KIND_DROP_FOREIGN_KEY],
+            [
+                SchemaDiffOp::KIND_DROP_INDEX,
+                SchemaDiffOp::KIND_DROP_FOREIGN_KEY,
+                SchemaDiffOp::KIND_PROMOTE_PRIMARY_KEY,
+            ],
             true,
         )) {
             if ($physicalIdentity === null || !$this->backupService->backupPhysicalTableStructure(
@@ -1059,6 +1065,24 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
             case SchemaDiffOp::KIND_MODIFY_TABLE_COMMENT:
                 $comment = is_string($op->payload) ? str_replace("'", "''", $op->payload) : '';
                 return $connector->buildAlterTableCommentSql($table, $comment);
+            case SchemaDiffOp::KIND_PROMOTE_PRIMARY_KEY:
+                if (!$op->payload instanceof PrimaryKeyPromotionDefinition) {
+                    throw new \RuntimeException('promote primary key payload missing; table=' . $op->tableName);
+                }
+                $forward = $connector->buildPromotePrimaryKeySql(
+                    $table,
+                    $op->payload->columns,
+                    $op->payload->replaceUniqueIndexNames,
+                );
+                $trimmed = ltrim($forward);
+                if ($trimmed === '' || str_starts_with($trimmed, '--')) {
+                    throw new \RuntimeException(
+                        'adapter cannot promote PRIMARY KEY; table=' . $op->tableName
+                        . '; columns=' . implode(',', $op->payload->columns)
+                        . '; detail=' . trim($forward)
+                    );
+                }
+                return $forward;
             default:
                 return '';
         }
@@ -1116,6 +1140,9 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
             case SchemaDiffOp::KIND_MODIFY_TABLE_COMMENT:
                 $oldComment = is_string($op->rollbackPayload) ? str_replace("'", "''", $op->rollbackPayload) : '';
                 return $connector->buildAlterTableCommentSql($table, $oldComment);
+            case SchemaDiffOp::KIND_PROMOTE_PRIMARY_KEY:
+                // Structure backup is authoritative; dialect-safe PK demotion is not emitted here.
+                return '';
             default:
                 return '';
         }

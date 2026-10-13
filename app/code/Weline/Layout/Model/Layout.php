@@ -22,7 +22,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 class Layout extends Model
 {
     public const schema_table = 'weline_layout';
-    public const schema_primary_keys = ['layout_id', 'code', 'module_code', 'layout_type'];
+    // Physical MySQL: PRIMARY(layout_id) + UNIQUE(code, module_code, layout_type).
+    // Composite schema_primary_keys blocked setup:upgrade / webhook deploy (refuse silent rewrite).
+    public const schema_primary_key = 'layout_id';
     public const indexer = 'weline_layout';
     #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '布局ID')]
     public const schema_fields_ID = 'layout_id';
@@ -46,7 +48,7 @@ class Layout extends Model
     public const schema_fields_SORT_ORDER = 'sort_order';
     #[Col('varchar', 500, default: '', comment: '预览图片路径')]
     public const schema_fields_PREVIEW_IMAGE = 'preview_image';
-    public array $_unit_primary_keys = ['layout_id', 'code', 'module_code', 'layout_type'];
+    public array $_unit_primary_keys = ['layout_id'];
     public array $_index_sort_keys = ['layout_id', 'code', 'module_code', 'layout_type'];
 // ===== Getters and Setters =====
     public function getCode(): string

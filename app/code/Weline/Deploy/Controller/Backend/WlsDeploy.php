@@ -352,7 +352,7 @@ class WlsDeploy extends BackendController
                 ? ($resolved['deploy_version_hint'] ?? null)
                 : null,
             'force' => $force,
-            'no_backup' => false,
+            'no_backup' => true,
             'printer' => null,
             'config' => $releaseConfig,
             'context' => $releaseContext,

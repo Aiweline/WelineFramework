@@ -178,7 +178,7 @@ app/code/Weline/Deploy/
 
 | 分栏 | 服务类 | 归属 | 对象 | 用途 |
 |------|--------|------|------|------|
-| **整站文件备份** | `Weline\Deploy\Service\DeploySiteBackupService` | `Weline_Deploy` | 工作树 / 整站 tar（常见落盘 `var/backup/deploy/`） | 发布失败自动回滚、正式站强制整站备份 |
+| **整站文件备份** | `Weline\Deploy\Service\DeploySiteBackupService` | `Weline_Deploy` | 工作树 / 整站 tar（常见落盘 `var/backup/deploy/`） | 可选；Git 版本发布默认不备份，回滚靠 commit/tag |
 | **Schema 列备份** | `Weline\Framework\Database\Service\BackupService`（`Weline_Database` 可薄继承） | Framework / Database | 表·列·结构·分块 **`MigrationBackup`** | SchemaDiff `DROP`/`MODIFY`、module rollback 列保全与 R2 自动捞回 |
 
 **硬口径**

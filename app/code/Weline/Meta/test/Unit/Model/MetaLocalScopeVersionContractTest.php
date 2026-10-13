@@ -21,13 +21,25 @@ final class MetaLocalScopeVersionContractTest extends TestCase
         self::assertStringContainsString('idx_scope', $src);
         self::assertStringContainsString('idx_version_id', $src);
         self::assertStringContainsString(
-            "['meta_id', 'locale_code', 'config_key', 'scope', 'version_id']",
+            "['meta_identify', 'locale_code', 'config_key', 'scope', 'version_id']",
             $src
         );
+        self::assertStringContainsString('function whereNaturalKey(', $src);
         self::assertStringNotContainsString(
             "columns: ['meta_identify', 'locale_code', 'config_key'], type: 'UNIQUE'",
             $src
         );
+    }
+
+    public function testBackendFileUsesMetaTranslationNaturalKeyPath(): void
+    {
+        $file = dirname(__DIR__, 3) . '/Controller/Backend/Config/File.php';
+        $src = (string)file_get_contents($file);
+
+        self::assertStringContainsString('MetaTranslation::setTranslatedValue(', $src);
+        self::assertStringContainsString('MetaTranslation::getTranslatedValue(', $src);
+        self::assertStringNotContainsString('forceCheck()->save()', $src);
+        self::assertStringNotContainsString('MetaLocal::schema_fields_META_ID', $src);
     }
 
     public function testHelperExposesScopedApiAndDelegatesGc(): void

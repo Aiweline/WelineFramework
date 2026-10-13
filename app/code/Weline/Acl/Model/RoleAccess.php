@@ -22,11 +22,12 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Acl\Service\ResourceTreeService;
 
-/** 复合主键 (role_id, source_id) 用 UNIQUE 约束实现，框架暂不支持复合主键声明 */
+/** 复合主键 (role_id, source_id)：schema_primary_keys 声明物理 PRIMARY；同列 UNIQUE 供遗留表 promote 收敛。 */
 #[Table(comment: '角色资源访问表')]
 #[Index(name: 'uk_role_source', columns: ['role_id', 'source_id'], type: 'UNIQUE', comment: '角色+资源唯一')]
 class RoleAccess extends Model
 {
+    public const schema_primary_keys = ['role_id', 'source_id'];
 
     #[Col(type: 'int', nullable: false, comment: '角色ID')]
     public const schema_fields_ID = 'role_id';

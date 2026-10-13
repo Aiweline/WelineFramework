@@ -361,7 +361,12 @@ class BackupService
             throw new \RuntimeException('physical column backup connector is not bound to its connection factory');
         }
         $columns = $connector->getPhysicalTableColumns($identity);
-        $primaryKeys = $this->resolvePrimaryKeyColumnsFromMetadata($columns, $modelClass);
+        $primaryKeys = $this->resolvePrimaryKeyColumnsFromMetadata(
+            $columns,
+            $modelClass,
+            $identity->canonical(),
+            $columnName,
+        );
         $query = $this->physicalQuery($connector, $identity)
             ->fields(array_merge($primaryKeys, [$columnName]))
             ->where($columnName, null, 'IS NOT NULL')
@@ -2265,12 +2270,20 @@ class BackupService
      * @param list<array<string, mixed>> $columns
      * @return list<string>
      */
-    private function resolvePrimaryKeyColumnsFromMetadata(array $columns, ?string $modelClass = null): array
-    {
+    private function resolvePrimaryKeyColumnsFromMetadata(
+        array $columns,
+        ?string $modelClass = null,
+        string $table = '',
+        string $column = '',
+    ): array {
         unset($modelClass);
         $primaryKeys = $this->resolveCompletePrimaryKeyColumnsFromMetadata($columns);
         if ($primaryKeys === []) {
-            throw new \RuntimeException('physical column backup requires a complete primary key');
+            throw new \RuntimeException(
+                'physical column backup requires a complete primary key'
+                . ($table !== '' ? '; table=' . $table : '')
+                . ($column !== '' ? '; column=' . $column : '')
+            );
         }
         return $primaryKeys;
     }

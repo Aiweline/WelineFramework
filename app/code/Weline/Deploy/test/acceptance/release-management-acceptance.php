@@ -183,21 +183,32 @@ record(
     $results,
     $failed,
     'RM-10.5-01',
-    '正式站强制备份（isProductionDeploy + DeploySiteBackupService）',
-    str_contains($orchSource, 'isProductionDeploy')
-        && str_contains($orchSource, 'DeploySiteBackupService')
-        && str_contains($orchSource, 'shouldRunBackup'),
+    'Git 版本发布默认不强制整站 tar（shouldRunBackup=!$noBackup；默认 no_backup）',
+    str_contains($orchSource, 'shouldRunBackup')
+        && str_contains($orchSource, 'return !$noBackup')
+        && str_contains($orchSource, "no_backup'] ?? true"),
     ''
 );
+$rmRestoreOk = preg_match(
+    '/function restoreProtectedPaths\(string \$deployRoot, string \$snapshotId\): void\s*\{(?P<body>.*?)\n    \}/s',
+    $orchSource,
+    $rmRestore
+) === 1
+    && isset($rmRestore['body'])
+    && !str_contains($rmRestore['body'], 'removePath($target)')
+    && str_contains($rmRestore['body'], 'removePath($snapshotRoot)');
 record(
     $results,
     $failed,
     'RM-10.2-04',
-    '发布过程保护 pub/ 与 var/generated/ 等目录',
+    '发布过程仅快照/恢复保护根下 git 已跟踪文件（ls-files；restore 不整树 removePath）',
     str_contains($orchSource, "'pub'")
         && str_contains($orchSource, 'var/generated')
         && str_contains($orchSource, 'snapshotProtectedPaths')
-        && str_contains($orchSource, 'restoreProtectedPaths'),
+        && str_contains($orchSource, 'restoreProtectedPaths')
+        && str_contains($orchSource, 'listTrackedFilesUnder')
+        && str_contains($orchSource, 'ls-files')
+        && $rmRestoreOk,
     ''
 );
 record(

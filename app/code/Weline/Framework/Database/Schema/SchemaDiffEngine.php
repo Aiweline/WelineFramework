@@ -36,14 +36,53 @@ final class SchemaDiffEngine
                 static fn(ColumnDefinition $column): bool => $column->primaryKey,
             )) > 1;
 
+        $declaredPrimaryKeys = $this->primaryKeyColumns($declared->columns);
+        $actualPrimaryKeys = $this->primaryKeyColumns($actual->columns);
+        $primaryKeyPromotionNeeded = $declaredPrimaryKeys !== []
+            && $declaredPrimaryKeys !== $actualPrimaryKeys;
+        // Declared wider than physical: trust physical PK; never MODIFY COLUMN to add PRIMARY.
+        $trustPhysicalPrimaryKey = false;
+        if ($primaryKeyPromotionNeeded
+            && $actualPrimaryKeys !== []
+            && $this->isPrimaryKeyColumnSubset($actualPrimaryKeys, $declaredPrimaryKeys)
+        ) {
+            $trustPhysicalPrimaryKey = true;
+            $primaryKeyPromotionNeeded = false;
+        }
+        $promoteReplaceUniqueNames = [];
+        if ($primaryKeyPromotionNeeded && $actualPrimaryKeys === []) {
+            // Exact UNIQUE match, or legacy UNIQUE whose columns are a subset of the
+            // declared PK (e.g. MetaLocal 3-col UNIQUE → 5-col PRIMARY with scope/version).
+            $promoteReplaceUniqueNames = $this->findPromotableUniqueIndexNames(
+                $actual->indexes,
+                $declaredPrimaryKeys,
+            );
+        }
+        $promoteReplaceUniqueKeys = [];
+        foreach ($promoteReplaceUniqueNames as $uniqueName) {
+            $promoteReplaceUniqueKeys[strtolower($uniqueName)] = true;
+        }
+        $deferPrimaryKeyFlags = $primaryKeyPromotionNeeded || $trustPhysicalPrimaryKey;
+
         foreach ($declared->columns as $col) {
             if (!isset($actualCols[$col->name])) {
                 $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_ADD_COLUMN, $tableName, $col, $modelClass);
             } else {
                 $existing = $actualCols[$col->name];
+                if ($deferPrimaryKeyFlags
+                    && $this->columnEqualsIgnoringPrimaryKey($col, $existing, $databaseType, $sqliteCompositePrimaryKey)
+                ) {
+                    // Primary-key flag drift is handled by KIND_PROMOTE_PRIMARY_KEY (or trusted physical).
+                    continue;
+                }
                 if (!$this->columnEquals($col, $existing, $databaseType, $sqliteCompositePrimaryKey)
                     && !$this->skipTimestampCompatibleModify($col, $existing)) {
-                    $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_MODIFY_COLUMN, $tableName, $col, $modelClass, $existing);
+                    // Never push declared primaryKey=true onto MODIFY when physical PK is trusted
+                    // or promotion is deferred — MySQL rejects "Multiple primary key defined".
+                    $colForModify = $deferPrimaryKeyFlags
+                        ? $this->columnWithPrimaryKeyFlag($col, $existing->primaryKey)
+                        : $col;
+                    $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_MODIFY_COLUMN, $tableName, $colForModify, $modelClass, $existing);
                 }
             }
         }
@@ -141,6 +180,11 @@ final class SchemaDiffEngine
             if (isset($indexReplaceNames[$indexKey]) || isset($actualIndexes[$indexKey])) {
                 continue;
             }
+            // PRIMARY already enforces uniqueness; do not also ADD a UNIQUE on the same columns.
+            if (strtoupper($idx->type) === 'UNIQUE'
+                && $this->columnsEqualUnordered($idx->columns, $declaredPrimaryKeys)) {
+                continue;
+            }
             $allColsExist = true;
             foreach ($idx->columns as $col) {
                 if (!isset($declaredColNames[$col])) {
@@ -159,6 +203,10 @@ final class SchemaDiffEngine
                 continue;
             }
             if (!isset($declaredIndexes[$indexKey])) {
+                // Consumed by KIND_PROMOTE_PRIMARY_KEY (DROP UNIQUE + ADD PRIMARY).
+                if (isset($promoteReplaceUniqueKeys[$indexKey])) {
+                    continue;
+                }
                 $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_DROP_INDEX, $tableName, $idx, $modelClass);
                 continue;
             }
@@ -197,7 +245,215 @@ final class SchemaDiffEngine
             );
         }
 
+        if ($primaryKeyPromotionNeeded) {
+            if ($actualPrimaryKeys !== []) {
+                // Opposite drift (physical wider / disjoint) — refuse silent rewrite.
+                // (Declared-wider subset already handled via $trustPhysicalPrimaryKey above.)
+                throw new \RuntimeException(
+                    'physical primary key differs from declared primary key; refuse silent rewrite'
+                    . '; table=' . $tableName
+                    . '; declared=' . implode(',', $declaredPrimaryKeys)
+                    . '; physical=' . implode(',', $actualPrimaryKeys)
+                );
+            }
+            foreach ($declaredPrimaryKeys as $pkCol) {
+                if (!isset($actualCols[$pkCol]) && !isset($declaredCols[$pkCol])) {
+                    throw new \RuntimeException(
+                        'declared primary key column missing from schema; table=' . $tableName
+                        . '; column=' . $pkCol
+                    );
+                }
+            }
+            $replaceUnique = $promoteReplaceUniqueNames;
+            if ($replaceUnique === []) {
+                $physicalUniques = [];
+                foreach ($actual->indexes as $index) {
+                    if (strtoupper($index->type) === 'UNIQUE') {
+                        $physicalUniques[] = $index->name . '(' . implode(',', $index->columns) . ')';
+                    }
+                }
+                if ($physicalUniques !== []) {
+                    throw new \RuntimeException(
+                        'declared primary key has no exact or subset UNIQUE match to promote'
+                        . '; table=' . $tableName
+                        . '; declared=' . implode(',', $declaredPrimaryKeys)
+                        . '; unique_indexes=' . implode('|', $physicalUniques)
+                    );
+                }
+            }
+            $ops[] = new SchemaDiffOp(
+                SchemaDiffOp::KIND_PROMOTE_PRIMARY_KEY,
+                $tableName,
+                new PrimaryKeyPromotionDefinition($declaredPrimaryKeys, $replaceUnique),
+                $modelClass,
+                $actualPrimaryKeys,
+            );
+        }
+
         return $ops;
+    }
+
+    /**
+     * @param list<ColumnDefinition> $columns
+     * @return list<string>
+     */
+    private function primaryKeyColumns(array $columns): array
+    {
+        $keys = [];
+        foreach ($columns as $column) {
+            if ($column->primaryKey) {
+                $keys[] = $column->name;
+            }
+        }
+        return $keys;
+    }
+
+    /**
+     * True when every column in $subset appears in $superset (order-independent).
+     *
+     * @param list<string> $subset
+     * @param list<string> $superset
+     */
+    private function isPrimaryKeyColumnSubset(array $subset, array $superset): bool
+    {
+        if ($subset === []) {
+            return false;
+        }
+        $super = array_fill_keys($superset, true);
+        foreach ($subset as $col) {
+            if (!isset($super[$col])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function columnWithPrimaryKeyFlag(ColumnDefinition $column, bool $primaryKey): ColumnDefinition
+    {
+        if ($column->primaryKey === $primaryKey) {
+            return $column;
+        }
+
+        return new ColumnDefinition(
+            name: $column->name,
+            type: $column->type,
+            length: $column->length,
+            nullable: $column->nullable,
+            primaryKey: $primaryKey,
+            autoIncrement: $column->autoIncrement,
+            default: $column->default,
+            comment: $column->comment,
+            unique: $column->unique,
+        );
+    }
+
+    /**
+     * @param list<IndexDefinition> $indexes
+     * @param list<string> $columns
+     * @return list<string>
+     */
+    /**
+     * @param list<IndexDefinition> $indexes
+     * @param list<string> $primaryKeyColumns
+     * @return list<string>
+     */
+    private function findPromotableUniqueIndexNames(array $indexes, array $primaryKeyColumns): array
+    {
+        $exact = $this->findExactUniqueIndexNames($indexes, $primaryKeyColumns);
+        if ($exact !== []) {
+            return $exact;
+        }
+        return $this->findSubsetUniqueIndexNames($indexes, $primaryKeyColumns);
+    }
+
+    private function findExactUniqueIndexNames(array $indexes, array $columns): array
+    {
+        $wanted = array_values($columns);
+        $names = [];
+        foreach ($indexes as $index) {
+            if (strtoupper($index->type) !== 'UNIQUE') {
+                continue;
+            }
+            // Column set match (order-independent): PRIMARY KEY column order follows
+            // schema_primary_keys; physical UNIQUE may list the same columns differently.
+            if ($this->columnsEqualUnordered($index->columns, $wanted)) {
+                $names[] = $index->name;
+            }
+        }
+        return $names;
+    }
+
+    /**
+     * Legacy UNIQUE whose columns are a proper subset of the declared PRIMARY KEY.
+     * Uniqueness on the subset already implies uniqueness on the expanded key set,
+     * so DROP subset UNIQUE + ADD PRIMARY KEY is safe without an intermediate UNIQUE.
+     *
+     * @param list<IndexDefinition> $indexes
+     * @param list<string> $primaryKeyColumns
+     * @return list<string>
+     */
+    private function findSubsetUniqueIndexNames(array $indexes, array $primaryKeyColumns): array
+    {
+        if ($primaryKeyColumns === []) {
+            return [];
+        }
+        $pkSet = array_fill_keys($primaryKeyColumns, true);
+        $names = [];
+        foreach ($indexes as $index) {
+            if (strtoupper($index->type) !== 'UNIQUE' || $index->columns === []) {
+                continue;
+            }
+            if ($this->columnsEqualUnordered($index->columns, $primaryKeyColumns)) {
+                continue;
+            }
+            foreach ($index->columns as $column) {
+                if (!isset($pkSet[$column])) {
+                    continue 2;
+                }
+            }
+            $names[] = $index->name;
+        }
+        return $names;
+    }
+
+    /**
+     * @param list<string> $a
+     * @param list<string> $b
+     */
+    private function columnsEqualUnordered(array $a, array $b): bool
+    {
+        $left = array_values($a);
+        $right = array_values($b);
+        sort($left);
+        sort($right);
+        return $left === $right;
+    }
+
+    /**
+     * @param list<IndexDefinition> $indexes
+     * @param list<string> $columns
+     */
+    private function hasMatchingDeclaredUnique(array $indexes, array $columns): bool
+    {
+        return $this->findExactUniqueIndexNames($indexes, $columns) !== [];
+    }
+
+    private function columnEqualsIgnoringPrimaryKey(
+        ColumnDefinition $a,
+        ColumnDefinition $b,
+        ?string $databaseType = null,
+        bool $sqliteCompositePrimaryKey = false,
+    ): bool {
+        return $a->name === $b->name
+            && $this->columnTypeCompatible($a, $b, $databaseType)
+            && $this->normalizeLength($a->type, $a->length, $databaseType)
+                === $this->normalizeLength($b->type, $b->length, $databaseType)
+            && $a->nullable === $b->nullable
+            && $this->columnAutoIncrementCompatible($a, $b, $databaseType, $sqliteCompositePrimaryKey)
+            && $this->columnUniqueCompatible($a, $b)
+            && $this->columnCommentCompatible($a, $b)
+            && $this->columnDefaultCompatible($a, $b, $databaseType);
     }
 
     /** @return array<string, ColumnDefinition> */

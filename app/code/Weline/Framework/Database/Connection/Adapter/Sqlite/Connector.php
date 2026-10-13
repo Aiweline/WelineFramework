@@ -1083,6 +1083,38 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     }
 
     /** @inheritDoc */
+    public function buildPromotePrimaryKeySql(
+        string $table,
+        array $primaryKeyColumns,
+        array $dropUniqueIndexNames = [],
+    ): string {
+        unset($dropUniqueIndexNames); // SQLite cannot promote in place; drops are irrelevant.
+        $normalized = [];
+        foreach ($primaryKeyColumns as $column) {
+            $name = trim((string)$column);
+            if ($name !== '') {
+                $normalized[] = $name;
+            }
+        }
+        $normalized = array_values(array_unique($normalized));
+        if ($normalized === []) {
+            throw new \InvalidArgumentException('promote primary key requires columns; table=' . $table);
+        }
+
+        // SQLite cannot ADD PRIMARY KEY to an existing table without rebuild.
+        // Surface an explicit comment DDL so the executor can fail closed instead of
+        // pretending the constraint exists.
+        $quotedTable = $this->getDialect()->quoteTable($table);
+        $quotedColumns = array_map(
+            fn (string $column): string => $this->getDialect()->quoteIdentifier($column),
+            $normalized
+        );
+
+        return '-- SQLite cannot promote PRIMARY KEY on existing table without rebuild: '
+            . $quotedTable . ' (' . implode(', ', $quotedColumns) . ')';
+    }
+
+    /** @inheritDoc */
     public function buildAddForeignKeySql(string $table, array $fk): string
     {
         [$definitions, $suffix] = $this->sqliteTableDefinitions($table);

@@ -1907,6 +1907,51 @@ SQL);
     }
 
     /** @inheritDoc */
+    public function buildPromotePrimaryKeySql(
+        string $table,
+        array $primaryKeyColumns,
+        array $dropUniqueIndexNames = [],
+    ): string {
+        $normalized = [];
+        foreach ($primaryKeyColumns as $column) {
+            $name = trim((string)$column);
+            if ($name !== '') {
+                $normalized[] = $name;
+            }
+        }
+        $normalized = array_values(array_unique($normalized));
+        if ($normalized === []) {
+            throw new \InvalidArgumentException('promote primary key requires columns; table=' . $table);
+        }
+
+        $statements = [];
+        foreach ($dropUniqueIndexNames as $indexName) {
+            $indexName = trim((string)$indexName);
+            if ($indexName === '') {
+                continue;
+            }
+            // Reuse exact-table index/constraint resolution (DROP INDEX / DROP CONSTRAINT).
+            $dropSql = $this->buildDropIndexSql($table, $indexName);
+            if ($dropSql !== '') {
+                $statements[] = $dropSql;
+            }
+        }
+
+        $dialect = $this->getDialect();
+        $quotedTable = $dialect->quoteTable($table);
+        $quotedColumns = array_map(
+            static fn (string $column): string => $dialect->quoteIdentifier($column),
+            $normalized
+        );
+        $constraintName = $dialect->quoteIdentifier('pk_' . preg_replace('/[^a-zA-Z0-9_]+/', '_', $table));
+        $statements[] = 'ALTER TABLE ' . $quotedTable
+            . ' ADD CONSTRAINT ' . $constraintName
+            . ' PRIMARY KEY (' . implode(', ', $quotedColumns) . ')';
+
+        return implode(";\n", $statements);
+    }
+
+    /** @inheritDoc */
     public function buildAddForeignKeySql(string $table, array $fk): string
     {
         $d = $this->getDialect();

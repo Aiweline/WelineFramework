@@ -258,4 +258,74 @@ final class SchemaDiffEngineTest extends TestCase
             $operations[1]->payload->columns,
         );
     }
+
+    public function testAlignedPhysicalAndDeclaredPrimaryKeyDoesNotRefuse(): void
+    {
+        $declared = new TableSchema(
+            tableName: 'w_acl',
+            comment: '',
+            columns: [
+                new ColumnDefinition('acl_id', 'int', null, false, true, true),
+                new ColumnDefinition('source_id', 'varchar', 127, false, false, false, null, '', true),
+            ],
+            indexes: [
+                new IndexDefinition('idx_source_id', ['source_id'], 'UNIQUE'),
+            ],
+            foreignKeys: [],
+            modelClass: null
+        );
+        $actual = new TableSchema(
+            tableName: 'w_acl',
+            comment: '',
+            columns: [
+                new ColumnDefinition('acl_id', 'int', null, false, true, true),
+                new ColumnDefinition('source_id', 'varchar', 127, false, false, false),
+            ],
+            indexes: [
+                new IndexDefinition('idx_source_id', ['source_id'], 'UNIQUE'),
+            ],
+            foreignKeys: [],
+            modelClass: null
+        );
+
+        $ops = (new SchemaDiffEngine())->diff($declared, $actual, 'pgsql');
+        $kinds = array_map(static fn (SchemaDiffOp $op): string => $op->kind, $ops);
+
+        self::assertNotContains(SchemaDiffOp::KIND_PROMOTE_PRIMARY_KEY, $kinds);
+        self::assertIsArray($kinds);
+    }
+
+    public function testMismatchedPhysicalPrimaryKeyStillRefusesSilentRewrite(): void
+    {
+        $declared = new TableSchema(
+            tableName: 'w_acl',
+            comment: '',
+            columns: [
+                new ColumnDefinition('acl_id', 'int', null, false, false, true),
+                new ColumnDefinition('source_id', 'varchar', 127, false, true, false, null, '', true),
+            ],
+            indexes: [
+                new IndexDefinition('idx_source_id', ['source_id'], 'UNIQUE'),
+            ],
+            foreignKeys: [],
+            modelClass: null
+        );
+        $actual = new TableSchema(
+            tableName: 'w_acl',
+            comment: '',
+            columns: [
+                new ColumnDefinition('acl_id', 'int', null, false, true, true),
+                new ColumnDefinition('source_id', 'varchar', 127, false, false, false),
+            ],
+            indexes: [
+                new IndexDefinition('idx_source_id', ['source_id'], 'UNIQUE'),
+            ],
+            foreignKeys: [],
+            modelClass: null
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('refuse silent rewrite');
+        (new SchemaDiffEngine())->diff($declared, $actual, 'pgsql');
+    }
 }

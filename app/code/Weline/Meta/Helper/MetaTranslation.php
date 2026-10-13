@@ -31,24 +31,24 @@ class MetaTranslation
     ): string {
         $locale = self::resolveLocale($locale);
         $scope = self::normalizeScope($scope);
-        $metaId = self::resolveMetaId($metaIdentify);
-        if ($metaId === null) {
+        $metaIdentify = trim($metaIdentify);
+        if ($metaIdentify === '') {
             return $defaultValue ?? '';
         }
 
-        $value = self::loadRow($metaId, $locale, $configKey, $scope, $versionId);
+        $value = self::loadRow($metaIdentify, $locale, $configKey, $scope, $versionId);
         if ($value !== '') {
             return $value;
         }
         // fallback: same scope version 0, then default scope
         if ($versionId !== MetaLocal::DEFAULT_VERSION_ID) {
-            $value = self::loadRow($metaId, $locale, $configKey, $scope, MetaLocal::DEFAULT_VERSION_ID);
+            $value = self::loadRow($metaIdentify, $locale, $configKey, $scope, MetaLocal::DEFAULT_VERSION_ID);
             if ($value !== '') {
                 return $value;
             }
         }
         if ($scope !== MetaLocal::DEFAULT_SCOPE) {
-            $value = self::loadRow($metaId, $locale, $configKey, MetaLocal::DEFAULT_SCOPE, MetaLocal::DEFAULT_VERSION_ID);
+            $value = self::loadRow($metaIdentify, $locale, $configKey, MetaLocal::DEFAULT_SCOPE, MetaLocal::DEFAULT_VERSION_ID);
             if ($value !== '') {
                 return $value;
             }
@@ -159,11 +159,7 @@ class MetaTranslation
             // version_id=0 时 Model::save 的 force_check 会因真值判断漏掉该列，
             // 进而走带 conflict 字段的 insert 把事务弄脏；这里用可移植 Query 先查再更/插。
             $existing = $localModel->reset()
-                ->where(MetaLocal::schema_fields_META_IDENTIFY, $metaIdentify)
-                ->where(MetaLocal::schema_fields_LOCALE_CODE, $locale)
-                ->where(MetaLocal::schema_fields_CONFIG_KEY, $configKey)
-                ->where(MetaLocal::schema_fields_SCOPE, $scope)
-                ->where(MetaLocal::schema_fields_VERSION_ID, $versionId)
+                ->whereNaturalKey($metaIdentify, $locale, $configKey, $scope, $versionId)
                 ->find()
                 ->fetchArray();
 
@@ -249,21 +245,19 @@ class MetaTranslation
         if ($parsed === null) {
             return null;
         }
-        $metaId = self::resolveMetaId($parsed['meta_identify']);
-        if ($metaId === null) {
-            return null;
-        }
         /** @var MetaLocal $localModel */
         $localModel = ObjectManager::getInstance(MetaLocal::class);
         $localModel->reset()
-            ->where(MetaLocal::schema_fields_META_ID, $metaId)
-            ->where(MetaLocal::schema_fields_LOCALE_CODE, $locale)
-            ->where(MetaLocal::schema_fields_CONFIG_KEY, $parsed['config_key'])
-            ->where(MetaLocal::schema_fields_SCOPE, $parsed['scope'])
-            ->where(MetaLocal::schema_fields_VERSION_ID, max(0, $versionId))
+            ->whereNaturalKey(
+                $parsed['meta_identify'],
+                $locale,
+                $parsed['config_key'],
+                $parsed['scope'],
+                max(0, $versionId),
+            )
             ->find()
             ->fetch();
-        if (!$localModel->getMetaId()) {
+        if (!$localModel->getMetaIdentify()) {
             return null;
         }
 
@@ -281,22 +275,20 @@ class MetaTranslation
         if ($parsed === null) {
             return false;
         }
-        $metaId = self::resolveMetaId($parsed['meta_identify']);
-        if ($metaId === null) {
-            return false;
-        }
         try {
             /** @var MetaLocal $localModel */
             $localModel = ObjectManager::getInstance(MetaLocal::class);
             $localModel->reset()
-                ->where(MetaLocal::schema_fields_META_ID, $metaId)
-                ->where(MetaLocal::schema_fields_LOCALE_CODE, $locale)
-                ->where(MetaLocal::schema_fields_CONFIG_KEY, $parsed['config_key'])
-                ->where(MetaLocal::schema_fields_SCOPE, self::normalizeScope($parsed['scope']))
-                ->where(MetaLocal::schema_fields_VERSION_ID, max(0, $versionId))
+                ->whereNaturalKey(
+                    $parsed['meta_identify'],
+                    $locale,
+                    $parsed['config_key'],
+                    self::normalizeScope($parsed['scope']),
+                    max(0, $versionId),
+                )
                 ->find()
                 ->fetch();
-            if (!$localModel->getMetaId()) {
+            if (!$localModel->getMetaIdentify()) {
                 return true;
             }
             $localModel->delete();
@@ -386,14 +378,14 @@ class MetaTranslation
      */
     public static function getAllTranslations(string $metaIdentify, ?string $scope = null, ?int $versionId = null): array
     {
-        $metaId = self::resolveMetaId($metaIdentify);
-        if ($metaId === null) {
+        $metaIdentify = trim($metaIdentify);
+        if ($metaIdentify === '') {
             return [];
         }
 
         /** @var MetaLocal $localModel */
         $localModel = ObjectManager::getInstance(MetaLocal::class);
-        $query = $localModel->reset()->where(MetaLocal::schema_fields_META_ID, $metaId);
+        $query = $localModel->reset()->where(MetaLocal::schema_fields_META_IDENTIFY, $metaIdentify);
         if ($scope !== null) {
             $query->where(MetaLocal::schema_fields_SCOPE, self::normalizeScope($scope));
         }
@@ -453,19 +445,20 @@ class MetaTranslation
         ];
     }
 
-    private static function loadRow(int $metaId, string $locale, string $configKey, string $scope, int $versionId): string
-    {
+    private static function loadRow(
+        string $metaIdentify,
+        string $locale,
+        string $configKey,
+        string $scope,
+        int $versionId,
+    ): string {
         /** @var MetaLocal $localModel */
         $localModel = ObjectManager::getInstance(MetaLocal::class);
         $localModel->reset()
-            ->where(MetaLocal::schema_fields_META_ID, $metaId)
-            ->where(MetaLocal::schema_fields_LOCALE_CODE, $locale)
-            ->where(MetaLocal::schema_fields_CONFIG_KEY, $configKey)
-            ->where(MetaLocal::schema_fields_SCOPE, $scope)
-            ->where(MetaLocal::schema_fields_VERSION_ID, $versionId)
+            ->whereNaturalKey($metaIdentify, $locale, $configKey, $scope, $versionId)
             ->find()
             ->fetch();
-        if (!$localModel->getMetaId()) {
+        if (!$localModel->getMetaIdentify()) {
             return '';
         }
         return trim((string)($localModel->getConfigValue() ?? ''));
