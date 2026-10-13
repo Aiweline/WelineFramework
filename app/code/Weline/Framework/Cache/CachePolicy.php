@@ -29,6 +29,12 @@ final readonly class CachePolicy
         public int $singleFlightWaitMs = 0,
         /** Opt-in: builder [] is a legitimate shared value (honest-empty markers), not negative cache. */
         public bool $allowEmptyResult = false,
+        /**
+         * When false, Shared/MS still holds the envelope but Worker process L1 is skipped.
+         * Use for high-cardinality keys (facet panels, af_* combos) so crawlers cannot
+         * inflate the worker bag; baseline low-cardinality resources keep the default true.
+         */
+        public bool $storeProcessL1 = true,
     ) {
         if (trim($resource) === '' || trim($pool) === '') {
             throw new \InvalidArgumentException('Cache policy resource and pool must not be empty.');
@@ -116,6 +122,7 @@ final readonly class CachePolicy
             'stale_ttl' => $this->staleTtlSeconds,
             'single_flight_wait_ms' => $this->singleFlightWaitMs,
             'allow_empty_result' => $this->allowsEmptyResult,
+            'store_process_l1' => $this->storeProcessL1,
         ];
     }
 }

@@ -42,6 +42,12 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     /** Cap chrome-pool share so locale variants cannot dominate the whole L1. */
     private const CHROME_POOL_MAX_BYTES = 1_048_576; // 1 MiB
 
+    /** Cap product-pool share (offers / filter panels that still opt into L1). */
+    private const PRODUCT_POOL_MAX_BYTES = 1_048_576; // 1 MiB
+
+    /** Cap product-card HTML share so card variants cannot dominate the whole L1. */
+    private const CARD_POOL_MAX_BYTES = 524_288; // 512 KiB
+
     /** Skip process L1 for a single oversized payload (Shared/MS still holds it). */
     private const PROCESS_ENTRY_MAX_BYTES = 262_144; // 256 KiB
 
@@ -102,7 +108,18 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         if ($key === null) {
             return $builder();
         }
-        return $this->rememberKey($policy->pool, $key, $policy->freshTtlSeconds, $builder, $policy->staleTtlSeconds, true, $traceMeta, $policy->singleFlightWaitMs, $policy->allowsEmptyResult);
+        return $this->rememberKey(
+            $policy->pool,
+            $key,
+            $policy->freshTtlSeconds,
+            $builder,
+            $policy->staleTtlSeconds,
+            true,
+            $traceMeta,
+            $policy->singleFlightWaitMs,
+            $policy->allowsEmptyResult,
+            $policy->storeProcessL1,
+        );
     }
 
     /**
@@ -136,6 +153,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             $traceMeta,
             $policy->singleFlightWaitMs,
             true,
+            $policy->storeProcessL1,
         );
     }
 
@@ -240,12 +258,16 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             return null;
         }
         $processKey = $policy->pool . '|' . $key;
-        $entry = self::$processCache[$processKey] ?? null;
-        if (is_array($entry)) {
-            $status = $this->entryStatus($entry);
-            if ($status === 'fresh' || $status === 'stale') {
-                return $entry['payload'];
+        if ($policy->storeProcessL1) {
+            $entry = self::$processCache[$processKey] ?? null;
+            if (is_array($entry)) {
+                $status = $this->entryStatus($entry);
+                if ($status === 'fresh' || $status === 'stale') {
+                    return $entry['payload'];
+                }
+                self::dropProcessEntry($processKey);
             }
+        } else {
             self::dropProcessEntry($processKey);
         }
         try {
@@ -261,7 +283,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         if ($status !== 'fresh' && $status !== 'stale') {
             return null;
         }
-        $this->storeProcessEntry($processKey, $entry);
+        $this->maybeStoreProcessEntry($processKey, $entry, $policy->storeProcessL1);
 
         return $entry['payload'];
     }
@@ -275,7 +297,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     public function prefetchPolicy(CachePolicy|string $policy, array $logicalKeys): int
     {
         $policy = $this->resolvePolicy($policy);
-        if (!KeyBuilder::policyAllowsSharedCache($policy)) {
+        if (!KeyBuilder::policyAllowsSharedCache($policy) || !$policy->storeProcessL1) {
             return 0;
         }
         $freshTtl = max(1, $policy->freshTtlSeconds);
@@ -331,7 +353,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             if ($status !== 'fresh' && $status !== 'stale') {
                 continue;
             }
-            $this->storeProcessEntry($processKey, $entry);
+            $this->maybeStoreProcessEntry($processKey, $entry, true);
             ++$primed;
         }
 
@@ -405,6 +427,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         ?array $traceMeta = null,
         int $singleFlightWaitMs = 0,
         bool $allowEmptyResult = false,
+        bool $storeProcessL1 = true,
     ): mixed {
         $processKey = $poolIdentity . '|' . $scopedKey;
 
@@ -424,10 +447,11 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                         $builder,
                         $explicitDimensions,
                         $allowEmptyResult,
+                        $storeProcessL1,
                     );
                 }
 
-                $this->storeProcessEntry($processKey, $entry);
+                $this->maybeStoreProcessEntry($processKey, $entry, $storeProcessL1);
                 return $entry['payload'];
             }
             self::dropProcessEntry($processKey);
@@ -483,7 +507,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                             $phaseMeta = array_replace($phaseMeta, $this->entryTraceMetadata($entry, $status, 'l2'));
                         }
                         if ($status === 'fresh' || $status === 'stale') {
-                            $this->storeProcessEntry($processKey, $entry);
+                            $this->maybeStoreProcessEntry($processKey, $entry, $storeProcessL1);
                             if ($status === 'stale') {
                                 $this->queueRefresh(
                                     $poolIdentity,
@@ -494,6 +518,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                                     $builder,
                                     $explicitDimensions,
                                     $allowEmptyResult,
+                                    $storeProcessL1,
                                 );
                             }
                             return $entry['payload'];
@@ -526,8 +551,8 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                             $phaseMeta['write_stale_until'] = $entry['stale_until'];
                         }
                     }
-                    // L1 仍存：同请求复用；L2 失败时下一请求会再 miss（shared_write_ok=false）。
-                    $this->storeProcessEntry($processKey, $entry);
+                    // L1 仅在策略允许时写入；L2 失败时下一请求会再 miss（shared_write_ok=false）。
+                    $this->maybeStoreProcessEntry($processKey, $entry, $storeProcessL1);
                     return $payload;
                 } finally {
                     $preflightFlight->release($preflightLockKey, $preflightToken);
@@ -550,7 +575,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                 $phaseMeta = array_replace($phaseMeta, $this->entryTraceMetadata($entry, $status, 'l2'));
             }
             if ($status === 'fresh' || $status === 'stale') {
-                $this->storeProcessEntry($processKey, $entry);
+                $this->maybeStoreProcessEntry($processKey, $entry, $storeProcessL1);
                 if ($status === 'stale') {
                     $this->queueRefresh(
                         $poolIdentity,
@@ -561,6 +586,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                         $builder,
                         $explicitDimensions,
                         $allowEmptyResult,
+                        $storeProcessL1,
                     );
                 }
 
@@ -608,7 +634,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                     $phaseMeta = array_replace($phaseMeta, $this->entryTraceMetadata($entry, $status, 'l2_recheck'));
                 }
                 if ($status !== 'miss') {
-                    $this->storeProcessEntry($processKey, $entry);
+                    $this->maybeStoreProcessEntry($processKey, $entry, $storeProcessL1);
                     return $entry['payload'];
                 }
             }
@@ -639,7 +665,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                     $phaseMeta['write_stale_until'] = $entry['stale_until'];
                 }
             }
-            $this->storeProcessEntry($processKey, $entry);
+            $this->maybeStoreProcessEntry($processKey, $entry, $storeProcessL1);
             return $payload;
         } finally {
             $flight->release($lockKey, $token);
@@ -727,7 +753,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     }
 
     /**
-     * Soft memory-pressure trim: evict oldest process L1 entries until under budget.
+     * Soft memory-pressure trim: prefer product/card keys, then FIFO.
      * Shared/MS payloads remain; next hit rebuilds L1.
      */
     public static function trimProcessCacheToBudget(int $maxBytes): int
@@ -741,7 +767,9 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             self::$processCache !== []
             && (self::$processCacheBytes > $maxBytes || \count(self::$processCache) > 64)
         ) {
-            $evictKey = \array_key_first(self::$processCache);
+            $evictKey = self::oldestProductProcessKey()
+                ?? self::oldestCardProcessKey()
+                ?? \array_key_first(self::$processCache);
             if (!\is_string($evictKey)) {
                 break;
             }
@@ -787,6 +815,17 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     }
 
     /** @param array{payload:mixed,fresh_until:float,stale_until:float,version:int} $entry */
+    private function maybeStoreProcessEntry(string $key, array $entry, bool $storeProcessL1): void
+    {
+        if (!$storeProcessL1) {
+            self::dropProcessEntry($key);
+
+            return;
+        }
+        $this->storeProcessEntry($key, $entry);
+    }
+
+    /** @param array{payload:mixed,fresh_until:float,stale_until:float,version:int} $entry */
     private function storeProcessEntry(string $key, array $entry): void
     {
         $entryBytes = self::estimateProcessEntryBytes($entry);
@@ -802,17 +841,29 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         }
 
         $chromeOnly = self::isChromeProcessKey($key);
+        $productOnly = self::isProductProcessKey($key);
+        $cardOnly = self::isCardProcessKey($key);
         while (
             self::$processCache !== []
             && (
                 \count(self::$processCache) >= $this->maxProcessEntries
                 || self::$processCacheBytes + $entryBytes > self::PROCESS_CACHE_MAX_BYTES
                 || ($chromeOnly && self::chromePoolBytes() + $entryBytes > self::CHROME_POOL_MAX_BYTES)
+                || ($productOnly && self::productPoolBytes() + $entryBytes > self::PRODUCT_POOL_MAX_BYTES)
+                || ($cardOnly && self::cardPoolBytes() + $entryBytes > self::CARD_POOL_MAX_BYTES)
             )
         ) {
-            $evictKey = $chromeOnly
-                ? (self::oldestChromeProcessKey() ?? \array_key_first(self::$processCache))
-                : \array_key_first(self::$processCache);
+            $evictKey = null;
+            if ($chromeOnly) {
+                $evictKey = self::oldestChromeProcessKey();
+            } elseif ($productOnly) {
+                $evictKey = self::oldestProductProcessKey();
+            } elseif ($cardOnly) {
+                $evictKey = self::oldestCardProcessKey();
+            }
+            $evictKey ??= self::oldestProductProcessKey()
+                ?? self::oldestCardProcessKey()
+                ?? \array_key_first(self::$processCache);
             if (!\is_string($evictKey)) {
                 break;
             }
@@ -823,6 +874,12 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             return;
         }
         if ($chromeOnly && $entryBytes > self::CHROME_POOL_MAX_BYTES) {
+            return;
+        }
+        if ($productOnly && $entryBytes > self::PRODUCT_POOL_MAX_BYTES) {
+            return;
+        }
+        if ($cardOnly && $entryBytes > self::CARD_POOL_MAX_BYTES) {
             return;
         }
 
@@ -875,6 +932,68 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         return $bytes;
     }
 
+    private static function isProductProcessKey(string $key): bool
+    {
+        $pool = \explode('|', $key, 2)[0] ?? $key;
+        $pool = \strtolower($pool);
+
+        // Exact product pool — not product_card_html (handled by card cap).
+        return $pool === 'product';
+    }
+
+    private static function isCardProcessKey(string $key): bool
+    {
+        $pool = \explode('|', $key, 2)[0] ?? $key;
+
+        return \str_contains(\strtolower($pool), 'product_card');
+    }
+
+    private static function oldestProductProcessKey(): ?string
+    {
+        foreach (\array_keys(self::$processCache) as $processKey) {
+            if (self::isProductProcessKey($processKey)) {
+                return $processKey;
+            }
+        }
+
+        return null;
+    }
+
+    private static function oldestCardProcessKey(): ?string
+    {
+        foreach (\array_keys(self::$processCache) as $processKey) {
+            if (self::isCardProcessKey($processKey)) {
+                return $processKey;
+            }
+        }
+
+        return null;
+    }
+
+    private static function productPoolBytes(): int
+    {
+        $bytes = 0;
+        foreach (self::$processCache as $processKey => $entry) {
+            if (self::isProductProcessKey($processKey)) {
+                $bytes += self::estimateProcessEntryBytes($entry);
+            }
+        }
+
+        return $bytes;
+    }
+
+    private static function cardPoolBytes(): int
+    {
+        $bytes = 0;
+        foreach (self::$processCache as $processKey => $entry) {
+            if (self::isCardProcessKey($processKey)) {
+                $bytes += self::estimateProcessEntryBytes($entry);
+            }
+        }
+
+        return $bytes;
+    }
+
     private static function recountProcessCacheBytes(): int
     {
         $bytes = 0;
@@ -893,10 +1012,13 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             return \strlen($payload) + 64;
         }
         // Never json_encode large payloads for metering — that itself OOMs near ceiling.
+        // Sample nested arrays/strings with a hard ceiling so few-key huge panels
+        // still trip PROCESS_ENTRY_MAX_BYTES and skip process L1.
         if (\is_array($payload)) {
-            $n = \count($payload);
-
-            return \min(self::PROCESS_CACHE_MAX_BYTES, ($n * 256) + 256);
+            return \min(
+                self::PROCESS_CACHE_MAX_BYTES,
+                self::estimateMixedBytes($payload, 0, 4) + 256,
+            );
         }
         if (\is_object($payload)) {
             return 4096;
@@ -906,6 +1028,35 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         }
 
         return 128;
+    }
+
+    private static function estimateMixedBytes(mixed $value, int $depth, int $maxDepth): int
+    {
+        if (\is_string($value)) {
+            return \strlen($value) + 16;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return 24;
+        }
+        if (\is_bool($value) || $value === null) {
+            return 8;
+        }
+        if (!\is_array($value)) {
+            return 64;
+        }
+        if ($depth >= $maxDepth) {
+            return \min(65_536, \count($value) * 256 + 256);
+        }
+        $bytes = 64;
+        $n = 0;
+        foreach ($value as $child) {
+            $bytes += self::estimateMixedBytes($child, $depth + 1, $maxDepth);
+            if (++$n >= 256 || $bytes >= self::PROCESS_CACHE_MAX_BYTES) {
+                break;
+            }
+        }
+
+        return \min(self::PROCESS_CACHE_MAX_BYTES, $bytes);
     }
 
     private function readShared(CachePoolInterface $pool, string $key, bool $explicitDimensions): mixed
@@ -1024,6 +1175,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         callable $builder,
         bool $explicitDimensions = false,
         bool $allowEmptyResult = false,
+        bool $storeProcessL1 = true,
     ): void {
         $queueKey = $poolIdentity . ':' . $scopedKey;
         if (isset(self::$refreshQueued[$queueKey])) {
@@ -1041,6 +1193,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             $queueKey,
             $explicitDimensions,
             $allowEmptyResult,
+            $storeProcessL1,
         ): void {
             $flight = $this->singleFlight ??= new SingleFlightCoordinator();
             $lockKey = 'storefront-hot-cache:' . hash('sha256', $processKey);
@@ -1055,7 +1208,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                 if (is_array($cached) && array_key_exists('payload', $cached)) {
                     $entry = $this->normalizeEnvelope($cached, $freshTtlSeconds, $staleTtlSeconds);
                     if ($this->entryStatus($entry) === 'fresh') {
-                        $this->storeProcessEntry($processKey, $entry);
+                        $this->maybeStoreProcessEntry($processKey, $entry, $storeProcessL1);
                         return;
                     }
                 }
@@ -1065,7 +1218,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                 }
                 $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
                 $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
-                $this->storeProcessEntry($processKey, $entry);
+                $this->maybeStoreProcessEntry($processKey, $entry, $storeProcessL1);
             } catch (\Throwable) {
                 return;
             } finally {

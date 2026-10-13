@@ -854,7 +854,9 @@ final class WorkerResponseMemoryGuard
         $hotTrimmed = 0;
         $processCachesCleared = 0;
         if ($shedBags) {
-            $keepWarmLocales = ($pressure >= $thresholds['hard'] || $absoluteHeadroom < (48 * 1024 * 1024))
+            // Soft pressure (and low absolute headroom) must shed cold Phrase locales —
+            // waiting for hard pressure lets multi-locale crawls inflate bagRefs first.
+            $keepWarmLocales = ($pressure >= $thresholds['soft'] || $absoluteHeadroom < (48 * 1024 * 1024))
                 ? 0
                 : 1;
 

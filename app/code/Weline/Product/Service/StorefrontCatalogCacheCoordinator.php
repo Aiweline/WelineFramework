@@ -167,6 +167,8 @@ final class StorefrontCatalogCacheCoordinator
             freshTtlSeconds: 120,
             staleTtlSeconds: 900,
             singleFlightWaitMs: 1200,
+            // High-cardinality af_* combos must not inflate Worker process L1.
+            storeProcessL1: false,
         );
     }
 
@@ -181,6 +183,7 @@ final class StorefrontCatalogCacheCoordinator
             dependencies: ['catalog', 'config'],
             freshTtlSeconds: 120,
             staleTtlSeconds: 900,
+            storeProcessL1: false,
         );
     }
 

@@ -52,7 +52,16 @@ Worker 长驻进程内，多语言词典与业务散落 `static` 袋抬高 RSS �
 - 不改共享 Memory/Session 服务淘汰实现  
 - 不恢复 CachePool processStore  
 - 不改 UI；不扩 Phrase 业务语义  
-- W3（FPC-L1/HotCache/菜单）不在首发强制范围  
+
+## 5b. W3（HotCache 高基数 · 2026-10-13 强制）
+
+| 要求 | 落点 |
+|------|------|
+| 高基数/组合键（filter_panel、`af_*`）禁止进 HotCache process L1；权威 Shared | `CachePolicy.storeProcessL1` + `StorefrontScopeHotCache::maybeStoreProcessEntry` |
+| HotCache 数组字节诚实估算；product/card 池子帽；trim 优先踢 product | `estimateMixedBytes` / `PRODUCT_POOL_MAX_BYTES` / `CARD_POOL_MAX_BYTES` |
+
+FPC process pointer-only / SoftSurvivor FPC→CONTENT / softCompact 仍在同会话未入库切片，不在本提交强制范围。
+
 
 ## 6. 框架映射
 

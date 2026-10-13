@@ -12,13 +12,19 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 {
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
-        AttributeMetadataCatalog::clearProcessCache();
+        // Process bag is rebuildable content: soft memory pressure may clear it;
+        // hard / explicit cache clear always clear it. No parallel static bag.
+        if ($context->isSoftContent() || $context->allowsRegistryClear() || $context->isExplicitCacheClear()) {
+            AttributeMetadataCatalog::clearProcessCache();
 
-        return 1;
+            return 1;
+        }
+
+        return 0;
     }
+
     public function diagCounts(): array
     {
         return [];
     }
-
 }
