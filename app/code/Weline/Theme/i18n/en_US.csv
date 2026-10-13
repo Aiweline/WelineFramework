@@ -887,17 +887,6 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
-迷你购物车,迷你购物车
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
-小计,Subtotal
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-去结算,"Proceed to Checkout"
-查看购物车,"View cart"
 特价,Sale
 DEMO,DEMO
 热销,Hot
@@ -910,10 +899,23 @@ Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"
 Next,Next
 个人中心,"Personal center"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
 面包屑,"bread crumbs"
 分类展示图,"Category showcase image"
 查看全部,"View all"
 搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
 法律与政策,"Law and Policy"
@@ -929,7 +931,11 @@ Next,Next
 零售车,零售车
 批发车,批发车
 继续购物,"Continue shopping"
+小计,Subtotal
+去结算,"Proceed to Checkout"
 正在前往结算...,"Proceeding to checkout..."
+查看购物车,"View cart"
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
 运费将在结算时计算,"Shipping calculated at checkout"
 税费,Tax
 正在加载购物车...,"Loading cart..."
@@ -947,6 +953,11 @@ Next,Next
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1070,8 +1081,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1113,7 +1122,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1124,10 +1132,6 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1145,8 +1149,6 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看更多,"View more"
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
@@ -1185,10 +1187,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
@@ -2317,6 +2315,8 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 "开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径...","开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径..."
 "设计 area→Theme 模块路径：","设计 area→Theme 模块路径："
 搜索筛选,"Search and filter"
@@ -4613,28 +4613,28 @@ Chiffon,Chiffon
 方领短袄试穿,"Square-collar jacket try-on"
 魏晋大袖试穿,"Wei–Jin wide-sleeve try-on"
 礼宴雅集留影,"Banquet gathering snapshot"
-形制顾问,"Form consultant"
-穿搭与形制,"Styling & silhouette"
+形制顾问,"Style advisor"
+穿搭与形制,"Wear & silhouette"
 工艺与质检,"Craft & QC"
-"面料 · 刺绣 · 成衣","Fabric · embroidery · finished garment"
+"面料 · 刺绣 · 成衣","Fabric · embroidery · ready-to-wear"
 "批发 + 单件","Wholesale + single piece"
 去选购,"Shop now"
 了解品牌,"About the brand"
-形制、工艺与履约，陪你选对第一套汉服,"Silhouette, craft, and fulfillment—find your first Hanfu with us"
-购买、尺码、配送与养护,"Buying, sizing, shipping, and care"
-从明制马面裙到唐风襦裙，按场景给出形制与层次建议，帮你选对第一套汉服。,"From Ming mamian skirts to Tang-style ruqun, we suggest silhouettes and layering for your first Hanfu."
-把关织造、刺绣与成衣细节，确保上身气韵与日常穿着兼顾。,"We check weaving, embroidery, and finishing so pieces look refined and wear well day to day."
+形制、工艺与履约，陪你选对第一套汉服,"Silhouette, craft, and fulfillment—helping you choose your first Hanfu."
+购买、尺码、配送与养护,"Buying, sizing, shipping & care"
+从明制马面裙到唐风襦裙，按场景给出形制与层次建议，帮你选对第一套汉服。,"From Ming mamian skirts to Tang ruqun, we suggest silhouettes and layering by occasion so you pick the right first set."
+把关织造、刺绣与成衣细节，确保上身气韵与日常穿着兼顾。,"We check weaving, embroidery, and finishing so presence and everyday wear both hold up."
 支持一件起订与批发拿货，协调国际物流、尺码沟通与售后跟进。,"Order one piece or wholesale—we coordinate international shipping, sizing questions, and after-sales."
 可以批发，也可以只买一件吗？,"Can I buy wholesale or just one piece?"
-可以。長安漢服同时服务一件起订的个人买家与批发客户，商品页可切换零售／批发身份后下单。,"Yes. Chang’an Hanfu serves both single-piece shoppers and wholesale buyers—switch retail/wholesale on the product page before checkout."
+可以。長安漢服同时服务一件起订的个人买家与批发客户，商品页可切换零售／批发身份后下单。,"Yes. Chang’an Hanfu serves single-piece shoppers and wholesale buyers—switch retail/wholesale on the product page before ordering."
 尺码如何选择？,"How do I choose a size?"
-请对照商品页尺码表，按胸围、腰围与身高选号；不确定时可联系客服，我们会按形制给出建议。,"Use the size chart on the product page (bust, waist, height). If unsure, contact support for silhouette-based advice."
+请对照商品页尺码表，按胸围、腰围与身高选号；不确定时可联系客服，我们会按形制给出建议。,"Use the size chart on the product page (bust, waist, height). Unsure? Contact support for silhouette advice."
 国际配送大概多久？,"How long does international shipping take?"
-视目的地与清关情况，通常在付款后数个工作日内发出；物流单号可在订单中心跟踪。,"Depending on destination and customs, we usually ship within a few business days after payment. Track via order center."
+视目的地与清关情况，通常在付款后数个工作日内发出；物流单号可在订单中心跟踪。,"Depending on destination and customs, we usually ship within a few business days after payment; track the number in your order center."
 汉服怎么养护？,"How should I care for Hanfu?"
-建议轻柔手洗或专业干洗，避免暴晒与高温烘干；刺绣与袖缘请单独放置，减少勾丝。,"Prefer gentle hand wash or professional dry cleaning; avoid strong sun and high heat. Store embroidered pieces and sleeves carefully to reduce snags."
-退换货怎么处理？,"How do returns and exchanges work?"
-未穿用且吊牌完整的商品可按退换政策申请；定制款与贴身衣物规则以政策页为准。,"Unworn items with tags intact can follow the returns policy; custom and intimate items follow the policy page."
+建议轻柔手洗或专业干洗，避免暴晒与高温烘干；刺绣与袖缘请单独放置，减少勾丝。,"Hand-wash gently or dry-clean; avoid strong sun and high heat. Store embroidery and cuffs separately to reduce snags."
+退换货怎么处理？,"How do returns & exchanges work?"
+未穿用且吊牌完整的商品可按退换政策申请；定制款与贴身衣物规则以政策页为准。,"Unused items with tags can follow the return policy; made-to-order and intimate items follow the policy page."
 选品、质检与履约，陪你买到放心好物,"Curation, QC, and fulfillment—shop with confidence"
 选品顾问,"Buying consultant"
 风格与搭配,"Style & matching"
@@ -4849,3 +4849,4 @@ Chiffon,Chiffon
 作用域结构冲突，请先重置或重新基线化后再发布,"Scope structural conflict — reset or re-baseline before publishing"
 发布主题失败,"Theme publish failed"
 "查看物件 →","View object →"
+跨境履约,"Cross-border fulfillment"
