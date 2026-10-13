@@ -23,6 +23,10 @@ enum CronStatus: string
 
     static function displayProgressBar(string $title, int $current, int $total, bool $scoall = true): void
     {
+        // Cron shell redirects stdout into var/cron.log — ANSI/\r progress must stay quiet.
+        if (!self::shouldDisplayInteractiveProgress()) {
+            return;
+        }
         if($current>$total){
             $current = $total;
         }
@@ -35,5 +39,17 @@ enum CronStatus: string
         $coloredProgress = "\033[42m{$progress}\033[0m"; // 设置背景绿色
         echo "\033[34m {$title}（{$total}\\{$current}）: \033[0m {$coloredProgress} \033[32m {$percentage}% \033[0m \r";
         flush();
+    }
+
+    /**
+     * Interactive TTY only. Non-TTY (crontab >> cron.log) stays silent.
+     */
+    public static function shouldDisplayInteractiveProgress(): bool
+    {
+        if (\defined('STDOUT') && \is_resource(STDOUT) && \function_exists('stream_isatty')) {
+            return @\stream_isatty(STDOUT);
+        }
+
+        return false;
     }
 }

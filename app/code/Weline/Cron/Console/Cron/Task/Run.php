@@ -426,7 +426,7 @@ class Run implements CommandInterface
                                     $admissionDeferNoted = true;
                                     $this->printing->note(\str_replace(
                                         '%{1}',
-                                        (string)$admission->maxConcurrent(),
+                                        (string)$admission->effectiveMax(),
                                         DatabaseFreeTranslator::translate(
                                             '受管计划任务并发已达上限（%{1}），本轮延后派发。',
                                             'Weline_Cron',
@@ -451,18 +451,18 @@ class Run implements CommandInterface
                         if (!$serializeManagedChildren) {
                             /** @var ManagedChildAdmission $admission */
                             $admission = ObjectManager::getInstance(ManagedChildAdmission::class);
-                            if ($admission->countLiveManagedChildren() > $admission->maxConcurrent()) {
+                            if ($admission->countLiveManagedChildren() > $admission->effectiveMax()) {
                                 $this->releaseClaimedLaunchForAdmission(
                                     (int)$taskModel->getId(),
                                     $runStart,
                                     $handoffToken,
-                                    $admission->maxConcurrent(),
+                                    $admission->effectiveMax(),
                                 );
                                 if (!$admissionDeferNoted) {
                                     $admissionDeferNoted = true;
                                     $this->printing->note(\str_replace(
                                         '%{1}',
-                                        (string)$admission->maxConcurrent(),
+                                        (string)$admission->effectiveMax(),
                                         DatabaseFreeTranslator::translate(
                                             '受管计划任务并发已达上限（%{1}），本轮延后派发。',
                                             'Weline_Cron',
