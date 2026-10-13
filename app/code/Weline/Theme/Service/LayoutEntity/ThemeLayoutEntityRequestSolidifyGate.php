@@ -173,7 +173,10 @@ final class ThemeLayoutEntityRequestSolidifyGate
             'chrome_origin_stale' => $chromeOriginStale,
         ];
         RequestContext::set(self::CTX_DECISION, $decision);
-        $this->exportSolidifyDecisionDebug($decision);
+        // Always expose fallback reason on the wire so BYPASS/no-store is not
+        // mistaken for "FPC broken" or browser Disable-cache. Verbose NDJSON
+        // logging stays behind WELINE_THEME_SOLIDIFY_DEBUG.
+        $this->exportSolidifyDecisionObservability($decision);
         if ($useOriginal) {
             RequestContext::set(self::CTX_FORCE_ORIGINAL, true);
             ThemeLayoutEntityPublishedSlotHost::markSolidifiedControllerTemplateSelected(false);
@@ -360,8 +363,24 @@ final class ThemeLayoutEntityRequestSolidifyGate
     /**
      * @param array<string, mixed> $decision
      */
-    private function exportSolidifyDecisionDebug(array $decision): void
+    private function exportSolidifyDecisionObservability(array $decision): void
     {
+        if (!empty($decision['use_original_template'])) {
+            try {
+                $response = ObjectManager::getInstance(Request::class)->getResponse();
+                $response->setHeader(
+                    'X-Weline-Solidify-Decision',
+                    substr((string)($decision['reason'] ?? ''), 0, 120),
+                );
+                $response->setHeader(
+                    'X-Weline-Solidify-Pending',
+                    !empty($decision['pending']) ? '1' : '0',
+                );
+            } catch (\Throwable) {
+                // Request/response may be unavailable in CLI / unit contexts.
+            }
+        }
+
         if ((string)getenv('WELINE_THEME_SOLIDIFY_DEBUG') !== '1') {
             return;
         }
@@ -371,19 +390,6 @@ final class ThemeLayoutEntityRequestSolidifyGate
             $payload = (string)($decision['reason'] ?? 'unknown');
         }
         Env::log('theme/request_solidify_decision', $payload);
-        try {
-            $response = ObjectManager::getInstance(Request::class)->getResponse();
-            $response->setHeader(
-                'X-Weline-Solidify-Decision',
-                substr((string)($decision['reason'] ?? ''), 0, 120),
-            );
-            $response->setHeader(
-                'X-Weline-Solidify-Pending',
-                !empty($decision['pending']) ? '1' : '0',
-            );
-        } catch (\Throwable) {
-            // Request/response may be unavailable in CLI / unit contexts.
-        }
     }
 
     private function derivedPagePath(

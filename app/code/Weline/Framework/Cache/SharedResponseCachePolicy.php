@@ -38,9 +38,13 @@ final class SharedResponseCachePolicy
         }
         RequestContext::set(self::REQUEST_FORBIDDEN_KEY, $reasons);
         $cacheControl = 'private, no-store, max-age=0, must-revalidate';
+        // Observability: DevTools / ops must see WHY shared FPC was refused
+        // (e.g. theme_layout_solidify_fallback_original), not only BYPASS/no-store.
+        $forbiddenHeader = implode(',', array_keys($reasons));
         HeaderCollector::getInstance()
             ->setHeader('Cache-Control', $cacheControl)
-            ->setHeader('Pragma', 'no-cache');
+            ->setHeader('Pragma', 'no-cache')
+            ->setHeader('X-Weline-Shared-Cache-Forbidden', $forbiddenHeader !== '' ? $forbiddenHeader : '1');
         self::dispatchForbidden($reason, $reasons, $cacheControl);
     }
 

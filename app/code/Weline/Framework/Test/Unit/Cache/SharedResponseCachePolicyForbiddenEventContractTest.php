@@ -19,5 +19,6 @@ final class SharedResponseCachePolicyForbiddenEventContractTest extends TestCase
         self::assertStringContainsString('dispatch(self::EVENT_SHARED_CACHE_FORBIDDEN', $src);
         self::assertStringContainsString("'cache_control'", $src);
         self::assertStringContainsString('private, no-store, max-age=0, must-revalidate', $src);
+        self::assertStringContainsString('X-Weline-Shared-Cache-Forbidden', $src);
     }
 }

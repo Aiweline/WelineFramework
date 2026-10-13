@@ -19,6 +19,7 @@ final class ApplyOriginNoStoreWlsFpcBypassContractTest extends TestCase
         self::assertStringContainsString('STATUS_BYPASS', $observer);
         self::assertStringContainsString("setHeader('X-Weline-FPC', 'BYPASS')", $observer);
         self::assertStringContainsString("setHeader('X-Wls-Fpc-Status', 'BYPASS')", $observer);
+        self::assertStringContainsString('X-Weline-Shared-Cache-Forbidden', $observer);
         self::assertStringContainsString('\\bno-store\\b', $observer);
     }
 }

@@ -970,11 +970,23 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
         $response->setHeader('Pragma', 'no-cache');
         GuardHeaders::writeCacheStatus($response, GuardHeaders::STATUS_BYPASS);
+        $forbiddenReasons = SharedResponseCachePolicy::isForbidden()
+            ? SharedResponseCachePolicy::reasons()
+            : [];
+        $forbiddenHeader = $forbiddenReasons !== [] ? \implode(',', $forbiddenReasons) : '';
+        if ($forbiddenHeader !== '') {
+            // Keep Response jar aligned with HeaderCollector when forbid() ran first
+            // (detached Response collectors otherwise lose the reason observability header).
+            $response->setHeader('X-Weline-Shared-Cache-Forbidden', $forbiddenHeader);
+        }
         try {
-            HeaderCollector::getInstance()
+            $collector = HeaderCollector::getInstance()
                 ->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
                 ->setHeader('Pragma', 'no-cache')
                 ->setHeader(GuardHeaders::CACHE_STATUS, GuardHeaders::STATUS_BYPASS);
+            if ($forbiddenHeader !== '') {
+                $collector->setHeader('X-Weline-Shared-Cache-Forbidden', $forbiddenHeader);
+            }
         } catch (\Throwable) {
             // optional
         }

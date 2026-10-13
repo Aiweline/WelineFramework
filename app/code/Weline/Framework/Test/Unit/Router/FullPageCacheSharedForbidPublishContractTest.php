@@ -23,5 +23,6 @@ final class FullPageCacheSharedForbidPublishContractTest extends TestCase
         self::assertStringContainsString('sharedResponseForbidsPublish()', $src);
         self::assertStringContainsString('GuardHeaders::STATUS_BYPASS', $src);
         self::assertStringContainsString("directive === 'no-store'", $src);
+        self::assertStringContainsString('X-Weline-Shared-Cache-Forbidden', $src);
     }
 }

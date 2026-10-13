@@ -34,9 +34,17 @@ final class ApplyOriginNoStoreWlsFpcBypass implements ObserverInterface
 
         // X-Weline-FPC is what WlsRuntime::currentFpcStatus historically read;
         // X-Wls-Fpc-Status + Cache-Status cover edge/observability consumers.
-        HeaderCollector::getInstance()
+        $collector = HeaderCollector::getInstance()
             ->setHeader(GuardHeaders::CACHE_STATUS, GuardHeaders::STATUS_BYPASS)
             ->setHeader('X-Weline-FPC', 'BYPASS')
             ->setHeader('X-Wls-Fpc-Status', 'BYPASS');
+        $reasons = $event->getData('reasons');
+        if (\is_array($reasons) && $reasons !== []) {
+            $joined = \implode(',', \array_map('strval', $reasons));
+            if ($joined !== '') {
+                // Reinforce Framework forbid observability if Response jar diverged.
+                $collector->setHeader('X-Weline-Shared-Cache-Forbidden', $joined);
+            }
+        }
     }
 }
