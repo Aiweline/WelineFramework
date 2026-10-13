@@ -14,6 +14,7 @@ final class DeployWebhookQueueContractTest extends TestCase
         self::assertFileExists($base . '/Service/DeployWebhookJobQueue.php');
         self::assertFileExists($base . '/Service/DeployWebhookJobDrainService.php');
         self::assertFileExists($base . '/Cron/DeployWebhookDrainCron.php');
+        self::assertFileExists($base . '/Cron/DeployWebhookExpectCron.php');
         self::assertFileExists($base . '/Console/Deploy/Webhook/Drain.php');
 
         $cron = (string)file_get_contents($base . '/Cron/DeployWebhookDrainCron.php');
@@ -23,5 +24,6 @@ final class DeployWebhookQueueContractTest extends TestCase
         $queue = (string)file_get_contents($base . '/Service/DeployWebhookJobQueue.php');
         self::assertStringContainsString('webhook-queue', $queue);
         self::assertStringContainsString("'status' => 'pending'", $queue);
+        self::assertStringContainsString('function findByRef', $queue);
     }
 }

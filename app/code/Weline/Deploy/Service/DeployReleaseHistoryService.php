@@ -248,6 +248,80 @@ class DeployReleaseHistoryService
         return $this->loadById($releaseId);
     }
 
+    /**
+     * Locate a recent release that matches a git tag name (git_tag or deploy_version).
+     */
+    public function findByGitTag(string $tag): ?DeployRelease
+    {
+        $tag = trim($tag);
+        if ($tag === '') {
+            return null;
+        }
+
+        /** @var DeployRelease $model */
+        $model = ObjectManager::getInstance(DeployRelease::class);
+        $byTag = $model->reset()
+            ->where(DeployRelease::schema_fields_GIT_TAG, $tag)
+            ->order(DeployRelease::schema_fields_STARTED_AT, 'DESC')
+            ->select()
+            ->pagination(1, 1)
+            ->fetch();
+        $items = $this->collectionItems($byTag);
+        if ($items !== []) {
+            return $items[0];
+        }
+
+        $byVersion = $model->reset()
+            ->where(DeployRelease::schema_fields_DEPLOY_VERSION, $tag)
+            ->order(DeployRelease::schema_fields_STARTED_AT, 'DESC')
+            ->select()
+            ->pagination(1, 1)
+            ->fetch();
+        $items = $this->collectionItems($byVersion);
+
+        return $items[0] ?? null;
+    }
+
+    /**
+     * Locate a recent release whose git_commit matches the given SHA (full or prefix).
+     */
+    public function findByGitCommit(string $commit): ?DeployRelease
+    {
+        $commit = strtolower(trim($commit));
+        if ($commit === '' || !preg_match('/^[0-9a-f]{7,40}$/', $commit)) {
+            return null;
+        }
+
+        /** @var DeployRelease $model */
+        $model = ObjectManager::getInstance(DeployRelease::class);
+        if (strlen($commit) === 40) {
+            $exact = $model->reset()
+                ->where(DeployRelease::schema_fields_GIT_COMMIT, $commit)
+                ->order(DeployRelease::schema_fields_STARTED_AT, 'DESC')
+                ->select()
+                ->pagination(1, 1)
+                ->fetch();
+            $items = $this->collectionItems($exact);
+            if ($items !== []) {
+                return $items[0];
+            }
+        }
+
+        // Prefix match: scan a recent window (portable; no SQL dialect LIKE required for short SHA).
+        $recent = $this->getRecent(50);
+        foreach ($recent as $row) {
+            $stored = strtolower(trim((string)$row->getData(DeployRelease::schema_fields_GIT_COMMIT)));
+            if ($stored === '') {
+                continue;
+            }
+            if ($stored === $commit || str_starts_with($stored, $commit) || str_starts_with($commit, $stored)) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
     private function loadById(string $releaseId): ?DeployRelease
     {
         /** @var DeployRelease $model */

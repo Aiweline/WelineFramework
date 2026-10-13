@@ -13,7 +13,8 @@ class DeployWebhookJobDrainService
         private readonly DeployWebhookJobQueue $queue,
         private readonly DeployWebhookRefResolver $refResolver,
         private readonly DeployOrchestratorService $orchestrator,
-        private readonly DeployConfigService $configService
+        private readonly DeployConfigService $configService,
+        private readonly DeployReleaseNotifier $releaseNotifier,
     ) {
     }
 
@@ -35,6 +36,12 @@ class DeployWebhookJobDrainService
             if ($jobId === '' || $ref === '') {
                 $skipped++;
                 $messages[] = 'skip invalid job';
+                $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_DRAIN_SKIPPED, [
+                    'job_id' => $jobId,
+                    'ref' => $ref,
+                    'trigger' => 'webhook',
+                    'reason' => 'invalid_job',
+                ]);
                 continue;
             }
 
@@ -44,6 +51,13 @@ class DeployWebhookJobDrainService
                 continue;
             }
 
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_DRAIN_START, [
+                'job_id' => $jobId,
+                'ref' => $ref,
+                'trigger' => 'webhook',
+                'log_path' => (string)($job['log_path'] ?? ''),
+            ]);
+
             try {
                 $config = $this->configService->getWebhookShellConfig();
                 if ($config === []) {
@@ -51,13 +65,20 @@ class DeployWebhookJobDrainService
                 }
                 $refInfo = $this->refResolver->resolve($ref, $config);
                 if (!empty($refInfo['skipped'])) {
+                    $reason = (string)($refInfo['reason'] ?? 'skipped');
                     $this->queue->updateJob($jobId, [
                         'status' => 'skipped',
-                        'reason' => (string)($refInfo['reason'] ?? 'skipped'),
+                        'reason' => $reason,
                         'finished_at' => time(),
                     ]);
                     $skipped++;
-                    $messages[] = $jobId . ': skipped ' . (string)($refInfo['reason'] ?? '');
+                    $messages[] = $jobId . ': skipped ' . $reason;
+                    $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_DRAIN_SKIPPED, [
+                        'job_id' => $jobId,
+                        'ref' => $ref,
+                        'trigger' => 'webhook',
+                        'reason' => $reason,
+                    ]);
                     continue;
                 }
 

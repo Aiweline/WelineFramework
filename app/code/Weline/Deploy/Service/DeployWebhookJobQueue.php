@@ -104,6 +104,74 @@ class DeployWebhookJobQueue
     }
 
     /**
+     * Find any job (any status) whose ref matches the given ref after normalization.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function findByRef(string $ref): ?array
+    {
+        return $this->findByRefCreatedSince($ref, null);
+    }
+
+    /**
+     * Find a job matching ref whose created_at is >= $minCreatedAt (inclusive).
+     * When $minCreatedAt is null, any matching job is returned (newest first).
+     *
+     * @return array<string,mixed>|null
+     */
+    public function findByRefCreatedSince(string $ref, ?int $minCreatedAt): ?array
+    {
+        $needle = $this->normalizeRef($ref);
+        if ($needle === '') {
+            return null;
+        }
+
+        $dir = $this->queueDir();
+        $files = glob($dir . DIRECTORY_SEPARATOR . '*.json') ?: [];
+        // Newest first — prefer recent arrivals for the same tag/branch.
+        rsort($files);
+        foreach ($files as $file) {
+            $job = $this->readJob($file);
+            if ($job === null) {
+                continue;
+            }
+            if ($this->normalizeRef((string)($job['ref'] ?? '')) !== $needle) {
+                continue;
+            }
+            if ($minCreatedAt !== null) {
+                $created = (int)($job['created_at'] ?? 0);
+                if ($created < $minCreatedAt) {
+                    continue;
+                }
+            }
+
+            return $job;
+        }
+
+        return null;
+    }
+
+    public function normalizeRef(string $ref): string
+    {
+        $ref = trim($ref);
+        if ($ref === '') {
+            return '';
+        }
+        if (str_starts_with($ref, 'refs/tags/')) {
+            return $ref;
+        }
+        if (str_starts_with($ref, 'refs/heads/')) {
+            return $ref;
+        }
+        // Bare tag or commit-ish → treat as tag name for expect-watch matching.
+        if (!str_contains($ref, '/')) {
+            return 'refs/tags/' . $ref;
+        }
+
+        return $ref;
+    }
+
+    /**
      * @return array<string,mixed>|null
      */
     private function readJob(string $path): ?array

@@ -2,6 +2,9 @@
 "deploy:release / Orchestrator 发布流程完成后触发。","deploy:release / Orchestrator 发布流程完成后触发。"
 核心更新完成后,核心更新完成后
 "core:update 将框架核心同步到项目并打印统计后触发。观察者可清主题布局固化物等派生磁盘；Deploy 不硬绑 Theme。","core:update 将框架核心同步到项目并打印统计后触发。观察者可清主题布局固化物等派生磁盘；Deploy 不硬绑 Theme。"
+"Deploy 发布进度","Deploy 发布进度"
+部署,部署
+"Webhook 入队、发布各阶段进度、成功/失败与远程 tag 超时未见 Webhook 告警","Webhook 入队、发布各阶段进度、成功/失败与远程 tag 超时未见 Webhook 告警"
 请指定分支。,请指定分支。
 请求方式错误。,请求方式错误。
 发布参数不完整。,发布参数不完整。
@@ -531,6 +534,23 @@ pending,等待中
 "无法执行 git ls-files 以快照保护路径：%{1}","无法执行 git ls-files 以快照保护路径：%{1}"
 "git ls-files 失败（exit %{1}）保护路径 %{2}：%{3}","git ls-files 失败（exit %{1}）保护路径 %{2}：%{3}"
 "部署后命令失败（exit %{1}）：%{2}","部署后命令失败（exit %{1}）：%{2}"
+"Deploy：Webhook 已入队%{1}","Deploy：Webhook 已入队%{1}"
+Deploy：开始消费队列%{1},Deploy：开始消费队列%{1}
+Deploy：开始发布%{1},Deploy：开始发布%{1}
+Deploy：备份中,Deploy：备份中
+"Deploy：Git 更新完成%{1}","Deploy：Git 更新完成%{1}"
+Deploy：后置命令开始,Deploy：后置命令开始
+Deploy：后置命令完成,Deploy：后置命令完成
+Deploy：版本戳已写入%{1},Deploy：版本戳已写入%{1}
+Deploy：服务重载,Deploy：服务重载
+Deploy：发布成功%{1},Deploy：发布成功%{1}
+Deploy：发布失败%{1},Deploy：发布失败%{1}
+Deploy：队列任务跳过,Deploy：队列任务跳过
+"Deploy：远程 tag 超时未见 Webhook%{1}","Deploy：远程 tag 超时未见 Webhook%{1}"
+Deploy：回滚开始,Deploy：回滚开始
+Deploy：回滚成功,Deploy：回滚成功
+Deploy：回滚失败,Deploy：回滚失败
+Deploy：%{1},Deploy：%{1}
 "Profile 来源",简介来源
 "当前发布会优先读取该项目的独立 Profile。","当前发布会优先读取该项目的独立 Profile。"
 "该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。","该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。"
@@ -588,6 +608,7 @@ pending,等待中
 "命令包含不允许的 shell 控制字符。","命令包含不允许的 shell 控制字符。"
 命令包含不允许的命令替换表达式。,命令包含不允许的命令替换表达式。
 "命令包含不允许的 & 控制符。","命令包含不允许的 & 控制符。"
+"检测远程新 tag 超时未见 Webhook 入队并告警","检测远程新 tag 超时未见 Webhook 入队并告警"
 "消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）","消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）"
 "从 Git 仓库恢复框架核心文件","从 Git 仓库恢复框架核心文件"
 框架核心文件恢复,框架核心文件恢复

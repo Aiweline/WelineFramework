@@ -17,6 +17,7 @@ use Weline\Deploy\Service\DeployOrchestratorService;
 use Weline\Deploy\Service\DeployProjectCommandPolicyService;
 use Weline\Deploy\Service\DeployReleaseHistoryService;
 use Weline\Deploy\Service\DeployReleaseRuntimeService;
+use Weline\Deploy\Service\DeployReleaseNotifier;
 use Weline\Deploy\Service\DeploySiteBackupService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -94,6 +95,7 @@ $orch = new DeployOrchestratorService(
     ObjectManager::getInstance(DeployGitMetadataService::class),
     ObjectManager::getInstance(DeployProjectCommandPolicyService::class),
     ObjectManager::getInstance(DeploySiteBackupService::class),
+    ObjectManager::getInstance(DeployReleaseNotifier::class),
 );
 
 $git = ObjectManager::getInstance(DeployGitMetadataService::class);

@@ -13,7 +13,8 @@ namespace Weline\Deploy\Service;
 class DeployWebhookAsyncDispatcher
 {
     public function __construct(
-        private readonly DeployWebhookJobQueue $jobQueue
+        private readonly DeployWebhookJobQueue $jobQueue,
+        private readonly DeployReleaseNotifier $releaseNotifier,
     ) {
     }
 
@@ -93,6 +94,12 @@ class DeployWebhookAsyncDispatcher
         }
         $jobId = (string)$queued['job_id'];
         @file_put_contents($logPath, '# job_id=' . $jobId . "\n", FILE_APPEND);
+        $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_QUEUED, [
+            'job_id' => $jobId,
+            'ref' => $ref,
+            'trigger' => 'webhook',
+            'log_path' => $logPath,
+        ]);
 
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             return [

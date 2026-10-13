@@ -42,5 +42,7 @@ final class DeployWebhookAsyncAckContractTest extends TestCase
         self::assertStringContainsString('enqueue', $source);
         self::assertStringContainsString('systemdRunDetach', $source);
         self::assertStringContainsString("'transport' => 'queue'", $source);
+        self::assertStringContainsString('DeployReleaseNotifier', $source);
+        self::assertStringContainsString('PHASE_QUEUED', $source);
     }
 }

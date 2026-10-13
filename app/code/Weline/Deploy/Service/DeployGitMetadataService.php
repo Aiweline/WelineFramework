@@ -160,6 +160,82 @@ class DeployGitMetadataService
     }
 
     /**
+     * Remote branch tip SHA via `git ls-remote` (not local origin/branch tracking).
+     * Returns null when the git process fails (caller should fail-open).
+     */
+    public function listRemoteBranchTip(string $branch, string $remote = 'origin', ?string $root = null): ?string
+    {
+        $remote = trim($remote) !== '' ? trim($remote) : 'origin';
+        $branch = trim($branch);
+        if ($branch === '') {
+            return null;
+        }
+        $ref = 'refs/heads/' . $branch;
+        try {
+            $result = $this->runGit(['ls-remote', $remote, $ref], $root);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (($result['exit_code'] ?? 1) !== 0) {
+            return null;
+        }
+        $raw = trim((string)($result['stdout'] ?? ''));
+        if ($raw === '') {
+            return '';
+        }
+        foreach (explode("\n", $raw) as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            $parts = preg_split('/\s+/', $line, 2);
+            if (!is_array($parts) || count($parts) < 2) {
+                continue;
+            }
+            if (trim((string)$parts[1]) !== $ref) {
+                continue;
+            }
+            $sha = strtolower(trim((string)$parts[0]));
+            if (preg_match('/^[0-9a-f]{40}$/', $sha) === 1) {
+                return $sha;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Paths with skip-worktree bit set (`git ls-files -v`, leading S/s).
+     *
+     * @return list<string>
+     */
+    public function listSkipWorktreePaths(?string $root = null): array
+    {
+        $raw = $this->readGitOutput(['ls-files', '-v'], $root);
+        if ($raw === '') {
+            return [];
+        }
+        $paths = [];
+        foreach (explode("\n", $raw) as $line) {
+            $line = rtrim($line, "\r");
+            if ($line === '') {
+                continue;
+            }
+            // Format: "<status><space><path>" — skip-worktree uses S or s.
+            $status = $line[0] ?? '';
+            if ($status !== 'S' && $status !== 's') {
+                continue;
+            }
+            $path = trim(substr($line, 1));
+            if ($path !== '') {
+                $paths[] = $path;
+            }
+        }
+
+        return $paths;
+    }
+
+    /**
      * @return list<array{sha:string,short_sha:string,committed_at:int,author:string,subject:string}>
      */
     public function listCommits(
@@ -207,6 +283,53 @@ class DeployGitMetadataService
         }
 
         return $commits;
+    }
+
+    /**
+     * Remote tag names via `git ls-remote --tags` (peeled `^{}` rows ignored).
+     * Returns null when the git process fails (caller should fail-open).
+     *
+     * @return list<string>|null
+     */
+    public function listRemoteTagNames(string $remote = 'origin', ?string $root = null): ?array
+    {
+        $remote = trim($remote) !== '' ? trim($remote) : 'origin';
+        try {
+            $result = $this->runGit(['ls-remote', '--tags', $remote], $root);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (($result['exit_code'] ?? 1) !== 0) {
+            return null;
+        }
+
+        $raw = trim((string)($result['stdout'] ?? ''));
+        $names = [];
+        if ($raw !== '') {
+            foreach (explode("\n", $raw) as $line) {
+                $line = trim($line);
+                if ($line === '' || str_ends_with($line, '^{}')) {
+                    continue;
+                }
+                // "<sha>\trefs/tags/<name>"
+                $parts = preg_split('/\s+/', $line, 2);
+                if (!is_array($parts) || count($parts) < 2) {
+                    continue;
+                }
+                $ref = trim((string)$parts[1]);
+                if (!str_starts_with($ref, 'refs/tags/')) {
+                    continue;
+                }
+                $name = substr($ref, 10);
+                if ($name !== '') {
+                    $names[$name] = true;
+                }
+            }
+        }
+        $out = array_keys($names);
+        sort($out, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $out;
     }
 
     /**

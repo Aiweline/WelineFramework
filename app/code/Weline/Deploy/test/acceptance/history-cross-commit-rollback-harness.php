@@ -119,6 +119,7 @@ $orch = new DeployOrchestratorService(
     ObjectManager::getInstance(DeployGitMetadataService::class),
     ObjectManager::getInstance(DeployProjectCommandPolicyService::class),
     ObjectManager::getInstance(DeploySiteBackupService::class),
+    ObjectManager::getInstance(\Weline\Deploy\Service\DeployReleaseNotifier::class),
 );
 
 $result = $orch->rollback([

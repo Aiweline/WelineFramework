@@ -104,7 +104,7 @@ class DeployWebhookRefResolver
     /**
      * 从配置中解析触发模式，兼容旧配置 webhook_allow_tag_deploy。
      */
-    private function resolveTriggerMode(array $config): string
+    public function resolveTriggerMode(array $config): string
     {
         $mode = (string)($config['deploy_trigger_mode'] ?? $config['DEPLOY_TRIGGER_MODE'] ?? '');
 

@@ -36,6 +36,7 @@ class DeployOrchestratorService
         private readonly DeployGitMetadataService $gitService,
         private readonly DeployProjectCommandPolicyService $commandPolicyService,
         private readonly DeploySiteBackupService $siteBackupService,
+        private readonly DeployReleaseNotifier $releaseNotifier,
     ) {
         $this->isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
     }
@@ -81,7 +82,17 @@ class DeployOrchestratorService
         };
 
         $this->historyService->start($releaseId, $trigger, $refType, $ref, $versionHint, $gitTag, $releaseContext);
+        $startedAt = time();
+        $notifyBase = static function (array $extra = []) use ($releaseId, $trigger, $ref, $startedAt): array {
+            return array_merge([
+                'release_id' => $releaseId,
+                'trigger' => $trigger,
+                'ref' => $ref,
+                'elapsed_s' => max(0, time() - $startedAt),
+            ], $extra);
+        };
         $log(__('开始发布：%{1}', [$releaseId]));
+        $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_STARTED, $notifyBase());
 
         $deployRoot = '';
         $config = [];
@@ -90,6 +101,8 @@ class DeployOrchestratorService
         $preCurrent = null;
         $gitUpdateStarted = false;
         $versionStampWritten = false;
+        $gitCommit = '';
+        $deployVersion = '';
 
         try {
             $config = $this->loadConfig($runtimeConfig);
@@ -101,6 +114,9 @@ class DeployOrchestratorService
 
             if ($this->shouldRunBackup($noBackup)) {
                 $log(__('备份中...'));
+                $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_BACKUP, $notifyBase([
+                    'deploy_root' => $deployRoot,
+                ]));
                 $this->runDeployBackup($config, $deployRoot, $backupTrigger, [
                     'git_commit' => is_array($preCurrent)
                         ? (string)($preCurrent['git_commit'] ?? $preCommit)
@@ -122,6 +138,11 @@ class DeployOrchestratorService
             } else {
                 $deployVersion = $this->gitService->getShortCommit($deployRoot) ?: ($versionHint ?? 'unknown');
             }
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_GIT_DONE, $notifyBase([
+                'deploy_root' => $deployRoot,
+                'deploy_version' => $deployVersion,
+                'git_commit' => $gitCommit,
+            ]));
 
             // R1：空 POST_DEPLOY 不得跳过 Upgrade；默认 setup:upgrade（!DEV → SetupUpgradeAfterDeployStatic）
             $postDeployCommand = trim((string)($config['POST_DEPLOY_COMMAND'] ?? ''));
@@ -130,7 +151,19 @@ class DeployOrchestratorService
                 $log(__('POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…'));
             }
             $log(__('执行后置命令...'));
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_POST_DEPLOY_START, $notifyBase([
+                'deploy_root' => $deployRoot,
+                'deploy_version' => $deployVersion,
+                'git_commit' => $gitCommit,
+                'command' => $postDeployCommand,
+            ]));
             $this->execCommand($postDeployCommand, $deployRoot);
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_POST_DEPLOY_DONE, $notifyBase([
+                'deploy_root' => $deployRoot,
+                'deploy_version' => $deployVersion,
+                'git_commit' => $gitCommit,
+                'command' => $postDeployCommand,
+            ]));
 
             $workerBuildId = $this->runtimeService->generateWorkerBuildId();
             $deployModeInfo = $this->resolveDeployModeInfo();
@@ -162,14 +195,29 @@ class DeployOrchestratorService
             $this->runtimeService->syncEnv($deployVersion, $workerBuildId);
             $versionStampWritten = true;
             $log(__('版本戳已写入：%{1}', [$deployVersion]));
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_STAMP_WRITTEN, $notifyBase([
+                'deploy_root' => $deployRoot,
+                'deploy_version' => $deployVersion,
+                'git_commit' => $gitCommit,
+            ]));
 
             $log(__('重载服务...'));
             $this->reloadServer($deployRoot);
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_RELOAD, $notifyBase([
+                'deploy_root' => $deployRoot,
+                'deploy_version' => $deployVersion,
+                'git_commit' => $gitCommit,
+            ]));
 
             $this->historyService->markSuccess($releaseId, $deployVersion, $workerBuildId, $gitCommit, $gitBranch);
             $this->dispatchReleaseAfter($releaseId, $deployVersion, $refType, $gitTag, $gitCommit, $releaseContext);
 
             $log(__('发布成功：%{1}', [$deployVersion]));
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_SUCCESS, $notifyBase([
+                'deploy_root' => $deployRoot,
+                'deploy_version' => $deployVersion,
+                'git_commit' => $gitCommit,
+            ]));
 
             return [
                 'success' => true,
@@ -179,6 +227,7 @@ class DeployOrchestratorService
             ];
         } catch (\Throwable $throwable) {
             $error = $throwable->getMessage();
+            $outputTail = $this->clipNotifyTail($error);
             $rollbackNote = $this->autoRollbackAfterReleaseFailure(
                 $gitUpdateStarted,
                 $preCommit,
@@ -193,8 +242,16 @@ class DeployOrchestratorService
             if ($rollbackNote !== '') {
                 $error .= $rollbackNote;
             }
-            $this->historyService->markFailed($releaseId, $error);
+            $this->historyService->markFailed($releaseId, $error, $outputTail);
             $log(__('发布失败：%{1}', [$error]));
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_FAILED, $notifyBase([
+                'deploy_root' => $deployRoot,
+                'deploy_version' => $deployVersion,
+                'git_commit' => $gitCommit,
+                'error_message' => $error,
+                'output_tail' => $outputTail,
+                'auto_rollback' => $rollbackNote !== '',
+            ]));
 
             return [
                 'success' => false,
@@ -203,6 +260,16 @@ class DeployOrchestratorService
                 'message' => $error,
             ];
         }
+    }
+
+    private function clipNotifyTail(string $text): string
+    {
+        $max = DeployReleaseHistoryService::OUTPUT_TAIL_MAX_CHARS;
+        if (mb_strlen($text, 'UTF-8') <= $max) {
+            return $text;
+        }
+
+        return mb_substr($text, max(0, mb_strlen($text, 'UTF-8') - $max), $max, 'UTF-8');
     }
 
     /**
@@ -249,7 +316,21 @@ class DeployOrchestratorService
         $releaseId = $this->runtimeService->generateReleaseId('rollback-' . $versionHint);
         $gitTag = $refType === 'tag' ? $this->rollbackTagName($rollbackRef) : null;
         $this->historyService->start($releaseId, 'rollback', $refType, $rollbackRef, $versionHint, $gitTag, $releaseContext);
+        $startedAt = time();
+        $notifyBase = static function (array $extra = []) use ($releaseId, $rollbackRef, $startedAt): array {
+            return array_merge([
+                'release_id' => $releaseId,
+                'trigger' => 'rollback',
+                'ref' => $rollbackRef,
+                'elapsed_s' => max(0, time() - $startedAt),
+            ], $extra);
+        };
         $log(__('开始回滚：%{1}', [$releaseId]));
+        $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_ROLLBACK_STARTED, $notifyBase());
+
+        $deployRoot = '';
+        $gitCommit = '';
+        $deployVersion = '';
 
         try {
             $config = $this->loadConfig($runtimeConfig);
@@ -312,6 +393,11 @@ class DeployOrchestratorService
             $this->dispatchReleaseAfter($releaseId, $deployVersion, $refType, $gitTag, $gitCommit, $releaseContext);
 
             $log(__('回滚成功：%{1}', [$deployVersion]));
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_ROLLBACK_SUCCESS, $notifyBase([
+                'deploy_root' => $deployRoot,
+                'deploy_version' => $deployVersion,
+                'git_commit' => $gitCommit,
+            ]));
 
             return [
                 'success' => true,
@@ -321,8 +407,16 @@ class DeployOrchestratorService
             ];
         } catch (\Throwable $throwable) {
             $error = $throwable->getMessage();
-            $this->historyService->markFailed($releaseId, $error);
+            $outputTail = $this->clipNotifyTail($error);
+            $this->historyService->markFailed($releaseId, $error, $outputTail);
             $log(__('回滚失败：%{1}', [$error]));
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_ROLLBACK_FAILED, $notifyBase([
+                'deploy_root' => $deployRoot,
+                'deploy_version' => $deployVersion,
+                'git_commit' => $gitCommit,
+                'error_message' => $error,
+                'output_tail' => $outputTail,
+            ]));
 
             return [
                 'success' => false,
@@ -571,6 +665,8 @@ class DeployOrchestratorService
         $snapshotId = $this->snapshotProtectedPaths($deployRoot);
 
         try {
+            $this->assertNoSkipWorktree($deployRoot, 'release');
+
             if ($refType === 'commit' && $gitCheckout !== null && trim($gitCheckout) !== '') {
                 $this->gitService->checkoutCommit(trim($gitCheckout), $remote, $deployRoot);
                 return;
@@ -604,6 +700,8 @@ class DeployOrchestratorService
         $snapshotId = $this->snapshotProtectedPaths($deployRoot);
 
         try {
+            $this->assertNoSkipWorktree($deployRoot, 'rollback');
+
             if ($refType === 'tag') {
                 $tag = $this->rollbackTagName($rollbackRef);
                 $this->gitService->checkoutTag($tag, $remote, $deployRoot);
@@ -630,6 +728,35 @@ class DeployOrchestratorService
         } finally {
             $this->restoreProtectedPaths($deployRoot, $snapshotId);
         }
+    }
+
+    /**
+     * Fail-closed when skip-worktree bits would block reset/checkout.
+     * Does NOT clear skip-worktree automatically.
+     */
+    private function assertNoSkipWorktree(string $deployRoot, string $op): void
+    {
+        $paths = $this->gitService->listSkipWorktreePaths($deployRoot);
+        if ($paths === []) {
+            return;
+        }
+        $max = 20;
+        $shown = array_slice($paths, 0, $max);
+        $summary = implode(', ', $shown);
+        if (count($paths) > $max) {
+            $summary .= ', …(+' . (count($paths) - $max) . ')';
+        }
+        $message = (string)__(
+            'Deploy workdir has skip-worktree paths (%{1}); refusing %{2}. Clear the skip-worktree bits manually before retrying.',
+            [count($paths) . ': ' . $summary, $op]
+        );
+        $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_WORKDIR_BLOCKED, [
+            'deploy_root' => $deployRoot,
+            'trigger' => $op,
+            'error_message' => $message,
+            'reason' => 'skip_worktree',
+        ]);
+        throw new \RuntimeException($message);
     }
 
     private function rollbackVersionHint(string $rollbackRef, string $refType): string
