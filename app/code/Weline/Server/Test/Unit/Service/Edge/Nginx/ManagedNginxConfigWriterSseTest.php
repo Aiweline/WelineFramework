@@ -56,6 +56,20 @@ final class ManagedNginxConfigWriterSseTest extends TestCase
             $config,
             'Managed nginx must raise the default 1m body cap for MediaManager uploads.',
         );
+        // Prod-verified: long FPC pierce map keys need larger map_hash buckets (LIVE http head).
+        self::assertStringContainsString('map_hash_bucket_size 128;', $config);
+        self::assertStringContainsString('map_hash_max_size 4096;', $config);
+        $httpPos = \strpos($config, "http {\n");
+        $mimePos = \strpos($config, 'include', $httpPos !== false ? $httpPos : 0);
+        $bucketPos = \strpos($config, 'map_hash_bucket_size 128;');
+        self::assertIsInt($httpPos);
+        self::assertIsInt($mimePos);
+        self::assertIsInt($bucketPos);
+        self::assertLessThan(
+            $mimePos,
+            $bucketPos,
+            'map_hash_* must precede include mime.types inside http {} (prod LIVE order).',
+        );
 
         $sseStart = \strpos($config, 'location = /api/framework/stream {');
         $genericStart = \strpos($config, 'location / {');

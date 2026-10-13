@@ -473,6 +473,8 @@ events {
 {$eventsExtra}}
 
 http {
+    map_hash_bucket_size 128;
+    map_hash_max_size 4096;
     include       {$quotedMimeTypes};
     default_type  application/octet-stream;
     access_log    off;
