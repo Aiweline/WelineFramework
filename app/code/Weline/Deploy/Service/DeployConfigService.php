@@ -60,6 +60,7 @@ class DeployConfigService
             'webhook_port' => '9097',
             'webhook_path' => '',
             'webhook_secret' => '',
+            'webhook_pierce_ack_hash' => '',
             'webhook_branch' => '',
             'webhook_bash' => 'bash',
             'deploy_trigger_mode' => self::TRIGGER_MODE_TAG,

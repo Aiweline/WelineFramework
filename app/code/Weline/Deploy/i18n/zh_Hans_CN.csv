@@ -526,6 +526,7 @@ pending,等待中
 自动回滚后服务重载失败：%{1},自动回滚后服务重载失败：%{1}
 "已自动回滚到发布前版本 %{1}","已自动回滚到发布前版本 %{1}"
 自动回滚失败：%{1},自动回滚失败：%{1}
+"Deploy workdir has skip-worktree paths (%{1}); refusing %{2}. Clear the skip-worktree bits manually before retrying.","Deploy workdir has skip-worktree paths (%{1}); refusing %{2}. Clear the skip-worktree bits manually before retrying."
 部署根目录包含不允许的控制字符。,部署根目录包含不允许的控制字符。
 部署根目录必须是绝对路径：%{1},部署根目录必须是绝对路径：%{1}
 部署根目录不存在：%{1},部署根目录不存在：%{1}
@@ -546,7 +547,8 @@ Deploy：服务重载,Deploy：服务重载
 Deploy：发布成功%{1},Deploy：发布成功%{1}
 Deploy：发布失败%{1},Deploy：发布失败%{1}
 Deploy：队列任务跳过,Deploy：队列任务跳过
-"Deploy：远程 tag 超时未见 Webhook%{1}","Deploy：远程 tag 超时未见 Webhook%{1}"
+"Deploy：远程 ref 超时未见 Webhook%{1}","Deploy：远程 ref 超时未见 Webhook%{1}"
+"Deploy：工作树含 skip-worktree，已中止","Deploy：工作树含 skip-worktree，已中止"
 Deploy：回滚开始,Deploy：回滚开始
 Deploy：回滚成功,Deploy：回滚成功
 Deploy：回滚失败,Deploy：回滚失败
@@ -609,7 +611,7 @@ Deploy：%{1},Deploy：%{1}
 命令包含不允许的命令替换表达式。,命令包含不允许的命令替换表达式。
 "命令包含不允许的 & 控制符。","命令包含不允许的 & 控制符。"
 "检测远程新 tag 超时未见 Webhook 入队并告警","检测远程新 tag 超时未见 Webhook 入队并告警"
-"消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）","消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）"
+"消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（不依赖 sudo）","消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（不依赖 sudo）"
 "从 Git 仓库恢复框架核心文件","从 Git 仓库恢复框架核心文件"
 框架核心文件恢复,框架核心文件恢复
 "步骤 1/4：检查 Git 仓库...","步骤 1/4：检查 Git 仓库..."
@@ -773,7 +775,7 @@ commit：%{1}（%{2}）,提交：%{1}（%{2}）
 "无法生成 curl 示例：缺少完整 Webhook URL。","无法生成 curl 示例：缺少完整 Webhook URL。"
 配置指引,配置指引
 完成。,完成。
-"消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）","消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）"
+"消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（CLI/cron；不依赖 sudo）","消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（CLI/cron；不依赖 sudo）"
 "从 Git 仓库拉取代码并更新部署项目","从 Git 仓库拉取代码并更新部署项目"
 "Git 部署开始...","Git 部署开始..."
 "步骤 1/5：读取配置文件...","步骤 1/5：读取配置文件..."
@@ -854,6 +856,9 @@ tag：%{1},标签：%{1}
 未找到映射文件，已跳过。,未找到映射文件，已跳过。
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","完整发布：Git 更新 + 后置命令 + 写版本戳 + reload"
 生成不执行发布的机器可读部署计划,生成不执行发布的机器可读部署计划
+"Deploy：远程 tag 超时未见 Webhook%{1}","Deploy：远程 tag 超时未见 Webhook%{1}"
+"消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）","消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）"
+"消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）","消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）"
 部署环境映射文件必须返回数组。,部署环境映射文件必须返回数组。
 "部署环境映射 schema 必须为 %{1}。","部署环境映射 schema 必须为 %{1}。"
 "部署环境映射 rules 必须为数组。","部署环境映射 rules 必须为数组。"

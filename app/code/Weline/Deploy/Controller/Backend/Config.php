@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Deploy\Controller\Backend;
 
 use Weline\Deploy\Service\DeployConfigService;
+use Weline\Deploy\Service\DeployWebhookPierceGate;
 use Weline\Deploy\Service\DeployWebhookSetupService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
@@ -15,7 +16,8 @@ class Config extends BackendController
 {
     public function __construct(
         private readonly DeployConfigService $deployConfigService,
-        private readonly DeployWebhookSetupService $deployWebhookSetupService
+        private readonly DeployWebhookSetupService $deployWebhookSetupService,
+        private readonly DeployWebhookPierceGate $pierceGate
     ) {
     }
 
@@ -33,8 +35,32 @@ class Config extends BackendController
         $this->assign('settings', $settings);
         $this->assign('saveUrl', $this->_url->getBackendUrl('deploy/backend/config/save'));
         $this->assign('webhookMeta', $this->buildWebhookMeta($this->deployConfigService->getSettings()));
+        $this->assign('pierceAckPending', $this->pierceGate->isPierceAckPending());
+        $this->assign(
+            'pierceAckUrl',
+            $this->_url->getBackendUrl('deploy/backend/config/confirmPierceUrl')
+        );
 
         return (string)$this->fetch();
+    }
+
+    #[Acl('Weline_Deploy::deploy_config_confirm_pierce', '确认 Webhook 签章 URL 已同步', 'check', '开发者确认已更新 Git 平台 Webhook 中的 FPC 签章参数')]
+    public function confirmPierceUrl(): string
+    {
+        if (!$this->request->isPost()) {
+            MessageManager::warning((string)__('请求方式错误'));
+            $this->redirect($this->_url->getBackendUrl('deploy/backend/config'));
+
+            return '';
+        }
+        if ($this->pierceGate->acknowledgeCurrentPierce()) {
+            MessageManager::success((string)__('已记录：你确认 Git 平台 Webhook 地址中的签章参数已更新。'));
+        } else {
+            MessageManager::warning((string)__('当前无可用 FPC 签章，或非 WLS 边缘模式，无需确认。'));
+        }
+        $this->redirect($this->_url->getBackendUrl('deploy/backend/config'));
+
+        return '';
     }
 
     #[Acl('Weline_Deploy::deploy_config_save', '保存部署配置', 'save', '保存部署信息配置')]
@@ -52,7 +78,8 @@ class Config extends BackendController
             $settings = [];
             foreach (array_keys($this->deployConfigService->getDefaults()) as $key) {
                 $value = $data[$key] ?? '';
-                if ($key === 'webhook_path') {
+                if ($key === 'webhook_path' || $key === DeployWebhookPierceGate::ACK_CONFIG_KEY) {
+                    // Path and pierce-ack fingerprint are not form fields; keep stored values.
                     $settings[$key] = (string)($existing[$key] ?? '');
                     continue;
                 }

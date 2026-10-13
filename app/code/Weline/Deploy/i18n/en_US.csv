@@ -541,6 +541,7 @@ pending,pending
 自动回滚后服务重载失败：%{1},"Server reload after auto-rollback failed: %{1}"
 "已自动回滚到发布前版本 %{1}","Auto-rolled back to pre-release version %{1}"
 自动回滚失败：%{1},"Auto-rollback failed: %{1}"
+"Deploy workdir has skip-worktree paths (%{1}); refusing %{2}. Clear the skip-worktree bits manually before retrying.","Deploy workdir has skip-worktree paths (%{1}); refusing %{2}. Clear the skip-worktree bits manually before retrying."
 部署根目录包含不允许的控制字符。,"Deploy root contains disallowed control characters."
 部署根目录必须是绝对路径：%{1},"Deploy root must be an absolute path: %{1}"
 部署根目录不存在：%{1},"Deploy root does not exist: %{1}"
@@ -561,7 +562,8 @@ Deploy：服务重载,Deploy：服务重载
 Deploy：发布成功%{1},Deploy：发布成功%{1}
 Deploy：发布失败%{1},Deploy：发布失败%{1}
 Deploy：队列任务跳过,Deploy：队列任务跳过
-"Deploy：远程 tag 超时未见 Webhook%{1}","Deploy：远程 tag 超时未见 Webhook%{1}"
+"Deploy：远程 ref 超时未见 Webhook%{1}","Deploy：远程 ref 超时未见 Webhook%{1}"
+"Deploy：工作树含 skip-worktree，已中止","Deploy：工作树含 skip-worktree，已中止"
 Deploy：回滚开始,Deploy：回滚开始
 Deploy：回滚成功,Deploy：回滚成功
 Deploy：回滚失败,Deploy：回滚失败
@@ -624,7 +626,7 @@ Deploy：%{1},Deploy：%{1}
 命令包含不允许的命令替换表达式。,"Command contains unsupported command substitution."
 "命令包含不允许的 & 控制符。","Command contains unsupported ampersand control tokens."
 "检测远程新 tag 超时未见 Webhook 入队并告警","检测远程新 tag 超时未见 Webhook 入队并告警"
-"消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）","消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）"
+"消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（不依赖 sudo）","消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（不依赖 sudo）"
 "从 Git 仓库恢复框架核心文件","Restore framework core files from Git repository"
 框架核心文件恢复,"Framework Core File Recovery"
 "步骤 1/4：检查 Git 仓库...","Step 1/4: Checking Git repository..."
@@ -788,7 +790,7 @@ commit：%{1}（%{2}）,commit：%{1}（%{2}）
 "无法生成 curl 示例：缺少完整 Webhook URL。","Unable to generate curl example: full webhook URL missing."
 配置指引,"Configuration Guide"
 完成。,Finish.
-"消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）","消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）"
+"消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（CLI/cron；不依赖 sudo）","消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（CLI/cron；不依赖 sudo）"
 "从 Git 仓库拉取代码并更新部署项目","Pull code from Git repository and update deployment project"
 "Git 部署开始...","Git deployment begins..."
 "步骤 1/5：读取配置文件...","Step 1/5: Reading configuration file..."
@@ -869,6 +871,9 @@ tag：%{1},"Tag: %{1}"
 未找到映射文件，已跳过。,"Map file not found; skipped."
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","Full release: Git update + post commands + stamp + reload"
 生成不执行发布的机器可读部署计划,"Generate a machine-readable deployment plan without executing the deployment."
+"Deploy：远程 tag 超时未见 Webhook%{1}","Deploy：远程 tag 超时未见 Webhook%{1}"
+"消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）","消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）"
+"消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）","消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）"
 部署环境映射文件必须返回数组。,"Deploy env map file must return an array."
 "部署环境映射 schema 必须为 %{1}。","Deploy env map schema must be %{1}."
 "部署环境映射 rules 必须为数组。","Deploy env map rules must be an array."

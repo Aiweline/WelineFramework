@@ -18,8 +18,14 @@ class DeployWebhookSetupService
 
     public function __construct(
         private readonly DeployConfigService $deployConfigService,
-        private readonly DeployWebhookRouteService $routeService
+        private readonly DeployWebhookRouteService $routeService,
+        private readonly ?DeployWebhookPierceGate $pierceGate = null
     ) {
+    }
+
+    private function pierceGate(): DeployWebhookPierceGate
+    {
+        return $this->pierceGate ?? new DeployWebhookPierceGate($this->deployConfigService);
     }
 
     public function sshKeyDirectory(): string
@@ -111,7 +117,21 @@ class DeployWebhookSetupService
             return '';
         }
 
-        return $webhookUrl . '/version';
+        $parts = \parse_url($webhookUrl);
+        if (!\is_array($parts) || empty($parts['host'])) {
+            return \rtrim($webhookUrl, '/') . '/version';
+        }
+        $path = \rtrim((string)($parts['path'] ?? ''), '/') . '/version';
+        $out = ($parts['scheme'] ?? 'https') . '://' . $parts['host'];
+        if (isset($parts['port'])) {
+            $out .= ':' . $parts['port'];
+        }
+        $out .= $path;
+        if (!empty($parts['query'])) {
+            $out .= '?' . $parts['query'];
+        }
+
+        return $out;
     }
 
     /**
@@ -271,7 +291,7 @@ class DeployWebhookSetupService
             return '';
         }
 
-        return $base . '/' . $path;
+        return $this->pierceGate()->appendPierceQuery($base . '/' . $path);
     }
 
     public function buildSampleRef(array $settings, ?string $refOverride): string
@@ -337,11 +357,18 @@ class DeployWebhookSetupService
         bool $sshGenerated,
         string $sshPublicKeyPath
     ): array {
+        $pierceOn = $this->pierceGate()->shouldAttachPierceToWebhookUrl();
         $lines = [
             (string) __('【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。'),
             (string) __('【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。'),
             (string) __('【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。'),
         ];
+
+        if ($pierceOn) {
+            $lines[] = (string) __('【3b】WLS 边缘：完整 URL 含 w_fpc_pierce=（本机 FPC 打穿签章）。签章轮换后只需改 Git URL 里该参数，不必重跑 setup；后台「确认已换」后提示才会消失。');
+        } else {
+            $lines[] = (string) __('【3b】当前为 FPM/非 WLS 边缘：URL 不含 FPC 签章；发布只靠 webhook_secret；该路径不会进 FPC。');
+        }
 
         if ($webhookUrl !== '') {
             $lines[] = (string) __('【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}', [$webhookUrl]);
