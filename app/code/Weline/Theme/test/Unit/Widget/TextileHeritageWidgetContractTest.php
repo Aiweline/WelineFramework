@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\Widget;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Deploy\DeployPublicUrlMode;
 use Weline\Theme\Service\TextileHeritageCatalog;
 use Weline\Theme\Service\TextileHeritageLabels;
 
@@ -25,6 +26,23 @@ final class TextileHeritageWidgetContractTest extends TestCase
         self::assertStringNotContainsString('@widget.default_injections', $src);
     }
 
+    public function testCatalogImageBaseHonorsStagingProductionPublicUrls(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/TextileHeritageCatalog.php');
+        self::assertStringContainsString('function imageBase', $src);
+        self::assertStringContainsString('PublicStaticUrl::fromDevWebPath', $src);
+        self::assertSame(
+            '/Weline/Theme/view/statics/images/textile-heritage',
+            TextileHeritageCatalog::IMAGE_BASE,
+        );
+        $base = TextileHeritageCatalog::imageBase();
+        if (DeployPublicUrlMode::useProduction()) {
+            self::assertSame('/static/Weline/Theme/images/textile-heritage', $base);
+        } else {
+            self::assertSame(TextileHeritageCatalog::IMAGE_BASE, $base);
+        }
+    }
+
     public function testCatalogMapsExactlySixRealRasterAssetsWithProvenance(): void
     {
         $items = TextileHeritageCatalog::items();
@@ -33,7 +51,11 @@ final class TextileHeritageWidgetContractTest extends TestCase
         $root = dirname(__DIR__, 3);
         foreach ($items as $item) {
             $image = (string)$item['image'];
-            self::assertStringStartsWith('/Weline/Theme/view/statics/images/textile-heritage/', $image);
+            if (DeployPublicUrlMode::useProduction()) {
+                self::assertStringStartsWith('/static/Weline/Theme/images/textile-heritage/', $image);
+            } else {
+                self::assertStringStartsWith('/Weline/Theme/view/statics/images/textile-heritage/', $image);
+            }
             self::assertDoesNotMatchRegularExpression('/\.svg(?:$|\?)/i', $image);
             self::assertMatchesRegularExpression('/\.(?:jpe?g|png|webp)$/i', $image);
             self::assertStringStartsWith('https://', (string)$item['source_url']);

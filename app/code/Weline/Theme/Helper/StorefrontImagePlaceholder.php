@@ -58,26 +58,10 @@ final class StorefrontImagePlaceholder
     public static function url(int $seed = 0): string
     {
         unset($seed);
-        $relative = 'Weline/Theme/view/statics/' . self::STATIC_DIR . '/' . self::FILE;
-        if (\defined('PROD') && PROD) {
-            // Must match PublicThemeNamespace (same as @static / theme:upgrade).
-            // Reading theme.frontend / inventing "default" produced
-            // /static/default/... 404s while assets live under Weline/hanfu/...
-            $configuredPath = null;
-            try {
-                $cfg = \Weline\Framework\App\Env::getInstance()->getConfig('theme');
-                if (\is_array($cfg)) {
-                    $configuredPath = (string)($cfg['path'] ?? '');
-                }
-            } catch (\Throwable) {
-            }
-
-            $theme = \Weline\Framework\View\PublicThemeNamespace::resolve($configuredPath);
-
-            return '/static/' . $theme . '/' . $relative;
-        }
-
-        return '/' . $relative;
+        // Authority: PublicStaticUrl (Upgrade flat /static/{Vendor}/{Module}/…).
+        return \Weline\Framework\View\PublicStaticUrl::fromDevWebPath(
+            '/Weline/Theme/view/statics/' . self::STATIC_DIR . '/' . self::FILE
+        );
     }
 
     public static function isUsable(?string $image): bool

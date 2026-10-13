@@ -212,7 +212,7 @@ $id = $carrier ? $carrier->getId() : null;
                                             </div>
                                         </details>
 
-                                        <script src="/Weline/Theme/view/statics/js/address.js?v=20260906-catalog-empty1" data-shipping-address-direct data-no-extract="true" onload="window.__welineShippingAddressReady&&window.__welineShippingAddressReady()"></script>
+                                        <script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/js/address.js?v=20260906-catalog-empty1'), ENT_QUOTES) ?>" data-shipping-address-direct data-no-extract="true" onload="window.__welineShippingAddressReady&&window.__welineShippingAddressReady()"></script>
                                         <script>
                                         (function () {
                                             var hidden = document.getElementById('carrier_coverage_json');

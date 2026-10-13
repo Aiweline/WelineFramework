@@ -18,13 +18,18 @@ final class DeployModeSetStagingContractTest extends TestCase
         self::assertStringContainsString('purgePrevAndResidue', $src);
         self::assertStringContainsString('abort', $src);
         // Prod path must not wipe live trees before staging pipeline.
+        // Scoop only until the next case (prod ends with return, not break).
         self::assertSame(1, preg_match(
-            '/case\s+[\'"]prod[\'"]\s*:\s*(.*?)break;/s',
+            '/case\s+[\'"]prod[\'"]\s*:\s*(.*?)(?=\n\s*case\s+)/s',
             $src,
             $prodCase,
         ));
         $prodBody = (string)($prodCase[1] ?? '');
         self::assertStringContainsString('deployProdViaStaging', $prodBody);
+        self::assertMatchesRegularExpression(
+            '/persistDeployMode\(\s*[\'"]prod[\'"]\s*\).*deployProdViaStaging/s',
+            $prodBody,
+        );
         self::assertStringNotContainsString('cleanTplComDir', $prodBody);
         self::assertStringNotContainsString('clearGeneratedComplicateDir', $prodBody);
         self::assertStringNotContainsString('cleanThemeDir', $prodBody);
@@ -53,6 +58,15 @@ final class DeployModeSetStagingContractTest extends TestCase
         );
         self::assertStringContainsString('DeployStagingSession::isActive()', $trait);
         self::assertStringContainsString('DeployStagingSession::complicateRoot()', $trait);
+        self::assertStringContainsString('DeployPublicUrlMode::useProduction', $trait);
+        self::assertStringContainsString('useProductionStaticPublicUrls', $trait);
+        self::assertStringContainsString('deploy_public_urls', $trait);
+        self::assertStringContainsString('context-env-v10-module-static-flat', $trait);
+        $publicUrlMode = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Deploy/DeployPublicUrlMode.php',
+        );
+        self::assertStringContainsString('forcesProductionPublicUrls', $publicUrlMode);
+        self::assertStringContainsString("Env::system('deploy')", $publicUrlMode);
 
         $session = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Deploy/DeployStagingSession.php',
@@ -61,6 +75,7 @@ final class DeployModeSetStagingContractTest extends TestCase
         self::assertStringContainsString('deploy_staging_static_empty', $session);
         self::assertStringContainsString('WELINE_DEPLOY_STAGING_ROOT', $session);
         self::assertStringContainsString('removeEmptyStagingParent', $session);
+        self::assertStringContainsString('forcesProductionPublicUrls', $session);
         $modeSet = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Console/Console/Deploy/Mode/Set.php',
         );
@@ -69,5 +84,7 @@ final class DeployModeSetStagingContractTest extends TestCase
             '/deactivate\(\);\s*\$session->purgePrevAndResidue\(\);/m',
             $modeSet,
         );
+        self::assertStringContainsString('reloadPersistentWorkersAfterModeSet', $modeSet);
+        self::assertStringContainsString('server:reload', $modeSet);
     }
 }

@@ -11,14 +11,14 @@ $flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_H
     <title>Weline Frontend Worker API Smoke</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <script type="application/json" data-weline-runtime-config><?= json_encode($runtime, $flags) ?: '{}' ?></script>
-    <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/weline-foundation.css">
-    <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/weline-frontend.css">
-    <link rel="stylesheet" href="/Weline/Theme/view/statics/ui/pages/weline-api-worker-smoke.css">
-    <script src="/Weline/Frontend/view/statics/js/runtime.js"></script>
-    <script src="/Weline/Frontend/view/statics/js/weline-api-business.js"></script>
-    <script src="/Weline/Frontend/view/statics/js/weline.js"></script>
-    <script type="module" src="/Weline/Theme/view/statics/ui/weline-ui.js"></script>
-    <script type="module" src="/Weline/Theme/view/statics/ui/pages/weline-api-worker-smoke.js"></script>
+    <link rel="stylesheet" href="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/ui/weline-foundation.css'), ENT_QUOTES) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/ui/weline-frontend.css'), ENT_QUOTES) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/ui/pages/weline-api-worker-smoke.css'), ENT_QUOTES) ?>">
+    <script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/runtime.js'), ENT_QUOTES) ?>"></script>
+    <script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api-business.js'), ENT_QUOTES) ?>"></script>
+    <script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline.js'), ENT_QUOTES) ?>"></script>
+    <script type="module" src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/ui/weline-ui.js'), ENT_QUOTES) ?>"></script>
+    <script type="module" src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/ui/pages/weline-api-worker-smoke.js'), ENT_QUOTES) ?>"></script>
 </head>
 <body>
     <main class="w-container w-api-worker-smoke">

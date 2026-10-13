@@ -41,4 +41,4 @@ $globalHint = (string)__('Global 表示全部站点；选择具体网站 / 店�
     </div>
 </div>
 <script type="application/json" id="b2b-work-scope-i18n"><?= htmlspecialchars(json_encode(['globalAlert' => $globalHint], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_NOQUOTES, 'UTF-8') ?></script>
-<script src="/Weline/B2B/view/statics/js/backend/control-center-work-scope.js?v=20260910-scope1" data-no-extract="true"></script>
+<script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/B2B/view/statics/js/backend/control-center-work-scope.js?v=20260910-scope1'), ENT_QUOTES) ?>" data-no-extract="true"></script>

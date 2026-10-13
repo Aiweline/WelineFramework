@@ -3,8 +3,10 @@
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Deploy\DeployPublicUrlMode;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Session\SessionCookieNameResolver;
+use Weline\Framework\View\PublicStaticUrl;
 
 $host = rtrim((string)$this->request->getBaseHost(), '/');
 $baseRouter = (string)$this->request->getRouterData('router');
@@ -46,7 +48,8 @@ if ($availableCurrencies === []) {
     $availableCurrencies = array_values(array_unique(array_filter([$currentCurrency, $defaultCurrency])));
 }
 $themePath = str_replace('\\', '/', (string)(Env::getInstance()->getTheme()['path'] ?? ''));
-$mediaTemplate = $host . '/' . (DEV
+$useProdPublicUrls = DeployPublicUrlMode::useProduction();
+$mediaTemplate = $host . '/' . (!$useProdPublicUrls
     ? '{module}/view/statics/{path}'
     : 'static/' . trim($themePath, '/') . '/{module}/view/statics/{path}');
 $i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
@@ -59,16 +62,16 @@ if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
     } catch (\Throwable) {
     }
 }
-// Drop multiline / oversized docs (e.g. event.php __() descriptions) so the
-// storefront runtime JSON stays small enough for the main thread to parse.
-$i18nWords = \Weline\Frontend\Helper\FrontendRuntimeI18nDictionary::filterForClient(
+// Seed Weline.Api error-presentation i18nText phrases (not page-scanned __()),
+// then drop multiline / oversized docs so storefront runtime JSON stays small.
+$i18nWords = \Weline\Frontend\Helper\FrontendRuntimeI18nDictionary::mergeApiErrorPresentationPhrases(
     is_array($i18nWords) ? $i18nWords : []
 );
 $deployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
 $deployVersion = is_array($deployMeta) ? (string)($deployMeta['deploy_version'] ?? '') : '';
 $workerBuildId = is_array($deployMeta) ? (string)($deployMeta['worker_build_id'] ?? '') : '';
 // PROD 禁止沿用粘滞的 deploy_version=dev（会把 FPC 钉死在旧 ?v=dev-* 与烤死的 DEV 模块路径上）。
-if (DEV) {
+if (!$useProdPublicUrls) {
     if ($deployVersion === '') {
         $deployVersion = 'dev';
     }
@@ -97,11 +100,9 @@ try {
     }
 } catch (\Throwable) {
 }
-$workerUrl = DEV
-    ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
-    : '/static/Weline/Frontend/js/weline-api-worker.js';
+$workerUrl = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api-worker.js');
 $workerJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api-worker.js');
-$workerUrl .= '?v=' . rawurlencode($deployVersion . '-' . $workerBuildId . ($workerJsMtime ? ('-' . (string)$workerJsMtime) : ''));
+$workerUrl .= (str_contains($workerUrl, '?') ? '&' : '?') . 'v=' . rawurlencode($deployVersion . '-' . $workerBuildId . ($workerJsMtime ? ('-' . (string)$workerJsMtime) : ''));
 // Bust lazy-loaded Weline.Api / Account / Theme widgets when source changes
 // (local deploy_version is often sticky "dev" and would keep an old mini-cart.js).
 $apiJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api.js');
@@ -121,11 +122,9 @@ $frontendJsMtime = max(
 );
 $frontendAssetVersion = $deployVersion . ($frontendJsMtime > 0 ? ('-' . (string)$frontendJsMtime) : '');
 $modulesJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/base/weline.modules.js');
-$modulesConfigUrl = DEV
-    ? '/Weline/Frontend/view/statics/base/weline.modules.js'
-    : '/static/Weline/Frontend/base/weline.modules.js';
+$modulesConfigUrl = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/base/weline.modules.js');
 if ($modulesJsMtime) {
-    $modulesConfigUrl .= '?v=' . rawurlencode((string)$modulesJsMtime);
+    $modulesConfigUrl .= (str_contains($modulesConfigUrl, '?') ? '&' : '?') . 'v=' . rawurlencode((string)$modulesJsMtime);
 }
 // Keep the Worker endpoint on the current Website mount so its trusted binding
 // refines the same Website navigation Scope rather than the host default.
@@ -151,13 +150,19 @@ if (!is_array($scopeMeta)) {
     $scopeMeta = [];
 }
 $runtime = [
-    'env' => ['WELINE_ENV' => DEV ? 'DEV' : 'PROD', 'DEV' => DEV, 'PROD' => !DEV],
+    'env' => [
+        'WELINE_ENV' => $useProdPublicUrls ? 'PROD' : 'DEV',
+        'DEV' => !$useProdPublicUrls,
+        'PROD' => $useProdPublicUrls,
+        'useProductionPublicUrls' => $useProdPublicUrls,
+    ],
     'area' => 'frontend',
     // baseUrl：在下方 JSON 用 url 标签注入根路径（禁止 PHP 赋 url 标签字符串 / getBaseUrl）
     'modulesConfigUrl' => $modulesConfigUrl,
-    'modulesBaseUrl' => DEV
-        ? '/Weline/Frontend/view/statics/js/weline-api'
-        : '/static/Weline/Frontend/js/weline-api',
+    'modulesBaseUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api'),
+    'miniCartDrawerCss' => PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css'),
+    'miniCartQtyHitCss' => PublicStaticUrl::fromDevWebPath('/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css'),
+    'storefrontPlaceholderUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/images/storefront-placeholder/default.svg'),
     'assetVersion' => $frontendAssetVersion,
 
     'deployVersion' => $deployVersion,
@@ -174,6 +179,9 @@ $runtime = [
         'workerUrl' => $workerUrl,
         'endpoint' => $queryBinUrl,
         'queryBinUrl' => $queryBinUrl,
+        // Mirror root stamps into api so mergeApiConfig() alone cannot fall back to "dev".
+        'deployVersion' => $deployVersion,
+        'workerBuildId' => $workerBuildId,
         'locale' => $currentLang,
         'currency' => $currentCurrency,
         'availableCurrencies' => $availableCurrencies,
@@ -295,10 +303,8 @@ $welineBootDev = defined('DEV') ? (bool)DEV : null;
 <js defer>Weline_Frontend::js/weline-api-business.js</js>
 <?php
 // Bust sticky theme_static_version so weline.js edits are not stuck in WLS static cache.
-$welineJsSrc = (defined('DEV') && DEV)
-    ? '/Weline/Frontend/view/statics/js/weline.js'
-    : '/static/Weline/Frontend/js/weline.js';
-$welineJsSrc .= '?v=' . rawurlencode((string)$frontendAssetVersion);
+$welineJsSrc = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline.js');
+$welineJsSrc .= (str_contains($welineJsSrc, '?') ? '&' : '?') . 'v=' . rawurlencode((string)$frontendAssetVersion);
 ?>
 <?php // defer：早期调用（declare/load/dom.observe）由 head 的 weline-boot-stub 排队，本文件初始化后回放 ?>
 <script defer src="<?= htmlspecialchars($welineJsSrc, ENT_QUOTES) ?>"></script>

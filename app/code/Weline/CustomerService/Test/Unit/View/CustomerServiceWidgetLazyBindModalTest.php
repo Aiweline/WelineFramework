@@ -90,6 +90,15 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
             "'Weline_CustomerService::js/customer-service.js?v=' + encodeURIComponent(customerServiceJsVersion)",
             $content
         );
+        $this->assertStringContainsString('customerServiceJsHref', $content);
+        $this->assertStringContainsString(
+            "fetchTagSource('statics', 'Weline_CustomerService::js/customer-service.js')",
+            $content
+        );
+        $this->assertStringNotContainsString(
+            "/Weline/CustomerService/view/statics/js/customer-service.js",
+            $content
+        );
         $this->assertStringNotContainsString("window.Weline.load('customerService')", $content);
         $this->assertStringNotContainsString('customer-service.css)?v=', $content);
         $this->assertStringNotContainsString('customer-service.js)?v=', $content);

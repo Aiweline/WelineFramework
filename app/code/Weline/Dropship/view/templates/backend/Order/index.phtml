@@ -296,7 +296,7 @@ $colspan = 6;
     return false;
   }
   if (boot()) return;
-  var src = '/Weline/Dropship/view/statics/backend/order-accordion.js?v=1.0.69';
+  var src = <?= json_encode(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Dropship/view/statics/backend/order-accordion.js') . '?v=1.0.69', JSON_UNESCAPED_SLASHES) ?>;
   var existing = document.querySelector('script[data-dropship-order-accordion-src]');
   if (existing) {
     existing.addEventListener('load', function () { boot(); });

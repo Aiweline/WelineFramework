@@ -6,6 +6,8 @@
 
 `deploy:upgrade` 对每个活跃模块的 `view/statics`：**主题 overlay** 仍铺到 `pub/static/{theme.path}/…/view/statics/…`；同时**整树扁平**铺到 `pub/static/{Vendor}/{Module}/…`，与 PROD `Module::` / `resolveStaticPath`（无 theme、无 `view/statics` 段）对齐。既有 `deploy.flat_static.*` Provider 仅为可选补充/兼容，不再是防 404 主路径。
 
+**模块静态主 URL（硬）**：`@static` / `<css>` / `<js>` / `TraitTemplate::fetchTagSource(statics)` / `PublicStaticUrl` 在 prod/staging 下**必须**输出扁平 `/static/{Vendor}/{Module}/{rest}`。主题命名空间路径只服务**主题设计资源**（`dir_type_THEME`、colors、design assets）与 overlay 落盘兼容，**不得**再作为模块 `view/statics` 的主公开前缀。
+
 **正式入口**：`php bin/w deploy:mode:set prod`（内联 `Deploy\Upgrade` → `prod_after`）。日常生产变更须经 `setup:upgrade`（!DEV → `SetupUpgradeAfterDeployStatic`）或显式 `deploy:upgrade`；`core:update` / 仅改 env **不算**完成。Orchestrator 空 `POST_DEPLOY` 默认执行 `setup:upgrade`。
 
 ## 主题命名空间归一化（发布目标必须与 URL 同源）
@@ -49,8 +51,9 @@
 
 | 调用点 | 入口 |
 |--------|------|
-| 模板静态资源 URL 前缀 | `TraitTemplate::resolvePublicThemeNamespace()` |
-| 模块 `view/statics` / `view/theme` 发布目标 | `Deploy\Upgrade::execute` |
+| 模块 `view/statics` 公开 URL | `PublicStaticUrl`（`TraitTemplate::buildModuleStaticPublicUrl`） |
+| 主题设计资源 URL / overlay 前缀 | `TraitTemplate::resolvePublicThemeNamespace()` → `PublicThemeNamespace` |
+| 模块 `view/statics` / `view/theme` 发布目标 | `Deploy\Upgrade::execute`（flat + overlay 双写） |
 | 按请求即时补发 `/static` 资源 | `ThemeResourceGateway::publishForRequestPath` |
 | 主题静态命名空间解析 | `ThemeStaticNamespaceService::resolvePublicThemePath`（委托 `tryResolve`） |
 | 设计覆盖搬迁 | `theme:upgrade`（`Theme\Console\Theme\Upgrade`） |

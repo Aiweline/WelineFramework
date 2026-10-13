@@ -13,7 +13,6 @@ namespace Weline\Framework\View\test;
 
 use Weline\Admin\Controller\Index;
 use Weline\Framework\App\Debug;
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Test\TestCore;
 use Weline\Framework\View\Template;
@@ -38,19 +37,13 @@ class TemplateTest extends TestCore
         $res = $this->template->tmp_replace($string);
         // 建议不要在单元测试中直接dd($res)，可以用断言或输出
         self::assertNotEmpty($res);
-        if (defined('DEV') && DEV) {
-            self::assertEquals(
-                '/Weline/Framework/view/statics/1.png',
-                $this->template->fetchTagSource('statics', 'Weline_Framework::1.png')
-            );
-            return;
+        $url = (string)$this->template->fetchTagSource('statics', 'Weline_Framework::1.png');
+        $pathOnly = preg_replace('#\?v=.*$#', '', $url);
+        if (\Weline\Framework\Deploy\DeployPublicUrlMode::useProduction()) {
+            self::assertEquals('/static/Weline/Framework/1.png', $pathOnly);
+        } else {
+            self::assertEquals('/Weline/Framework/view/statics/1.png', $pathOnly);
         }
-        $theme = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
-        $theme = str_replace('\\', '/', $theme);
-        self::assertEquals(
-            '/static/' . $theme . '/Weline/Framework/view/statics/1.png',
-            $this->template->fetchTagSource('statics', 'Weline_Framework::1.png')
-        );
 
     }
 }

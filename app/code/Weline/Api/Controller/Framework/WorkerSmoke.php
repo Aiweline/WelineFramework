@@ -6,6 +6,7 @@ namespace Weline\Api\Controller\Framework;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Response;
+use Weline\Framework\View\PublicStaticUrl;
 
 class WorkerSmoke extends FrontendController
 {
@@ -25,12 +26,12 @@ class WorkerSmoke extends FrontendController
             'runtime' => [
                 'env' => ['WELINE_ENV' => 'DEV', 'DEV' => true, 'PROD' => false],
                 'area' => 'frontend',
-                'modulesBaseUrl' => '/Weline/Frontend/view/statics/js/weline-api',
+                'modulesBaseUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api'),
                 'assetVersion' => 'dev-smoke',
                 'deployVersion' => 'dev',
                 'workerBuildId' => 'dev-smoke',
                 'api' => [
-                    'workerUrl' => '/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                    'workerUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api-worker.js'),
                     'endpoint' => $endpoint,
                     'queryBinUrl' => $endpoint,
                     'requestTimeoutMs' => 4000,

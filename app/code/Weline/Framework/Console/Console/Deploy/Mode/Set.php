@@ -110,8 +110,19 @@ class Set extends CommandAbstract
         $cacheManagerConsole->execute([], ['skip_view_compile' => true]);
         switch ($type) {
             case 'prod':
+                // Persist env.php BEFORE staging bake so child CLI/workers re-reading
+                // config see prod. This process still has define-once DEV=true — TraitTemplate
+                // must honor DeployStagingSession::forcesProductionPublicUrls() for URLs.
+                if (!$this->persistDeployMode('prod')) {
+                    $this->printer->error('╮(๑•́ ₃•̀๑)╭ 部署模式设置错误：prod');
+                    return;
+                }
                 $this->deployProdViaStaging();
-                break;
+                // Long-lived WLS workers keep define-once DEV/PROD until reload;
+                // without this, storefront keeps emitting /Weline/... module static URLs.
+                $this->reloadPersistentWorkersAfterModeSet('prod');
+                $this->printer->success('（●´∀｀）♪ 当前部署模式：prod');
+                return;
             case 'dev':
                 $this->printer->note('正在删除模组模板编译目录...');
                 $this->cleanTplComDir();
@@ -124,9 +135,48 @@ class Set extends CommandAbstract
                 return;
         }
         if ($this->persistDeployMode($type)) {
+            if ($type === 'dev') {
+                $this->reloadPersistentWorkersAfterModeSet('dev');
+            }
             $this->printer->success('（●´∀｀）♪ 当前部署模式：' . $type);
         } else {
             $this->printer->error('╮(๑•́ ₃•̀๑)╭ 部署模式设置错误：' . $type);
+        }
+    }
+
+    /**
+     * Rebind DEV/PROD in persistent workers after env.php deploy flip.
+     * Soft-depends on Weline_Server; no-op when Server/CLI reload unavailable.
+     */
+    private function reloadPersistentWorkersAfterModeSet(string $mode): void
+    {
+        $bin = \escapeshellarg(PHP_BINARY);
+        $cli = \escapeshellarg(rtrim((string)\BP, '/\\') . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'w');
+        $this->printer->note(__(
+            '正在重载持久 Worker 以绑定新的部署常量（mode=%{mode}）…',
+            ['mode' => $mode],
+        ));
+        try {
+            $result = $this->system->exec($bin . ' ' . $cli . ' server:reload -n');
+            $code = \is_array($result) ? (int)($result['return_vars'] ?? 1) : 1;
+            $output = '';
+            if (\is_array($result) && isset($result['output']) && \is_array($result['output'])) {
+                $output = \trim(\implode("\n", \array_map('strval', $result['output'])));
+            }
+            if ($output !== '') {
+                $this->printer->note($output);
+            }
+            if ($code !== 0) {
+                $this->printer->warning(__(
+                    'server:reload 退出码 %{code}；请手动执行 php bin/w server:reload，否则店面可能仍输出模块前缀静态 URL。',
+                    ['code' => (string)$code],
+                ));
+            }
+        } catch (\Throwable $error) {
+            $this->printer->warning(__(
+                'server:reload 未完成（%{msg}）；请手动执行 php bin/w server:reload，否则店面可能仍输出模块前缀静态 URL。',
+                ['msg' => $error->getMessage()],
+            ));
         }
     }
 

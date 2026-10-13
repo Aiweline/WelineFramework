@@ -9,7 +9,6 @@
 
 namespace Weline\Framework\View;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Test\TestCore;
 
 class TemplateTest extends TestCore
@@ -21,12 +20,11 @@ class TemplateTest extends TestCore
         $content = $template->fetchTagSource(
             \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
             trim("Weline_Admin::/css/index.css"));
-        if (DEV) {
-            self::assertEquals('/Weline/Admin/view/statics/css/index.css', $content, '解析静态资源');
+        $pathOnly = preg_replace('#\?v=.*$#', '', (string)$content);
+        if (\Weline\Framework\Deploy\DeployPublicUrlMode::useProduction()) {
+            self::assertEquals('/static/Weline/Admin/css/index.css', $pathOnly, '生产：模块静态主路径为 Upgrade flat');
         } else {
-            $theme = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
-            $theme = str_replace('\\', '/', $theme);
-            self::assertEquals('/static/' . $theme . '/Weline/Admin/view/statics/css/index.css', $content, '解析静态资源');
+            self::assertEquals('/Weline/Admin/view/statics/css/index.css', $pathOnly, '开发：模块前缀路径');
         }
     }
 
@@ -40,19 +38,17 @@ class TemplateTest extends TestCore
             $path
         );
         $pathOnly = preg_replace('#\?v=.*$#', '', $content);
-        if (DEV) {
+        if (\Weline\Framework\Deploy\DeployPublicUrlMode::useProduction()) {
+            self::assertEquals(
+                '/static/Weline/Theme/ui/weline-foundation.css',
+                $pathOnly,
+                '生产：模块 UI 静态主路径为 Upgrade flat'
+            );
+        } else {
             self::assertEquals(
                 '/Weline/Theme/view/statics/ui/weline-foundation.css',
                 $pathOnly,
-                '开发环境：UI 资源应使用模块 statics 路径'
-            );
-        } else {
-            $theme = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
-            $theme = str_replace('\\', '/', $theme);
-            self::assertEquals(
-                '/static/' . $theme . '/Weline/Theme/view/statics/ui/weline-foundation.css',
-                $pathOnly,
-                '生产环境：statics 路径应使用 /static/{theme}/Weline/{Module}/view/statics/...'
+                '开发：UI 资源应使用模块 statics 路径'
             );
         }
     }

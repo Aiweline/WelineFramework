@@ -50,8 +50,7 @@ final class StorefrontImagePlaceholderTest extends TestCase
     {
         $source = file_get_contents(dirname(__DIR__, 3) . '/Helper/StorefrontImagePlaceholder.php');
         self::assertIsString($source);
-        self::assertStringContainsString('PublicThemeNamespace::resolve', $source);
-        self::assertStringContainsString("\$cfg['path']", $source);
+        self::assertStringContainsString('PublicStaticUrl::fromDevWebPath', $source);
         self::assertStringNotContainsString("\$theme = 'default'", $source);
         self::assertStringNotContainsString("\$cfg['frontend']", $source);
     }

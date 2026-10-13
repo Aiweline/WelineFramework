@@ -47,7 +47,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
      */
     private const SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE = 'need_backend_verification_code';
     private const SESSION_KEY_BACKEND_VERIFICATION_CODE = 'backend_verification_code';
-    private const DEFAULT_LOGIN_BG_URL = '/Weline/Admin/view/statics/assets/images/login-lotus-bg.png';
+    private const DEFAULT_LOGIN_BG_PATH = '/Weline/Admin/view/statics/assets/images/login-lotus-bg.png';
     private const DEFAULT_LOGIN_LOGO_URL = '/Weline/Theme/view/theme/backend/assets/images/theme/logo.png';
     protected ?string $layoutType = null;
     
@@ -184,7 +184,9 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             }
             $loginBg = ltrim($loginBg, '/');
         }
-        $loginBgUrl = $loginBg !== '' ? '/pub/media/' . $loginBg : self::DEFAULT_LOGIN_BG_URL;
+        $loginBgUrl = $loginBg !== ''
+            ? '/pub/media/' . $loginBg
+            : \Weline\Framework\View\PublicStaticUrl::fromDevWebPath(self::DEFAULT_LOGIN_BG_PATH);
         $this->assign('login_bg_url', $loginBgUrl);
         $storefrontUrl = '';
         $storefrontProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)

@@ -25,6 +25,15 @@ if ($websiteSelectDisplay === '' && $websiteSelectValue !== '') {
 $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 $createWebsiteSelectValue = '0';
 $createWebsiteSelectDisplay = $websiteSelectDisplay;
+$analyticsRuntimeConfigJson = \json_encode([
+    'modulesConfigUrl' => \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/base/weline.modules.js'),
+    'modulesBaseUrl' => \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api'),
+    'api' => [
+        'workerUrl' => \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api-worker.js'),
+        'endpoint' => '/api/framework/query-bin',
+        'queryBinUrl' => '/api/framework/query-bin',
+    ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN" data-w-area="frontend" data-theme-preference="system" data-theme="light">
@@ -36,7 +45,7 @@ $createWebsiteSelectDisplay = $websiteSelectDisplay;
     <css>Weline_Theme::ui/weline-frontend.css</css>
     <css>Weline_Visitor::css/tokens/analytics.css</css>
     <css>Weline_Visitor::css/analytics-panel.css</css>
-    <script type="application/json" data-weline-runtime-config>{"modulesConfigUrl":"/Weline/Frontend/view/statics/base/weline.modules.js","modulesBaseUrl":"/Weline/Frontend/view/statics/js/weline-api","api":{"workerUrl":"/Weline/Frontend/view/statics/js/weline-api-worker.js","endpoint":"/api/framework/query-bin","queryBinUrl":"/api/framework/query-bin"}}</script>
+    <script type="application/json" data-weline-runtime-config><?= $analyticsRuntimeConfigJson ?></script>
     <js>Weline_Frontend::js/runtime.js</js>
     <js>Weline_Frontend::js/weline-api-business.js</js>
     <js>Weline_Frontend::js/weline.js</js>

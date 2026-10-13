@@ -35,7 +35,12 @@ final class TextileHeritageWidgetContractTest extends TestCase
         self::assertSame(ThemeTextileHeritageCatalog::widgetConfig(), TextileHeritageCatalog::widgetConfig());
 
         foreach (TextileHeritageCatalog::items() as $item) {
-            self::assertStringStartsWith('/Weline/Theme/view/statics/images/textile-heritage/', (string)$item['image']);
+            $image = (string)$item['image'];
+            if (\Weline\Framework\Deploy\DeployPublicUrlMode::useProduction()) {
+                self::assertStringStartsWith('/static/Weline/Theme/images/textile-heritage/', $image);
+            } else {
+                self::assertStringStartsWith('/Weline/Theme/view/statics/images/textile-heritage/', $image);
+            }
             self::assertDoesNotMatchRegularExpression('/\.svg(?:$|\?)/i', (string)$item['image']);
             self::assertStringStartsWith('https://', (string)$item['source_url']);
             self::assertNotSame('', trim((string)$item['license']));

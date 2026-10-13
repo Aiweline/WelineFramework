@@ -95,8 +95,16 @@
         || '';
 
     const SCOPE_BOOTSTRAP_OPAQUE = /^[A-Za-z0-9_-]{43}$/;
+    /** Hole-punch must not hang forever; queued QueryBin calls wait on this Promise. */
+    const SCOPE_HOLE_PUNCH_TIMEOUT_MS = 12000;
+    /** Soft tip cooldown while callers wait for Scope token (avoid spam on filter clicks). */
+    const SCOPE_WAIT_TIP_COOLDOWN_MS = 4500;
+    /** Delay before tip so fast hole-punch does not flash. */
+    const SCOPE_WAIT_TIP_DELAY_MS = 280;
     let holePunchBootstrapId = '';
     let holePunchInFlight = null;
+    let scopeWaitTipAt = 0;
+    let scopeWaitTipTimer = null;
 
     const readScopeBootstrapIdFromMeta = () => {
         const nodes = document.querySelectorAll('meta[name="weline-worker-scope-bootstrap"]');
@@ -132,6 +140,13 @@
      * Anonymous FPC / generated/html pages have no meta stamp. Hole-punch
      * Host+path once; SharedWorker indexes by URL identity key.
      */
+    const clearScopeWaitTipSchedule = () => {
+        if (scopeWaitTipTimer) {
+            window.clearTimeout(scopeWaitTipTimer);
+            scopeWaitTipTimer = null;
+        }
+    };
+
     const ensureScopeBootstrapHolePunch = () => {
         const existing = readScopeBootstrapId();
         if (existing) {
@@ -141,7 +156,18 @@
             return holePunchInFlight;
         }
         const path = String((window.location && window.location.pathname) || '/');
-        holePunchInFlight = fetch('/api/frontend/scope-bootstrap', {
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        let timeoutId = 0;
+        if (controller) {
+            timeoutId = window.setTimeout(() => {
+                try {
+                    controller.abort();
+                } catch (_abortError) {
+                    /* ignore */
+                }
+            }, SCOPE_HOLE_PUNCH_TIMEOUT_MS);
+        }
+        const fetchOptions = {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
@@ -149,7 +175,11 @@
                 'Accept': 'application/json',
             },
             body: JSON.stringify({ path: path }),
-        }).then((res) => {
+        };
+        if (controller) {
+            fetchOptions.signal = controller.signal;
+        }
+        holePunchInFlight = fetch('/api/frontend/scope-bootstrap', fetchOptions).then((res) => {
             if (res.status === 204) {
                 return '';
             }
@@ -194,7 +224,18 @@
                 return id;
             }
             return '';
+        }).catch((error) => {
+            if (error && (error.name === 'AbortError' || error.code === 'ABORT_ERR')) {
+                const timedOut = new Error('[Weline.Api] Scope hole-punch timed out.');
+                timedOut.code = 'scope_bootstrap_timeout';
+                timedOut.status = 0;
+                throw timedOut;
+            }
+            throw error;
         }).finally(() => {
+            if (timeoutId) {
+                window.clearTimeout(timeoutId);
+            }
             holePunchInFlight = null;
         });
         return holePunchInFlight;
@@ -377,9 +418,7 @@
                 /* fallback below */
             }
         }
-        return isDevMode()
-            ? '/Weline/Frontend/view/statics/js/weline-dev-console.js'
-            : '/static/Weline/Frontend/js/weline-dev-console.js';
+        return (function(d){try{var c=JSON.parse((document.getElementById('weline-frontend-runtime-config')||document.getElementById('weline-backend-runtime-config')||{}).textContent||'{}');if(c&&c.env&&c.env.useProductionPublicUrls){var m=String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);if(m)return'/static/'+m[1]+'/'+m[2]+'/'+m[3];}}catch(e){}return d;}('/Weline/Frontend/view/statics/js/weline-dev-console.js'));
     };
 
     const loadDevConsole = () => {
@@ -727,8 +766,20 @@
             },
             deploy_reload_required: {
                 title: i18nText('站点已更新'),
-                message: i18nText('检测到新版本部署，正在刷新页面以继续。'),
+                message: i18nText('店面部署版本已变更。请重新加载页面以继续。'),
                 autoReload: true,
+            },
+            scope_bootstrap_timeout: {
+                title: i18nText('商城范围未就绪'),
+                message: i18nText('服务器繁忙或维护中，请稍后重试。'),
+            },
+            scope_bootstrap_hole_punch_failed: {
+                title: i18nText('商城范围未就绪'),
+                message: i18nText('请求失败，请稍后重试。'),
+            },
+            scope_bootstrap_rate_limited: {
+                title: i18nText('商城范围未就绪'),
+                message: i18nText('请稍等片刻...'),
             },
         };
         const byStatus = {
@@ -1171,10 +1222,6 @@
     };
 
     const getDefaultWorkerUrl = () => {
-        const isDev = isDevMode();
-        if (isDev) {
-            return '/Weline/Frontend/view/statics/js/weline-api-worker.js';
-        }
         if (window.Weline && window.Weline.staticResourceResolver) {
             try {
                 return window.Weline.staticResourceResolver.resolve('Weline_Frontend::js/weline-api-worker.js');
@@ -1182,7 +1229,22 @@
                 /* fall through */
             }
         }
-        return '/static/Weline/Frontend/js/weline-api-worker.js';
+        // Align with PublicStaticUrl / DeployPublicUrlMode (staging may force public under DEV).
+        return (function (d) {
+            try {
+                var c = JSON.parse((document.getElementById('weline-frontend-runtime-config') || document.getElementById('weline-backend-runtime-config') || {}).textContent || '{}');
+                if (c && c.api && c.api.workerUrl) {
+                    return String(c.api.workerUrl);
+                }
+                if (c && c.env && c.env.useProductionPublicUrls) {
+                    var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
+                    if (m) {
+                        return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                    }
+                }
+            } catch (e) { /* keep DEV path */ }
+            return d;
+        })('/Weline/Frontend/view/statics/js/weline-api-worker.js');
     };
 
     const cloneWorkerValue = (value, depth = 0) => {
@@ -1279,8 +1341,25 @@
 
         config.workerUrl = withDevCacheBust(sameOriginUrl(apiConfig.workerUrl || getDefaultWorkerUrl(), getDefaultWorkerUrl()));
         config.endpoint = sameOriginUrl(apiConfig.endpoint || apiConfig.queryBinUrl || '/api/framework/query-bin', '/api/framework/query-bin');
-        config.deployVersion = String(apiConfig.deployVersion || apiConfig.deploy_version || config.deployVersion || 'dev');
-        config.workerBuildId = String(apiConfig.workerBuildId || apiConfig.worker_build_id || config.workerBuildId || 'dev');
+        // deployVersion / workerBuildId live on the runtime root (see header/base.phtml),
+        // not only under config.api — reading api-only left clients stuck on literal "dev"
+        // and QueryBin 409'd every filteredListingPage when Env had a real stamp.
+        config.deployVersion = String(
+            apiConfig.deployVersion
+            || apiConfig.deploy_version
+            || runtimeConfig.deployVersion
+            || runtimeConfig.deploy_version
+            || config.deployVersion
+            || 'dev'
+        );
+        config.workerBuildId = String(
+            apiConfig.workerBuildId
+            || apiConfig.worker_build_id
+            || runtimeConfig.workerBuildId
+            || runtimeConfig.worker_build_id
+            || config.workerBuildId
+            || 'dev'
+        );
         config.area = String(apiConfig.area || apiConfig.context || config.area || '');
         config.defaultCurrency = normalizeCurrencyCode(
             apiConfig.defaultCurrency || apiConfig.default_currency || runtimeConfig.defaultCurrency || runtimeConfig.default_currency || 'CNY'
@@ -2209,6 +2288,7 @@
                     });
                 }).then((result) => {
                     this.scopeWarmupComplete = true;
+                    clearScopeWaitTipSchedule();
                     return result;
                 }).finally(() => {
                     if (!this.scopeWarmupComplete) {
@@ -2217,6 +2297,89 @@
                 });
             }
             return this.scopeWarmupPromise;
+        }
+
+        /**
+         * Soft tip while QueryBin callers wait for Scope token — not an error toast.
+         * Coalesced + delayed so filter spam and fast hole-punch stay quiet.
+         */
+        notifyScopeBootstrapWaiting() {
+            if (this.scopeWarmupComplete) {
+                return;
+            }
+            if (scopeWaitTipTimer) {
+                return;
+            }
+            scopeWaitTipTimer = window.setTimeout(() => {
+                scopeWaitTipTimer = null;
+                if (this.scopeWarmupComplete) {
+                    return;
+                }
+                const now = Date.now();
+                if (now - scopeWaitTipAt < SCOPE_WAIT_TIP_COOLDOWN_MS) {
+                    return;
+                }
+                scopeWaitTipAt = now;
+                const message = i18nText('请稍等片刻...');
+                let shown = false;
+                try {
+                    const Toast = this.resolveToastComponent();
+                    if (Toast && typeof Toast.info === 'function') {
+                        Toast.info(message, { duration: 2800 });
+                        shown = true;
+                    } else if (Toast && typeof Toast.show === 'function') {
+                        Toast.show(message, { type: 'info', tone: 'info', duration: 2800 });
+                        shown = true;
+                    }
+                } catch (_toastError) {
+                    /* tip is best-effort */
+                }
+                // Theme notice may be unavailable early in boot — still surface a soft tip.
+                if (!shown || !document.querySelector('[data-theme-notice-region] .weline-notice-toast, #weline-api-wait-tip')) {
+                    this.renderScopeWaitTip(message);
+                }
+            }, SCOPE_WAIT_TIP_DELAY_MS);
+        }
+
+        renderScopeWaitTip(message) {
+            if (!document || !document.body) {
+                return;
+            }
+            let el = document.getElementById('weline-api-wait-tip');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'weline-api-wait-tip';
+                el.setAttribute('role', 'status');
+                el.setAttribute('aria-live', 'polite');
+                el.style.cssText = [
+                    'position:fixed',
+                    'right:1rem',
+                    'bottom:1rem',
+                    'z-index:2147483646',
+                    'max-width:min(22rem,calc(100vw - 2rem))',
+                    'border-radius:.75rem',
+                    'background:#0f1111',
+                    'color:#fafafa',
+                    'box-shadow:0 12px 32px rgba(15,23,42,.18)',
+                    'font:600 14px/1.45 sans-serif',
+                    'padding:.85rem 1rem',
+                ].join(';');
+                document.body.appendChild(el);
+            }
+            el.textContent = message;
+            el.style.opacity = '1';
+            window.setTimeout(() => {
+                if (!el || !el.parentNode) {
+                    return;
+                }
+                el.style.transition = 'opacity .18s ease';
+                el.style.opacity = '0';
+                window.setTimeout(() => {
+                    if (el && el.parentNode) {
+                        el.remove();
+                    }
+                }, 220);
+            }, 2800);
         }
 
         isTransientServiceError(error) {
@@ -2265,6 +2428,10 @@
         dispatchToWorker(payload) {
             if (payload && payload.type !== 'scope-bootstrap') {
                 // Hole-punch (or legacy meta) before QueryBin so anonymous FPC pages work.
+                // While token is still in flight, queue the call and tip "请稍等片刻" — do not error.
+                if (!this.scopeWarmupComplete) {
+                    this.notifyScopeBootstrapWaiting();
+                }
                 return this.warmup().then(() => this.sendToWorker(payload));
             }
             return this.sendToWorker(payload);
@@ -2936,21 +3103,19 @@
 
     window.WelineApiModule = ApiModule;
     window.Weline = window.Weline || {};
-    if (!window.Weline.Api || window.Weline.Api.__fallback === true) {
-        window.Weline.Api = ApiModule;
-    }
+    // Always promote — stub must not remain if full module loaded (order races with weline.js).
+    window.Weline.Api = ApiModule;
 
+    // Eager warmup: meta stamp OR hole-punch. Do not wait for the first filter click.
     try {
-        if (readScopeBootstrapId() !== '') {
-            ApiModule.bootstrapScope().catch((error) => {
-                window.dispatchEvent(new CustomEvent('weline:scope-bootstrap-failed', {
-                    detail: {
-                        code: error && error.code ? error.code : 'scope_bootstrap_invalid',
-                        status: error && error.status ? error.status : 0,
-                    },
-                }));
-            });
-        }
+        ApiModule.bootstrapScope().catch((error) => {
+            window.dispatchEvent(new CustomEvent('weline:scope-bootstrap-failed', {
+                detail: {
+                    code: error && error.code ? error.code : 'scope_bootstrap_invalid',
+                    status: error && error.status ? error.status : 0,
+                },
+            }));
+        });
     } catch (error) {
         window.dispatchEvent(new CustomEvent('weline:scope-bootstrap-failed', {
             detail: {

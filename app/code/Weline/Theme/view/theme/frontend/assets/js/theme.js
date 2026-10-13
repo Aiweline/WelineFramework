@@ -2907,7 +2907,18 @@
             return;
         }
         var src = (window.__WelineThemeConfig && window.__WelineThemeConfig.wScopeUrl)
-            || '/Weline/FileManager/view/statics/js/w-scope.js';
+            || (function (d) {
+                try {
+                    var c = JSON.parse((document.getElementById('weline-frontend-runtime-config') || document.getElementById('weline-backend-runtime-config') || {}).textContent || '{}');
+                    if (c && c.env && c.env.useProductionPublicUrls) {
+                        var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
+                        if (m) {
+                            return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                        }
+                    }
+                } catch (e) { /* keep DEV path */ }
+                return d;
+            })('/Weline/FileManager/view/statics/js/w-scope.js');
         var s = document.createElement('script');
         s.src = src;
         s.async = false;
@@ -2936,9 +2947,7 @@
 
     (function preLoadScopeBootstrapApi() {
         const preload = () => {
-            if (!document.querySelector('meta[name="weline-worker-scope-bootstrap"]')) {
-                return;
-            }
+            // Meta stamp OR hole-punch — do not wait for first filter click on FPC shells.
             Weline.load('api').then((apiModule) => {
                 if (apiModule && typeof apiModule.bootstrapScope === 'function') {
                     return apiModule.bootstrapScope();
@@ -2950,9 +2959,7 @@
             });
         };
 
-        if (document.querySelector('meta[name="weline-worker-scope-bootstrap"]')) {
-            preload();
-        } else if (document.readyState === 'loading') {
+        if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', preload, { once: true });
         } else {
             setTimeout(preload, 0);

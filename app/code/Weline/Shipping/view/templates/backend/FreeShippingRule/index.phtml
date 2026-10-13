@@ -136,7 +136,7 @@ $sectionUrl = static function (string $section) use ($scopeQueryBase, $indexBase
                     searchable="true"
                     name="free_rule_region_picker"
                 />
-                <script src="/Weline/Theme/view/statics/js/address.js?v=20260909-free1" data-shipping-address-direct data-no-extract="true" onload="window.__welineShippingAddressReady&&window.__welineShippingAddressReady()"></script>
+                <script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/js/address.js?v=20260909-free1'), ENT_QUOTES) ?>" data-shipping-address-direct data-no-extract="true" onload="window.__welineShippingAddressReady&&window.__welineShippingAddressReady()"></script>
                 <script>
                 (function () {
                     var hidden = document.getElementById('free_region_selection');

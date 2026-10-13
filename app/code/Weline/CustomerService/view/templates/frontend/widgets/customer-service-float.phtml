@@ -112,6 +112,10 @@ $modernScreenshotPath = $customerServiceStaticDir . DIRECTORY_SEPARATOR . 'js' .
 $modernScreenshotVersion = (string) ((int) (@filemtime($modernScreenshotPath) ?: time()));
 $html2canvasHref = (string)$this->fetchTagSource('statics', 'Weline_CustomerService::js/vendor/html2canvas.min.js');
 $modernScreenshotHref = (string)$this->fetchTagSource('statics', 'Weline_CustomerService::js/vendor/modern-screenshot.js');
+// Fallback <script src> must use the same public URL semantics as @static (prod → /static/...).
+$customerServiceJsHref = (string)$this->fetchTagSource('statics', 'Weline_CustomerService::js/customer-service.js');
+$customerServiceJsHref = preg_replace('/[?&]v=[^&]*/', '', $customerServiceJsHref) ?: $customerServiceJsHref;
+$customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
 ?>
 <div id="customer-service-widget" class="customer-service-widget customer-service-widget--amazon" data-editor-interactive>
     <div id="cs-chat-button" class="cs-chat-button" data-cs-toggle-chat>
@@ -317,6 +321,7 @@ function initCustomerServiceWidget() {
     'use strict';
 
     var customerServiceJsVersion = <?= json_encode($customerServiceJsVersion, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var customerServiceJsHref = <?= json_encode($customerServiceJsHref, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var customerServiceScriptLoading = false;
     var customerServiceOpenAfterLoad = false;
 
@@ -345,8 +350,9 @@ function initCustomerServiceWidget() {
             var script = document.createElement('script');
             script.async = true;
             script.dataset.welineCsFallback = '1';
-            script.src = '/Weline/CustomerService/view/statics/js/customer-service.js?v='
-                + encodeURIComponent(customerServiceJsVersion);
+            script.src = customerServiceJsHref
+                + (customerServiceJsHref.indexOf('?') >= 0 ? '&' : '?')
+                + 'v=' + encodeURIComponent(customerServiceJsVersion);
             script.onload = function () { resolve(); };
             script.onerror = function () {
                 reject(new Error('[CustomerService] fallback script load failed'));

@@ -93,7 +93,9 @@ $placeholder = '';
 try {
     $placeholder = \Weline\Theme\Helper\StorefrontImagePlaceholder::url();
 } catch (\Throwable) {
-    $placeholder = '/Weline/Theme/view/statics/images/storefront-placeholder/default.svg';
+    $placeholder = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath(
+        '/Weline/Theme/view/statics/images/storefront-placeholder/default.svg'
+    );
 }
 // hero-slider 未声明 title/subtitle/button_text 参数；共享 Template 上的页面 title
 //（如主题名 Weline_Theme）不得当作轮播文案，否则 slides 为空时会落成单页半成品。

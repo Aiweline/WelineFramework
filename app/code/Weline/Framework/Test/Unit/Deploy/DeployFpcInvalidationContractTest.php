@@ -55,6 +55,10 @@ final class DeployFpcInvalidationContractTest extends TestCase
         self::assertStringContainsString('afterModeSetProd', $src);
         self::assertStringContainsString('DATA_SKIP_INVALIDATION', $src);
         self::assertStringContainsString('prod_after', $src);
+        $helper = (string)file_get_contents(
+            BP . 'app/code/Weline/Framework/Deploy/DeployFpcInvalidation.php'
+        );
+        self::assertStringContainsString('FpcStaticDiskStore::purgeAllLive', $helper);
     }
 
     public function testUpgradeCallsHelperUnlessSkipped(): void

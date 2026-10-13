@@ -1582,7 +1582,33 @@
                     if (window.Weline && window.Weline.Theme && typeof window.Weline.Theme.storefrontImagePlaceholder === 'function') {
                         return window.Weline.Theme.storefrontImagePlaceholder(seed);
                     }
-                    return '/Weline/Theme/view/statics/images/storefront-placeholder/default.svg';
+                    try {
+                        var cfgNode = document.getElementById('weline-frontend-runtime-config');
+                        if (cfgNode && cfgNode.textContent) {
+                            var cfg = JSON.parse(cfgNode.textContent);
+                            if (cfg && cfg.storefrontPlaceholderUrl) {
+                                return String(cfg.storefrontPlaceholderUrl);
+                            }
+                        }
+                    } catch (err) { /* fall through */ }
+                    return (function (d) {
+                        try {
+                            var cfgNode = document.getElementById('weline-frontend-runtime-config');
+                            if (cfgNode && cfgNode.textContent) {
+                                var cfg = JSON.parse(cfgNode.textContent);
+                                if (cfg && cfg.storefrontPlaceholderUrl) {
+                                    return String(cfg.storefrontPlaceholderUrl);
+                                }
+                                if (cfg && cfg.env && cfg.env.useProductionPublicUrls) {
+                                    var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
+                                    if (m) {
+                                        return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                                    }
+                                }
+                            }
+                        } catch (e) { /* keep DEV path */ }
+                        return d;
+                    })('/Weline/Theme/view/statics/images/storefront-placeholder/default.svg');
                 }
 
                 function appendLeafTab(label, href, description, categoryImage) {
@@ -2007,6 +2033,130 @@
         }
     }
 
+    /**
+     * plan_id lazy-hamburger-nav · hydrateSidebarCategoryTreeFromNav
+     * 从横向 #categories-list / [data-testid=header-category-menu] 提取一级项，
+     * 构建进 #categories-sidebar-list。禁止 BinQuery / catalog / navTree 二次拉树。
+     * 幂等：data-sidebar-nav-lazy=ready 后不再灌；nav 空则可见空态。
+     */
+    function hydrateSidebarCategoryTreeFromNav(sidebarRoot) {
+        var list = (sidebarRoot && sidebarRoot.querySelector)
+            ? sidebarRoot.querySelector('#categories-sidebar-list')
+            : document.getElementById('categories-sidebar-list');
+        if (!list) {
+            return false;
+        }
+        var lazyState = (list.getAttribute('data-sidebar-nav-lazy') || '').trim();
+        if (lazyState === 'ready') {
+            return true;
+        }
+
+        var sourceList = document.getElementById('categories-list');
+        if (!sourceList) {
+            var menu = document.querySelector('[data-testid="header-category-menu"], nav.header-category-menu, .header-category-menu-widget nav.categories-nav');
+            sourceList = menu ? menu.querySelector('.categories-list, #categories-list') : null;
+        }
+        if (!sourceList) {
+            list.innerHTML = '';
+            var missing = document.createElement('li');
+            missing.className = 'sidebar-category-item sidebar-category-item--empty';
+            missing.setAttribute('data-sidebar-nav-empty', 'nav-missing');
+            missing.textContent = (labels.navEmpty || labels.empty || '暂无分类');
+            list.appendChild(missing);
+            list.setAttribute('data-sidebar-nav-lazy', 'ready');
+            return true;
+        }
+
+        // 权威源：#categories-list 下直接子 .category-item（含 CSS 隐藏 / overflow hidden）；
+        // 跳过 .categories-overflow-wrapper。项仍在 DOM，不因 display:none 卸出。
+        var sourceItems = Array.prototype.slice.call(
+            sourceList.querySelectorAll(':scope > .category-item')
+        );
+
+        list.innerHTML = '';
+        if (!sourceItems.length) {
+            var empty = document.createElement('li');
+            empty.className = 'sidebar-category-item sidebar-category-item--empty';
+            empty.setAttribute('data-sidebar-nav-empty', 'nav-empty');
+            empty.textContent = (labels.navEmpty || labels.empty || '暂无分类');
+            list.appendChild(empty);
+            list.setAttribute('data-sidebar-nav-lazy', 'ready');
+            return true;
+        }
+
+        sourceItems.forEach(function(item) {
+            var link = item.querySelector('a.category-link, a[href]');
+            if (!link) {
+                return;
+            }
+            var href = (link.getAttribute('href') || '').trim() || '#';
+            var title = (link.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!title) {
+                return;
+            }
+            var descRaw = (link.getAttribute('data-category-description')
+                || item.getAttribute('data-category-description')
+                || '').trim();
+            var image = (item.getAttribute('data-category-image') || '').trim();
+            var hasChildren = item.classList.contains('has-children')
+                || item.classList.contains('category-item--mega');
+            var isCatalog = !!image
+                || /\/category\//i.test(href)
+                || /^category/i.test(String(item.getAttribute('data-mega-panel-id') || ''));
+            var desc = descRaw || (isCatalog ? formatBrowseCategoryDesc(title) : '');
+            var itemClass = isCatalog
+                ? 'sidebar-category-item'
+                : 'sidebar-category-item sidebar-category-item--page';
+
+            var mediaHtml;
+            if (isCatalog && image) {
+                mediaHtml = '<span class="sidebar-category-card__media">'
+                    + '<img data-sidebar-img-src="' + escapeHeaderHtml(image) + '"'
+                    + ' alt="' + escapeHeaderHtml(title) + '" loading="lazy" width="48" height="48"'
+                    + ' data-layout-exempt="1"></span>';
+            } else if (isCatalog) {
+                mediaHtml = '<span class="sidebar-category-card__media sidebar-category-card__media--icon" aria-hidden="true">'
+                    + '<i class="fas fa-tags"></i></span>';
+            } else {
+                mediaHtml = '<span class="sidebar-category-card__media sidebar-category-card__media--icon" aria-hidden="true">'
+                    + '<i class="fas fa-store"></i></span>';
+            }
+
+            var bodyHtml = '<span class="sidebar-category-card__body">'
+                + '<span class="sidebar-category-card__title">' + escapeHeaderHtml(title) + '</span>'
+                + '<span class="sidebar-category-card__desc">' + escapeHeaderHtml(desc) + '</span>'
+                + '</span>';
+
+            var li = document.createElement('li');
+            if (hasChildren) {
+                li.className = itemClass + ' has-children sidebar-category-item--mega';
+                li.setAttribute('data-w-component', 'popover');
+                li.setAttribute('data-w-open-on', 'hover');
+                li.setAttribute('data-w-placement', 'right-start');
+                li.setAttribute('data-w-gap', '0');
+                li.setAttribute('data-sidebar-mega-source', href);
+                li.setAttribute('data-sidebar-mega-deferred', '1');
+                li.innerHTML = '<div class="sidebar-category-card sidebar-category-card--trigger'
+                    + (isCatalog ? '' : ' sidebar-category-card--page') + '"'
+                    + ' data-w-popover-trigger data-w-gap="0" aria-haspopup="dialog" aria-expanded="false">'
+                    + '<a class="sidebar-category-card__link" href="' + escapeHeaderHtml(href) + '">'
+                    + mediaHtml + bodyHtml + '</a>'
+                    + '<span class="sidebar-category-card__chevron" aria-hidden="true">▶</span>'
+                    + '</div>';
+            } else {
+                li.className = itemClass;
+                li.innerHTML = '<a class="sidebar-category-card sidebar-category-card--row'
+                    + (isCatalog ? '' : ' sidebar-category-card--page') + '"'
+                    + ' href="' + escapeHeaderHtml(href) + '">'
+                    + mediaHtml + bodyHtml + '</a>';
+            }
+            list.appendChild(li);
+        });
+
+        list.setAttribute('data-sidebar-nav-lazy', 'ready');
+        return true;
+    }
+
     function hydrateSidebarMegaPanels(root) {
         var scope = root || document;
         if (!scope || typeof scope.querySelectorAll !== 'function') {
@@ -2223,7 +2373,8 @@
             categoriesSidebar.setAttribute('aria-hidden', 'false');
             categoriesSidebarOverlay.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
-            // 抽屉打开后再赋分类图 src，并绑定内部 mega（右侧飞出）
+            // 首开：从横向 #categories-list DOM hydrate 侧栏整表（零网络），再 deferred 图 + mega
+            hydrateSidebarCategoryTreeFromNav(categoriesSidebar);
             hydrateSidebarDeferredImages(categoriesSidebar);
             hydrateSidebarMegaPanels(categoriesSidebar);
             bindHeaderMegaMenu(categoriesSidebar);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\View\PublicStaticUrl;
+
 /**
  * Canonical data for the reusable Textile Heritage widget.
  *
@@ -15,7 +17,16 @@ final class TextileHeritageCatalog
 {
     public const TITLE = '织艺谱系 · Textile Heritage';
 
+    /** DEV module-prefix path identity (contracts); runtime URLs use {@see imageBase()}. */
     public const IMAGE_BASE = '/Weline/Theme/view/statics/images/textile-heritage';
+
+    /**
+     * Root-relative image directory: DEV module path; Prod/staging Upgrade-flat /static/...
+     */
+    public static function imageBase(): string
+    {
+        return PublicStaticUrl::fromDevWebPath(self::IMAGE_BASE);
+    }
 
     /**
      * @return list<array{
@@ -26,7 +37,7 @@ final class TextileHeritageCatalog
      */
     public static function items(): array
     {
-        $base = self::IMAGE_BASE;
+        $base = self::imageBase();
 
         return [
             [

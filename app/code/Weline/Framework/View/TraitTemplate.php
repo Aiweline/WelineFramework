@@ -25,9 +25,9 @@ use Weline\Framework\View\Data\HtmlInterface;
 trait TraitTemplate
 {
     // 路径映射和物理编译目录必须同时迁移格式，避免映射仍指向旧编译产物。
-    // v8：在 v7 明文 scope 上增加「站点地址」维度（文档公开源 Host）；同站多绑定地址各自分区烘焙绝对 URL。
+    // v10：模块 STATICS 主 URL/磁盘根改 Upgrade flat（PublicStaticUrl）；主题 ns 仅服务 theme assets。
     // hooks 变更靠编译文件头 compile_id 原地失效覆盖，不再新开目录堆产物。
-    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v8-site-address-origin';
+    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v10-module-static-flat';
 
     /**
      * @DESC          # 读取页头代码
@@ -212,42 +212,18 @@ trait TraitTemplate
                 $this->viewCache->set($cache_key, $t_f);
                 break;
             case DataInterface::dir_type_STATICS:
-                // 静态 URL 不读写缓存，避免跨请求/环境读到错误 URL（key 若未含 BP/模块足够信息会串用）
+                // 静态 URL 不读写缓存；主路径权威 = PublicStaticUrl（Upgrade flat）。
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
-                # 第三方模组或当前模组
                 if ($module_name) {
-                    $modules = Env::getInstance()->getModuleList();
-                    if (isset($modules[$module_name]) && $module = $modules[$module_name]) {
-                        $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                        $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
-                        $t_f = str_replace($module_name . '::', '', $t_f);
-                    }
+                    $t_f = str_replace($module_name . '::', '', $t_f);
                 } else {
-                    // 没有指定模块时，使用当前请求模块的静态资源目录
-                    $current_module_name = $this->templateSourceModule()[0];
-                    $modules = Env::getInstance()->getModuleList();
-                    if (isset($modules[$current_module_name]) && $module = $modules[$current_module_name]) {
-                        $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                        $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $current_module_name);
-                    } else {
-                        $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS);
-                    }
+                    $module_name = $this->templateSourceModule()[0] ?? '';
                 }
-                $t_f = preg_replace('#^statics[/\\\\]+#', '', str_replace('\\', '/', $t_f));
-                $t_f = ltrim($t_f, '/');
-                $url_base = $this->getUrlPath($base_url_path);
-                if ($url_base === '' && $base_url_path !== '') {
-                    $name_for_base = $module_name ?? $this->templateSourceModule()[0];
-                    if ($name_for_base !== '') {
-                        $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/statics/';
-                        if (defined('PROD') && PROD) {
-                            $themePath = $this->resolvePublicThemeNamespace();
-                            $url_base = '/static/' . $themePath . '/' . ltrim($url_base, '/');
-                        }
-                        $url_base = rtrim($url_base, '/') . '/';
-                    }
-                }
-                $data = $url_base . $t_f;
+                $t_f = preg_replace('#^statics[/\\\\]+#', '', str_replace('\\', '/', (string)$t_f));
+                $t_f = ltrim((string)$t_f, '/');
+                $data = $module_name !== ''
+                    ? $this->buildModuleStaticPublicUrl($module_name, $t_f)
+                    : '';
                 break;
             default:
         }
@@ -293,44 +269,22 @@ trait TraitTemplate
             case DataInterface::dir_type_STATICS:
                 $dataIsUrl = true;
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
-                # 第三方模组或当前模组
                 if ($module_name) {
                     $modules = Env::getInstance()->getModuleList();
-                    if (isset($modules[$module_name]) && $module = $modules[$module_name]) {
-                        $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                        $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
-                        $t_f = str_replace($module_name . '::', '', $t_f);
-                    } else {
+                    if (!isset($modules[$module_name])) {
                         throw new Exception(__('资源不存在：%{1}，模组：%{2}', [$source, $module_name]));
                     }
+                    $t_f = str_replace($module_name . '::', '', $t_f);
                 } else {
-                    // 没有指定模块时，使用当前请求模块的静态资源目录
-                    $current_module_name = $this->templateSourceModule()[0];
-                    $modules = Env::getInstance()->getModuleList();
-                    if (isset($modules[$current_module_name]) && $module = $modules[$current_module_name]) {
-                        $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                        $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $current_module_name);
-                    } else {
-                        $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS);
-                    }
+                    $module_name = $this->templateSourceModule()[0] ?? '';
                 }
-                // base_url_path 已含 view/statics/，去掉 t_f 前多余的 statics/ 避免重复
-                $t_f = preg_replace('#^statics[/\\\\]+#', '', str_replace('\\', '/', $t_f));
-                $t_f = ltrim($t_f, '/');
-                $url_base = $this->getUrlPath($base_url_path);
-                // 当 getUrlPath 返回空时兜底：$base_url_path 有值但路径未匹配 APP_CODE_PATH/VENDOR_PATH(PROD 下 PUB) 时会返回空，见 getUrlPath() 注释
-                if ($url_base === '' && $base_url_path !== '') {
-                    $name_for_base = $module_name ?? $this->templateSourceModule()[0];
-                    if ($name_for_base !== '') {
-                        $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/statics/';
-                        if (defined('PROD') && PROD) {
-                            $themePath = $this->resolvePublicThemeNamespace();
-                            $url_base = '/static/' . $themePath . '/' . ltrim($url_base, '/');
-                        }
-                        $url_base = rtrim($url_base, '/') . '/';
-                    }
+                $t_f = preg_replace('#^statics[/\\\\]+#', '', str_replace('\\', '/', (string)$t_f));
+                $t_f = ltrim((string)$t_f, '/');
+                if ($module_name === '') {
+                    throw new Exception(__('资源不存在：%{1}', [$source]));
                 }
-                $data = $url_base . $t_f;
+                // 主路径 = Upgrade flat（PublicStaticUrl）；禁止主题 ns + view/statics 段。
+                $data = $this->buildModuleStaticPublicUrl($module_name, $t_f);
                 break;
             case DataInterface::dir_type_THEME:
                 // 检查是否是静态资源文件（js/css等），如果是则返回URL，否则返回文件路径
@@ -396,7 +350,8 @@ trait TraitTemplate
             // 编译期静态镜像（theme:css/js tryStaticMirror）必须传 allowPreviewVersion=false，
             // 否则会把 ?v=preview_xxxx 烘进按 theme_id 分片的 com 产物，预览结束后仍污染店面 URL。
             $version = $allowPreviewVersion ? $this->getPreviewStaticResourceVersion() : null;
-            if (!$version && defined('DEV') && DEV) {
+            // Staging bake must not stamp ?v=dev_* into prod trees (DEV constant still true).
+            if (!$version && defined('DEV') && DEV && !$this->useProductionStaticPublicUrls()) {
                 $version = $this->getDevelopmentStaticResourceVersion($source, $data);
             }
             if (!$version) {
@@ -590,7 +545,7 @@ trait TraitTemplate
         // 构建真实文件路径
         $real_path = rtrim($module_view_dir_path, DS) . DS . $rel_path;
 
-        if (!PROD) {
+        if (!$this->useProductionStaticPublicUrls()) {
             // 开发环境：直接转URL
             $dir = dirname($real_path);
             $url_base = $this->getUrlPath($dir);
@@ -598,7 +553,7 @@ trait TraitTemplate
             return str_replace('//', '/', str_replace('\\', '/', $url));
         }
 
-        // 生产环境：发布到静态目录
+        // 生产 / staging：发布到静态目录（staging 时 staticRoot 指向 staging/static）
         $statics_base_dir = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
         $publish_target = rtrim($statics_base_dir, DS) . DS . $rel_path;
         $publish_dir = dirname($publish_target);
@@ -687,41 +642,44 @@ trait TraitTemplate
                 }
                 break;
             case DataInterface::dir_type_STATICS:
-                // key 必须含模块名、BP 与公开主题命名空间，避免跨模块/跨环境/跨主题串用旧目录。
+                // prod/staging：磁盘主根 = Upgrade flat pub/static/{Vendor}/{Module}/（与 PublicStaticUrl 同源）。
+                // overlay 主题树仍由 deploy:upgrade 发布，但不作模块 STATICS 主解析。
+                $useProdStaticLayout = $this->useProductionStaticPublicUrls();
                 $cache_key = 'getViewDir' . (defined('BP') ? BP : '') . $module_name . $module_view_dir_path . $type
-                    . (PROD ? 'prod|theme:' . $this->resolvePublicThemeNamespace() : 'dev');
+                    . ($useProdStaticLayout
+                        ? 'prod|flat' . (\Weline\Framework\Deploy\DeployStagingSession::isActive() ? '|staging' : '')
+                        : 'dev');
                 if ($cache_static_dir = $this->viewCache->get($cache_key)) {
                     return $cache_static_dir;
                 }
-                # 生产环境处理
-                if (PROD) {
-                    $module_view_dir_path_arr = $path_arr = explode(DS, $module_view_dir_path);
-                    $view_dir = array_pop($module_view_dir_path_arr);
-                    $view_dir = array_pop($module_view_dir_path_arr) . DS . $view_dir;
-                    array_pop($module_view_dir_path_arr);
-                    array_pop($module_view_dir_path_arr);
-                    $module_view_dir_path = implode(DS, $module_view_dir_path_arr) . DS . str_replace('_', DS, $module_name) . DS . $view_dir;
+                if ($useProdStaticLayout) {
+                    $flatRoot = $this->resolveFlatStaticModuleDiskRoot($module_name);
+                    if ($flatRoot !== null) {
+                        $path = $flatRoot;
+                        $this->viewCache->set($cache_key, $path);
+                        break;
+                    }
                 }
                 $path = $module_view_dir_path . DataInterface::view_STATICS_DIR . DS;
-                # 生产环境处理
-                if (PROD) {
-                    $publicThemePath = str_replace('/', DS, $this->resolvePublicThemeNamespace());
-                    $path = str_replace(APP_CODE_PATH, PUB . 'static' . DS . $publicThemePath . DS, $path);
-                    $path = str_replace(VENDOR_PATH, PUB . 'static' . DS . $publicThemePath . DS, $path);
-                }
                 $this->viewCache->set($cache_key, $path);
                 break;
             case DataInterface::dir_type_THEME:
+                $useProdStaticLayout = $this->useProductionStaticPublicUrls();
                 $cache_key = 'getViewDir' . (defined('BP') ? BP : '') . $module_name . $module_view_dir_path . $type
-                    . (PROD ? 'prod|theme:' . $this->resolvePublicThemeNamespace() : 'dev');
+                    . ($useProdStaticLayout
+                        ? 'prod|theme:' . $this->resolvePublicThemeNamespace()
+                            . (\Weline\Framework\Deploy\DeployStagingSession::isActive() ? '|staging' : '')
+                        : 'dev');
                 if ($cache_static_dir = $this->viewCache->get($cache_key)) {
                     return $cache_static_dir;
                 }
                 $path = $module_view_dir_path . 'theme' . DS;
-                if (PROD) {
+                if ($useProdStaticLayout) {
                     $publicThemePath = str_replace('/', DS, $this->resolvePublicThemeNamespace());
-                    $path = str_replace(APP_CODE_PATH, PUB . 'static' . DS . $publicThemePath . DS, $path);
-                    $path = str_replace(VENDOR_PATH, PUB . 'static' . DS . $publicThemePath . DS, $path);
+                    $staticBase = rtrim(\Weline\Framework\Deploy\DeployStagingSession::staticRoot(), '/\\')
+                        . DS . $publicThemePath . DS;
+                    $path = str_replace(APP_CODE_PATH, $staticBase, $path);
+                    $path = str_replace(VENDOR_PATH, $staticBase, $path);
                 }
                 $this->viewCache->set($cache_key, $path);
                 break;
@@ -754,7 +712,8 @@ trait TraitTemplate
     /**
      * 将主题配置中的源码路径归一化为 pub/static 使用的公开设计主题命名空间。
      *
-     * 逻辑权威在 {@see PublicThemeNamespace}：发布目标与 `/static/` URL 前缀必须同源。
+     * 逻辑权威在 {@see PublicThemeNamespace}：主题设计资源发布目标与 `/static/` URL 前缀必须同源。
+     * 模块 view/statics 主路径改走 {@see PublicStaticUrl} / Upgrade flat，不再用本命名空间。
      */
     private function resolvePublicThemeNamespace(): string
     {
@@ -766,6 +725,40 @@ trait TraitTemplate
     }
 
     /**
+     * Module static public URL（DEV 模块前缀或 PROD Upgrade flat）。
+     */
+    private function buildModuleStaticPublicUrl(string $moduleName, string $relativeUnderStatics): string
+    {
+        $rel = ltrim(str_replace('\\', '/', $relativeUnderStatics), '/');
+        $rel = (string)preg_replace('#^statics/+#', '', $rel);
+
+        return PublicStaticUrl::fromModuleSource($moduleName . '::' . $rel);
+    }
+
+    /**
+     * Upgrade flat 磁盘根：{staticRoot}/{Vendor}/{Module}/（statics 内容铺在模块根下）。
+     */
+    private function resolveFlatStaticModuleDiskRoot(string $moduleName): ?string
+    {
+        $parts = explode('_', $moduleName, 2);
+        if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+            return null;
+        }
+
+        return rtrim(\Weline\Framework\Deploy\DeployStagingSession::staticRoot(), '/\\')
+            . DS . $parts[0] . DS . $parts[1] . DS;
+    }
+
+    /**
+     * Prod runtime OR Mode\Set staging bake: emit /static/{ns}/... public URLs.
+     * Prefer Env deploy + staging over define-once PROD (stale workers / mode:set parent).
+     */
+    private function useProductionStaticPublicUrls(): bool
+    {
+        return \Weline\Framework\Deploy\DeployPublicUrlMode::useProduction();
+    }
+
+    /**
      * @DESC         |转化静态文件的URL路径（将磁盘路径转为可访问的 URL 路径）
      *
      * 参数区：
@@ -774,7 +767,7 @@ trait TraitTemplate
      *
      * @return string 以 / 开头的 URL 路径，如 /Aiweline/PlayingInChina/view/statics/...；以下情况返回空字符串：
      *                 - 开发：real_path 不以 APP_CODE_PATH 或 VENDOR_PATH 开头（如 CLI 下常量未正确初始化、路径格式不一致）
-     *                 - 生产：real_path 不以 PUB 开头
+     *                 - 生产/staging：real_path 不以 PUB 或 staging/static 开头
      */
     private function getUrlPath(string $real_path): string
     {
@@ -798,18 +791,26 @@ trait TraitTemplate
             }
             return str_starts_with($path, $prefix) ? substr($path, strlen($prefix)) : $path;
         };
-        if (DEV) {
+        if ($this->useProductionStaticPublicUrls()) {
+            $pubPath = defined('PUB') ? str_replace('\\', '/', PUB) : '';
+            if ($startsWithPath($normalized, $pubPath)) {
+                $url_path = '/' . ltrim($stripPrefix($normalized, $pubPath), '/');
+            } elseif (\Weline\Framework\Deploy\DeployStagingSession::isActive()) {
+                $stagingStatic = str_replace('\\', '/', rtrim(
+                    \Weline\Framework\Deploy\DeployStagingSession::staticRoot(),
+                    '/\\',
+                ));
+                if ($startsWithPath($normalized, $stagingStatic)) {
+                    $url_path = '/static/' . ltrim($stripPrefix($normalized, $stagingStatic), '/');
+                }
+            }
+        } else {
             $appCode = str_replace('\\', '/', APP_CODE_PATH);
             $vendorPath = defined('VENDOR_PATH') ? str_replace('\\', '/', VENDOR_PATH) : '';
             if ($startsWithPath($normalized, $appCode)) {
                 $url_path = '/' . ltrim($stripPrefix($normalized, $appCode), '/');
             } elseif ($startsWithPath($normalized, $vendorPath)) {
                 $url_path = '/' . ltrim($stripPrefix($normalized, $vendorPath), '/');
-            }
-        } else {
-            $pubPath = defined('PUB') ? str_replace('\\', '/', PUB) : '';
-            if ($startsWithPath($normalized, $pubPath)) {
-                $url_path = '/' . ltrim($stripPrefix($normalized, $pubPath), '/');
             }
         }
         return $url_path === '' ? '' : rtrim($url_path, '/') . '/';
@@ -890,6 +891,8 @@ trait TraitTemplate
             // generated/hooks.php changes, fetch/tpl mappings must miss so chrome
             // (e.g. header account dropdown) re-bakes instead of serving stale menus.
             'hooks_registry' => self::hooksRegistryCompileDigest(),
+            // Staging forces /static/ URL semantics while DEV constant is still true.
+            'deploy_public_urls' => $this->useProductionStaticPublicUrls() ? 'prod' : 'dev',
         ], $dimensions);
     }
 

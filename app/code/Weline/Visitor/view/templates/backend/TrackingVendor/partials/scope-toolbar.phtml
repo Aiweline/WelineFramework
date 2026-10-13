@@ -47,4 +47,4 @@ $chainText = \implode(' ← ', \array_map('strval', $inheritChain));
     </div>
 </div>
 <script type="application/json" id="tracking-vendor-work-scope-i18n"><?= htmlspecialchars(json_encode(['globalAlert' => $globalAlert], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_NOQUOTES, 'UTF-8') ?></script>
-<script src="/Weline/Visitor/view/statics/js/backend/tracking-vendor-work-scope.js?v=20260910-scope3" data-no-extract="true"></script>
+<script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Visitor/view/statics/js/backend/tracking-vendor-work-scope.js?v=20260910-scope3'), ENT_QUOTES) ?>" data-no-extract="true"></script>

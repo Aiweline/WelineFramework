@@ -440,7 +440,7 @@ class DevToolPanelObserver implements ObserverInterface
         $requestId = \htmlspecialchars($requestId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $tokenRequired = $panelAccess->requiresTokenForUi() ? '1' : '0';
         $sessionUrl = \htmlspecialchars('/' . $this->resolveApiBase() . '/panel/session', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $loaderSrc = '/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20260926-tpl-perf-armed';
+        $loaderSrc = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20260926-tpl-perf-armed');
         // HttpOnly cookie 武装徽标时前端读不到 cookie；把服务端真实状态注入 bootstrap，避免开关显示「开启」却仍渲染 timing。
         $tplPerfArmed = RequestLifecycleTrace::isTemplatePerfOverlayRequested() ? '1' : '0';
 

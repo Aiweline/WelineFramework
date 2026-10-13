@@ -21,7 +21,7 @@
         return;
     }
     var node = document.currentScript;
-    var src = '/Weline/Visitor/view/statics/js/event-sandbox-monitor.js?v=20260922-ga4-debug1';
+    var src = (function(d){try{var c=JSON.parse((document.getElementById('weline-frontend-runtime-config')||document.getElementById('weline-backend-runtime-config')||{}).textContent||'{}');if(c&&c.env&&c.env.useProductionPublicUrls){var m=String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);if(m)return'/static/'+m[1]+'/'+m[2]+'/'+m[3];}}catch(e){}return d;})('/Weline/Visitor/view/statics/js/event-sandbox-monitor.js') + '?v=20260922-ga4-debug1';
     if (node && node.src) {
         src = String(node.src).replace('lifecycle-event-assistant.js', 'event-sandbox-monitor.js');
     }

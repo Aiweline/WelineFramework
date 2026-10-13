@@ -3,8 +3,10 @@
 
 use Weline\Backend\Block\ThemeConfig;
 use Weline\Framework\App\Env;
+use Weline\Framework\Deploy\DeployPublicUrlMode;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\View\PublicStaticUrl;
 
 /** @var ThemeConfig $themeConfig */
 $themeConfig = ObjectManager::getInstance(ThemeConfig::class);
@@ -20,7 +22,8 @@ $backendHost = rtrim((string)$this->request->getUrlBuilder()->getBackendUrl('/',
 $apiHost = rtrim((string)$this->request->getUrlBuilder()->getApiUrl('/', [], false), '/');
 $frontendApiHost = rtrim((string)$this->request->getUrlBuilder()->getFrontendApiUrl('/', [], false), '/');
 $themePath = str_replace('\\', '/', (string)(Env::getInstance()->getTheme()['path'] ?? ''));
-$mediaTemplate = $host . '/' . (DEV
+$useProdPublicUrls = DeployPublicUrlMode::useProduction();
+$mediaTemplate = $host . '/' . (!$useProdPublicUrls
     ? '{module}/view/statics/{path}'
     : 'static/' . trim($themePath, '/') . '/{module}/view/statics/{path}');
 $csrfToken = \Weline\Framework\Security\Token::create('csrf', 16, 600);
@@ -52,10 +55,8 @@ $deployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.j
 $deployVersion = is_array($deployMeta) ? (string)($deployMeta['deploy_version'] ?? 'dev') : 'dev';
 $workerBuildId = is_array($deployMeta) ? (string)($deployMeta['worker_build_id'] ?? 'dev') : 'dev';
 $queryBinUrl = Env::getFrontendQueryBinPath();
-$queryWorkerUrl = DEV
-    ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
-    : '/static/Weline/Frontend/js/weline-api-worker.js';
-$queryWorkerUrl .= '?v=' . rawurlencode($deployVersion . '-' . $workerBuildId);
+$queryWorkerUrl = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api-worker.js');
+$queryWorkerUrl .= (str_contains($queryWorkerUrl, '?') ? '&' : '?') . 'v=' . rawurlencode($deployVersion . '-' . $workerBuildId);
 $apiConfig = [
     'workerUrl' => $queryWorkerUrl,
     'queryWorkerUrl' => $queryWorkerUrl,
@@ -66,18 +67,19 @@ $apiConfig = [
     'requestTimeoutMs' => 60000,
 ];
 $runtime = [
-    'env' => ['WELINE_ENV' => DEV ? 'DEV' : 'PROD', 'DEV' => DEV, 'PROD' => !DEV],
+    'env' => [
+        'WELINE_ENV' => $useProdPublicUrls ? 'PROD' : 'DEV',
+        'DEV' => !$useProdPublicUrls,
+        'PROD' => $useProdPublicUrls,
+        'useProductionPublicUrls' => $useProdPublicUrls,
+    ],
     'area' => 'backend',
-    'modulesConfigUrl' => DEV
-        ? '/Weline/Backend/view/statics/base/weline.modules.js'
-        : '/static/Weline/Backend/base/weline.modules.js',
-    'modulesBaseUrl' => DEV
-        ? '/Weline/Backend/view/statics/js'
-        : '/static/Weline/Backend/js',
+    'modulesConfigUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Backend/view/statics/base/weline.modules.js'),
+    'modulesBaseUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Backend/view/statics/js'),
     'assetVersion' => $deployVersion,
     'deployVersion' => $deployVersion,
     'workerBuildId' => $workerBuildId,
-    'debug' => DEV,
+    'debug' => !$useProdPublicUrls,
     'api' => $apiConfig,
     'url' => [
         'origin' => $host,

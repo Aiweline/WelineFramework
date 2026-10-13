@@ -2,7 +2,7 @@
 
 return [
     'name' => 'Weline_Dropship',
-    'version' => '1.0.92',
+    'version' => '1.0.93',
     'requires' => [
         'Weline_SystemConfig',
         'Weline_Product',

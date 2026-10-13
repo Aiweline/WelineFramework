@@ -9,8 +9,8 @@
  * @hook-solo false
  */
 // 快速链接 URL（动态生成，避免 404）
-$wlsPerformanceJsUrl = '/Weline/Server/view/statics/wls-performance-panel/panel.js?v=20260727-weline-panel-wls-http-1';
-$wlsPerformanceCssUrl = '/Weline/Server/view/statics/wls-performance-panel/panel.css?v=20260702-weline-panel-wls-detect-1';
+$wlsPerformanceJsUrl = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Server/view/statics/wls-performance-panel/panel.js?v=20260727-weline-panel-wls-http-1');
+$wlsPerformanceCssUrl = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Server/view/statics/wls-performance-panel/panel.css?v=20260702-weline-panel-wls-detect-1');
 $wlsPerformanceEndpointUrl = '/server/test/wls-performance-panel';
 $wlsRuntimeMode = 'unknown';
 $wlsRuntimeIsWls = false;
@@ -1282,7 +1282,7 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
     };
 })();
 </script>
-<script src="/Weline/Server/view/statics/wls-security-probes/panel.js?v=20260908-weline-panel-probes-7"></script>
+<script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Server/view/statics/wls-security-probes/panel.js?v=20260908-weline-panel-probes-7'), ENT_QUOTES) ?>"></script>
 <script>
 (function() {
     var TAB_ID = 'wls-probes';

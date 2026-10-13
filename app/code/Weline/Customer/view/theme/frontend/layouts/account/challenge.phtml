@@ -44,10 +44,7 @@
         'robots' => 'noindex,follow',
     ], static fn ($value): bool => $value !== null && $value !== ''));
     $isAuthStagePage = true;
-    $isDev = defined('DEV') && DEV;
-    $apiWorkerUrl = $isDev
-        ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
-        : '/static/Weline/Frontend/js/weline-api-worker.js';
+    $apiWorkerUrl = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api-worker.js');
     $frontendQueryBinUrl = \Weline\Framework\App\Env::getFrontendQueryBinPath();
     $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         | JSON_UNESCAPED_SLASHES

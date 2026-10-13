@@ -122,7 +122,18 @@
 
 	// config of RequireJS (REQUIRED)
 	require.config({
-		baseUrl : '/Weline/ElFinderFileManager/view/statics/js',
+		baseUrl : (function (d) {
+			try {
+				var c = JSON.parse((document.getElementById('weline-backend-runtime-config') || document.getElementById('weline-frontend-runtime-config') || {}).textContent || '{}');
+				if (c && c.env && c.env.useProductionPublicUrls) {
+					var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
+					if (m) {
+						return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+					}
+				}
+			} catch (e) { /* keep DEV path */ }
+			return d;
+		})('/Weline/ElFinderFileManager/view/statics/js'),
 		paths : {
 			'jquery'   : '//cdnjs.cloudflare.com/ajax/libs/jquery/'+(old? '1.12.4' : jqver)+'/jquery.min',
 			'jquery-ui': '//cdnjs.cloudflare.com/ajax/libs/jqueryui/'+uiver+'/jquery-ui.min',

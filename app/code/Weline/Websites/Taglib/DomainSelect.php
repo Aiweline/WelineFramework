@@ -122,8 +122,8 @@ class DomainSelect implements TaglibInterface
             $conflictCheckPath = $url->getBackendUrlPath('websites/backend/api/domain-pool/check-conflict');
             // Prefer module view/statics path (served as /Weline/Websites/view/statics/...).
             // getThemeUrl(.../statics/backend/...) currently 404s under pure WLS static mapping.
-            $purchaseDialogJs = '/Weline/Websites/view/statics/backend/domain-purchase-dialog.js';
-            $mountJs = '/Weline/Websites/view/statics/backend/domain-select-mount.js';
+            $purchaseDialogJs = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Websites/view/statics/backend/domain-purchase-dialog.js');
+            $mountJs = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Websites/view/statics/backend/domain-select-mount.js');
             $purchaseApiPath = $url->getBackendUrlPath('websites/admin/domain/purchase');
             $purchaseAccountsPath = $url->getBackendUrlPath('websites/admin/domain/get-registrar-accounts');
 

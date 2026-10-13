@@ -11,7 +11,7 @@ $formHtml = ObjectManager::getInstance(InquiryRendererInterface::class)->render(
 );
 ?>
 <css>Weline_Inquiry::css/supplier-application-atelier.css</css>
-<link rel="stylesheet" href="/Weline/Inquiry/view/statics/css/supplier-application-atelier.css?v=20260907-stretch2" data-inquiry-atelier-css="1" data-no-extract="true">
+<link rel="stylesheet" href="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Inquiry/view/statics/css/supplier-application-atelier.css?v=20260907-stretch2'), ENT_QUOTES) ?>" data-inquiry-atelier-css="1" data-no-extract="true">
 <section class="w-inquiry-suppliers w-inquiry-suppliers--atelier" data-testid="inquiry-supplier-application" weline-code="inquiry.frontend.suppliers">
     <div class="w-inquiry-suppliers__shell">
         <aside class="w-inquiry-suppliers__story" aria-label="@lang{'合作说明'}">

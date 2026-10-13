@@ -1,5 +1,19 @@
 (function () {
-  var DEFAULT_SRC = '/Weline/Theme/view/statics/images/storefront-placeholder/default.svg';
+  var DEFAULT_SRC = (function (d) {
+    try {
+      var c = JSON.parse((document.getElementById('weline-frontend-runtime-config') || {}).textContent || '{}');
+      if (c && c.storefrontPlaceholderUrl) {
+        return String(c.storefrontPlaceholderUrl);
+      }
+      if (c && c.env && c.env.useProductionPublicUrls) {
+        var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
+        if (m) {
+          return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+        }
+      }
+    } catch (e) { /* keep DEV path */ }
+    return d;
+  })('/Weline/Theme/view/statics/images/storefront-placeholder/default.svg');
   var DEFAULT_PREDICT_MARGIN = '600px 0px';
   var predictObserver = null;
 

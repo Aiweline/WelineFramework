@@ -30,6 +30,7 @@ final class DeployStagingSessionTest extends TestCase
         $_ENV[DeployStagingSession::ENV_ROOT] = $root;
 
         self::assertTrue(DeployStagingSession::isActive());
+        self::assertTrue(DeployStagingSession::forcesProductionPublicUrls());
         self::assertSame($root . DIRECTORY_SEPARATOR . 'static', DeployStagingSession::staticRoot());
         self::assertStringEndsWith(
             'complicate' . DIRECTORY_SEPARATOR,
@@ -57,6 +58,7 @@ final class DeployStagingSessionTest extends TestCase
             $session->abort();
         }
         self::assertFalse(DeployStagingSession::isActive());
+        self::assertFalse(DeployStagingSession::forcesProductionPublicUrls());
     }
 
     public function testEmptyStaticCommitFailsClosed(): void

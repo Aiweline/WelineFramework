@@ -6,7 +6,7 @@ $formName = (string)(($state['form']['name'] ?? '') ?: '');
 $formCode = (string)(($state['form']['code'] ?? '') ?: '');
 ?>
 <css>Weline_Inquiry::css/inquiry-editor.css</css>
-<link rel="stylesheet" href="/Weline/Inquiry/view/statics/css/inquiry-editor.css?v=20260908-chrome-toolbar1" data-inquiry-editor-css="1" data-no-extract="true">
+<link rel="stylesheet" href="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Inquiry/view/statics/css/inquiry-editor.css?v=20260908-chrome-toolbar1'), ENT_QUOTES) ?>" data-inquiry-editor-css="1" data-no-extract="true">
 <style data-inquiry-editor-responsive="1">
 /* Critical responsive field rail (inline bypasses stale WLS static CSS cache) */
 .w-inquiry-editor__field-main{

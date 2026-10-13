@@ -1905,7 +1905,7 @@ foreach ($categories as $cat) {
       return false;
     }
     if (boot()) return;
-    var src = '/Weline/Dropship/view/statics/backend/listed-accordion.js?v=1.0.70';
+    var src = <?= json_encode(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Dropship/view/statics/backend/listed-accordion.js') . '?v=1.0.70', JSON_UNESCAPED_SLASHES) ?>;
     var existing = document.querySelector('script[data-dropship-listed-accordion-src]');
     if (existing) {
       existing.addEventListener('load', function () { boot(); });

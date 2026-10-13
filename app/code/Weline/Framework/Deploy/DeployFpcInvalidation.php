@@ -7,6 +7,7 @@ namespace Weline\Framework\Deploy;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
+use Weline\Framework\Http\Fpc\FpcStaticDiskStore;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -33,6 +34,8 @@ final class DeployFpcInvalidation
     public function afterModeSetProd(): array
     {
         $stamp = $this->ensureObservableDeployStamp('mode_set_prod');
+        // Drop DEV-mirrored module-prefix static FPC leaves before workers re-serve.
+        FpcStaticDiskStore::purgeAllLive();
         $this->publishInvalidation(
             self::TRIGGER_MODE_SET_PROD,
             purgeFpcAll: true,

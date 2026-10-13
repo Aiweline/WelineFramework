@@ -44,7 +44,9 @@ final class CountryFlagMarkup
         }
         $ratio = self::normalizeRatio($ratio);
 
-        return '/Weline/I18n/view/statics/flags/' . $ratio . '/' . $code . '.svg';
+        return \Weline\Framework\View\PublicStaticUrl::fromDevWebPath(
+            '/Weline/I18n/view/statics/flags/' . $ratio . '/' . $code . '.svg'
+        );
     }
 
     public static function staticFilePath(string $countryCode, string $ratio = '4x3'): string

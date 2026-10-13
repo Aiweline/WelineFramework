@@ -492,17 +492,16 @@ HTML;
 
     private function buildFastAccountAuthRuntimeHeadHtml(Template $template): string
     {
-        $isDev = defined('DEV') && DEV;
         $themeAssetVersion = '20260609-auth-api-runtime';
-        $modulesConfigUrl = $isDev
-            ? '/Weline/Frontend/view/statics/base/weline.modules.js'
-            : '/static/Weline/Frontend/base/weline.modules.js';
-        $modulesBaseUrl = $isDev
-            ? '/Weline/Frontend/view/statics/js/weline-api'
-            : '/static/Weline/Frontend/js/weline-api';
-        $apiWorkerUrl = $isDev
-            ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
-            : '/static/Weline/Frontend/js/weline-api-worker.js';
+        $modulesConfigUrl = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath(
+            '/Weline/Frontend/view/statics/base/weline.modules.js'
+        );
+        $modulesBaseUrl = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath(
+            '/Weline/Frontend/view/statics/js/weline-api'
+        );
+        $apiWorkerUrl = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath(
+            '/Weline/Frontend/view/statics/js/weline-api-worker.js'
+        );
         $template = $this->getTemplateInstance();
         $runtimeScriptUrl = (string)$template->fetchTagSource(
             \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,

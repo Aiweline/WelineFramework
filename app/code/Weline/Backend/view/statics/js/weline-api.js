@@ -77,9 +77,7 @@
                 /* fallback below */
             }
         }
-        return isDevMode()
-            ? '/Weline/Backend/view/statics/js/weline-dev-console.js'
-            : '/static/Weline/Backend/js/weline-dev-console.js';
+        return (function(d){try{var c=JSON.parse((document.getElementById('weline-frontend-runtime-config')||document.getElementById('weline-backend-runtime-config')||{}).textContent||'{}');if(c&&c.env&&c.env.useProductionPublicUrls){var m=String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);if(m)return'/static/'+m[1]+'/'+m[2]+'/'+m[3];}}catch(e){}return d;}('/Weline/Backend/view/statics/js/weline-dev-console.js'));
     }
 
     var devConsoleLoadPromise = null;
@@ -214,9 +212,7 @@
         if (scriptUrl) {
             return scriptUrl.replace(/weline-api\.js(\?.*)?$/, 'weline-api-worker.js$1');
         }
-        return isDevMode()
-            ? '/Weline/Backend/view/statics/js/weline-api-worker.js'
-            : '/static/Weline/Backend/js/weline-api-worker.js';
+        return (function(d){try{var c=JSON.parse((document.getElementById('weline-frontend-runtime-config')||document.getElementById('weline-backend-runtime-config')||{}).textContent||'{}');if(c&&c.env&&c.env.useProductionPublicUrls){var m=String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);if(m)return'/static/'+m[1]+'/'+m[2]+'/'+m[3];}}catch(e){}return d;}('/Weline/Backend/view/statics/js/weline-api-worker.js'));
     }
 
     function defaultQueryWorkerUrl() {
@@ -227,9 +223,7 @@
                 /* fallback below */
             }
         }
-        return isDevMode()
-            ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
-            : '/static/Weline/Frontend/js/weline-api-worker.js';
+        return (function(d){try{var c=JSON.parse((document.getElementById('weline-frontend-runtime-config')||document.getElementById('weline-backend-runtime-config')||{}).textContent||'{}');if(c&&c.env&&c.env.useProductionPublicUrls){var m=String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);if(m)return'/static/'+m[1]+'/'+m[2]+'/'+m[3];}}catch(e){}return d;}('/Weline/Frontend/view/statics/js/weline-api-worker.js'));
     }
 
     // Cache-bust once per page load. Rebuilding this on every send() recreates the

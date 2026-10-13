@@ -721,6 +721,9 @@ class Template extends DataObject implements RequestLocalInterface
             // Nested w:widget compile bakes <w:hook> output. Digest stays in compile_id
             // (in-place overwrite), not in a new ctx_/__bytes_ directory.
             'hooks_registry' => self::hooksRegistryCompileDigest(),
+            // Mode\Set staging / env prod must not reuse DEV-module-prefix compile dirs.
+            'deploy_public_urls' => \Weline\Framework\Deploy\DeployPublicUrlMode::useProduction()
+                ? 'prod' : 'dev',
         ];
     }
 

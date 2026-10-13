@@ -741,43 +741,61 @@
         },
 
         /**
-         * Api 模块代理（stub；weline-api.js 加载后会替换为同步 ApiModule）
+         * Api 模块代理（stub；weline-api.js 加载后会替换为同步 ApiModule）。
+         * 若完整模块已先于本文件执行，保留 __full Api，禁止 stub 盖写。
          */
-        Api: {
+        Api: (window.Weline && window.Weline.Api && window.Weline.Api.__full === true)
+            ? window.Weline.Api
+            : (window.WelineApiModule && window.WelineApiModule.__full === true)
+                ? window.WelineApiModule
+            : {
             __fallback: true,
+            _promoteFullApi(ApiModule) {
+                if (ApiModule && ApiModule.__full === true && window.Weline) {
+                    window.Weline.Api = ApiModule;
+                }
+                return ApiModule;
+            },
             call: async (provider, operation, params, options) => {
-                const ApiModule = await moduleLoader.loadModule('api');
+                const ApiModule = this._promoteFullApi(await moduleLoader.loadModule('api'));
                 return ApiModule.call(provider, operation, params, options);
             },
             graph: async (graph, options) => {
-                const ApiModule = await moduleLoader.loadModule('api');
+                const ApiModule = this._promoteFullApi(await moduleLoader.loadModule('api'));
                 return ApiModule.graph(graph, options);
             },
             stream: async (channel, params, options) => {
-                const ApiModule = await moduleLoader.loadModule('api');
+                const ApiModule = this._promoteFullApi(await moduleLoader.loadModule('api'));
                 return ApiModule.stream(channel, params, options);
             },
             resource: async (provider, optionalMap) => {
-                const ApiModule = await moduleLoader.loadModule('api');
+                const ApiModule = this._promoteFullApi(await moduleLoader.loadModule('api'));
                 return ApiModule.resource(provider, optionalMap);
             },
             /**
              * 发送请求
              */
             request: async (url, options) => {
-                const ApiModule = await moduleLoader.loadModule('api');
+                const ApiModule = this._promoteFullApi(await moduleLoader.loadModule('api'));
                 return ApiModule.request(url, options);
             },
             enableAutoRequests: async () => {
-                const ApiModule = await moduleLoader.loadModule('api');
+                const ApiModule = this._promoteFullApi(await moduleLoader.loadModule('api'));
                 return ApiModule.enableAutoRequests();
             },
             disableAutoRequests: async () => {
-                const ApiModule = await moduleLoader.loadModule('api');
+                const ApiModule = this._promoteFullApi(await moduleLoader.loadModule('api'));
                 return ApiModule.disableAutoRequests();
             },
+            bootstrapScope: async () => {
+                const ApiModule = this._promoteFullApi(await moduleLoader.loadModule('api'));
+                if (ApiModule && typeof ApiModule.bootstrapScope === 'function') {
+                    return ApiModule.bootstrapScope();
+                }
+                return null;
+            },
             getClient: async () => {
-                const ApiModule = await moduleLoader.loadModule('api');
+                const ApiModule = this._promoteFullApi(await moduleLoader.loadModule('api'));
                 return ApiModule.getClient();
             },
         },
@@ -1275,6 +1293,11 @@
     // 承接启动桩（head 最早执行的 inline 桩）的待办队列：桩把 declare/load/preLoad/
     // mount/dom.observe 的早期调用排进 __bootQueue，此处统一回放，使这些脚本可以 defer。
     const __bootQueue = (window.Weline && window.Weline.__bootQueue) || [];
+    // weline-api.js may have finished between object literal build and this assign —
+    // never leave a stub on top of an already-full WelineApiModule.
+    if (window.WelineApiModule && window.WelineApiModule.__full === true) {
+        Weline.Api = window.WelineApiModule;
+    }
     window.Weline = Weline;
     Weline.__bootQueue = __bootQueue;
     Weline.whenDomReady = whenDomReady;
@@ -1707,9 +1730,7 @@
      */
     (function preLoadScopeBootstrapApi() {
         const preload = () => {
-            if (!document.querySelector('meta[name="weline-worker-scope-bootstrap"]')) {
-                return;
-            }
+            // Meta stamp OR hole-punch — FPC pages have no meta; still warm Scope early.
             Weline.preLoad('api').then((apiModule) => {
                 if (apiModule && typeof apiModule.bootstrapScope === 'function') {
                     return apiModule.bootstrapScope();

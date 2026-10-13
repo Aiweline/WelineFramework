@@ -312,11 +312,18 @@
                 // 解析模块配置URL，确保在开发/生产模式下都能正确加载
                 let modulesConfigUrl = runtimeConfig.modulesConfigUrl;
                 if (!modulesConfigUrl) {
-                    if (isDev) {
-                        modulesConfigUrl = '/Weline/Backend/view/statics/base/weline.modules.js';
-                    } else {
-                        modulesConfigUrl = '/static/Weline/Backend/base/weline.modules.js';
-                    }
+                    modulesConfigUrl = (function (d) {
+                        try {
+                            var c = JSON.parse((document.getElementById('weline-backend-runtime-config') || document.getElementById('weline-frontend-runtime-config') || {}).textContent || '{}');
+                            if (c && c.env && c.env.useProductionPublicUrls) {
+                                var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
+                                if (m) {
+                                    return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                                }
+                            }
+                        } catch (e) { /* keep DEV path */ }
+                        return d;
+                    })('/Weline/Backend/view/statics/base/weline.modules.js');
                 } else {
                     modulesConfigUrl = StaticResourceResolver.resolve(modulesConfigUrl);
                 }
@@ -562,12 +569,18 @@
                         // 使用静态资源解析器确保路径正确
                         let modulesBaseUrl = runtimeConfig.modulesBaseUrl;
                         if (!modulesBaseUrl) {
-                            // 如果没有配置，根据环境生成默认路径
-                            if (isDev) {
-                                modulesBaseUrl = '/Weline/Backend/view/statics/js/weline-api';
-                            } else {
-                                modulesBaseUrl = '/static/Weline/Backend/js/weline-api';
-                            }
+                            modulesBaseUrl = (function (d) {
+                                try {
+                                    var c = JSON.parse((document.getElementById('weline-backend-runtime-config') || document.getElementById('weline-frontend-runtime-config') || {}).textContent || '{}');
+                                    if (c && c.env && c.env.useProductionPublicUrls) {
+                                        var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
+                                        if (m) {
+                                            return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                                        }
+                                    }
+                                } catch (e) { /* keep DEV path */ }
+                                return d;
+                            })('/Weline/Backend/view/statics/js/weline-api');
                         } else {
                             // 如果配置了路径，使用静态资源解析器解析
                             modulesBaseUrl = StaticResourceResolver.resolve(modulesBaseUrl);

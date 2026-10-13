@@ -2639,10 +2639,32 @@
         return link;
     }
 
+    function resolvePublicStaticUrl(devPath) {
+        try {
+            var cfgNode = document.getElementById('weline-frontend-runtime-config');
+            if (cfgNode && cfgNode.textContent) {
+                var cfg = JSON.parse(cfgNode.textContent);
+                if (cfg && cfg.miniCartQtyHitCss && /mini-cart-drawer-qty-hit\.css/.test(String(devPath))) {
+                    return String(cfg.miniCartQtyHitCss);
+                }
+                if (cfg && cfg.miniCartDrawerCss && /mini-cart-drawer\.css/.test(String(devPath))) {
+                    return String(cfg.miniCartDrawerCss);
+                }
+                if (cfg && cfg.env && cfg.env.useProductionPublicUrls) {
+                    var m = String(devPath).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
+                    if (m) {
+                        return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                    }
+                }
+            }
+        } catch (err) { /* keep DEV path */ }
+        return String(devPath);
+    }
+
     function ensureCartQtyHitCss(assetVersion) {
         // Cart-owned qty hit-target gate — Theme only ensures the sheet is present.
         var stamp = '20261007-cart-qty-hit-v3';
-        var href = '/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css?v=' + stamp;
+        var href = resolvePublicStaticUrl('/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css') + '?v=' + stamp;
         if (assetVersion) {
             href += '&_weline_dev=' + encodeURIComponent(assetVersion);
         }
@@ -2677,7 +2699,7 @@
         } catch (err) {
             assetVersion = '';
         }
-        var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css?v=' + cssStamp;
+        var href = resolvePublicStaticUrl('/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css') + '?v=' + cssStamp;
         if (assetVersion) {
             href += '&_weline_dev=' + encodeURIComponent(assetVersion);
         }

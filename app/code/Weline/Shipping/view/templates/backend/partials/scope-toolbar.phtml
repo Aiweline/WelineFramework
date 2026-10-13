@@ -41,4 +41,4 @@ $globalAlert = (string)__('配送配置没有独立的 Global 层：已使用默
     </div>
 </div>
 <script type="application/json" id="shipping-work-scope-i18n"><?= htmlspecialchars(json_encode(['globalAlert' => $globalAlert], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_NOQUOTES, 'UTF-8') ?></script>
-<script src="/Weline/Shipping/view/statics/js/backend/shipping-work-scope.js?v=20260909-scope2" data-no-extract="true"></script>
+<script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Shipping/view/statics/js/backend/shipping-work-scope.js?v=20260909-scope2'), ENT_QUOTES) ?>" data-no-extract="true"></script>

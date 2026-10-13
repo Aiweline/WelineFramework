@@ -37,6 +37,17 @@ final class DeployStagingSession
         return self::$active !== null || self::envRoot() !== '';
     }
 
+    /**
+     * Mode\Set prod staging runs in a process that still has DEV=true / PROD=false
+     * (App constants are define-once). Public static URLs and version stamps must
+     * nevertheless use production semantics so baked HTML / complicate do not leak
+     * `/Weline/...` module paths or `?v=dev_*` fingerprints into the live trees.
+     */
+    public static function forcesProductionPublicUrls(): bool
+    {
+        return self::isActive();
+    }
+
     public static function current(): ?self
     {
         return self::$active;

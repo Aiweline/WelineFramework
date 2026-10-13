@@ -478,7 +478,7 @@ $escape = static fn (mixed $value): string => htmlspecialchars((string) $value, 
         </div>
     </div>
 </section>
-<script src="/Weline/Payment/view/statics/js/backend/dev-relay.js?v=1.9.61-<?= rawurlencode((string) (\Weline\Framework\App\Env::getInstance()->getConfig('theme_static_version') ?: 'dev')) ?>"></script>
+<script src="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Payment/view/statics/js/backend/dev-relay.js') . '?v=1.9.61-' . rawurlencode((string) (\Weline\Framework\App\Env::getInstance()->getConfig('theme_static_version') ?: 'dev')), ENT_QUOTES) ?>"></script>
 <script>
 window.WelinePaymentDevRelay && window.WelinePaymentDevRelay.initIndex({
     isLocal: <?= $is_local ? 'true' : 'false' ?>,
