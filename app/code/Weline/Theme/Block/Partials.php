@@ -202,16 +202,6 @@ class Partials extends Block
         if ($policyMeta === null) {
             return null;
         }
-        $cacheContext = $this->resolvePartialOutputCacheContext(
-            $area,
-            $type,
-            $defaultOption,
-            $dictionary,
-            $policyMeta,
-        );
-        if ($cacheContext === null) {
-            return null;
-        }
         $snapshot = ThemeLayoutSourceSnapshot::current();
         $captured = $snapshot?->source($path);
         $sourceFile = $captured === null ? $this->resolveModulePath($path) : null;
@@ -226,7 +216,18 @@ class Partials extends Block
             $captured,
             $sourceStat,
         );
-        $cacheKey = \sha1($path . '|' . $sourceFingerprint . '|' . $cacheContext);
+        $cacheKey = $this->resolvePartialOutputCacheKey(
+            $path,
+            $sourceFingerprint,
+            $area,
+            $type,
+            $defaultOption,
+            $dictionary,
+            $policyMeta,
+        );
+        if ($cacheKey === null) {
+            return null;
+        }
         $typeLc = \strtolower(\trim($type));
         $logicalPrefix = $typeLc === 'head' ? 'theme.head.' : 'theme.chrome.';
         $logicalKey = $logicalPrefix . $typeLc . '.' . $cacheKey;
@@ -366,11 +367,6 @@ class Partials extends Block
             return $this->renderCompiledPartial($fileName, $dictionary);
         }
 
-        $cacheContext = $this->resolvePartialOutputCacheContext($area, $type, $defaultOption, $dictionary, $policy);
-        if ($cacheContext === null) {
-            return $this->fetchHtml($fileName, $dictionary);
-        }
-
         // Key from stable source only. Never call getFetchFile before a process hit:
         // compiled paths are request-partitioned and compile/stat work must not sit
         // on the chrome hot path. Shared theme_runtime IPC is also skipped here —
@@ -390,7 +386,18 @@ class Partials extends Block
             $captured,
             $sourceStat,
         );
-        $cacheKey = \sha1($fileName . '|' . $sourceFingerprint . '|' . $cacheContext);
+        $cacheKey = $this->resolvePartialOutputCacheKey(
+            $fileName,
+            $sourceFingerprint,
+            $area,
+            $type,
+            $defaultOption,
+            $dictionary,
+            $policy,
+        );
+        if ($cacheKey === null) {
+            return $this->fetchHtml($fileName, $dictionary);
+        }
 
         $cached = $this->readPartialOutputCache($cacheKey);
         if ($cached['status'] !== 'miss') {
@@ -1281,9 +1288,13 @@ class Partials extends Block
     }
 
     /**
+     * HTML chrome/head process + HotCache logical payload via system KeyBuilder.
+     *
      * @param array{mode: string, auth: string, ttl: int} $policy
      */
-    private function resolvePartialOutputCacheContext(
+    private function resolvePartialOutputCacheKey(
+        string $sourcePath,
+        string $sourceFingerprint,
         string $area,
         string $type,
         string $defaultOption,
@@ -1345,8 +1356,9 @@ class Partials extends Block
                 // v21：搜索 facade（q/type/category）岛后注水；header 键 guest-neutral（禁按 tip q 分袋）。
                 // v22：xscope A — frontend header/footer layout-agnostic（SharedChrome inherit）；
                 //     去 layout 分区 + 路径级源指纹，homepage warmer 与 search/plp 同键。
+                // v23：HTML 袋改 KeyBuilder::buildEnvironmentScoped，禁 sha1|environmentHash 自建。
                 // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v22-layout-agnostic-shell',
+                'schema' => 'chrome-partial-v23-env-scoped-key',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : '',
@@ -1400,7 +1412,14 @@ class Partials extends Block
                 'currency' => false,
             ];
 
-            return KeyBuilder::environmentHash($hashPayload, $hashDims);
+            $identity = $type === 'head' ? 'theme.head.partial' : 'theme.chrome.partial';
+
+            return KeyBuilder::buildEnvironmentScoped(
+                $identity,
+                $sourcePath . '|' . $type . '|' . $sourceFingerprint,
+                $hashPayload,
+                $hashDims,
+            );
         } catch (\Throwable) {
             return null;
         }

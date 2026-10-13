@@ -19,6 +19,7 @@ use Weline\Theme\Helper\FooterDefaultLinksHelper;
 use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ThemeData;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
@@ -4184,7 +4185,7 @@ HTML;
             $widgetType = (string)($widget['widget_type'] ?? '');
             $widgetArea = $this->pass()->renderArea === 'backend' ? 'backend' : 'frontend';
             $instanceIdentify = $this->resolveWidgetInstanceIdentify($config, $widgetArea);
-            $locale = $this->resolveRenderLocale();
+            $locale = $this->resolveRenderLocale($widgetArea);
 
             if ($definition) {
                 $identify = $instanceIdentify !== '' ? $instanceIdentify : (($widgetModule === 'Weline_Theme'
@@ -4240,8 +4241,37 @@ HTML;
         return ThemeData::mergeTranslatedPaths($config, $params, $identify, $locale);
     }
 
-    private function resolveRenderLocale(): ?string
+    /**
+     * Frontend: same path-first authority as chrome ({@see WidgetI18n::storefrontLocale}).
+     * Backend: RequestContext / default only — never storefront URL path locale.
+     */
+    private function resolveRenderLocale(?string $renderArea = null): ?string
     {
+        $area = $renderArea;
+        if ($area === null || $area === '') {
+            try {
+                $area = (string)($this->pass()->renderArea ?? 'frontend');
+            } catch (\Throwable) {
+                $area = 'frontend';
+            }
+        }
+        $area = \strtolower(\trim($area));
+
+        if ($area !== 'backend') {
+            try {
+                $locale = \trim(WidgetI18n::storefrontLocale());
+            } catch (\Throwable) {
+                $locale = '';
+            }
+            if ($locale === '') {
+                return null;
+            }
+
+            return preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $locale)
+                ? $locale
+                : null;
+        }
+
         $locale = '';
         try {
             $locale = trim((string)(RequestContext::locale() ?: ''));
@@ -4597,7 +4627,7 @@ HTML;
         string $area,
         array $identity,
     ): array {
-        $locale = $this->resolveRenderLocale();
+        $locale = $this->resolveRenderLocale($area);
         if ($locale === null || $locale === '' || \strcasecmp($locale, 'default') === 0) {
             return $layout;
         }

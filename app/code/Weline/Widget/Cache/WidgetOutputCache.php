@@ -16,7 +16,7 @@ use Weline\Framework\View\Cache\TemplateFragmentOutputCache;
  */
 final class WidgetOutputCache
 {
-    public const CACHE_VERSION = '20261010-widget-output-ttl-v3';
+    public const CACHE_VERSION = '20261013-widget-output-env-scoped-v4';
 
     /** Layout-key sentinel when {@see normalizeShare} is true. */
     public const SHARED_LAYOUT_TOKEN = '*';
@@ -174,7 +174,8 @@ final class WidgetOutputCache
             ? self::SHARED_LAYOUT_TOKEN
             : self::resolveLayoutName($parts, $configForDigest);
 
-        return 'widget.output.' . \sha1(\implode('|', [
+        // Logical payload only — lang/currency/website enter via KeyBuilder system build.
+        $logical = \implode('|', [
             (string)($parts['identity'] ?? ''),
             $templatePath,
             (string)$mtime,
@@ -186,13 +187,20 @@ final class WidgetOutputCache
             $share ? '1' : '0',
             $configDigest,
             (string)max(0, (int)($parts['ttl'] ?? 0)),
-            KeyBuilder::environmentHash([
+        ]);
+
+        return KeyBuilder::buildEnvironmentScoped(
+            'widget.output',
+            $logical,
+            [
                 'cache_version' => self::CACHE_VERSION,
                 'widget_context' => 'ttl',
-            ], [
+            ],
+            [
+                // Same as hook chrome: reuse across routes; keep website/lang/currency.
                 'area_route' => false,
-            ]),
-        ]));
+            ],
+        );
     }
 
     /**

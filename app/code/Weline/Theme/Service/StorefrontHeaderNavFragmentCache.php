@@ -359,17 +359,17 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
         return \substr(\sha1(\implode("\n", $parts)), 0, 16);
     }
 
+    /**
+     * Path-first storefront locale for logical keys (same authority as chrome Phrase).
+     * Kept in logical until HotCache StorefrontCacheKeyContext.lang is proven ≡ path
+     * on /{locale}/ routes; policy vary=lang still applies on top.
+     */
     private function storefrontLocaleSegment(): string
     {
         try {
-            $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\App\State::getLangLocal()));
+            $locale = \trim(\Weline\Theme\Helper\WidgetI18n::storefrontLocale());
         } catch (\Throwable) {
             $locale = '';
-        }
-        $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-        $pathLocale = \Weline\Theme\Helper\WidgetI18n::localeFromRequestUri($requestUri);
-        if ($pathLocale !== null) {
-            $locale = $pathLocale;
         }
 
         return $locale !== '' ? $locale : 'zh_Hans_CN';

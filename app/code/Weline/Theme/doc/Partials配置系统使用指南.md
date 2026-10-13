@@ -256,7 +256,7 @@ $headerPath = PartialsScanner::getPartialsPath($theme, 'frontend', 'header', 'de
 
 - `mode=chrome`：启用 **Worker 进程内** LRU 输出缓存；缺省或解析失败则不缓存
 - `auth`：`guest` | `role` | `user`（topbar 含用户名时用 `user`）
-- 缓存 key 经 `KeyBuilder::environmentHash`，按网站、lang / lang_local、currency、主题/配色和鉴权维度复用
+- 缓存 key 经 `KeyBuilder::buildEnvironmentScoped`（chrome/head HTML 袋）；网站、lang / lang_local、currency、主题/配色和鉴权进入系统环境维，禁止手搓 `sha1|environmentHash`
 - 后台 URI、控制器、页面布局和内容数据不进入壳缓存 key；同环境访问新页面继续复用同一壳
 - 热路径不走 `theme_runtime` 共享内存：在连接池压力下每次 `wls.memory.get/set` 可达约 200ms，会导致壳缓存比直接渲染更慢
 - 每个 Worker 首次渲染后进程内命中；同 Worker 热刷应亚百毫秒级。跨 Worker 需各自预热（bootstrap warmup / 首次请求）

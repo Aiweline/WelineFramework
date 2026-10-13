@@ -1562,21 +1562,22 @@ class Template extends DataObject implements RequestLocalInterface
             $cachePolicy,
             $this->staticHookOutputCacheTtl(),
         );
-        // Hook chrome must vary by lang/currency/website/auth — not by product
-        // area_route. Default environmentHash includes area_route and would copy
-        // one HTML blob per PDP URL into the worker process cache.
-        // Do not inject Request::getBaseUrl(): on PDPs it can include the product
-        // path and would shard keys even with area_route disabled.
-        // Do not key on absolute $compiledFile path: tag-source mappings used to
-        // shard by area_route and produced unique tempfile/path identities per URL.
-        $cacheKey = 'hook.output.' . \sha1($hookFile . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . KeyBuilder::environmentHash([
-            'cache_version' => '20260921-hook-origin-base',
-            'hook_context' => $cacheContext,
-            'policy_digest' => $templateCachePolicies->digest(),
-            'ttl' => $ttl,
-        ], [
-            'area_route' => false,
-        ]));
+        // Hook HTML: system KeyBuilder env scope (lang/currency/website/origin).
+        // area_route=false so PDP URLs do not shard one chrome blob per product.
+        // Logical payload only — do not hand-roll sha1(prefix|environmentHash).
+        $cacheKey = KeyBuilder::buildEnvironmentScoped(
+            'hook.output',
+            $hookFile . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'],
+            [
+                'cache_version' => '20261013-hook-env-scoped-v2',
+                'hook_context' => $cacheContext,
+                'policy_digest' => $templateCachePolicies->digest(),
+                'ttl' => $ttl,
+            ],
+            [
+                'area_route' => false,
+            ],
+        );
         $cached = $this->readStaticHookOutputCache($cacheKey, $ttl);
         if ($cached['status'] !== 'miss') {
             if ($this->isEmptyCacheHtml((string)$cached['html'])) {
@@ -1766,13 +1767,9 @@ class Template extends DataObject implements RequestLocalInterface
                 return null;
             }
 
-            // Same-locale storefront pages share one body-end hook blob; do not
-            // shard by full request_path or by area_route (product URLs).
-            return 'body-end:' . KeyBuilder::environmentHash([
-                'auth' => $authContext,
-            ], [
-                'area_route' => false,
-            ]);
+            // Logical discriminator only — outer hook.output buildEnvironmentScoped
+            // applies lang/currency/website. Do not nest environmentHash here.
+            return 'body-end|auth:' . $authContext;
         } catch (\Throwable) {
             return null;
         }
@@ -1797,15 +1794,9 @@ class Template extends DataObject implements RequestLocalInterface
                 return null;
             }
 
-            $hash = KeyBuilder::environmentHash(
-                ['scope' => $eventName],
-                [
-                    'currency' => $type === 'currency',
-                    'area_route' => false,
-                ]
-            );
-
-            return $type . ':' . $hash;
+            // Logical only; outer hook.output / aggregate keys apply env scope.
+            // Currency switcher still varies via default currency dim on the outer key.
+            return $type . '|scope:' . $eventName;
         } catch (\Throwable) {
             return null;
         }
@@ -2291,18 +2282,20 @@ class Template extends DataObject implements RequestLocalInterface
             return null;
         }
 
-        return 'template.output.header.default.' . KeyBuilder::environmentHash([
-            'scope' => 'frontend-header-default',
-            'cache_version' => '20260825-header-search-scope',
-            'file' => $path,
-            'file_mtime' => (int)$stat['mtime'],
-            'file_size' => (int)$stat['size'],
-            'auth' => $authContext,
-            'dictionary' => $this->reusableHeaderDictionaryScopeHash($dictionary),
-            'request_scope' => $this->reusableHeaderRequestScope(),
-        ], [
-            'area_route' => false,
-        ]);
+        return KeyBuilder::buildEnvironmentScoped(
+            'template.output.header.default',
+            $path . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'],
+            [
+                'scope' => 'frontend-header-default',
+                'cache_version' => '20261013-header-env-scoped-v2',
+                'auth' => $authContext,
+                'dictionary' => $this->reusableHeaderDictionaryScopeHash($dictionary),
+                'request_scope' => $this->reusableHeaderRequestScope(),
+            ],
+            [
+                'area_route' => false,
+            ],
+        );
     }
 
     private function reusableHeaderDictionaryScopeHash(array $dictionary): string
@@ -2706,7 +2699,16 @@ class Template extends DataObject implements RequestLocalInterface
             if ($requestId === null || $requestId === '') {
                 $requestId = (string)($context->get('runtime.request_count') ?? \spl_object_id($context));
             }
-            $requestCacheKey = 'view.hook.output.' . sha1($requestId . ':' . $name . ':' . $this->hookLocaleCacheContext());
+            $requestCacheKey = KeyBuilder::buildEnvironmentScoped(
+                'view.hook.request',
+                $requestId . ':' . $name,
+                [
+                    'cache_version' => '20261013-hook-request-v2',
+                ],
+                [
+                    'area_route' => false,
+                ],
+            );
             $cachedHookHtml = RequestContext::get($requestCacheKey);
             if (\is_string($cachedHookHtml)) {
                 if ($traceAccountSidebarHook) {
@@ -2724,9 +2726,16 @@ class Template extends DataObject implements RequestLocalInterface
         if ($aggregatePolicy !== null && !$this->shouldDecorateHookOutput()) {
             $aggregateContext = $this->resolveTemplateCachePolicyContext($aggregatePolicy, $name);
             if ($aggregateContext !== null) {
-                $aggregateCacheKey = 'view.hook.aggregate.' . \sha1(
-                    $name . '|' . $this->baseUrlCacheContext() . '|' . $aggregateContext . '|'
-                    . $this->hookLocaleCacheContext() . '|' . $templateCachePolicies->aggregateDigest($name)
+                $aggregateCacheKey = KeyBuilder::buildEnvironmentScoped(
+                    'view.hook.aggregate',
+                    $name . '|' . $aggregateContext . '|' . $templateCachePolicies->aggregateDigest($name),
+                    [
+                        'cache_version' => '20261013-hook-aggregate-v2',
+                        'origin' => $this->baseUrlCacheContext(),
+                    ],
+                    [
+                        'area_route' => false,
+                    ],
                 );
                 $aggregateTtl = $this->staticHookAggregateCacheTtl();
                 if (!$forceRefresh) {
@@ -3319,31 +3328,19 @@ class Template extends DataObject implements RequestLocalInterface
 
     private function accountSidebarStaticHookCacheContext(): ?string
     {
-        try {
-            return 'account-sidebar:' . KeyBuilder::environmentHash([
-                'base_url' => $this->baseUrlCacheContext(),
-                'cache_version' => '20260528-hook-i18n-context',
-                'scope' => 'account-sidebar',
-            ], [
-                'area_route' => false,
-            ]);
-        } catch (\Throwable) {
-            return null;
-        }
+        // Logical only; outer hook.output buildEnvironmentScoped owns env/origin.
+        return 'account-sidebar|v2';
     }
 
     private function headerActionStaticHookCacheContext(string $name): ?string
     {
-        try {
-            return 'header-action:' . $name . ':' . KeyBuilder::environmentHash([
-                'base_url' => $this->baseUrlCacheContext(),
-                'hook' => $name,
-            ], [
-                'area_route' => false,
-            ]);
-        } catch (\Throwable) {
+        $name = \trim($name);
+        if ($name === '') {
             return null;
         }
+
+        // Logical only; outer hook.output buildEnvironmentScoped owns env/origin.
+        return 'header-action|' . $name;
     }
 
     private function baseUrlCacheContext(): string
@@ -3370,17 +3367,6 @@ class Template extends DataObject implements RequestLocalInterface
             return \trim((string)($env['host'] ?? ''));
         } catch (\Throwable) {
             return '';
-        }
-    }
-
-    private function hookLocaleCacheContext(): string
-    {
-        try {
-            return 'env:' . KeyBuilder::environmentHash(['scope' => 'hook-locale'], [
-                'area_route' => false,
-            ]);
-        } catch (\Throwable) {
-            return 'locale:unknown';
         }
     }
 

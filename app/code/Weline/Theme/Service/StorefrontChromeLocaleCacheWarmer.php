@@ -31,7 +31,7 @@ use Weline\Websites\Service\ThemeApplicationContextProducer;
  *
  * Header chrome is guest-neutral (lang-only); search facade hydrates on serve.
  * Soft-clear / empty L2 otherwise makes first hit of a new locale pay chrome builder.
- * CLI/Clear must pin the acceptance public Host so environmentHash matches HTTP.
+ * CLI/Clear must pin the acceptance public Host so KeyBuilder env scope matches HTTP.
  * MUST install the same homepage ThemeLayoutSourceSnapshot the storefront Index
  * path installs (SolidifiedControllerTemplateResolver) so chrome partial bytes are
  * captured for path-local digests (xscope A / chrome-partial-v22). Full layout
@@ -286,7 +286,7 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
 
     /**
      * Pin CLI/Clear identity to the storefront public acceptance Host so
-     * KeyBuilder environmentHash (host/website_url/base_url) matches HTTP.
+     * KeyBuilder environment dimensions (host/website_url/base_url) match HTTP.
      * Reads WLS_PUBLIC_ORIGIN / instance public_origin / public_host — never a
      * sibling-site slug whitelist.
      */

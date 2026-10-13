@@ -323,12 +323,31 @@ class Widget implements TaglibInterface
                     : $renderWidget();
             };
 
+            $productId = 0;
+            $offerId = 0;
+            if ($ttl > 0 && \class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
+                try {
+                    $offer = \Weline\Product\Helper\StorefrontOfferResolver::currentOffer();
+                    $productId = max(0, (int)($offer['product_id'] ?? 0));
+                    $offerId = max(0, (int)($offer['offer_id'] ?? $offer['product_offer_id'] ?? 0));
+                } catch (\Throwable) {
+                }
+            }
+            if ($ttl > 0 && $productId <= 0) {
+                $productId = max(0, (int)($params['card_product_id'] ?? $params['product_id'] ?? 0));
+            }
+            if ($ttl > 0 && $offerId <= 0) {
+                $offerId = max(0, (int)($params['offer_id'] ?? $params['product_offer_id'] ?? 0));
+            }
+
             $html = \Weline\Widget\Cache\WidgetOutputCache::remember(
                 $ttl,
                 $ttl > 0 ? \Weline\Widget\Cache\WidgetOutputCache::buildKey([
                     'identity' => $identity,
                     'template_path' => $templatePath,
                     'node_uid' => (string)($spec['widget_id'] ?? $spec['template_ref'] ?? ''),
+                    'product_id' => $productId,
+                    'offer_id' => $offerId,
                     'layout_name' => \Weline\Widget\Cache\WidgetOutputCache::resolveLayoutName([], $params),
                     'share' => $share,
                     'ttl' => $ttl,

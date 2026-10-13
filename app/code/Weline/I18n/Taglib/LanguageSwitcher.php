@@ -6,6 +6,7 @@ namespace Weline\I18n\Taglib;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\CachePolicy;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Phrase\Parser;
@@ -343,14 +344,17 @@ class LanguageSwitcher implements TaglibInterface
                 $currentSearch,
                 $backendRoute,
                 $catalogFingerprintCodes,
-            ) . '|language_request=' . ($showLanguageRequest ? '1' : '0')
-                . '|navigation=' . $navigation
-                . '|show_search=' . ($showSearch ? '1' : '0')
-                . '|label_mode=' . $labelMode
-                . '|lazy_panel=' . ($lazyPanel ? '1' : '0')
-                . '|markup=weline-ui-2-language-switcher-' . self::SWITCHER_MARKUP_VERSION
-                . '|mount=' . $websiteMount
-                . '|inst=' . $switcherId;
+                [
+                    'language_request' => $showLanguageRequest ? '1' : '0',
+                    'navigation' => $navigation,
+                    'show_search' => $showSearch ? '1' : '0',
+                    'label_mode' => $labelMode,
+                    'lazy_panel' => $lazyPanel ? '1' : '0',
+                    'markup' => 'weline-ui-2-language-switcher-' . self::SWITCHER_MARKUP_VERSION,
+                    'mount' => $websiteMount,
+                    'inst' => $switcherId,
+                ],
+            );
             $now = \microtime(true);
             // Frontend switcher HTML embeds currentPath language links; process L1
             // keyed by path copies one blob per PDP URL. Keep process cache for
@@ -1026,7 +1030,11 @@ class LanguageSwitcher implements TaglibInterface
     }
 
     /**
+     * Backend process HTML bag for the language switcher.
+     * System KeyBuilder env-scopes lang/currency/website; logical holds path/UI dims.
+     *
      * @param string[] $languageCodes
+     * @param array<string, scalar|null> $ui
      */
     private static function buildHtmlCacheKey(
         bool $isBackendArea,
@@ -1038,25 +1046,46 @@ class LanguageSwitcher implements TaglibInterface
         string $currentPath,
         string $currentSearch,
         string $backendRoute,
-        array $languageCodes
+        array $languageCodes,
+        array $ui = [],
     ): string {
-        return \md5(\json_encode([
-            'dictionary_version' => DictionaryCacheNamespace::fingerprint(array_values(array_unique([
-                $currentCode,
-                $displayLocale,
-                ...\Weline\Framework\Cache\StorefrontCacheKeyContext::currentOrRequestFence()->translationLocales,
-            ]))),
-            'translation_locales' => \Weline\Framework\Cache\StorefrontCacheKeyContext::currentOrRequestFence()->translationLocales,
-            'scope' => $isBackendArea ? 'backend' : 'frontend:' . $websiteId,
-            'for' => $renderFor,
-            'lang' => $currentCode,
-            'display' => $displayLocale,
-            'currency' => $currentCurrency,
-            'path' => $currentPath,
-            'search' => self::sanitizeLanguageSearch($currentSearch),
-            'backend_route' => $backendRoute,
-            'languages' => $languageCodes,
-        ], \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE) ?: '');
+        $logical = \implode('|', [
+            $isBackendArea ? 'backend' : ('frontend:' . $websiteId),
+            $renderFor,
+            $currentPath,
+            self::sanitizeLanguageSearch($currentSearch),
+            $backendRoute,
+            \implode(',', $languageCodes),
+            (string)($ui['language_request'] ?? '0'),
+            (string)($ui['navigation'] ?? ''),
+            (string)($ui['show_search'] ?? '0'),
+            (string)($ui['label_mode'] ?? ''),
+            (string)($ui['lazy_panel'] ?? '0'),
+            (string)($ui['markup'] ?? ''),
+            (string)($ui['mount'] ?? ''),
+            (string)($ui['inst'] ?? ''),
+        ]);
+
+        return KeyBuilder::buildEnvironmentScoped(
+            'i18n.language_switcher.html',
+            $logical,
+            [
+                'cache_version' => '20261013-lang-switcher-env-scoped-v2',
+                'dictionary_version' => DictionaryCacheNamespace::fingerprint(\array_values(\array_unique([
+                    $currentCode,
+                    $displayLocale,
+                    ...\Weline\Framework\Cache\StorefrontCacheKeyContext::currentOrRequestFence()->translationLocales,
+                ]))),
+                'translation_locales' => \Weline\Framework\Cache\StorefrontCacheKeyContext::currentOrRequestFence()->translationLocales,
+                'display' => $displayLocale,
+                // Pin rendered lang/currency so bag matches hrefs if State drifts.
+                'lang' => $currentCode,
+                'currency' => $currentCurrency,
+            ],
+            [
+                'area_route' => false,
+            ],
+        );
     }
 
     /**
