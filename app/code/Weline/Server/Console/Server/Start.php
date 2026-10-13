@@ -6253,6 +6253,27 @@ class Start extends CommandAbstract
         if (\is_array($detailed['budget'])) {
             $config['worker_budget_detail'] = $detailed['budget'];
         }
+        // Inject host capacity for Worker Fiber / Nginx / L7 tier ceilings.
+        if ($limitMb > 0) {
+            $config['host_limit_mb'] = $limitMb;
+            @\putenv('WLS_HOST_LIMIT_MB=' . $limitMb);
+            $_ENV['WLS_HOST_LIMIT_MB'] = (string)$limitMb;
+            $_SERVER['WLS_HOST_LIMIT_MB'] = (string)$limitMb;
+        }
+        $capacityTier = \Weline\Server\Service\Capacity\HostCapacityTier::resolve(
+            $limitMb > 0 ? $limitMb : null
+        );
+        $config['capacity_tier'] = $capacityTier['tier'];
+        $config['capacity_tier_reason'] = $capacityTier['reason'];
+        $this->printer->note(
+            'capacity_tier=' . $capacityTier['tier']
+            . ' host_limit_mb=' . (int)$capacityTier['host_limit_mb']
+            . ' nginx_connections_cap=' . (int)$capacityTier['nginx_worker_connections_cap']
+            . ' fiber_cap=' . ($capacityTier['fiber_max_active_cap'] === null
+                ? 'none'
+                : (string)$capacityTier['fiber_max_active_cap'])
+            . ' (' . $capacityTier['reason'] . ')'
+        );
         if ($cliWorkerCountExplicit
             && $limitMb > 0
             && $limitMb <= 2300

@@ -372,6 +372,12 @@ final class RuntimePolicyCompiler
             throw new \RuntimeException('Runtime attack rules resolved to an empty ruleset.');
         }
 
+        // In-memory compile snapshot only — never write scaled numbers back to
+        // SecurityPolicyStateStore (would multiply on re-publish).
+        if (\class_exists(\Weline\Server\Service\Capacity\HostCapacityTier::class)) {
+            $rules = \Weline\Server\Service\Capacity\HostCapacityTier::scaleAttackRules($rules);
+        }
+
         return $rules;
     }
 

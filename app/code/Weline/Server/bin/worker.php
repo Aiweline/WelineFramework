@@ -1702,6 +1702,17 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         $maxMemoryBytes,
                         $fiberPinMaxActive
                     );
+                    $fiberCapacityApplied = \Weline\Server\Service\Capacity\HostCapacityTier::applyFiberAdmission(
+                        $fiberAdmissionConfig,
+                        $fiberMaxActive
+                    );
+                    $fiberMaxActive = (int)$fiberCapacityApplied['max_active'];
+                    $fiberPinMaxActive = (bool)$fiberCapacityApplied['pin_max_active'];
+                    $fiberAdaptiveMaxActive = (bool)$fiberCapacityApplied['adaptive_max_active'];
+                    $fiberAdmissionQueueWaitMs = (int)$fiberCapacityApplied['queue_wait_ms'];
+                    \Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHardFloorBytes(
+                        (int)$fiberCapacityApplied['admission_hard_floor_bytes']
+                    );
                     \Weline\Server\Service\AdaptiveFiberMaxActive::configure(
                         $fiberMaxActive,
                         $fiberPinMaxActive,
@@ -1713,6 +1724,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         . ($fiberMaxActive !== $fiberMaxActiveConfigured
                             ? (" (configured={$fiberMaxActiveConfigured}, clamped)")
                             : '')
+                        . ' capacity_tier=' . (string)$fiberCapacityApplied['capacity_tier']
                     );
                     break;
 
@@ -1969,13 +1981,24 @@ $fiberMaxActive = \Weline\Server\Service\WorkerResponseMemoryGuard::clampMaxActi
     $maxMemoryBytes,
     $fiberPinMaxActive
 );
+$fiberCapacityApplied = \Weline\Server\Service\Capacity\HostCapacityTier::applyFiberAdmission(
+    $fiberAdmissionConfig,
+    $fiberMaxActive
+);
+$fiberMaxActive = (int)$fiberCapacityApplied['max_active'];
+$fiberPinMaxActive = (bool)$fiberCapacityApplied['pin_max_active'];
+$fiberAdaptiveMaxActive = (bool)$fiberCapacityApplied['adaptive_max_active'];
+$fiberAdmissionConfig['queue_wait_ms'] = (int)$fiberCapacityApplied['queue_wait_ms'];
+\Weline\Server\Service\WorkerResponseMemoryGuard::setAdmissionMemoryHardFloorBytes(
+    (int)$fiberCapacityApplied['admission_hard_floor_bytes']
+);
 \Weline\Server\Service\AdaptiveFiberMaxActive::configure(
     $fiberMaxActive,
     $fiberPinMaxActive,
     $fiberAdaptiveMaxActive
 );
 $fiberMaxActive = \Weline\Server\Service\AdaptiveFiberMaxActive::current();
-$fiberAdmissionQueueWaitMs = (int)$fiberAdmissionConfig['queue_wait_ms'];
+$fiberAdmissionQueueWaitMs = (int)$fiberCapacityApplied['queue_wait_ms'];
 $fiberAdmissionQueueDepth = (int)$fiberAdmissionConfig['queue_depth'];
 $fiberAdmissionQueueSliceMs = (int)$fiberAdmissionConfig['queue_slice_ms'];
 $fiberAdmissionWaiters = []; // fiberKey => true（排队中，不占活跃槽）
@@ -1986,6 +2009,7 @@ WlsLogger::info_(
     . ($fiberMaxActive !== $fiberMaxActiveConfigured
         ? (' (configured=' . $fiberMaxActiveConfigured . ', clamped for memory_limit=' . $wlsMemoryLimit . ')')
         : '')
+    . ' capacity_tier=' . (string)$fiberCapacityApplied['capacity_tier']
     . ' adaptive=' . ($fiberAdaptiveMaxActive && !$fiberPinMaxActive ? '1' : '0')
     . ' queue_wait_ms=' . $fiberAdmissionQueueWaitMs
     . ' queue_depth=' . $fiberAdmissionQueueDepth

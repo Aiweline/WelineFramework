@@ -80,10 +80,17 @@ return [
             // 设为 0/false 才启用严格 in-process 首页证明（可能因模板编译致命错误杀死进程）。
             'ready_gate_homepage_fail_open' => true,
         ],
+        // 主机容量档：按 MemTotal/cgroup 钳制 Fiber / Nginx / L7（与 worker_budget 分工：只管个数）。
+        // force=tiny|small|medium|large；enabled=false 关闭。Start 注入 WLS_HOST_LIMIT_MB。
+        'capacity_tier' => [
+            'enabled' => true,
+            // 'force' => 'tiny',
+        ],
         // Fiber 准入：默认限制每 Worker 并发渲染数；满则排队等待，优先延迟再 503。
         // max_active=0 表示不限制（内存软压仍会等待）。wait 默认 20s、硬顶 30s。
         // mix30 / 爬虫：钉死较低 max_active + 满等待，避免 FileAdapter 并发读缓存 OOM→502。
         // adaptive_max_active：按实时头寸降快升慢；pin_max_active 钉死配置值。
+        // tiny/small 上 HostCapacityTier 保活优先，仍覆盖 pin。
         'fiber' => [
             'max_active' => 6,
             'adaptive_max_active' => false,

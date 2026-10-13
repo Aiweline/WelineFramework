@@ -163,6 +163,15 @@ NGINX;
         $upstreamKeepalive = $this->paths->upstreamKeepalive();
         $upstreamKeepaliveTimeoutSec = $this->paths->upstreamKeepaliveTimeoutSec();
         $workerConnections = $this->paths->workerConnections();
+        $edgeLimit = \class_exists(\Weline\Server\Service\Capacity\HostCapacityTier::class)
+            ? \Weline\Server\Service\Capacity\HostCapacityTier::nginxEdgeLimitFragments()
+            : [
+                'enabled' => false,
+                'http_zone_block' => '',
+                'location_directives' => '',
+            ];
+        $edgeLimitHttpZone = (string)($edgeLimit['http_zone_block'] ?? '');
+        $edgeLimitLocation = (string)($edgeLimit['location_directives'] ?? '');
         $mimeTypes = $this->stageMimeTypesDependency();
         $quotedMimeTypes = $this->nginxQuotedPath($mimeTypes);
 
@@ -407,7 +416,7 @@ http {
     open_file_cache_errors on;
 {$tempBlock}{$gzipBlock}
 {$cacheHttpBlock}{$authorityMapBlock}{$protocolMapBlock}
-
+{$edgeLimitHttpZone}
     upstream wls_backend {
 {$upstreamServers}
         keepalive {$upstreamKeepalive};
@@ -487,7 +496,7 @@ http {
 {$mediaDiskLocationBlock}
 {$staticCacheLocationBlock}
         location / {
-            proxy_pass http://wls_backend;
+{$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
 {$httpRedirectLocation}
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
@@ -996,6 +1005,10 @@ NGINX;
         if ($hostSsl === []) {
             return '';
         }
+        $edgeLimitLocation = '';
+        if (\class_exists(\Weline\Server\Service\Capacity\HostCapacityTier::class)) {
+            $edgeLimitLocation = (string)(\Weline\Server\Service\Capacity\HostCapacityTier::nginxEdgeLimitFragments()['location_directives'] ?? '');
+        }
         $blocks = [];
         foreach ($hostSsl as $host => $ssl) {
             $host = \strtolower(\trim((string)$host));
@@ -1036,7 +1049,7 @@ NGINX;
         }
 
         location / {
-            proxy_pass http://wls_backend;
+{$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
             proxy_set_header Connection \$wls_business_upstream_connection;

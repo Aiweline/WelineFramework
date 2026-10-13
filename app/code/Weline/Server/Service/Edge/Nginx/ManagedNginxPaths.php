@@ -282,7 +282,12 @@ final class ManagedNginxPaths
     {
         $cfg = $this->config();
         $n = (int)($cfg['upstream_keepalive'] ?? 256);
-        return \max(16, \min(1024, $n));
+        $n = \max(16, \min(1024, $n));
+        if (\class_exists(\Weline\Server\Service\Capacity\HostCapacityTier::class)) {
+            $n = \Weline\Server\Service\Capacity\HostCapacityTier::clampNginxUpstreamKeepalive($n);
+        }
+
+        return $n;
     }
 
     public function upstreamKeepaliveTimeoutSec(): int
@@ -300,7 +305,12 @@ final class ManagedNginxPaths
     {
         $cfg = $this->config();
         $n = (int)($cfg['worker_connections'] ?? 32768);
-        return \max(1024, \min(65535, $n));
+        $n = \max(1024, \min(65535, $n));
+        if (\class_exists(\Weline\Server\Service\Capacity\HostCapacityTier::class)) {
+            $n = \Weline\Server\Service\Capacity\HostCapacityTier::clampNginxWorkerConnections($n);
+        }
+
+        return $n;
     }
 
     public function tempDir(): string
