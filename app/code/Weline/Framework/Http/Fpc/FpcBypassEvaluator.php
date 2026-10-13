@@ -140,10 +140,11 @@ final class FpcBypassEvaluator
                 ],
                 'effect' => 'bypass_serve_and_publish',
             ],
-            // Deploy webhook MARKER (~wh~); keep in sync with DeployWebhookRouteService::MARKER.
+            // Deploy webhook MARKER (~wh~): WLS pierce-gated (FPM uses path hard-exclude instead).
             [
                 'id' => 'deploy.webhook_path_prefix',
                 'match' => [
+                    'require_pierce_stamp' => true,
                     'uri_path_prefixes' => ['/~wh~'],
                 ],
                 'effect' => 'bypass_serve_and_publish',

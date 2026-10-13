@@ -53,10 +53,37 @@ final class FpcBypassAndStoreContractTest extends TestCase
         self::assertTrue(FpcBypassEvaluator::shouldBypass([
             'request_path' => '/~preview/pv_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG/~site/grocery/',
         ], $rules));
+        // Deploy /~wh~: pierce required (same gate as diag); bare path must not bypass.
+        self::assertFalse(FpcBypassEvaluator::shouldBypass([
+            'request_path' => '/~wh~deadbeef',
+        ], $rules));
+        self::assertTrue(FpcBypassEvaluator::shouldBypass([
+            'request_path' => '/~wh~deadbeef',
+            'pierce_stamp_valid' => true,
+        ], $rules));
         self::assertFalse(FpcBypassEvaluator::shouldBypass([
             'query' => ['q' => 'hanfu'],
             'headers' => ['cache-control' => 'no-cache'],
         ], $rules));
+    }
+
+    public function testBuiltinFallbackPinsDeployWebhookPierceGate(): void
+    {
+        $byId = [];
+        foreach (FpcBypassEvaluator::builtinFallbackRules() as $rule) {
+            $byId[(string)($rule['id'] ?? '')] = $rule;
+        }
+        self::assertArrayHasKey('deploy.webhook_path_prefix', $byId);
+        $match = $byId['deploy.webhook_path_prefix']['match'] ?? [];
+        self::assertTrue((bool)($match['require_pierce_stamp'] ?? false));
+        self::assertSame(['/~wh~'], $match['uri_path_prefixes'] ?? null);
+    }
+
+    public function testCoordinatorHardExcludesDeployWebhookOnFpmOnly(): void
+    {
+        $path = BP . '/app/code/Weline/Framework/Router/FullPageCacheCoordinator.php';
+        $source = (string)\file_get_contents($path);
+        self::assertStringContainsString("str_starts_with(\$firstSegment, '~wh~') && !Runtime::isWls()", $source);
     }
 
     public function testCollectorPreservesRequirePierceStamp(): void
