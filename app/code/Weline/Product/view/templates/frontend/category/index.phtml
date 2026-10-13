@@ -36,6 +36,14 @@ $sortOptions = StorefrontPageAssignBag::coalesce($this->getData('storefront_list
 $sortOptions = is_array($sortOptions) ? $sortOptions : [];
 $children = StorefrontPageAssignBag::coalesce($this->getData('storefront_category_children'), 'storefront_category_children', []);
 $children = is_array($children) ? $children : [];
+$listingPath = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_path'), 'storefront_listing_path', ''));
+$categoryRoutePath = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_category_path'), 'storefront_category_path', ''));
+if ($listingPath === '' && $categoryRoutePath !== '') {
+    $listingPath = '/category/' . $categoryRoutePath;
+}
+if ($listingPath === '') {
+    $listingPath = '/categories';
+}
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
 $from = $visibleCount > 0 ? (($page - 1) * $pageSize) + 1 : 0;
@@ -43,6 +51,13 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
 ?>
 <section class="amz-plp"
          data-testid="storefront-category-catalog"
+         data-storefront-listing="1"
+         data-listing-surface="category"
+         data-listing-path="<?= $escape($listingPath) ?>"
+         data-category-path="<?= $escape($categoryRoutePath) ?>"
+         data-weline-load="storefrontListing"
+         data-weline-load-when="idle"
+         data-listing-loading-label="<?= $escape(__('加载中…')) ?>"
          weline-code="product.frontend.category.section_1">
 
     <?php if ($breadcrumbs !== []): ?>
@@ -125,40 +140,38 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
     <?php endif; ?>
 
     <div class="amz-plp__results-bar" data-testid="storefront-category-toolbar">
-        <h2 class="amz-plp__results-text">
+        <h2 class="amz-plp__results-text" data-listing-count>
             <?php if ($visibleCount > 0): ?>
                 <?= __('第 %{1}–%{2} 件，共 %{3} 件结果', [$from, $to, $visibleCount]) ?>
             <?php else: ?>
                 <?= __('0 件结果') ?>
             <?php endif; ?>
             <span class="amz-plp__results-query">
-                <?= __('“%{1}”', [$categoryName]) ?>
+                <?= $escape($categoryName) ?>
             </span>
-            <?php if ($activePrice !== '' && $visibleCount !== $totalCount): ?>
-                <span class="amz-plp__results-hint"><?= __('（筛选自 %{1} 件）', [$totalCount]) ?></span>
-            <?php endif; ?>
+            <span class="amz-plp__results-hint" data-listing-count-hint hidden></span>
         </h2>
         <?php if ($sortOptions !== []): ?>
             <label class="amz-plp__sort">
                 <span><?= __('排序') ?>:</span>
                 <select class="amz-plp__sort-select"
                         data-testid="storefront-category-sort"
-                        onchange="if (this.value) { window.location.href = this.value; }">
+                        data-listing-sort>
                     <?php foreach ($sortOptions as $option): ?>
                         <?php
                         if (!is_array($option)) {
                             continue;
                         }
-                        $href = trim((string)($option['url'] ?? ''));
-                        if ($href === '') {
+                        $code = trim((string)($option['code'] ?? ''));
+                        if ($code === '') {
                             continue;
                         }
                         ?>
-                        <option value="<?= $escape($href) ?>"<?= !empty($option['selected']) ? ' selected' : '' ?>>
+                        <option value="<?= $escape($code) ?>"<?= !empty($option['selected']) ? ' selected' : '' ?>>
                             <?php
                             // Literal __() so Taglib can prefetch heavy locale packs;
                             // dynamic __($var) is not collected and falls back to Chinese.
-                            $sortLabel = match ((string)($option['code'] ?? '')) {
+                            $sortLabel = match ($code) {
                                 'default' => (string)__('默认排序'),
                                 'price_asc' => (string)__('价格从低到高'),
                                 'price_desc' => (string)__('价格从高到低'),
@@ -176,16 +189,13 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
 
     <div class="amz-plp__notice" data-testid="category-message" aria-live="polite"></div>
 
+    <div data-listing-stage>
     <?php if ($offers === []): ?>
-        <div class="amz-plp__empty" data-testid="storefront-category-empty">
-            <?php if ($activePrice !== ''): ?>
-                <?= __('当前筛选条件下暂无商品，请调整筛选。') ?>
-            <?php else: ?>
-                <?= __('该分类下暂无已发布商品。') ?>
-            <?php endif; ?>
+        <div class="amz-plp__empty" data-testid="storefront-category-empty" data-listing-empty>
+            <?= __('该分类下暂无已发布商品。') ?>
         </div>
     <?php else: ?>
-        <div class="amz-plp__grid weline-product-card-shelf" data-testid="storefront-category-grid">
+        <div class="amz-plp__grid weline-product-card-shelf" data-testid="storefront-category-grid" data-listing-grid>
             <?= ProductCardRenderer::projectFromOffers($offers, [
                 'show_price' => true,
                 'show_add_to_cart' => true,
@@ -193,63 +203,66 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
                 'show_compare' => true,
                 'show_quickview' => true,
                 'show_labels' => true,
+                'show_sku' => true,
                 'density' => 'standard',
                 'class' => 'wpc-listing-card',
                 'wishlist_pixel' => true,
             ]) ?>
         </div>
-        <?php if ($totalPages > 1 && $pageOptions !== []): ?>
-            <nav class="amz-plp__pager"
-                 data-testid="storefront-category-pager"
-                 aria-label="<?= $escape(WidgetI18n::label('分页')) ?>">
-                <?php foreach ($pageOptions as $option): ?>
-                    <?php
-                    if (!is_array($option)) {
-                        continue;
-                    }
-                    $type = (string)($option['type'] ?? 'page');
-                    $href = trim((string)($option['url'] ?? ''));
-                    $label = (string)($option['label'] ?? $option['page'] ?? '');
-                    if ($type === 'prev') {
-                        $label = WidgetI18n::label('上一页');
-                    } elseif ($type === 'next') {
-                        $label = WidgetI18n::label('下一页');
-                    }
-                    if ($label === '') {
-                        continue;
-                    }
-                    if ($type === 'ellipsis') {
-                        ?>
-                        <span class="amz-plp__pager-item is-ellipsis" aria-hidden="true"><?= $escape($label) ?></span>
-                        <?php
-                        continue;
-                    }
-                    if ($type === 'prev' || $type === 'next') {
-                        $disabled = !empty($option['disabled']);
-                        if ($disabled || $href === '') {
-                            ?>
-                            <span class="amz-plp__pager-item is-nav is-disabled" aria-disabled="true"><?= $escape($label) ?></span>
-                            <?php
-                        } else {
-                            ?>
-                            <a class="amz-plp__pager-item is-nav" href="<?= $escape($href) ?>"><?= $escape($label) ?></a>
-                            <?php
-                        }
-                        continue;
-                    }
-                    if ($href === '') {
-                        continue;
-                    }
+        <nav class="amz-plp__pager"
+             data-testid="storefront-category-pager"
+             data-listing-pager
+             aria-label="<?= $escape(WidgetI18n::label('分页')) ?>"
+             <?= ($totalPages > 1 && $pageOptions !== []) ? '' : 'hidden' ?>>
+            <?php foreach ($pageOptions as $option): ?>
+                <?php
+                if (!is_array($option)) {
+                    continue;
+                }
+                $type = (string)($option['type'] ?? 'page');
+                $pageNum = max(1, (int)($option['page'] ?? 1));
+                $label = (string)($option['label'] ?? $option['page'] ?? '');
+                if ($type === 'prev') {
+                    $label = WidgetI18n::label('上一页');
+                } elseif ($type === 'next') {
+                    $label = WidgetI18n::label('下一页');
+                }
+                if ($label === '') {
+                    continue;
+                }
+                if ($type === 'ellipsis') {
                     ?>
-                    <?php if (!empty($option['selected'])): ?>
-                        <span class="amz-plp__pager-item is-current" aria-current="page"><?= $escape($label) ?></span>
-                    <?php else: ?>
-                        <a class="amz-plp__pager-item" href="<?= $escape($href) ?>"><?= $escape($label) ?></a>
-                    <?php endif; ?>
-                <?php endforeach; ?>
-            </nav>
-        <?php endif; ?>
+                    <span class="amz-plp__pager-item is-ellipsis" aria-hidden="true"><?= $escape($label) ?></span>
+                    <?php
+                    continue;
+                }
+                if ($type === 'prev' || $type === 'next') {
+                    $disabled = !empty($option['disabled']);
+                    if ($disabled) {
+                        ?>
+                        <span class="amz-plp__pager-item is-nav is-disabled" aria-disabled="true"><?= $escape($label) ?></span>
+                        <?php
+                    } else {
+                        ?>
+                        <button type="button"
+                                class="amz-plp__pager-item is-nav"
+                                data-listing-page="<?= $pageNum ?>"><?= $escape($label) ?></button>
+                        <?php
+                    }
+                    continue;
+                }
+                ?>
+                <?php if (!empty($option['selected'])): ?>
+                    <span class="amz-plp__pager-item is-current" aria-current="page"><?= $escape($label) ?></span>
+                <?php else: ?>
+                    <button type="button"
+                            class="amz-plp__pager-item"
+                            data-listing-page="<?= $pageNum ?>"><?= $escape($label) ?></button>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </nav>
     <?php endif; ?>
+    </div>
 </section>
 
 <style>
@@ -420,6 +433,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
     font-size: 13px;
     font-weight: 600;
     text-decoration: none;
+    cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -452,6 +466,26 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
     color: #565959;
     text-align: center;
     background: #fff;
+}
+.storefront-listing-loading {
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #f0f2f2;
+    color: #565959;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+.storefront-listing-loading[hidden] { display: none !important; }
+.amz-plp.is-listing-loading [data-listing-stage] {
+    opacity: .45;
+    pointer-events: none;
+    transition: opacity .15s ease;
+}
+.amz-plp.is-listing-loading [data-listing-sort] {
+    pointer-events: none;
+    opacity: .7;
 }
 @media (max-width: 1200px) {
     .amz-plp__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -135,6 +135,86 @@ final class StorefrontCatalogViewService
     }
 
     /**
+     * Page-only card presentation after filter/paginate: real listing media +
+     * storefront display names (same summary source as SSR cards).
+     *
+     * Soft facet-listing bags keep identity codes and empty images for the full
+     * catalog; only the current page (~page_size) is upgraded here so QueryBin
+     * never media-hydrates hundreds of rows.
+     *
+     * @param list<array<string, mixed>> $offers
+     * @return list<array<string, mixed>>
+     */
+    public function hydrateListingCardPresentation(array $offers): array
+    {
+        if ($offers === []) {
+            return $offers;
+        }
+
+        $offers = $this->hydrateListingMedia($offers);
+
+        $productIds = array_values(array_unique(array_filter(array_map(
+            static fn(array $offer): int => (int)($offer['product_id'] ?? 0),
+            $offers,
+        ), static fn(int $id): bool => $id > 0)));
+        if ($productIds === []) {
+            return $offers;
+        }
+
+        $summaries = RequestLifecycleTrace::measurePhase(
+            'product.catalog.listing_card_names',
+            fn(): array => $this->publishedOffersForProductIds(
+                $productIds,
+                max(count($productIds), 1),
+                false,
+            ),
+            ['products' => count($productIds)],
+        );
+        $byProductId = [];
+        foreach ($summaries as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $productId = (int)($row['product_id'] ?? 0);
+            if ($productId > 0) {
+                $byProductId[$productId] = $row;
+            }
+        }
+
+        foreach ($offers as &$offer) {
+            $productId = (int)($offer['product_id'] ?? 0);
+            $summary = $byProductId[$productId] ?? null;
+            if (!is_array($summary)) {
+                continue;
+            }
+            $name = trim((string)($summary['name'] ?? ''));
+            if ($name !== '') {
+                $offer['name'] = $name;
+            }
+            // Belt-and-suspenders: summary media when listing_media left empty.
+            $image = trim((string)($offer['image'] ?? ''));
+            if ($image === '') {
+                $image = trim((string)($summary['image'] ?? ''));
+                if ($image !== '') {
+                    $offer['image'] = $image;
+                    $offer['images'] = [$image];
+                }
+            }
+            $slug = trim((string)($summary['slug'] ?? ''));
+            if ($slug !== '' && trim((string)($offer['slug'] ?? '')) === '') {
+                $offer['slug'] = $slug;
+            }
+            $url = trim((string)($summary['url'] ?? ''));
+            if ($url !== '' && trim((string)($offer['url'] ?? '')) === '') {
+                $offer['url'] = $url;
+            }
+        }
+        unset($offer);
+
+        return $offers;
+    }
+
+    /**
      * Return a bounded channel/locale summary projection for card surfaces.
      *
      * Read candidates in bounded SQL pages and continue past unavailable rows
@@ -364,6 +444,81 @@ final class StorefrontCatalogViewService
         } while (count($page) === $pageSize);
 
         return $rows;
+    }
+
+    /**
+     * Soft PLP / QueryBin category bag: shopper-facet EAV + prices, no card media.
+     *
+     * Must not reuse the shared `full` catalog projection (media + fat attrs) —
+     * that path pins worker RSS near the 1GB QueryBin ceiling and turns filter
+     * clicks into OverflowException / worker_timeout with a stuck「加载中…」.
+     * Page rows are upgraded later via {@see hydrateListingCardPresentation()}.
+     *
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    public function publishedFacetListingForProductIds(array $productIds, int $limit = 120): array
+    {
+        $limit = max(1, min(self::MAX_CATALOG_PRODUCTS, $limit));
+        $filterIds = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        if ($filterIds === []) {
+            return [];
+        }
+
+        $scope = $this->currentScope();
+        $websiteId = max(0, (int)$scope->websiteId);
+        $requestIds = $filterIds;
+        sort($requestIds);
+        $requestKey = serialize([
+            $websiteId,
+            $scope->canonicalKey(),
+            max(0, RequestContext::getWelineStoreId()),
+            strtoupper(trim(RequestContext::getWelineUserCurrency())),
+            trim((string)RequestContext::getWelineUserLang()),
+            $requestIds,
+            'facet-listing-v5',
+            $this->locationSellDestinationCacheSegment(),
+        ]);
+        $logicalKey = $this->catalogCache->catalogTargetedOffersLogicalKey(
+            $websiteId,
+            $requestIds,
+            true,
+        ) . '.facet-listing-v5';
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $this->hotCache->rememberForRequest(
+            'product.catalog.facet_listing_offers.request',
+            $requestKey,
+            fn(): array => RequestLifecycleTrace::measurePhase(
+                'product.catalog.resolve_facet_listing',
+                fn(): array => $this->hotCache->rememberPolicy(
+                    StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
+                    $logicalKey,
+                    fn(): array => RequestLifecycleTrace::measurePhase(
+                        'product.catalog.build_facet_listing',
+                        fn(): array => $this->buildPublishedOffers(
+                            $websiteId,
+                            $scope,
+                            $filterIds,
+                            true,
+                            true,
+                            null,
+                            null,
+                            false,
+                        ),
+                        ['website_id' => $websiteId, 'product_ids' => count($filterIds)],
+                    ),
+                ),
+                ['website_id' => $websiteId, 'product_ids' => count($filterIds)],
+            ),
+        );
+
+        $rows = $this->applyPostCacheOfferFilters($rows);
+
+        return $this->materializeCampaignUrls(\array_slice($rows, 0, $limit));
     }
 
     /**
@@ -608,9 +763,14 @@ final class StorefrontCatalogViewService
             ? null
             : max(1, min(self::MAX_CATALOG_PRODUCTS, $maxRows));
         // summary-card3: slug-from-SKU fallback + card-only payload (no description/meta/EAV facet fat).
+        // candidates-facet-listing-v5: typed EAV value + shared option-label resolve
+        // (skip per-SKU projectListing label graphs that pin worker RSS near 1GB).
         $logicalKey = $this->catalogCache->catalogOffersLogicalKey(
             $websiteId,
-            ($includeMedia ? '' : 'candidates-') . ($includeListingDetails ? 'full' : 'summary-card3')
+            ($includeMedia ? '' : 'candidates-')
+                . ($includeListingDetails
+                    ? ($includeMedia ? 'full' : 'facet-listing-v5')
+                    : 'summary-card3')
                 . ($boundMax === null ? '' : '-max' . $boundMax),
         );
         $requestKey = serialize([
@@ -1182,10 +1342,14 @@ final class StorefrontCatalogViewService
         $attributeRows = null;
         if ($includeListingDetails) {
             $attributeStartedAt = hrtime(true);
+            // Soft-listing candidates (!includeMedia): bound EAV to shopper facet codes
+            // so QueryBin includeDetails does not dump every sourcing/QC attribute (OOM).
+            $attributeCodes = (!$includeMedia) ? $this->resolveShopperFacetAttributeCodes() : null;
             $attributeRows = $this->requestAttributeRows(
                 $websiteId,
                 \array_keys($publishedProductIds),
                 $storeIds,
+                $attributeCodes,
             );
             RequestLifecycleTrace::recordPhase(
                 'product.catalog.attributes',
@@ -1194,6 +1358,7 @@ final class StorefrontCatalogViewService
                     'products' => count($publishedProductIds),
                     'rows' => count($attributeRows),
                     'listing_details' => $includeListingDetails,
+                    'facet_codes' => $attributeCodes === null ? 0 : count($attributeCodes),
                 ],
             );
         }
@@ -1292,7 +1457,9 @@ final class StorefrontCatalogViewService
         // multi-product listing. A PDP projects one product (even when it has
         // many offers), so the prefetch scan costs more than the lazy,
         // request-memoized catalogForProduct() path and adds no batching gain.
-        if ($includeListingDetails && count($projectionProductIds) > 1) {
+        // Soft-listing facet bags (!includeMedia) skip metadata prefetch — it doubles
+        // peak RSS on ~300 SKU catalogs and QueryBin workers are memory-bounded.
+        if ($includeListingDetails && $includeMedia && count($projectionProductIds) > 1) {
             $this->detailProjector->prefetchForProducts($projectionProductIds);
         }
         $fieldProjectionMs = 0.0;
@@ -1324,6 +1491,14 @@ final class StorefrontCatalogViewService
             $itemStartedAt = hrtime(true);
             if (is_array($bulkProjectedRows)) {
                 $projected = $bulkProjectedRows[$index] ?? $row;
+            } elseif (!$includeMedia && $includeListingDetails) {
+                // Soft QueryBin facet bags: keep snapshot card facts + raw shopper
+                // specs. Skipping projectListing avoids per-SKU label graphs that
+                // push worker RSS to the 1GB ceiling after a cold build.
+                $projected = $this->attachRawFacetSpecifications(
+                    is_array($row) ? $row : [],
+                    $attributeRowsByProduct[$productId] ?? [],
+                );
             } elseif ($representativeOnly) {
                 $projected = $includeListingDetails
                     ? $this->detailProjector->projectListing(
@@ -1390,6 +1565,26 @@ final class StorefrontCatalogViewService
             foreach ($rows as $index => $row) {
                 $rows[$index] = $this->toCardSurfaceRow(is_array($row) ? $row : []);
             }
+        } elseif (!$includeMedia) {
+            // Soft-listing / candidates with details: keep facet specs, drop PDP fat.
+            foreach ($rows as $index => $row) {
+                $rows[$index] = $this->toFacetListingSurfaceRow(is_array($row) ? $row : []);
+            }
+            // Drop EAV/projection intermediates before returning slim bags (QueryBin 1GB).
+            unset(
+                $attributeRows,
+                $attributeRowsByProduct,
+                $projectedRows,
+                $bulkProjectedRows,
+                $mediaRows,
+                $mediaRowsByProduct,
+                $products,
+                $snapshots,
+                $candidateOffers,
+            );
+            if (\function_exists('gc_collect_cycles')) {
+                \gc_collect_cycles();
+            }
         }
 
         return $rows;
@@ -1426,6 +1621,147 @@ final class StorefrontCatalogViewService
             'is_free_shipping' => !empty($row['is_free_shipping']),
             'is_limited_deal' => !empty($row['is_limited_deal']) || !empty($row['limited_deal']),
         ];
+    }
+
+    /**
+     * @return list<string>|null Null keeps legacy unfiltered attribute dump (PDP/full media).
+     */
+    private function resolveShopperFacetAttributeCodes(): ?array
+    {
+        if (!\class_exists(\Weline\Filters\Service\StorefrontFacetPresentationPolicy::class)) {
+            return null;
+        }
+        try {
+            /** @var \Weline\Filters\Service\StorefrontFacetPresentationPolicy $policy */
+            $policy = ObjectManager::getInstance(\Weline\Filters\Service\StorefrontFacetPresentationPolicy::class);
+            $codes = $policy->allCandidateCodes();
+
+            return $codes === [] ? null : $codes;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Soft-listing facet bag: keep price + brand/specifications for refinement counts,
+     * drop description/meta/gallery fat that OOMs QueryBin on ~300 SKU catalogs.
+     *
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function toFacetListingSurfaceRow(array $row): array
+    {
+        $card = $this->toCardSurfaceRow($row);
+        $card['brand'] = trim((string)($row['brand'] ?? ''));
+        $card['brand_code'] = trim((string)($row['brand_code'] ?? ''));
+        $card['attribute_set'] = trim((string)($row['attribute_set'] ?? ''));
+        $card['combination'] = is_array($row['combination'] ?? null) ? $row['combination'] : [];
+        $card['combination_key'] = trim((string)($row['combination_key'] ?? ''));
+        $specs = [];
+        foreach (is_array($row['specifications'] ?? null) ? $row['specifications'] : [] as $spec) {
+            if (!is_array($spec)) {
+                continue;
+            }
+            $code = strtolower(trim((string)($spec['code'] ?? $spec['attribute_code'] ?? '')));
+            $value = trim((string)($spec['value'] ?? ''));
+            if ($code === '' || $value === '') {
+                continue;
+            }
+            $specs[] = [
+                'code' => $code,
+                'label' => trim((string)($spec['label'] ?? '')),
+                'value' => $value,
+            ];
+        }
+        $card['specifications'] = $specs;
+
+        return $card;
+    }
+
+    /**
+     * Attach shopper-facet specs from EAV rows using one shared option-label map.
+     * Avoids per-SKU projectListing / labelsForProduct graphs (QueryBin RSS).
+     *
+     * @param array<string, mixed> $row
+     * @param list<array<string, mixed>> $attributeRows
+     * @return array<string, mixed>
+     */
+    private function attachRawFacetSpecifications(array $row, array $attributeRows): array
+    {
+        $byCode = [];
+        foreach ($attributeRows as $attributeRow) {
+            if (!is_array($attributeRow)) {
+                continue;
+            }
+            $code = strtolower(trim((string)($attributeRow[AttributeValue::schema_fields_ATTRIBUTE_CODE]
+                ?? $attributeRow['attribute_code']
+                ?? '')));
+            if ($code === '') {
+                continue;
+            }
+            // listExplicitRows materializes typed `value` (string|number|array|null).
+            $rawValue = $attributeRow['value']
+                ?? $attributeRow[AttributeValue::schema_fields_VALUE_TEXT]
+                ?? $attributeRow['value_text']
+                ?? null;
+            $value = '';
+            if (is_string($rawValue) || is_numeric($rawValue)) {
+                $value = trim((string)$rawValue);
+            } elseif (is_array($rawValue)) {
+                $parts = [];
+                foreach ($rawValue as $item) {
+                    if (is_string($item) || is_numeric($item)) {
+                        $parts[] = trim((string)$item);
+                    }
+                }
+                $value = implode(',', array_filter($parts, static fn(string $part): bool => $part !== ''));
+            } elseif (is_bool($rawValue)) {
+                $value = $rawValue ? '1' : '0';
+            }
+            if ($value === '') {
+                continue;
+            }
+            $locale = trim((string)($attributeRow[AttributeValue::schema_fields_LOCALE]
+                ?? $attributeRow['locale']
+                ?? ''));
+            $storeId = (int)($attributeRow[AttributeValue::schema_fields_STORE_ID]
+                ?? $attributeRow['store_id']
+                ?? 0);
+            // Prefer website/source identity rows (store 0 + empty locale).
+            $score = ($storeId === 0 ? 2 : 0) + ($locale === '' ? 1 : 0);
+            $existing = $byCode[$code] ?? null;
+            if (!is_array($existing) || $score >= (int)($existing['score'] ?? -1)) {
+                $byCode[$code] = ['value' => $value, 'score' => $score];
+            }
+        }
+
+        /** @var StorefrontEavLabelResolver $labels */
+        $labels = ObjectManager::getInstance(StorefrontEavLabelResolver::class);
+        $specs = [];
+        foreach ($byCode as $code => $payload) {
+            $value = trim((string)($payload['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            try {
+                $display = trim($labels->resolve($code, $value));
+            } catch (\Throwable) {
+                $display = $value;
+            }
+            $specs[] = [
+                'code' => $code,
+                'label' => '',
+                'value' => $display !== '' ? $display : $value,
+            ];
+        }
+        usort(
+            $specs,
+            static fn(array $left, array $right): int => strcmp((string)$left['code'], (string)$right['code']),
+        );
+
+        $row['specifications'] = $specs;
+
+        return $this->toFacetListingSurfaceRow($row);
     }
 
     /**

@@ -34,6 +34,35 @@ final class StorefrontFacetPresentationPolicy
         ['brand', 'hanfu_pin_pai'],
     ];
 
+    /** @var list<string> */
+    private const COLOR_FAMILY_CODES = ['color', 'available_colors'];
+
+    /**
+     * Apparel letter sizes (and size-like pure numerics) that leak into color EAV.
+     * Matched case-insensitively against the option value token.
+     */
+    private const COLOR_SIZE_TOKEN_PATTERN = '/^(?:XXS|XS|S|M|L|XL|XXL|XXXL|\d{1,2})$/i';
+
+    /**
+     * Flat list of shopper-facing facet attribute codes (for bounded EAV loads).
+     *
+     * @return list<string>
+     */
+    public function allCandidateCodes(): array
+    {
+        $codes = [];
+        foreach (self::FACET_FAMILIES as $family) {
+            foreach ($family as $code) {
+                $code = strtolower(trim((string)$code));
+                if ($code !== '') {
+                    $codes[$code] = $code;
+                }
+            }
+        }
+
+        return array_values($codes);
+    }
+
     /**
      * Restrict offer projection counting to customer-facing candidates.
      *
@@ -80,12 +109,37 @@ final class StorefrontFacetPresentationPolicy
             if ($code === '' || !is_array($counts)) {
                 continue;
             }
+            $selectedValue = '';
+            if (isset($selectedAttributes[$code])) {
+                $selectedValue = trim((string)$selectedAttributes[$code]);
+            }
+            $stripColorSizeJunk = $this->isColorFamilyCode($code);
             $nonEmpty = [];
             foreach ($counts as $value => $count) {
                 $value = trim((string)$value);
                 $count = (int)$count;
-                if ($value !== '' && $count > 0) {
+                $isSelected = $selectedValue !== ''
+                    && strtolower($selectedValue) === strtolower($value);
+                // Color family: drop size-token junk (S/M/L/XL…) unless currently selected.
+                if ($stripColorSizeJunk && !$isSelected && $this->isColorSizeToken($value)) {
+                    continue;
+                }
+                // R3: drop unselected zeros; R1/R2: keep selected even when count=0.
+                if ($value !== '' && ($count > 0 || $isSelected)) {
                     $nonEmpty[$value] = $count;
+                }
+            }
+            if ($selectedValue !== '' && !isset($nonEmpty[$selectedValue])) {
+                // Preserve exact selected label key when counts used a different casing.
+                $matched = false;
+                foreach ($nonEmpty as $existing => $_) {
+                    if (strtolower((string)$existing) === strtolower($selectedValue)) {
+                        $matched = true;
+                        break;
+                    }
+                }
+                if (!$matched) {
+                    $nonEmpty[$selectedValue] = 0;
                 }
             }
             if ($nonEmpty !== []) {
@@ -104,6 +158,19 @@ final class StorefrontFacetPresentationPolicy
             static fn(string $code): string => strtolower(trim($code)),
             array_keys($selectedAttributes),
         ), true);
+
+        // R4: selected attribute with only count=0 must still produce a curated group.
+        foreach ($selectedAttributes as $code => $value) {
+            $code = strtolower(trim((string)$code));
+            $value = trim((string)$value);
+            if ($code === '' || $value === '' || isset($normalizedCounts[$code])) {
+                continue;
+            }
+            $normalizedCounts[$code] = [$value => 0];
+            if (!isset($normalizedNames[$code])) {
+                $normalizedNames[$code] = $code;
+            }
+        }
 
         $curated = [];
         foreach (self::FACET_FAMILIES as $family) {
@@ -133,5 +200,39 @@ final class StorefrontFacetPresentationPolicy
         }
 
         return $curated;
+    }
+
+    /**
+     * Shopper rail sort: selected first, then count DESC, then label.
+     *
+     * @param array{label?:string,value?:string,count?:int,selected?:bool} $left
+     * @param array{label?:string,value?:string,count?:int,selected?:bool} $right
+     */
+    public function compareFacetOptions(array $left, array $right): int
+    {
+        $selectionOrder = (int)!empty($right['selected']) <=> (int)!empty($left['selected']);
+        if ($selectionOrder !== 0) {
+            return $selectionOrder;
+        }
+        $countOrder = (int)($right['count'] ?? 0) <=> (int)($left['count'] ?? 0);
+        if ($countOrder !== 0) {
+            return $countOrder;
+        }
+        $leftLabel = (string)($left['label'] ?? $left['value'] ?? '');
+        $rightLabel = (string)($right['label'] ?? $right['value'] ?? '');
+
+        return strcasecmp($leftLabel, $rightLabel);
+    }
+
+    public function isColorFamilyCode(string $code): bool
+    {
+        return in_array(strtolower(trim($code)), self::COLOR_FAMILY_CODES, true);
+    }
+
+    public function isColorSizeToken(string $value): bool
+    {
+        $value = trim($value);
+
+        return $value !== '' && preg_match(self::COLOR_SIZE_TOKEN_PATTERN, $value) === 1;
     }
 }

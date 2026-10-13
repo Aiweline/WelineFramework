@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace Weline\Product\Extends\Module\Weline_Framework\Query;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Product\Api\ProductQuoteRequestSubmitInterface;
 use Weline\Product\Model\Shard\Media;
 use Weline\Product\Repository\MediaRepository;
 use Weline\Product\Service\ProductCardRenderer;
 use Weline\Product\Service\StorefrontCatalogViewService;
+use Weline\Product\Service\StorefrontCategoryViewService;
+use Weline\Product\Service\StorefrontListingShell;
 
 /**
  * Server-side storefront catalogue boundary for cross-module consumers.
@@ -35,6 +39,7 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
             'youMayLikeCards' => $this->youMayLikeCards($params),
             'recentlyViewedCards' => $this->recentlyViewedCards($params),
             'liveOffersByProductIds' => $this->liveOffersByProductIds($params),
+            'filteredListingPage' => $this->filteredListingPage($params),
             'submitQuoteRequest' => $this->submitQuoteRequest($params),
             default => throw new \InvalidArgumentException((string)__(
                 'Product Storefront 接口不支持操作：%{1}',
@@ -140,6 +145,26 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                     'summary' => '按当前范围批量读取实时商品首个已发布 Offer，以商品 ID 为键；每批最多 100 个商品',
                 ],
                 [
+                    'name' => 'filteredListingPage',
+                    'frontend' => true,
+                    'external' => false,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        ['name' => 'surface', 'type' => 'string', 'required' => false, 'max_length' => 32],
+                        ['name' => 'listing_path', 'type' => 'string', 'required' => false, 'max_length' => 512],
+                        ['name' => 'category_path', 'type' => 'string', 'required' => false, 'max_length' => 512],
+                        ['name' => 'price', 'type' => 'string', 'required' => false, 'max_length' => 32],
+                        ['name' => 'sort', 'type' => 'string', 'required' => false, 'max_length' => 32],
+                        ['name' => 'page', 'type' => 'int', 'required' => false, 'min' => 1],
+                        ['name' => 'filters', 'type' => 'array', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'PLP path-only: filtered grid HTML + Amazon refinement facet_counts via Filters',
+                ],
+                [
                     'name' => 'submitQuoteRequest',
                     'frontend' => true,
                     'external' => false,
@@ -157,6 +182,166 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                 ],
             ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function filteredListingPage(array $params): array
+    {
+        /** @var StorefrontListingShell $shell */
+        $shell = ObjectManager::getInstance(StorefrontListingShell::class);
+        /** @var StorefrontCatalogViewService $catalog */
+        $catalog = ObjectManager::getInstance(StorefrontCatalogViewService::class);
+
+        // Price buckets are in active display currency (SSR = website default USD
+        // here). CLI / undressed Context still boots CNY → all SKUs land in 300-up
+        // and price=0-99 becomes empty + attributes {}. Align only when no WLS
+        // ScopeIdentity (shopper currency already applied by QueryBin otherwise).
+        $this->alignListingCurrencyForPricing($params);
+
+        $surface = strtolower(trim((string)($params['surface'] ?? 'products')));
+        if ($surface !== 'category') {
+            $surface = 'products';
+        }
+        $listingPath = $shell->normalizeListingPath((string)($params['listing_path'] ?? ($surface === 'category' ? '/category' : '/products')));
+        $categoryPath = trim(str_replace('\\', '/', (string)($params['category_path'] ?? '')), '/');
+
+        $query = [
+            'price' => (string)($params['price'] ?? ''),
+            'sort' => (string)($params['sort'] ?? ''),
+            'page' => (string)($params['page'] ?? '1'),
+        ];
+        $filters = is_array($params['filters'] ?? null) ? $params['filters'] : [];
+        foreach ($filters as $code => $value) {
+            $code = strtolower(trim((string)$code));
+            $code = preg_replace('/[^a-z0-9_\-]/', '', $code) ?? '';
+            if ($code === '') {
+                continue;
+            }
+            if (str_starts_with($code, 'af_')) {
+                $code = substr($code, 3);
+            }
+            $raw = is_array($value) ? (string)reset($value) : (string)$value;
+            $raw = trim($raw);
+            if ($code === '' || $raw === '') {
+                continue;
+            }
+            $query['af_' . $code] = $raw;
+        }
+        // Also accept flat af_* on params for soft URL mirrors.
+        foreach ($params as $key => $value) {
+            $key = strtolower(trim((string)$key));
+            if (!str_starts_with($key, 'af_')) {
+                continue;
+            }
+            $raw = is_array($value) ? (string)reset($value) : (string)$value;
+            $raw = trim($raw);
+            if ($raw !== '') {
+                $query[$key] = $raw;
+            }
+        }
+
+        // Soft listing always needs attribute projections on baseOffers so
+        // price-only (and conjunction) refinement can count af_* dimensions.
+        // Catalog projects facet-listing rows (specs+price, no PDP description fat).
+        $includeDetails = true;
+        if ($surface === 'category') {
+            $offers = [];
+            if ($categoryPath !== '') {
+                /** @var StorefrontCategoryViewService $categories */
+                $categories = ObjectManager::getInstance(StorefrontCategoryViewService::class);
+                $page = $categories->resolvePage($categoryPath)
+                    ?? $categories->synthesizePageFromPublicPath($categoryPath);
+                $productIds = is_array($page['product_ids'] ?? null) ? $page['product_ids'] : [];
+                if ($productIds !== []) {
+                    // Facet-listing bag (no media). Never targeted-full reuse —
+                    // full bags OOM QueryBin (~1GB) and leave PLP「加载中…」stuck.
+                    $offers = $catalog->publishedFacetListingForProductIds($productIds, 120);
+                }
+            }
+        } else {
+            $offers = $catalog->publishedListingCandidates(1000, $includeDetails);
+        }
+        // Extra lean pass: keep only fields needed for refinement + grid cards.
+        $offers = $this->slimOffersForSoftListing($offers);
+        if (\function_exists('gc_collect_cycles')) {
+            \gc_collect_cycles();
+        }
+
+        // Refinement FIRST while specs are present and before grid HTML pulls i18n.
+        // attributes must json_encode as {} (object), never [] — front-end reads a map.
+        $emptyFacetCounts = ['price' => [], 'attributes' => new \stdClass()];
+        $facetCounts = $emptyFacetCounts;
+        if (class_exists(\Weline\Filters\Service\StorefrontFilterPanelService::class)) {
+            try {
+                $websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
+                /** @var \Weline\Filters\Service\StorefrontFilterPanelService $panel */
+                $panel = ObjectManager::getInstance(\Weline\Filters\Service\StorefrontFilterPanelService::class);
+                $facetCounts = $panel->buildRefinementFacetCounts(
+                    $offers,
+                    $query,
+                    $listingPath,
+                    $websiteId,
+                );
+                if (!isset($facetCounts['attributes']) || $facetCounts['attributes'] === []) {
+                    $facetCounts['attributes'] = new \stdClass();
+                }
+            } catch (\Throwable $facetError) {
+                // Facet failure must not block the grid projection below — but must
+                // be probe-visible (was silently returning empty attributes {}).
+                $this->recordFacetRefinementFailure($facetError);
+                $facetCounts = $emptyFacetCounts;
+            }
+        }
+        if (\function_exists('gc_collect_cycles')) {
+            \gc_collect_cycles();
+        }
+
+        // Facet-listing bags keep identity codes + empty images for the full
+        // catalog (refinement needs specs, not card media). After filter+paginate
+        // hydrate only the page bag (~12) to storefront names + real media, while
+        // still releasing the full catalog before Phrase/grid (1GB ceiling).
+        $projection = $shell->projectFiltered(
+            $offers,
+            $query,
+            $listingPath,
+            $surface,
+            null,
+            true,
+            true,
+            true,
+        );
+        // Drop catalog bags before response assembly / Phrase dictionary growth.
+        unset($offers, $projection['offers']);
+        if (\function_exists('gc_collect_cycles')) {
+            \gc_collect_cycles();
+        }
+
+        $pageOffers = is_array($projection['page_offers'] ?? null) ? $projection['page_offers'] : [];
+        $response = [
+            'surface' => $surface,
+            'listing_path' => $listingPath,
+            'grid_html' => (string)($projection['grid_html'] ?? ''),
+            'empty' => $pageOffers === [],
+            'price' => (string)$projection['price'],
+            'sort' => (string)$projection['sort'],
+            'total' => (int)$projection['total'],
+            'count' => (int)$projection['count'],
+            'page' => (int)$projection['page'],
+            'page_size' => (int)$projection['page_size'],
+            'total_pages' => (int)$projection['total_pages'],
+            'from' => (int)$projection['from'],
+            'to' => (int)$projection['to'],
+            'sort_options' => $projection['sort_options'],
+            'page_options' => $projection['page_options'],
+            'applied' => $projection['applied'],
+            'facet_counts' => $facetCounts,
+        ];
+        unset($projection, $pageOffers, $facetCounts);
+
+        return $response;
     }
 
     /**
@@ -450,5 +635,122 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
         return function_exists('mb_strtolower')
             ? mb_strtolower($value, 'UTF-8')
             : strtolower($value);
+    }
+
+    /**
+     * Align display currency with SSR price buckets when ScopeIdentity is absent
+     * (CLI / undressed Context). Soft QueryBin already applied shopper currency
+     * and typically carries ScopeIdentity — do not override that path.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function alignListingCurrencyForPricing(array $params): void
+    {
+        $fromParam = strtoupper(trim((string)($params['currency'] ?? '')));
+        if ($fromParam !== '' && preg_match('/^[A-Z]{3}$/', $fromParam) === 1) {
+            RequestContext::setWelineUserCurrency($fromParam);
+
+            return;
+        }
+
+        if (RequestContext::scopeIdentity() !== null) {
+            return;
+        }
+
+        $websiteDefault = '';
+        try {
+            $websiteDefault = strtoupper(trim(State::resolveWebsiteDefaultCurrency()));
+        } catch (\Throwable) {
+            $websiteDefault = '';
+        }
+        if ($websiteDefault === '') {
+            return;
+        }
+
+        $current = strtoupper(trim(RequestContext::getWelineUserCurrency()));
+        if ($current !== $websiteDefault) {
+            RequestContext::setWelineUserCurrency($websiteDefault);
+        }
+    }
+
+    /**
+     * Keep only fields required for refinement counts + soft grid cards.
+     *
+     * @param list<array<string, mixed>> $offers
+     * @return list<array<string, mixed>>
+     */
+    private function slimOffersForSoftListing(array $offers): array
+    {
+        $slim = [];
+        foreach ($offers as $offer) {
+            if (!is_array($offer)) {
+                continue;
+            }
+            $specs = [];
+            foreach (is_array($offer['specifications'] ?? null) ? $offer['specifications'] : [] as $spec) {
+                if (!is_array($spec)) {
+                    continue;
+                }
+                $code = strtolower(trim((string)($spec['code'] ?? $spec['attribute_code'] ?? '')));
+                $value = trim((string)($spec['value'] ?? ''));
+                if ($code === '' || $value === '') {
+                    continue;
+                }
+                $specs[] = [
+                    'code' => $code,
+                    'label' => trim((string)($spec['label'] ?? '')),
+                    'value' => $value,
+                ];
+            }
+            $slim[] = [
+                'product_id' => (int)($offer['product_id'] ?? 0),
+                'offer_id' => (int)($offer['offer_id'] ?? 0),
+                'name' => (string)($offer['name'] ?? ''),
+                'sku' => (string)($offer['sku'] ?? ''),
+                'slug' => (string)($offer['slug'] ?? ''),
+                'url' => (string)($offer['url'] ?? ''),
+                'image' => (string)($offer['image'] ?? ''),
+                'images' => is_array($offer['images'] ?? null) ? $offer['images'] : [],
+                'currency' => strtoupper(trim((string)($offer['currency'] ?? 'CNY'))) ?: 'CNY',
+                'unit_price_minor' => max(0, (int)($offer['unit_price_minor'] ?? 0)),
+                'catalog_price_minor' => max(0, (int)($offer['catalog_price_minor'] ?? $offer['unit_price_minor'] ?? 0)),
+                'quote_only' => !empty($offer['quote_only']),
+                'sellable' => !empty($offer['sellable']),
+                'stock' => (int)($offer['stock'] ?? 0),
+                'brand' => (string)($offer['brand'] ?? ''),
+                'brand_code' => (string)($offer['brand_code'] ?? ''),
+                'attribute_set' => (string)($offer['attribute_set'] ?? ''),
+                'combination' => is_array($offer['combination'] ?? null) ? $offer['combination'] : [],
+                'combination_key' => (string)($offer['combination_key'] ?? ''),
+                'specifications' => $specs,
+                'currency_unavailable' => !empty($offer['currency_unavailable']),
+            ];
+        }
+
+        return $slim;
+    }
+
+    private function recordFacetRefinementFailure(\Throwable $error): void
+    {
+        $message = $error::class . ': ' . $error->getMessage();
+        $requestId = (string)(RequestContext::getRequestId() ?? '');
+        \error_log('[product.storefront.facet_refinement] ' . ($requestId !== '' ? $requestId . ' ' : '') . $message);
+        try {
+            RequestContext::set('product.storefront.facet_counts.error', [
+                'class' => $error::class,
+                'message' => $error->getMessage(),
+                'file' => $error->getFile(),
+                'line' => $error->getLine(),
+            ]);
+        } catch (\Throwable) {
+        }
+        try {
+            RequestLifecycleTrace::recordPhase('product.storefront.facet_refinement', 0.0, [
+                'status' => 'error',
+                'error_class' => $error::class,
+                'error' => $error->getMessage(),
+            ]);
+        } catch (\Throwable) {
+        }
     }
 }

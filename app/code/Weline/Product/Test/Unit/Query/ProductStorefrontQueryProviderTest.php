@@ -39,6 +39,18 @@ final class ProductStorefrontQueryProviderTest extends TestCase
         self::assertContains('bundleCards', $names);
         self::assertContains('youMayLikeCards', $names);
         self::assertContains('recentlyViewedCards', $names);
+        self::assertContains('filteredListingPage', $names);
+        $listingOp = null;
+        foreach ($descriptor['operations'] as $operation) {
+            if (($operation['name'] ?? '') === 'filteredListingPage') {
+                $listingOp = $operation;
+                break;
+            }
+        }
+        self::assertNotNull($listingOp);
+        self::assertStringContainsString('facet_counts', (string)($listingOp['summary'] ?? ''));
+        self::assertTrue($listingOp['frontend']);
+        self::assertSame('any', $listingOp['auth'] ?? null);
         foreach (['bundleCards', 'youMayLikeCards', 'recentlyViewedCards'] as $opName) {
             $op = null;
             foreach ($descriptor['operations'] as $operation) {
@@ -65,6 +77,57 @@ final class ProductStorefrontQueryProviderTest extends TestCase
         self::assertSame(8, (int)($result[1]['id'] ?? 0));
         self::assertSame('USD', $result[0]['currency'] ?? null);
         self::assertStringContainsString('product/bse-j11', (string)($result[0]['url'] ?? ''));
+    }
+
+    public function testFilteredListingPageSourceEmitsFacetCountsFromUnfilteredBaseOffers(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/ProductStorefrontQueryProvider.php',
+        );
+        self::assertStringContainsString("'facet_counts'", $source);
+        self::assertStringContainsString('buildRefinementFacetCounts', $source);
+        self::assertStringContainsString('StorefrontFilterPanelService', $source);
+        // Soft listing always loads listing details so price-only can count attributes.
+        self::assertStringContainsString('$includeDetails = true', $source);
+        self::assertStringNotContainsString(
+            '$includeDetails = $shell->queryHasAttributeFilters($query)',
+            $source,
+        );
+        // Category soft bag must use facet-listing (no media), never targeted-full.
+        self::assertStringContainsString('publishedFacetListingForProductIds', $source);
+        self::assertStringNotContainsString(
+            'publishedOffersForProductIds($productIds, 120, $includeDetails)',
+            $source,
+        );
+        self::assertStringContainsString('new \stdClass()', $source);
+        // CLI/undressed Context must align to website default currency (SSR price buckets).
+        self::assertStringContainsString('alignListingCurrencyForPricing', $source);
+        self::assertStringContainsString('resolveWebsiteDefaultCurrency', $source);
+        // Lean soft bags + probe-visible facet failure (no silent empty attributes).
+        self::assertStringContainsString('slimOffersForSoftListing', $source);
+        self::assertStringContainsString('recordFacetRefinementFailure', $source);
+        self::assertStringContainsString('product.storefront.facet_counts.error', $source);
+        // Soft path: page-only card presentation hydrate + release full catalog.
+        self::assertStringContainsString('projectFiltered(', $source);
+        self::assertMatchesRegularExpression(
+            '/projectFiltered\(\s*\$offers\s*,.*?null\s*,\s*true\s*,\s*true\s*,\s*true\s*,?\s*\)/s',
+            $source,
+        );
+        self::assertStringContainsString('hydrate only the page bag', $source);
+        self::assertStringNotContainsString(
+            '// Facet-listing bags already carry a card image; skip media re-hydrate.',
+            $source,
+        );
+        // Must call refinement on the same unfiltered $offers variable, not filtered page_offers.
+        self::assertMatchesRegularExpression(
+            '/\$facetCounts\s*=\s*\$panel->buildRefinementFacetCounts\(\s*\$offers\s*,/s',
+            $source,
+        );
+        $api = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Frontend/view/statics/js/weline-api.js',
+        );
+        self::assertStringNotContainsString('facet_counts', $api);
+        self::assertStringNotContainsString('buildRefinementFacetCounts', $api);
     }
 
     public function testSearchFiltersPaginatesAndNormalizesPublishedOffers(): void

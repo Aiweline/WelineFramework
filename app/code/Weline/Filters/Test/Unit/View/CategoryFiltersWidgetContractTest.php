@@ -104,15 +104,31 @@ final class CategoryFiltersWidgetContractTest extends TestCase
         self::assertStringNotContainsString('__($opt[\'label\'])', $template);
     }
 
-    public function testWidgetTemplateResolvesFilterQueryFromRequestParams(): void
+    public function testWidgetTemplateSortsAttributeOptionsBySelectedCountThenLabel(): void
     {
         $template = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/templates/frontend/widgets/category-filters.phtml',
         );
 
-        self::assertStringContainsString('getQueryParams', $template);
-        self::assertStringContainsString('QUERY_STRING', $template);
-        self::assertStringContainsString('WELINE_ORIGIN_REQUEST_URI', $template);
+        self::assertStringContainsString('selected → count DESC → label', $template);
+        self::assertStringContainsString('(int)($right[\'count\'] ?? 0) <=> (int)($left[\'count\'] ?? 0)', $template);
+        self::assertStringContainsString('$visibleOptionLimit = 6', $template);
+        self::assertStringContainsString('w-filters__list--more', $template);
+    }
+
+    public function testWidgetTemplateUsesPathOnlyNeutralPanelWithoutQueryHref(): void
+    {
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/category-filters.phtml',
+        );
+
+        self::assertStringContainsString('Path-only FPC', $template);
+        self::assertStringContainsString('$query = [];', $template);
+        self::assertStringContainsString('data-listing-filter="price"', $template);
+        self::assertStringContainsString('data-listing-filter="attr"', $template);
+        self::assertStringContainsString('data-listing-filter-clear', $template);
+        self::assertStringNotContainsString('href="<?= $escape($opt[\'url\']) ?>"', $template);
+        self::assertStringNotContainsString('getQueryParams', $template);
     }
 
     public function testAttributeListingFilterBuildsUrlsViaFrameworkFrontendUrl(): void

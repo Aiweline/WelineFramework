@@ -22,6 +22,8 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
         );
 
         self::assertStringContainsString('product.catalog.resolve_filtered', $source);
+        self::assertStringContainsString('publishedFacetListingForProductIds', $source);
+        self::assertStringContainsString('product.catalog.build_facet_listing', $source);
         self::assertStringContainsString('buildPublishedOffers(', $source);
         self::assertStringContainsString('$filterIds', $source);
         self::assertStringContainsString('$includeListingDetails', $source);
@@ -46,8 +48,9 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
         self::assertStringContainsString('product.catalog.attribute_rows.request', $source);
         self::assertStringContainsString('CatalogOverlayResolver', $source);
         self::assertStringContainsString('rememberForRequest(', $source);
+        // Soft facet bags (!includeMedia) skip metadata prefetch — media+details only.
         self::assertStringContainsString(
-            'if ($includeListingDetails && count($projectionProductIds) > 1)',
+            'if ($includeListingDetails && $includeMedia && count($projectionProductIds) > 1)',
             $source,
         );
         self::assertStringContainsString('public function projectMany(', $projectorSource);
@@ -55,7 +58,11 @@ final class StorefrontCatalogFilteredOffersContractTest extends TestCase
         // Summary listings seed null; full listings load shard attributes once via request memo.
         self::assertStringContainsString('$attributeRows = null;', $source);
         self::assertMatchesRegularExpression(
-            '/\$attributeRows = null;\s*if \(\$includeListingDetails\) \{\s*\$attributeStartedAt = hrtime\(true\);\s*\$attributeRows = \$this->requestAttributeRows\(/s',
+            '/\$attributeRows = null;\s*if \(\$includeListingDetails\) \{\s*\$attributeStartedAt = hrtime\(true\);.*?\$attributeRows = \$this->requestAttributeRows\(/s',
+            $source,
+        );
+        self::assertStringContainsString(
+            '$attributeCodes = (!$includeMedia) ? $this->resolveShopperFacetAttributeCodes() : null;',
             $source,
         );
         self::assertStringNotContainsString(

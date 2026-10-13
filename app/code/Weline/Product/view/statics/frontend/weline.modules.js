@@ -47,5 +47,14 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: null,
         description: "PDP 详情杂志楼层滚轮入场（§5.4）"
+    },
+    storefrontListing: {
+        paths: [
+            "Weline_Product::js/storefront-listing.js?v=20261013-facet-lean1"
+        ],
+        globalVar: "WelineStorefrontListing",
+        dependencies: ["api"],
+        async: true,
+        description: "PLP path-only：筛选/排序/分页一步 BinQuery 换格"
     }
 });

@@ -167,17 +167,35 @@ final class StorefrontFilterPanelService
         array $query = [],
         int $websiteId = 0,
         bool $rootCurrent = false,
+        bool $refinementCounts = false,
     ): array {
         $query = $this->normalizePanelQuery($query);
-        $logicalKey = $this->buildPanelLogicalKey($offers, $listingUrl, $query, $websiteId, $rootCurrent);
+        $logicalKey = $this->buildPanelLogicalKey(
+            $offers,
+            $listingUrl,
+            $query,
+            $websiteId,
+            $rootCurrent,
+            $refinementCounts,
+        );
+        $cacheNamespace = $refinementCounts
+            ? 'storefront.filters.panel.refinement'
+            : 'storefront.filters.panel';
 
         $builder = fn(): array => $this->hotCache->rememberForRequest(
-            'storefront.filters.panel',
+            $cacheNamespace,
             $logicalKey,
             fn(): array => \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-                'storefront.filters.panel',
-                fn(): array => $this->buildPanelData($offers, $listingUrl, $query, $websiteId, $rootCurrent),
-                ['website_id' => $websiteId, 'offers' => count($offers)],
+                $cacheNamespace,
+                fn(): array => $this->buildPanelData(
+                    $offers,
+                    $listingUrl,
+                    $query,
+                    $websiteId,
+                    $rootCurrent,
+                    $refinementCounts,
+                ),
+                ['website_id' => $websiteId, 'offers' => count($offers), 'refinement' => $refinementCounts],
             ),
         );
         // URL generation carries the current editor identity. Keep that result
@@ -201,6 +219,272 @@ final class StorefrontFilterPanelService
         // unique (often missing) strings across PDP/list crawls — skip it.
 
         return $panel;
+    }
+
+    /**
+     * Amazon-style refinement facet counts for soft listing refresh (BinQuery).
+     *
+     * count(D,v) = |filter(baseOffers, Q_{-D} ∪ {D=v})|
+     * Cross-dimension AND; within-dimension disjunction; empty intersection must not
+     * fall back to full-catalog counts. R3: omit unselected options with count=0.
+     *
+     * Lean path: offer-projection only (no departments / catalog EAV / full panel
+     * HotCache). Callers must pass baseOffers that already carry attribute
+     * projections (listing details / specifications), e.g. includeDetails=true.
+     * Price bucket counts use unit_price_minor in the *active display currency*
+     * (same as SSR); callers (filteredListingPage) must align currency first.
+     *
+     * @param list<array<string, mixed>> $baseOffers Unfiltered listing universe
+     * @param array<string, mixed> $query Soft query (price + af_*); sort/page ignored
+     * @return array{
+     *     price: list<array{value:string,count:int,selected:bool}>,
+     *     attributes: array<string, list<array{value:string,count:int,selected:bool}>>|\stdClass
+     * }
+     */
+    public function buildRefinementFacetCounts(
+        array $baseOffers,
+        array $query = [],
+        string $listingUrl = '/products',
+        int $websiteId = 0,
+    ): array {
+        unset($listingUrl, $websiteId); // reserved for cache/key parity with buildPanel
+        $query = $this->normalizePanelQuery($query);
+        $activePrice = $this->listingFilter->normalizePriceBucket((string)($query['price'] ?? ''));
+        $selectedAttrs = $this->attributeListing->normalizeFromRequest($query);
+
+        $price = [];
+        $offersForPrice = $this->attributeListing->apply($baseOffers, $selectedAttrs);
+        foreach ($this->listingFilter->priceBucketsWithCounts($offersForPrice) as $bucket) {
+            $code = (string)($bucket['code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+            $count = (int)($bucket['count'] ?? 0);
+            $selected = $activePrice === $code;
+            if ($count <= 0 && !$selected) {
+                continue;
+            }
+            $price[] = [
+                'value' => $code,
+                'count' => $count,
+                'selected' => $selected,
+            ];
+        }
+
+        $fallbackCodeNames = [
+            'hanfu_chao_dai' => '朝代',
+            'hanfu_xing_zhi' => '形制',
+            'hanfu_han_fu_zhi_shi' => '汉服形制',
+            'style_type' => '类型',
+            'hanfu_shi_yong_xing_bie' => '适用性别',
+            'color' => '颜色',
+            'available_colors' => '可选颜色',
+            'size' => '尺码',
+            'available_sizes' => '可选尺码',
+            'hanfu_zhi_wu' => '面料',
+            'material' => '材质',
+            'hanfu_zhi_wu_ming_cheng' => '面料名称',
+            'hanfu_zhu_zhi_wu_cheng_fen' => '主面料成分',
+            'hanfu_shi_yong_chang_he' => '适用场合',
+            'hanfu_shi_yong_ji_jie' => '适用季节',
+            'hanfu_shi_he_ji_jie' => '适合季节',
+            'hanfu_shang_shi_nian_fen_ji_jie' => '上市季节',
+            'hanfu_feng_ge' => '风格',
+            'hanfu_zao_xing_feng_ge' => '造型风格',
+            'hanfu_gong_yi' => '工艺',
+            'hanfu_zhi_wu_gong_yi' => '面料工艺',
+            'hanfu_tu_an' => '图案',
+            'brand' => '品牌',
+            'hanfu_pin_pai' => '品牌',
+        ];
+        $candidateCodeNames = $this->facetPresentation->candidateCodeNames($fallbackCodeNames);
+        $baseline = $this->attributeListing->countOfferAttributeValues($baseOffers, $candidateCodeNames);
+        $countsByCode = [];
+        foreach ($baseline as $code => $derived) {
+            $code = strtolower(trim((string)$code));
+            if ($code === '' || !is_array($derived)) {
+                continue;
+            }
+            $counts = is_array($derived['counts'] ?? null) ? $derived['counts'] : [];
+            if ($counts === []) {
+                continue;
+            }
+            $countsByCode[$code] = $counts;
+            $name = trim((string)($derived['name'] ?? ''));
+            if ($name !== '') {
+                $candidateCodeNames[$code] = $name;
+            }
+        }
+
+        if ($countsByCode !== []) {
+            $sliceMemo = [];
+            $refinedCounts = [];
+            foreach ($countsByCode as $code => $baselineCounts) {
+                $code = strtolower(trim((string)$code));
+                if ($code === '' || !is_array($baselineCounts)) {
+                    continue;
+                }
+                $otherAttrs = $selectedAttrs;
+                unset($otherAttrs[$code]);
+                $fingerprint = $activePrice . "\0" . serialize($otherAttrs);
+                if (!isset($sliceMemo[$fingerprint])) {
+                    $sliceMemo[$fingerprint] = $this->filterOffersForRefinement(
+                        $baseOffers,
+                        $activePrice,
+                        $otherAttrs,
+                    );
+                }
+                $sliceOffers = $sliceMemo[$fingerprint];
+                $derived = $this->attributeListing->countOfferAttributeValues(
+                    $sliceOffers,
+                    [$code => (string)($candidateCodeNames[$code] ?? $code)],
+                );
+                $sliceCounts = is_array($derived[$code]['counts'] ?? null) ? $derived[$code]['counts'] : [];
+                $merged = [];
+                foreach ($baselineCounts as $value => $_) {
+                    $value = trim((string)$value);
+                    if ($value !== '') {
+                        $merged[$value] = 0;
+                    }
+                }
+                foreach ($sliceCounts as $value => $count) {
+                    $value = trim((string)$value);
+                    if ($value !== '') {
+                        $merged[$value] = (int)$count;
+                    }
+                }
+                if (isset($selectedAttrs[$code])) {
+                    $selectedValue = trim((string)$selectedAttrs[$code]);
+                    if ($selectedValue !== '') {
+                        $found = false;
+                        foreach ($merged as $existing => $_) {
+                            if (strtolower((string)$existing) === strtolower($selectedValue)) {
+                                $found = true;
+                                break;
+                            }
+                        }
+                        if (!$found) {
+                            $merged[$selectedValue] = 0;
+                        }
+                    }
+                }
+                $refinedCounts[$code] = $merged;
+            }
+            $countsByCode = $refinedCounts;
+        }
+
+        $curatedCounts = $this->facetPresentation->curateFacetCounts(
+            $countsByCode,
+            $candidateCodeNames,
+            $selectedAttrs,
+        );
+
+        /** @var array<string, list<array{value:string,count:int,selected:bool}>> $attributes */
+        $attributes = [];
+        foreach ($curatedCounts as $code => $facet) {
+            $code = strtolower(trim((string)$code));
+            if ($code === '' || !is_array($facet)) {
+                continue;
+            }
+            $counts = is_array($facet['counts'] ?? null) ? $facet['counts'] : [];
+            $options = [];
+            foreach ($counts as $value => $count) {
+                $value = trim((string)$value);
+                $count = (int)$count;
+                if ($value === '') {
+                    continue;
+                }
+                $selected = isset($selectedAttrs[$code])
+                    && strtolower($selectedAttrs[$code]) === strtolower($value);
+                if ($count <= 0 && !$selected) {
+                    continue;
+                }
+                $options[] = [
+                    'value' => $value,
+                    'count' => $count,
+                    'selected' => $selected,
+                ];
+            }
+            if ($options === []) {
+                continue;
+            }
+            usort(
+                $options,
+                fn(array $a, array $b): int => $this->facetPresentation->compareFacetOptions($a, $b),
+            );
+            $attributes[$code] = $options;
+        }
+
+        return [
+            'price' => $price,
+            // Empty PHP array becomes JSON []; front-end treats attributes as a map.
+            'attributes' => $attributes === [] ? new \stdClass() : $attributes,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $panel
+     * @return array{
+     *     price: list<array{value:string,count:int,selected:bool}>,
+     *     attributes: array<string, list<array{value:string,count:int,selected:bool}>>|\stdClass
+     * }
+     */
+    public function panelToFacetCounts(array $panel): array
+    {
+        $price = [];
+        foreach (is_array($panel['price'] ?? null) ? $panel['price'] : [] as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $value = trim((string)($option['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            $price[] = [
+                'value' => $value,
+                'count' => (int)($option['count'] ?? 0),
+                'selected' => !empty($option['selected']),
+            ];
+        }
+
+        $attributes = [];
+        foreach (is_array($panel['attributes'] ?? null) ? $panel['attributes'] : [] as $group) {
+            if (!is_array($group)) {
+                continue;
+            }
+            $code = strtolower(trim((string)($group['code'] ?? '')));
+            if ($code === '') {
+                continue;
+            }
+            $options = [];
+            foreach (is_array($group['options'] ?? null) ? $group['options'] : [] as $option) {
+                if (!is_array($option)) {
+                    continue;
+                }
+                $value = trim((string)($option['value'] ?? ''));
+                if ($value === '') {
+                    continue;
+                }
+                $count = (int)($option['count'] ?? 0);
+                $selected = !empty($option['selected']);
+                if ($count <= 0 && !$selected) {
+                    continue;
+                }
+                $options[] = [
+                    'value' => $value,
+                    'count' => $count,
+                    'selected' => $selected,
+                ];
+            }
+            if ($options !== []) {
+                $attributes[$code] = $options;
+            }
+        }
+
+        return [
+            'price' => $price,
+            'attributes' => $attributes === [] ? new \stdClass() : $attributes,
+        ];
     }
 
     /**
@@ -304,6 +588,7 @@ final class StorefrontFilterPanelService
         array $query,
         int $websiteId,
         bool $rootCurrent,
+        bool $refinementCounts = false,
     ): string {
         $identities = [];
         foreach ($offers as $offer) {
@@ -334,7 +619,29 @@ final class StorefrontFilterPanelService
             $query,
             max(0, $websiteId),
             $rootCurrent,
+            $refinementCounts ? 'refinement' : 'neutral',
         ]));
+    }
+
+    /**
+     * Apply price + attribute filters for refinement slices (sort ignored).
+     *
+     * @param list<array<string, mixed>> $offers
+     * @param array<string, string> $selectedAttrs
+     * @return list<array<string, mixed>>
+     */
+    private function filterOffersForRefinement(
+        array $offers,
+        string $priceBucket,
+        array $selectedAttrs,
+    ): array {
+        $filtered = $this->listingFilter->apply(
+            $offers,
+            $priceBucket,
+            StorefrontCategoryListingFilter::SORT_DEFAULT,
+        );
+
+        return $this->attributeListing->apply($filtered, $selectedAttrs);
     }
 
     /**
@@ -371,6 +678,7 @@ final class StorefrontFilterPanelService
         array $query = [],
         int $websiteId = 0,
         bool $rootCurrent = false,
+        bool $refinementCounts = false,
     ): array {
         $listingUrl = '/' . ltrim(trim($listingUrl), '/');
         if ($listingUrl === '/') {
@@ -399,13 +707,20 @@ final class StorefrontFilterPanelService
             fn(): array => $this->buildDepartmentNav(max(0, $websiteId), $listingUrl),
         );
 
+        // Refinement price: Q_{-price} = attributes only (never fall back to full base).
+        $priceCountOffers = $refinementCounts
+            ? $this->attributeListing->apply($offers, $selectedAttrs)
+            : $offers;
+
         $priceOptions = [];
-        foreach ($this->listingFilter->priceBucketsWithCounts($offers) as $bucket) {
-            if ((int)$bucket['count'] <= 0) {
+        foreach ($this->listingFilter->priceBucketsWithCounts($priceCountOffers) as $bucket) {
+            $code = (string)$bucket['code'];
+            $count = (int)$bucket['count'];
+            $selected = $activePrice === $code;
+            // Neutral SSR: hide empty buckets. Refinement: keep selected zeros (R1/R2), hide unselected zeros (R3).
+            if ($count <= 0 && (!$refinementCounts || !$selected)) {
                 continue;
             }
-            $code = (string)$bucket['code'];
-            $selected = $activePrice === $code;
             $params = $baseExtra;
             foreach ($selectedAttrs as $attrCode => $attrValue) {
                 $params[StorefrontAttributeListingFilter::QUERY_PREFIX . $attrCode] = $attrValue;
@@ -416,7 +731,7 @@ final class StorefrontFilterPanelService
             $priceOptions[] = [
                 'label' => (string)$bucket['label'],
                 'value' => $code,
-                'count' => (int)$bucket['count'],
+                'count' => $count,
                 'url' => $this->attributeListing->buildListingUrl($listingUrl, [], $params),
                 'selected' => $selected,
             ];
@@ -559,13 +874,75 @@ final class StorefrontFilterPanelService
             $candidateCodeNames[$code] = (string)$derived['name'];
         }
 
+        // Refinement: per attribute code, recount on Q_{-code} (price + other attrs).
+        // Memo slices by filter fingerprint to avoid N× full scans when attrs share Q_{-D}.
+        if ($refinementCounts && $countsByCode !== []) {
+            $sliceMemo = [];
+            $refinedCounts = [];
+            foreach ($countsByCode as $code => $baselineCounts) {
+                $code = strtolower(trim((string)$code));
+                if ($code === '' || !is_array($baselineCounts)) {
+                    continue;
+                }
+                $otherAttrs = $selectedAttrs;
+                unset($otherAttrs[$code]);
+                $fingerprint = $activePrice . "\0" . serialize($otherAttrs);
+                if (!isset($sliceMemo[$fingerprint])) {
+                    $sliceMemo[$fingerprint] = $this->filterOffersForRefinement(
+                        $offers,
+                        $activePrice,
+                        $otherAttrs,
+                    );
+                }
+                $sliceOffers = $sliceMemo[$fingerprint];
+                $derived = $this->attributeListing->countOfferAttributeValues(
+                    $sliceOffers,
+                    [$code => (string)($candidateCodeNames[$code] ?? $code)],
+                );
+                $sliceCounts = is_array($derived[$code]['counts'] ?? null) ? $derived[$code]['counts'] : [];
+                // Preserve baseline value keys so selected zeros survive when absent from slice.
+                $merged = [];
+                foreach ($baselineCounts as $value => $_) {
+                    $value = trim((string)$value);
+                    if ($value === '') {
+                        continue;
+                    }
+                    $merged[$value] = 0;
+                }
+                foreach ($sliceCounts as $value => $count) {
+                    $value = trim((string)$value);
+                    if ($value === '') {
+                        continue;
+                    }
+                    $merged[$value] = (int)$count;
+                }
+                if (isset($selectedAttrs[$code])) {
+                    $selectedValue = trim((string)$selectedAttrs[$code]);
+                    if ($selectedValue !== '') {
+                        $found = false;
+                        foreach ($merged as $existing => $_) {
+                            if (strtolower((string)$existing) === strtolower($selectedValue)) {
+                                $found = true;
+                                break;
+                            }
+                        }
+                        if (!$found) {
+                            $merged[$selectedValue] = 0;
+                        }
+                    }
+                }
+                $refinedCounts[$code] = $merged;
+            }
+            $countsByCode = $refinedCounts;
+        }
+
         $curatedCounts = $this->facetPresentation->curateFacetCounts(
             $countsByCode,
             $candidateCodeNames,
             $selectedAttrs,
         );
         $attributeGroups = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.options',
-            function () use ($curatedCounts, $selectedAttrs, $baseExtra, $activePrice, $listingUrl): array {
+            function () use ($curatedCounts, $selectedAttrs, $baseExtra, $activePrice, $listingUrl, $refinementCounts): array {
                 $attributeGroups = [];
                 foreach ($curatedCounts as $code => $facet) {
                     $counts = $facet['counts'];
@@ -575,8 +952,13 @@ final class StorefrontFilterPanelService
                     $groupName = $this->facetTranslator->translate($groupName);
                     foreach ($counts as $value => $count) {
                         $value = (string)$value;
+                        $count = (int)$count;
                         $selected = isset($selectedAttrs[$code])
                             && strtolower($selectedAttrs[$code]) === strtolower($value);
+                        // R3 in refinement mode (curation already drops most zeros; belt-and-suspenders).
+                        if ($refinementCounts && $count <= 0 && !$selected) {
+                            continue;
+                        }
                         $nextSelected = $selectedAttrs;
                         if ($selected) {
                             unset($nextSelected[$code]);
@@ -593,7 +975,7 @@ final class StorefrontFilterPanelService
                         $options[] = [
                             'label' => $label,
                             'value' => $value,
-                            'count' => (int)$count,
+                            'count' => $count,
                             'url' => $this->attributeListing->buildListingUrl($listingUrl, $nextSelected, $params),
                             'selected' => $selected,
                         ];
@@ -603,7 +985,7 @@ final class StorefrontFilterPanelService
                     }
                     usort(
                         $options,
-                        static fn(array $a, array $b): int => strcasecmp((string)$a['label'], (string)$b['label']),
+                        fn(array $a, array $b): int => $this->facetPresentation->compareFacetOptions($a, $b),
                     );
                     $attributeGroups[] = [
                         'code' => (string)$code,

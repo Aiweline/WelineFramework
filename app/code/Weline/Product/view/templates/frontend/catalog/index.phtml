@@ -24,12 +24,19 @@ $sortOptions = StorefrontPageAssignBag::coalesce($this->getData('storefront_list
 $sortOptions = is_array($sortOptions) ? $sortOptions : [];
 $heading = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_heading'), 'storefront_heading', __('全部商品')));
 $lede = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_lede'), 'storefront_lede', __('浏览当前网站已发布的商品，可按分类与价格筛选。')));
+$listingPath = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_path'), 'storefront_listing_path', '/products'));
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $from = $visibleCount > 0 ? (($page - 1) * $pageSize) + 1 : 0;
 $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
 ?>
 <section class="product-storefront"
          data-testid="storefront-product-catalog"
+         data-storefront-listing="1"
+         data-listing-surface="products"
+         data-listing-path="<?= $escape($listingPath) ?>"
+         data-weline-load="storefrontListing"
+         data-weline-load-when="idle"
+         data-listing-loading-label="<?= $escape(__('加载中…')) ?>"
          weline-code="product.frontend.catalog.section_1">
     <header class="product-storefront__header">
         <h1><?= $escape($heading) ?></h1>
@@ -37,37 +44,35 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
     </header>
 
     <div class="product-storefront__toolbar" data-testid="storefront-products-toolbar">
-        <p class="product-storefront__count">
+        <p class="product-storefront__count" data-listing-count>
             <?php if ($visibleCount > 0): ?>
                 <?= __('第 %{1}–%{2} 件，共 %{3} 件商品', [$from, $to, $visibleCount]) ?>
             <?php else: ?>
                 <?= __('0 件商品') ?>
             <?php endif; ?>
-            <?php if ($activePrice !== '' && $visibleCount !== $totalCount): ?>
-                <span class="product-storefront__count-hint"><?= __('（筛选自 %{1} 件）', [$totalCount]) ?></span>
-            <?php endif; ?>
+            <span class="product-storefront__count-hint" data-listing-count-hint hidden></span>
         </p>
         <?php if ($sortOptions !== []): ?>
             <label class="product-storefront__sort">
                 <span><?= __('排序') ?>:</span>
                 <select class="product-storefront__sort-select"
                         data-testid="storefront-products-sort"
-                        onchange="if (this.value) { window.location.href = this.value; }">
+                        data-listing-sort>
                     <?php foreach ($sortOptions as $option): ?>
                         <?php
                         if (!is_array($option)) {
                             continue;
                         }
-                        $href = trim((string)($option['url'] ?? ''));
-                        if ($href === '') {
+                        $code = trim((string)($option['code'] ?? ''));
+                        if ($code === '') {
                             continue;
                         }
                         ?>
-                        <option value="<?= $escape($href) ?>"<?= !empty($option['selected']) ? ' selected' : '' ?>>
+                        <option value="<?= $escape($code) ?>"<?= !empty($option['selected']) ? ' selected' : '' ?>>
                             <?php
                             // Literal __() so Taglib can prefetch heavy locale packs;
                             // dynamic __($var) is not collected and falls back to Chinese.
-                            $sortLabel = match ((string)($option['code'] ?? '')) {
+                            $sortLabel = match ($code) {
                                 'default' => (string)__('默认排序'),
                                 'price_asc' => (string)__('价格从低到高'),
                                 'price_desc' => (string)__('价格从高到低'),
@@ -85,16 +90,13 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
 
     <div class="product-storefront__notice" data-testid="catalog-message" aria-live="polite"></div>
 
+    <div data-listing-stage>
     <?php if ($offers === []): ?>
-        <div class="product-storefront__empty" data-testid="storefront-product-empty">
-            <?php if ($activePrice !== ''): ?>
-                <?= __('当前筛选条件下暂无商品，请调整筛选。') ?>
-            <?php else: ?>
-                <?= __('当前网站暂无已发布商品。') ?>
-            <?php endif; ?>
+        <div class="product-storefront__empty" data-testid="storefront-product-empty" data-listing-empty>
+            <?= __('当前网站暂无已发布商品。') ?>
         </div>
     <?php else: ?>
-        <div class="product-storefront__grid weline-product-card-shelf">
+        <div class="product-storefront__grid weline-product-card-shelf" data-listing-grid>
             <?= ProductCardRenderer::projectFromOffers($offers, [
                 'show_price' => true,
                 'show_add_to_cart' => true,
@@ -102,63 +104,66 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
                 'show_compare' => true,
                 'show_quickview' => true,
                 'show_labels' => true,
+                'show_sku' => true,
                 'density' => 'standard',
                 'class' => 'wpc-listing-card',
                 'wishlist_pixel' => true,
             ]) ?>
         </div>
-        <?php if ($totalPages > 1 && $pageOptions !== []): ?>
-            <nav class="product-storefront__pager"
-                 data-testid="storefront-products-pager"
-                 aria-label="<?= $escape(WidgetI18n::label('分页')) ?>">
-                <?php foreach ($pageOptions as $option): ?>
-                    <?php
-                    if (!is_array($option)) {
-                        continue;
-                    }
-                    $type = (string)($option['type'] ?? 'page');
-                    $href = trim((string)($option['url'] ?? ''));
-                    $label = (string)($option['label'] ?? $option['page'] ?? '');
-                    if ($type === 'prev') {
-                        $label = WidgetI18n::label('上一页');
-                    } elseif ($type === 'next') {
-                        $label = WidgetI18n::label('下一页');
-                    }
-                    if ($label === '') {
-                        continue;
-                    }
-                    if ($type === 'ellipsis') {
-                        ?>
-                        <span class="product-storefront__pager-item is-ellipsis" aria-hidden="true"><?= $escape($label) ?></span>
-                        <?php
-                        continue;
-                    }
-                    if ($type === 'prev' || $type === 'next') {
-                        $disabled = !empty($option['disabled']);
-                        if ($disabled || $href === '') {
-                            ?>
-                            <span class="product-storefront__pager-item is-nav is-disabled" aria-disabled="true"><?= $escape($label) ?></span>
-                            <?php
-                        } else {
-                            ?>
-                            <a class="product-storefront__pager-item is-nav" href="<?= $escape($href) ?>"><?= $escape($label) ?></a>
-                            <?php
-                        }
-                        continue;
-                    }
-                    if ($href === '') {
-                        continue;
-                    }
+        <nav class="product-storefront__pager"
+             data-testid="storefront-products-pager"
+             data-listing-pager
+             aria-label="<?= $escape(WidgetI18n::label('分页')) ?>"
+             <?= ($totalPages > 1 && $pageOptions !== []) ? '' : 'hidden' ?>>
+            <?php foreach ($pageOptions as $option): ?>
+                <?php
+                if (!is_array($option)) {
+                    continue;
+                }
+                $type = (string)($option['type'] ?? 'page');
+                $pageNum = max(1, (int)($option['page'] ?? 1));
+                $label = (string)($option['label'] ?? $option['page'] ?? '');
+                if ($type === 'prev') {
+                    $label = WidgetI18n::label('上一页');
+                } elseif ($type === 'next') {
+                    $label = WidgetI18n::label('下一页');
+                }
+                if ($label === '') {
+                    continue;
+                }
+                if ($type === 'ellipsis') {
                     ?>
-                    <?php if (!empty($option['selected'])): ?>
-                        <span class="product-storefront__pager-item is-current" aria-current="page"><?= $escape($label) ?></span>
-                    <?php else: ?>
-                        <a class="product-storefront__pager-item" href="<?= $escape($href) ?>"><?= $escape($label) ?></a>
-                    <?php endif; ?>
-                <?php endforeach; ?>
-            </nav>
-        <?php endif; ?>
+                    <span class="product-storefront__pager-item is-ellipsis" aria-hidden="true"><?= $escape($label) ?></span>
+                    <?php
+                    continue;
+                }
+                if ($type === 'prev' || $type === 'next') {
+                    $disabled = !empty($option['disabled']);
+                    if ($disabled) {
+                        ?>
+                        <span class="product-storefront__pager-item is-nav is-disabled" aria-disabled="true"><?= $escape($label) ?></span>
+                        <?php
+                    } else {
+                        ?>
+                        <button type="button"
+                                class="product-storefront__pager-item is-nav"
+                                data-listing-page="<?= $pageNum ?>"><?= $escape($label) ?></button>
+                        <?php
+                    }
+                    continue;
+                }
+                ?>
+                <?php if (!empty($option['selected'])): ?>
+                    <span class="product-storefront__pager-item is-current" aria-current="page"><?= $escape($label) ?></span>
+                <?php else: ?>
+                    <button type="button"
+                            class="product-storefront__pager-item"
+                            data-listing-page="<?= $pageNum ?>"><?= $escape($label) ?></button>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </nav>
     <?php endif; ?>
+    </div>
 
     <a class="product-storefront__cart" href="@url{'cart'}" data-testid="view-cart" hidden>
         <?= __('查看购物车') ?>
@@ -233,6 +238,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
         font-size:13px;
         font-weight:600;
         text-decoration:none;
+        cursor:pointer;
         display:inline-flex;
         align-items:center;
         justify-content:center;
@@ -265,6 +271,26 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
         color:#565959;
         text-align:center;
         background:#fff;
+    }
+    .storefront-listing-loading {
+        margin:0 0 10px;
+        padding:8px 12px;
+        border-radius:8px;
+        background:#f0f2f2;
+        color:#565959;
+        font-size:13px;
+        font-weight:600;
+        line-height:1.35;
+    }
+    .storefront-listing-loading[hidden] { display:none !important; }
+    .product-storefront.is-listing-loading [data-listing-stage] {
+        opacity:.45;
+        pointer-events:none;
+        transition:opacity .15s ease;
+    }
+    .product-storefront.is-listing-loading [data-listing-sort] {
+        pointer-events:none;
+        opacity:.7;
     }
     @media (max-width:1200px) {
         .product-storefront__grid { grid-template-columns:repeat(3, minmax(0, 1fr)); }
