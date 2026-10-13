@@ -21,6 +21,8 @@ refresh,refresh
 执行发布,"Execute release"
 从发布控制触发部署,"Trigger deployment from release control"
 请求方式错误,"Wrong request method"
+"已记录：你确认 Git 平台 Webhook 地址中的签章参数已更新。","已记录：你确认 Git 平台 Webhook 地址中的签章参数已更新。"
+"当前无可用 FPC 签章，或非 WLS 边缘模式，无需确认。","当前无可用 FPC 签章，或非 WLS 边缘模式，无需确认。"
 部署配置已保存,"Deployment configuration saved"
 部署配置保存失败：%{1},"Failed to save deployment configuration: %{1}"
 当前站点请求域名,"Current request site domain"
@@ -28,6 +30,9 @@ refresh,refresh
 "管理部署仓库、Webhook 与缓存清理配置","Manage deployment repository, webhook and cache cleaning configuration"
 查看部署配置,"View deployment configuration"
 查看部署信息配置,"View deployment information configuration"
+"确认 Webhook 签章 URL 已同步","确认 Webhook 签章 URL 已同步"
+check,check
+"开发者确认已更新 Git 平台 Webhook 中的 FPC 签章参数","开发者确认已更新 Git 平台 Webhook 中的 FPC 签章参数"
 保存部署配置,"Save deployment configuration"
 save,save
 保存部署信息配置,"Save deployment information configuration"
@@ -158,7 +163,6 @@ settings,settings
 edit,edit
 "View WLS Panel deploy project profile","View WLS Panel deploy project profile"
 "View WLS Deploy Preflight","View WLS Deploy Preflight"
-check,check
 "View WLS Panel deploy preflight","View WLS Panel deploy preflight"
 "View WLS Deploy Webhooks","View WLS Deploy Webhooks"
 "View WLS Panel deploy webhooks","View WLS Panel deploy webhooks"
@@ -184,6 +188,9 @@ list,list
 已配置，留空表示不修改,"Configured, leave blank to not modify"
 未配置,"Not Configured"
 立即复制,"Copy now"
+"开发者注意：FPC 打穿签章已变更（或尚未确认）","开发者注意：FPC 打穿签章已变更（或尚未确认）"
+"请到 Gitee/GitHub 仓库 Webhook，把 URL 中的 w_fpc_pierce= 改成当前签章（~wh~ 路径通常不用改）。也可复制下方完整公网地址覆盖。改完后点「确认已换」；下次再换章会再提示。不必为换签章重跑 setup。","请到 Gitee/GitHub 仓库 Webhook，把 URL 中的 w_fpc_pierce= 改成当前签章（~wh~ 路径通常不用改）。也可复制下方完整公网地址覆盖。改完后点「确认已换」；下次再换章会再提示。不必为换签章重跑 setup。"
+确认已换,确认已换
 "后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。","After the background configuration is saved, it will take precedence over dev/deploy/.config and .env; only when the field is left blank will it fall back to the server file configuration."
 项目仓库,"Project warehouse"
 项目仓库地址,"Project Repository URL"
@@ -510,6 +517,8 @@ pending,pending
 "【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。","[1] The Webhook public network path is randomly generated (~wh~ prefix), and only deploy:webhook:setup can be rotated; the Git platform URL must be exactly the same as the command output."
 "【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。","【2】The Git platform Secret/password must be consistent with the webhook_secret below; it is recommended to use Authorization: Bearer."
 "【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。","【3】The version detection address is the Webhook path followed by /version (can be used in conjunction with the background ""publish detection token"")."
+"【3b】WLS 边缘：完整 URL 含 w_fpc_pierce=（本机 FPC 打穿签章）。签章轮换后只需改 Git URL 里该参数，不必重跑 setup；后台「确认已换」后提示才会消失。","【3b】WLS 边缘：完整 URL 含 w_fpc_pierce=（本机 FPC 打穿签章）。签章轮换后只需改 Git URL 里该参数，不必重跑 setup；后台「确认已换」后提示才会消失。"
+"【3b】当前为 FPM/非 WLS 边缘：URL 不含 FPC 签章；发布只靠 webhook_secret；该路径不会进 FPC。","【3b】当前为 FPM/非 WLS 边缘：URL 不含 FPC 签章；发布只靠 webhook_secret；该路径不会进 FPC。"
 "【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}","【4】Git platform Webhook URL (copy to warehouse configuration): %{1}"
 "【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。","[4] The site domain name cannot be automatically inferred. Please add --base-url=https://your domain name and re-run to output the complete deployment address and curl."
 "【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。","【5】Only test curl in the dedicated deployment directory to avoid accidentally triggering uncommitted code on the development machine."

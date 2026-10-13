@@ -21,6 +21,8 @@ refresh,刷新
 执行发布,执行发布
 从发布控制触发部署,从发布控制触发部署
 请求方式错误,请求方式错误
+"已记录：你确认 Git 平台 Webhook 地址中的签章参数已更新。","已记录：你确认 Git 平台 Webhook 地址中的签章参数已更新。"
+"当前无可用 FPC 签章，或非 WLS 边缘模式，无需确认。","当前无可用 FPC 签章，或非 WLS 边缘模式，无需确认。"
 部署配置已保存,部署配置已保存
 部署配置保存失败：%{1},部署配置保存失败：%{1}
 当前站点请求域名,当前站点请求域名
@@ -28,6 +30,9 @@ refresh,刷新
 "管理部署仓库、Webhook 与缓存清理配置","管理部署仓库、Webhook 与缓存清理配置"
 查看部署配置,查看部署配置
 查看部署信息配置,查看部署信息配置
+"确认 Webhook 签章 URL 已同步","确认 Webhook 签章 URL 已同步"
+check,查看
+"开发者确认已更新 Git 平台 Webhook 中的 FPC 签章参数","开发者确认已更新 Git 平台 Webhook 中的 FPC 签章参数"
 保存部署配置,保存部署配置
 save,节省
 保存部署信息配置,保存部署信息配置
@@ -158,7 +163,6 @@ settings,设置
 edit,编辑
 "View WLS Panel deploy project profile","查看 WLS Panel 部署项目配置文件"
 "View WLS Deploy Preflight","查看 WLS 部署预检"
-check,查看
 "View WLS Panel deploy preflight","查看 WLS 面板部署预检"
 "View WLS Deploy Webhooks","查看 WLS 部署 Webhook"
 "View WLS Panel deploy webhooks","查看 WLS 面板部署 webhook"
@@ -184,6 +188,9 @@ list,列表
 已配置，留空表示不修改,已配置，留空表示不修改
 未配置,未配置
 立即复制,立即复制
+"开发者注意：FPC 打穿签章已变更（或尚未确认）","开发者注意：FPC 打穿签章已变更（或尚未确认）"
+"请到 Gitee/GitHub 仓库 Webhook，把 URL 中的 w_fpc_pierce= 改成当前签章（~wh~ 路径通常不用改）。也可复制下方完整公网地址覆盖。改完后点「确认已换」；下次再换章会再提示。不必为换签章重跑 setup。","请到 Gitee/GitHub 仓库 Webhook，把 URL 中的 w_fpc_pierce= 改成当前签章（~wh~ 路径通常不用改）。也可复制下方完整公网地址覆盖。改完后点「确认已换」；下次再换章会再提示。不必为换签章重跑 setup。"
+确认已换,确认已换
 "后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。","后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。"
 项目仓库,项目仓库
 项目仓库地址,项目仓库地址
@@ -495,6 +502,8 @@ pending,等待中
 "【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。","【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。"
 "【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。","【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。"
 "【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。","【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。"
+"【3b】WLS 边缘：完整 URL 含 w_fpc_pierce=（本机 FPC 打穿签章）。签章轮换后只需改 Git URL 里该参数，不必重跑 setup；后台「确认已换」后提示才会消失。","【3b】WLS 边缘：完整 URL 含 w_fpc_pierce=（本机 FPC 打穿签章）。签章轮换后只需改 Git URL 里该参数，不必重跑 setup；后台「确认已换」后提示才会消失。"
+"【3b】当前为 FPM/非 WLS 边缘：URL 不含 FPC 签章；发布只靠 webhook_secret；该路径不会进 FPC。","【3b】当前为 FPM/非 WLS 边缘：URL 不含 FPC 签章；发布只靠 webhook_secret；该路径不会进 FPC。"
 "【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}","【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}"
 "【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。","【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。"
 "【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。","【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。"
