@@ -6,13 +6,19 @@ namespace Weline\Websites\Service;
 
 use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Http\NoRouterException;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Http\ResponseTerminateException;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
 use Weline\Framework\Runtime\InternalHomepagePrime;
 use Weline\Framework\Runtime\RequestAuthority;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\StorefrontScopeInstallerInterface;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 
 /**
@@ -41,7 +47,15 @@ final class FrontendWorkerScopeBootstrapResponseService
         if (!$result instanceof Response && !\is_string($result)) {
             return $result;
         }
-        if ($this->alreadyDecorated() || !$this->isEligibleRequest()) {
+        if ($this->alreadyDecorated()) {
+            return $result;
+        }
+        if (!$this->isEligibleRequest()) {
+            // FPC/cold-disk hits can reach markCacheHit without a full frontend
+            // request Context. Never emit that public HTML under binding-on —
+            // browsers then hit QueryBin with scope_binding_required:401 and
+            // surface a fake "登录状态异常". CLI is excluded in isEligibleRequest.
+            $this->failClosedIfCachedHtmlNeedsBinding($result);
             return $result;
         }
 
@@ -50,12 +64,42 @@ final class FrontendWorkerScopeBootstrapResponseService
             return $result;
         }
 
+        $scheme = $this->requestInput('scheme');
         $scope = RequestContext::scopeIdentity();
+        if ((!$scope instanceof ScopeIdentity || $scope->scopeKind !== ScopeIdentity::KIND_CHANNEL)
+            && WelineEnv::get('response.from_cache', false)
+        ) {
+            // Early FPC/cold-disk hits often skip DetectWebsite; recover channel
+            // Scope from the request URL before fail-closed so Always Online can
+            // still emit bootstrap instead of a bare 503/401 loop.
+            $scope = $this->tryRecoverChannelScopeFromRequest();
+        }
         if (!$scope instanceof ScopeIdentity || $scope->scopeKind !== ScopeIdentity::KIND_CHANNEL) {
+            // allowlist/on must not emit HTML that QueryBin will reject with
+            // scope_binding_required:401 (surface as a fake "登录状态异常").
+            $bindingRequired = false;
+            try {
+                $bindingRequired = $this->scopeProvider->requiresBinding($scheme);
+            } catch (FrontendWorkerScopeException $exception) {
+                throw $exception;
+            } catch (\Weline\Framework\Runtime\RequestExitException $cancelled) {
+                throw $cancelled;
+            } catch (\Throwable) {
+                // Policy probe itself failed; do not invent a binding requirement.
+                $bindingRequired = false;
+            }
+            if ($bindingRequired) {
+                throw new FrontendWorkerScopeException(
+                    'worker_scope_bootstrap_scope_missing',
+                    503,
+                    \function_exists('__')
+                        ? (string)\__('系统正在升级维护，请稍后再试。')
+                        : '系统正在升级维护，请稍后再试。',
+                );
+            }
             return $result;
         }
 
-        $scheme = $this->requestInput('scheme');
         $authorityHost = $this->requestInput('host');
         try {
             $decision = $this->scopeProvider->rollout($scope, $scheme);
@@ -234,7 +278,7 @@ final class FrontendWorkerScopeBootstrapResponseService
                 throw new FrontendWorkerScopeException(
                     'worker_scope_bootstrap_unavailable',
                     503,
-                    (string)__('系统正在升级维护，请稍后再试。'),
+                    (string)\__('系统正在升级维护，请稍后再试。'),
                     $exception,
                 );
             }
@@ -255,6 +299,18 @@ final class FrontendWorkerScopeBootstrapResponseService
 
     private function isEligibleRequest(): bool
     {
+        // bin/w finalize through response_ready under CLI SAPI with meta.type=system.
+        // RequestContext defaults area to frontend, so without this guard binding-on
+        // fail-closed rewrites every CLI Response body to the maintenance string.
+        // PHPUnit / simulated HTTP keep meta.type=request under the same SAPI.
+        if (Runtime::isCli()) {
+            $cliContext = Context::getCurrent();
+            $metaType = $cliContext !== null ? (string)$cliContext->get('meta.type', '') : '';
+            if ($metaType === 'system' || $metaType === '') {
+                return false;
+            }
+        }
+
         if (InternalHomepagePrime::hasServerOnlyMarker()) {
             return false;
         }
@@ -272,6 +328,93 @@ final class FrontendWorkerScopeBootstrapResponseService
         }
 
         return \strcasecmp((string)$context->server('HTTP_X_REQUESTED_WITH', ''), 'XMLHttpRequest') !== 0;
+    }
+
+    /**
+     * Recover channel ScopeIdentity for FPC/cold-disk responses that never ran
+     * DetectWebsite. Owning installer stays Websites via Framework interface.
+     */
+    private function tryRecoverChannelScopeFromRequest(): ?ScopeIdentity
+    {
+        $fullUri = \trim($this->requestInput('full_request_uri'));
+        if ($fullUri === '') {
+            $host = \trim($this->requestInput('host'));
+            if ($host === '') {
+                return null;
+            }
+            $scheme = \trim($this->requestInput('scheme'));
+            if ($scheme === '') {
+                $scheme = 'https';
+            }
+            $uri = \trim($this->requestInput('uri'));
+            if ($uri === '') {
+                $uri = '/';
+            }
+            if ($uri[0] !== '/') {
+                $uri = '/' . $uri;
+            }
+            $fullUri = $scheme . '://' . $host . $uri;
+        }
+
+        try {
+            /** @var RuntimeProviderResolver $resolver */
+            $resolver = ObjectManager::getInstance(RuntimeProviderResolver::class);
+            $resolution = $resolver->resolveDetailed(StorefrontScopeInstallerInterface::class);
+            $installer = $resolution->provider;
+            if (!$installer instanceof StorefrontScopeInstallerInterface) {
+                return null;
+            }
+            $navigation = $installer->installNavigationScope($fullUri);
+            $identity = $navigation->identity;
+            if ($identity instanceof ScopeIdentity
+                && $identity->scopeKind === ScopeIdentity::KIND_CHANNEL) {
+                return $identity;
+            }
+        } catch (NoRouterException|ResponseTerminateException) {
+            return null;
+        } catch (\Weline\Framework\Runtime\RequestExitException $cancelled) {
+            throw $cancelled;
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return null;
+    }
+
+    /**
+     * When an early FPC/cold-disk hit cannot decorate (ineligible request Context)
+     * but commerce scope binding is required, refuse the undecorated public HTML.
+     */
+    private function failClosedIfCachedHtmlNeedsBinding(mixed $result): void
+    {
+        if (!$result instanceof Response || !$this->isEligibleResponse($result)) {
+            return;
+        }
+        if (!WelineEnv::get('response.from_cache', false)) {
+            return;
+        }
+
+        $bindingRequired = false;
+        try {
+            $bindingRequired = $this->scopeProvider->requiresBinding($this->requestInput('scheme'));
+        } catch (FrontendWorkerScopeException $exception) {
+            throw $exception;
+        } catch (\Weline\Framework\Runtime\RequestExitException $cancelled) {
+            throw $cancelled;
+        } catch (\Throwable) {
+            $bindingRequired = false;
+        }
+        if (!$bindingRequired) {
+            return;
+        }
+
+        throw new FrontendWorkerScopeException(
+            'worker_scope_bootstrap_fpc_context_missing',
+            503,
+            \function_exists('__')
+                ? (string)\__('系统正在升级维护，请稍后再试。')
+                : '系统正在升级维护，请稍后再试。',
+        );
     }
 
     private function isEligibleResponse(Response $response): bool
@@ -508,7 +651,7 @@ final class FrontendWorkerScopeBootstrapResponseService
             throw new FrontendWorkerScopeException(
                 'worker_scope_response_marker_invalid',
                 503,
-                (string)__('系统正在升级维护，请稍后再试。'),
+                (string)\__('系统正在升级维护，请稍后再试。'),
             );
         }
         return $decorated;
@@ -523,7 +666,7 @@ final class FrontendWorkerScopeBootstrapResponseService
             throw new FrontendWorkerScopeException(
                 $reason,
                 503,
-                (string)__('系统正在升级维护，请稍后再试。'),
+                (string)\__('系统正在升级维护，请稍后再试。'),
             );
         }
 
@@ -541,7 +684,7 @@ final class FrontendWorkerScopeBootstrapResponseService
             throw new FrontendWorkerScopeException(
                 $reason,
                 503,
-                (string)__('系统正在升级维护，请稍后再试。'),
+                (string)\__('系统正在升级维护，请稍后再试。'),
             );
         }
 
@@ -639,9 +782,12 @@ final class FrontendWorkerScopeBootstrapResponseService
             return RequestAuthority::current();
         }
 
+        if ($name === 'scheme') {
+            return $this->resolveRequestScheme($context);
+        }
+
         $canonical = match ($name) {
             'method' => WelineEnv::getRequestMethod(),
-            'scheme' => \strtolower(\trim(WelineEnv::getRequestScheme())),
             default => '',
         };
         if ($canonical !== '') {
@@ -654,12 +800,11 @@ final class FrontendWorkerScopeBootstrapResponseService
 
         $value = \trim((string)$context->get('input.' . $name, ''));
         if ($value !== '') {
-            return $name === 'scheme' ? \strtolower($value) : $value;
+            return $value;
         }
 
         return match ($name) {
             'method' => \trim((string)$context->server('REQUEST_METHOD', '')),
-            'scheme' => $this->requestSchemeFromServer($context),
             'host' => \trim((string)$context->server(
                 'HTTP_HOST',
                 $context->server('SERVER_NAME', ''),
@@ -668,8 +813,49 @@ final class FrontendWorkerScopeBootstrapResponseService
         };
     }
 
+    /**
+     * Worker speaks plain HTTP to nginx; public storefront is HTTPS via
+     * X-Forwarded-Proto. Cold-disk/FPC hits must not treat the upstream hop as
+     * the token scheme or Scope Kernel throws scope_token_https_required → 503.
+     */
+    private function resolveRequestScheme(?Context $context): string
+    {
+        $env = \strtolower(\trim(WelineEnv::getRequestScheme()));
+        if ($env === 'https') {
+            return 'https';
+        }
+
+        if ($context !== null) {
+            $forwarded = \strtolower(\trim((string)$context->server('HTTP_X_FORWARDED_PROTO', '')));
+            if ($forwarded !== '') {
+                $forwarded = \trim(\explode(',', $forwarded, 2)[0]);
+                if ($forwarded === 'https' || $forwarded === 'http') {
+                    return $forwarded;
+                }
+            }
+            $input = \strtolower(\trim((string)$context->get('input.scheme', '')));
+            if ($input === 'https' || $input === 'http') {
+                return $input;
+            }
+            $fromServer = $this->requestSchemeFromServer($context);
+            if ($fromServer === 'https') {
+                return 'https';
+            }
+        }
+
+        return $env !== '' ? $env : 'http';
+    }
+
     private function requestSchemeFromServer(Context $context): string
     {
+        $forwarded = \strtolower(\trim((string)$context->server('HTTP_X_FORWARDED_PROTO', '')));
+        if ($forwarded !== '') {
+            $forwarded = \trim(\explode(',', $forwarded, 2)[0]);
+            if ($forwarded === 'https' || $forwarded === 'http') {
+                return $forwarded;
+            }
+        }
+
         $requestScheme = \strtolower(\trim((string)$context->server('REQUEST_SCHEME', '')));
         if ($requestScheme !== '') {
             return $requestScheme;

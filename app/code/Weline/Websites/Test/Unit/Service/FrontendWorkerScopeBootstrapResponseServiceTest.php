@@ -7,6 +7,7 @@ namespace Weline\Websites\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestExitException;
@@ -201,6 +202,124 @@ final class FrontendWorkerScopeBootstrapResponseServiceTest extends TestCase
                 $_SERVER['WLS_INTERNAL_WARMUP'] = $previousFlag;
             }
         }
+    }
+
+    public function testMissingChannelScopeFailsClosedWhenBindingRequired(): void
+    {
+        $this->clearInstalledScopeIdentity();
+        TestBootstrapScopeProvider::$mode = FrontendWorkerScopeRolloutDecision::MODE_ON;
+        $service = new FrontendWorkerScopeBootstrapResponseService(
+            new TestBootstrapScopeProvider(),
+            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
+        );
+
+        try {
+            $service->decorate(Response::html(
+                '<!doctype html><html><head><title>Home</title></head><body>Home</body></html>',
+            ));
+            self::fail('Expected FrontendWorkerScopeException when channel Scope is missing.');
+        } catch (FrontendWorkerScopeException $exception) {
+            self::assertSame('worker_scope_bootstrap_scope_missing', $exception->reason);
+            self::assertSame(503, $exception->httpStatus);
+        }
+    }
+
+    public function testIneligibleCachedHtmlFailsClosedWhenBindingRequired(): void
+    {
+        // Simulate early FPC/cold-disk hit: cache flag set, but request Context is
+        // not a normal frontend decorate surface (static route).
+        Context::getCurrent()?->set('route.is_static', true);
+        \Weline\Framework\Env\WelineEnv::set(
+            'response.from_cache',
+            true,
+            'FrontendWorkerScopeBootstrapResponseServiceTest ineligible cached html',
+        );
+        TestBootstrapScopeProvider::$mode = FrontendWorkerScopeRolloutDecision::MODE_ON;
+        $service = new FrontendWorkerScopeBootstrapResponseService(
+            new TestBootstrapScopeProvider(),
+            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
+        );
+        $html = '<!doctype html><html><head><title>Cached</title></head><body>Public</body></html>';
+
+        try {
+            $service->decorate(Response::html($html));
+            self::fail('Expected FrontendWorkerScopeException for ineligible cached HTML under binding.');
+        } catch (FrontendWorkerScopeException $exception) {
+            self::assertSame('worker_scope_bootstrap_fpc_context_missing', $exception->reason);
+            self::assertSame(503, $exception->httpStatus);
+        }
+    }
+
+    public function testCliSystemMetaNeverDecoratesOrFailClosed(): void
+    {
+        if (!\Weline\Framework\Runtime\Runtime::isCli()) {
+            self::markTestSkipped('Contract locks CLI SAPI skip; run under cli/phpdbg.');
+        }
+        // Real bin/w uses FpmRuntime meta.type=system; keep body intact.
+        Context::leave();
+        Context::enter(new Context([
+            'meta' => ['type' => 'system', 'mode' => 'fpm', 'process_tag' => 'CLI'],
+            'input' => [
+                'method' => 'GET',
+                'scheme' => 'https',
+                'host' => 'cli.example.test',
+                'uri' => '/',
+                'full_request_uri' => 'https://cli.example.test/',
+                'server' => [
+                    'HTTP_HOST' => 'cli.example.test',
+                    'REQUEST_METHOD' => 'GET',
+                    'REQUEST_SCHEME' => 'https',
+                    'REQUEST_URI' => '/',
+                ],
+            ],
+            'route' => [
+                'area' => RequestContext::AREA_FRONTEND,
+                'is_static' => false,
+                'is_media' => false,
+            ],
+        ]));
+        RequestContext::setId('scope-bootstrap-cli-system-test');
+        $this->clearInstalledScopeIdentity();
+        TestBootstrapScopeProvider::$mode = FrontendWorkerScopeRolloutDecision::MODE_ON;
+        $service = new FrontendWorkerScopeBootstrapResponseService(
+            new TestBootstrapScopeProvider(),
+            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
+        );
+        $response = Response::html(
+            '<!doctype html><html><head><title>CLI</title></head><body>status-ok</body></html>',
+        );
+
+        self::assertSame($response, $service->decorate($response));
+        self::assertStringNotContainsString('weline-worker-scope-bootstrap', $response->getBody());
+        self::assertStringContainsString('status-ok', $response->getBody());
+        self::assertSame(0, TestBootstrapScopeProvider::$issueCalls);
+    }
+
+    public function testMissingChannelScopeSkippedWhenRolloutOff(): void
+    {
+        $this->clearInstalledScopeIdentity();
+        TestBootstrapScopeProvider::$mode = FrontendWorkerScopeRolloutDecision::MODE_OFF;
+        $service = new FrontendWorkerScopeBootstrapResponseService(
+            new TestBootstrapScopeProvider(),
+            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
+        );
+        $response = Response::html(
+            '<!doctype html><html><head><title>Home</title></head><body>Home</body></html>',
+        );
+
+        self::assertSame($response, $service->decorate($response));
+        self::assertStringNotContainsString('weline-worker-scope-bootstrap', $response->getBody());
+    }
+
+    private function clearInstalledScopeIdentity(): void
+    {
+        $context = Context::getCurrent();
+        self::assertNotNull($context);
+        $path = (new \ReflectionClass(RequestContext::class))
+            ->getConstant('SCOPE_IDENTITY_PATH');
+        self::assertIsString($path);
+        $context->set($path, null);
+        self::assertNull(RequestContext::scopeIdentity());
     }
 
     public function testRequestCancellationIsNotTurnedIntoMaintenanceResponse(): void

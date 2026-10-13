@@ -87,9 +87,18 @@ final class FrontendWorkerScopeBootstrapResponse implements ObserverInterface
             $headers->removeHeader('Content-Encoding');
             $headers->removeHeader('Content-Length');
             $headers->removeHeader('Content-Disposition');
-            foreach (['ETag', 'Content-MD5', 'Digest', 'Content-Digest', 'Last-Modified', 'Accept-Ranges'] as $header) {
+            // Strip FPC/CDN edge hints so a failed decorate never poisons nginx
+            // / cold-disk as a cacheable HIT for the public storefront URL.
+            foreach ([
+                'ETag', 'Content-MD5', 'Digest', 'Content-Digest', 'Last-Modified', 'Accept-Ranges',
+                'X-Weline-FPC', 'X-Weline-FPC-Source', 'X-Wls-Fpc-Status', 'X-Weline-Cache-Status',
+                'CDN-Cache-Control', 'Cloudflare-CDN-Cache-Control', 'Surrogate-Control',
+                'X-WLS-Degrade',
+            ] as $header) {
                 $headers->removeHeader($header);
             }
+            $response->setHeader('X-Weline-FPC', 'BYPASS');
+            $response->setHeader('X-Wls-Fpc-Status', 'BYPASS');
             $response->setBody((string)__('系统正在升级维护，请稍后再试。'));
             return $response;
         }
