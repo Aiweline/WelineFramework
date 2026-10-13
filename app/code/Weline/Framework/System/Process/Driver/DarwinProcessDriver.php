@@ -17,7 +17,7 @@ use Weline\Framework\System\Process\Native\DarwinProcessProbe;
  * | 能力 | `LinuxProcessDriver` 在 Darwin 上的实际通路 |
  * |------|--------------------------------------------|
  * | 命令行 | `/proc/{pid}/cmdline`（不存在）→ `ps -p -o args=` |
- * | 进程信息 | `/proc/{pid}/…`（不存在）→ `ps -p -o pid=,%mem=,%cpu=,lstart=` + `ps -o comm=` |
+ * | 进程信息 | `/proc/{pid}/…`（不存在）→ `ps -p -o pid=,rss=,%mem=,%cpu=,lstart=` + `ps -o comm=` |
  * | 存活/僵尸 | `posix_kill`，僵尸细化再依赖 `ps -p -o pid=,stat=` |
  *
  * 于是「WLS 是否允许操作这个进程」这一**安全门禁**被押在一个可被运行环境禁用的
@@ -32,8 +32,8 @@ use Weline\Framework\System\Process\Native\DarwinProcessProbe;
  *
  * ## 策略：原生**优先**，但只在拿到明确结论时短路
  *
- * 正常 macOS 主机上 `ps` 可用，既有行为（含 `%mem` / `%cpu` / `lstart` 字段）
- * 被测试钉住，不能动。因此：
+ * 正常 macOS 主机上 `ps` 可用，既有行为（含 `rss`→MB、`%mem` / `%cpu` / `lstart`）
+ * 被测试钉住。因此：
  *
  * - {@see self::getProcessCommandLine()}：原生优先（更准、不 fork、不受 `ps` 输出截断影响），
  *   原生取不到才回落 `parent`；

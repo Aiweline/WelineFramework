@@ -735,10 +735,11 @@ class LinuxProcessDriver extends AbstractProcessDriver
         
         // Fallback for macOS / other Unix. Never put `comm` in the same
         // whitespace-split row as `lstart`: multi-word COMM values such as
-        // "nginx: master process" shift %mem/%cpu into the start-time field.
+        // "nginx: master process" shift rss/%mem/%cpu into the start-time field.
+        // Prefer RSS (KB) so status shows absolute MB; keep %mem as secondary.
         $output = [];
         $this->executeCommand(
-            "ps -p {$pid} -o pid=,%mem=,%cpu=,lstart= 2>/dev/null",
+            "ps -p {$pid} -o pid=,rss=,%mem=,%cpu=,lstart= 2>/dev/null",
             $output,
         );
         foreach ($output as $line) {
@@ -746,14 +747,21 @@ class LinuxProcessDriver extends AbstractProcessDriver
             if ($line === '') {
                 continue;
             }
-            if (\preg_match('/\A(\d+)\s+(\S+)\s+(\S+)\s+(.+?)\s*\z/D', $line, $matches) !== 1
+            if (\preg_match('/\A(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.+?)\s*\z/D', $line, $matches) !== 1
                 || (int) $matches[1] !== $pid
             ) {
                 continue;
             }
-            $info['memory'] = $matches[2] . '%';
-            $info['cpu'] = $matches[3] . '%';
-            $info['start_time'] = \preg_replace('/\s+/', ' ', \trim($matches[4])) ?? \trim($matches[4]);
+            $rssKb = (int) $matches[2];
+            $memPct = (string) $matches[3];
+            if ($rssKb > 0) {
+                $mb = \number_format($rssKb / 1024, 1, '.', '');
+                $info['memory'] = $mb . ' MB (' . $memPct . '%)';
+            } else {
+                $info['memory'] = $memPct . '%';
+            }
+            $info['cpu'] = $matches[4] . '%';
+            $info['start_time'] = \preg_replace('/\s+/', ' ', \trim($matches[5])) ?? \trim($matches[5]);
             $info['exists'] = true;
             break;
         }

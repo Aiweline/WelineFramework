@@ -36,8 +36,8 @@ final class LinuxProcessDriverGetProcessInfoUnixTest extends TestCase
         };
 
         $driver->responses = [
-            'pid=,%mem=,%cpu=,lstart=' => [
-                '44989  0.0  0.0 Tue Aug  4 18:59:13 2026',
+            'pid=,rss=,%mem=,%cpu=,lstart=' => [
+                '44989  107520  0.3  0.0 Tue Aug  4 18:59:13 2026',
             ],
             'comm=' => [
                 'nginx: master process',
@@ -51,7 +51,7 @@ final class LinuxProcessDriverGetProcessInfoUnixTest extends TestCase
 
         self::assertTrue($info['exists']);
         self::assertSame('nginx: master process', $info['name']);
-        self::assertSame('0.0%', $info['memory']);
+        self::assertSame('105.0 MB (0.3%)', $info['memory']);
         self::assertSame('0.0%', $info['cpu']);
         self::assertSame('Tue Aug 4 18:59:13 2026', $info['start_time']);
         self::assertStringContainsString('/tmp/nginx', $info['command']);
