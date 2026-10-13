@@ -204,6 +204,13 @@
             globalVar: null,
             description: "迷你购物车订单留言"
         },
+        storefrontSearchResults: {
+            origin_paths: ["app/code/Weline/Search/view/statics/js/storefront-search-results.js"],
+            paths: ["Weline_Search::js/storefront-search-results.js"],
+            globalVar: "WelineStorefrontSearchResults",
+            async: true,
+            description: "搜索页壳 FPC：异步 BinQuery 填充结果"
+        },
         relatedProducts: {
             origin_paths: ["app/code/Weline/Product/view/statics/js/widgets/related-products.js"],
             paths: ["Weline_Product::js/widgets/related-products.js"],
@@ -239,6 +246,13 @@
             paths: ["Weline_Product::js/widgets/product-detail-reveal.js?v=20261009-detail-reveal5"],
             globalVar: null,
             description: "PDP 详情杂志楼层滚轮入场（§5.4）"
+        },
+        storefrontListing: {
+            origin_paths: ["app/code/Weline/Product/view/statics/js/storefront-listing.js?v=20261013-facet-lean1"],
+            paths: ["Weline_Product::js/storefront-listing.js?v=20261013-facet-lean1"],
+            globalVar: "WelineStorefrontListing",
+            async: true,
+            description: "PLP path-only：筛选/排序/分页一步 BinQuery 换格"
         },
         recentlyViewed: {
             origin_paths: ["app/code/Weline/RecentlyViewed/view/statics/js/widgets/recently-viewed.js"],
@@ -305,8 +319,8 @@
             description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"
         },
         b2bSellingMode: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-shell-toc-wins1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261010-extras-rebuild1"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-shell-toc-wins1", "Weline_B2B::js/selling-mode.js?v=20261010-extras-rebuild1"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-shell-toc-wins1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261013-single-cookie1"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-shell-toc-wins1", "Weline_B2B::js/selling-mode.js?v=20261013-single-cookie1"],
             globalVar: "WelineB2BSellingMode",
             description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
         },

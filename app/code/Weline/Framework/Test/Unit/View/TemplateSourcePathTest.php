@@ -21,12 +21,14 @@ class TemplateSourcePathTest extends TestCore
         $content = $template->fetchTagSource(
             \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
             trim("Weline_Admin::/css/index.css"));
+        // 版本号（DEV 内容指纹 dev_xxx / 配置全局戳）与路径解析无关，断言只看路径。
+        $pathOnly = preg_replace('#\?v=.*$#', '', $content);
         if (DEV) {
-            self::assertEquals('/Weline/Admin/view/statics/css/index.css', $content, '解析静态资源');
+            self::assertEquals('/Weline/Admin/view/statics/css/index.css', $pathOnly, '解析静态资源');
         } else {
             $theme = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
             $theme = str_replace('\\', '/', $theme);
-            self::assertEquals('/static/' . $theme . '/Weline/Admin/view/statics/css/index.css', $content, '解析静态资源');
+            self::assertEquals('/static/' . $theme . '/Weline/Admin/view/statics/css/index.css', $pathOnly, '解析静态资源');
         }
     }
 

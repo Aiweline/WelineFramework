@@ -83,10 +83,20 @@ final class ProductRepository extends AbstractWebsiteShardRepository
     public function listAll(int $websiteId): array
     {
         $this->assertWebsite($websiteId);
-        $rows = $this->newModel($websiteId)
+        // 分片表行数可达数万（重复播种会累积 draft 残留）。无 LIMIT 的 fetchArray 一旦
+        // 超过 database.fetch.max_rows（默认 10000）就抛 DbException「Unbounded SELECT
+        // detected」，导致 PDP / sitemap 同步 / 后台列表整页 500。改为游标迭代读取，
+        // 返回语义（全部行、按 id 升序）不变。
+        $rows = [];
+        $iterator = $this->newModel($websiteId)
             ->clear()
             ->select()
-            ->fetchArray();
+            ->fetchIterator();
+        foreach ($iterator as $row) {
+            if (\is_array($row)) {
+                $rows[] = $row;
+            }
+        }
         usort(
             $rows,
             static fn(array $left, array $right): int => (int)($left[Product::schema_fields_ID] ?? 0)

@@ -19,6 +19,18 @@ use Weline\Websites\Model\WebsiteLanguage;
  */
 final class SitemapLocaleUrlExpander
 {
+    /**
+     * 单次 expand() 内复用的「已安装 locale」映射。
+     *
+     * LocaleCatalogInterface::installed() 每次都要查库并逐个 locale 取名称/国旗，
+     * 而 tryNormalizeLocale() 是**逐行**调用的：万级 URL 会重复调用上万次，
+     * 直接把一次 sitemap 同步拖到十几分钟。缓存只在一次 expand() 内有效，
+     * expand() 入口重置，避免跨 provider / 跨请求读到陈旧数据。
+     *
+     * @var array<string,string>|null
+     */
+    private ?array $activeLocaleMapCache = null;
+
     public function __construct(
         private readonly LocalizedUrlBuilderInterface $urlBuilder,
         private readonly LocaleCatalogInterface $localeCatalog,
@@ -38,6 +50,7 @@ final class SitemapLocaleUrlExpander
      */
     public function expand(SitemapUrlProviderInterface $provider, Website $website, array $rawUrls): array
     {
+        $this->activeLocaleMapCache = null;
         $ownerCount = count($rawUrls);
         if (!$provider->supportsSiteLanguagePathExpansion()) {
             return [
@@ -247,6 +260,9 @@ final class SitemapLocaleUrlExpander
     /** @return array<string,string> */
     private function activeLocaleMap(): array
     {
+        if ($this->activeLocaleMapCache !== null) {
+            return $this->activeLocaleMapCache;
+        }
         $map = [];
         foreach ($this->localeCatalog->installed('zh_Hans_CN') as $record) {
             $code = trim((string)($record['code'] ?? ''));
@@ -256,7 +272,7 @@ final class SitemapLocaleUrlExpander
             $map[strtolower(str_replace('-', '_', $code))] = $code;
         }
 
-        return $map;
+        return $this->activeLocaleMapCache = $map;
     }
 
     /**

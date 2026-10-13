@@ -170,7 +170,7 @@ php app/code/Weline/Cdn/Test/Http/Api/ClearApiHttp.script.php
 
 ## 参考
 
-- [http:request命令帮助](../../../../docs/dev/开发文档.md#httprequest-命令)
-- [路由系统说明](../../../../docs/dev/开发文档.md#路由系统详解)
+- [http:request命令帮助](../../../../app/code/Weline/Framework/doc/README.md#httprequest-命令)
+- [路由系统说明](../../../../app/code/Weline/Framework/doc/README.md#路由系统详解)
 - [HTTP测试最佳实践](../../../../AI 测试提示词.md#HTTP请求测试)
 

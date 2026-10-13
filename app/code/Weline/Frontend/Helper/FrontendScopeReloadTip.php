@@ -33,11 +33,11 @@ final class FrontendScopeReloadTip
         return [
             'scope_reload_required' => [
                 '商城范围已变更',
-                '当前页面商城范围已过期，正在刷新以继续。',
+                '当前页面商城范围已过期，正在重新签章以继续。',
             ],
             'scope_binding_required' => [
                 '商城范围未就绪',
-                '页面绑定信息缺失或已失效，正在刷新以继续。',
+                '页面绑定信息缺失或已失效，正在重新签章以继续。',
             ],
             'scope_context_conflict' => [
                 '商城范围已变更',

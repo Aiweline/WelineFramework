@@ -2236,6 +2236,9 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 系统未安装任何主题！,"No theme installed in the system!"
 【已激活】,【Activated】
 查看主题列表,"View theme list"
+"Pending solidify jobs: %{1}","Pending solidify jobs: %{1}"
+"No layout entities for theme #%{1}","No layout entities for theme #%{1}"
+"布局固化物 pending jobs / chrome digest 健康；可选 --purge-stale GC","布局固化物 pending jobs / chrome digest 健康；可选 --purge-stale GC"
 "未找到范围已绑定主题，请用 -t/--theme 指定主题名。","No scope-bound theme found; use -t/--theme to name one."
 "开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…","开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…"
 版本范围：全部历史版本（--all）,"Version set: all historical versions (--all)"
@@ -2307,8 +2310,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
-"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
-"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
+搜索筛选,"Search and filter"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
@@ -2316,6 +2318,11 @@ Pagination,Pagination
 Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"
 Next,Next
+选择作用范围,"Select scope."
+搜索作用范围,"Search scope."
+未找到匹配作用范围,"No matching scope found."
+"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
+"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
 "w:slot 标签 id 格式无效: ""%{id}""，只允许字母开头，包含字母、数字、下划线、连字符","w:slot tag id format invalid: ""%{id}"", must start with letter, contains letters, numbers, underscore, hyphen"
 "w:slot 标签 position 属性值无效: ""%{value}""","w:slot tag position attribute value invalid: ""%{value}"""
 "w:slot 标签 max 属性必须是 >= -1 的整数，当前值: ""%{value}""","w:slot tag max attribute must be integer >= -1, current value: ""%{value}"""
@@ -2330,11 +2337,7 @@ Next,Next
 主题布局预固化,"Solidifying theme layouts"
 "未找到激活主题，请用 -t/--theme 指定主题名。","未找到激活主题，请用 -t/--theme 指定主题名。"
 "更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）"
-搜索筛选,"Search and filter"
 注册,Register
-选择作用范围,"Select scope."
-搜索作用范围,"Search scope."
-未找到匹配作用范围,"No matching scope found."
 "画布与默认预览跟当前后台 Host：本站本机域上开编辑器则用当前域；项目 Host 上开则用 /~site/{站点}。真实预览靠 Token，跨 Host 一般不掉后台登录；正式/外部域名可选，线上可能看不到本机草稿。","Canvas and default preview follow the current admin Host: use the current domain when the editor is already on this site's local domain; use /~site/{site} on the project Host. Live preview relies on the Token, so a cross-Host open usually does not drop admin login; formal/external domains are optional and may not show local drafts."
 "默认预览：走项目壳 /~site/{站点}，保证能正确预览当前要发布的版本。编辑器画布也固定用此通道，不依赖外部域名。","Default preview uses project shell /~site/{site} so you always see the version about to publish. The editor canvas uses the same channel and does not depend on external domains."
 本机独立域名可选；编辑与默认预览请优先「本机项目壳（/~site）」。,"Optional local bound domain; prefer the local project shell (/~site) for editing and default preview."

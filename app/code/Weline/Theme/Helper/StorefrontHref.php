@@ -25,7 +25,17 @@ final class StorefrontHref
             return '#';
         }
 
-        return self::currentDocumentPath($fallbackPath) . '#' . $id;
+        // Request URI may already strip lang/currency; rebuild via localizeUrl so TOC
+        // anchors keep the active storefront prefix (fixes /en_US/... → /policy/...#id).
+        $path = self::localize(self::currentDocumentPath($fallbackPath));
+        if ($path === '' || $path === '#') {
+            $path = self::localize($fallbackPath);
+        }
+        if ($path === '' || $path === '#') {
+            return '#' . $id;
+        }
+
+        return $path . '#' . $id;
     }
 
     /**

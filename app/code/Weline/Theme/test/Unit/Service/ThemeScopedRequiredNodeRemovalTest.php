@@ -3,8 +3,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\SystemConfig\Api\Scope\ScopeContext;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Service\Scoped\ThemeLayoutSnapshotNormalizer;
@@ -20,7 +19,8 @@ final class ThemeScopedRequiredNodeRemovalTest extends TestCase
         $uid=str_repeat('a',32);
         $node=['node_uid'=>$uid,'widget_module'=>'Weline_Test','widget_type'=>'content','widget_code'=>'music',
             'area'=>'content','slot_id'=>'content','is_active'=>true,'source'=>'default_injection','config'=>['volume'=>25]];
-        $context=new ThemeEditorContext(new ScopeContext(ScopeIdentity::website(0,'default'),'default.__store__.__channel__','normal',['default.__store__.__channel__']),
+        $context=new ThemeEditorContext(
+            ThemeContentScope::fromStoredOwner('default.__store__.__channel__','normal','default'),
             'frontend','layout',1,'homepage');
         $workspace=$this->createMock(ThemeScopedWorkspaceInterface::class);
         $workspace->method('load')->willReturn(['revision'=>0,'expected_parent_release_id'=>284,'draft_payload'=>['nodes'=>[$uid=>$node]]]);

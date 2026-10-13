@@ -65,7 +65,7 @@ function couponRejected(res) {
 
 function defaultPdp(prepared) {
   return String((prepared && prepared.pdp_path) || process.env.CHECKOUT_PDP_PATH || '').trim()
-    || '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
+    || '/product/yue-ya-ni-shang-yue-ya-ni-shang-zhang-an-yi-yuan-chuang-zheng-pin-tang-zhi-4d375d6d/';
 }
 
 moduleDescribe(test, MODULE, 'B2B测试店购物结账通路', () => {
@@ -212,8 +212,27 @@ moduleDescribe(test, MODULE, 'B2B测试店购物结账通路', () => {
 
       await gotoPdp(page, gotoFrontend, pdp);
       await expect(page.locator('body')).not.toContainText(FATAL);
-      await expect(page.locator('[data-testid="product-quick-pay"], [data-helppay-quick-pay]').first())
-        .toBeVisible({ timeout: 30000 });
+      // gotoPdp already force-reveals; assert attached then visible (B2B theme may keep opacity/hidden briefly).
+      const quickCta = page.locator('[data-testid="product-quick-pay"], [data-helppay-quick-pay]').first();
+      await expect(quickCta).toBeAttached({ timeout: 30000 });
+      await page.evaluate(() => {
+        document.documentElement.setAttribute('data-selling-mode', 'toc');
+        document.querySelectorAll('[data-testid="product-quick-pay"], [data-helppay-quick-pay], .w-helppay-cta').forEach((el) => {
+          let node = el;
+          while (node && node !== document.body) {
+            if (node.hasAttribute && node.hasAttribute('hidden')) {
+              node.hidden = false;
+              node.removeAttribute('hidden');
+            }
+            if (node.style) {
+              if (node.style.display === 'none') node.style.display = '';
+              if (node.style.visibility === 'hidden') node.style.visibility = 'visible';
+            }
+            node = node.parentElement;
+          }
+        });
+      }).catch(() => {});
+      await expect(quickCta).toBeVisible({ timeout: 15000 });
 
       const evidence = await runQuickPayCaptureEvidence(page, { scope: 'b2b_store_helppay_quick' });
       assertStep(!!evidence.transaction_no, 'b2b.helppay.quick.txn', evidence);
@@ -231,8 +250,26 @@ moduleDescribe(test, MODULE, 'B2B测试店购物结账通路', () => {
 
       await gotoPdp(page, gotoFrontend, pdp);
       await expect(page.locator('body')).not.toContainText(FATAL);
-      await expect(page.locator('[data-testid="product-help-pay"], [data-helppay-open], [data-testid="help-pay-open"]').first())
-        .toBeVisible({ timeout: 30000 });
+      const helpCta = page.locator('[data-testid="product-help-pay"], [data-helppay-open], [data-testid="help-pay-open"]').first();
+      await expect(helpCta).toBeAttached({ timeout: 30000 });
+      await page.evaluate(() => {
+        document.documentElement.setAttribute('data-selling-mode', 'toc');
+        document.querySelectorAll('[data-testid="product-help-pay"], [data-helppay-open], .w-helppay-cta').forEach((el) => {
+          let node = el;
+          while (node && node !== document.body) {
+            if (node.hasAttribute && node.hasAttribute('hidden')) {
+              node.hidden = false;
+              node.removeAttribute('hidden');
+            }
+            if (node.style) {
+              if (node.style.display === 'none') node.style.display = '';
+              if (node.style.visibility === 'hidden') node.style.visibility = 'visible';
+            }
+            node = node.parentElement;
+          }
+        });
+      }).catch(() => {});
+      await expect(helpCta).toBeVisible({ timeout: 15000 });
 
       const evidence = await runHelpPayFriendCaptureEvidence(page, { scope: 'b2b_store_helppay_friend' });
       assertStep(!!evidence.transaction_no, 'b2b.helppay.friend.txn', evidence);

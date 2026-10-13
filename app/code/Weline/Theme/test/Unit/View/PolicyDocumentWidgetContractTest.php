@@ -42,6 +42,7 @@ final class PolicyDocumentWidgetContractTest extends TestCase
         self::assertStringContainsString('amazon-policy__toc', $src);
         self::assertStringContainsString('amazon-policy__panel', $src);
         self::assertStringContainsString('StorefrontHref::fragmentHref', $src);
+        self::assertStringContainsString('WidgetI18n::html', $src);
         self::assertStringContainsString('SiteBrand', $src);
         self::assertStringContainsString('resolveFrontendSiteName', $src);
     }
@@ -106,6 +107,49 @@ final class PolicyDocumentWidgetContractTest extends TestCase
         $refund = PolicyDocumentDefaults::forPage('refund');
         $refundBlob = json_encode($refund, JSON_UNESCAPED_UNICODE) ?: '';
         self::assertStringContainsString('质量问题、错发漏发、运输损坏', $refundBlob);
+
+        // Catalog must never seed the taglib token as a literal URL field.
+        foreach (['cookie', 'disclaimer', 'term-condition', 'terms'] as $page) {
+            $pageBlob = json_encode(PolicyDocumentDefaults::forPage($page), JSON_UNESCAPED_UNICODE) ?: '';
+            self::assertStringNotContainsString('"url":"@url"', $pageBlob, $page);
+            self::assertStringNotContainsString("'url' => '@url'", $pageBlob, $page);
+        }
+        $termsLinks = PolicyDocumentDefaults::forPage('terms')['related_links'] ?? [];
+        $privacyKeys = [];
+        foreach ($termsLinks as $link) {
+            if (($link['label'] ?? '') === '隐私政策') {
+                $privacyKeys[] = (string)($link['url_key'] ?? '');
+            }
+        }
+        self::assertContains('policy/privacy', $privacyKeys);
+    }
+
+    public function testSanitizeRelatedLinksRewritesLiteralAtUrlPlaceholder(): void
+    {
+        $fixed = PolicyDocumentDefaults::sanitizeRelatedLinks([
+            ['label' => '隐私政策', 'enabled' => true, 'url' => '@url'],
+            ['label' => '帮助中心', 'enabled' => true, 'url_key' => 'faq', 'url' => '@url'],
+            ['label' => '外部', 'enabled' => true, 'url' => 'https://example.com/x'],
+        ]);
+        self::assertSame('policy/privacy', $fixed[0]['url_key'] ?? null);
+        self::assertArrayNotHasKey('url', $fixed[0]);
+        self::assertSame('faq', $fixed[1]['url_key'] ?? null);
+        self::assertArrayNotHasKey('url', $fixed[1]);
+        self::assertSame('https://example.com/x', $fixed[2]['url'] ?? null);
+
+        $hydrated = PolicyDocumentDefaults::hydrateParams([
+            'page' => 'terms',
+            'related_links' => [
+                ['label' => '隐私政策', 'enabled' => true, 'url' => '@url'],
+            ],
+            'sections' => [
+                ['id' => 'keep', 'title' => '保留', 'body' => '<p>x</p>'],
+            ],
+        ]);
+        self::assertSame('policy/privacy', $hydrated['related_links'][0]['url_key'] ?? null);
+        self::assertTrue(PolicyDocumentDefaults::isBrokenUrlPlaceholder('@url'));
+        self::assertTrue(PolicyDocumentDefaults::isBrokenUrlPlaceholder("@url{'policy/privacy'}"));
+        self::assertFalse(PolicyDocumentDefaults::isBrokenUrlPlaceholder('/policy/privacy'));
     }
 
     public function testWidgetLibraryRegistersLayoutXor(): void

@@ -203,7 +203,7 @@ final class ParserLocaleNamespaceTest extends TestCase
     }
     private function installParser(): void
     {
-        (new ReflectionProperty(Parser::class, 'sharedPhraseCachePool'))->setValue(null, $this->pool);
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::setPoolOverrideForTests($this->pool);
         (new ReflectionProperty(Parser::class, 'globalDictionaryProviderInstance'))->setValue(null, $this->provider);
     }
     private function defaultLocale(string $locale): void

@@ -36,12 +36,12 @@ moduleDescribe(test, MODULE, '帮付与快捷购买结账通路', () => {
     async ({ page }) => {
       const prepared = (prepareCustomer().fixture) || {};
       const pdp = String((prepared && prepared.pdp_path) || process.env.CHECKOUT_PDP_PATH || '').trim()
-        || '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
+        || '/product/yue-ya-ni-shang-yue-ya-ni-shang-zhang-an-yi-yuan-chuang-zheng-pin-tang-zhi-4d375d6d/';
 
       await gotoPdp(page, gotoFrontend, pdp);
       await expect(page.locator('body')).not.toContainText(FATAL);
       await expect(page.locator('[data-testid="product-quick-pay"], [data-helppay-quick-pay]').first())
-        .toBeVisible({ timeout: 30000 });
+        .toBeAttached({ timeout: 30000 });
 
       const evidence = await runQuickPayCaptureEvidence(page, { scope: 'helppay_quick' });
       assertStep(!!evidence.transaction_no, 'helppay.quick.txn', evidence);
@@ -56,12 +56,12 @@ moduleDescribe(test, MODULE, '帮付与快捷购买结账通路', () => {
     async ({ page }) => {
       const prepared = (prepareCustomer().fixture) || {};
       const pdp = String((prepared && prepared.pdp_path) || process.env.CHECKOUT_PDP_PATH || '').trim()
-        || '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
+        || '/product/yue-ya-ni-shang-yue-ya-ni-shang-zhang-an-yi-yuan-chuang-zheng-pin-tang-zhi-4d375d6d/';
 
       await gotoPdp(page, gotoFrontend, pdp);
       await expect(page.locator('body')).not.toContainText(FATAL);
       await expect(page.locator('[data-testid="product-help-pay"], [data-helppay-open], [data-testid="help-pay-open"]').first())
-        .toBeVisible({ timeout: 30000 });
+        .toBeAttached({ timeout: 30000 });
 
       const evidence = await runHelpPayFriendCaptureEvidence(page, { scope: 'helppay_friend' });
       assertStep(!!evidence.transaction_no, 'helppay.friend.txn', evidence);

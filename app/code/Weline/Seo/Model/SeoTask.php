@@ -118,6 +118,41 @@ class SeoTask extends Model
     }
 
     /**
+     * 回收僵死的「处理中」任务：超过 $staleMinutes 仍未结束的 processing 任务
+     * 说明抢占它的进程已死，永远不会有结果。这里把它们退回 pending 重跑，
+     * 否则它们会一直占着 processing 状态（既不会被消费，也会阻塞同键去重）。
+     *
+     * @return int 被回收的任务数
+     */
+    public function reclaimStaleProcessing(string $taskType, int $staleMinutes = 45): int
+    {
+        $staleBefore = date('Y-m-d H:i:s', time() - max(1, $staleMinutes) * 60);
+        $stuck = $this->reset()
+            ->where(self::schema_fields_TASK_TYPE, $taskType)
+            ->where(self::schema_fields_STATUS, self::STATUS_PROCESSING)
+            ->where(self::schema_fields_UPDATED_AT, $staleBefore, '<')
+            ->select()
+            ->fetchArray();
+
+        $reclaimed = 0;
+        foreach ($stuck as $row) {
+            $task = (clone $this)->reset()->load((int)($row[self::schema_fields_ID] ?? 0));
+            if (!$task->getId() || !$task->isProcessing()) {
+                continue;
+            }
+            // 回到 pending，并清掉 attempts 让它可以重新跑满重试次数
+            $task->setStatus(self::STATUS_PENDING)
+                ->setData(self::schema_fields_ATTEMPTS, 0)
+                ->setData(self::schema_fields_SCHEDULED_AT, date('Y-m-d H:i:s'))
+                ->setData(self::schema_fields_ERROR_MESSAGE, '任务长时间未结束，已重置为待处理')
+                ->save();
+            $reclaimed++;
+        }
+
+        return $reclaimed;
+    }
+
+    /**
      * 标记任务为处理中
      * 
      * @return self

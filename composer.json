@@ -60,7 +60,7 @@
       "type": "path",
       "url": "app/code/Weline/*",
       "options": {
-        "symlink": false
+        "symlink": true
       }
     }
   ],

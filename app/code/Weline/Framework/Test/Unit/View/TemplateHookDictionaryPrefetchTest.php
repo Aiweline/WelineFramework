@@ -6,6 +6,7 @@ namespace Weline\Framework\Test\Unit\View;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser;
@@ -76,7 +77,16 @@ final class TemplateHookDictionaryPrefetchTest extends TestCase
     {
         $template = $this->template();
         $template->policies->requestCache = true;
-        $key = 'view.hook.output.' . sha1(RequestContext::getId() . ':fixture/request:fixture');
+        $requestId = RequestContext::getId();
+        if ($requestId === null || $requestId === '') {
+            $requestId = (string)\spl_object_id(\Weline\Framework\Context::current());
+        }
+        $key = KeyBuilder::buildEnvironmentScoped(
+            'view.hook.request',
+            $requestId . ':fixture/request',
+            ['cache_version' => '20261013-hook-request-v2'],
+            ['area_route' => false],
+        );
         RequestContext::set($key, '<request-cached>');
         self::assertSame('<request-cached>', $template->getHook('fixture/request'));
         $template->policies->requestCache = false;

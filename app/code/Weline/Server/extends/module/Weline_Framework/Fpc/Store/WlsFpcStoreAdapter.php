@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Extends\Module\Weline_Framework\Fpc\Store;
 
+use Weline\Framework\Http\Fpc\FpcHtmlDiskStore;
 use Weline\Framework\Http\Fpc\FpcStoreAdapterInterface;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 
@@ -44,12 +45,8 @@ final class WlsFpcStoreAdapter implements FpcStoreAdapterInterface
         } catch (\Throwable) {
         }
         try {
-            $this->purgePayloadTree(
-                BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
-            );
-            $this->purgePayloadTree(
-                BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-path-index'
-            );
+            FpcHtmlDiskStore::purgeAll();
+            FpcHtmlDiskStore::purgeLegacyHashTrees();
         } catch (\Throwable) {
         }
         unset($reason);
@@ -65,25 +62,4 @@ final class WlsFpcStoreAdapter implements FpcStoreAdapterInterface
         }
     }
 
-    private function purgePayloadTree(string $dir): void
-    {
-        if (!\is_dir($dir)) {
-            return;
-        }
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST,
-        );
-        foreach ($iterator as $node) {
-            if (!$node instanceof \SplFileInfo) {
-                continue;
-            }
-            $path = $node->getPathname();
-            if ($node->isDir()) {
-                @\rmdir($path);
-            } elseif ($node->isFile()) {
-                @\unlink($path);
-            }
-        }
-    }
 }

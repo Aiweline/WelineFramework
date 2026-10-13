@@ -1072,6 +1072,16 @@ IP,IP
 "管理 Nginx 公网入口使用的证书与域名绑定","Manage certificates and domain bindings for the Nginx public edge"
 工作进程、会话、内存服务与实例启停,"Workers, session/memory services, and instance lifecycle"
 攻击规则、项目策略与防护日志,"Attack rules, project policies, and protection logs"
+"托管 Nginx 配置（只读）","托管 Nginx 配置（只读）"
+"展示当前磁盘上的托管配置原文，面板不可编辑。打穿章 map 中的密钥已遮罩。","展示当前磁盘上的托管配置原文，面板不可编辑。打穿章 map 中的密钥已遮罩。"
+目录,目录
+只读,只读
+配置读取错误,配置读取错误
+"未找到托管 Nginx 配置文件。","未找到托管 Nginx 配置文件。"
+"启动或 reload 托管 Nginx 后，配置会出现在此。","启动或 reload 托管 Nginx 后，配置会出现在此。"
+缺失,缺失
+已截断,已截断
+已遮罩,已遮罩
 项目切换,"Project switch"
 "托管 WLS 项目","Hosted WLS project"
 新建项目,"New project"
@@ -1862,6 +1872,9 @@ Disabled,Disabled
 "%{1} active crawlers","%{1} active crawlers"
 Configured,Configured
 "%{1} entries","%{1} entries"
+"主配置 nginx.conf","主配置 nginx.conf"
+"FPC 打穿章 map","FPC 打穿章 map"
+"附加 %{1}","附加 %{1}"
 显式配置,"Explicitly configured"
 "公网默认 80/443","Public default 80/443"
 已回退项目偏移,"Fell back to project offset"

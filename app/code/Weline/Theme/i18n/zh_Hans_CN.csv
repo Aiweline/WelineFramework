@@ -2236,6 +2236,9 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 系统未安装任何主题！,系统未安装任何主题！
 【已激活】,【已激活】
 查看主题列表,查看主题列表
+"Pending solidify jobs: %{1}","Pending solidify jobs: %{1}"
+"No layout entities for theme #%{1}","No layout entities for theme #%{1}"
+"布局固化物 pending jobs / chrome digest 健康；可选 --purge-stale GC","布局固化物 pending jobs / chrome digest 健康；可选 --purge-stale GC"
 "未找到范围已绑定主题，请用 -t/--theme 指定主题名。","未找到范围已绑定主题，请用 -t/--theme 指定主题名。"
 "开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…","开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…"
 版本范围：全部历史版本（--all）,版本范围：全部历史版本（--all）
@@ -2307,8 +2310,7 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 静态文件：weline.modules.js编译文件！,静态文件：weline.modules.js编译文件！
 "编译 Weline UI 2.0 静态资源包！","编译 Weline UI 2.0 静态资源包！"
 编译主题资源（less、weline.modules.js等）,编译主题资源（less、weline.modules.js等）
-"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
-"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
+搜索筛选,搜索筛选
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
@@ -2316,6 +2318,11 @@ Pagination,分页
 Previous,以前的
 "Page %{1} of %{2}","第 %{1} 页（共 %{2}）"
 Next,下一个
+选择作用范围,选择作用范围
+搜索作用范围,搜索作用范围
+未找到匹配作用范围,未找到匹配作用范围
+"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
+"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
 "w:slot 标签 id 格式无效: ""%{id}""，只允许字母开头，包含字母、数字、下划线、连字符","w:slot 标签 id 格式无效: ""%{id}""，只允许字母开头，包含字母、数字、下划线、连字符"
 "w:slot 标签 position 属性值无效: ""%{value}""","w:slot 标签 position 属性值无效: ""%{value}"""
 "w:slot 标签 max 属性必须是 >= -1 的整数，当前值: ""%{value}""","w:slot 标签 max 属性必须是 >= -1 的整数，当前值: ""%{value}"""
@@ -2330,11 +2337,7 @@ Next,下一个
 主题布局预固化,主题布局预固化
 "未找到激活主题，请用 -t/--theme 指定主题名。","未找到激活主题，请用 -t/--theme 指定主题名。"
 "更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）"
-搜索筛选,搜索筛选
 注册,注册
-选择作用范围,选择作用范围
-搜索作用范围,搜索作用范围
-未找到匹配作用范围,未找到匹配作用范围
 "画布与默认预览跟当前后台 Host：本站本机域上开编辑器则用当前域；项目 Host 上开则用 /~site/{站点}。真实预览靠 Token，跨 Host 一般不掉后台登录；正式/外部域名可选，线上可能看不到本机草稿。","画布与默认预览跟当前后台 Host：本站本机域上开编辑器则用当前域；项目 Host 上开则用 /~site/{站点}。真实预览靠 Token，跨 Host 一般不掉后台登录；正式/外部域名可选，线上可能看不到本机草稿。"
 "默认预览：走项目壳 /~site/{站点}，保证能正确预览当前要发布的版本。编辑器画布也固定用此通道，不依赖外部域名。","默认预览：走项目壳 /~site/{站点}，保证能正确预览当前要发布的版本。编辑器画布也固定用此通道，不依赖外部域名。"
 本机独立域名可选；编辑与默认预览请优先「本机项目壳（/~site）」。,本机独立域名可选；编辑与默认预览请优先「本机项目壳（/~site）」。

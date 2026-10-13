@@ -106,6 +106,8 @@ final class WorkerFullPageCacheFastPath
             // legacy pre-router FPC is disabled — receipt identity is required.)
             if ($requestUri === '/') {
                 $cookieHeader = (string)($headers['cookie'] ?? '');
+                // Guest homepage receipt ignores cookies; still pass header for
+                // cold-disk / formatted fallthrough identity helpers.
                 $receipt = $this->runtime?->resolveHomepageFastPathReceipt(
                     $fullUri,
                     $cookieHeader,
@@ -113,16 +115,17 @@ final class WorkerFullPageCacheFastPath
                     $fullUri,
                     $cookieHeader,
                 );
-                if ($receipt === null && $cookieHeader === '') {
+                if ($receipt === null) {
                     $receipt = $this->coordinator->resolveRootHomepageProcessReceipt(
                         $this->alternateRootFullUri($fullUri, $scheme),
-                        '',
+                        $cookieHeader,
                     );
                 }
-                if ($receipt === null && $cookieHeader === '') {
-                    $receipt = $this->coordinator->resolveRootHomepageStaleReceipt($fullUri)
+                if ($receipt === null) {
+                    $receipt = $this->coordinator->resolveRootHomepageStaleReceipt($fullUri, $cookieHeader)
                         ?? $this->coordinator->resolveRootHomepageStaleReceipt(
                             $this->alternateRootFullUri($fullUri, $scheme),
+                            $cookieHeader,
                         );
                 }
                 if (\is_array($receipt)) {
@@ -151,6 +154,19 @@ final class WorkerFullPageCacheFastPath
                 } else {
                     $cached = null;
                 }
+                // Receipt miss: still allow URL-tree generated/html (same tree Nginx try_files).
+                if ($cached === null) {
+                    RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
+                    $cached = $this->coordinator->getFormattedCachedResponseForFullUri(
+                        $fullUri,
+                        $decision->method,
+                        (string)($headers['accept'] ?? ''),
+                        (string)($headers['accept-encoding'] ?? ''),
+                        (string)($headers['cookie'] ?? ''),
+                        $decision->keepAlive(),
+                        $this->processOnly || !$decision->fpcSharedCacheEnabled(),
+                    );
+                }
             } else {
                 $localizedReceipt = $this->coordinator->resolveLocalizedHomepageProcessReceipt(
                     $fullUri,
@@ -168,9 +184,10 @@ final class WorkerFullPageCacheFastPath
                         (string)($headers['accept-encoding'] ?? ''),
                         true,
                     );
-                } elseif ($this->coordinator->isLocalizedHomepageFullUri($fullUri)) {
-                    $cached = null;
                 } else {
+                    // Localized homepage receipt miss (incl. Cookie present) and
+                    // other storefront URLs: same cold-disk / Shared fallthrough.
+                    RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
                     $cached = $this->coordinator->getFormattedCachedResponseForFullUri(
                         $fullUri,
                         $decision->method,

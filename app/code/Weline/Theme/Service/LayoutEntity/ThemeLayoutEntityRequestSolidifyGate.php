@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Cache\SharedResponseCachePolicy;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Service\ThemeScopeVersionService;
@@ -17,6 +19,9 @@ final class ThemeLayoutEntityRequestSolidifyGate
 {
     public const CTX_FORCE_ORIGINAL = 'theme.layout_entity.request_solidify.force_original.v1';
     public const CTX_DECISION = 'theme.layout_entity.request_solidify.decision.v1';
+
+    /** Critical public chrome partials checked for design-origin drift (WS-A). */
+    private const CRITICAL_CHROME_PARTIALS = ['header', 'footer'];
 
     public function __construct(
         private readonly ThemeLayoutEntitySolidifyStampStore $stamps,
@@ -105,10 +110,19 @@ final class ThemeLayoutEntityRequestSolidifyGate
             $versionId,
             $revision,
         );
+        $chromeOriginStale = $this->derivedChromeOriginStale(
+            $themeId,
+            $scope,
+            $storeMode,
+            $area,
+            $versionId,
+            $revision,
+        );
         $needsJob = $pending
             || $stale
             || $criticalEmpty
             || $originStale
+            || $chromeOriginStale
             || ($derivedMissing && !$stampFresh);
         $enqueued = false;
         $coalesced = false;
@@ -134,6 +148,8 @@ final class ThemeLayoutEntityRequestSolidifyGate
                 $versionId,
                 $revision,
             ) ? 'empty_filters_inventory_fallback_original' : 'empty_footer_extras_fallback_original';
+        } elseif ($chromeOriginStale) {
+            $reason = 'design_chrome_origin_stale_fallback_original';
         } elseif ($originStale) {
             $reason = 'design_origin_stale_fallback_original';
         } elseif ($stale) {
@@ -154,8 +170,10 @@ final class ThemeLayoutEntityRequestSolidifyGate
             'pending' => $pending,
             'expected_fp' => $expectedFp,
             'serial_key' => $key->toString(),
+            'chrome_origin_stale' => $chromeOriginStale,
         ];
         RequestContext::set(self::CTX_DECISION, $decision);
+        $this->exportSolidifyDecisionDebug($decision);
         if ($useOriginal) {
             RequestContext::set(self::CTX_FORCE_ORIGINAL, true);
             ThemeLayoutEntityPublishedSlotHost::markSolidifiedControllerTemplateSelected(false);
@@ -286,6 +304,86 @@ final class ThemeLayoutEntityRequestSolidifyGate
         $digest = (string)($meta['input_digest'] ?? '');
 
         return !ThemeLayoutEntityPageInputDigest::matchesStored($digest, $origin);
+    }
+
+    /**
+     * Critical chrome partials (header/footer): RAW (no weline-source), missing input_digest,
+     * or digest ≠ live origin → force original + re-solidify (do not pin stale chrome).
+     */
+    private function derivedChromeOriginStale(
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+        int $versionId,
+        int $revision,
+    ): bool {
+        if ($versionId < 1) {
+            return false;
+        }
+        try {
+            $identity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+                $themeId,
+                $scope,
+                $storeMode,
+                $area,
+                $versionId,
+                'formal',
+                max(1, $revision),
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+        foreach (self::CRITICAL_CHROME_PARTIALS as $type) {
+            $path = $this->paths->partialPhtml($identity, $type, 'default');
+            if (!is_file($path)) {
+                continue;
+            }
+            try {
+                $meta = ThemeLayoutSourceSnapshot::metadata((string)file_get_contents($path));
+            } catch (\Throwable) {
+                return true;
+            }
+            if (!is_array($meta)) {
+                return true;
+            }
+            $digest = (string)($meta['input_digest'] ?? '');
+            $origin = (string)($meta['origin'] ?? '');
+            if (!ThemeLayoutEntityPageInputDigest::matchesStored($digest, $origin)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $decision
+     */
+    private function exportSolidifyDecisionDebug(array $decision): void
+    {
+        if ((string)getenv('WELINE_THEME_SOLIDIFY_DEBUG') !== '1') {
+            return;
+        }
+        try {
+            $payload = json_encode($decision, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        } catch (\Throwable) {
+            $payload = (string)($decision['reason'] ?? 'unknown');
+        }
+        Env::log('theme/request_solidify_decision', $payload);
+        try {
+            $response = ObjectManager::getInstance(Request::class)->getResponse();
+            $response->setHeader(
+                'X-Weline-Solidify-Decision',
+                substr((string)($decision['reason'] ?? ''), 0, 120),
+            );
+            $response->setHeader(
+                'X-Weline-Solidify-Pending',
+                !empty($decision['pending']) ? '1' : '0',
+            );
+        } catch (\Throwable) {
+            // Request/response may be unavailable in CLI / unit contexts.
+        }
     }
 
     private function derivedPagePath(

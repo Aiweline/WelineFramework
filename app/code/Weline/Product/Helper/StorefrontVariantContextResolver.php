@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace Weline\Product\Helper;
 
 use Weline\Framework\Context;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 use Weline\Product\Service\StorefrontCatalogViewService;
-use Weline\Product\Service\StorefrontEavLabelResolver;
+use Weline\Product\Service\StorefrontPdpVariantShell;
 use Weline\Product\Service\StorefrontVariantSelectionService;
 
 /**
@@ -89,88 +88,48 @@ final class StorefrontVariantContextResolver
     }
 
     /**
+     * Neutral catalog for path-only PDP: never bind request query into selected.
+     * Prefer Detail/PageAssignBag catalog when already published for the request.
+     *
      * @param list<array<string, mixed>> $offers
      * @return array{axes:list<array<string,mixed>>,offers:list<array<string,mixed>>,selected:array<string,string>}
      */
     public function buildCatalog(Template $template, array $offers, ?array $selectedOffer = null): array
     {
+        unset($selectedOffer);
+        $assigned = StorefrontPageAssignBag::get('variant_catalog');
+        if (is_array($assigned)
+            && is_array($assigned['offers'] ?? null)
+            && $assigned['offers'] !== []
+        ) {
+            $catalog = $assigned;
+            unset($catalog['selected_offer']);
+            $catalog['selected'] = is_array($catalog['selected'] ?? null) ? $catalog['selected'] : [];
+
+            return $catalog;
+        }
+
         if ($offers === []) {
             return ['axes' => [], 'offers' => [], 'selected' => []];
         }
 
-        /** @var StorefrontVariantSelectionService $selection */
-        $selection = ObjectManager::getInstance(StorefrontVariantSelectionService::class);
-        /** @var StorefrontEavLabelResolver $labels */
-        $labels = ObjectManager::getInstance(StorefrontEavLabelResolver::class);
-        $query = $labels->canonicalizeAxisQuery(
-            $this->resolveQuery($template),
-            $selection->collectAxisCodes($offers),
-        );
-        $querySelected = $selection->resolveSelectedOffer($offers, $query);
-        if ($querySelected !== null) {
-            $selectedOffer = $querySelected;
-        } elseif ($selectedOffer === null) {
-            $selectedOffer = $selection->resolveSelectedOffer($offers, $query);
-        }
-        if ($selectedOffer === null) {
-            $selectedOffer = $offers[0];
-        }
-
-        $catalog = $selection->buildCatalog($offers, $selectedOffer);
-        foreach ($catalog['axes'] as $axisIndex => $axis) {
-            if (!is_array($axis)) {
-                continue;
-            }
-            $axisCode = strtolower(trim((string)($axis['code'] ?? '')));
-            if ($axisCode === '') {
-                continue;
-            }
-            foreach ((array)($axis['options'] ?? []) as $optionIndex => $option) {
-                if (!is_array($option)) {
-                    continue;
-                }
-                $value = trim((string)($option['value'] ?? ''));
-                if ($value === '' || trim((string)($option['code'] ?? '')) !== '') {
-                    continue;
-                }
-                $catalog['axes'][$axisIndex]['options'][$optionIndex]['code'] = $labels->publicOptionCode(
-                    $axisCode,
-                    $value,
-                );
-            }
-        }
-        $catalog = $selection->compactCatalogMedia($catalog);
-        $catalog['selected_offer'] = $selectedOffer;
-
-        return $catalog;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function resolveQuery(Template $template): array
-    {
-        $query = [];
         try {
-            $request = $template->getRequest();
-            if ($request instanceof Request) {
-                $query = $request->getParams();
-            }
+            /** @var StorefrontPdpVariantShell $shell */
+            $shell = ObjectManager::getInstance(StorefrontPdpVariantShell::class);
+            $built = $shell->buildNeutral($offers);
+            $catalog = $built['variant_catalog'];
+            unset($catalog['selected_offer']);
+            $catalog['selected'] = is_array($catalog['selected'] ?? null) ? $catalog['selected'] : [];
+
+            return $catalog;
         } catch (\Throwable) {
-        }
+            /** @var StorefrontVariantSelectionService $selection */
+            $selection = ObjectManager::getInstance(StorefrontVariantSelectionService::class);
+            $catalog = $selection->compactCatalogMedia($selection->buildCatalog($offers, null));
+            $catalog['selected'] = [];
 
-        foreach ($_GET as $key => $value) {
-            if (!is_scalar($value)) {
-                continue;
-            }
-            $key = trim((string)$key);
-            if ($key === '' || isset($query[$key])) {
-                continue;
-            }
-            $query[$key] = trim((string)$value);
+            return $catalog;
         }
-
-        return $query;
     }
 
     /**

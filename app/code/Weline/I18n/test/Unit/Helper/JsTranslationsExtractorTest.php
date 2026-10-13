@@ -38,4 +38,17 @@ final class JsTranslationsExtractorTest extends TestCase
         self::assertArrayHasKey('模块 %{1} 加载失败：未找到 %{2}', $words);
         self::assertArrayHasKey('自动预加载模块', $words);
     }
+
+    public function testExtractWordsRecognizesI18nTextCalls(): void
+    {
+        $path = JsTranslationsExtractor::resolveModulePath('/Weline/Frontend/view/statics/js/weline-api.js');
+        self::assertIsString($path);
+
+        $words = JsTranslationsExtractor::extractWordsFromJsFile($path);
+
+        self::assertArrayHasKey('站点已更新', $words);
+        self::assertArrayHasKey('主题已发布新版本。请重新加载页面以继续。', $words);
+        self::assertArrayHasKey('商城范围未就绪', $words);
+        self::assertArrayHasKey('查看详情', $words);
+    }
 }

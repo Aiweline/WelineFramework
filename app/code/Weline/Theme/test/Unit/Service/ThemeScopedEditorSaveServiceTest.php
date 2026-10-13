@@ -2,8 +2,7 @@
 declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\SystemConfig\Api\Scope\ScopeContext;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
@@ -31,7 +30,14 @@ final class ThemeScopedEditorSaveServiceTest extends TestCase
     }
     private function context(): ThemeEditorContext
     {
-        return new ThemeEditorContext(new ScopeContext(ScopeIdentity::channel(7, 'shop', 'cn', 'app', 'test'), 'shop.cn.app', 'test', ['shop.cn.app']), 'frontend', 'layout', 19, 'homepage', 'default');
+        return new ThemeEditorContext(
+            ThemeContentScope::fromStoredOwner('shop.cn.app', 'test', 'default'),
+            'frontend',
+            'layout',
+            19,
+            'homepage',
+            'default',
+        );
     }
     private function workspace(array $payload): ThemeScopedWorkspaceInterface
     {

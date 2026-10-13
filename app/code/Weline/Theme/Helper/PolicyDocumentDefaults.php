@@ -89,8 +89,85 @@ final class PolicyDocumentDefaults
                 'is_array'
             ));
         }
+        if (\is_array($params['related_links'] ?? null)) {
+            // Published layouts may still store the taglib token "@url" as a literal
+            // href — rewrite to url_key so runtime never emits /@url.
+            $params['related_links'] = self::sanitizeRelatedLinks($params['related_links']);
+        }
 
         return $params;
+    }
+
+    /**
+     * Rewrite broken related-link placeholders (literal "@url" / empty taglib) to url_key.
+     *
+     * @param list<mixed> $links
+     * @return list<array<string,mixed>>
+     */
+    public static function sanitizeRelatedLinks(array $links): array
+    {
+        $out = [];
+        foreach ($links as $link) {
+            if (!\is_array($link)) {
+                continue;
+            }
+            $urlKey = trim((string)($link['url_key'] ?? ''));
+            $url = trim((string)($link['url'] ?? ''));
+            if ($urlKey === '' && self::isBrokenUrlPlaceholder($url)) {
+                $inferred = self::inferUrlKeyFromLabel((string)($link['label'] ?? ''));
+                if ($inferred !== '') {
+                    $link['url_key'] = $inferred;
+                    unset($link['url']);
+                } else {
+                    // Drop unusable placeholder rather than emit href="@url".
+                    $link['url'] = '#';
+                }
+            } elseif ($urlKey !== '' && self::isBrokenUrlPlaceholder($url)) {
+                unset($link['url']);
+            }
+            $out[] = $link;
+        }
+
+        return $out;
+    }
+
+    public static function isBrokenUrlPlaceholder(string $url): bool
+    {
+        $url = trim($url);
+        if ($url === '@url') {
+            return true;
+        }
+        // Bare taglib tokens that never compiled (e.g. "@url{'policy/privacy'}").
+        return (bool)preg_match('/^@url(?:\{.*\})?$/D', $url);
+    }
+
+    /** Best-effort map from common Chinese/English labels to storefront routes. */
+    public static function inferUrlKeyFromLabel(string $label): string
+    {
+        $normalized = mb_strtolower(trim($label));
+        $map = [
+            '隐私政策' => 'policy/privacy',
+            '隐私声明' => 'policy/privacy',
+            'privacy policy' => 'policy/privacy',
+            'privacy notice' => 'policy/privacy',
+            '服务条款' => 'terms',
+            '使用条件' => 'terms',
+            'terms of service' => 'terms',
+            'terms of use' => 'terms',
+            'cookie 政策' => 'policy/cookie',
+            'cookie政策' => 'policy/cookie',
+            'cookie policy' => 'policy/cookie',
+            '帮助中心' => 'faq',
+            'help center' => 'faq',
+            '免责声明' => 'policy/disclaimer',
+            'disclaimer' => 'policy/disclaimer',
+            '退款政策' => 'policy/refund',
+            'refund policy' => 'policy/refund',
+            '配送政策' => 'policy/shipping',
+            'shipping policy' => 'policy/shipping',
+        ];
+
+        return $map[$normalized] ?? '';
     }
 
     /** @return array<string,array<string,mixed>> */
@@ -319,7 +396,7 @@ final class PolicyDocumentDefaults
       array (
         'label' => '隐私政策',
         'enabled' => true,
-        'url' => '@url',
+        'url_key' => 'policy/privacy',
       ),
       1 => 
       array (
@@ -489,7 +566,7 @@ final class PolicyDocumentDefaults
       array (
         'label' => '隐私政策',
         'enabled' => true,
-        'url' => '@url',
+        'url_key' => 'policy/privacy',
       ),
       2 => 
       array (
@@ -572,7 +649,7 @@ final class PolicyDocumentDefaults
       array (
         'label' => '隐私政策',
         'enabled' => true,
-        'url' => '@url',
+        'url_key' => 'policy/privacy',
       ),
       1 => 
       array (

@@ -42,12 +42,16 @@ class UrlPusher implements CronTaskInterface
             /** @var SeoTask $taskModel */
             $taskModel = $this->objectManager->getInstance(SeoTask::class);
 
+            // 先回收僵死的 processing 任务，避免它们永久占位（既不被消费，也会阻塞同键去重）。
+            $reclaimed = $taskModel->reclaimStaleProcessing(SeoTask::TASK_TYPE_SITEMAP_REFRESH, 45);
+
             $tasks = array_merge(
                 $taskModel->getPendingTasks(SeoTask::TASK_TYPE_SITEMAP_REFRESH, 10),
                 $taskModel->getPendingTasks(SeoTask::TASK_TYPE_PUSH_URLS, 50)
             );
             if (empty($tasks)) {
-                return 'No pending SEO URL push tasks.';
+                return 'No pending SEO URL push tasks.'
+                    . ($reclaimed > 0 ? sprintf(' Reclaimed %d stale processing task(s).', $reclaimed) : '');
             }
 
             /** @var TaskProcessor $taskProcessor */
@@ -85,6 +89,9 @@ class UrlPusher implements CronTaskInterface
                 $errorCount,
                 count($tasks)
             );
+            if ($reclaimed > 0) {
+                $summary .= sprintf(' Reclaimed %d stale processing task(s).', $reclaimed);
+            }
             if ($yielded) {
                 $summary .= ' ' . (string)__('因系统升级意图提前结束计划任务。');
             }

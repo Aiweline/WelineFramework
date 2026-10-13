@@ -41,16 +41,13 @@ final class PurchasePanelService
     {
         $productId = max(0, (int)($params['product_id'] ?? 0));
         $slug = strtolower(trim((string)($params['slug'] ?? '')));
-        $requestedOfferUuid = trim((string)($params['offer'] ?? ''));
         $identity = $this->resolveB2bIdentity();
 
         try {
             /** @var StorefrontCatalogViewService $catalog */
             $catalog = ObjectManager::getInstance(StorefrontCatalogViewService::class);
-            /** @var StorefrontVariantSelectionService $variantSelection */
-            $variantSelection = ObjectManager::getInstance(StorefrontVariantSelectionService::class);
-            /** @var StorefrontEavLabelResolver $variantLabels */
-            $variantLabels = ObjectManager::getInstance(StorefrontEavLabelResolver::class);
+            /** @var StorefrontPdpVariantShell $variantShell */
+            $variantShell = ObjectManager::getInstance(StorefrontPdpVariantShell::class);
 
             $offers = [];
             if ($slug !== '') {
@@ -69,41 +66,17 @@ final class PurchasePanelService
             }
 
             $productIdForLabels = max(0, (int)($offers[0]['product_id'] ?? $productId));
-            $labels = $variantLabels->forProduct($productIdForLabels);
-            $axisQuery = $labels->canonicalizeAxisQuery(
-                $params,
-                $variantSelection->collectAxisCodes($offers),
-            );
-            if ($requestedOfferUuid !== '') {
-                $axisQuery['offer'] = $requestedOfferUuid;
-            }
-            $selectedOffer = $variantSelection->resolveSelectedOffer($offers, $axisQuery);
-            $displayOffer = $selectedOffer ?? $offers[0];
-            $requiresExplicitSelection = count($offers) > 1 && $selectedOffer === null && $requestedOfferUuid === '';
-            if ($requiresExplicitSelection) {
-                $displayOffer['global_offer_uuid'] = '';
-                $displayOffer['sellable'] = false;
-                $displayOffer['selection_required'] = true;
-                $displayOffer['message'] = (string)__('请选择规格后再加入购物车。');
-            } else {
-                $displayOffer['selection_required'] = false;
-            }
-
-            $catalogData = $variantSelection->compactCatalogMedia(
-                $this->enrichCatalogOptionCodes(
-                    $variantSelection->buildCatalog($offers, $displayOffer),
-                    $labels,
-                ),
-            );
+            // API quick-add may still pin offer/axes; page URL policy stays path-only.
+            $shell = $variantShell->buildForInteractivePanel($offers, $params);
+            $displayOffer = $shell['display_offer'];
+            $catalogData = $shell['variant_catalog'];
 
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
             $template->assign([
                 'storefront_offer' => $displayOffer,
                 'storefront_offers' => $offers,
-                'selected_offer_uuid' => $selectedOffer === null
-                    ? ''
-                    : trim((string)($selectedOffer['global_offer_uuid'] ?? '')),
+                'selected_offer_uuid' => $shell['selected_offer_uuid'],
                 'variant_catalog' => $catalogData,
                 'quick_add' => true,
                 'b2b_customer_logged_in' => $identity['logged_in'],
@@ -229,44 +202,4 @@ final class PurchasePanelService
         ];
     }
 
-    /**
-     * @param array{axes:list<array<string,mixed>>,offers:list<array<string,mixed>>,selected:array<string,string>} $catalog
-     * @return array{axes:list<array<string,mixed>>,offers:list<array<string,mixed>>,selected:array<string,string>}
-     */
-    private function enrichCatalogOptionCodes(array $catalog, StorefrontEavLabelResolver $variantLabels): array
-    {
-        foreach ($catalog['axes'] as $axisIndex => $axis) {
-            if (!is_array($axis)) {
-                continue;
-            }
-            $axisCode = strtolower(trim((string)($axis['code'] ?? '')));
-            if ($axisCode === '') {
-                continue;
-            }
-            $options = [];
-            foreach ((array)($axis['options'] ?? []) as $option) {
-                if (!is_array($option)) {
-                    continue;
-                }
-                $value = trim((string)($option['value'] ?? ''));
-                if ($value === '') {
-                    continue;
-                }
-                $label = trim((string)($option['label'] ?? ''));
-                $resolvedLabel = trim($variantLabels->resolve($axisCode, $value));
-                $labelCorrupt = $label !== '' && preg_match('/%[0-9A-Fa-f]{2}/', $label) === 1;
-                $resolvedIsLocal = $resolvedLabel !== '' && strcasecmp($resolvedLabel, $value) !== 0;
-                if ($resolvedLabel !== '' && ($label === '' || $label === $value || $labelCorrupt || $resolvedIsLocal)) {
-                    $option['label'] = $resolvedLabel;
-                }
-                if (trim((string)($option['code'] ?? '')) === '') {
-                    $option['code'] = $variantLabels->publicOptionCode($axisCode, $value);
-                }
-                $options[] = $option;
-            }
-            $catalog['axes'][$axisIndex]['options'] = $options;
-        }
-
-        return $catalog;
-    }
 }

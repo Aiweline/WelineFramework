@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\StorefrontPageContext;
 use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Service\StorefrontCatalogSurfaceResolver;
 use Weline\Product\Service\StorefrontCatalogViewService;
-use Weline\Product\Service\StorefrontCategoryListingFilter;
 use Weline\Product\Service\StorefrontCategoryViewService;
-use Weline\Product\Service\StorefrontListingPager;
+use Weline\Product\Service\StorefrontListingShell;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
 /**
@@ -28,11 +26,9 @@ final class Catalog extends FrontendController
 {
     public function __construct(
         private readonly StorefrontCatalogViewService $catalog,
-        private readonly StorefrontCategoryListingFilter $listingFilter,
         private readonly StorefrontCatalogSurfaceResolver $surfaceResolver,
-        private readonly StorefrontListingPager $listingPager,
         private readonly StorefrontCategoryViewService $categoryView,
-        private readonly EventsManager $events,
+        private readonly StorefrontListingShell $listingShell,
     ) {
     }
 
@@ -131,134 +127,61 @@ final class Catalog extends FrontendController
         // Catalog template owns sort/count toolbar; hide layout slot placeholder.
         $this->assign('showToolbar', false);
 
-        $queryParams = $this->request->getParams() ?: [];
-        $includeListingDetails = false;
-        foreach ($queryParams as $queryKey => $queryValue) {
-            $queryKey = strtolower(trim((string)$queryKey));
-            $queryValue = is_array($queryValue) ? (string)reset($queryValue) : (string)$queryValue;
-            if (str_starts_with($queryKey, 'af_') && trim($queryValue) !== '') {
-                $includeListingDetails = true;
-                break;
-            }
-        }
-        $offers = $this->catalog->publishedListingCandidates(1000, $includeListingDetails);
+        // Path-only FPC: never expand listing details or bind af_/price/sort/page
+        // into the shared leaf. Interactive filters hydrate via BinQuery.
+        $offers = $this->catalog->publishedListingCandidates(1000, false);
         StorefrontPageContext::setListingOffers($offers);
-        $priceBucket = $this->listingFilter->normalizePriceBucket((string)$this->request->getParam('price', ''));
-        $sort = $this->listingFilter->normalizeSort((string)$this->request->getParam('sort', ''));
-        $filteredOffers = $this->listingFilter->apply($offers, $priceBucket, $sort);
-        $filterEvent = [
-            'offers' => $filteredOffers,
-            'query' => $queryParams,
-            'surface' => (string)$surface['code'],
-        ];
-        $this->events->dispatch('Weline_Product::storefront_offers_filter', $filterEvent);
-        $filteredOffers = is_array($filterEvent['offers'] ?? null) ? $filterEvent['offers'] : $filteredOffers;
-
-        $attributeFilterParams = [];
-        foreach ($filterEvent['query'] as $key => $value) {
-            $key = strtolower(trim((string)$key));
-            if (!str_starts_with($key, 'af_')) {
-                continue;
-            }
-            $code = preg_replace('/[^a-z0-9_\-]/', '', substr($key, 3)) ?? '';
-            $raw = is_array($value) ? (string)reset($value) : (string)$value;
-            $raw = trim($raw);
-            if ($code === '' || $raw === '') {
-                continue;
-            }
-            $attributeFilterParams['af_' . $code] = $raw;
-        }
 
         $productsUrl = (string)$this->getUrl($surface['public_route']);
         $productsPath = parse_url($productsUrl, PHP_URL_PATH);
         if (is_string($productsPath) && $productsPath !== '') {
             $productsUrl = $productsPath;
         }
-        $page = $this->listingFilter->normalizePage($this->request->getParam('page', 1));
         // A diagnostic chain warmup only needs to hydrate the process-local
         // router/template/slot/catalog chain. The normal storefront FPC
         // warmup deliberately keeps the public page shape so it can safely
         // publish the rendered response for later anonymous hits.
         $isInternalStorefrontChainWarmup = (string)$this->request->getServer('WLS_INTERNAL_STOREFRONT_CHAIN_WARMUP') === '1';
-        $paged = $this->listingFilter->paginate(
-            $filteredOffers,
-            $page,
+        $projection = $this->listingShell->projectNeutral(
+            $offers,
+            $productsUrl,
+            (string)$surface['code'],
             $isInternalStorefrontChainWarmup ? 1 : null,
         );
-        $pageOffers = $this->catalog->hydrateListingMedia($paged['items']);
-        // Pass Chinese source labels; translate in the template at render time so
-        // Phrase can resolve against the request locale pack (controller-time __()
-        // may run before heavy locale dictionaries are loaded on WLS).
-        $sortOptions = [];
-        foreach ([
-            StorefrontCategoryListingFilter::SORT_DEFAULT => '默认排序',
-            StorefrontCategoryListingFilter::SORT_PRICE_ASC => '价格从低到高',
-            StorefrontCategoryListingFilter::SORT_PRICE_DESC => '价格从高到低',
-            StorefrontCategoryListingFilter::SORT_NAME_ASC => '名称 A-Z',
-        ] as $code => $label) {
-            $params = $attributeFilterParams;
-            if ($priceBucket !== '') {
-                $params['price'] = $priceBucket;
-            }
-            if ($code !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
-                $params['sort'] = $code;
-            }
-            $sortOptions[] = [
-                'code' => $code,
-                'label' => $label,
-                'url' => $this->listingFilter->buildListingUrl($productsUrl, $params),
-                'selected' => $sort === $code,
-            ];
-        }
-
-        $pageOptions = [];
-        if (!$isInternalStorefrontChainWarmup && $paged['total_pages'] > 1) {
-            $params = $attributeFilterParams;
-            if ($priceBucket !== '') {
-                $params['price'] = $priceBucket;
-            }
-            if ($sort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
-                $params['sort'] = $sort;
-            }
-            $pageOptions = $this->listingPager->buildPageOptions(
-                $productsUrl,
-                (int)$paged['page'],
-                (int)$paged['total_pages'],
-                $params,
-            );
-        }
 
         $this->assign('page_title', $surface['title']);
         $this->assign('storefront_heading', $surface['heading']);
         $this->assign('storefront_lede', $surface['lede']);
         $this->assign('storefront_surface', $surface['code']);
         $this->assign('storefront_offers_unfiltered', $offers);
-        $this->assign('storefront_offers', $pageOffers);
-        $this->assign('storefront_listing_price', $priceBucket);
-        $this->assign('storefront_listing_sort', $sort);
-        $this->assign('storefront_listing_total', count($offers));
-        $this->assign('storefront_listing_count', $paged['total']);
-        $this->assign('storefront_listing_page', $paged['page']);
-        $this->assign('storefront_listing_page_size', $paged['page_size']);
-        $this->assign('storefront_listing_total_pages', $paged['total_pages']);
-        $this->assign('storefront_listing_page_options', $pageOptions);
-        $this->assign('storefront_listing_sort_options', $sortOptions);
+        $this->assign('storefront_offers', $projection['page_offers']);
+        $this->assign('storefront_listing_price', $projection['price']);
+        $this->assign('storefront_listing_sort', $projection['sort']);
+        $this->assign('storefront_listing_total', $projection['total']);
+        $this->assign('storefront_listing_count', $projection['count']);
+        $this->assign('storefront_listing_page', $projection['page']);
+        $this->assign('storefront_listing_page_size', $projection['page_size']);
+        $this->assign('storefront_listing_total_pages', $projection['total_pages']);
+        $this->assign('storefront_listing_page_options', $projection['page_options']);
+        $this->assign('storefront_listing_sort_options', $projection['sort_options']);
+        $this->assign('storefront_listing_path', $this->listingShell->normalizeListingPath($productsUrl));
         StorefrontPageAssignBag::replace([
             'page_title' => $surface['title'],
             'storefront_heading' => $surface['heading'],
             'storefront_lede' => $surface['lede'],
             'storefront_surface' => $surface['code'],
             'storefront_offers_unfiltered' => $offers,
-            'storefront_offers' => $pageOffers,
-            'storefront_listing_price' => $priceBucket,
-            'storefront_listing_sort' => $sort,
-            'storefront_listing_total' => count($offers),
-            'storefront_listing_count' => $paged['total'],
-            'storefront_listing_page' => $paged['page'],
-            'storefront_listing_page_size' => $paged['page_size'],
-            'storefront_listing_total_pages' => $paged['total_pages'],
-            'storefront_listing_page_options' => $pageOptions,
-            'storefront_listing_sort_options' => $sortOptions,
+            'storefront_offers' => $projection['page_offers'],
+            'storefront_listing_price' => $projection['price'],
+            'storefront_listing_sort' => $projection['sort'],
+            'storefront_listing_total' => $projection['total'],
+            'storefront_listing_count' => $projection['count'],
+            'storefront_listing_page' => $projection['page'],
+            'storefront_listing_page_size' => $projection['page_size'],
+            'storefront_listing_total_pages' => $projection['total_pages'],
+            'storefront_listing_page_options' => $projection['page_options'],
+            'storefront_listing_sort_options' => $projection['sort_options'],
+            'storefront_listing_path' => $this->listingShell->normalizeListingPath($productsUrl),
         ]);
 
         $listingFacts = new StorefrontSeoListingFacts();
@@ -269,9 +192,9 @@ final class Catalog extends FrontendController
             'keywords' => $surface['seo_keywords'] ?? '',
             'image' => (string)($surface['share_image'] ?? ''),
             'image_alt' => $surface['share_image_alt'] ?? '',
-            'item_list' => $listingFacts->itemListFromOffers($pageOffers),
-            'item_list_total' => (int)$paged['total'],
-            'item_list_page' => (int)$paged['page'],
+            'item_list' => $listingFacts->itemListFromOffers($projection['page_offers']),
+            'item_list_total' => (int)$projection['count'],
+            'item_list_page' => (int)$projection['page'],
             'breadcrumbs' => $listingFacts->withHomeBreadcrumb([
                 [
                     'name' => $surface['title'] !== '' ? $surface['title'] : $surface['heading'],

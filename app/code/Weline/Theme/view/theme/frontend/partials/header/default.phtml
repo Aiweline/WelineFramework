@@ -727,43 +727,15 @@ $defaultNavItemsFactory = static function (): array {
                  aria-labelledby="categories-sidebar-categories-toggle"
                  hidden>
                 <nav class="categories-sidebar-nav" role="navigation" aria-label="<?= $headerEsc('分类导航') ?>">
-                    <ul class="categories-sidebar-list" id="categories-sidebar-list" data-sidebar-category-tree="1">
+                    <ul class="categories-sidebar-list" id="categories-sidebar-list"
+                        data-sidebar-category-tree="1"
+                        data-sidebar-nav-lazy="pending"
+                        data-testid="categories-sidebar-list">
                         <?php
-                        // 抽屉「全部分类」：优先 all-menu 已发布树；否则万能分类 catalog；演示仅预览。
-                        $sidebarNavItems = null;
-                        try {
-                            if (\Weline\Theme\Service\AllMenu\AllMenuTreeRegistry::hasPublished()) {
-                                $publishedTree = \Weline\Theme\Service\AllMenu\AllMenuTreeRegistry::get() ?? [];
-                                $sidebarNavItems = (new \Weline\Theme\Service\AllMenu\MenuTreeNormalizer())
-                                    ->toNavItems(is_array($publishedTree) ? $publishedTree : []);
-                            }
-                        } catch (\Throwable) {
-                            $sidebarNavItems = null;
-                        }
-                        if ($sidebarNavItems === null || $sidebarNavItems === []) {
-                            $sidebarSource = is_array($navItems ?? null) ? $navItems : [];
-                            if ($sidebarSource === []) {
-                                $sidebarSource = $this->getData('navItems') ?? $meta['navItems'] ?? [];
-                            }
-                            if ($sidebarSource === [] && !$this->getData('navItems_set_by_hook')) {
-                                $catalogNav = \Weline\Theme\Helper\HeaderCommerceData::resolveCategoryNavItems();
-                                if (!empty($catalogNav['items']) && \is_array($catalogNav['items'])) {
-                                    $sidebarSource = $catalogNav['items'];
-                                } elseif ($editorPreviewLight) {
-                                    $sidebarSource = $defaultNavItemsFactory();
-                                }
-                            }
-                            $sidebarNavItems = is_array($sidebarSource) ? $sidebarSource : [];
-                        }
-                        // 保留 children：侧栏飞出 / mega 与店面同源，禁止 editor 拍平。
-                        if (!empty($sidebarNavItems)):
-                            echo \Weline\Theme\Helper\HeaderNavFragment::fetchCategoriesSidebarNav($this, [
-                                'items' => $sidebarNavItems,
-                                'esc' => $headerEsc,
-                                'esc_desc' => $headerEscDesc,
-                                'show_banner_with_children' => $headerShowBannerWithChildren,
-                            ]);
-                        endif; ?>
+                        // plan_id lazy-hamburger-nav：侧栏禁止再 SSR 整树（resolveCategoryNavItems /
+                        // fetchCategoriesSidebarNav）。首开汉堡时由 header-default.js
+                        // hydrateSidebarCategoryTreeFromNav 从 #categories-list DOM 提取注入。
+                        ?>
                     </ul>
                 </nav>
             </div>

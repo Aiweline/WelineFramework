@@ -281,7 +281,14 @@ final class AllMenuNavTreeContractTest extends TestCase
 
         $headerSrc = (string)file_get_contents($header);
         self::assertStringContainsString('<w:widget type="navigation" name="all-menu"', $headerSrc);
-        self::assertStringContainsString('AllMenuTreeRegistry::hasPublished()', $headerSrc);
+        // lazy-hamburger-nav：侧栏空壳 DOM hydrate；AllMenu 仍 publish / publishAllProductsNav；禁 hasPublished 灌侧栏。
+        self::assertStringNotContainsString('AllMenuTreeRegistry::hasPublished()', $headerSrc);
+        self::assertStringContainsString('data-sidebar-nav-lazy="pending"', $headerSrc);
+        self::assertStringContainsString('hydrateSidebarCategoryTreeFromNav', $headerSrc);
+        $listPos = strpos($headerSrc, 'id="categories-sidebar-list"');
+        self::assertNotFalse($listPos);
+        $sidebarBlock = substr($headerSrc, $listPos, 1200);
+        self::assertStringNotContainsString('HeaderCommerceData::resolveCategoryNavItems', $sidebarBlock);
 
         $jsSrc = (string)file_get_contents($js);
         self::assertStringContainsString('initNavTreeEditors', $jsSrc);

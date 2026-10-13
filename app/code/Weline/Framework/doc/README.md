@@ -13,6 +13,8 @@
 - [扩展点选型](./3-开发/扩展点选型.md) - Event/Query/Hook/Interface 机制选择
 - [事件索引](./event/README.md) - Framework 事件文档树
 - [BinQuery 文档目录](./BinQuery/) - 站外二进制 Query 网关、SDK 与 Provider 开发指南
+- [静态资源与呈现世代](./static-resource-versioning.md) - deploy 戳 / FPC / 主题静态版本；店面世代指针见下文 Frontend 文档
+- [店面世代与前端工作流](../../Frontend/doc/架构/店面世代与前端工作流.md) - **开发者维护必读**：Scope 主题发布身份 ↔ 前端 hole-punch / QueryBin / Worker（非系统 deploy）
 - [SSE 可恢复后台任务架构](./3-开发/SSE可恢复后台任务架构.md) - 站内 Worker 查询、一次性 stream ticket 与可恢复任务边界
 - [性能与稳定性预算](./architecture/04-performance-budget.md) - 请求 deadline、严格连接池与 SQLite busy 重试约束
 - [开发日志](./开发日志.md) - 文档与框架变更记录
@@ -59,9 +61,9 @@ PHP-FPM 请求，而不能只验证当前 CLI 进程。
 - `/bin/query` 是站外 SDK / API Key 协议，规范位于 [BinQuery 文档目录](./BinQuery/)。
 - `/{rest_frontend}/framework/query-bin` 是浏览器页面的站内二进制入口，只允许 `Weline.Api → Dedicated Worker → QueryBin` 调用。浏览器业务代码不得使用原生 `fetch`、XHR 或 axios 绕过 Worker。
 
-站内 Worker Session 由服务端构造权威区域，`frontend` 与 `backend` 绑定互斥。Scope Token、后台 Session ID、binding digest、HMAC secret 均不得进入页面 JavaScript；页面只接收一次性的 43 字符 opaque bootstrap ID。当前时限为：bootstrap 120 秒、未绑定 Worker Session 600 秒、nonce 180 秒、stream ticket 60 秒；Scope-bound Session 使用已验证 Scope Token 的固定 1800 秒窗口，并与 Token 验签共享“签发时间最多领先 60 秒”的边界，过期时间不延长；Backend Session 最长 600 秒且还受后台证明的更早到期时间约束。共享状态恢复会重新验证这些规范时间窗，不能用持久化数据延长权限。
+站内 Worker Session 由服务端构造权威区域，`frontend` 与 `backend` 绑定互斥。Scope Token、后台 Session ID、binding digest、HMAC secret 均不得进入页面 JavaScript。店面长期 Scope Token 仅存于稳定名 HttpOnly Cookie `__Host-Weline-Worker-Scope`（TTL 对齐 ScopeToken ≈1800s）；打洞 API JSON **不**回传 Token 或一次性 opaque bootstrap ID。当前时限为：店面 Scope Cookie / Scope-bound Session 1800 秒（与 Token 验签共享“签发时间最多领先 60 秒”的边界，过期时间不延长）、未绑定 Worker Session 600 秒、nonce 180 秒、stream ticket 60 秒；Backend 一次性 bootstrap 仍为 120 秒，Backend Session 最长 600 秒且还受后台证明的更早到期时间约束。共享状态恢复会重新验证这些规范时间窗，不能用持久化数据延长权限。
 
-当 Scope provider 判定当前 HTTPS storefront 为 `allowlist/on` 时，无 bootstrap 的握手在创建 Session 前返回 401 `scope_binding_required`，不得占用未绑定 Session 容量。已配置 provider、keyring 或状态存储不可用时保留 503；只有 proof 无效、过期或已消费等客户端错误归一为 401。Provider 若抛出 `ResumableTaskAccessDeniedException`（含 backend 证明与 Session 不一致），QueryBin 映射为 401 `backend_attestation_invalid`，不得再包装成 500 `Internal server error.`。二进制输出保护不得把 stray output 原文写日志，只允许记录字节数与 SHA-256。
+当 Scope provider 判定当前 HTTPS storefront 为 `allowlist/on` 时，无有效 Scope Cookie 的握手在创建 Session 前返回 401 `scope_binding_required`，不得占用未绑定 Session 容量。握手成功后**不清**长期 Scope Cookie。已配置 provider、keyring 或状态存储不可用时保留 503；只有 Cookie/Token 无效或过期等客户端错误归一为 401。Provider 若抛出 `ResumableTaskAccessDeniedException`（含 backend 证明与 Session 不一致），QueryBin 映射为 401 `backend_attestation_invalid`，不得再包装成 500 `Internal server error.`。二进制输出保护不得把 stray output 原文写日志，只允许记录字节数与 SHA-256。
 
 未显式配置 `wls.frontend_worker_session_store_driver` 时默认 **`cache`**：权威状态落在缓存池 `frontend_worker_credential`（WLS 常驻时 file→`wls_memory`，池配 redis 则跟 redis）。有 CAS 用原子快照仓；无 CAS 用自建文件锁包住缓存读写。显式 `local` 时 Session/nonce/ticket/bootstrap 位于 `var/cache/frontend_worker/store.json`（目录 `0700`、文件 `0600`、锁内原子替换、8 MiB 硬上限、不安全文件 fail-closed），只适合单机或受控 allowlist 验证。
 

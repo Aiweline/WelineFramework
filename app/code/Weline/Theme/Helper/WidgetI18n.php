@@ -112,6 +112,47 @@ final class WidgetI18n
     }
 
     /**
+     * Translate policy/editor HTML whose Chinese source lives as sentence-level CSV keys.
+     * Whole-string lookup first; on miss, translate each text node between tags.
+     */
+    public static function html(string $markup, string $fallback = ''): string
+    {
+        $html = trim($markup !== '' ? $markup : $fallback);
+        if ($html === '') {
+            return '';
+        }
+
+        $whole = self::label($html);
+        if ($whole !== $html || !str_contains($html, '<')) {
+            return $whole;
+        }
+
+        return (string) preg_replace_callback(
+            '/>([^<]*)</u',
+            static function (array $match): string {
+                $raw = $match[1];
+                if ($raw === '' || trim($raw) === '') {
+                    return '>' . $raw . '<';
+                }
+                if (preg_match('/^(\s*)(.*?)(\s*)$/us', $raw, $parts) !== 1) {
+                    return '>' . $raw . '<';
+                }
+                $source = $parts[2];
+                if ($source === '' || !preg_match('/\p{Han}/u', $source)) {
+                    return '>' . $raw . '<';
+                }
+                $translated = self::label($source);
+                if ($translated === '' || $translated === $source) {
+                    return '>' . $raw . '<';
+                }
+
+                return '>' . $parts[1] . $translated . $parts[3] . '<';
+            },
+            $html
+        );
+    }
+
+    /**
      * Resolve configured/default storefront copy and expand framework-style positional placeholders.
      *
      * @param list<scalar|null> $args

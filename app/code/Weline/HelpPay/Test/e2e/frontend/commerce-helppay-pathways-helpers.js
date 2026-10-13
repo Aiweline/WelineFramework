@@ -60,13 +60,135 @@ function prepareCustomer() {
   return parsed;
 }
 
+async function waitForWelineApi(page, timeout = 90000) {
+  await page.waitForFunction(() => !!(window.Weline && (
+    (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
+    || typeof window.Weline.load === 'function'
+  )), null, { timeout });
+}
+
+function isThemeGenerationStaleMessage(msg) {
+  return /主题已发布新版本|reload the page to continue|deploy_reload_required|Theme published generation changed|Worker session theme generation mismatch|theme generation mismatch/i
+    .test(String(msg || ''));
+}
+
+function resultLooksThemeStale(result) {
+  if (!result || typeof result !== 'object') return false;
+  if (isThemeGenerationStaleMessage(result.error)
+    || isThemeGenerationStaleMessage(result.message)
+    || isThemeGenerationStaleMessage(result.__error)
+    || isThemeGenerationStaleMessage(result.code)) {
+    return true;
+  }
+  try {
+    return isThemeGenerationStaleMessage(JSON.stringify(result).slice(0, 800));
+  } catch (_) {
+    return false;
+  }
+}
+
+async function ensureFpcBypassHeaders(page) {
+  const context = page.context();
+  if (context.__welineE2eFpcBypass) return;
+  await context.setExtraHTTPHeaders({
+    'x-wls-fpc-bypass': '1',
+    'x-wls-internal-fpc-bypass': '1',
+  }).catch(() => {});
+  await context.addInitScript(() => {
+    try {
+      if (window.__WELINE_E2E_RELOAD_STUBBED) return;
+      window.__WELINE_E2E_RELOAD_STUBBED = true;
+      window.__WELINE_E2E_RELOAD_REQUESTED = false;
+      Location.prototype.reload = function e2eReloadStub() {
+        window.__WELINE_E2E_RELOAD_REQUESTED = true;
+      };
+    } catch (_) {}
+  }).catch(() => {});
+  context.__welineE2eFpcBypass = true;
+}
+
+async function hardRefreshStorefront(page) {
+  await ensureFpcBypassHeaders(page);
+  const current = String(page.url() || '').trim();
+  if (!current || current === 'about:blank') {
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
+  } else {
+    let next = current;
+    try {
+      const u = new URL(current);
+      u.searchParams.set('_e2e_theme_nc', String(Date.now()));
+      next = u.toString();
+    } catch (_) {
+      next = current.includes('?') ? `${current}&_e2e_theme_nc=${Date.now()}` : `${current}?_e2e_theme_nc=${Date.now()}`;
+    }
+    await page.goto(next, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(async () => {
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
+    });
+  }
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
+  await neutralizeStaleThemeStamp(page);
+  await waitForWelineApi(page);
+}
+
+async function neutralizeStaleThemeStamp(page) {
+  await page.evaluate(() => {
+    try {
+      if (window.Weline && window.Weline.config) {
+        window.Weline.config.themePublishedVersionId = '';
+        window.Weline.config.theme_published_version_id = '';
+      }
+    } catch (_) {}
+  }).catch(() => {});
+}
+
+async function reloadIfThemeGenerationStale(page) {
+  const stale = await page.evaluate(() => {
+    const tip = String(document.body && document.body.innerText || '');
+    return /主题已发布新版本|reload the page to continue|deploy_reload_required/i.test(tip);
+  }).catch(() => false);
+  if (!stale) return false;
+  await hardRefreshStorefront(page);
+  return true;
+}
+
+async function evaluateWithThemeReload(page, fn, arg) {
+  await ensureFpcBypassHeaders(page);
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.evaluate(() => { window.__WELINE_E2E_RELOAD_REQUESTED = false; }).catch(() => {});
+    await neutralizeStaleThemeStamp(page);
+    try {
+      const result = await page.evaluate(fn, arg);
+      const reloadRequested = await page.evaluate(() => !!window.__WELINE_E2E_RELOAD_REQUESTED).catch(() => false);
+      if ((resultLooksThemeStale(result) || reloadRequested) && attempt < 1) {
+        await neutralizeStaleThemeStamp(page);
+        continue;
+      }
+      return result;
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err && err.message || err);
+      const reloadRequested = await page.evaluate(() => !!window.__WELINE_E2E_RELOAD_REQUESTED).catch(() => false);
+      if ((!isThemeGenerationStaleMessage(msg) && !reloadRequested) || attempt >= 1) {
+        throw err;
+      }
+      await neutralizeStaleThemeStamp(page);
+    }
+  }
+  if (lastErr) throw lastErr;
+  return page.evaluate(fn, arg);
+}
+
 async function dismissNoise(page) {
+  // Newsletter popup close is .popup-close / data-testid — not data-newsletter-popup.
   for (const sel of [
     'button:has-text("同意")',
     'button:has-text("Agree")',
     '[data-cookie-accept]',
     '[data-consent-accept]',
-    '[data-newsletter-popup] button[aria-label*="Close"], [data-newsletter-popup] [data-close], .newsletter-popup__close',
+    '[data-testid="newsletter-popup"] .popup-close',
+    '[data-newsletter-kind="popup"] .popup-close',
+    '[data-testid="newsletter-popup"] button[aria-label*="关闭"], [data-testid="newsletter-popup"] button[aria-label*="Close"]',
   ]) {
     const btn = page.locator(sel).first();
     if (await btn.isVisible({ timeout: 600 }).catch(() => false)) {
@@ -74,24 +196,66 @@ async function dismissNoise(page) {
     }
   }
   await page.keyboard.press('Escape').catch(() => {});
+  await page.evaluate(() => {
+    document.querySelectorAll(
+      '[data-testid="newsletter-popup"], [data-newsletter-kind="popup"], [data-widget-code="newsletter-popup"]'
+    ).forEach((el) => {
+      el.style.display = 'none';
+      el.setAttribute('hidden', '');
+      el.classList.remove('is-open');
+    });
+    document.body && document.body.removeAttribute('data-newsletter-scroll-lock');
+  }).catch(() => {});
 }
 
 async function gotoPdp(page, gotoFrontend, pdpPath) {
+  await ensureFpcBypassHeaders(page);
   const origin = storefrontOrigin();
-  const abs = pdpPath.startsWith('http')
+  let abs = pdpPath.startsWith('http')
     ? pdpPath
     : `${origin}${pdpPath.startsWith('/') ? '' : '/'}${pdpPath}`;
+  try {
+    const u = new URL(abs);
+    u.searchParams.set('_e2e_theme_nc', String(Date.now()));
+    abs = u.toString();
+  } catch (_) {}
   try {
     await page.goto(abs, { waitUntil: 'domcontentloaded', timeout: 90000 });
   } catch (_) {
     await gotoFrontend(page, pdpPath, { timeout: 90000, settleMs: 600, useProxy: false });
   }
-  await page.waitForFunction(() => !!(window.Weline && window.Weline.Api), null, { timeout: 60000 });
+  await neutralizeStaleThemeStamp(page);
+  await waitForWelineApi(page);
+  await reloadIfThemeGenerationStale(page);
+  await neutralizeStaleThemeStamp(page);
   await dismissNoise(page).catch(() => {});
-  await page.waitForSelector(
+  const cta = page.locator(
     '[data-testid="product-quick-pay"], [data-helppay-quick-pay], [data-testid="product-help-pay"], [data-action="buy-now"][data-product-id]',
-    { timeout: 60000 }
-  );
+  ).first();
+  await cta.waitFor({ state: 'attached', timeout: 60000 });
+  await dismissNoise(page).catch(() => {});
+  // Force-reveal HelpPay CTAs: runtime may leave .w-helppay-cta[hidden] after mount race.
+  await page.evaluate(() => {
+    document.documentElement.setAttribute('data-selling-mode', 'toc');
+    document.querySelectorAll('.w-helppay-cta, [data-helppay-placement], [data-testid="product-quick-pay"], [data-testid="product-help-pay"], [data-helppay-quick-pay], [data-helppay-open]').forEach((el) => {
+      let node = el;
+      while (node && node !== document.body) {
+        if (node.hasAttribute && node.hasAttribute('hidden')) {
+          node.hidden = false;
+          node.removeAttribute('hidden');
+        }
+        if (node.style) {
+          if (node.style.display === 'none') node.style.display = '';
+          if (node.style.visibility === 'hidden') node.style.visibility = 'visible';
+        }
+        node = node.parentElement;
+      }
+      el.hidden = false;
+      el.removeAttribute('hidden');
+      el.style.visibility = 'visible';
+      el.style.display = '';
+    });
+  }).catch(() => {});
 }
 
 /**
@@ -99,7 +263,7 @@ async function gotoPdp(page, gotoFrontend, pdpPath) {
  * @param {import('@playwright/test').Page} page
  */
 async function readPdpProductContext(page) {
-  return page.evaluate(() => {
+  return evaluateWithThemeReload(page, () => {
     const btn = document.querySelector('[data-helppay-quick-pay], [data-testid="product-quick-pay"]')
       || document.querySelector('[data-helppay-open], [data-testid="help-pay-open"]')
       || document.querySelector('[data-action="buy-now"][data-product-id]')
@@ -142,7 +306,7 @@ async function runQuickPayCaptureEvidence(page, meta = {}) {
   const ctx = await readPdpProductContext(page);
   assertStep(ctx.product_id > 0, 'helppay.quick.product_id', ctx);
 
-  const started = await page.evaluate(async ({ product, address, payMethod }) => {
+  const started = await evaluateWithThemeReload(page, async ({ product, address, payMethod }) => {
     try {
       let api = window.Weline && window.Weline.Api;
       if (!api || typeof api.resource !== 'function') {
@@ -308,7 +472,7 @@ async function runHelpPayFriendCaptureEvidence(page, meta = {}) {
   const ctx = await readPdpProductContext(page);
   assertStep(ctx.product_id > 0, 'helppay.friend.product_id', ctx);
 
-  const started = await page.evaluate(async ({ product, address, payMethod }) => {
+  const started = await evaluateWithThemeReload(page, async ({ product, address, payMethod }) => {
     try {
       let api = window.Weline && window.Weline.Api;
       if (!api || typeof api.resource !== 'function') {

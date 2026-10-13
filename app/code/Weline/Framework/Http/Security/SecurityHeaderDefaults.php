@@ -14,8 +14,8 @@ final class SecurityHeaderDefaults
     /**
      * 后台模板依赖内联 style/script，以及主题内嵌 data:image 图标。
      *
-     * worker-src 须显式放行 'self' + blob:：QueryBin 可用同源 Worker，
-     * 也可在同源挂起时回退到 Blob Worker（CSP 缺 worker-src 时会回落到 script-src，禁止 blob:）。
+     * worker-src 须显式放行 'self' + blob:：QueryBin 优先同源 SharedWorker，
+     * Dedicated/Blob Worker 为降级（CSP 缺 worker-src 时会回落到 script-src，禁止 blob:）。
      *
      * Framework 基线只保留自有面（'self' / data / blob / unsafe-inline 等）。
      * 业务第三方 / CDN（支付含 Stripe、人机、社媒登录、融媒体、分析、商品视频、DataTable CDN 等）

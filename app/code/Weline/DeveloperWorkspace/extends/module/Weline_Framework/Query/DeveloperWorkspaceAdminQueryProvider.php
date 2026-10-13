@@ -520,7 +520,7 @@ class DeveloperWorkspaceAdminQueryProvider implements QueryProviderInterface
 
         $parts = parse_url($url);
         $path = '/' . trim((string)($parts['path'] ?? ''), '/');
-        if (!preg_match('#/(?:dev/tool/)?docs/(tree|documents|document|search)$#i', $path, $match)) {
+        if (!preg_match('#/(?:dev/tool/)?dev/docs/(tree|documents|document|search)$#i', $path, $match)) {
             return ['success' => false, 'message' => 'Unsupported documentation path: ' . $path];
         }
 

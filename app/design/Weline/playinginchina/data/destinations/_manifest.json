@@ -1,21 +1,21 @@
 {
     "version": 1,
-    "updated_at": "2026-10-12T11:47:22+00:00",
-    "total": 34745,
+    "updated_at": "2026-10-13T03:16:58+00:00",
+    "total": 6380,
     "shards": {
         "anhui": {
             "province": "Anhui",
-            "count": 2445,
+            "count": 428,
             "file": "anhui.json"
         },
         "beijing": {
             "province": "Beijing",
-            "count": 3646,
+            "count": 433,
             "file": "beijing.json"
         },
         "chongqing": {
             "province": "Chongqing",
-            "count": 870,
+            "count": 152,
             "file": "chongqing.json"
         },
         "chongqing-hubei": {
@@ -25,162 +25,162 @@
         },
         "fujian": {
             "province": "Fujian",
-            "count": 1309,
+            "count": 246,
             "file": "fujian.json"
         },
         "gansu": {
             "province": "Gansu",
-            "count": 351,
+            "count": 98,
             "file": "gansu.json"
         },
         "guangdong": {
             "province": "Guangdong",
-            "count": 3042,
+            "count": 414,
             "file": "guangdong.json"
         },
         "guangxi": {
             "province": "Guangxi",
-            "count": 779,
+            "count": 106,
             "file": "guangxi.json"
         },
         "guizhou": {
             "province": "Guizhou",
-            "count": 541,
+            "count": 138,
             "file": "guizhou.json"
         },
         "hainan": {
             "province": "Hainan",
-            "count": 246,
+            "count": 66,
             "file": "hainan.json"
         },
         "hebei": {
             "province": "Hebei",
-            "count": 811,
+            "count": 139,
             "file": "hebei.json"
         },
         "heilongjiang": {
             "province": "Heilongjiang",
-            "count": 266,
+            "count": 55,
             "file": "heilongjiang.json"
         },
         "henan": {
             "province": "Henan",
-            "count": 704,
+            "count": 156,
             "file": "henan.json"
         },
         "hong-kong": {
             "province": "Hong Kong",
-            "count": 1703,
+            "count": 126,
             "file": "hong-kong.json"
         },
         "hubei": {
             "province": "Hubei",
-            "count": 614,
+            "count": 124,
             "file": "hubei.json"
         },
         "hunan": {
             "province": "Hunan",
-            "count": 997,
+            "count": 215,
             "file": "hunan.json"
         },
         "inner-mongolia": {
             "province": "Inner Mongolia",
-            "count": 289,
+            "count": 60,
             "file": "inner-mongolia.json"
         },
         "jiangsu": {
             "province": "Jiangsu",
-            "count": 1684,
+            "count": 393,
             "file": "jiangsu.json"
         },
         "jiangxi": {
             "province": "Jiangxi",
-            "count": 589,
+            "count": 133,
             "file": "jiangxi.json"
         },
         "jilin": {
             "province": "Jilin",
-            "count": 795,
+            "count": 150,
             "file": "jilin.json"
         },
         "liaoning": {
             "province": "Liaoning",
-            "count": 859,
+            "count": 157,
             "file": "liaoning.json"
         },
         "macau": {
             "province": "Macau",
-            "count": 242,
+            "count": 23,
             "file": "macau.json"
         },
         "ningxia": {
             "province": "Ningxia",
-            "count": 239,
+            "count": 63,
             "file": "ningxia.json"
         },
         "qinghai": {
             "province": "Qinghai",
-            "count": 237,
+            "count": 70,
             "file": "qinghai.json"
         },
         "shaanxi": {
             "province": "Shaanxi",
-            "count": 716,
+            "count": 175,
             "file": "shaanxi.json"
         },
         "shandong": {
             "province": "Shandong",
-            "count": 1973,
+            "count": 330,
             "file": "shandong.json"
         },
         "shanghai": {
             "province": "Shanghai",
-            "count": 983,
+            "count": 352,
             "file": "shanghai.json"
         },
         "shanxi": {
             "province": "Shanxi",
-            "count": 1256,
+            "count": 267,
             "file": "shanxi.json"
         },
         "sichuan": {
             "province": "Sichuan",
-            "count": 1198,
+            "count": 221,
             "file": "sichuan.json"
         },
         "taiwan": {
             "province": "Taiwan",
-            "count": 24,
+            "count": 23,
             "file": "taiwan.json"
         },
         "tianjin": {
             "province": "Tianjin",
-            "count": 520,
+            "count": 104,
             "file": "tianjin.json"
         },
         "tibet": {
             "province": "Tibet",
-            "count": 265,
+            "count": 61,
             "file": "tibet.json"
         },
         "unknown": {
             "province": "Unknown",
-            "count": 489,
+            "count": 38,
             "file": "unknown.json"
         },
         "xinjiang": {
             "province": "Xinjiang",
-            "count": 545,
+            "count": 144,
             "file": "xinjiang.json"
         },
         "yunnan": {
             "province": "Yunnan",
-            "count": 1389,
+            "count": 277,
             "file": "yunnan.json"
         },
         "zhejiang": {
             "province": "Zhejiang",
-            "count": 2128,
+            "count": 442,
             "file": "zhejiang.json"
         }
     }

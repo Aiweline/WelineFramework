@@ -77,7 +77,9 @@ final class TemplateRequestRefreshTest extends TestCase
 
         $template = Template::getInstance();
 
-        self::assertSame('Weline_Framework', $template->getData('title'));
+        // 27d2078d6e 起 init() 刻意不再把模块代码塞进 $title（避免嵌套 ob_file/init 下泄漏成 H1/SEO 占位）；
+        // 该分支只在 isRequestRuntime() 为真时执行，故 title 被重置为空本身即证明 CLI 上下文被当作请求运行期。
+        self::assertSame('', $template->getData('title'), '请求运行期下 title 不得回落为模块代码占位。');
         self::assertSame('http://fresh.test/fresh', $template->getData('req')['url'] ?? null);
     }
 

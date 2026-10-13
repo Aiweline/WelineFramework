@@ -88,7 +88,7 @@ app/code/Weline/Frontend/
 │           ├── login.phtml    # 登录页面（时长选择）
 │           ├── register.phtml # 注册页面
 │           └── index.phtml    # 个人中心页面
-└── docs/
+└── dev/docs/
     ├── USER_CENTER_GUIDE.md   # 详细文档
     └── REMEMBER_ME_GUIDE.md   # 记住我功能文档
 
@@ -295,8 +295,8 @@ CREATE TABLE `frontend_user` (
 
 ## 📚 更多文档
 
-- [详细使用指南](docs/USER_CENTER_GUIDE.md)
-- [记住我功能指南](docs/REMEMBER_ME_GUIDE.md) ⭐ 新增
+- [详细使用指南](dev/docs/USER_CENTER_GUIDE.md)
+- [记住我功能指南](dev/docs/REMEMBER_ME_GUIDE.md) ⭐ 新增
 - [TwoFactorAuth使用指南](../TwoFactorAuth/USAGE_GUIDE.md)
 
 ---

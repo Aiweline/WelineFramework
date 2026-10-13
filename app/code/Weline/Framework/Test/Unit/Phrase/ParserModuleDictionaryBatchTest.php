@@ -152,6 +152,6 @@ final class ParserModuleDictionaryBatchTest extends TestCase
 
     private function installPool(): void
     {
-        (new ReflectionProperty(Parser::class, 'sharedPhraseCachePool'))->setValue(null, $this->pool);
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::setPoolOverrideForTests($this->pool);
     }
 }

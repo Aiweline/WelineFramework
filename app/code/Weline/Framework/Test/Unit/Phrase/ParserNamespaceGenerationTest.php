@@ -42,7 +42,7 @@ final class ParserNamespaceGenerationTest extends TestCase
         $pool->method('remember')->willReturnCallback(static fn($key, $ttl, $builder) => $builder());
         $pool->method('getMultiple')->willReturn([]);
         $pool->method('setMultiple')->willReturn(true);
-        (new ReflectionProperty(Parser::class, 'sharedPhraseCachePool'))->setValue(null, $pool);
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::setPoolOverrideForTests($pool);
         $this->nextRequest();
     }
 

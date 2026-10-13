@@ -10,6 +10,7 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Template;
 use Weline\Framework\View\Data\DataInterface;
+use Weline\Product\Helper\StorefrontCampaignEntry;
 use Weline\Theme\Helper\ProductCardUrl;
 use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
@@ -529,6 +530,8 @@ final class ProductCardRenderer
             $queryPart = trim($queryPart);
             $querySuffix = $queryPart !== '' ? '?' . $queryPart : '';
         }
+        // Path-only PDP: drop offer/axis identity query even from stale bag URLs.
+        $querySuffix = self::sanitizeStorefrontCardQuery($querySuffix);
         $link = ProductCardUrl::splitForTaglib($route);
         if ($link['url'] !== '') {
             $product['url'] = $link['url'] . $querySuffix;
@@ -778,8 +781,39 @@ final class ProductCardRenderer
      * Prefer Template::getUrl when a request is available; fall back to
      * mount + Url::getPrefix so CLI/unit still produce site-rooted paths.
      */
+    /**
+     * Keep marketing/quote flags only; never emit offer UUID or axis deep links.
+     */
+    public static function sanitizeStorefrontCardQuery(string $querySuffix): string
+    {
+        $querySuffix = trim($querySuffix);
+        if ($querySuffix === '') {
+            return '';
+        }
+        $params = [];
+        parse_str(ltrim($querySuffix, '?&'), $params);
+        if (!\is_array($params) || $params === []) {
+            return '';
+        }
+        $keep = [];
+        foreach ($params as $key => $value) {
+            $key = strtolower(trim((string)$key));
+            if ($key === 'quote'
+                || $key === StorefrontCampaignEntry::QUERY_CAMPAIGN
+                || $key === StorefrontCampaignEntry::QUERY_THEME_ID
+            ) {
+                if (\is_scalar($value) && trim((string)$value) !== '') {
+                    $keep[$key] = trim((string)$value);
+                }
+            }
+        }
+
+        return $keep === [] ? '' : '?' . http_build_query($keep);
+    }
+
     public static function buildStorefrontCardHref(string $path, string $querySuffix = ''): string
     {
+        $querySuffix = self::sanitizeStorefrontCardQuery($querySuffix);
         $raw = trim($path);
         if ($raw === '') {
             return '';

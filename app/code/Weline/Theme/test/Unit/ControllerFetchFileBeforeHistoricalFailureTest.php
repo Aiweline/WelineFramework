@@ -75,6 +75,29 @@ final class ControllerFetchFileBeforeHistoricalFailureTest extends TestCase
             else { ObjectManager::setInstance($class, $previous); }
         }
         ControllerFetchFileBefore::clearRuntimeCache();
+        // Sample hygiene: history.test.default / theme 391 must not leave solidify jobs in shared generated/.
+        $this->purgeHistoryTestSolidifyJobs();
+    }
+
+    /** Debt #2 sample: UT scopes that touch history.test must cancel residual durable jobs. */
+    private function purgeHistoryTestSolidifyJobs(): void
+    {
+        $root = (defined('BP') ? rtrim((string)BP, '/\\') : dirname(__DIR__, 5))
+            . '/generated/theme-layout-entities/391/.solidify-jobs';
+        if (!is_dir($root)) {
+            return;
+        }
+        foreach (@scandir($root) ?: [] as $file) {
+            if ($file === '.' || $file === '..' || !str_ends_with($file, '.json')) {
+                continue;
+            }
+            $path = $root . DIRECTORY_SEPARATOR . $file;
+            $raw = @file_get_contents($path);
+            if (!is_string($raw) || !str_contains($raw, 'history.test.default')) {
+                continue;
+            }
+            @unlink($path);
+        }
     }
 
     public function testHistoricalSourceFailureCrossesBothFallbackBoundariesUnchanged(): void

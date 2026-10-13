@@ -251,7 +251,7 @@ php bin/w phpunit:run --path=app/code/Weline/Cdn/Test/Integration/Http/Backend
 
 ## 参考资源
 
-- [WelineFramework 集成测试指南](../../../../docs/dev/开发文档.md#集成测试)
+- [WelineFramework 集成测试指南](../../../../app/code/Weline/Framework/doc/README.md#集成测试)
 - [PHPUnit HTTP测试](https://phpunit.de/documentation.html)
 - [HTTP测试最佳实践](https://www.phpunit.de/manual/current/en/testing.html)
 

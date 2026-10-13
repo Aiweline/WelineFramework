@@ -26,8 +26,7 @@ namespace {
     if (!function_exists('__')) { function __(string $message): string { return $message; } }
 
     use Weline\Framework\Manager\ObjectManager;
-    use Weline\Framework\Runtime\ScopeIdentity;
-    use Weline\SystemConfig\Api\Scope\ScopeContext;
+    use Weline\Theme\Api\Scoped\ThemeContentScope;
     use Weline\Theme\Api\Scoped\ThemeEditorContext;
     use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
     use Weline\Theme\Controller\Backend\ThemeEditor;
@@ -37,8 +36,13 @@ namespace {
     use Weline\Theme\Service\WidgetDefaultInjectionService;
     use Weline\Theme\Service\SlotRendererService;
 
-    $context = new ThemeEditorContext(new ScopeContext(ScopeIdentity::website(0, 'default'),
-        'default.__store__.__channel__', 'normal', ['default.__store__.__channel__']), 'frontend', 'layout', 1, 'homepage');
+    $context = new ThemeEditorContext(
+        ThemeContentScope::fromStoredOwner('default.__store__.__channel__', 'normal', 'default'),
+        'frontend',
+        'layout',
+        1,
+        'homepage',
+    );
     $store = (object)['writes' => 0, 'revision' => 8, 'payload' => ['nodes' => [
         'removed' => ['node_uid' => 'removed', 'source' => 'user_deleted', 'is_active' => false],
         'clear' => ['widget_code' => '__no_widget_placements__'],

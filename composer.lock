@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "77adf3f023dff31c397492cc5dbdf83c",
+    "content-hash": "b2e03f5c62d93a346bc43a602859722d",
     "packages": [
         {
             "name": "ardagnsrn/ollama-php",
@@ -6808,8 +6808,7 @@
             ],
             "description": "Weline Base聚合包 - 统一管理Weline默认发行模块依赖",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -6867,8 +6866,7 @@
                 "weline"
             ],
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -6900,8 +6898,7 @@
             ],
             "description": "WelineFramework access control list",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -6936,8 +6933,7 @@
             ],
             "description": "WelineFramework admin module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7007,8 +7003,7 @@
             ],
             "description": "AI助手工具模块 - 统一的AI模型管理和助手工具平台",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7042,8 +7037,7 @@
             ],
             "description": "WelineFramework backend base module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7077,8 +7071,7 @@
             ],
             "description": "后端日志记录组件。（Backend activity log module）。可以记录后端用户操作记录。",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7113,8 +7106,7 @@
             ],
             "description": "WelineFramework 缓存管理（cache manager）",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7147,8 +7139,7 @@
             ],
             "description": "WelineFramework 集成CKEditor富文本编辑器管理器",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7181,8 +7172,7 @@
             ],
             "description": "WelineFramework 组件（component）",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7216,8 +7206,7 @@
             ],
             "description": "WelineFramework cron(计划任务)",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7259,8 +7248,7 @@
             ],
             "description": "Weline Framework front customer management module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7305,8 +7293,7 @@
             ],
             "description": "Weline Framework DataTable Module - 提供强大的数据表格功能",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7346,8 +7333,7 @@
             ],
             "description": "WelineFramework 部署模块，提供基于 Git 的代码更新和部署功能",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7391,8 +7377,7 @@
             ],
             "description": "WelineFramework 开发空间（developer workspace）",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7426,8 +7411,7 @@
             ],
             "description": "WelineFramework eav module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7460,8 +7444,7 @@
             ],
             "description": "WelineFramework 编辑器管理器控制插件",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7495,8 +7478,7 @@
             ],
             "description": "WelineFramework 集成Elfinder文件管理器",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7522,8 +7504,7 @@
             ],
             "description": "WelineFramework Extends module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7560,8 +7541,7 @@
             ],
             "description": "WelineFramework 文件管理器控制插件",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7602,8 +7582,7 @@
             ],
             "description": "WelineFramework 前端（frontend）",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7646,8 +7625,7 @@
             ],
             "description": "WelineFramework 国际化i18n翻译支持",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7678,8 +7656,7 @@
             ],
             "description": "WelineFramework 索引",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7710,8 +7687,7 @@
             ],
             "description": "WelineFramework 框架安装器",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7743,8 +7719,7 @@
             ],
             "description": "WelineFramework 维护管理器",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7783,8 +7758,7 @@
             ],
             "description": "WelineFramework 媒体管理器：图片链接裁剪、缓存及 WLS 兼容的文件浏览/上传/下载",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7812,8 +7786,7 @@
             ],
             "description": "WelineFramework Meta module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7849,8 +7822,7 @@
             ],
             "description": "WelineFramework 模组管理器",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7882,8 +7854,7 @@
             ],
             "description": "WelineFramework 模组路由管理器",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7914,8 +7885,7 @@
             ],
             "description": "WelineFramework 部分组件：碎片可重复使用的部分化零件。",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -7950,8 +7920,7 @@
             ],
             "description": "WelineFramework 队列",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8011,8 +7980,7 @@
                 "weline"
             ],
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8047,8 +8015,7 @@
             ],
             "description": "Weline smtp module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8080,8 +8047,7 @@
             ],
             "description": "WelineFramework 系统配置",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8113,8 +8079,7 @@
             ],
             "description": "WelineFramework taglib module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8161,8 +8126,7 @@
             ],
             "description": "WelineFramework theme module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8213,8 +8177,7 @@
                 "weline"
             ],
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8247,8 +8210,7 @@
             ],
             "description": "WelineFramework 链接管理",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8288,8 +8250,7 @@
             ],
             "description": "WelineFramework 组件（visitor）",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8320,8 +8281,7 @@
             ],
             "description": "WelineFramework 缓存预热",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8352,8 +8312,7 @@
             ],
             "description": "网站监控",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -8384,8 +8343,7 @@
             ],
             "description": "WelineFramework Widget module",
             "transport-options": {
-                "symlink": false,
-                "relative": true
+                "symlink": true
             }
         },
         {
@@ -9630,6 +9588,6 @@
         "ext-gd": "*",
         "ext-curl": "*"
     },
-    "platform-dev": {},
+    "platform-dev": [],
     "plugin-api-version": "2.9.0"
 }

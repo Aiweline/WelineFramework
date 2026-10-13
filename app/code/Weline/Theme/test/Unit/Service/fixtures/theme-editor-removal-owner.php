@@ -15,8 +15,7 @@ namespace {
     require dirname(__DIR__, 8) . '/vendor/autoload.php';
     require dirname(__DIR__, 4) . '/Controller/Backend/ThemeEditor.php';
     use Weline\Framework\Manager\ObjectManager;
-    use Weline\Framework\Runtime\ScopeIdentity;
-    use Weline\SystemConfig\Api\Scope\ScopeContext;
+    use Weline\Theme\Api\Scoped\ThemeContentScope;
     use Weline\Theme\Api\Scoped\ThemeEditorContext;
     use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
     use Weline\Theme\Controller\Backend\ThemeEditor;
@@ -53,7 +52,12 @@ namespace {
         public function getUserId(): int { return 1; }
         public function getUsername(): string { return 'fixture'; }
     };
-    $context = new ThemeEditorContext(new ScopeContext(ScopeIdentity::global(), '0.0.0', 'normal', ['0.0.0']), 'frontend', themeId: 3, layoutType: 'product');
+    $context = new ThemeEditorContext(
+        ThemeContentScope::fromStoredOwner('0.0.0', 'normal', 'default'),
+        'frontend',
+        themeId: 3,
+        layoutType: 'product',
+    );
     $result = $reflection->getMethod('removeScopedLayoutNodeFromWorkspace')->invoke($controller, $context, $uid);
     echo json_encode(['removed' => $result, 'layout_writes' => $writer->removed, 'layout_reads' => $workspace->loads], JSON_THROW_ON_ERROR);
 }

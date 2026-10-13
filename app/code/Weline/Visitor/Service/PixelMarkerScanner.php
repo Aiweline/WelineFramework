@@ -169,7 +169,7 @@ class PixelMarkerScanner
             return $html;
         }
 
-        // HTML comments may also embed docs/examples with marker strings.
+        // HTML comments may also embed dev/docs/examples with marker strings.
         $stripped = \preg_replace('/<!--.*?-->/s', ' ', $stripped);
         return \is_string($stripped) ? $stripped : $html;
     }

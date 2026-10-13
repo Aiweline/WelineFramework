@@ -115,7 +115,7 @@ Weline/TwoFactorAuth/
 ├── README.md
 ├── USAGE_GUIDE.md                  # 使用指南
 ├── IMPORT_GUIDE.md                 # 导入指南
-└── docs/
+└── dev/docs/
     ├── DEVELOPMENT_NOTES.md        # 开发笔记
     ├── QR_SCAN_GUIDE.md            # 二维码扫描指南 🆕
     └── EXPORT_FORMATS_GUIDE.md     # 导出格式指南 🆕
@@ -431,7 +431,7 @@ php bin/weline setup:upgrade --force
 4. **2FAS格式** - 可直接导入到2FAS Authenticator
 5. **URI列表** - 兼容所有支持手动添加的验证器
 
-详细说明请参考 [导出格式指南](docs/EXPORT_FORMATS_GUIDE.md)
+详细说明请参考 [导出格式指南](dev/docs/EXPORT_FORMATS_GUIDE.md)
 
 ### 使用示例
 

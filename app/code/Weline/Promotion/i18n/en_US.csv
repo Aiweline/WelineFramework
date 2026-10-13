@@ -312,6 +312,12 @@ ID,ID
 全部店铺,"All stores"
 全部渠道,"All channels"
 "活动主题 ResourceChange 缺少有效 id","Campaign theme ResourceChange missing valid id"
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+小计,小计
+税费与运费将在结算时计算,税费与运费将在结算时计算
+去结算,去结算
+查看购物车,查看购物车
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 今日精选,"Today's picks"
 今日搭配精选,"Today's Hanfu edit"

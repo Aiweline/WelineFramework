@@ -256,7 +256,7 @@ WLS 禁止在 Worker READY 或普通请求阶段加载某个 locale 的全模块
 
 ## 2026-07-13 匿名首页 READY receipt 快路径
 
-冷重载后发现，首页虽显示 Process FPC HIT，但匿名请求不携带默认语言/货币 Cookie，Worker 重构的身份与 READY 发布 receipt 不同，因此每次仍进入 Framework FPC 管线，QPS 只有 300–500。修复后仅同 scheme/host/effective-port 的无 Cookie 根路径复用已验证 receipt；两拓扑的外部响应均显示 `UrlParser=0 / UrlParserApply=0`。
+冷重载后发现，首页虽显示 Process FPC HIT，但匿名请求不携带默认语言/货币 Cookie，Worker 重构的身份与 READY 发布 receipt 不同，因此每次仍进入 Framework FPC 管线，QPS 只有 300–500。修复后同 scheme/host/effective-port 的根路径复用已验证 guest receipt（Cookie 不挡 HIT；语种/货币在 full_uri/Scope）；两拓扑的外部响应均显示 `UrlParser=0 / UrlParserApply=0`。
 
 | 拓扑 / 并发 / 请求 | 成功 | QPS | p95 | p99 | max |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -267,7 +267,7 @@ Direct QPS 相对提升 20.26%，两组 0 错误。默认策略恢复后，裸 `
 
 ## 2026-08-17 READY receipt 证明字段丢失回归
 
-当前 Storefront 隔离合同正确禁止原始 Worker 在没有请求级 generation vector 时重建通用 FPC 变体。回归原因是匿名首页分支只传递 `full_uri/cookie_header`，丢弃 READY receipt 的 `cache_key/identity_digest`，因此页面虽然最终报 Process FPC HIT，每次仍稳定进入 Router。修复后 Worker 只在同 origin、无 Cookie 根路径上优先消费完整 receipt，且仅读 Process L1；通用 pre-router 门禁和 Shared L2 边界不变。
+当前 Storefront 隔离合同正确禁止原始 Worker 在没有请求级 generation vector 时重建通用 FPC 变体。回归原因是匿名首页分支只传递 `full_uri/cookie_header`，丢弃 READY receipt 的 `cache_key/identity_digest`，因此页面虽然最终报 Process FPC HIT，每次仍稳定进入 Router。修复后 Worker 在同 origin 根路径上优先消费完整 guest receipt（含带登录/偏好 Cookie 的请求），且仅读 Process L1；通用 pre-router 门禁和 Shared L2 边界不变。
 
 | 当前机器 / HTTP/2 / 4 lanes / c32 / gzip / `/` | 成功 | 失败 | QPS | p50 | p95 | p99 | max |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

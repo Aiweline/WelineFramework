@@ -53,15 +53,17 @@ Worker 长驻进程内，多语言词典与业务散落 `static` 袋抬高 RSS �
 - 不恢复 CachePool processStore  
 - 不改 UI；不扩 Phrase 业务语义  
 
-## 5b. W3（HotCache 高基数 · 2026-10-13 强制）
+## 5b. W3（强制 · 2026-10-13）
+
+原「FPC-L1/HotCache 不在首发」已升强制：
 
 | 要求 | 落点 |
 |------|------|
 | 高基数/组合键（filter_panel、`af_*`）禁止进 HotCache process L1；权威 Shared | `CachePolicy.storeProcessL1` + `StorefrontScopeHotCache::maybeStoreProcessEntry` |
 | HotCache 数组字节诚实估算；product/card 池子帽；trim 优先踢 product | `estimateMixedBytes` / `PRODUCT_POOL_MAX_BYTES` / `CARD_POOL_MAX_BYTES` |
-
-FPC process pointer-only / SoftSurvivor FPC→CONTENT / softCompact 仍在同会话未入库切片，不在本提交强制范围。
-
+| FPC process L1 pointer-only（`fpc_body_file`）；读路径 hydrate | `processL1PointerOnlyPayload` + `getProcessCachedPayload` |
+| soft reclaim 必须能卸非 pinned FPC process 袋；`estimateBytes` 真实 | `FullPageCacheReclaimableAdapter` + `softCompactProcessCache` |
+| SoftSurvivor：整 FPC body/袋为 CONTENT，不得标 REGISTRY 挡 soft 卸货 | `SoftSurvivorCatalog` |
 
 ## 6. 框架映射
 

@@ -135,6 +135,7 @@ final class ThemeLayoutEntityMaterializer
             $candidates[$this->paths->partialPhtml($identity, $type, $option)] = $this->metadata($source, [
                 'origin' => $origin, 'identity' => $identity->toArray(), 'resource_type' => 'partial',
                 'partial_type' => $type, 'partial_option' => $option,
+                'input_digest' => ThemeLayoutEntityPageInputDigest::forOrigin($origin),
             ]);
         }
         // Keep the original fetch and its PHP/Hook conditions in place. Only the
@@ -159,6 +160,7 @@ final class ThemeLayoutEntityMaterializer
             $candidates[$path] = $this->metadata($source, [
                 'origin' => $origin, 'identity' => $identity->toArray(), 'resource_type' => 'partial_dependency',
                 'partial_type' => $type, 'partial_option' => $option,
+                'input_digest' => ThemeLayoutEntityPageInputDigest::forOrigin($origin),
             ]);
         }
         return $candidates;

@@ -96,6 +96,8 @@ $relatedLinks = Block::items($this->getData('related_links'));
 if ($relatedLinks === [] && !empty($defaults['related_links']) && is_array($defaults['related_links'])) {
     $relatedLinks = array_values(array_filter($defaults['related_links'], 'is_array'));
 }
+// Bake-time / editor mistakes: literal "@url" must never reach href.
+$relatedLinks = PolicyDocumentDefaults::sanitizeRelatedLinks($relatedLinks);
 
 // Normalize sections + build TOC
 $normalizedSections = [];
@@ -118,6 +120,13 @@ foreach ($sections as $index => $section) {
 
 $resolveLinkHref = static function (array $link): string {
     $urlKey = Block::text($link['url_key'] ?? '');
+    $raw = Block::text($link['url'] ?? '');
+    if ($urlKey === '' && PolicyDocumentDefaults::isBrokenUrlPlaceholder($raw)) {
+        $urlKey = PolicyDocumentDefaults::inferUrlKeyFromLabel(Block::text($link['label'] ?? ''));
+        $raw = '';
+    } elseif (PolicyDocumentDefaults::isBrokenUrlPlaceholder($raw)) {
+        $raw = '';
+    }
     if ($urlKey !== '') {
         try {
             /** @var Url $url */
@@ -127,11 +136,16 @@ $resolveLinkHref = static function (array $link): string {
             return '/' . ltrim($urlKey, '/');
         }
     }
-    $raw = Block::text($link['url'] ?? '');
     if ($raw === '') {
         return '#';
     }
-    return Block::link($raw) ?: $raw;
+    $localized = Block::link($raw);
+    // Never echo unresolved @url taglib tokens into href.
+    if ($localized === '' || PolicyDocumentDefaults::isBrokenUrlPlaceholder($localized)) {
+        return '#';
+    }
+
+    return $localized;
 };
 
 $siteName = 'Weline';
@@ -228,9 +242,8 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
                             <h2><?= $esc($t($section['title'])) ?></h2>
                         <?php endif; ?>
                         <?php
-                        // Trusted editor HTML (admin / Theme defaults). Translate whole field as Chinese source.
-                        $bodyHtml = $t($section['body']);
-                        echo $bodyHtml;
+                        // Trusted editor HTML: sentence-level CSV keys via WidgetI18n::html (whole blob rarely keyed).
+                        echo WidgetI18n::html($section['body']);
                         ?>
                     </section>
                 <?php endforeach; ?>
@@ -257,7 +270,7 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
                 <?php if ($section['title'] !== ''): ?>
                     <h2 class="section-title"><?= $esc($t($section['title'])) ?></h2>
                 <?php endif; ?>
-                <?php echo $t($section['body']); ?>
+                <?php echo WidgetI18n::html($section['body']); ?>
             </section>
         <?php endforeach; ?>
         <?php if ($footerNote !== ''): ?>

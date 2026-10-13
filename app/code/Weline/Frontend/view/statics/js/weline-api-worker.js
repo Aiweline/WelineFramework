@@ -23,6 +23,8 @@
     const sessionsByScopeKey = new Map();
     let handshakePromise = null;
     let handshakePromiseKey = '';
+    /** Bumped on forceHandshake so a superseded in-flight handshake cannot rewrite the slot. */
+    let handshakeEpoch = 0;
     let handshakeCooldownUntil = 0;
     let handshakeBackoffMs = 0;
     // Interactive commerce/UI calls (cart, purchase panel, …) must not wait behind
@@ -90,7 +92,10 @@
                 const config = normalizeConfig(message.config || {});
                 await ensureResponseCacheDeployVersion(config);
                 if (message.type === 'scope-bootstrap' || message.type === 'backend-bootstrap') {
-                    const session = await ensureSession(config);
+                    // forceHandshake: main thread re-punched Cookie; drop SharedWorker badge
+                    // so ensureSession cannot reuse a prior-generation / expired slot.
+                    const forceHandshake = !!(message.options && message.options.forceHandshake);
+                    const session = await ensureSession(config, { forceHandshake: forceHandshake });
                     port.postMessage({
                         id,
                         ok: true,
@@ -762,10 +767,23 @@
         );
     }
 
-    async function ensureSession(config) {
+    async function ensureSession(config, options = {}) {
         const now = Math.floor(Date.now() / 1000);
         const scopeKey = scopeSessionIdentityKey(config);
+        const forceHandshake = !!(options && options.forceHandshake);
         let entry = sessionsByScopeKey.get(scopeKey) || null;
+
+        // Main-thread stamp recover re-issued Cookie; SharedWorker must not keep the old badge
+        // or an in-flight handshake that still used the expired Cookie.
+        if (forceHandshake) {
+            sessionsByScopeKey.delete(scopeKey);
+            entry = null;
+            handshakeEpoch += 1;
+            if (handshakePromiseKey === scopeKey) {
+                handshakePromise = null;
+                handshakePromiseKey = '';
+            }
+        }
 
         // Backend bootstrap rotation replaces that slot only. Storefront slots are
         // keyed by Scope canonical (+ authority) — no opaque bootstrap id.
@@ -805,15 +823,20 @@
 
         if (!handshakePromise || handshakePromiseKey !== scopeKey) {
             handshakePromiseKey = scopeKey;
+            const epochAtStart = handshakeEpoch;
             handshakePromise = (async () => {
                 const session = await handshake(config);
+                // forceHandshake may have superseded this flight while await was pending.
+                if (epochAtStart !== handshakeEpoch) {
+                    return session;
+                }
                 sessionsByScopeKey.set(scopeKey, {
                     session: session,
                     backendBootstrapId: String(config.backendBootstrapId || ''),
                 });
                 return session;
             })().finally(() => {
-                if (handshakePromiseKey === scopeKey) {
+                if (handshakePromiseKey === scopeKey && epochAtStart === handshakeEpoch) {
                     handshakePromise = null;
                     handshakePromiseKey = '';
                 }
@@ -1024,6 +1047,16 @@
         if (/theme generation mismatch/i.test(message)) {
             // Prior-generation SharedWorker badges must not survive one soft retry.
             sessionsByScopeKey.clear();
+            return true;
+        }
+        // Cookie / binding expired: drop badge and re-handshake once. Main thread
+        // re-punches Cookie if handshake still fails (see recoverScopeStamp).
+        if (
+            code === 'scope_binding_required'
+            || code === 'scope_reload_required'
+            || code === 'scope_bootstrap_invalid'
+            || code === 'worker_scope_binding_expired'
+        ) {
             return true;
         }
         return code === 'auth_error' || code === 'backend_attestation_invalid';

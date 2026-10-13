@@ -28,4 +28,20 @@ final class CommandPreferenceTest extends TestCase
 
         self::assertSame(ProjectE2eRun::class, $selected['class']);
     }
+
+    public function testCanonicalTestConsoleWinsOverLegacyUnitTestConsoleWhenBothAppCode(): void
+    {
+        $cli = (new ReflectionClass(Cli::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(Cli::class, 'selectPreferredCommand');
+        $selected = $method->invoke($cli, [
+            ['class' => VendorE2eRun::class, 'command' => 'e2e:run', 'data' => ['class' => VendorE2eRun::class]],
+            ['class' => ProjectE2eRun::class, 'command' => 'e2e:run', 'data' => ['class' => ProjectE2eRun::class]],
+        ]);
+
+        self::assertSame(ProjectE2eRun::class, $selected['class']);
+        self::assertFalse(
+            str_starts_with((string)$selected['class'], 'Weline\\Framework\\UnitTest\\Console\\'),
+            'Legacy UnitTest\\Console must not win e2e:run preference over Test\\Console'
+        );
+    }
 }

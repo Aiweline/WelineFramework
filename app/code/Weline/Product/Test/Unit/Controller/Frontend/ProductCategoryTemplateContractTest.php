@@ -14,7 +14,8 @@ final class ProductCategoryTemplateContractTest extends TestCase
             BP . 'app/code/Weline/Product/Controller/Frontend/Category.php',
         );
 
-        self::assertStringContainsString('StorefrontCategoryListingFilter', $controller);
+        self::assertStringContainsString('StorefrontListingShell', $controller);
+        self::assertStringContainsString('projectNeutral(', $controller);
         self::assertStringContainsString("assign('storefront_offers_unfiltered'", $controller);
         self::assertStringContainsString("assign('storefront_listing_sort_options'", $controller);
         self::assertStringContainsString("assign('storefront_category_siblings'", $controller);
@@ -24,14 +25,13 @@ final class ProductCategoryTemplateContractTest extends TestCase
         self::assertStringContainsString('$this->layoutType = \'category\'', $controller);
         self::assertStringContainsString("\$productIds = \$page['product_ids'];", $controller);
         self::assertStringContainsString('$productIds === []', $controller);
-        self::assertStringContainsString('$includeListingDetails = false;', $controller);
-        self::assertStringContainsString('getQueryParams()', $controller);
-        self::assertStringContainsString("str_starts_with(\$queryKey, 'af_')", $controller);
         self::assertStringContainsString(
-            'publishedOffersForProductIds($productIds, 120, $includeListingDetails)',
+            'publishedOffersForProductIds($productIds, 120, false)',
             $controller,
         );
-        self::assertStringContainsString('Weline_Product::storefront_offers_filter', $controller);
+        self::assertStringNotContainsString("getParam('price'", $controller);
+        self::assertStringNotContainsString("getParam('sort'", $controller);
+        self::assertStringNotContainsString('getQueryParams()', $controller);
         self::assertStringNotContainsString('ObjectManager', $controller);
     }
 
@@ -43,6 +43,9 @@ final class ProductCategoryTemplateContractTest extends TestCase
 
         self::assertStringContainsString('data-testid="storefront-category-toolbar"', $template);
         self::assertStringContainsString('data-testid="storefront-category-sort"', $template);
+        self::assertStringContainsString('data-listing-sort', $template);
+        self::assertStringContainsString('data-storefront-listing="1"', $template);
+        self::assertStringNotContainsString('window.location.href', $template);
         // Heavy-locale packs only prefetch template literals; dynamic __($var) stays Chinese.
         self::assertStringContainsString("__('默认排序')", $template);
         self::assertStringContainsString("__('价格从低到高')", $template);
@@ -50,6 +53,11 @@ final class ProductCategoryTemplateContractTest extends TestCase
         self::assertStringContainsString("__('名称 A-Z')", $template);
         self::assertStringContainsString('data-testid="storefront-category-grid"', $template);
         self::assertStringContainsString('amz-plp__results-bar', $template);
+        // Category name is plain text — no decorative curly quotes around the query span.
+        self::assertStringContainsString('amz-plp__results-query', $template);
+        self::assertStringContainsString('$escape($categoryName)', $template);
+        self::assertStringNotContainsString("__('“%{1}”'", $template);
+        self::assertStringNotContainsString("__('「%{1}」'", $template);
         self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $template);
         self::assertStringContainsString("'show_sku' => true", $template);
         self::assertStringContainsString('weline-product-card-shelf', $template);

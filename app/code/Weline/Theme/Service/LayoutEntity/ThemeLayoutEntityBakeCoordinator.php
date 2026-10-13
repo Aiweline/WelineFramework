@@ -170,11 +170,38 @@ final class ThemeLayoutEntityBakeCoordinator
         $partialLocaleKeys = array_fill_keys(array_map(static fn(string $type): string => 'partials.' . $type, array_keys($options)), true);
         $hasLocaleParams = array_filter($locales, static fn(array $values): bool => array_intersect_key($values, $partialLocaleKeys) !== []) !== [];
         if ($original === [] && $nodes === [] && !array_filter($partialParams) && !$hasLocaleParams && !array_filter($options, static fn($option): bool => $option !== 'default')) {
-            $out = [];
-            foreach ($options as $type => $option) { $out[$this->paths()->partialPhtml($version->toVersionIdentity(), $type, $option)] = null; }
-            return $out;
+            $identity = $version->toVersionIdentity();
+            // RAW / missing input_digest / origin drift → force materializeChrome (with digest).
+            // Do not leave dirty copies, and do not null-delete fresh digest-bearing partials.
+            foreach ($options as $type => $option) {
+                $path = $this->paths()->partialPhtml($identity, (string)$type, (string)$option);
+                if ($this->chromePartialDiskStaleOrRaw($path)) {
+                    return $this->materializer->candidateChrome($version, $locales, $options, $partialParams);
+                }
+            }
+            return [];
         }
         return $this->materializer->candidateChrome($version, $locales, $options, $partialParams);
+    }
+
+    /** True when a derived chrome partial is RAW (no weline-source) or input_digest mismatches live origin. */
+    private function chromePartialDiskStaleOrRaw(string $path): bool
+    {
+        if (!is_file($path)) {
+            return false;
+        }
+        try {
+            $meta = ThemeLayoutSourceSnapshot::metadata((string)file_get_contents($path));
+        } catch (\Throwable) {
+            return true;
+        }
+        if (!is_array($meta)) {
+            return true;
+        }
+        $digest = (string)($meta['input_digest'] ?? '');
+        $origin = (string)($meta['origin'] ?? '');
+
+        return !ThemeLayoutEntityPageInputDigest::matchesStored($digest, $origin);
     }
 
     /**
@@ -640,14 +667,29 @@ final class ThemeLayoutEntityBakeCoordinator
         $result = $pipeline->run($workItems, $pipelineProgress, $options);
         $this->lastRebakeReport['migrated'] = (int)($result['migrated'] ?? 0);
         $seenOwners = [];
+        $seenChrome = [];
         foreach ($workItems as $item) {
             $identity = $item['identity'];
             $ownerKey = $identity->themeId . "\0" . $identity->canonicalScope . "\0" . $identity->storeMode;
-            if (isset($seenOwners[$ownerKey])) {
+            if (!isset($seenOwners[$ownerKey])) {
+                $seenOwners[$ownerKey] = true;
+                $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
+            }
+            // Pipeline may skip unchanged pages — still force chrome heal per identity (draft + formal).
+            $chromeKey = $ownerKey . "\0" . $identity->themeVersionId . "\0" . $identity->mode;
+            if (isset($seenChrome[$chromeKey])) {
                 continue;
             }
-            $seenOwners[$ownerKey] = true;
-            $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
+            $seenChrome[$chromeKey] = true;
+            if ($this->rematerializeChromeIfStale(
+                $identity->themeId,
+                $identity->canonicalScope,
+                $identity->themeVersionId,
+                $identity->area,
+                $identity->storeMode,
+            )) {
+                $this->lastRebakeReport['chrome_bootstrapped']++;
+            }
         }
 
         return $this->lastRebakeReport['migrated'];
@@ -717,6 +759,15 @@ final class ThemeLayoutEntityBakeCoordinator
             // Pipeline solidify must refresh chrome_payload (homepage + mini-cart footer-extras)
             // so storefront fillEmptyNestedChromeSlots can heal empty coupon/留言 shells.
             $this->persistChromePayload($identity);
+            // Force chrome rematerialize for this identity (formal + selected draft alike).
+            // RAW / missing input_digest on draft chrome must not survive upgrade/pipeline.
+            $this->rematerializeChromeIfStale(
+                $identity->themeId,
+                $identity->canonicalScope,
+                $identity->themeVersionId,
+                $identity->area,
+                $identity->storeMode,
+            );
         });
 
         return [
@@ -876,6 +927,17 @@ final class ThemeLayoutEntityBakeCoordinator
                 ];
             }
             if ($pending === []) {
+                // Pages unchanged / inherit-skipped: identity never enters pipeline.
+                // Still force chrome heal so draft/formal RAW cannot survive upgrade.
+                if ($this->rematerializeChromeIfStale(
+                    $identity->themeId,
+                    $identity->canonicalScope,
+                    $identity->themeVersionId,
+                    $identity->area,
+                    $identity->storeMode,
+                )) {
+                    $this->lastRebakeReport['chrome_bootstrapped']++;
+                }
                 continue;
             }
             $workItems[] = [
@@ -1041,6 +1103,61 @@ final class ThemeLayoutEntityBakeCoordinator
         if ($version === null) { return ''; }
         $path = $this->paths()->partialPhtml($version->toVersionIdentity(), 'header', 'default');
         return is_file($path) ? $path : '';
+    }
+
+    /**
+     * Drain / gate / upgrade heal: if derived chrome is RAW or input_digest stale, force materializeChrome.
+     * Uses the version row's natural draft|formal mode (never force formal when healing draft chrome).
+     * Does not run on the request hot path as a full upgrade — only when a solidify job / upgrade already runs.
+     */
+    public function rematerializeChromeIfStale(
+        int $themeId,
+        string $scope,
+        int $versionId,
+        string $area = 'frontend',
+        string $storeMode = 'normal',
+    ): bool {
+        if ($themeId < 1 || $versionId < 1) {
+            return false;
+        }
+        $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery()->load($versionId);
+        if (
+            !$version
+            || (int)$version->getVersionId() < 1
+            || (int)$version->getThemeId() !== $themeId
+            || (string)$version->getArea() !== $area
+            || (string)$version->getStoreMode() !== $storeMode
+            || (string)$version->getScope() !== $scope
+        ) {
+            // Scope mismatch / missing row: fall back to published formal path for drain compatibility.
+            try {
+                $identity = $this->resolveBakeIdentity($themeId, $scope, true, $versionId, $area, $storeMode);
+            } catch (\Throwable) {
+                return false;
+            }
+        } else {
+            // Keep lifecycle mode (draft → draft/ path; sealed → vN/).
+            $identity = $version->toVersionIdentity();
+        }
+        $options = ['header' => 'default', 'footer' => 'default', 'sidebar' => 'default'];
+        $needs = false;
+        foreach ($options as $type => $option) {
+            if ($this->chromePartialDiskStaleOrRaw($this->paths()->partialPhtml($identity, $type, $option))) {
+                $needs = true;
+                break;
+            }
+        }
+        if (!$needs) {
+            return false;
+        }
+        return ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $options): bool {
+            $version = $this->loadVersion($identity);
+            $candidates = $this->materializer->candidateChrome($version, [], $options, []);
+            (new ThemeLayoutEntityBatchPublisher())->publish($identity, $candidates, ['compile' => false]);
+            $this->persistChromePayload($identity);
+
+            return true;
+        });
     }
 
     public function bootstrapMissingChromeScopes(?int $themeId = null): int { return 0; }

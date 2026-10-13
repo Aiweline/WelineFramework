@@ -6,6 +6,7 @@ namespace Weline\Product\Service;
 
 use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Http\Fpc\FpcHtmlDiskStore;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -87,33 +88,11 @@ final class ProductStorefrontCacheInvalidator
 
     private function purgeRouterFpcPayloadFiles(string $reason): void
     {
-        $dir = BP . 'var' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'router-fpc-payloads';
-        $base = realpath(BP);
-        $resolved = realpath($dir);
-        if ($base === false || $resolved === false || !is_dir($resolved)) {
-            return;
-        }
-
-        $baseNormalized = strtolower(rtrim(str_replace('\\', '/', $base), '/') . '/');
-        $dirNormalized = strtolower(rtrim(str_replace('\\', '/', $resolved), '/') . '/');
-        if ($dirNormalized !== $baseNormalized . 'var/cache/router-fpc-payloads/') {
-            return;
-        }
-
         try {
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($resolved, \FilesystemIterator::SKIP_DOTS),
-                \RecursiveIteratorIterator::CHILD_FIRST,
-            );
-            foreach ($iterator as $item) {
-                if ($item->isDir()) {
-                    @rmdir($item->getPathname());
-                    continue;
-                }
-                @unlink($item->getPathname());
-            }
+            FpcHtmlDiskStore::purgeAll();
+            FpcHtmlDiskStore::purgeLegacyHashTrees();
         } catch (\Throwable $e) {
-            $this->logFailure('router_fpc_payload_files', $reason, $e);
+            $this->logFailure('fpc_html_disk_purge', $reason, $e);
         }
     }
 

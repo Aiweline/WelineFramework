@@ -1528,11 +1528,10 @@ window.WelineWidgetAssets.register('product-product-info-0', function (widgetScr
     }
 
     function syncUrl(current) {
-        const params = new URLSearchParams();
-        Object.keys(normalizeSelection(current)).forEach(function (axisCode) {
-            params.set(axisCode, publicCodeFor(axisCode, current[axisCode]));
-        });
+        // Path-only PDP: selection stays in-page; do not rewrite axis/offer query.
+        void current;
         const existing = new URLSearchParams(window.location.search || '');
+        const params = new URLSearchParams();
         if (existing.get('quote') === '1') {
             params.set('quote', '1');
         }

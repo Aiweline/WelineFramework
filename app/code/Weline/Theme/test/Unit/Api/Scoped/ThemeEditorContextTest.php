@@ -225,4 +225,37 @@ final class ThemeEditorContextTest extends TestCase
         self::assertNotSame($frontend->ownerHash(), $testMode->ownerHash());
         self::assertNotSame($frontend->scopeKey() . $frontend->storeModeKey(), $testMode->scopeKey() . $testMode->storeModeKey());
     }
+
+    /**
+     * Debt #5: ThemeEditorContext ctor accepts ThemeContentScope only.
+     * Fixtures must convert via fromStoredOwner — never pass ScopeContext.
+     */
+    public function testFixturesNeverPassScopeContextIntoThemeEditorContext(): void
+    {
+        $themeRoot = dirname(__DIR__, 4);
+        $ctor = (string)file_get_contents($themeRoot . '/Api/Scoped/ThemeEditorContext.php');
+        self::assertNotSame('', $ctor, 'ThemeEditorContext.php must be readable for contract scan');
+        self::assertMatchesRegularExpression(
+            '/function __construct\(\s*public ThemeContentScope \$scope/s',
+            $ctor,
+            'Production ThemeEditorContext must keep ThemeContentScope (forbid ScopeContext union)',
+        );
+
+        $hits = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($themeRoot . '/test', \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $src = (string)file_get_contents($file->getPathname());
+            if (preg_match('/new\s+ThemeEditorContext\(\s*new\s+ScopeContext\b/', $src) === 1
+                || preg_match('/new\s+\\\\?Weline\\\\Theme\\\\Api\\\\Scoped\\\\ThemeEditorContext\(\s*new\s+\\\\?Weline\\\\SystemConfig\\\\Api\\\\Scope\\\\ScopeContext\b/', $src) === 1
+            ) {
+                $hits[] = substr($file->getPathname(), strlen($themeRoot) + 1);
+            }
+        }
+        self::assertSame([], $hits, 'Theme tests must use ThemeContentScope::fromStoredOwner before ThemeEditorContext');
+    }
 }

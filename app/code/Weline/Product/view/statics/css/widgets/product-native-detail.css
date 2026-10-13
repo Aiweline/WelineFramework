@@ -673,6 +673,9 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     align-items: center;
     gap: var(--token-size-10px);
     margin-bottom: 0;
+    /* Narrow buybox: hide wishlist label (icon + title/aria remain). */
+    container-type: inline-size;
+    container-name: product-qty-row;
 }
 .product-native-detail__qty-label {
     flex: 0 0 auto;
@@ -680,6 +683,35 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     color: var(--color-text-primary);
     font-size: var(--token-size-13px);
     font-weight: 700;
+}
+.product-native-detail__qty-controls {
+    flex: 0 0 auto;
+    min-inline-size: 0;
+}
+.product-native-detail__wishlist {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2, 0.4rem);
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1.2;
+}
+.product-native-detail__wishlist-label {
+    white-space: nowrap;
+}
+/* If Count + icon + full label cannot share one row, drop the label. */
+@container product-qty-row (max-width: 22rem) {
+    .product-native-detail__wishlist-label {
+        display: none;
+    }
 }
 .product-native-detail__qty-select {
     /* Override foundation reset select{inline-size:100%} so label is not crushed. */

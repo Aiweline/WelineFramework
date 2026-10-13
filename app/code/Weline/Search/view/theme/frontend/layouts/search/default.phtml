@@ -101,9 +101,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
                             ]);
                             ?>
                         <?php endif; ?>
-                        <?php if ($searchType === 'product'): ?>
-                            <w:hook>Weline_Search::frontend::search::filters::product</w:hook>
-                        <?php endif; ?>
+                        <?php /* Path-only FPC: never SSR product filter hook; JS mounts host when type=product. */ ?>
                         <w:slot id="search-filters"
                                 name="搜索筛选区"
                                 accept="layout-search-filters,layout-category-filters,category-filters,attribute-filter,price-filter"

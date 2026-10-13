@@ -400,17 +400,15 @@ SKU,SKU
 沟通,Communication
 查看沟通,"View chat"
 "询价沟通 #%{1}","Inquiry chat #%{1}"
+加载中…,Loading...
 面包屑,Breadcrumb
 "第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
 "0 件结果","0 results"
-“%{1}”,“%{1}”
-"（筛选自 %{1} 件）","(filtered from %{1})"
 排序,Sort
 默认排序,Default
 价格从低到高,"Price: Low to High"
 价格从高到低,"Price: High to Low"
 "名称 A-Z","Name: A-Z"
-当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
 该分类下暂无已发布商品。,"No products have been published in this category yet."
 汉服分类,汉服分类
 按形制探索分类，再进入商品列表选购。,按形制探索分类，再进入商品列表选购。
@@ -547,7 +545,6 @@ DPI,DPI
 查看商品视频,"View product video"
 查看商品图片,"View product images"
 下单前请联系客服核实所选款式及目的地的预计发货与运输时间,"Before ordering, contact us to confirm estimated dispatch and transit times for your chosen style and destination"
-加入购物车,"Add to Cart"
 请填写邮箱或手机号,"Please provide an email or phone number"
 提交成功，我们会尽快联系您。,"Submitted successfully. We will contact you soon."
 "Customers also viewed","Customers also viewed"
@@ -555,7 +552,6 @@ Website,Website
 切换,Switch
 默认产品布局,"Default product layout"
 "该分类下商品若无产品专属选择，详情将使用此布局；定时只改有效 option，不写回永久选择。","If products under this category have no product-specific choice, detail uses this layout; schedule only changes effective option, not permanent choice."
-加载中…,Loading...
 保存默认布局,"Save default layout"
 打开可视化编辑,"Open Visual Editor"
 清除默认,"Clear default"
@@ -1308,6 +1304,10 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 "必须与当前 env 配置一致的 mig_clone_* 数据库","Databases named `mig_clone_*` that must be consistent with the current environment configuration."
 "cutover/rollback 必填的切换状态版本","Required switchover/rollback version status."
 "rollback 目标：dual_read（默认）或 legacy","Rollback target: dual_read (default) or legacy."
+“%{1}”,“%{1}”
+"（筛选自 %{1} 件）","(filtered from %{1})"
+当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
+加入购物车,"Add to Cart"
 加入购物袋,"Add to bag"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。

@@ -15,9 +15,8 @@ use Weline\Product\Helper\StorefrontPdpBuyBoxBag;
 use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Service\ProductStorefrontBreadcrumbBuilder;
 use Weline\Product\Service\StorefrontCatalogViewService;
-use Weline\Product\Service\StorefrontEavLabelResolver;
 use Weline\Product\Service\StorefrontPdpShelfDeferral;
-use Weline\Product\Service\StorefrontVariantSelectionService;
+use Weline\Product\Service\StorefrontPdpVariantShell;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Service\ProductLayoutCacheBustService;
 use Weline\Theme\Service\ProductLayoutResolveService;
@@ -25,14 +24,15 @@ use Weline\Theme\Service\ProductLayoutResolveService;
 /**
  * 商品详情（店面）。
  *
+ * Path-only public entry: `/product/{slug}` only. Query never selects the SSR buy-box.
+ *
  * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/catalog public_path_patterns=/product/*,/catalog/product/*
  */
 final class Detail extends FrontendController
 {
     public function __construct(
         private readonly StorefrontCatalogViewService $catalog,
-        private readonly StorefrontVariantSelectionService $variantSelection,
-        private readonly StorefrontEavLabelResolver $variantLabels,
+        private readonly StorefrontPdpVariantShell $variantShell,
         private readonly EventsManager $events,
         private readonly ProductStorefrontBreadcrumbBuilder $breadcrumbs,
     ) {
@@ -42,7 +42,6 @@ final class Detail extends FrontendController
     {
         $slug = strtolower(trim((string)$this->request->getParam('slug', '')));
         $productId = (int)$this->request->getParam('id', 0);
-        $requestedOfferUuid = trim((string)$this->request->getParam('offer', ''));
 
         $offers = [];
         if ($slug !== '') {
@@ -63,57 +62,30 @@ final class Detail extends FrontendController
         );
         // id/slug 解析一次后写回请求上下文；后续只读 Context / Request，不再拆地址。
         $this->carryResolvedIdentity($productIdForLabels, $canonicalSlug !== '' ? $canonicalSlug : $slug);
-        $variantLabels = $this->variantLabels->forProduct($productIdForLabels);
         if ($slug === '' && $canonicalSlug !== '') {
-            $target = $this->getUrl('product/' . $canonicalSlug);
-            $query = [];
-            if ($requestedOfferUuid !== '') {
-                $query['offer'] = $requestedOfferUuid;
-            } else {
-                foreach ($this->variantSelection->collectAxisCodes($offers) as $axisCode) {
-                    $axisValue = trim((string)$this->request->getParam($axisCode, ''));
-                    if ($axisValue !== '') {
-                        $query[$axisCode] = $variantLabels->publicOptionCode($axisCode, $axisValue);
-                    }
-                }
-            }
-            if ($query !== []) {
-                $target .= '?' . http_build_query($query);
-            }
-            $entryThemeId = StorefrontCampaignEntry::preferredThemeIdFromParams($this->request->getParams());
-            $entryCampaign = strtolower(trim((string)$this->request->getParam(StorefrontCampaignEntry::QUERY_CAMPAIGN, '')));
-            if ($entryThemeId > 0 || $entryCampaign !== '') {
-                $entryQuery = StorefrontCampaignEntry::mergeIntoQuery(
-                    [],
-                    $entryThemeId,
-                    $entryCampaign,
-                );
-                $target .= (str_contains($target, '?') ? '&' : '?') . http_build_query($entryQuery);
-            }
-            return (string)$this->redirect($target);
+            // Legacy id URL → permanent bare slug; strip offer/axis/campaign query.
+            $this->request->getResponse()->redirect(
+                $this->getUrl('product/' . $canonicalSlug),
+                301,
+            );
+            return '';
+        }
+        // Non-SEO offer UUID entry on an otherwise valid slug → bare path.
+        if ($canonicalSlug !== ''
+            && trim((string)$this->request->getParam('offer', '')) !== ''
+        ) {
+            $this->request->getResponse()->redirect(
+                $this->getUrl('product/' . $canonicalSlug),
+                301,
+            );
+            return '';
         }
 
-        $selectedOffer = $this->variantSelection->resolveSelectedOffer(
-            $offers,
-            $variantLabels->canonicalizeAxisQuery(
-                $this->request->getParams(),
-                $this->variantSelection->collectAxisCodes($offers),
-            ),
-        );
-        $displayOffer = $selectedOffer ?? $offers[0];
-        $displayOffer = $this->applyCampaignEntryPricing($displayOffer);
-        $requiresExplicitSelection = count($offers) > 1
-            && $selectedOffer === null
-            && $requestedOfferUuid === ''
-            && !$this->hasAxisSelection($offers);
-        if ($requiresExplicitSelection) {
-            $displayOffer['global_offer_uuid'] = '';
-            $displayOffer['sellable'] = false;
-            $displayOffer['selection_required'] = true;
-            $displayOffer['message'] = (string)__('请选择规格后再加入购物车。');
-        } else {
-            $displayOffer['selection_required'] = false;
-        }
+        $shell = $this->variantShell->buildNeutral($offers);
+        $displayOffer = $this->applyCampaignEntryPricing($shell['display_offer']);
+        $selectedOffer = $shell['selected_offer'];
+        $selectedOfferUuid = $shell['selected_offer_uuid'];
+        $variantCatalog = $shell['variant_catalog'];
 
         $name = trim((string)($displayOffer['name'] ?? ''));
 
@@ -168,7 +140,9 @@ final class Detail extends FrontendController
         // that getUrl() may omit when framework fallback currency equals the active code.
         $canonicalUrl = '';
         try {
-            $canonicalUrl = (string)$this->request->getUrlBuilder()->getCurrentUrl([], true);
+            $canonicalUrl = $this->pathOnlyUrl(
+                (string)$this->request->getUrlBuilder()->getCurrentUrl([], true),
+            );
         } catch (\Throwable) {
             $canonicalUrl = '';
         }
@@ -228,13 +202,7 @@ final class Detail extends FrontendController
             max(0, (int)($displayOffer['product_id'] ?? $productIdForLabels)),
             $canonicalSlug !== '' ? $canonicalSlug : $slug,
         );
-        $selectedOfferUuid = $selectedOffer === null
-            ? ''
-            : trim((string)($selectedOffer['global_offer_uuid'] ?? ''));
-        $variantCatalog = $this->variantSelection->compactCatalogMedia($this->enrichCatalogOptionCodes(
-            $this->variantSelection->buildCatalog($offers, $displayOffer),
-            $variantLabels,
-        ));
+        unset($selectedOffer);
         $this->assign('selected_offer_uuid', $selectedOfferUuid);
         $this->assign('variant_catalog', $variantCatalog);
         // Page facts survive widget Template::unsetData(); offer seed stays on OfferResolver.
@@ -367,18 +335,6 @@ final class Detail extends FrontendController
         return $offer;
     }
 
-    /** @param list<array<string, mixed>> $offers */
-    private function hasAxisSelection(array $offers): bool
-    {
-        foreach ($this->variantSelection->collectAxisCodes($offers) as $axisCode) {
-            if (trim((string)$this->request->getParam($axisCode, '')) !== '') {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private function carryResolvedIdentity(int $productId, string $slug): void
     {
         $productId = max(0, $productId);
@@ -393,50 +349,29 @@ final class Detail extends FrontendController
         }
     }
 
-    /**
-     * @param array{axes:list<array<string,mixed>>,offers:list<array<string,mixed>>,selected:array<string,string>} $catalog
-     * @return array{axes:list<array<string,mixed>>,offers:list<array<string,mixed>>,selected:array<string,string>}
-     */
-    private function enrichCatalogOptionCodes(
-        array $catalog,
-        ?StorefrontEavLabelResolver $variantLabels = null,
-    ): array {
-        $variantLabels ??= $this->variantLabels;
-        foreach ($catalog['axes'] as $axisIndex => $axis) {
-            if (!is_array($axis)) {
-                continue;
+    private function pathOnlyUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return strtok($url, '?') ?: $url;
+        }
+        $rebuilt = '';
+        if (isset($parts['scheme'], $parts['host'])) {
+            $rebuilt .= $parts['scheme'] . '://' . $parts['host'];
+            if (isset($parts['port'])) {
+                $rebuilt .= ':' . $parts['port'];
             }
-            $axisCode = strtolower(trim((string)($axis['code'] ?? '')));
-            if ($axisCode === '') {
-                continue;
-            }
-            $options = [];
-            foreach ((array)($axis['options'] ?? []) as $option) {
-                if (!is_array($option)) {
-                    continue;
-                }
-                $value = trim((string)($option['value'] ?? ''));
-                if ($value === '') {
-                    continue;
-                }
-                $label = trim((string)($option['label'] ?? ''));
-                $resolvedLabel = trim($variantLabels->resolve($axisCode, $value));
-                // Prefer EAV Option LocalDescription when resolve yields a real local
-                // name (differs from the identity token). Do not clobber an existing
-                // label with a bare identity fallback.
-                $resolvedIsLocal = $resolvedLabel !== '' && strcasecmp($resolvedLabel, $value) !== 0;
-                if ($resolvedLabel !== '' && ($label === '' || $label === $value || $resolvedIsLocal)) {
-                    $option['label'] = $resolvedLabel;
-                }
-                if (trim((string)($option['code'] ?? '')) === '') {
-                    $option['code'] = $variantLabels->publicOptionCode($axisCode, $value);
-                }
-                $options[] = $option;
-            }
-            $catalog['axes'][$axisIndex]['options'] = $options;
+        }
+        $rebuilt .= (string)($parts['path'] ?? '');
+        if (isset($parts['fragment']) && $parts['fragment'] !== '') {
+            $rebuilt .= '#' . $parts['fragment'];
         }
 
-        return $catalog;
+        return $rebuilt;
     }
 
     /**

@@ -15,7 +15,7 @@ final class SearchParamGuard
     public const ERROR_PARAMS = 'search_params_invalid';
     public const ERROR_SCOPE = 'search_scope_invalid';
 
-    public const PUBLIC_KEYS = ['q', 'type', 'page', 'page_size', 'area'];
+    public const PUBLIC_KEYS = ['q', 'type', 'page', 'page_size', 'area', 'mode'];
 
     public function guardSearch(
         array $params,

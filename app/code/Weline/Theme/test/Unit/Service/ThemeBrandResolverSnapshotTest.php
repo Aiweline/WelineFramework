@@ -51,6 +51,9 @@ final class ThemeBrandResolverSnapshotTest extends TestCase
         self::assertStringContainsString('filling missing keys from ancestor Scopes', $src);
         self::assertStringContainsString('readBrandAtScope', $src);
         self::assertStringContainsString('parentIdentity', $src);
+        self::assertStringContainsString('ThemeContentScope::fromStoredOwner', $src);
+        self::assertStringContainsString('resolveThemeIdForScope', $src);
+        self::assertStringContainsString('resolvePublishedTheme', $src);
     }
 
     public function testEmptyBrandAtChildScopeInheritsFromParentScope(): void

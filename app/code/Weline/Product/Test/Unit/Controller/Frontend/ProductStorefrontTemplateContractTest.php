@@ -18,12 +18,14 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         self::assertStringContainsString("setGet('page_type', \$surface['page_type'])", $controller);
         self::assertStringNotContainsString('theme_public_route', $controller);
         self::assertStringContainsString("assign('showToolbar', false)", $controller);
-        self::assertStringContainsString('StorefrontCategoryListingFilter', $controller);
-        self::assertStringContainsString('StorefrontListingPager', $controller);
+        self::assertStringContainsString('StorefrontListingShell', $controller);
+        self::assertStringContainsString('projectNeutral(', $controller);
         self::assertStringContainsString("assign('storefront_offers_unfiltered'", $controller);
         self::assertStringContainsString("assign('storefront_listing_sort_options'", $controller);
-        self::assertStringContainsString('paginate(', $controller);
         self::assertStringContainsString("assign('storefront_listing_page_options'", $controller);
+        self::assertStringNotContainsString("getParam('price'", $controller);
+        self::assertStringNotContainsString("getParam('sort'", $controller);
+        self::assertStringNotContainsString("getParam('page'", $controller);
     }
 
     public function testCatalogAndCategoryTemplatesExposeListingPager(): void
@@ -37,6 +39,10 @@ final class ProductStorefrontTemplateContractTest extends TestCase
 
         self::assertStringContainsString('data-testid="storefront-products-pager"', $catalog);
         self::assertStringContainsString('data-testid="storefront-category-pager"', $category);
+        self::assertStringContainsString('data-listing-sort', $catalog);
+        self::assertStringContainsString('data-listing-page', $catalog);
+        self::assertStringNotContainsString('window.location.href', $catalog);
+        self::assertStringNotContainsString('window.location.href', $category);
         // Heavy-locale packs only prefetch template literals; dynamic __($var) stays Chinese.
         self::assertStringContainsString("__('默认排序')", $catalog);
         self::assertStringContainsString("__('价格从低到高')", $catalog);
@@ -121,14 +127,18 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         );
     }
 
-    public function testCatalogControllerDispatchesStorefrontOffersFilterEvent(): void
+    public function testCatalogControllerDispatchesStorefrontOffersFilterEventViaListingShell(): void
     {
         $controller = (string)file_get_contents(
             BP . 'app/code/Weline/Product/Controller/Frontend/Catalog.php',
         );
+        $shell = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/Service/StorefrontListingShell.php',
+        );
 
-        self::assertStringContainsString('Weline_Product::storefront_offers_filter', $controller);
-        self::assertStringContainsString('EventsManager', $controller);
+        self::assertStringContainsString('StorefrontListingShell', $controller);
+        self::assertStringContainsString('Weline_Product::storefront_offers_filter', $shell);
+        self::assertStringContainsString('EventsManager', $shell);
         self::assertStringNotContainsString('ObjectManager', $controller);
     }
 

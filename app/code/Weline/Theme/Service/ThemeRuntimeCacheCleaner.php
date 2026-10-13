@@ -11,6 +11,7 @@ use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Model\Cache\NamespaceVersion;
+use Weline\Framework\Http\Fpc\FpcHtmlDiskStore;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -217,6 +218,15 @@ final class ThemeRuntimeCacheCleaner
                 FullPageCacheCoordinator::clearProcessCache();
             }
         });
+        $this->runStep($result, 'fpc_router_cache_pools', function (): void {
+            $cacheManager = ObjectManager::getInstance(CacheManager::class);
+            foreach (['fpc', 'router'] as $pool) {
+                if (\method_exists($cacheManager, 'hasPool') && !$cacheManager->hasPool($pool)) {
+                    continue;
+                }
+                $cacheManager->pool($pool)->clear();
+            }
+        });
         $this->runStep($result, 'shared_theme_runtime_memory', function (): void {
             if ($this->currentRuntimeInstanceName() === null) {
                 return;
@@ -233,8 +243,8 @@ final class ThemeRuntimeCacheCleaner
                 $broadcaster->cacheClear($instanceName);
             }
         });
-        $this->runStep($result, 'router_fpc_payload_files', function (): void {
-            $this->purgeRouterFpcPayloadFiles();
+        $this->runStep($result, 'fpc_staging_warm_promote', function () use (&$result): void {
+            $this->rebuildFpcViaStagingWarmPromote($result);
         });
 
         return $result;
@@ -473,8 +483,8 @@ final class ThemeRuntimeCacheCleaner
             }
         });
 
-        $this->runStep($result, 'router_fpc_payload_files', function (): void {
-            $this->purgeRouterFpcPayloadFiles();
+        $this->runStep($result, 'fpc_staging_warm_promote', function () use (&$result): void {
+            $this->rebuildFpcViaStagingWarmPromote($result);
         });
 
         return $result;
@@ -774,33 +784,32 @@ final class ThemeRuntimeCacheCleaner
         }
     }
 
-    private function purgeRouterFpcPayloadFiles(): void
+    /**
+     * Theme rebuild: keep live serving old HTML while staging is seeded + warmed,
+     * then atomically promote. Warm failure abandons staging (live unchanged).
+     *
+     * @param array{steps:array<string,bool>,failures:array<string,string>} $result
+     */
+    private function rebuildFpcViaStagingWarmPromote(array &$result): void
     {
-        $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads';
-        $base = \realpath(BP);
-        $resolved = \realpath($dir);
-        if ($base === false || $resolved === false || !\is_dir($resolved)) {
-            return;
-        }
-
-        $baseNormalized = \strtolower(\rtrim(\str_replace('\\', '/', $base), '/') . '/');
-        $dirNormalized = \strtolower(\rtrim(\str_replace('\\', '/', $resolved), '/') . '/');
-        $expectedPrefix = $baseNormalized . 'var/cache/router-fpc-payloads/';
-        if ($dirNormalized !== $expectedPrefix) {
-            return;
-        }
-
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($resolved, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($iterator as $item) {
-            if ($item->isDir()) {
-                @\rmdir($item->getPathname());
-            } else {
-                @\unlink($item->getPathname());
+        FpcHtmlDiskStore::beginStagingGeneration(true);
+        try {
+            if (\class_exists(StorefrontFpcWarmer::class)) {
+                ObjectManager::getInstance(StorefrontFpcWarmer::class)->warm();
             }
+            if (!FpcHtmlDiskStore::promoteStagingGeneration()) {
+                FpcHtmlDiskStore::abandonStagingGeneration();
+                throw new \RuntimeException('fpc_staging_promote_failed');
+            }
+        } catch (\Throwable $e) {
+            try {
+                FpcHtmlDiskStore::abandonStagingGeneration();
+            } catch (\Throwable) {
+            }
+            throw $e;
         }
+        FpcHtmlDiskStore::purgeLegacyHashTrees();
+        unset($result);
     }
 
     /**

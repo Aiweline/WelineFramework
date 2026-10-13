@@ -1241,6 +1241,7 @@ operation：%{id},operation：%{id}
 跳过框架编译,跳过框架编译
 跳过反射编译,跳过反射编译
 无法动态代理final类:%{1},无法动态代理final类:%{1}
+"插件目标类 %{type} 的拦截器 instance 无效：%{instance}（%{message}）","插件目标类 %{type} 的拦截器 instance 无效：%{instance}（%{message}）"
 静态函数尚不支持代理：%{1},静态函数尚不支持代理：%{1}
 "%{1} 拦截器Plugin未指定name属性：<plugin name=""pluginName"">...</plugin>","%{1} 拦截器Plugin未指定name属性：<plugin name=""pluginName"">...</plugin>"
 "%{1} 拦截器Plugin未指定class属性：<plugin class=""pluginClass"">...</plugin>","%{1} 拦截器Plugin未指定class属性：<plugin class=""pluginClass"">...</plugin>"
@@ -1699,6 +1700,15 @@ SQL调试输出,SQL调试输出
 "WLS multipart 文件名无效。","WLS multipart 文件名无效。"
 "WLS multipart 文本字段超过安全上限。","WLS multipart 文本字段超过安全上限。"
 "WLS 上传临时文件清理失败：%{1} 个文件仍未删除。","WLS 上传临时文件清理失败：%{1} 个文件仍未删除。"
+"Import an offline FPC bake package into cold disk (fail-closed anti cross-site)","Import an offline FPC bake package into cold disk (fail-closed anti cross-site)"
+"--seed-shared   Also seed router Shared pointers under target-native offline-bake keys","--seed-shared   Also seed router Shared pointers under target-native offline-bake keys"
+"Required: --website --origin --dir","Required: --website --origin --dir"
+"Import rejected: %{1}","Import rejected: %{1}"
+"Imported %{1} cold-disk entries (shared_seeded=%{2})","Imported %{1} cold-disk entries (shared_seeded=%{2})"
+"Export host-scoped FPC cold-disk bodies into an offline bake package","Export host-scoped FPC cold-disk bodies into an offline bake package"
+"--url=https://host/path   Extra URL to include when cold-disk present (repeatable)","--url=https://host/path   Extra URL to include when cold-disk present (repeatable)"
+"Export failed: %{1}","Export failed: %{1}"
+"Exported %{1} entries to %{2} (skipped=%{3})","Exported %{1} entries to %{2} (skipped=%{3})"
 请指定请求路径！,请指定请求路径！
 正确用法示例:,正确用法示例:
 "使用指定的 Session ID（值已隐藏）","使用指定的 Session ID（值已隐藏）"
@@ -2076,6 +2086,7 @@ Transport,运输
 "资源变更 website 上下文无效","资源变更 website 上下文无效"
 "资源变更 website 字段类型或值无效","资源变更 website 字段类型或值无效"
 "资源变更 impact 必须是数组","资源变更 impact 必须是数组"
+"impact.url_matrix_ready 必须是布尔值","impact.url_matrix_ready 必须是布尔值"
 "资源变更 coalesced_event_ids 含无效 event_id","资源变更 coalesced_event_ids 含无效 event_id"
 "资源变更 before/after 快照类型无效","资源变更 before/after 快照类型无效"
 "非删除资源变更的 after 必须是数组","非删除资源变更的 after 必须是数组"
@@ -2093,6 +2104,7 @@ Transport,运输
 "%{1} 包含非白名单字段","%{1} 包含非白名单字段"
 "%{1} 必须是列表","%{1} 必须是列表"
 "%{1} 必须只包含非空字符串","%{1} 必须只包含非空字符串"
+"%{1} 必须只包含非负整数","%{1} 必须只包含非负整数"
 "impact.cache_ops 必须是列表","impact.cache_ops 必须是列表"
 "%{1} 必须是对象","%{1} 必须是对象"
 "%{1}.pool 无效","%{1}.pool 无效"
@@ -2326,6 +2338,8 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "陈旧索引项: %{1}","陈旧索引项: %{1}"
 "陈旧 PID 文件: %{1}","陈旧 PID 文件: %{1}"
 "遗留 .pid 文件: %{1}","遗留 .pid 文件: %{1}"
+店面缓存预热,店面缓存预热
+"每分钟推进店面 FPC 预热相位 A→B(Sitemap 文档)→C(补源)→D(地图 loc)；真机 busy 门禁；进度账本续跑。WLS Worker 不再编排店面预热。","每分钟推进店面 FPC 预热相位 A→B(Sitemap 文档)→C(补源)→D(地图 loc)；真机 busy 门禁；进度账本续跑。WLS Worker 不再编排店面预热。"
 描述,描述
 使用方法,使用方法
 选项,选项
@@ -2384,6 +2398,23 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "已 bump global/storefront/deploy（日常 Upgrade 优先 bump）","已 bump global/storefront/deploy（日常 Upgrade 优先 bump）"
 静态资源部署进程池,静态资源部署进程池
 静态资源部署,静态资源部署
+"同步 path 包 transport-options.symlink（不 update 依赖图）","同步 path 包 transport-options.symlink（不 update 依赖图）"
+"缺少 composer.json 或 composer.lock","缺少 composer.json 或 composer.lock"
+"composer.json 解析失败","composer.json 解析失败"
+"composer.json 未找到 type=path 的 repositories.options.symlink","composer.json 未找到 type=path 的 repositories.options.symlink"
+"composer.lock 解析失败","composer.lock 解析失败"
+"目标 symlink=%{1}；lock 待改 %{2} 个；installed 待改 %{3} 个","目标 symlink=%{1}；lock 待改 %{2} 个；installed 待改 %{3} 个"
+"transport-options 已对齐，无需写入","transport-options 已对齐，无需写入"
+"若 vendor 仍是 directory 副本，执行：composer reinstall 'weline/*' --no-scripts","若 vendor 仍是 directory 副本，执行：composer reinstall 'weline/*' --no-scripts"
+dry-run：未写盘,dry-run：未写盘
+"无法备份 composer.lock → %{1}","无法备份 composer.lock → %{1}"
+"已备份 lock：%{1}","已备份 lock：%{1}"
+"写入 composer.lock 失败","写入 composer.lock 失败"
+"无法备份 installed.json → %{1}","无法备份 installed.json → %{1}"
+"写入 installed.json 失败","写入 installed.json 失败"
+"已备份 installed：%{1}","已备份 installed：%{1}"
+"transport-options 已同步","transport-options 已同步"
+"下一步（不 update 依赖图）：composer reinstall 'weline/*' --no-scripts","下一步（不 update 依赖图）：composer reinstall 'weline/*' --no-scripts"
 "必须提供 --task-id。","必须提供 --task-id。"
 未找到可恢复任务。,未找到可恢复任务。
 查看可恢复后台任务的持久状态,查看可恢复后台任务的持久状态

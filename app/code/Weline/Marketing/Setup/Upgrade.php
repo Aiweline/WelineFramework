@@ -17,7 +17,7 @@ use Weline\Marketing\Model\Winback\WinbackCampaign;
 use Weline\Marketing\Service\MarketingWebsiteScope;
 use Weline\Smtp\Service\MailTemplateSeeder;
 use Weline\SystemConfig\Model\SystemConfig;
-use Weline\Theme\Model\ThemeLayout;
+use Weline\Marketing\Service\LegacyCouponWidgetCodeRemapper;
 
 /** Ensure rule local-description table exists; unify coupon widget codes. */
 class Upgrade implements UpgradeInterface
@@ -99,25 +99,16 @@ class Upgrade implements UpgradeInterface
 
     /**
      * cart-coupon / mini-cart-coupon → checkout-coupon（同一部件三处注入）。
-     * Soft：Theme 布局表未就绪时不阻断 upgrade（Theme 为 optional）。
-     * 走 Model/Query 连接器拼方言，禁止手写跨库 SQL。
+     * Soft：Theme 表/载荷未就绪时不阻断 upgrade（Theme 为 optional）。
+     * 清洗面：theme_layout（若仍存在）+ default_injection + chrome/patch/release JSON。
      */
     private function remapLegacyCouponWidgetCodes(): void
     {
         try {
-            /** @var ThemeLayout $layoutModel */
-            $layoutModel = ObjectManager::getInstance(ThemeLayout::class);
-            $layoutModel->reset()
-                ->where(ThemeLayout::schema_fields_WIDGET_MODULE, 'Weline_Marketing')
-                ->where(
-                    ThemeLayout::schema_fields_WIDGET_CODE,
-                    ['cart-coupon', 'mini-cart-coupon'],
-                    'IN',
-                )
-                ->update([
-                    ThemeLayout::schema_fields_WIDGET_CODE => 'checkout-coupon',
-                ])
-                ->fetch();
+            /** @var LegacyCouponWidgetCodeRemapper $remapper */
+            $remapper = ObjectManager::getInstance(LegacyCouponWidgetCodeRemapper::class);
+            $stats = $remapper->run();
+            w_log_info('Marketing remapLegacyCouponWidgetCodes: ' . \json_encode($stats, \JSON_UNESCAPED_UNICODE), [], 'marketing');
         } catch (\Throwable $e) {
             w_log_warning('Marketing remapLegacyCouponWidgetCodes: ' . $e->getMessage(), [], 'marketing');
         }

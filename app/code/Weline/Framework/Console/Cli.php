@@ -834,11 +834,34 @@ class Cli extends CliAbstract
     private function selectPreferredCommand(array $matches): array
     {
         usort($matches, function (array $left, array $right): int {
-            return ((int)$this->isVendorCommand((string)$left['class']))
+            $vendorCmp = ((int)$this->isVendorCommand((string)$left['class']))
                 <=> ((int)$this->isVendorCommand((string)$right['class']));
+            if ($vendorCmp !== 0) {
+                return $vendorCmp;
+            }
+
+            // Same-module legacy forks (e.g. Framework UnitTest vs Test both register
+            // e2e:run under app/code): prefer the canonical Test\Console tree so suite
+            // gates and newer control flags are not shadowed by registration order.
+            $legacyCmp = ((int)$this->isLegacyFrameworkUnitTestCommand((string)$left['class']))
+                <=> ((int)$this->isLegacyFrameworkUnitTestCommand((string)$right['class']));
+            if ($legacyCmp !== 0) {
+                return $legacyCmp;
+            }
+
+            return 0;
         });
 
         return $matches[0];
+    }
+
+    /**
+     * Framework historically kept a UnitTest\Console command tree parallel to Test\Console.
+     * When both are non-vendor and share a command name, UnitTest is treated as lower preference.
+     */
+    private function isLegacyFrameworkUnitTestCommand(string $class): bool
+    {
+        return str_starts_with($class, 'Weline\\Framework\\UnitTest\\Console\\');
     }
     
     /**

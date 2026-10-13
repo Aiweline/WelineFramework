@@ -16,7 +16,7 @@ final class UrlLiteralBakeContractTest extends TestCase
 {
     public function testCompilerGenerationBumpsForUrlLiteralBake(): void
     {
-        self::assertSame('20261009-url-literal-bake-site-address-v6', Taglib::COMPILER_GENERATION);
+        self::assertSame('20261013-deploy-public-urls-v7', Taglib::COMPILER_GENERATION);
         $source = (string)file_get_contents(dirname(__DIR__, 3) . '/View/Taglib.php');
         self::assertStringContainsString('function tryBakeUrlFamily', $source);
         self::assertStringContainsString('adjustBakedStaticInlineReplacement', $source);

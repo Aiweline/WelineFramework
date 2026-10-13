@@ -287,9 +287,9 @@ jobs:
 ## 参考资料
 
 - [PHPUnit文档](https://phpunit.de/documentation.html)
-- [WelineFramework测试指南](../../../docs/testing.md)
-- [数据库迁移文档](../../../docs/database-migration.md)
-- [备份恢复文档](../../../docs/backup-restore.md)
+- [WelineFramework测试指南](../../../dev/docs/testing.md)
+- [数据库迁移文档](../../../dev/docs/database-migration.md)
+- [备份恢复文档](../../../dev/docs/backup-restore.md)
 
 ## 联系方式
 

@@ -10,6 +10,7 @@ use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeContext;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePublishedSnapshotReaderInterface;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
@@ -53,7 +54,9 @@ final class ThemeBrandResolver
         ];
         try {
             $scope ??= $this->currentScopeContext();
-            $themeId ??= $this->resolveActiveThemeId($area);
+            // Prefer published theme_binding for this Scope — ThemeContextService may
+            // fall back to package default (#1) when ThemeApplicationContext is absent.
+            $themeId ??= $this->resolveThemeIdForScope($area, $scope);
             if ($themeId <= 0 || $scope === null) {
                 return $empty;
             }
@@ -167,8 +170,18 @@ final class ThemeBrandResolver
             'logo_dark' => '',
             'source_scope' => null,
         ];
+        // Storefront ScopeContext → ThemeContentScope (workspace identity); never pass ScopeContext raw.
+        $storeMode = \trim((string)$scope->storeMode);
+        if ($storeMode === '') {
+            $storeMode = 'normal';
+        }
+        $contentScope = ThemeContentScope::fromStoredOwner(
+            (string)$scope->storageScope,
+            $storeMode,
+            'default',
+        );
         $context = new ThemeEditorContext(
-            scope: $scope,
+            scope: $contentScope,
             area: $area === 'backend' ? 'backend' : 'frontend',
             resourceType: ThemeEditorContext::RESOURCE_APPEARANCE,
             themeId: $themeId,
@@ -275,6 +288,23 @@ final class ThemeBrandResolver
                 return null;
             }
         }
+    }
+
+    private function resolveThemeIdForScope(string $area, ?ScopeContext $scope): int
+    {
+        $normalized = $area === 'backend' ? 'backend' : 'frontend';
+        if ($scope instanceof ScopeContext) {
+            try {
+                $resolved = $this->workspace->resolvePublishedTheme($scope, $normalized);
+                $bound = (int)($resolved?->effectiveValue ?? 0);
+                if ($bound > 0) {
+                    return $bound;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return $this->resolveActiveThemeId($normalized);
     }
 
     private function resolveActiveThemeId(string $area): int

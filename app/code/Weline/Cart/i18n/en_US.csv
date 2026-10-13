@@ -72,7 +72,6 @@ search,search
 购物车批发信用,"Cart wholesale credit"
 购物车帮我付,"Cart pay-for-me"
 当前货币暂不可用,"This currency is temporarily unavailable"
-加入购物车,"Add to Cart"
 暂不可售,"Currently unavailable"
 正在加入购物车...,"Adding to cart..."
 已加入购物车,"Added to cart"
@@ -155,10 +154,11 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,"This product is temporarily unavailable; remove it from the cart or try again later"
 "channel_code 必须与 store_code 同时提供","channel_code must be provided together with store_code"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","Cart Scope does not match the trusted Website/Store/Channel request"
+加入购物车,"Add to Cart"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 跨币种购物车不可合并,"Cross-currency carts cannot be merged"
 购物车包含跨币种商品，禁止合并,"Cart contains cross-currency items; merge is forbidden"
 税费（预估）,"Estimated tax"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 商品小计,"Items subtotal"
 仅询价,"Quote only"
 已加入,"Added to cart"

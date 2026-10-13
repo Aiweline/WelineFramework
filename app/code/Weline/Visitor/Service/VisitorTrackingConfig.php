@@ -227,23 +227,9 @@ class VisitorTrackingConfig
         } catch (\Throwable) {
         }
         try {
-            $dir = (\defined('BP') ? BP : '') . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads';
-            $resolved = \is_dir($dir) ? \realpath($dir) : false;
-            if ($resolved === false) {
-                return;
-            }
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($resolved, \FilesystemIterator::SKIP_DOTS),
-                \RecursiveIteratorIterator::CHILD_FIRST
-            );
-            foreach ($iterator as $fileInfo) {
-                if (!$fileInfo instanceof \SplFileInfo) {
-                    continue;
-                }
-                $path = $fileInfo->getPathname();
-                if ($fileInfo->isFile()) {
-                    @\unlink($path);
-                }
+            if (\class_exists(\Weline\Framework\Http\Fpc\FpcHtmlDiskStore::class)) {
+                \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::purgeAll();
+                \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::purgeLegacyHashTrees();
             }
         } catch (\Throwable) {
         }

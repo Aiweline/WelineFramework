@@ -108,17 +108,11 @@ final class BinaryOutputGuard
         if (!\function_exists('w_log_warning')) {
             return;
         }
-        if ($label === 'QueryBin') {
-            \w_log_warning('[' . $label . '] Cleared pre-existing output buffer before binary response.', [
-                'bytes' => \strlen($preExisting),
-                'sha256' => \hash('sha256', $preExisting),
-            ], 'query_bin');
-            return;
-        }
-        \w_log_warning(
-            '[' . $label . '] Cleared pre-existing output buffer before binary response: '
-            . \mb_substr(\trim($preExisting), 0, 500)
-        );
+        // Never log body snippets — bytes + sha256 only (QueryBin contract / all binary guards).
+        \w_log_warning('[' . $label . '] Cleared pre-existing output buffer before binary response.', [
+            'bytes' => \strlen($preExisting),
+            'sha256' => \hash('sha256', $preExisting),
+        ], $label === 'QueryBin' ? 'query_bin' : 'http');
     }
 
     private static function logSuppressed(string $label, string $captured): void
@@ -126,16 +120,9 @@ final class BinaryOutputGuard
         if (!\function_exists('w_log_warning')) {
             return;
         }
-        if ($label === 'QueryBin') {
-            \w_log_warning('[' . $label . '] Suppressed stray output during binary response.', [
-                'bytes' => \strlen($captured),
-                'sha256' => \hash('sha256', $captured),
-            ], 'query_bin');
-            return;
-        }
-        \w_log_warning(
-            '[' . $label . '] Suppressed stray output during binary response: '
-            . \mb_substr(\trim($captured), 0, 500)
-        );
+        \w_log_warning('[' . $label . '] Suppressed stray output during binary response.', [
+            'bytes' => \strlen($captured),
+            'sha256' => \hash('sha256', $captured),
+        ], $label === 'QueryBin' ? 'query_bin' : 'http');
     }
 }

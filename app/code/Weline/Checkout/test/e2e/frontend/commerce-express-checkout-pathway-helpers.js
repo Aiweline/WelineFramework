@@ -6,6 +6,8 @@ const {
   ADDRESS,
   waitForWelineApi,
   assertStep,
+  reloadIfThemeGenerationStale,
+  evaluateWithThemeReload,
 } = require('./release-paypal-account-lifecycle-helpers');
 
 const {
@@ -37,14 +39,27 @@ async function runExpressCheckoutCaptureEvidence(page, meta = {}) {
     province_name: 'California',
   };
 
-  const started = await page.evaluate(async ({ payMethod, shipAddress }) => {
+  // Do not hard-refresh here: theme reload between addToCart and express drops in-flight cart
+  // identity for some guest sessions and surfaces 购物车为空 on startExpressCheckout.
+  const started = await evaluateWithThemeReload(page, async ({ payMethod, shipAddress }) => {
     try {
+      if (window.Weline && window.Weline.config) {
+        window.Weline.config.themePublishedVersionId = '';
+        window.Weline.config.theme_published_version_id = '';
+      }
       let api = window.Weline && window.Weline.Api;
       if (!api || typeof api.resource !== 'function') {
         api = await window.Weline.load('api');
       }
+      if (window.Weline && window.Weline.config) {
+        window.Weline.config.themePublishedVersionId = '';
+        window.Weline.config.theme_published_version_id = '';
+      }
       let guestToken = '';
       try { guestToken = String(sessionStorage.getItem('weline.cart.guest_token') || '').trim(); } catch (e) {}
+      if (!guestToken) {
+        return { success: false, message: 'evaluate_threw', error: 'guest_token_missing' };
+      }
 
       const checkoutApi = await api.resource('checkout');
       // Do not pass service_code — frontend worker whitelist rejects unknown params.
@@ -56,7 +71,7 @@ async function runExpressCheckoutCaptureEvidence(page, meta = {}) {
         selling_mode: 'toc',
         address: shipAddress,
         idempotency_key: 'express_pathway_' + Date.now(),
-      }, { silent: true, requestTimeoutMs: 120000 });
+      }, { silent: true, requestTimeoutMs: 45000 });
 
       const payload = (express && express.data && typeof express.data === 'object') ? express.data : express;
       const orderUuids = Array.isArray(payload && payload.order_uuids)

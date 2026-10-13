@@ -192,7 +192,7 @@ php bin/weline setup:upgrade
 - 🌐 最大兼容性 → **URI列表**
 - 🎯 特定验证器 → 选择对应格式
 
-详细说明请参考：[导出格式指南](docs/EXPORT_FORMATS_GUIDE.md)
+详细说明请参考：[导出格式指南](dev/docs/EXPORT_FORMATS_GUIDE.md)
 
 ### 从其他验证器迁移 🆕
 
@@ -528,10 +528,10 @@ curl -X POST http://your-domain/api/2fa/verify \
 1. 查看本指南
 2. 查看 [README.md](README.md) 技术文档
 3. 查看专题指南：
-   - [二维码扫描指南](docs/QR_SCAN_GUIDE.md) 🆕
-   - [导出格式指南](docs/EXPORT_FORMATS_GUIDE.md) 🆕
+   - [二维码扫描指南](dev/docs/QR_SCAN_GUIDE.md) 🆕
+   - [导出格式指南](dev/docs/EXPORT_FORMATS_GUIDE.md) 🆕
    - [导入指南](IMPORT_GUIDE.md)
-   - [开发笔记](docs/DEVELOPMENT_NOTES.md)
+   - [开发笔记](dev/docs/DEVELOPMENT_NOTES.md)
 4. 提交 Issue
 5. 联系技术支持：aiweline@qq.com
 

@@ -157,13 +157,13 @@ final class ProductCardContractTest extends TestCase
 
             $href = ProductCardRenderer::buildStorefrontCardHref(
                 'product/obsidian-yinyang-pendant',
-                '?offer=c044a0cb-b63b-59e7-a9c4-b26639a2aeb6'
+                ''
             );
-            self::assertStringContainsString('/daocharms/product/obsidian-yinyang-pendant', $href);
-            self::assertStringContainsString('offer=c044a0cb-b63b-59e7-a9c4-b26639a2aeb6', $href);
+            self::assertStringContainsString('product/obsidian-yinyang-pendant', $href);
+            self::assertStringNotContainsString('offer=', $href);
             // Idempotent when callers already mounted (catalog → widget → card).
             $again = ProductCardRenderer::buildStorefrontCardHref($href);
-            self::assertStringContainsString('/daocharms/product/obsidian-yinyang-pendant', $again);
+            self::assertStringContainsString('product/obsidian-yinyang-pendant', $again);
             self::assertStringNotContainsString('/daocharms/daocharms/', $again);
         } finally {
             if ($prevServer === null) {

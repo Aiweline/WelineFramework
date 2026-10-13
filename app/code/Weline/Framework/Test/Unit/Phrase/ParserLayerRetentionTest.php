@@ -46,7 +46,7 @@ final class ParserLayerRetentionTest extends TestCase
         $pool->method('getMultiple')->willReturnCallback(fn(array $keys): array => array_intersect_key($this->storage, array_fill_keys($keys, true)));
         $pool->method('setMultiple')->willReturnCallback(function (array $values): bool { $this->storage = array_replace($this->storage, $values); return true; });
         $pool->method('remember')->willReturnCallback(function ($key, $ttl, $builder) { return $this->storage[$key] ??= $builder(); });
-        (new ReflectionProperty(Parser::class, 'sharedPhraseCachePool'))->setValue(null, $pool);
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::setPoolOverrideForTests($pool);
         (new ReflectionProperty(Parser::class, 'globalDictionaryProviderInstance'))->setValue(null, $this->provider);
         $this->nextRequest('first');
     }

@@ -398,6 +398,26 @@ class JsTranslationsExtractor
                 }
             }
         }
+
+        // 7. 匹配 i18nText('...')（Weline.Api 等模块内嵌词典查找；与 __() 同为简中 source）
+        if (preg_match_all('/i18nText\s*\(\s*(["\'])((?:[^\\\\\1\n\r]|\\\\.)*?)\1\s*([,\\)])/', $content, $matches, PREG_OFFSET_CAPTURE)) {
+            foreach ($matches[2] as $index => $matchData) {
+                $match = $matchData[0];
+                $quoteChar = $matches[1][$index][0];
+                $escapedQuote = '\\' . $quoteChar;
+                $quoteCount = substr_count($match, $quoteChar);
+                $escapedQuoteCount = substr_count($match, $escapedQuote);
+                $realQuoteCount = $quoteCount - $escapedQuoteCount;
+                if ($realQuoteCount > 0) {
+                    continue;
+                }
+                $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $match);
+                $match = trim($match);
+                if (!empty($match) && $collector->isValidTranslationString($match)) {
+                    $words[$match] = $match;
+                }
+            }
+        }
         
         return $words;
     }

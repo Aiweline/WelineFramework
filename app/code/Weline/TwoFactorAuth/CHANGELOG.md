@@ -31,7 +31,7 @@
 - `etc/event.xml` - 事件配置
 
 #### 相关文档
-- [`docs/登录保护机制.md`](docs/登录保护机制.md) - 完整的登录保护机制说明
+- [`dev/docs/登录保护机制.md`](dev/docs/登录保护机制.md) - 完整的登录保护机制说明
 
 ---
 
@@ -49,7 +49,7 @@
 - `view/statics/twofa-app/app.js` - 倒计时优化逻辑
 
 #### 相关文档
-- [`docs/问题修复-倒计时刷新.md`](docs/问题修复-倒计时刷新.md)
+- [`dev/docs/问题修复-倒计时刷新.md`](dev/docs/问题修复-倒计时刷新.md)
 
 ---
 
@@ -70,7 +70,7 @@
 - `view/statics/twofa-app/style.css` - 复制图标样式
 
 #### 相关文档
-- [`docs/问题修复-倒计时刷新.md`](docs/问题修复-倒计时刷新.md)
+- [`dev/docs/问题修复-倒计时刷新.md`](dev/docs/问题修复-倒计时刷新.md)
 
 ---
 
@@ -168,7 +168,7 @@
 - `view/statics/twofa-app/app.js` - 相机扫描逻辑
 
 #### 相关文档
-- [`docs/CAMERA_SCAN_FEATURE.md`](docs/CAMERA_SCAN_FEATURE.md)
+- [`dev/docs/CAMERA_SCAN_FEATURE.md`](dev/docs/CAMERA_SCAN_FEATURE.md)
 - [`v2.1.0-功能说明.md`](v2.1.0-功能说明.md)
 
 ---
@@ -188,7 +188,7 @@
 - `view/statics/twofa-app/app.js` - 图片上传和QR识别
 
 #### 相关文档
-- [`docs/QR_SCAN_GUIDE.md`](docs/QR_SCAN_GUIDE.md)
+- [`dev/docs/QR_SCAN_GUIDE.md`](dev/docs/QR_SCAN_GUIDE.md)
 
 ---
 
@@ -224,7 +224,7 @@
 - `view/statics/twofa-app/app.js` - 各种格式导出逻辑
 
 #### 相关文档
-- [`docs/EXPORT_FORMATS_GUIDE.md`](docs/EXPORT_FORMATS_GUIDE.md)
+- [`dev/docs/EXPORT_FORMATS_GUIDE.md`](dev/docs/EXPORT_FORMATS_GUIDE.md)
 
 ---
 
@@ -256,7 +256,7 @@
 - [`README.md`](README.md) - 项目简介和技术说明
 - [`USAGE_GUIDE.md`](USAGE_GUIDE.md) - 用户使用指南
 - [`IMPORT_GUIDE.md`](IMPORT_GUIDE.md) - 备份导入指南
-- [`docs/DEVELOPMENT_NOTES.md`](docs/DEVELOPMENT_NOTES.md) - 开发笔记
+- [`dev/docs/DEVELOPMENT_NOTES.md`](dev/docs/DEVELOPMENT_NOTES.md) - 开发笔记
 
 ---
 

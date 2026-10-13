@@ -12,8 +12,6 @@
 "Product Search 投影负载无效","Invalid Product Search projection payload"
 "Product Search 投影 Scope kind 无效","Product Search projection Scope kind is invalid"
 "Product Search 投影 Store Scope 无效","Product Search projection Store Scope is invalid"
-搜索：%{1},"Search: %{1}"
-查看“%{1}”在本站商品、文章与帮助中的相关结果。,"See results for “%{1}” across products, articles, and help."
 搜索本站商品、灵感文章与帮助指南。,"Search products, inspiration articles, and help guides."
 性能慢日志,"Slow performance logs."
 clock,clock
@@ -52,16 +50,13 @@ chart,chart
 "非法 search shard key：%{1}","Illegal search shard key: %{1}"
 "非法 search shard 实体名：%{1}","Illegal search shard entity name: %{1}"
 搜索筛选,"Search Filters"
-全部,All
-商品,Products
-博客,Blog
-"共 %{1} 条","Total %{1} items"
-分类面包屑,"Category breadcrumb"
-请输入关键词开始搜索,"Enter a keyword to start searching"
+正在搜索…,正在搜索…
 未找到相关结果,"No matching results found"
+搜索失败，请稍后重试,搜索失败，请稍后重试
 "商品 0 条","0 products"
 暂无匹配商品，可换词或浏览分类,"No matching products — try another keyword or browse categories"
-查看更多%{1}结果,"View more %{1} results"
+请输入关键词开始搜索,"Enter a keyword to start searching"
+分类面包屑,"Category breadcrumb"
 展开/收起,"Expand / collapse"
 搜索类型,"Search type"
 是,yes
@@ -171,6 +166,22 @@ chart,chart
 显示帮助,"Show help"
 "重建全部 Provider 索引","Rebuild all provider indexes"
 "仅重建 Blog 索引","Rebuild Blog index only"
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+小计,小计
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+去结算,去结算
+查看购物车,查看购物车
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
+"共 %{1} 条","Total %{1} items"
+查看更多%{1}结果,"View more %{1} results"
+搜索：%{1},"Search: %{1}"
+查看“%{1}”在本站商品、文章与帮助中的相关结果。,"See results for “%{1}” across products, articles, and help."
+全部,All
+商品,Products
+博客,Blog
 "Dao Notes","Dao Notes"
 按符号,"By Symbol"
 按形状,"By Shape"
@@ -185,13 +196,6 @@ chart,chart
 "浏览全部物件 →","Browse all objects →"
 按分类探索,"Explore by category"
 探索,EXPLORE
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
-迷你购物车,迷你购物车
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
-小计,小计
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-去结算,去结算
-查看购物车,查看购物车
 查看“%{1}”在本站汉服、文章与帮助中的相关结果。,"See results for “%{1}” across Hanfu products, articles, and help on this site."
 在汉服商城中搜索商品、搭配灵感与帮助指南。,"Search Hanfu products, styling ideas, and help guides in the store."
 输入关键词…,"Enter keywords..."

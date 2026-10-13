@@ -54,9 +54,40 @@ final class ThemeLayoutEntityPageInputDigestContractTest extends TestCase
         $bake = (string)file_get_contents($root . '/ThemeLayoutEntityBakeCoordinator.php');
         $gate = (string)file_get_contents($root . '/ThemeLayoutEntityRequestSolidifyGate.php');
         self::assertStringContainsString('ThemeLayoutEntityPageInputDigest::forOrigin', $materializer);
+        self::assertStringContainsString(
+            "'input_digest' => ThemeLayoutEntityPageInputDigest::forOrigin(\$origin)",
+            $materializer,
+        );
+        self::assertGreaterThanOrEqual(
+            2,
+            substr_count($materializer, 'ThemeLayoutEntityPageInputDigest::forOrigin'),
+            'page + chrome (and deps) must write input_digest',
+        );
         self::assertStringContainsString('ThemeLayoutEntityPageInputDigest::matchesStored', $bake);
         self::assertStringContainsString('ThemeLayoutEntityPageInputDigest::planDigest', $bake);
+        self::assertStringContainsString('chromePartialDiskStaleOrRaw', $bake);
+        self::assertStringContainsString('rematerializeChromeIfStale', $bake);
         self::assertStringContainsString('ThemeLayoutEntityPageInputDigest::matchesStored', $gate);
         self::assertStringContainsString('design_origin_stale_fallback_original', $gate);
+        self::assertStringContainsString('design_chrome_origin_stale_fallback_original', $gate);
+        $queue = (string)file_get_contents($root . '/ThemeLayoutEntitySolidifyQueue.php');
+        self::assertStringContainsString('rematerializeChromeIfStale', $queue);
+        $cli = dirname(__DIR__, 3) . '/Console/Theme/LayoutSolidifyStatus.php';
+        self::assertFileExists($cli);
+        $cliSrc = (string)file_get_contents($cli);
+        self::assertStringContainsString('theme:layout-solidify-status', $cliSrc);
+        self::assertStringContainsString('ThemeLayoutEntityPageInputDigest::matchesStored', $cliSrc);
+        // Debt #1: upgrade/pipeline must heal draft chrome even when page pending is empty / skipped.
+        self::assertStringContainsString('rematerializeChromeIfStale', $bake);
+        self::assertGreaterThanOrEqual(
+            3,
+            substr_count($bake, 'rematerializeChromeIfStale'),
+            'BakeCoordinator: method + solidifyPendingIdentity + empty-pending collect heal (+ pipeline post-pass)',
+        );
+        self::assertStringContainsString('toVersionIdentity()', $bake);
+        self::assertStringContainsString('Pages unchanged / inherit-skipped', $bake);
+        self::assertStringContainsString("'/draft/'", $cliSrc);
+        self::assertStringContainsString("'draft'", $cliSrc);
+        self::assertStringContainsString("'formal'", $cliSrc);
     }
 }

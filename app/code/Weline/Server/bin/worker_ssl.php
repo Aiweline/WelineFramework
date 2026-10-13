@@ -12755,6 +12755,10 @@ function handleStaticFile(string $uri, string $rawRequest, ?int $maxPreAdmission
         }
         return null;
     }
+
+    // DEV / non-pub resolves: mirror into generated/static/live/{host}/{path}
+    // so managed Nginx can try_files without reading app/code next time.
+    \Weline\Server\Service\FpcStaticEdgeMirror::mirrorAfterResolve($rawRequest, $uriPath, $filename);
     
     // 默认标记为 MISS（非内存缓存命中）
     \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache([

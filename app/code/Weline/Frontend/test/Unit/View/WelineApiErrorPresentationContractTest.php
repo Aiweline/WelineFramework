@@ -101,6 +101,21 @@ final class WelineApiErrorPresentationContractTest extends TestCase
             "error.code = 'scope_context_conflict';\n            throw error;",
             $script,
         );
+        // Stamp expiry recovers in-page (re-punch + retry); only identity/theme drift reloads.
+        self::assertStringContainsString('isScopeStampRecoverableError', $script);
+        self::assertStringContainsString('recoverScopeStamp', $script);
+        self::assertStringContainsString('__scopeStampRetry', $script);
+        self::assertStringContainsString('forceHandshake: forceHandshake', $script);
+        self::assertStringContainsString("i18nText('当前页面商城范围已过期，正在重新签章以继续。')", $script);
+        self::assertStringContainsString("i18nText('页面绑定信息缺失或已失效，正在重新签章以继续。')", $script);
+        self::assertStringNotContainsString(
+            "message: i18nText('当前页面商城范围已过期，正在刷新以继续。'),\n                autoReload: true,",
+            $script,
+        );
+        self::assertStringNotContainsString(
+            "message: i18nText('页面绑定信息缺失或已失效，正在刷新以继续。'),\n                autoReload: true,",
+            $script,
+        );
     }
 
     public function testWorkerReusesSessionByScopeCanonicalKey(): void
@@ -113,6 +128,10 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         self::assertStringContainsString('function scopeSessionIdentityKey(config)', $script);
         self::assertStringContainsString('buildScopeCanonicalFromIds', $script);
         self::assertStringContainsString('Must NOT use Host+path', $script);
+        // Stamp recover forces SharedWorker to drop badge + re-handshake after Cookie re-punch.
+        self::assertStringContainsString('forceHandshake', $script);
+        self::assertStringContainsString('async function ensureSession(config, options = {})', $script);
+        self::assertStringContainsString("code === 'scope_binding_required'", $script);
         // Storefront handshake must not send one-shot opaque bootstrap id.
         self::assertStringContainsString('never send scope_bootstrap_id', $script);
         self::assertStringNotContainsString('handshakePayload.scope_bootstrap_id', $script);
@@ -144,11 +163,20 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         self::assertStringContainsString('if (isScopeStampAlreadyEnsured(ids)) {', $script);
         self::assertStringContainsString('rememberScopeStampKey(stampKey, expiresAt)', $script);
         self::assertStringContainsString('SCOPE_STAMP_SKEW_MS', $script);
+        self::assertStringContainsString('isScopeStampFresh', $script);
+        self::assertStringContainsString('scheduleScopeStampRenewal', $script);
+        self::assertStringContainsString('bindScopeStampVisibilityRenew', $script);
+        self::assertStringContainsString('scopeStampEnsuredExpiresAt', $script);
+        // 204 / rollout-off must not invent a long soft TTL visa.
+        self::assertStringContainsString('no_stamp: true', $script);
+        self::assertStringNotContainsString('SCOPE_STAMP_SOFT_TTL_SEC', $script);
         self::assertStringContainsString('isScopeBindingMissingError', $script);
         // Binding miss must drop optimistic memory (Reload otherwise loops forever).
         self::assertStringContainsString('forgetScopeStampKey();', $script);
         self::assertStringContainsString('Drop optimistic stamp memory before reload', $script);
-        self::assertStringContainsString('allowRepunch && isScopeBindingMissingError(error)', $script);
+        self::assertStringContainsString('allowRepunch && isScopeStampRecoverableError(error)', $script);
+        self::assertStringContainsString('warmup({ forceHandshake: true })', $script);
+        self::assertStringContainsString('shouldDeferScopeStampErrorUi', $script);
         self::assertStringContainsString('Success does not require bootstrap_id', $script);
         self::assertStringNotContainsString('SCOPE_BOOTSTRAP_OPAQUE', $script);
         self::assertStringNotContainsString('readScopeBootstrapId', $script);

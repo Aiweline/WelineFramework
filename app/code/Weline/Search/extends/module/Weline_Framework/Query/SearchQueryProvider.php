@@ -57,15 +57,27 @@ final class SearchQueryProvider implements QueryProviderInterface
         cost: 2,
     )]
     #[BinQueryCache(ttl: '0s', description: 'Search results are never CDN cached', cdn: false)]
+    #[BinQueryParam(name: 'q', type: 'string', required: false, maxLength: 255)]
+    #[BinQueryParam(name: 'type', type: 'string', required: false)]
+    #[BinQueryParam(name: 'area', type: 'string', required: false, maxLength: 16)]
+    #[BinQueryParam(name: 'page', type: 'int', required: false, min: 1, max: 100)]
+    #[BinQueryParam(name: 'page_size', type: 'int', required: false, min: 1, max: 48)]
+    #[BinQueryParam(name: 'mode', type: 'string', required: false, maxLength: 16, description: 'page = full storefront result payload')]
+    #[BinQueryParam(name: 'category_id', type: 'int', required: false, min: 0)]
+    #[BinQueryParam(name: 'blog_category_id', type: 'int', required: false, min: 0)]
     private function search(array $params): array
     {
         try {
-            // Backend typed search (e.g. sidebar menu filter) needs full page_size;
-            // storefront autocomplete stays capped at 8.
+            // mode=page → full storefront result page (no autocomplete page_size cap).
+            // Backend typed search also needs full page_size; autocomplete stays capped at 8.
             $area = strtolower(trim((string)($params['area'] ?? 'frontend')));
             $type = trim((string)($params['type'] ?? 'all'));
-            $autocomplete = !($area === 'backend' && $type !== '' && $type !== 'all');
-            $result = $this->hub->search($params, autocomplete: $autocomplete);
+            $mode = strtolower(trim((string)($params['mode'] ?? '')));
+            $autocomplete = $mode !== 'page'
+                && !($area === 'backend' && $type !== '' && $type !== 'all');
+            $hubParams = $params;
+            unset($hubParams['mode']);
+            $result = $this->hub->search($hubParams, autocomplete: $autocomplete);
             $payload = $result->toArray() + [
                 'website_id' => (int)(RequestContext::scopeMetadata()['website_id'] ?? 0),
                 'store_id' => (int)(RequestContext::scopeMetadata()['store_id'] ?? 0),
@@ -191,6 +203,9 @@ final class SearchQueryProvider implements QueryProviderInterface
                         ['name' => 'area', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'page', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 100],
                         ['name' => 'page_size', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 48],
+                        ['name' => 'mode', 'type' => 'string', 'required' => false, 'max_length' => 16],
+                        ['name' => 'category_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                        ['name' => 'blog_category_id', 'type' => 'int', 'required' => false, 'min' => 0],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Autocomplete/search; area=backend requires an active admin session inside SearchParamGuard',

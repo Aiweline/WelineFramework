@@ -80,7 +80,12 @@ final class ThemeLayoutEntityRequestSolidifyGateContractTest extends TestCase
         self::assertStringContainsString('filterInventoryBakeBroken', $gateSrc);
         self::assertStringContainsString('empty_filters_inventory_fallback_original', $gateSrc);
         self::assertStringContainsString('design_origin_stale_fallback_original', $gateSrc);
+        self::assertStringContainsString('design_chrome_origin_stale_fallback_original', $gateSrc);
         self::assertStringContainsString('derivedPageOriginStale', $gateSrc);
+        self::assertStringContainsString('derivedChromeOriginStale', $gateSrc);
+        self::assertStringContainsString('CRITICAL_CHROME_PARTIALS', $gateSrc);
+        self::assertStringContainsString('WELINE_THEME_SOLIDIFY_DEBUG', $gateSrc);
+        self::assertStringContainsString('X-Weline-Solidify-Decision', $gateSrc);
         self::assertStringContainsString('ThemeLayoutEntityPageInputDigest::matchesStored', $gateSrc);
         self::assertStringContainsString("SharedResponseCachePolicy::forbid('theme_layout_solidify_fallback_original')", $gateSrc);
         self::assertStringNotContainsString("setHeader('CDN-Cache-Control'", $gateSrc);

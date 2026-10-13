@@ -91,4 +91,45 @@ final class WlsCompressFormattedHttpResponseTest extends TestCase
         self::assertStringContainsString('Vary: Accept-Encoding', $plain);
         self::assertSame($body, \explode("\r\n\r\n", $plain, 2)[1]);
     }
+
+    public function testCrlfStaticResponseKeepsSingleVaryAcceptEncoding(): void
+    {
+        $body = \str_repeat('a', 2048);
+        $response = "HTTP/1.1 200 OK\r\n"
+            . "Content-Type: text/javascript; charset=utf-8\r\n"
+            . 'Content-Length: ' . \strlen($body) . "\r\n"
+            . "Vary: Accept-Encoding\r\n"
+            . "X-WLS-Static-Cache: HIT\r\n"
+            . "X-WLS-Content-Length: " . \strlen($body) . "\r\n"
+            . "\r\n"
+            . $body;
+        $raw = "GET /geo.js HTTP/1.1\r\nHost: example.test\r\nAccept-Encoding: br, gzip\r\n\r\n";
+
+        $out = wlsMaybeCompressStaticHttpResponse($response, $raw);
+        $headerEnd = \strpos($out, "\r\n\r\n");
+        self::assertNotFalse($headerEnd);
+        $headers = \substr($out, 0, $headerEnd);
+        self::assertSame(
+            1,
+            \preg_match_all('/^Vary:/mi', $headers),
+            'CRLF static compress must not stack duplicate Vary lines',
+        );
+        self::assertMatchesRegularExpression('/^Vary: Accept-Encoding\s*$/mi', $headers);
+        self::assertMatchesRegularExpression('/^Content-Encoding: (?:br|gzip)\s*$/mi', $headers);
+    }
+
+    public function testAddFormattedVaryCollapsesDuplicateVaryLines(): void
+    {
+        $headers = "HTTP/1.1 200 OK\r\n"
+            . "Vary: Accept-Encoding\r\n"
+            . "X-WLS-Static-Cache: HIT\r\n"
+            . "Vary: Accept-Encoding\r\n"
+            . "Content-Encoding: br\r\n"
+            . "Vary: Accept-Encoding";
+
+        $fixed = wlsAddFormattedVaryAcceptEncoding($headers);
+        self::assertSame(1, \preg_match_all('/^Vary:/mi', $fixed));
+        self::assertStringContainsString("Vary: Accept-Encoding\r\n", $fixed . "\r\n");
+        self::assertStringContainsString("Content-Encoding: br\r\n", $fixed . "\r\n");
+    }
 }

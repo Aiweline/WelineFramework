@@ -49,7 +49,7 @@ final class TemplateTranslationPrefetchTest extends TestCase
         (new ReflectionProperty(Parser::class, 'globalDictionaryProviderInstance'))->setValue(null, $this->provider);
         $pool = $this->createMock(TemplatePrefetchPool::class);
         $pool->method('remember')->willReturnCallback(static fn($key, $ttl, $builder) => $builder());
-        (new ReflectionProperty(Parser::class, 'sharedPhraseCachePool'))->setValue(null, $pool);
+        \Weline\Framework\Phrase\GlobalDictionaryModuleBagCache::setPoolOverrideForTests($pool);
         $this->cacheDir = sys_get_temp_dir() . '/weline-translation-prefetch-' . bin2hex(random_bytes(8));
         $this->nextRequest();
     }

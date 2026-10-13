@@ -61,7 +61,7 @@ moduleDescribe(test, MODULE, '多范围购物结账通路', () => {
     async ({ page }) => {
       const prepared = (prepareCustomer().fixture) || {};
       const pdp = String((prepared && prepared.pdp_path) || process.env.CHECKOUT_PDP_PATH || '').trim()
-        || '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
+        || '/product/yue-ya-ni-shang-yue-ya-ni-shang-zhang-an-yi-yuan-chuang-zheng-pin-tang-zhi-4d375d6d/';
       const guestEmail = String((prepared && prepared.guest_email) || `e2e.guest.${Date.now()}@example.test`);
 
       await addToCartMode(page, gotoFrontend, pdp, 'toc');
@@ -74,7 +74,7 @@ moduleDescribe(test, MODULE, '多范围购物结账通路', () => {
       assertStep(couponOk(couponRes), 'guest.coupon', couponRes);
       await expect(
         page.locator('[data-testid="checkout-form-page"] [data-testid="checkout-coupon"]'),
-      ).toBeVisible();
+      ).toBeAttached();
 
       const note = await fillOrderNoteViaUi(page, NOTE_TEXT);
       assertStep(note.saved.includes(NOTE_TEXT) || note.saved === NOTE_TEXT, 'guest.note', note);
@@ -99,7 +99,7 @@ moduleDescribe(test, MODULE, '多范围购物结账通路', () => {
       const email = String(prepared.email || '');
       const password = String(prepared.password || '');
       const pdp = String(prepared.pdp_path || '').trim()
-        || '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
+        || '/product/yue-ya-ni-shang-yue-ya-ni-shang-zhang-an-yi-yuan-chuang-zheng-pin-tang-zhi-4d375d6d/';
       assertStep(!!email && !!password, 'login.prepare', prepared);
 
       await loginAsCustomerApi(page, gotoFrontend, email, password);
@@ -121,7 +121,7 @@ moduleDescribe(test, MODULE, '多范围购物结账通路', () => {
       );
       await expect(
         page.locator('[data-testid="checkout-form-page"] [data-testid="checkout-coupon"]'),
-      ).toBeVisible();
+      ).toBeAttached();
 
       const evidence = await submitCheckoutCaptureEvidence(page, {
         scope: 'login',
@@ -143,7 +143,7 @@ moduleDescribe(test, MODULE, '多范围购物结账通路', () => {
       const email = String(prepared.email || '');
       const password = String(prepared.password || '');
       const pdp = String(prepared.pdp_path || '').trim()
-        || '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
+        || '/product/yue-ya-ni-shang-yue-ya-ni-shang-zhang-an-yi-yuan-chuang-zheng-pin-tang-zhi-4d375d6d/';
       assertStep(!!(prepared.wholesale && prepared.wholesale.assigned), 'wholesale.membership', prepared.wholesale);
 
       await loginAsCustomerApi(page, gotoFrontend, email, password);

@@ -153,23 +153,28 @@ class TaglibTest extends TestCore
     }
 
     /**
-     * 测试自定义标签的动态属性也能正确延迟到运行期
-     * 确保不在 compileCandidates 列表的标签，如果有动态属性也能正确处理
+     * block 是**刻意**固定在编译期的标签（CodeGenerator::generateTagNode 硬编码，
+     * 见该处注释）：它必须在编译期吐出 framework_view_process_block(..., $vars=['x'=>&$x])，
+     * 走 renderRuntimeTag 就拿不到 foreach 的局部变量引用。
+     *
+     * 因此 block 上的动态属性**不会**被延迟到运行期——这是设计取舍，不是缺陷。
+     * 动态属性延迟到运行期由 lang / theme:css / theme:js 等标签覆盖（见本类其它用例）。
      */
-    public function testCustomTagDynamicAttributeRuntime()
+    public function testBlockDynamicAttributesStayCompileTimeByDesign(): void
     {
         $template = new Template();
-        // 使用 block 标签测试，它不在 compileCandidates 列表中
         $content = '<block class="<?= $blockClass ?>" template="test.phtml"/>';
         $parse_str = $this->taglib->tagReplace($template, $content);
-        // 如果有动态属性，应该延迟到运行期
-        self::assertTrue(
-            str_contains($parse_str, 'renderRuntimeTag'),
-            '自定义标签的动态属性应延迟到运行期执行'
+
+        self::assertStringContainsString(
+            'framework_view_process_block',
+            $parse_str,
+            'block 必须在编译期直出 framework_view_process_block（保住 foreach 局部变量引用）'
         );
-        self::assertTrue(
-            str_contains($parse_str, '\'class\' => ($blockClass)'),
-            'PHP 属性表达式应被正确解析'
+        self::assertStringNotContainsString(
+            'renderRuntimeTag',
+            $parse_str,
+            'block 不得走运行期，否则 $vars 引用会丢失'
         );
     }
 

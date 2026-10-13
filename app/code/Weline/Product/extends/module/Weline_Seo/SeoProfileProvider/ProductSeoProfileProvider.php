@@ -530,36 +530,10 @@ final class ProductSeoProfileProvider implements SeoProfileProviderInterface
 
     private function offerUrl(string $baseUrl, string $offerUuid): string
     {
-        $offerUuid = trim($offerUuid);
-        if ($offerUuid === '') {
-            return $baseUrl;
-        }
-        if ($baseUrl === '') {
-            return '?offer=' . rawurlencode($offerUuid);
-        }
-        $parts = parse_url($baseUrl);
-        if (!is_array($parts)) {
-            return $baseUrl . (str_contains($baseUrl, '?') ? '&' : '?') . 'offer=' . rawurlencode($offerUuid);
-        }
-        $query = [];
-        if (isset($parts['query']) && $parts['query'] !== '') {
-            parse_str($parts['query'], $query);
-        }
-        $query['offer'] = $offerUuid;
-        $rebuilt = '';
-        if (isset($parts['scheme'], $parts['host'])) {
-            $rebuilt .= $parts['scheme'] . '://' . $parts['host'];
-            if (isset($parts['port'])) {
-                $rebuilt .= ':' . $parts['port'];
-            }
-        }
-        $rebuilt .= (string)($parts['path'] ?? '');
-        $rebuilt .= '?' . http_build_query($query);
-        if (isset($parts['fragment']) && $parts['fragment'] !== '') {
-            $rebuilt .= '#' . $parts['fragment'];
-        }
+        // Path-only PDP: JSON-LD variant URLs share the product slug path; no ?offer=.
+        unset($offerUuid);
 
-        return $rebuilt;
+        return $baseUrl;
     }
 
     /**

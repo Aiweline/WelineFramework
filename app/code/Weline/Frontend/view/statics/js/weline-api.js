@@ -109,11 +109,15 @@
     const SCOPE_STAMP_MEMORY_KEY = 'weline.api.scopeStampKey';
     /** Refresh / re-punch this many ms before Cookie expires_at (unix seconds → ms). */
     const SCOPE_STAMP_SKEW_MS = 60000;
-    /** Soft TTL when server returns 204 without expires_at (align ScopeToken ≈1800s). */
-    const SCOPE_STAMP_SOFT_TTL_SEC = 1800;
-    /** Same-page memory: Scope already ensured (HttpOnly Cookie cannot be read from JS). */
+    /**
+     * Same-page memory: Scope already ensured (HttpOnly Cookie cannot be read from JS).
+     * Must always pair with expiresAt — key alone must never skip POST forever.
+     */
     let scopeStampEnsuredKey = '';
+    let scopeStampEnsuredExpiresAt = 0;
     let scopeStampInFlight = null;
+    let scopeStampRenewTimer = null;
+    let scopeStampVisibilityBound = false;
     let scopeWaitTipAt = 0;
     let scopeWaitTipTimer = null;
 
@@ -144,24 +148,71 @@
         }
     };
 
+    const clearScopeStampRenewSchedule = () => {
+        if (scopeStampRenewTimer) {
+            window.clearTimeout(scopeStampRenewTimer);
+            scopeStampRenewTimer = null;
+        }
+    };
+
+    /**
+     * Proactive renew before Cookie expires_at (skew). HttpOnly invisible — timer uses
+     * server-returned expires_at only. Failure path still recovers via recoverScopeStamp.
+     */
+    const scheduleScopeStampRenewal = (stampKey, expiresAtUnix) => {
+        clearScopeStampRenewSchedule();
+        const expiresAt = Math.max(0, Number(expiresAtUnix) || 0);
+        if (expiresAt <= 0 || stampKey === '') {
+            return;
+        }
+        const renewAtMs = (expiresAt * 1000) - SCOPE_STAMP_SKEW_MS;
+        const delayMs = Math.max(1000, renewAtMs - Date.now());
+        // Cap so a tab left open for days still re-arms after the first wake (visibility).
+        const cappedDelayMs = Math.min(delayMs, 6 * 60 * 60 * 1000);
+        scopeStampRenewTimer = window.setTimeout(() => {
+            scopeStampRenewTimer = null;
+            const remembered = readRememberedScopeStamp();
+            if (!remembered || remembered.key !== stampKey) {
+                return;
+            }
+            const ids = (window.Weline && window.Weline.Api && typeof window.Weline.Api.getClient === 'function')
+                ? (window.Weline.Api.getClient().config || {})
+                : {};
+            if (pageScopeSessionKey(ids) !== stampKey) {
+                return;
+            }
+            // Drop optimistic memory so ensureScopeStamp POSTs again before Cookie dies.
+            forgetScopeStampKey();
+            ensureScopeStamp(ids).catch(() => {
+                /* renew is best-effort; QueryBin recover still covers miss */
+            });
+        }, cappedDelayMs);
+    };
+
     const rememberScopeStampKey = (stampKey, expiresAtUnix) => {
         const key = String(stampKey || '');
         if (key === '') {
             return;
         }
-        let expiresAt = Math.max(0, Number(expiresAtUnix) || 0);
+        // Require honest server expires_at — never invent a long soft TTL that outlives Cookie.
+        const expiresAt = Math.max(0, Number(expiresAtUnix) || 0);
         if (expiresAt <= 0) {
-            expiresAt = Math.floor(Date.now() / 1000) + SCOPE_STAMP_SOFT_TTL_SEC;
+            return;
         }
+        scopeStampEnsuredKey = key;
+        scopeStampEnsuredExpiresAt = expiresAt;
         try {
             sessionStorage.setItem(SCOPE_STAMP_MEMORY_KEY, JSON.stringify({ key, expiresAt }));
         } catch (_storageError) {
             /* private mode — page memory still works */
         }
+        scheduleScopeStampRenewal(key, expiresAt);
     };
 
     const forgetScopeStampKey = () => {
         scopeStampEnsuredKey = '';
+        scopeStampEnsuredExpiresAt = 0;
+        clearScopeStampRenewSchedule();
         try {
             sessionStorage.removeItem(SCOPE_STAMP_MEMORY_KEY);
         } catch (_storageError) {
@@ -169,30 +220,89 @@
         }
     };
 
+    const isScopeStampFresh = (expiresAtUnix) => {
+        const expiresAt = Math.max(0, Number(expiresAtUnix) || 0);
+        if (!(expiresAt > 0)) {
+            return false;
+        }
+        return (expiresAt * 1000) > (Date.now() + SCOPE_STAMP_SKEW_MS);
+    };
+
     const isScopeStampAlreadyEnsured = (ids) => {
         const stampKey = pageScopeSessionKey(ids || {});
-        if (scopeStampEnsuredKey === stampKey) {
+        // In-page key alone is not enough — must still honor expiresAt + skew.
+        if (scopeStampEnsuredKey === stampKey && isScopeStampFresh(scopeStampEnsuredExpiresAt)) {
             return true;
+        }
+        if (scopeStampEnsuredKey === stampKey && !isScopeStampFresh(scopeStampEnsuredExpiresAt)) {
+            scopeStampEnsuredKey = '';
+            scopeStampEnsuredExpiresAt = 0;
         }
         const remembered = readRememberedScopeStamp();
         if (!remembered || remembered.key !== stampKey) {
             return false;
         }
         // Unknown/legacy expiry → re-punch (Cookie may already be gone).
-        if (!(remembered.expiresAt > 0)) {
+        if (!isScopeStampFresh(remembered.expiresAt)) {
             return false;
         }
-        return (remembered.expiresAt * 1000) > (Date.now() + SCOPE_STAMP_SKEW_MS);
+        scopeStampEnsuredKey = stampKey;
+        scopeStampEnsuredExpiresAt = remembered.expiresAt;
+        scheduleScopeStampRenewal(stampKey, remembered.expiresAt);
+        return true;
     };
 
-    const isScopeBindingMissingError = (error) => {
+    /**
+     * Tab awake / BFCache restore: if soft memory says expired (or missing), re-punch
+     * before the next QueryBin so Cookie death is not discovered only via 401.
+     */
+    const bindScopeStampVisibilityRenew = () => {
+        if (scopeStampVisibilityBound || typeof document === 'undefined') {
+            return;
+        }
+        scopeStampVisibilityBound = true;
+        const onVisible = () => {
+            if (document.visibilityState && document.visibilityState !== 'visible') {
+                return;
+            }
+            const ids = (window.Weline && window.Weline.Api && typeof window.Weline.Api.getClient === 'function')
+                ? (window.Weline.Api.getClient().config || {})
+                : {};
+            if (isScopeStampAlreadyEnsured(ids)) {
+                return;
+            }
+            ensureScopeStamp(ids).catch(() => {
+                /* visibility renew is best-effort */
+            });
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('pageshow', (event) => {
+            if (event && event.persisted) {
+                onVisible();
+            }
+        });
+    };
+
+    /**
+     * Stamp / binding expired or missing — re-punch Cookie + re-handshake, then retry.
+     * NOT for scope identity conflicts or theme generation drift (those still autoReload).
+     */
+    const isScopeStampRecoverableError = (error) => {
         const code = String((error && error.code) || '').toLowerCase();
-        if (code === 'scope_binding_required') {
+        if (
+            code === 'scope_binding_required'
+            || code === 'scope_reload_required'
+            || code === 'scope_bootstrap_invalid'
+            || code === 'worker_scope_binding_expired'
+        ) {
             return true;
         }
         const message = String((error && error.message) || '');
-        return code === 'auth_error' && /Scope Cookie is required/i.test(message);
+        return code === 'auth_error' && /Scope Cookie is required|Scope Cookie is invalid or expired|Worker Scope Cookie/i.test(message);
     };
+
+    /** @deprecated alias — warmup + recover share the recoverable stamp set */
+    const isScopeBindingMissingError = isScopeStampRecoverableError;
 
     /**
      * Mirror ScopeIdentity::fromLayerIds placeholder codes for SharedWorker slot keys.
@@ -281,8 +391,9 @@
         }
         scopeStampInFlight = fetch('/api/frontend/scope-bootstrap', fetchOptions).then((res) => {
             if (res.status === 204) {
-                // Server: long Cookie already valid — skip re-issue.
-                return { ok: true, skipped: true };
+                // Rollout off / no stamp required — not a long Cookie visa.
+                // Do not invent soft TTL; leave memory empty so future ensure still POSTs.
+                return { ok: true, skipped: true, no_stamp: true };
             }
             if (res.status === 429) {
                 const error = new Error('[Weline.Api] Scope stamp ensure rate limited.');
@@ -326,10 +437,20 @@
                 }
                 throw error;
             }
+            // 204 / rollout-off: success without a long visa — do not remember as ensured.
+            if (payload && payload.no_stamp === true) {
+                forgetScopeStampKey();
+                return true;
+            }
             // Success does not require bootstrap_id (opaque bridge retired for storefront).
-            if (payload && (payload.ok === true || payload.skipped === true)) {
-                scopeStampEnsuredKey = stampKey;
+            if (payload && payload.ok === true) {
                 const expiresAt = Number(payload && payload.expires_at) || 0;
+                if (!(expiresAt > 0)) {
+                    const error = new Error('[Weline.Api] Scope stamp ensure missing expires_at.');
+                    error.code = 'scope_bootstrap_hole_punch_failed';
+                    error.status = 0;
+                    throw error;
+                }
                 rememberScopeStampKey(stampKey, expiresAt);
                 return true;
             }
@@ -988,16 +1109,16 @@
                 title: i18nText('网络异常'),
                 message: i18nText('无法连接服务器，请检查网络后重试。'),
             },
+            // Stamp expired / Cookie missing: recover via re-punch + retry (send()), not reload.
             scope_reload_required: {
                 title: i18nText('商城范围已变更'),
-                message: i18nText('当前页面商城范围已过期，正在刷新以继续。'),
-                autoReload: true,
+                message: i18nText('当前页面商城范围已过期，正在重新签章以继续。'),
             },
             scope_binding_required: {
                 title: i18nText('商城范围未就绪'),
-                message: i18nText('页面绑定信息缺失或已失效，正在刷新以继续。'),
-                autoReload: true,
+                message: i18nText('页面绑定信息缺失或已失效，正在重新签章以继续。'),
             },
+            // True page-identity drift — HTML is for the wrong Scope / theme generation.
             scope_context_conflict: {
                 title: i18nText('商城范围已变更'),
                 message: i18nText('检测到渠道或店铺切换，正在刷新页面。'),
@@ -2309,6 +2430,7 @@
             this.worker = null;
             this.workerStartPromise = null;
             this.workerRecoverPromise = null;
+            this.scopeStampRecoverPromise = null;
             this.workerFetchAbort = null;
             this.requestId = 0;
             this.pending = new Map();
@@ -2540,20 +2662,27 @@
             return Promise.reject(new Error('[Weline.Api] direct request(url) is disabled. Use Weline.Api.resource()/call()/graph()/stream().'));
         }
 
-        warmup() {
-            if (this.scopeWarmupComplete) {
+        warmup(options = {}) {
+            const forceHandshake = !!(options && options.forceHandshake);
+            if (this.scopeWarmupComplete && !forceHandshake) {
                 return Promise.resolve(null);
+            }
+            if (forceHandshake) {
+                // Do not share an in-flight non-force warmup; stamp recover must re-punch + re-handshake.
+                this.scopeWarmupPromise = null;
+                this.scopeWarmupComplete = false;
             }
             if (!this.scopeWarmupPromise) {
                 const runWarmup = (allowRepunch) => ensureScopeStamp(this.config).then(() => {
                     // Handshake uses credentials Cookie only — no scope_bootstrap_id.
+                    // forceHandshake drops SharedWorker badge so a new Cookie is not ignored.
                     return this.sendToWorker({
                         type: 'scope-bootstrap',
-                        options: { silent: true },
+                        options: { silent: true, forceHandshake: forceHandshake },
                     });
                 }).catch((error) => {
                     // Tab memory said OK but Cookie gone → one silent re-punch, no stuck Reload modal.
-                    if (allowRepunch && isScopeBindingMissingError(error)) {
+                    if (allowRepunch && isScopeStampRecoverableError(error)) {
                         forgetScopeStampKey();
                         return runWarmup(false);
                     }
@@ -2570,6 +2699,26 @@
                 });
             }
             return this.scopeWarmupPromise;
+        }
+
+        /**
+         * Cookie / binding expired while the page stayed open: forget optimistic stamp,
+         * POST scope-bootstrap, force SharedWorker re-handshake, then callers retry once.
+         */
+        recoverScopeStamp() {
+            if (this.scopeStampRecoverPromise) {
+                return this.scopeStampRecoverPromise;
+            }
+            this.scopeStampRecoverPromise = Promise.resolve().then(() => {
+                forgetScopeStampKey();
+                this.scopeWarmupComplete = false;
+                this.scopeWarmupPromise = null;
+                this.notifyScopeBootstrapWaiting();
+                return this.warmup({ forceHandshake: true });
+            }).finally(() => {
+                this.scopeStampRecoverPromise = null;
+            });
+            return this.scopeStampRecoverPromise;
         }
 
         /**
@@ -2678,8 +2827,26 @@
 
         send(payload) {
             return this.dispatchToWorker(payload).catch((error) => {
-                if (payload && payload.__workerRetry) {
+                if (payload && (payload.__workerRetry || payload.__scopeStampRetry)) {
                     throw error;
+                }
+                // Stamp / Cookie expired: re-punch + re-handshake, then continue the same request.
+                // Do not location.reload() — SharedWorker would keep the stale badge across reload.
+                if (isScopeStampRecoverableError(error)) {
+                    return this.recoverScopeStamp().then(() => {
+                        const retryPayload = Object.assign({}, payload, { __scopeStampRetry: true });
+                        return this.dispatchToWorker(retryPayload);
+                    }).catch((recoverError) => {
+                        const requestOptions = payload && payload.options;
+                        this.handleHttpError(
+                            Number((recoverError && recoverError.status) || (error && error.status) || 0) || 0,
+                            recoverError || error,
+                            !!(requestOptions && requestOptions.silent),
+                            requestOptions,
+                            payload
+                        );
+                        throw recoverError || error;
+                    });
                 }
                 if (error && error.code === 'worker_timeout') {
                     // Concurrent cart/account/bootstrap timeouts must share one recreate;
@@ -2895,7 +3062,10 @@
                         workerMessage: data,
                         skipConsole: true,
                     });
-                    this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions, pending.payload);
+                    // Defer toast/reload: send() may recover stamp + retry the same call.
+                    if (!this.shouldDeferScopeStampErrorUi(error, pending.payload)) {
+                        this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions, pending.payload);
+                    }
                     pending.reject(error);
                     return;
                 }
@@ -2951,8 +3121,21 @@
                 workerMessage: data,
                 skipConsole: true,
             });
-            this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions, pending.payload);
+            // Defer toast/reload: send() may recover stamp + retry the same call.
+            if (!this.shouldDeferScopeStampErrorUi(error, pending.payload)) {
+                this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions, pending.payload);
+            }
             pending.reject(error);
+        }
+
+        shouldDeferScopeStampErrorUi(error, payload) {
+            if (!isScopeStampRecoverableError(error)) {
+                return false;
+            }
+            if (payload && (payload.__scopeStampRetry || payload.__workerRetry)) {
+                return false;
+            }
+            return true;
         }
 
         handleWorkerError(event) {
@@ -3394,6 +3577,7 @@
 
     // Eager warmup: meta stamp OR hole-punch. Do not wait for the first filter click.
     try {
+        bindScopeStampVisibilityRenew();
         ApiModule.bootstrapScope().catch((error) => {
             window.dispatchEvent(new CustomEvent('weline:scope-bootstrap-failed', {
                 detail: {

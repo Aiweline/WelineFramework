@@ -78,7 +78,8 @@ final class ProductSeoProfileProviderContractTest extends TestCase
         self::assertSame('12.34', $profile['product']['variants'][0]['price']);
         self::assertSame('白色仅上衣2307', $profile['product']['variants'][0]['color']);
         self::assertSame('S80-90斤', $profile['product']['variants'][0]['size']);
-        self::assertStringContainsString('offer=offer-white-s', (string)$profile['product']['variants'][0]['url']);
+        self::assertArrayHasKey('url', $profile['product']['variants'][0]);
+        self::assertStringNotContainsString('offer=', (string)$profile['product']['variants'][0]['url']);
         self::assertStringContainsString('白色仅上衣2307', (string)$profile['product']['variants'][0]['name']);
         self::assertTrue(!empty($profile['site_search_enabled']));
         self::assertNotEmpty($profile['breadcrumbs']);
@@ -181,7 +182,8 @@ final class ProductSeoProfileProviderContractTest extends TestCase
         self::assertSame('product-uuid-94', $profile['product']['global_product_uuid']);
         self::assertSame('长袖上衣+红马面裙', $profile['product']['variants'][0]['pattern']);
         self::assertSame('S', $profile['product']['variants'][0]['size']);
-        self::assertStringContainsString('offer=offer-style-s', (string)$profile['product']['variants'][0]['url']);
+        self::assertStringNotContainsString('offer=', (string)$profile['product']['variants'][0]['url']);
+        self::assertSame('https://shop.test/product/feitian', (string)$profile['product']['variants'][0]['url']);
         self::assertStringContainsString('长袖上衣+红马面裙', (string)$profile['product']['variants'][0]['name']);
     }
 

@@ -14,9 +14,15 @@ declare(strict_types=1);
  */
 
 use Weline\Customer\Service\CustomerAccountService;
+use Weline\Framework\App\Env;
+use Weline\Framework\Http\CookieScope;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Auth\AreaConfig;
+use Weline\Framework\Session\Auth\AuthenticatedSession;
+use Weline\Framework\Session\Session;
 use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\Session\Strategy\WlsStrategy;
 use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderItem;
 use Weline\Payment\Model\PaymentTransaction;
@@ -45,6 +51,77 @@ function rel_paypal_output(array $payload, int $code = 0): never
 function rel_paypal_fail(string $message): never
 {
     rel_paypal_output(['ok' => false, 'error' => $message], 1);
+}
+
+/**
+ * Prefer env tip; else probe known storefront PDP paths against local worker (no dialect SQL).
+ * Hardcoded legacy slug may 301→/products/ after catalog churn — never trust it without HTTP check.
+ */
+function rel_paypal_resolve_pdp_path(): string
+{
+    $forced = trim((string)(getenv('WELINE_E2E_PDP_PATH') ?: getenv('CHECKOUT_PDP_PATH') ?: ''));
+    $candidates = [];
+    if ($forced !== '') {
+        $candidates[] = $forced;
+    }
+    $candidates[] = '/product/yue-ya-ni-shang-yue-ya-ni-shang-zhang-an-yi-yuan-chuang-zheng-pin-tang-zhi-4d375d6d/';
+    $candidates[] = '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
+
+    foreach ($candidates as $raw) {
+        $path = trim((string)$raw);
+        if ($path === '') {
+            continue;
+        }
+        if ($path[0] !== '/') {
+            $path = '/' . $path;
+        }
+        if (rel_paypal_pdp_responds_ok($path)) {
+            return $path;
+        }
+    }
+
+    $fallback = $candidates[0] ?? '/products/';
+    if ($fallback !== '' && $fallback[0] !== '/') {
+        $fallback = '/' . $fallback;
+    }
+
+    return $fallback;
+}
+
+function rel_paypal_pdp_responds_ok(string $path): bool
+{
+    $origin = trim((string)(getenv('WELINE_E2E_STOREFRONT_ORIGIN') ?: getenv('WELINE_E2E_BASE_URL') ?: 'https://p05113ef3.test.weline.com'));
+    $origin = rtrim($origin, '/');
+    $url = $origin . $path;
+    $ctx = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'timeout' => 12,
+            'ignore_errors' => true,
+            'header' => "User-Agent: WelineE2EFixture/1.0\r\nAccept: text/html\r\n",
+        ],
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+        ],
+    ]);
+    $headers = @get_headers($url, true, $ctx);
+    if (!is_array($headers) || !isset($headers[0])) {
+        return false;
+    }
+    $statusLine = (string)$headers[0];
+    if (!preg_match('/\s(200)\s/', $statusLine)) {
+        return false;
+    }
+    // Reject soft redirects that land on listing shell without product CTA.
+    $location = '';
+    if (isset($headers['Location'])) {
+        $location = is_array($headers['Location'])
+            ? (string)end($headers['Location'])
+            : (string)$headers['Location'];
+    }
+
+    return $location === '' || !preg_match('#/products/?$#i', $location);
 }
 
 /**
@@ -80,13 +157,7 @@ function rel_paypal_prepare(?string $token): array
         rel_paypal_fail('customer_register_failed');
     }
 
-    $pdpPath = trim((string)(getenv('WELINE_E2E_PDP_PATH') ?: getenv('CHECKOUT_PDP_PATH') ?: ''));
-    if ($pdpPath === '') {
-        $pdpPath = '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
-    }
-    if ($pdpPath[0] !== '/') {
-        $pdpPath = '/' . $pdpPath;
-    }
+    $pdpPath = rel_paypal_resolve_pdp_path();
 
     return [
         'customer_id' => $customerId,
@@ -300,27 +371,78 @@ try {
         if ($customer === null || !$customer->getId()) {
             rel_paypal_fail('mint_session_customer_not_found:' . $email);
         }
-        $accounts->loginCustomer($customer);
-        /** @var SessionFactory $factory */
-        $factory = ObjectManager::getInstance()->get(SessionFactory::class);
-        $session = $factory->createFrontendSession();
+
+        // Align with tests/e2e/framework/customer-session-bootstrap.php:
+        // CLI FpmStrategy only mutates $_SESSION and never reaches WLS shared store,
+        // so Playwright cookies look valid but account pages 302 to login.
+        SessionFactory::getInstance()->resetRequestInstances();
+        Session::resetRequestState();
+        $sessionConfig = (array)Env::getInstance()->getConfig('session');
+        $ttl = (int)($sessionConfig['lifetime'] ?? $sessionConfig['session_ttl'] ?? 3600);
+        $factory = SessionFactory::getInstance();
+        $storage = $factory->createStorage('wls');
+        $strategy = new WlsStrategy($storage, [
+            'lifetime' => $ttl,
+            'cookie_path' => $sessionConfig['cookie_path'] ?? '/',
+            'cookie_domain' => $sessionConfig['cookie_domain'] ?? '',
+            'cookie_secure' => $sessionConfig['cookie_secure'] ?? null,
+            'cookie_httponly' => $sessionConfig['cookie_httponly'] ?? true,
+            'cookie_samesite' => $sessionConfig['cookie_samesite'] ?? 'Lax',
+            'cookie_lifetime' => (int)($sessionConfig['cookie_lifetime'] ?? 86400 * 30),
+        ]);
+        $raw = new Session($storage, $strategy, $ttl);
+        $session = new AuthenticatedSession($raw, new AreaConfig('frontend'));
+        $session->start(null);
+        $session->login($customer);
         $sessionId = trim((string)$session->getId());
         if ($sessionId === '') {
             rel_paypal_fail('mint_session_empty_id');
         }
-        $cookieName = SessionCookieNameResolver::resolve(
-            $host !== '' ? $host : null,
-            'frontend',
-        );
-        if ($cookieName === '') {
-            $cookieName = SessionCookieNameResolver::CUSTOMER_NAME;
+        $customer->setSessionId($sessionId)->setLoginIp('127.0.0.1')->save();
+        $rawSession = $session->getSession();
+        $rawSession->save();
+        if ($rawSession instanceof Session) {
+            $rawSession->getStrategy()->writeClose();
         }
+        Session::flushRequestSessions();
+
+        // CLI has no Website RequestContext → CookieScope suffix is empty, but the
+        // live storefront jar is WELINE_CUSTOMER_SESSID_w{id}. Default e2e host is w0.
+        $websiteId = (int)($input['website_id'] ?? 0);
+        if ($websiteId < 0) {
+            $websiteId = 0;
+        }
+        CookieScope::setPolicyResolverOverride(static function () use ($websiteId): array {
+            return [
+                'active' => true,
+                'name_suffix' => '_w' . $websiteId,
+                'name_suffix_pattern' => '/_w\d+$/',
+                'mount_path' => '/',
+                'expire_unscoped_aliases' => true,
+                'revision' => 'e2e_mint_session|w' . $websiteId,
+            ];
+        });
+        try {
+            $cookieName = SessionCookieNameResolver::resolve(
+                $host !== '' ? $host : null,
+                'frontend',
+            );
+        } finally {
+            CookieScope::setPolicyResolverOverride(null);
+        }
+        if ($cookieName === '') {
+            $cookieName = SessionCookieNameResolver::CUSTOMER_NAME . '_w' . $websiteId;
+        }
+        $unscoped = SessionCookieNameResolver::CUSTOMER_NAME;
         rel_paypal_output([
             'ok' => true,
             'customer_id' => (int)$customer->getId(),
             'email' => $email,
             'session_id' => $sessionId,
             'cookie_name' => $cookieName,
+            'cookie_names' => array_values(array_unique([$cookieName, $unscoped])),
+            'website_id' => $websiteId,
+            'storage' => 'wls',
         ]);
     }
 

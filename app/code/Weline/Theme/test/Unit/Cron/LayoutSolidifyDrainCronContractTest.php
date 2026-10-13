@@ -58,6 +58,60 @@ final class LayoutSolidifyDrainCronContractTest extends TestCase
         }
     }
 
+    public function testPurgeStaleDryRunAndApplyHonourPredicate(): void
+    {
+        $root = sys_get_temp_dir() . '/weline-solidify-jobs-gc-' . bin2hex(random_bytes(4));
+        @mkdir($root, 0775, true);
+        try {
+            $paths = new ThemeLayoutEntityPaths($root . DIRECTORY_SEPARATOR);
+            $store = new ThemeLayoutEntitySolidifyJobStore($paths);
+            $alive = ThemeLayoutEntitySolidifySerialKey::fromParts(
+                7, 'frontend', 'alive.default.default', 'normal', 'homepage', 'default', 10, 1,
+            );
+            $dead = ThemeLayoutEntitySolidifySerialKey::fromParts(
+                391, 'frontend', 'history.test.default', 'normal', 'history-test', 'default', 1430, 2,
+            );
+            $store->put($alive, str_repeat('a', 64));
+            $store->put($dead, str_repeat('b', 64));
+            $predicate = ThemeLayoutEntitySolidifyJobStore::defaultStalePredicate(
+                static fn(int $themeId): bool => $themeId === 7,
+                static fn(int $themeId, int $versionId, string $scope, string $area, string $storeMode): bool => $themeId === 7,
+                86400,
+            );
+            $dry = $store->purgeStale($predicate, false);
+            self::assertCount(1, $dry['candidates']);
+            self::assertSame(0, $dry['purged']);
+            self::assertTrue($store->has($dead));
+            $applied = $store->purgeStale($predicate, true);
+            self::assertSame(1, $applied['purged']);
+            self::assertFalse($store->has($dead));
+            self::assertTrue($store->has($alive));
+            $failed = $root . '/391/.solidify-jobs/failed';
+            self::assertDirectoryExists($failed);
+        } finally {
+            $this->purge($root);
+        }
+    }
+
+    public function testMoveToFailedRemovesPending(): void
+    {
+        $root = sys_get_temp_dir() . '/weline-solidify-jobs-dl-' . bin2hex(random_bytes(4));
+        @mkdir($root, 0775, true);
+        try {
+            $paths = new ThemeLayoutEntityPaths($root . DIRECTORY_SEPARATOR);
+            $store = new ThemeLayoutEntitySolidifyJobStore($paths);
+            $key = ThemeLayoutEntitySolidifySerialKey::fromParts(
+                9, 'frontend', 'x.default.default', 'normal', 'homepage', 'default', 1, 1,
+            );
+            $store->put($key, str_repeat('c', 64));
+            self::assertTrue($store->moveToFailed($key, 'unit_fail'));
+            self::assertFalse($store->has($key));
+            self::assertFileExists($root . '/9/.solidify-jobs/failed/' . $key->hash() . '.json');
+        } finally {
+            $this->purge($root);
+        }
+    }
+
     private function purge(string $dir): void
     {
         if (!is_dir($dir)) {

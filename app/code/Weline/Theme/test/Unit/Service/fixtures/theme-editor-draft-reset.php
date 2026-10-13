@@ -32,8 +32,7 @@ namespace Weline\Theme\Model {
 namespace {
     require dirname(__DIR__, 8) . '/vendor/autoload.php';
 
-    use Weline\Framework\Runtime\ScopeIdentity;
-    use Weline\SystemConfig\Api\Scope\ScopeContext;
+    use Weline\Theme\Api\Scoped\ThemeContentScope;
     use Weline\Theme\Api\Scoped\ThemeEditorContext;
     use Weline\Theme\Api\Scoped\ThemePatchCommand;
     use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
@@ -48,7 +47,8 @@ namespace {
         public function workspace(): ThemeScopedWorkspaceInterface { return $this->createMock(ThemeScopedWorkspaceInterface::class); }
     };
     $scoped = $test->workspace();
-    $scope = new ScopeContext(ScopeIdentity::global(), '0.0.0', 'normal', ['0.0.0']);
+    // ScopeContext must never be passed to ThemeEditorContext — convert via ThemeContentScope.
+    $scope = ThemeContentScope::fromStoredOwner('0.0.0', 'normal', 'default');
     $context = (new ThemeEditorContext($scope, 'frontend', themeId: 1))->withResource($argv[1]);
     $owned = [ThemePatchCommand::fromArray(['op' => 'set', 'path' => $argv[2], 'value' => 'Owned'])];
     $publishedRevision = (int)$argv[3];

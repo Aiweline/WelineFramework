@@ -85,7 +85,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
     }
 
     /** @dataProvider bootstrapHomepagePaths */
-    public function testEachHomepageCacheHitReceivesAnIsolatedScopeBootstrap(string $path): void
+    public function testHomepageCacheHitStaysStampFreeAfterDecorate(string $path): void
     {
         require_once BP . 'app/code/Weline/Websites/Test/Unit/Service/FrontendWorkerScopeBootstrapResponseServiceTest.php';
         $providerClass = \Weline\Websites\Test\Unit\Service\TestBootstrapScopeProvider::class;
@@ -130,7 +130,6 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             WorkerPolicyDecision::CACHE_FPC_PROCESS_L1);
         $fastPath = new WorkerFullPageCacheFastPath($coordinator, null, false);
         $originalContext = Context::getCurrent();
-        $ids = [];
         foreach ([1, 2] as $request) {
             $hit = $fastPath->lookup($decision, 'https');
             self::assertIsArray($hit);
@@ -139,20 +138,18 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             self::assertSame(strlen($hit['response']), $hit['bytes']);
             [$headers, $encoded] = explode("\r\n\r\n", $hit['response'], 2);
             $html = gzdecode($encoded);
-            self::assertMatchesRegularExpression('/name="weline-worker-scope-bootstrap" content="([A-Za-z0-9_-]{43})"/', $html);
-            preg_match('/name="weline-worker-scope-bootstrap" content="([A-Za-z0-9_-]{43})"/', $html, $match);
-            $ids[] = $match[1];
-            self::assertStringContainsString('__Host-Weline-Worker-Scope-Bootstrap-' . $match[1], $headers);
+            self::assertSame($body, $html);
+            self::assertStringNotContainsString('weline-worker-scope-bootstrap', $html);
+            self::assertStringNotContainsString('__Host-Weline-Worker-Scope-Bootstrap-', $headers);
+            self::assertStringNotContainsString('__Host-Weline-Worker-Scope=', $headers);
             self::assertMatchesRegularExpression('/Content-Length: ' . strlen($encoded) . '\r\n/i', $headers . "\r\n");
-            self::assertStringContainsString('private, no-store', $headers);
         }
-        self::assertNotSame($ids[0], $ids[1]);
         $public = (new \ReflectionMethod($coordinator, 'getProcessCachedPayload'))->invoke($coordinator, $cacheKey);
         $publicHtml = (new \ReflectionMethod($coordinator, 'resolvePlaintextBody'))->invoke($coordinator, $public);
         self::assertSame($body, $publicHtml);
         self::assertStringNotContainsString('weline-worker-scope-bootstrap', $publicHtml);
         self::assertStringNotContainsString('__Host-Weline-Worker-Scope-Bootstrap-', json_encode($public));
-        self::assertSame(2, $providerClass::$issueCalls);
+        self::assertSame(0, $providerClass::$issueCalls);
         $providerClass::reset();
     }
 

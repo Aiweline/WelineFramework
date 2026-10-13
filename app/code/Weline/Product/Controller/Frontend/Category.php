@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Runtime\StorefrontPageContext;
 use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Service\StorefrontCatalogViewService;
-use Weline\Product\Service\StorefrontCategoryListingFilter;
 use Weline\Product\Service\StorefrontCategoryViewService;
-use Weline\Product\Service\StorefrontListingPager;
+use Weline\Product\Service\StorefrontListingShell;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
 /**
@@ -24,9 +22,7 @@ final class Category extends FrontendController
     public function __construct(
         private readonly StorefrontCategoryViewService $categories,
         private readonly StorefrontCatalogViewService $catalog,
-        private readonly StorefrontCategoryListingFilter $listingFilter,
-        private readonly StorefrontListingPager $listingPager,
-        private readonly EventsManager $events,
+        private readonly StorefrontListingShell $listingShell,
     ) {
     }
 
@@ -59,35 +55,11 @@ final class Category extends FrontendController
         $this->request->setGet('path', $routePath);
 
         $productIds = $page['product_ids'];
-        // WLS request params also include values injected into the request context
-        // by routing/layout hooks. Use the raw query string for filter projection
-        // decisions so only an actual af_* URL filter expands listing details.
-        $queryParams = method_exists($this->request, 'getQueryParams')
-            ? (array)($this->request->getQueryParams() ?? [])
-            : ($this->request->getParams() ?: []);
-        $includeListingDetails = false;
-        foreach ($queryParams as $queryKey => $queryValue) {
-            $queryKey = strtolower(trim((string)$queryKey));
-            $queryValue = is_array($queryValue) ? (string)reset($queryValue) : (string)$queryValue;
-            if (str_starts_with($queryKey, 'af_') && trim($queryValue) !== '') {
-                $includeListingDetails = true;
-                break;
-            }
-        }
+        // Path-only FPC: SSR is always the neutral default listing (no af_/price/sort/page).
         $offers = $productIds === []
             ? []
-            : $this->catalog->publishedOffersForProductIds($productIds, 120, $includeListingDetails);
+            : $this->catalog->publishedOffersForProductIds($productIds, 120, false);
         StorefrontPageContext::setListingOffers($offers);
-        $priceBucket = $this->listingFilter->normalizePriceBucket((string)$this->request->getParam('price', ''));
-        $sort = $this->listingFilter->normalizeSort((string)$this->request->getParam('sort', ''));
-        $filteredOffers = $this->listingFilter->apply($offers, $priceBucket, $sort);
-        $filterEvent = [
-            'offers' => $filteredOffers,
-            'query' => $queryParams,
-            'surface' => 'category',
-        ];
-        $this->events->dispatch('Weline_Product::storefront_offers_filter', $filterEvent);
-        $filteredOffers = is_array($filterEvent['offers'] ?? null) ? $filterEvent['offers'] : $filteredOffers;
 
         $categoryUrl = trim((string)($category['url'] ?? ''));
         if ($categoryUrl === '') {
@@ -96,50 +68,16 @@ final class Category extends FrontendController
             $pathOnly = (string)(parse_url($categoryUrl, PHP_URL_PATH) ?: $categoryUrl);
             $categoryUrl = (string)$this->getUrl(ltrim($pathOnly, '/'));
         }
-        $pageNum = $this->listingFilter->normalizePage($this->request->getParam('page', 1));
-        $paged = $this->listingFilter->paginate($filteredOffers, $pageNum);
-        $pageOffers = $paged['items'];
-        // Pass Chinese source labels; translate in the template at render time so
-        // Phrase can resolve against the request locale pack (controller-time __()
-        // may run before heavy locale dictionaries are loaded on WLS).
-        $sortOptions = [];
-        foreach ([
-            StorefrontCategoryListingFilter::SORT_DEFAULT => '默认排序',
-            StorefrontCategoryListingFilter::SORT_PRICE_ASC => '价格从低到高',
-            StorefrontCategoryListingFilter::SORT_PRICE_DESC => '价格从高到低',
-            StorefrontCategoryListingFilter::SORT_NAME_ASC => '名称 A-Z',
-        ] as $code => $label) {
-            $params = [];
-            if ($priceBucket !== '') {
-                $params['price'] = $priceBucket;
-            }
-            if ($code !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
-                $params['sort'] = $code;
-            }
-            $sortOptions[] = [
-                'code' => $code,
-                'label' => $label,
-                'url' => $this->listingFilter->buildListingUrl($categoryUrl, $params),
-                'selected' => $sort === $code,
-            ];
+        $categoryPath = parse_url($categoryUrl, PHP_URL_PATH);
+        if (is_string($categoryPath) && $categoryPath !== '') {
+            $categoryUrl = $categoryPath;
         }
 
-        $pageOptions = [];
-        if ($paged['total_pages'] > 1) {
-            $params = [];
-            if ($priceBucket !== '') {
-                $params['price'] = $priceBucket;
-            }
-            if ($sort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
-                $params['sort'] = $sort;
-            }
-            $pageOptions = $this->listingPager->buildPageOptions(
-                $categoryUrl,
-                (int)$paged['page'],
-                (int)$paged['total_pages'],
-                $params,
-            );
-        }
+        $projection = $this->listingShell->projectNeutral(
+            $offers,
+            $categoryUrl,
+            'category',
+        );
 
         $pageTitle = $name !== '' ? $name : __('分类');
         $this->assign('page_title', $pageTitle);
@@ -150,17 +88,18 @@ final class Category extends FrontendController
         $this->assign('storefront_category_active_path_ids', $page['active_path_ids'] ?? []);
         $this->assign('storefront_category_breadcrumbs', $page['breadcrumbs']);
         $this->assign('storefront_offers_unfiltered', $offers);
-        $this->assign('storefront_offers', $pageOffers);
+        $this->assign('storefront_offers', $projection['page_offers']);
         $this->assign('storefront_category_path', $routePath);
-        $this->assign('storefront_listing_price', $priceBucket);
-        $this->assign('storefront_listing_sort', $sort);
-        $this->assign('storefront_listing_total', count($offers));
-        $this->assign('storefront_listing_count', $paged['total']);
-        $this->assign('storefront_listing_page', $paged['page']);
-        $this->assign('storefront_listing_page_size', $paged['page_size']);
-        $this->assign('storefront_listing_total_pages', $paged['total_pages']);
-        $this->assign('storefront_listing_page_options', $pageOptions);
-        $this->assign('storefront_listing_sort_options', $sortOptions);
+        $this->assign('storefront_listing_price', $projection['price']);
+        $this->assign('storefront_listing_sort', $projection['sort']);
+        $this->assign('storefront_listing_total', $projection['total']);
+        $this->assign('storefront_listing_count', $projection['count']);
+        $this->assign('storefront_listing_page', $projection['page']);
+        $this->assign('storefront_listing_page_size', $projection['page_size']);
+        $this->assign('storefront_listing_total_pages', $projection['total_pages']);
+        $this->assign('storefront_listing_page_options', $projection['page_options']);
+        $this->assign('storefront_listing_sort_options', $projection['sort_options']);
+        $this->assign('storefront_listing_path', $this->listingShell->normalizeListingPath($categoryUrl));
         StorefrontPageAssignBag::replace([
             'page_title' => $pageTitle,
             'storefront_category' => $category,
@@ -170,17 +109,18 @@ final class Category extends FrontendController
             'storefront_category_active_path_ids' => $page['active_path_ids'] ?? [],
             'storefront_category_breadcrumbs' => $page['breadcrumbs'],
             'storefront_offers_unfiltered' => $offers,
-            'storefront_offers' => $pageOffers,
+            'storefront_offers' => $projection['page_offers'],
             'storefront_category_path' => $routePath,
-            'storefront_listing_price' => $priceBucket,
-            'storefront_listing_sort' => $sort,
-            'storefront_listing_total' => count($offers),
-            'storefront_listing_count' => $paged['total'],
-            'storefront_listing_page' => $paged['page'],
-            'storefront_listing_page_size' => $paged['page_size'],
-            'storefront_listing_total_pages' => $paged['total_pages'],
-            'storefront_listing_page_options' => $pageOptions,
-            'storefront_listing_sort_options' => $sortOptions,
+            'storefront_listing_price' => $projection['price'],
+            'storefront_listing_sort' => $projection['sort'],
+            'storefront_listing_total' => $projection['total'],
+            'storefront_listing_count' => $projection['count'],
+            'storefront_listing_page' => $projection['page'],
+            'storefront_listing_page_size' => $projection['page_size'],
+            'storefront_listing_total_pages' => $projection['total_pages'],
+            'storefront_listing_page_options' => $projection['page_options'],
+            'storefront_listing_sort_options' => $projection['sort_options'],
+            'storefront_listing_path' => $this->listingShell->normalizeListingPath($categoryUrl),
         ]);
 
         $listingFacts = new StorefrontSeoListingFacts();
@@ -193,9 +133,9 @@ final class Category extends FrontendController
             'description' => trim((string)($category['meta_description'] ?? $category['description'] ?? '')),
             'image' => trim((string)($category['image'] ?? $category['banner'] ?? '')),
             'category' => $category,
-            'item_list' => $listingFacts->itemListFromOffers($pageOffers),
-            'item_list_total' => (int)$paged['total'],
-            'item_list_page' => (int)$paged['page'],
+            'item_list' => $listingFacts->itemListFromOffers($projection['page_offers']),
+            'item_list_total' => (int)$projection['count'],
+            'item_list_page' => (int)$projection['page'],
             'breadcrumbs' => $breadcrumbs,
         ]);
 

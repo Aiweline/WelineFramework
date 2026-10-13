@@ -27,6 +27,7 @@
 "未找到对应的 Meta 配置：%{meta_identify}","Meta configuration not found: %{meta_identify}"
 未找到参数定义：%{param},"Parameter definition not found: %{param}"
 获取翻译数据失败：,"Failed to retrieve translation data."
+保存翻译失败：%{locale},保存翻译失败：%{locale}
 "翻译已保存（共 %{count} 条）","Translations saved (total: %{count} items)."
 保存翻译失败：,"Failed to save translation:"
 获取语言列表失败：,"Failed to retrieve the list of languages."

@@ -898,17 +898,53 @@ function wlsPerformancePanelRequestLine(string $rawRequest): array
 
 function wlsAddFormattedVaryAcceptEncoding(string $headersPart): string
 {
-    if (!\preg_match('/^Vary:\s*([^\r\n]*)$/mi', $headersPart, $match)) {
+    // CRLF responses must not use `$` in the Vary matcher: with `\r\n` line
+    // endings PHP `$` does not match before `\r`, so a present Vary line was
+    // treated as missing and Accept-Encoding was appended again (triple Vary).
+    $lines = \preg_split('/\r\n|\n|\r/', $headersPart);
+    if ($lines === false || $lines === []) {
         return \rtrim($headersPart, "\r\n") . "\r\nVary: Accept-Encoding";
     }
 
-    $varyValue = (string)($match[1] ?? '');
-    foreach (\array_map('trim', \explode(',', $varyValue)) as $part) {
-        if (\strcasecmp($part, 'Accept-Encoding') === 0) {
-            return $headersPart;
+    $varyIndexes = [];
+    $tokens = [];
+    foreach ($lines as $index => $line) {
+        if (!\preg_match('/^Vary:\s*(.*)$/i', $line, $match)) {
+            continue;
+        }
+        $varyIndexes[] = $index;
+        foreach (\explode(',', (string)($match[1] ?? '')) as $part) {
+            $token = \trim($part);
+            if ($token === '') {
+                continue;
+            }
+            $key = \strtolower($token);
+            if (!isset($tokens[$key])) {
+                $tokens[$key] = $token;
+            }
         }
     }
 
-    $newValue = \trim($varyValue) === '' ? 'Accept-Encoding' : $varyValue . ', Accept-Encoding';
-    return (string)\preg_replace('/^Vary:\s*[^\r\n]*$/mi', 'Vary: ' . $newValue, $headersPart, 1);
+    if (!isset($tokens['accept-encoding'])) {
+        $tokens['accept-encoding'] = 'Accept-Encoding';
+    }
+    $merged = 'Vary: ' . \implode(', ', \array_values($tokens));
+
+    if ($varyIndexes === []) {
+        return \rtrim($headersPart, "\r\n") . "\r\n" . $merged;
+    }
+
+    // Keep a single Vary line; drop duplicates created by older compress paths.
+    $first = $varyIndexes[0];
+    $drop = \array_fill_keys($varyIndexes, true);
+    unset($drop[$first]);
+    $kept = [];
+    foreach ($lines as $index => $line) {
+        if (isset($drop[$index])) {
+            continue;
+        }
+        $kept[] = $index === $first ? $merged : $line;
+    }
+
+    return \rtrim(\implode("\r\n", $kept), "\r\n");
 }

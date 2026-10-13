@@ -8,6 +8,12 @@ use Weline\Seo\Model\SeoTask;
 /** Local durable refresh; business saves never publish files or call search engines. */
 class SitemapRefreshService
 {
+    /**
+     * 「正在处理」的任务在多久之后视为已死（可再次入队）。
+     * 与 Weline\Websites\Cron\DomainAutoResolve::STALE_PROCESSING_MINUTES 同口径。
+     */
+    private const STALE_PROCESSING_MINUTES = 45;
+
     public function __construct(
         private readonly SeoTask $tasks,
         private readonly SitemapUrlSyncService $sync,
@@ -20,15 +26,35 @@ class SitemapRefreshService
         if ($websiteId < 0) {
             throw new \InvalidArgumentException('Invalid sitemap website ID');
         }
+        // 注意：find() 只是把 fetch_type 置为 find 并 limit 1，返回的是查询对象而不是模型，
+        // 因此 `find()->getId()` 永远拿到 0 —— 这个「去重」从来就没生效过，本站因此积压了
+        // 13000+ 条同站同模块的重复 refresh。必须用 find()->fetch() 取回模型再取 id。
         $existing = (clone $this->tasks)->reset()
             ->where(SeoTask::schema_fields_TASK_TYPE, SeoTask::TASK_TYPE_SITEMAP_REFRESH)
             ->where(SeoTask::schema_fields_SUBJECT_ID, $websiteId)
             ->where(SeoTask::schema_fields_MODULE, $module)
             ->where(SeoTask::schema_fields_STATUS, SeoTask::STATUS_PENDING)
-            ->find()->getId();
-        if ($existing) {
-            return (int)$existing;
+            ->find()->fetch();
+        if ($existing && $existing->getId()) {
+            return (int)$existing->getId();
         }
+
+        // 只对 pending 去重仍然不够：一次 provider 全量同步可能跑十几分钟，期间任务处于
+        // processing，任何一次资源变更都会因为「查不到 pending」而再插一条重复任务。
+        // 因此把「正在处理且未过期」也视为已入队；超过 STALE_PROCESSING_MINUTES 的
+        // 才认定是僵死任务，允许重新入队。
+        $staleBefore = \date('Y-m-d H:i:s', \time() - self::STALE_PROCESSING_MINUTES * 60);
+        $inFlight = (clone $this->tasks)->reset()
+            ->where(SeoTask::schema_fields_TASK_TYPE, SeoTask::TASK_TYPE_SITEMAP_REFRESH)
+            ->where(SeoTask::schema_fields_SUBJECT_ID, $websiteId)
+            ->where(SeoTask::schema_fields_MODULE, $module)
+            ->where(SeoTask::schema_fields_STATUS, SeoTask::STATUS_PROCESSING)
+            ->where(SeoTask::schema_fields_UPDATED_AT, $staleBefore, '>=')
+            ->find()->fetch();
+        if ($inFlight && $inFlight->getId()) {
+            return (int)$inFlight->getId();
+        }
+
         $task = (clone $this->tasks)->reset()
             ->setTaskType(SeoTask::TASK_TYPE_SITEMAP_REFRESH)
             ->setSubjectType('website')->setSubjectId($websiteId)

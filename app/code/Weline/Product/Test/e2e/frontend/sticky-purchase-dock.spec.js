@@ -19,9 +19,8 @@ const MODULE = 'Weline_Product';
 const ROOT = path.resolve(__dirname, '../../../../../../..');
 const BASE = process.env.WELINE_E2E_BASE_URL || 'https://p05113ef3.test.weline.com:9555';
 const PDP_CANDIDATES = [
-  '/product/558?offer=8645527d-3748-5ab3-b144-f2e8b39f257f',
   '/product/558',
-  '/en_US/product/113?size=s&style_type=hf-s-shang-ru-jia-fen-se-qun-zi-4604234',
+  '/en_US/product/113',
 ];
 
 async function openPdpWithSticky(page) {

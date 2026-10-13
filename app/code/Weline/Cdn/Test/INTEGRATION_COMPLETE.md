@@ -197,6 +197,6 @@ php bin/w http:request cdn/backend/domain/index -b filter="域名管理"
 ## 参考文档
 
 - [HTTP测试使用说明](../Http/README.md)
-- [http:request命令帮助](../../../../docs/dev/开发文档.md#httprequest-命令)
-- [路由系统说明](../../../../docs/dev/开发文档.md#路由系统详解)
+- [http:request命令帮助](../../../../app/code/Weline/Framework/doc/README.md#httprequest-命令)
+- [路由系统说明](../../../../app/code/Weline/Framework/doc/README.md#路由系统详解)
 

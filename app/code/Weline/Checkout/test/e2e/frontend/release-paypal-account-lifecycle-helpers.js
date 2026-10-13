@@ -176,19 +176,68 @@ async function waitForCheckoutSuccessEvent(page, timeoutMs = 45000) {
 }
 
 function storefrontOrigin() {
-  return String(
-    process.env.PLAYWRIGHT_TARGET_ORIGIN
+  // Prefer public HTTPS Host — PLAYWRIGHT_TARGET_ORIGIN is often http://127.0.0.1:worker
+  // which triggers CSP mixed-content + theme-generation / Scope mismatches under nginx.
+  const forced = String(
+    process.env.WELINE_E2E_STOREFRONT_ORIGIN
       || process.env.WELINE_E2E_BASE_URL
-      || 'https://p05113ef3.test.weline.com',
-  ).replace(/\/$/, '');
+      || '',
+  ).trim().replace(/\/$/, '');
+  if (forced) return forced;
+  const target = String(process.env.PLAYWRIGHT_TARGET_ORIGIN || '').trim().replace(/\/$/, '');
+  if (target && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(target)) {
+    return target;
+  }
+  return 'https://p05113ef3.test.weline.com';
+}
+
+/**
+ * Prefer live HTML (themePublishedVersionId must match Scope). Stale html-disk HIT
+ * after theme:upgrade is the main source of deploy_reload_required in e2e.
+ */
+async function ensureFpcBypassHeaders(page) {
+  const context = page.context();
+  if (context.__welineE2eFpcBypass) return;
+  await context.setExtraHTTPHeaders({
+    'x-wls-fpc-bypass': '1',
+    'x-wls-internal-fpc-bypass': '1',
+  }).catch(() => {});
+  // Prevent Weline.Api auto location.reload() mid-evaluate (hangs Playwright until test timeout).
+  await context.addInitScript(() => {
+    try {
+      if (window.__WELINE_E2E_RELOAD_STUBBED) return;
+      window.__WELINE_E2E_RELOAD_STUBBED = true;
+      window.__WELINE_E2E_RELOAD_REQUESTED = false;
+      const original = Location.prototype.reload;
+      Location.prototype.reload = function e2eReloadStub() {
+        window.__WELINE_E2E_RELOAD_REQUESTED = true;
+      };
+      window.__WELINE_E2E_ORIG_RELOAD = original;
+    } catch (_) {}
+  }).catch(() => {});
+  context.__welineE2eFpcBypass = true;
 }
 
 async function gotoStorefront(page, pdpPath) {
-  const path = pdpPath.startsWith('http') ? pdpPath : `${storefrontOrigin()}${pdpPath.startsWith('/') ? '' : '/'}${pdpPath}`;
+  await ensureFpcBypassHeaders(page);
+  let path = pdpPath.startsWith('http') ? pdpPath : `${storefrontOrigin()}${pdpPath.startsWith('/') ? '' : '/'}${pdpPath}`;
+  try {
+    const u = new URL(path);
+    // Never stamp account/auth URLs — login referer with `_e2e_theme_nc` fails session asserts.
+    if (!/^\/customer(\/|$)/i.test(u.pathname)
+      && !u.searchParams.has('_wb_nc')
+      && !u.searchParams.has('_e2e_theme_nc')) {
+      u.searchParams.set('_e2e_theme_nc', String(Date.now()));
+    }
+    path = u.toString();
+  } catch (_) {
+    // relative already absolutized above
+  }
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 120000 });
       await page.waitForTimeout(800);
+      await neutralizeStaleThemeStamp(page);
       return;
     } catch (error) {
       if (attempt >= 2) throw error;
@@ -210,6 +259,119 @@ async function waitForWelineApi(page, timeout = 90000) {
   });
 }
 
+function isThemeGenerationStaleMessage(msg) {
+  return /主题已发布新版本|reload the page to continue|deploy_reload_required|Theme published generation changed|Worker session theme generation mismatch|theme generation mismatch/i
+    .test(String(msg || ''));
+}
+
+function resultLooksThemeStale(result) {
+  if (!result || typeof result !== 'object') return false;
+  if (isThemeGenerationStaleMessage(result.error)
+    || isThemeGenerationStaleMessage(result.message)
+    || isThemeGenerationStaleMessage(result.__error)
+    || isThemeGenerationStaleMessage(result.code)) {
+    return true;
+  }
+  try {
+    return isThemeGenerationStaleMessage(JSON.stringify(result).slice(0, 800));
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Cache-busting hard navigation — soft reload alone often keeps stale themePublishedVersionId
+ * from FPC/HTML while Scope hole-punch already advanced.
+ */
+async function hardRefreshStorefront(page) {
+  await ensureFpcBypassHeaders(page);
+  const current = String(page.url() || '').trim();
+  if (!current || current === 'about:blank') {
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
+  } else {
+    let next = current;
+    try {
+      const u = new URL(current);
+      u.searchParams.set('_e2e_theme_nc', String(Date.now()));
+      next = u.toString();
+    } catch (_) {
+      next = current.includes('?') ? `${current}&_e2e_theme_nc=${Date.now()}` : `${current}?_e2e_theme_nc=${Date.now()}`;
+    }
+    await page.goto(next, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(async () => {
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
+    });
+  }
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
+  // Neutralize BEFORE waitForWelineApi/warmup so the first handshake is not pinned
+  // to a stale html-disk themePublishedVersionId.
+  await neutralizeStaleThemeStamp(page);
+  await waitForWelineApi(page);
+}
+
+async function neutralizeStaleThemeStamp(page) {
+  await page.evaluate(() => {
+    try {
+      if (window.Weline && window.Weline.config) {
+        window.Weline.config.themePublishedVersionId = '';
+        window.Weline.config.theme_published_version_id = '';
+      }
+    } catch (_) {}
+  }).catch(() => {});
+}
+
+async function reloadIfThemeGenerationStale(page) {
+  const stale = await page.evaluate(() => {
+    const tip = String(document.body && document.body.innerText || '');
+    return /主题已发布新版本|reload the page to continue|deploy_reload_required/i.test(tip);
+  }).catch(() => false);
+  if (!stale) return false;
+  await hardRefreshStorefront(page);
+  return true;
+}
+
+/**
+ * Run page.evaluate; on theme-generation mismatch (throw OR soft-caught result), hard-refresh and retry.
+ */
+async function evaluateWithThemeReload(page, fn, arg) {
+  await ensureFpcBypassHeaders(page);
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.evaluate(() => { window.__WELINE_E2E_RELOAD_REQUESTED = false; }).catch(() => {});
+    await neutralizeStaleThemeStamp(page);
+    try {
+      const result = await page.evaluate(fn, arg);
+      const reloadRequested = await page.evaluate(() => !!window.__WELINE_E2E_RELOAD_REQUESTED).catch(() => false);
+      if ((resultLooksThemeStale(result) || reloadRequested) && attempt < 1) {
+        // Soft stamp clear first; if Worker generation already advanced (sibling
+        // theme:upgrade), hard-refresh non-account URLs so QueryBin stops returning HTML.
+        const url = String(page.url() || '');
+        if (!/\/customer(\/|$)/i.test(url)) {
+          await hardRefreshStorefront(page);
+        } else {
+          await neutralizeStaleThemeStamp(page);
+        }
+        continue;
+      }
+      return result;
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err && err.message || err);
+      const reloadRequested = await page.evaluate(() => !!window.__WELINE_E2E_RELOAD_REQUESTED).catch(() => false);
+      if ((!isThemeGenerationStaleMessage(msg) && !reloadRequested) || attempt >= 1) {
+        throw err;
+      }
+      const url = String(page.url() || '');
+      if (!/\/customer(\/|$)/i.test(url)) {
+        await hardRefreshStorefront(page);
+      } else {
+        await neutralizeStaleThemeStamp(page);
+      }
+    }
+  }
+  if (lastErr) throw lastErr;
+  return page.evaluate(fn, arg);
+}
+
 async function addToCartFromPdp(page, gotoFrontend, pdpPath) {
   // Prefer public Host (nginx *.test.weline.com). Direct 127.0.0.1:worker often 503.
   try {
@@ -217,8 +379,11 @@ async function addToCartFromPdp(page, gotoFrontend, pdpPath) {
   } catch (error) {
     await gotoFrontend(page, pdpPath, { timeout: 90000, settleMs: 800, useProxy: false });
   }
+  await neutralizeStaleThemeStamp(page);
   await waitForWelineApi(page);
-  const added = await page.evaluate(async () => {
+  await reloadIfThemeGenerationStale(page);
+  await neutralizeStaleThemeStamp(page);
+  const addFn = async () => {
     let api = window.Weline.Api;
     if (!api || typeof api.resource !== 'function') {
       api = await window.Weline.load('api');
@@ -264,9 +429,10 @@ async function addToCartFromPdp(page, gotoFrontend, pdpPath) {
       qty: 1,
       selling_mode: 'toc',
       cart_type: 'toc',
-    }, { silent: true, requestTimeoutMs: 120000 });
+    }, { silent: true, requestTimeoutMs: 45000 });
     return { success: !(addResult && addResult.success === false), guest_token: guestToken, add: addResult };
-  });
+  };
+  const added = await evaluateWithThemeReload(page, addFn);
   assertStep(added && added.success, 'cart.add', added);
   return added;
 }
@@ -486,6 +652,12 @@ async function submitPaypalCheckout(page, email) {
   if (/paypal\.com|sandbox\.paypal/i.test(page.url())) {
     return { success: true, stage: 'page_url', redirect_url: page.url(), order_uuid: started.order_uuid || '' };
   }
+  // FORCE_PAYMENT_METHOD=fake_card (and similar offline methods) pay in-process:
+  // success + order_uuid with empty redirect_url is durable evidence, not a fail.
+  const forcedMethod = String(wanted || process.env.FORCE_PAYMENT_METHOD || '').toLowerCase();
+  if (started.success && started.order_uuid && /^(fake_card|offline|free|cod)$/.test(forcedMethod)) {
+    return started;
+  }
   assertStep(false, 'checkout.submit', started);
   return started;
 }
@@ -533,20 +705,26 @@ async function approvePaypalAndLand(context, redirectUrl, existingPage = null) {
 async function mintCustomerSessionCookie(page, email) {
   const origin = storefrontOrigin();
   const host = origin.replace(/^https?:\/\//, '').split('/')[0];
-  const minted = runFixture('mint_session', { email, host });
+  const minted = runFixture('mint_session', { email, host, website_id: 0 });
   assertStep(minted.session_id && minted.cookie_name, 'customer.mint_session', minted);
   const secure = origin.startsWith('https://');
-  await page.context().addCookies([
-    {
-      name: minted.cookie_name,
-      value: minted.session_id,
-      domain: host.replace(/:\d+$/, ''),
-      path: '/',
-      httpOnly: true,
-      secure,
-      sameSite: 'Lax',
-    },
-  ]);
+  const domain = host.replace(/:\d+$/, '');
+  const names = Array.isArray(minted.cookie_names) && minted.cookie_names.length
+    ? minted.cookie_names.map((n) => String(n || '').trim()).filter(Boolean)
+    : [String(minted.cookie_name || '').trim()].filter(Boolean);
+  // Live jar is scoped (_w0); also set unscoped alias so either reader wins.
+  if (names.length && !names.some((n) => /_w\d+$/.test(n))) {
+    names.push(`${names[0]}_w0`);
+  }
+  await page.context().addCookies(names.map((name) => ({
+    name,
+    value: minted.session_id,
+    domain,
+    path: '/',
+    httpOnly: true,
+    secure,
+    sameSite: 'Lax',
+  })));
   return minted;
 }
 
@@ -712,6 +890,11 @@ module.exports = {
   storefrontOrigin,
   gotoStorefront,
   waitForWelineApi,
+  ensureFpcBypassHeaders,
+  hardRefreshStorefront,
+  neutralizeStaleThemeStamp,
+  reloadIfThemeGenerationStale,
+  evaluateWithThemeReload,
   runFixture,
   assertStep,
   paypalLoginAndApprove,

@@ -1080,6 +1080,13 @@ Canonical,典范
 "以下站点未绑定 SEO 账户，无法自动提交 sitemap：","以下站点未绑定 SEO 账户，无法自动提交 sitemap："
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。"
 SEO账户配置,SEO账户配置
+"Refresh sitemap URL sync (+ file generate when store mode allows) for one website","Refresh sitemap URL sync (+ file generate when store mode allows) for one website"
+"Single-site sitemap refresh (sync table; may hard_gate file publish in dev/test)","Single-site sitemap refresh (sync table; may hard_gate file publish in dev/test)"
+"Optional: only sync one SitemapUrlProvider module","Optional: only sync one SitemapUrlProvider module"
+"Required: --website=CODE|ID","Required: --website=CODE|ID"
+"Website not found: %{1}","Website not found: %{1}"
+"Sitemap refresh failed: %{1}","Sitemap refresh failed: %{1}"
+"Store mode hard_gate: indexable sitemap files not materialized; table sync kept. active_locs=%{1}","Store mode hard_gate: indexable sitemap files not materialized; table sync kept. active_locs=%{1}"
 "在 Bing Webmaster Tools → Settings → API Access 生成","在 Bing Webmaster Tools → Settings → API Access 生成"
 "从网站列表选择；须与 Bing Webmaster Tools 已验证站点一致","从网站列表选择；须与 Bing Webmaster Tools 已验证站点一致"
 "网站根目录 Key 文件内容须与此一致","网站根目录 Key 文件内容须与此一致"

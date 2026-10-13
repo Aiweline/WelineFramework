@@ -279,22 +279,26 @@ class NotificationRouter
 
     /**
      * 检查用户是否订阅了某个主题的某个渠道
+     *
+     * 必须用 fetchArray：select()->fetch() 对多列查询常不 hydrate 主键，
+     * getId()/subscription_id 会恒为 0，导致 Telegram 等外发渠道整表假未订阅。
      */
     public function isUserSubscribed(int $userId, string $topicCode, string $channel, string $messageType): bool
     {
-        $subscription = $this->subscriptionModel->clearQuery()
+        $rows = $this->subscriptionModel->clearQuery()
             ->where(UserNotificationSubscription::schema_fields_user_id, $userId)
             ->where(UserNotificationSubscription::schema_fields_topic_code, $topicCode)
             ->where(UserNotificationSubscription::schema_fields_channel, $channel)
             ->where(UserNotificationSubscription::schema_fields_is_enabled, 1)
+            ->limit(1)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
-        if (!$subscription || !$subscription->getId()) {
+        if ($rows === []) {
             return false;
         }
 
-        $minType = $subscription->getMinType();
+        $minType = (string) ($rows[0][UserNotificationSubscription::schema_fields_min_type] ?? 'info');
         return NotificationType::meetsMinimumType($messageType, $minType);
     }
 

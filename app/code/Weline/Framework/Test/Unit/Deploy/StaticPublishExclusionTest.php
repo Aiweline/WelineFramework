@@ -10,7 +10,7 @@ use Weline\Framework\Deploy\StaticPublishExclusion;
 /**
  * UT：静态发布排除规则（pub/static 只许含运行时资源）。
  *
- * 反例来自真实事故：vendored 库的 docs/tests/.github/*.md 与设计目录的
+ * 反例来自真实事故：vendored 库的 dev/docs/tests/.github/*.md 与设计目录的
  * doc/test 被铺进 Web 根，文档可被直接读取。
  *
  * 第二类反例是服务端可执行/模板源码：`pub/static` 下曾有 95 个 `.php`

@@ -100,12 +100,15 @@ final class TemplateSourceBytesTest extends TestCase
         $template->pinSource('digest-source.phtml', '<b>old</b>', __FILE__, 'same-context');
         $old = $template->getFetchFile('digest-source.phtml');
         self::assertSame($old, $template->getFetchFile('digest-source.phtml'));
+        self::assertSame('<b>old</b>', $template->ob_file($old));
         self::assertSame(1, $this->phaseCalls('template.source_bytes_digest'), 'Repeated pinned bytes must be hashed once.');
+
+        // 616297a8b7 起编译产物改为「固定路径 + 原地覆盖」，路径只由逻辑名/来源/上下文决定；
+        // 内容变更靠文件内 compile_id 身份判定后重编译，因此断言改为「路径稳定 + 内容已刷新」。
         $template->pinSource('digest-source.phtml', '<b>new</b>', __FILE__, 'same-context');
         $new = $template->getFetchFile('digest-source.phtml');
-        self::assertNotSame($old, $new, 'Equal byte lengths must not hide a changed source.');
-        self::assertSame('<b>new</b>', $template->ob_file($new));
-        self::assertSame('<b>old</b>', $template->ob_file($old));
+        self::assertSame($old, $new, 'Same logical name and context reuse one fixed compile path.');
+        self::assertSame('<b>new</b>', $template->ob_file($new), 'Equal byte lengths must not hide a changed source.');
         self::assertSame(2, $this->phaseCalls('template.source_bytes_digest'));
     }
 
@@ -128,10 +131,10 @@ final class TemplateSourceBytesTest extends TestCase
         $template->pinSource('direct-source.phtml', '<b>old</b>', __FILE__, 'same-context');
         $pinned = $template->getFetchFile('direct-source.phtml');
         $direct = $template->getFetchFileFromSource('direct-source.phtml', '<b>new</b>', __FILE__, 'same-context');
-        self::assertNotSame($pinned, $direct);
+        self::assertSame($pinned, $direct, 'Direct and pinned sources share the fixed compile path of the same logical name/context.');
         self::assertSame('<b>new</b>', $template->ob_file($direct));
         self::assertSame($pinned, $template->getFetchFile('direct-source.phtml'));
-        self::assertSame('<b>old</b>', $template->ob_file($pinned));
+        self::assertSame('<b>old</b>', $template->ob_file($pinned), 'Reading the pinned source again must restore its own bytes, not borrow the direct ones.');
         self::assertSame(2, $this->phaseCalls('template.source_bytes_digest'), 'Direct bytes need their own digest without evicting the unchanged pinned digest.');
     }
 
@@ -168,11 +171,21 @@ final class TemplateSourceBytesTest extends TestCase
         (new \ReflectionProperty(Template::class, 'eventsManager'))->setValue($template, $events);
         $template->pinSource('pipeline-source.phtml', '<b>same</b>', __FILE__);
         $first = $template->getFetchFile('pipeline-source.phtml');
+        $firstIdentity = $this->compiledIdentity($first);
         $revision = 2;
         $second = $template->getFetchFile('pipeline-source.phtml');
-        self::assertNotSame($first, $second);
+        // 固定路径不随 observer 管道变化；管道变更必须让编译身份失效并原地重编译。
+        self::assertSame($first, $second, 'Fixed path: the observer pipeline must not move the compile path.');
+        self::assertNotSame($firstIdentity, $this->compiledIdentity($second), 'A changed observer pipeline must invalidate the compiled identity.');
         self::assertSame('<b>same</b>', $template->ob_file($second));
         self::assertSame(1, $this->phaseCalls('template.source_bytes_digest'));
+    }
+
+    /** 读取编译产物内嵌的 compile_id 身份标记（管道/来源/上下文变更都会改变它）。 */
+    private function compiledIdentity(string $compiledPath): string
+    {
+        $raw = (string)file_get_contents($compiledPath);
+        return preg_match('#compile_id:([^ ]+)#', $raw, $m) === 1 ? $m[1] : '';
     }
 
     private function tracedTemplate(): Template

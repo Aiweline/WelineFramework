@@ -34,8 +34,7 @@ namespace {
     if (!function_exists('__')) { function __(string $message): string { return $message; } }
 
     use Weline\Framework\Manager\ObjectManager;
-    use Weline\Framework\Runtime\ScopeIdentity;
-    use Weline\SystemConfig\Api\Scope\ScopeContext;
+    use Weline\Theme\Api\Scoped\ThemeContentScope;
     use Weline\Theme\Api\Scoped\ThemeEditorContext;
     use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
     use Weline\Theme\Controller\Backend\ThemeEditor;
@@ -51,7 +50,13 @@ namespace {
     use Weline\Theme\Service\ThemeScopeVersionService;
 
     $scenario = $argv[1];
-    $context = new ThemeEditorContext(new ScopeContext(ScopeIdentity::website(0, 'default'), 'default.__store__.__channel__', 'normal', ['default.__store__.__channel__']), 'frontend', 'layout', 1, 'homepage');
+    $context = new ThemeEditorContext(
+        ThemeContentScope::fromStoredOwner('default.__store__.__channel__', 'normal', 'default'),
+        'frontend',
+        'layout',
+        1,
+        'homepage',
+    );
     $node = static fn(string $uid, string $code, string $area, string $slot): array => [
         'node_uid' => str_repeat($uid, 32), 'widget_module' => 'Weline_Test', 'widget_type' => 'content', 'widget_code' => $code,
         'area' => $area, 'slot_id' => $slot, 'sort_order' => 0, 'is_active' => true, 'source' => 'default_injection', 'config' => [],

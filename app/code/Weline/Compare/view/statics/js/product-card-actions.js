@@ -270,6 +270,24 @@
         body.appendChild(wrap);
     }
 
+    function syncWishlistButtonLabel(button, active) {
+        if (!button || !button.getAttribute) {
+            return;
+        }
+        var idle = button.getAttribute('data-wishlist-label-idle') || '';
+        var on = button.getAttribute('data-wishlist-label-active') || idle;
+        var label = active ? on : idle;
+        if (!label) {
+            return;
+        }
+        var node = button.querySelector('.product-native-detail__wishlist-label');
+        if (node) {
+            node.textContent = label;
+        }
+        button.setAttribute('title', label);
+        button.setAttribute('aria-label', label);
+    }
+
     function handleWishlist(button) {
         var productId = productIdFromButton(button);
         if (productId <= 0 || button.disabled) {
@@ -286,6 +304,7 @@
             }
             button.classList.toggle('is-active', !!data.active);
             button.setAttribute('aria-pressed', data.active ? 'true' : 'false');
+            syncWishlistButtonLabel(button, !!data.active);
             updateWishlistCount(data.wishlist_count);
             toast(data.message || texts().wishlistAdded, 'success');
         }).catch(function () {

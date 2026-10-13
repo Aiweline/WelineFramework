@@ -106,6 +106,7 @@ final class ThemeLayoutEntitySolidifyQueue
         }
         $ok = false;
         $failed = false;
+        $failReason = '';
         try {
             if ($expectedFp === '') {
                 foreach ($this->jobs->listPending(64) as $job) {
@@ -119,11 +120,15 @@ final class ThemeLayoutEntitySolidifyQueue
             $ok = true;
         } catch (\Throwable $e) {
             $failed = true;
-            Env::log_error('theme/layout_solidify_queue', $e->getMessage() . ' key=' . $key->toString());
+            $failReason = $e->getMessage();
+            Env::log_error('theme/layout_solidify_queue', $failReason . ' key=' . $key->toString());
         } finally {
             $this->leases->release($key);
             if ($ok) {
                 $this->jobs->delete($key);
+            } elseif ($failed) {
+                // Dead-letter: leave pending forever is forbidden; Cron can retry via failed/ inspection.
+                $this->jobs->moveToFailed($key, $failReason !== '' ? $failReason : 'drain_fail');
             }
         }
 
@@ -251,6 +256,14 @@ final class ThemeLayoutEntitySolidifyQueue
                 $key->storeMode,
             );
         }
+        // Chrome RAW / digest drift may remain when page short-circuit skipped materialize.
+        $this->bakeCoordinator->rematerializeChromeIfStale(
+            $key->themeId,
+            $key->canonicalScope,
+            $versionId,
+            $key->area,
+            $key->storeMode,
+        );
 
         if ($expectedFp === '') {
             $expectedFp = ObjectManager::getInstance(ThemeLayoutEntityRequestSolidifyGate::class)

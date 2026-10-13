@@ -53,7 +53,7 @@ class CacheManagerRoutingTest extends TestCase
      * 生产实测：router 池被劫持到 WlsMemoryAdapter 后，其 set() 返回 false
      * （内存 sidecar 不可用），条目根本不会落库；26/26 次查找 found=false，
      * 每个请求都退化为整页 SSR（action_execute_ms 中位 8s、P90 42s），
-     * 而 externalizeSharedPayload 仍持续写正文文件，使 var/cache 涨到 6.2G 孤儿。
+     * 历史：externalize 曾写 router-fpc-payloads 使 var/cache 涨到 6.2G 孤儿；现已停写 hash，仅 html-disk。
      */
     public function testFpcBearingPoolsAreExemptFromVolatileMemoryHijack(): void
     {
