@@ -1108,6 +1108,8 @@ body.account-dashboard-layout:has([data-account-section="b2b-identity"]:not([hid
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* UI22: bias down so stone vase + ledge stay in frame (ref 22-account) */
+    object-position: center 68%;
 }
 
 .account-dashboard,
