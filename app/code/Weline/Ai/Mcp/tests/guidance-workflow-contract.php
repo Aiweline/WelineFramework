@@ -511,8 +511,9 @@ $checks = [
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'automation_test_report_durable_evidence'
-            && str_contains((string) ($rule['summary'] ?? ''), 'USER-FACING')
+            && str_contains((string) ($rule['summary'] ?? ''), 'PERSIST')
             && str_contains((string) ($rule['summary'] ?? ''), 'order_uuid')
+            && str_contains((string) ($rule['summary'] ?? ''), 'user_facing_brief_plain_report')
             && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')),
         false,
     ),
@@ -982,8 +983,13 @@ $checks = [
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'user_facing_brief_plain_report'
-            && str_contains((string) ($rule['summary'] ?? ''), '什么问题')
+            && str_contains((string) ($rule['summary'] ?? ''), '问题：')
+            && str_contains((string) ($rule['summary'] ?? ''), '结论：')
+            && str_contains((string) ($rule['summary'] ?? ''), '≤5 lines')
+            && str_contains((string) ($rule['summary'] ?? ''), '已完成')
             && str_contains((string) ($rule['summary'] ?? ''), '简述')
+            && str_contains((string) ($rule['summary'] ?? ''), 'NOT 「减速」')
+            && str_contains((string) ($rule['summary'] ?? ''), 'self-store')
             && str_contains((string) ($rule['summary'] ?? ''), 'user_facing_verdict_last')
             && str_contains((string) ($rule['summary'] ?? ''), 'user-facing-brief-plain-report.mdc')),
         false,
