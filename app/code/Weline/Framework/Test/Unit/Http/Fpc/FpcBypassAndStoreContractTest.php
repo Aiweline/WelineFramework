@@ -25,11 +25,23 @@ final class FpcBypassAndStoreContractTest extends TestCase
         FpcBypassEvaluator::clearCache();
         $rules = FpcBypassEvaluator::builtinFallbackRules();
 
-        self::assertTrue(FpcBypassEvaluator::shouldBypass([
+        // Diag/editor query keys require install pierce stamp.
+        self::assertFalse(FpcBypassEvaluator::shouldBypass([
             'query' => ['editor_mode' => '1'],
+        ], $rules));
+        self::assertFalse(FpcBypassEvaluator::shouldBypass([
+            'query' => ['nocache' => '1'],
+        ], $rules));
+        self::assertFalse(FpcBypassEvaluator::shouldBypass([
+            'query' => ['_wb_nc' => '1'],
+        ], $rules));
+        self::assertTrue(FpcBypassEvaluator::shouldBypass([
+            'query' => ['_wb_nc' => '1'],
+            'pierce_stamp_valid' => true,
         ], $rules));
         self::assertTrue(FpcBypassEvaluator::shouldBypass([
             'query' => ['nocache' => '1'],
+            'env' => ['fpc_pierce_stamp' => '1'],
         ], $rules));
         // Legacy preview cookie alone must NOT bypass — identity is /~preview/{token}/ or query/header.
         self::assertFalse(FpcBypassEvaluator::shouldBypass([
@@ -45,6 +57,25 @@ final class FpcBypassAndStoreContractTest extends TestCase
             'query' => ['q' => 'hanfu'],
             'headers' => ['cache-control' => 'no-cache'],
         ], $rules));
+    }
+
+    public function testCollectorPreservesRequirePierceStamp(): void
+    {
+        $collector = new \ReflectionClass(\Weline\Framework\Http\Fpc\FpcBypassCollector::class);
+        $method = $collector->getMethod('normalizeRule');
+        $method->setAccessible(true);
+        $instance = $collector->newInstanceWithoutConstructor();
+        $normalized = $method->invoke($instance, [
+            'id' => 'theme.editor_preview_query',
+            'match' => [
+                'require_pierce_stamp' => true,
+                'query_keys' => ['_wb_nc', 'nocache'],
+            ],
+            'effect' => 'bypass_serve_and_publish',
+        ]);
+        self::assertIsArray($normalized);
+        self::assertTrue((bool)($normalized['match']['require_pierce_stamp'] ?? false));
+        self::assertSame(['_wb_nc', 'nocache'], $normalized['match']['query_keys']);
     }
 
     public function testThemeAndWlsProvidersShareBuiltinFallbackIds(): void

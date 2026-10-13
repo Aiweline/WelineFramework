@@ -13,8 +13,12 @@ use Weline\Server\Service\SslCertificateService;
 /**
  * Writes per-project nginx.conf that terminates TLS and proxies to WLS cleartext.
  *
- * Defaults target best-effort edge throughput: upstream keepalive, anonymous GET
- * micro-cache, gzip, reuseport, and access_log off.
+ * Defaults target best-effort edge throughput: upstream keepalive, URL-tree FPC
+ * try_files under generated/html/live, static-extension disk try_files (pub →
+ * app/code → vendor → BP, then @wls_static_origin), gzip, reuseport, and
+ * access_log off. Business HTML is not proxy_cached (disk or @wls origin).
+ * Non-HTML surfaces (BinQuery / REST / admin area prefixes / SSE) proxy_pass
+ * directly — they never publish index.html.br and must not pay try_files.
  */
 final class ManagedNginxConfigWriter
 {
@@ -28,6 +32,13 @@ final class ManagedNginxConfigWriter
     private const BUSINESS_PROXY_CONNECT_TIMEOUT_SEC = 5;
     private const BUSINESS_PROXY_READ_TIMEOUT_SEC = 90;
     private const BUSINESS_PROXY_SEND_TIMEOUT_SEC = 90;
+    /**
+     * html-disk HIT CDN edge TTL (seconds). Aligns with Framework Extra FPC year TTL
+     * / FullPageCacheCoordinator::applyFpcHitEdgeCacheHeaders CDN max-age ceiling.
+     */
+    private const FPC_HTML_DISK_CDN_MAX_AGE_SECONDS = 31536000;
+    /** Default browser Cache-Control max-age when Env key is unset. */
+    private const FPC_HTML_DISK_BROWSER_MAX_AGE_DEFAULT = 60;
 
     private readonly ManagedNginxPaths $paths;
     private readonly NginxConfigPublication $publication;
@@ -194,7 +205,6 @@ NGINX;
         }
 
         $cacheHttpBlock = '';
-        $cacheLocationBlock = "\n            proxy_cache off;\n";
         $staticCacheLocationBlock = '';
         $gzipBlock = '';
         if ($gzipOn) {
@@ -209,48 +219,83 @@ NGINX;
 NGINX;
         }
 
+        // Business HTML: URL-tree disk try_files (no HTML proxy_cache). Static
+        // extensions keep a separate edge zone. Bypass disk only for preview /
+        // Authorization / Upgrade — Session cookies still HIT anonymous HTML.
+        //
+        // 注意：nginx 不拼接相邻 token。`root "/a/b"/$var;` 是语法错误
+        // （nginx: [emerg] unexpected "/"），必须把变量放进同一对引号内，
+        // 即 `root "/a/b/$var";`。故这里直接产出「完整带引号的 root 值」。
+        $quotedFpcHtmlRoot = '"' . \str_replace(
+            ['\\', '"'],
+            ['/', '\\"'],
+            $this->paths->projectRoot()
+            . DIRECTORY_SEPARATOR . 'generated'
+            . DIRECTORY_SEPARATOR . 'html'
+            . DIRECTORY_SEPARATOR . 'live'
+        ) . '/$wls_fpc_html_host"';
+        $fpcHtmlDiskHitHeaders = $this->buildFpcHtmlDiskHitHeaderBlock();
+        try {
+            (new FpcPierceNginxMapWriter($this->paths))->publish();
+        } catch (\Throwable) {
+            // Conf write continues; nginx -t will fail closed if pierce map missing.
+        }
+        $quotedFpcPierceMap = $this->nginxQuotedPath(
+            $this->paths->confDir() . DIRECTORY_SEPARATOR . FpcPierceNginxMapWriter::MAP_BASENAME
+        );
+        $fpcHtmlDiskMapBlock = <<<NGINX
+
+    include {$quotedFpcPierceMap};
+    map \$http_authorization \$wls_fpc_html_bypass_auth {
+        default 0;
+        "~." 1;
+    }
+    map \$http_upgrade \$wls_fpc_html_bypass_upgrade {
+        default 0;
+        "~." 1;
+    }
+    # Product live-preview path may miss edge (token validated on origin).
+    map \$request_uri \$wls_fpc_html_bypass_preview_path {
+        default 0;
+        "~*^/~preview/" 1;
+    }
+    # Deploy public webhook MARKER (~wh~{random}) — never HTML disk HIT.
+    map \$request_uri \$wls_fpc_html_bypass_webhook_path {
+        default 0;
+        "~*^/~wh~" 1;
+    }
+    # Diagnostic / editor query bypass only with a valid install pierce stamp.
+    map \$request_uri \$wls_fpc_html_diag_query {
+        default 0;
+        "~*[?&](preview|visual_editor|editor_mode|workspace_preview|debug_hooks|no_cache|nocache|_wb_nc|wls_tpl_perf)=" 1;
+    }
+    map "\$wls_fpc_pierce_ok\$wls_fpc_html_diag_query" \$wls_fpc_html_diag_bypass {
+        default 0;
+        "11" 1;
+    }
+    map "\$wls_fpc_html_bypass_auth\$wls_fpc_html_bypass_upgrade\$wls_fpc_html_bypass_preview_path\$wls_fpc_html_bypass_webhook_path\$wls_fpc_html_diag_bypass" \$wls_fpc_html_disk_bypass {
+        default 0;
+        "~1" 1;
+    }
+    map \$http_host \$wls_fpc_html_host {
+        default \$http_host;
+        ""      \$host;
+    }
+    map \$http_accept_encoding \$wls_fpc_accepts_br {
+        default 0;
+        "~*(^|[, ])br(\$|[;,\\s])" 1;
+    }
+NGINX;
+
         if ($edgeCache) {
             $cacheHttpBlock = <<<NGINX
 
-    # HTML/API 边缘微缓存：有 Cookie、Authorization 或 Upgrade 时回源。
-    # 浏览器会给同域 CSS/JS 自动带 Cookie；静态扩展名使用独立 location，不套用该 bypass。
-    # FPC MISS/BYPASS 的冷 SSR 响应禁止写入 edge：否则 cookieless 公网探针会长期吃到
-    # 带 x-wls-fpc-status:MISS 的 STALE/HIT，而进程 FPC 实际已暖（warmup 为 in-process）。
-    # cache key 代次 |fpc2 淘汰历史误缓存的 MISS 条目。
+    # Static-extension edge zone only (CSS/JS/…). Business HTML uses generated/html
+    # try_files — do not proxy_cache HTML (avoids dual-path MISS poison).
     proxy_cache_path {$cacheDir} levels=1:2 keys_zone=wls_edge:{$keysZoneMb}m max_size={$cacheMaxMb}m inactive=30m use_temp_path=off;
-    map "\$http_cookie|\$http_authorization|\$http_upgrade" \$wls_edge_bypass {
-        default 1;
-        "||"    0;
-    }
-    map \$upstream_http_x_wls_fpc_status \$wls_edge_skip_fpc_miss_status {
-        default 0;
-        MISS    1;
-        BYPASS  1;
-    }
-    map \$upstream_http_x_weline_fpc \$wls_edge_skip_fpc_miss_weline {
-        default 0;
-        MISS    1;
-        BYPASS  1;
-    }
 NGINX;
             if ($this->paths->dynamicEdgeCacheEnabled()) {
                 $cacheHttpBlock .= $hostCacheState->nginxMap();
-                $cacheLocationBlock = <<<NGINX
-
-            proxy_cache wls_edge;
-            proxy_cache_key "\$scheme\$request_method\$host\$request_uri|fpc2\$wls_edge_host_generation";
-            proxy_cache_methods GET HEAD;
-            proxy_cache_valid 200 {$ttl}s;
-            proxy_cache_valid 301 302 {$ttl}s;
-            proxy_cache_lock on;
-            proxy_cache_lock_timeout 5s;
-            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
-            proxy_cache_background_update on;
-            proxy_cache_revalidate on;
-            proxy_cache_bypass \$wls_edge_bypass;
-            proxy_no_cache \$wls_edge_bypass \$wls_edge_skip_fpc_miss_status \$wls_edge_skip_fpc_miss_weline;
-            add_header X-Wls-Edge-Cache \$upstream_cache_status always;
-NGINX;
             }
         }
         $authorityMapBlock = <<<NGINX
@@ -314,12 +359,24 @@ NGINX;
         $businessProxyConnectTimeoutSec = self::BUSINESS_PROXY_CONNECT_TIMEOUT_SEC;
         $businessProxyReadTimeoutSec = self::BUSINESS_PROXY_READ_TIMEOUT_SEC;
         $businessProxySendTimeoutSec = self::BUSINESS_PROXY_SEND_TIMEOUT_SEC;
+        $nonHtmlOriginLocationBlock = $this->buildNonHtmlOriginProxyLocations(
+            $httpRedirectLocation,
+            $edgeLimitLocation,
+            $businessProxyConnectTimeoutSec,
+            $businessProxyReadTimeoutSec,
+            $businessProxySendTimeoutSec,
+            includeSseStream: true,
+            upstreamHostHeader: '$wls_upstream_authority',
+            emptyUpstreamConnection: false,
+        );
 
-        // Catalog/media files live on disk under {BP}/pub/media. Serving them
-        // through WLS means every listing thumbnail dies when workers drain or
-        // :9510 is briefly down (CF 502 → storefront placeholder). ^~ beats the
-        // extension regex that otherwise proxy_pass to wls_backend.
+        // Static disk layers (priority via ^~ then regex):
+        // 1) /pub/media  2) /static → pub/static  3) extension → FPC static disk
+        // 4) @wls_static_origin (+ optional proxy_cache). Do NOT try_files app/code.
         $quotedProjectRoot = $this->nginxQuotedPath($this->paths->projectRoot());
+        $quotedPubRoot = $this->nginxQuotedPath(
+            $this->paths->projectRoot() . DIRECTORY_SEPARATOR . 'pub'
+        );
         $mediaDiskLocationBlock = <<<NGINX
 
         location ^~ /pub/media/ {
@@ -330,20 +387,55 @@ NGINX;
             add_header X-Wls-Media-Disk "1" always;
             try_files \$uri =404;
         }
+        # Published compile tree: /static/... → {BP}/pub/static/...
+        location ^~ /static/ {
+{$httpRedirectLocation}
+            root {$quotedPubRoot};
+            access_log off;
+            expires 365d;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header X-Wls-Static-Disk "1" always;
+            try_files \$uri @wls_static_origin;
+{$locationProtocolHeaders}
+        }
 NGINX;
 
-        if ($edgeCache) {
-            // Keep in sync with WorkerPolicyKernel::PATH_SCAN_STATIC_EXTENSIONS.
-            $staticExt = 'avif|css|eot|gif|ico|jpe?g|js|map|mjs|m4a|aac|mp3|mp4|ogg|otf|png|svg|ttf|wasm|wav|webm|webp|woff2?';
-            $staticCacheLocationBlock = <<<NGINX
+        // Keep in sync with WorkerPolicyKernel::PATH_SCAN_STATIC_EXTENSIONS.
+        // FPC static mirror: generated/static/live/{Host}{uri} (WLS fills on cold).
+        $staticExt = 'avif|css|eot|gif|ico|jpe?g|js|map|mjs|m4a|aac|mp3|mp4|ogg|otf|png|svg|ttf|wasm|wav|webm|webp|woff2?';
+        $staticOriginCacheDirectives = $edgeCache
+            ? <<<NGINX
+            proxy_cache wls_edge;
+            proxy_cache_key "\$scheme\$request_method\$host\$request_uri";
+            proxy_cache_methods GET HEAD;
+            proxy_cache_valid 200 {$ttl}s;
+            proxy_cache_valid 301 302 {$ttl}s;
+            proxy_cache_lock on;
+            proxy_cache_lock_timeout 5s;
+            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+            proxy_cache_background_update on;
+            proxy_cache_revalidate on;
+            add_header X-Wls-Edge-Cache \$upstream_cache_status always;
+NGINX
+            : "            proxy_cache off;\n";
+        $staticCacheLocationBlock = <<<NGINX
 
-        # Public static assets: browsers always attach same-origin Cookie; do not
-        # treat Cookie/Authorization as edge bypass (unlike HTML/API below).
-        # Strip identity headers before upstream so WLS Static L1 never sees them.
+        # Module / DEV statics: FPC disk by Host+path, then WLS (which mirrors).
+        # ^~ /pub/media and ^~ /static already won above for those prefixes.
         location ~* \.(?:{$staticExt})$ {
+{$httpRedirectLocation}
+            root {$quotedProjectRoot};
+            try_files /generated/static/live/\$wls_fpc_html_host\$uri @wls_static_origin;
+            expires 365d;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header X-Wls-Static-Disk "1" always;
+            add_header X-Wls-Static-Fpc "1" always;
+            access_log off;
+{$locationProtocolHeaders}
+        }
+        location @wls_static_origin {
             proxy_pass http://wls_backend;
             proxy_http_version 1.1;
-{$httpRedirectLocation}
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
             proxy_set_header Connection \$wls_business_upstream_connection;
             proxy_set_header Host \$wls_upstream_authority;
@@ -362,20 +454,9 @@ NGINX;
             proxy_buffers 32 64k;
             proxy_busy_buffers_size 128k;
             proxy_max_temp_file_size 0;
-            proxy_cache wls_edge;
-            proxy_cache_key "\$scheme\$request_method\$host\$request_uri";
-            proxy_cache_methods GET HEAD;
-            proxy_cache_valid 200 {$ttl}s;
-            proxy_cache_valid 301 302 {$ttl}s;
-            proxy_cache_lock on;
-            proxy_cache_lock_timeout 5s;
-            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
-            proxy_cache_background_update on;
-            proxy_cache_revalidate on;
-            add_header X-Wls-Edge-Cache \$upstream_cache_status always;
+{$staticOriginCacheDirectives}{$locationProtocolHeaders}
         }
 NGINX;
-        }
 
         $workerProcesses = $isWindows ? '1' : 'auto';
         // Windows nginx ignores/limits high rlimit; keep a conservative value.
@@ -415,7 +496,7 @@ http {
     open_file_cache_min_uses 2;
     open_file_cache_errors on;
 {$tempBlock}{$gzipBlock}
-{$cacheHttpBlock}{$authorityMapBlock}{$protocolMapBlock}
+{$cacheHttpBlock}{$fpcHtmlDiskMapBlock}{$authorityMapBlock}{$protocolMapBlock}
 {$edgeLimitHttpZone}
     upstream wls_backend {
 {$upstreamServers}
@@ -472,30 +553,26 @@ http {
             proxy_set_header X-Real-IP \$remote_addr;
         }
 
-        # Framework SSE is a long-lived subscription. Keep transport buffering,
-        # caching and compression disabled without changing ordinary requests.
-        location = /api/framework/stream {
-            proxy_pass http://wls_backend;
-            proxy_http_version 1.1;
-{$httpRedirectLocation}
-            proxy_set_header Upgrade \$wls_business_upstream_upgrade;
-            proxy_set_header Connection \$wls_business_upstream_connection;
-            proxy_set_header Host \$wls_upstream_authority;
-            proxy_set_header X-Forwarded-Port \$server_port;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_buffering off;
-            proxy_cache off;
-            proxy_no_cache 1;
-            gzip off;
-            proxy_read_timeout 300s;
-            proxy_send_timeout 300s;
-        }
+{$nonHtmlOriginLocationBlock}
 {$mediaDiskLocationBlock}
 {$staticCacheLocationBlock}
+        # FPC URL tree: generated/html/live/{Host}/…/index.html.br. Miss / bypass / no-br → @wls_html_origin.
+        # Non-HTML (/api/, /bin/query, area prefixes) already proxy above — never try_files.
         location / {
+            error_page 418 = @wls_html_origin;
+            if (\$wls_fpc_html_disk_bypass) {
+                return 418;
+            }
+            if (\$wls_fpc_accepts_br = 0) {
+                return 418;
+            }
+            root {$quotedFpcHtmlRoot};
+            try_files \$uri/index.html.br =418;
+            default_type text/html;
+            charset utf-8;
+{$fpcHtmlDiskHitHeaders}{$httpRedirectLocation}{$locationProtocolHeaders}
+        }
+        location @wls_html_origin {
 {$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
 {$httpRedirectLocation}
@@ -507,6 +584,14 @@ http {
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
             proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Wls-Fpc-Bypass "";
+            proxy_set_header X-Wls-Internal-Fpc-Bypass "";
+            proxy_set_header X-Wls-Dynamic-Warmup "";
+            proxy_set_header X-Wls-Internal-Dynamic-Warmup "";
+            proxy_set_header X-Wls-Dynamic-Benchmark "";
+            proxy_set_header X-Wls-Fpc-Prime "";
+            proxy_set_header Wls-Fpc-Bypass "";
+            proxy_set_header Wls-Internal-Dynamic-Warmup "";
             proxy_connect_timeout {$businessProxyConnectTimeoutSec}s;
             proxy_read_timeout {$businessProxyReadTimeoutSec}s;
             proxy_send_timeout {$businessProxySendTimeoutSec}s;
@@ -515,7 +600,8 @@ http {
             proxy_buffers 32 64k;
             proxy_busy_buffers_size 128k;
             proxy_max_temp_file_size 0;
-{$locationProtocolHeaders}{$cacheLocationBlock}
+            proxy_cache off;
+{$locationProtocolHeaders}
         }
     }
 {$apexRedirectBlock}{$distinctHostBlocks}
@@ -1021,6 +1107,27 @@ NGINX;
             $connectTimeout = self::BUSINESS_PROXY_CONNECT_TIMEOUT_SEC;
             $readTimeout = self::BUSINESS_PROXY_READ_TIMEOUT_SEC;
             $sendTimeout = self::BUSINESS_PROXY_SEND_TIMEOUT_SEC;
+            // 同上方：变量必须与路径同处一对引号内，否则 nginx 报 unexpected "/"。
+            $quotedFpcHtmlRoot = '"' . \str_replace(
+                ['\\', '"'],
+                ['/', '\\"'],
+                $this->paths->projectRoot()
+                . DIRECTORY_SEPARATOR . 'generated'
+                . DIRECTORY_SEPARATOR . 'html'
+                . DIRECTORY_SEPARATOR . 'live'
+            ) . '/$wls_fpc_html_host"';
+            $fpcHtmlDiskHitHeaders = $this->buildFpcHtmlDiskHitHeaderBlock();
+            $originName = $this->nginxSafeNamedLocationSuffix($host);
+            $nonHtmlOriginLocationBlock = $this->buildNonHtmlOriginProxyLocations(
+                '',
+                $edgeLimitLocation,
+                $connectTimeout,
+                $readTimeout,
+                $sendTimeout,
+                includeSseStream: true,
+                upstreamHostHeader: '$wls_upstream_authority',
+                emptyUpstreamConnection: false,
+            );
             $blocks[] = <<<NGINX
 
     # WLS distinct-certificate host (SNI exact leaf for {$host})
@@ -1047,8 +1154,22 @@ NGINX;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
         }
-
+{$nonHtmlOriginLocationBlock}
         location / {
+            error_page 418 = @wls_html_origin_distinct_{$originName};
+            if (\$wls_fpc_html_disk_bypass) {
+                return 418;
+            }
+            if (\$wls_fpc_accepts_br = 0) {
+                return 418;
+            }
+            root {$quotedFpcHtmlRoot};
+            try_files \$uri/index.html.br =418;
+            default_type text/html;
+            charset utf-8;
+{$fpcHtmlDiskHitHeaders}
+        }
+        location @wls_html_origin_distinct_{$originName} {
 {$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
@@ -1165,6 +1286,18 @@ NGINX;
         ssl_buffer_size     4k;
 NGINX;
         }
+        // Keep same-origin query-bin / REST / BinQuery on apex workable:
+        // redirect:manual workers cannot follow the www 301 (opaque → WQB1 toast).
+        $apexNonHtmlOriginLocationBlock = $this->buildNonHtmlOriginProxyLocations(
+            '',
+            '',
+            self::BUSINESS_PROXY_CONNECT_TIMEOUT_SEC,
+            self::BUSINESS_PROXY_READ_TIMEOUT_SEC,
+            self::BUSINESS_PROXY_SEND_TIMEOUT_SEC,
+            includeSseStream: true,
+            upstreamHostHeader: '$host',
+            emptyUpstreamConnection: true,
+        );
 
         return <<<NGINX
 
@@ -1183,23 +1316,7 @@ NGINX;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
         }
-
-        # Keep same-origin query-bin / REST on apex workable: redirect:manual
-        # workers cannot follow the www 301 (opaque redirect → WQB1 toast).
-        location ^~ /api/ {
-            proxy_pass http://wls_backend;
-            proxy_http_version 1.1;
-            proxy_set_header Connection "";
-            proxy_set_header Host \$host;
-            proxy_set_header X-Forwarded-Port \$server_port;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_buffering on;
-            proxy_cache off;
-        }
-
+{$apexNonHtmlOriginLocationBlock}
         location / {
             add_header Cache-Control "no-store" always;
             return 301 https://{$wwwHost}\$request_uri;
@@ -1732,6 +1849,233 @@ NGINX;
         }
 
         return $left !== '' && \hash_equals($left, $right);
+    }
+
+    private function nginxSafeNamedLocationSuffix(string $host): string
+    {
+        $safe = \preg_replace('/[^a-zA-Z0-9_]+/', '_', \strtolower(\trim($host)));
+        $safe = \is_string($safe) ? \trim($safe, '_') : '';
+
+        return $safe !== '' ? $safe : 'host';
+    }
+
+    /**
+     * Path prefixes that never publish FPC HTML disk trees. Requests must
+     * proxy_pass to WLS without try_files $uri/index.html.br.
+     *
+     * @return list<string> URL path segments without leading/trailing slash
+     */
+    private function resolveNonHtmlOriginPathPrefixes(): array
+    {
+        $prefixes = [];
+        foreach (['rest_frontend', 'rest_backend', 'backend'] as $area) {
+            try {
+                $prefix = \trim((string)(Env::getAreaRoutePrefix($area) ?: ''), '/');
+            } catch (\Throwable) {
+                $prefix = '';
+            }
+            if ($prefix === '' && $area === 'rest_frontend') {
+                $prefix = 'api';
+            }
+            if ($prefix !== '' && $this->isSafeNginxLocationSegment($prefix)) {
+                $prefixes[\strtolower($prefix)] = \strtolower($prefix);
+            }
+        }
+        // Semantic /api/ stays even when rest_frontend is customized (Env keeps
+        // bare "api" as a reserved area path segment for query-bin / REST).
+        if ($this->isSafeNginxLocationSegment('api')) {
+            $prefixes['api'] = 'api';
+        }
+
+        return \array_values($prefixes);
+    }
+
+    private function isSafeNginxLocationSegment(string $segment): bool
+    {
+        return $segment !== ''
+            && \preg_match('/\A[A-Za-z0-9_-]{1,128}\z/', $segment) === 1;
+    }
+
+    /**
+     * Outbound headers for Nginx html-disk FPC HIT (try_files index.html.br).
+     *
+     * Aligns with Framework FullPageCacheCoordinator::applyFpcHitEdgeCacheHeaders
+     * so Cloudflare bypass_by_default can store the response. Disk is body-only;
+     * these are static edge-policy headers, not a replayed header bag.
+     */
+    private function buildFpcHtmlDiskHitHeaderBlock(): string
+    {
+        $browserTtl = self::FPC_HTML_DISK_BROWSER_MAX_AGE_DEFAULT;
+        try {
+            $browserTtl = (int)Env::get(
+                'wls.performance.fpc_browser_max_age_seconds',
+                self::FPC_HTML_DISK_BROWSER_MAX_AGE_DEFAULT,
+            );
+        } catch (\Throwable) {
+            $browserTtl = self::FPC_HTML_DISK_BROWSER_MAX_AGE_DEFAULT;
+        }
+        $browserTtl = max(0, min($browserTtl, self::FPC_HTML_DISK_CDN_MAX_AGE_SECONDS, 86400));
+        $cdnDirective = 'public, max-age=' . self::FPC_HTML_DISK_CDN_MAX_AGE_SECONDS;
+        $browserDirective = $browserTtl > 0
+            ? 'public, max-age=' . $browserTtl
+            : 'public, max-age=0, must-revalidate';
+
+        return <<<NGINX
+            add_header Content-Encoding br always;
+            add_header Vary "Accept-Encoding, Cookie" always;
+            add_header Cache-Control "{$browserDirective}" always;
+            add_header CDN-Cache-Control "{$cdnDirective}" always;
+            add_header Cloudflare-CDN-Cache-Control "{$cdnDirective}" always;
+            add_header X-Weline-Cache-Status hit always;
+            add_header X-Weline-FPC HIT always;
+            add_header X-Weline-FPC-Source html-disk always;
+
+NGINX;
+    }
+
+    /**
+     * Exact + prefix locations that skip HTML try_files and go straight to origin.
+     *
+     * Covers: /{rest_frontend|rest_backend|backend}/…, always /api/…,
+     * exact /bin/query, and SSE /{prefix}/framework/stream.
+     */
+    private function buildNonHtmlOriginProxyLocations(
+        string $httpRedirectLocation,
+        string $edgeLimitLocation,
+        int $connectTimeoutSec,
+        int $readTimeoutSec,
+        int $sendTimeoutSec,
+        bool $includeSseStream = true,
+        string $upstreamHostHeader = '$wls_upstream_authority',
+        bool $emptyUpstreamConnection = false,
+    ): string {
+        if ($upstreamHostHeader !== '$wls_upstream_authority' && $upstreamHostHeader !== '$host') {
+            throw new \InvalidArgumentException('Managed nginx non-HTML origin Host header is unsafe.');
+        }
+        // Values are interpolated via {$var} into the heredoc — do not pre-escape $.
+        $hostHeader = $upstreamHostHeader === '$host' ? '$host' : '$wls_upstream_authority';
+        $upgradeHeader = $emptyUpstreamConnection
+            ? ''
+            : "\n            proxy_set_header Upgrade \$wls_business_upstream_upgrade;";
+        $connectionHeader = $emptyUpstreamConnection
+            ? '""'
+            : '$wls_business_upstream_connection';
+
+        $blocks = [];
+        if ($includeSseStream) {
+            foreach ($this->resolveNonHtmlOriginPathPrefixes() as $prefix) {
+                // SSE only exists under rest_frontend (semantic /api/ + configured prefix).
+                if (!$this->isRestFrontendOrApiSemanticPrefix($prefix)) {
+                    continue;
+                }
+                $blocks[] = <<<NGINX
+
+        # Framework SSE: long-lived; no try_files / buffering / gzip.
+        location = /{$prefix}/framework/stream {
+            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+{$httpRedirectLocation}{$upgradeHeader}
+            proxy_set_header Connection {$connectionHeader};
+            proxy_set_header Host {$hostHeader};
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_buffering off;
+            proxy_cache off;
+            proxy_no_cache 1;
+            gzip off;
+            proxy_read_timeout 300s;
+            proxy_send_timeout 300s;
+        }
+NGINX;
+            }
+        }
+
+        $blocks[] = <<<NGINX
+
+        # External BinQuery SDK entry — never an FPC HTML path.
+        location = /bin/query {
+{$edgeLimitLocation}            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+{$httpRedirectLocation}{$upgradeHeader}
+            proxy_set_header Connection {$connectionHeader};
+            proxy_set_header Host {$hostHeader};
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_connect_timeout {$connectTimeoutSec}s;
+            proxy_read_timeout {$readTimeoutSec}s;
+            proxy_send_timeout {$sendTimeoutSec}s;
+            proxy_buffering on;
+            proxy_cache off;
+        }
+NGINX;
+
+        foreach ($this->resolveNonHtmlOriginPathPrefixes() as $prefix) {
+            $blocks[] = <<<NGINX
+
+        # Area prefix {$prefix}: REST / query-bin / admin API — skip HTML try_files.
+        location ^~ /{$prefix}/ {
+{$edgeLimitLocation}            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+{$httpRedirectLocation}{$upgradeHeader}
+            proxy_set_header Connection {$connectionHeader};
+            proxy_set_header Host {$hostHeader};
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_connect_timeout {$connectTimeoutSec}s;
+            proxy_read_timeout {$readTimeoutSec}s;
+            proxy_send_timeout {$sendTimeoutSec}s;
+            proxy_buffering on;
+            proxy_cache off;
+        }
+NGINX;
+        }
+
+        // Module Frontend\\Api PC surfaces (purchase-panel, variant-availability…).
+        $blocks[] = <<<NGINX
+
+        location ~* ^/[A-Za-z0-9_-]+/frontend/api(/|\$) {
+{$edgeLimitLocation}            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+{$httpRedirectLocation}{$upgradeHeader}
+            proxy_set_header Connection {$connectionHeader};
+            proxy_set_header Host {$hostHeader};
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_connect_timeout {$connectTimeoutSec}s;
+            proxy_read_timeout {$readTimeoutSec}s;
+            proxy_send_timeout {$sendTimeoutSec}s;
+            proxy_buffering on;
+            proxy_cache off;
+        }
+NGINX;
+
+        return \implode('', $blocks);
+    }
+
+    private function isRestFrontendOrApiSemanticPrefix(string $prefix): bool
+    {
+        if ($prefix === 'api') {
+            return true;
+        }
+        try {
+            $frontend = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/'));
+        } catch (\Throwable) {
+            $frontend = 'api';
+        }
+
+        return $frontend !== '' && \strtolower($prefix) === $frontend;
     }
 
     private function nginxQuotedPath(string $path): string

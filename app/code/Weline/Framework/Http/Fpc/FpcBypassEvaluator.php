@@ -43,20 +43,30 @@ final class FpcBypassEvaluator
         }
         $env = \is_array($facts['env'] ?? null) ? $facts['env'] : [];
 
+        $pierceOk = (bool)($facts['pierce_stamp_valid'] ?? false)
+            || \in_array(\strtolower(\trim((string)($env['fpc_pierce_stamp'] ?? ''))), ['1', 'true', 'yes', 'on'], true);
+
         foreach ($rules as $rule) {
             if (!\is_array($rule)) {
                 continue;
             }
             $match = \is_array($rule['match'] ?? null) ? $rule['match'] : [];
             $requestPath = (string)($facts['request_path'] ?? '');
-            if (self::matchQueryKeys($match, $query)
+            $requiresPierce = (bool)($match['require_pierce_stamp'] ?? false)
+                || (($rule['id'] ?? '') === 'theme.editor_preview_query');
+            $hit = self::matchQueryKeys($match, $query)
                 || self::matchCookieRegex($match, $cookie)
                 || self::matchRequestHeaders($match, $headers)
                 || self::matchEnvFlags($match, $env)
-                || self::matchUriPathPrefixes($match, $requestPath)
-            ) {
-                return true;
+                || self::matchUriPathPrefixes($match, $requestPath);
+            if (!$hit) {
+                continue;
             }
+            if ($requiresPierce && !$pierceOk) {
+                continue;
+            }
+
+            return true;
         }
 
         return false;
@@ -99,6 +109,9 @@ final class FpcBypassEvaluator
             [
                 'id' => 'theme.editor_preview_query',
                 'match' => [
+                    // Presence alone must not bypass; require_pierce_stamp gated in shouldBypass().
+                    // Product preview uses /~preview/{token}/ path (separate rule) or validated token.
+                    'require_pierce_stamp' => true,
                     'query_keys' => [
                         'preview',
                         'visual_editor',
@@ -107,7 +120,8 @@ final class FpcBypassEvaluator
                         'debug_hooks',
                         'no_cache',
                         'nocache',
-                        'weline_preview_token',
+                        '_wb_nc',
+                        'wls_tpl_perf',
                     ],
                 ],
                 'effect' => 'bypass_serve_and_publish',
@@ -123,6 +137,14 @@ final class FpcBypassEvaluator
                 'id' => 'theme.live_preview_path_prefix',
                 'match' => [
                     'uri_path_prefixes' => ['/~preview/'],
+                ],
+                'effect' => 'bypass_serve_and_publish',
+            ],
+            // Deploy webhook MARKER (~wh~); keep in sync with DeployWebhookRouteService::MARKER.
+            [
+                'id' => 'deploy.webhook_path_prefix',
+                'match' => [
+                    'uri_path_prefixes' => ['/~wh~'],
                 ],
                 'effect' => 'bypass_serve_and_publish',
             ],

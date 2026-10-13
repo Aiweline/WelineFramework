@@ -18,6 +18,8 @@ final class ThemeEditorFpcBypassProvider implements FpcBypassRuleProviderInterfa
             [
                 'id' => 'theme.editor_preview_query',
                 'match' => [
+                    // Open-source short names stay; without pierce stamp they must not bypass.
+                    'require_pierce_stamp' => true,
                     'query_keys' => [
                         'preview',
                         'visual_editor',
@@ -26,6 +28,8 @@ final class ThemeEditorFpcBypassProvider implements FpcBypassRuleProviderInterfa
                         'debug_hooks',
                         'no_cache',
                         'nocache',
+                        '_wb_nc',
+                        'wls_tpl_perf',
                         'weline_preview_token',
                     ],
                 ],

@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Runtime;
 
 /**
- * Last-resort reclaimable adapter for FullPageCache process L1.
+ * Reclaimable adapter for FullPageCache process L1 (pointer receipts + formatted bags).
  */
 final class FullPageCacheReclaimableAdapter implements MemoryReclaimableInterface
 {
@@ -15,7 +15,13 @@ final class FullPageCacheReclaimableAdapter implements MemoryReclaimableInterfac
 
     public function estimateBytes(): int
     {
-        return 0;
+        if (!\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class, false)
+            && !\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class, true)
+        ) {
+            return 0;
+        }
+
+        return \max(0, \Weline\Framework\Router\FullPageCacheCoordinator::processPayloadTotalBytes());
     }
 
     public function reclaimPriority(): int
@@ -30,7 +36,21 @@ final class FullPageCacheReclaimableAdapter implements MemoryReclaimableInterfac
 
     public function compact(): array
     {
-        return ['freed_bytes' => 0, 'skipped' => false, 'name' => $this->getName()];
+        if (!WlsConcurrency::canCompactProcessCaches()) {
+            return ['freed_bytes' => 0, 'skipped' => true, 'name' => $this->getName()];
+        }
+        if (!\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class, false)
+            && !\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class, true)
+        ) {
+            return ['freed_bytes' => 0, 'skipped' => true, 'name' => $this->getName()];
+        }
+        $freed = \Weline\Framework\Router\FullPageCacheCoordinator::softCompactProcessCache();
+
+        return [
+            'freed_bytes' => $freed > 0 ? $freed : 0,
+            'skipped' => false,
+            'name' => $this->getName(),
+        ];
     }
 
     public function evict(int $targetBytes): array

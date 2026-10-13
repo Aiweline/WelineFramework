@@ -728,9 +728,10 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         $runtimeReceipt->setValue($runtime, $receipt);
 
         self::assertSame($receipt, $runtime->resolveHomepageFastPathReceipt('https://example.test/'));
-        self::assertNull($runtime->resolveHomepageFastPathReceipt(
+        // Guest shell receipt is cookie-independent (signed-in / preference cookies OK).
+        self::assertSame($receipt, $runtime->resolveHomepageFastPathReceipt(
             'https://example.test/',
-            'private=value',
+            'WELINE_SESSID=' . str_repeat('a', 32),
         ));
         self::assertNull($runtime->resolveHomepageFastPathReceipt('https://example.test/catalog'));
         self::assertNull($runtime->resolveHomepageFastPathReceipt('https://other.example.test/'));

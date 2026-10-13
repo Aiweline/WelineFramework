@@ -7,9 +7,10 @@ namespace Weline\Framework\Http\Fpc;
 /**
  * Reverse index: storefront full URL → Shared FPC cache keys + cold body files.
  *
- * Index keys are host-scoped (`scheme://host[:port]/path`). Path-only keys are
- * legacy (purge / old writes); cold-disk serve must never look up path-only keys
- * or hosts will cross-contaminate (e.g. `/` shared across websites).
+ * Index keys are host-scoped (`scheme://host[:port]/path`) and path-only —
+ * query never participates (product variants share one body). Path-fragment
+ * keys without host are legacy purge only; cold-disk serve must never look up
+ * those or hosts will cross-contaminate (e.g. `/` shared across websites).
  */
 final class FpcPayloadPathIndex
 {
@@ -32,7 +33,7 @@ final class FpcPayloadPathIndex
                     continue;
                 }
                 foreach ($lines as $line) {
-                    $parts = \explode("\t", $line, 2);
+                    $parts = \explode("\t", $line);
                     $bodyFile = \trim((string)($parts[0] ?? ''));
                     $cacheKey = \trim((string)($parts[1] ?? ''));
                     if ($bodyFile !== '' && \is_file($bodyFile) && self::isUnderPayloadBase($bodyFile)) {
@@ -62,16 +63,70 @@ final class FpcPayloadPathIndex
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0775, true);
         }
-        $line = $bodyFile . "\t" . $cacheKey;
+        // Third column stores the host-scoped index key so offline bake export can
+        // enumerate without reversing md5 filenames. Lookup/purge still use cols 0–1.
+        $line = $bodyFile . "\t" . $cacheKey . "\t" . $indexKey;
         $existing = @\file($refsFile, \FILE_IGNORE_NEW_LINES | \FILE_SKIP_EMPTY_LINES);
         if (\is_array($existing)) {
             foreach ($existing as $row) {
-                if ($row === $line) {
+                if ($row === $line || \str_starts_with($row, $bodyFile . "\t" . $cacheKey)) {
                     return;
                 }
             }
         }
         @\file_put_contents($refsFile, $line . "\n", \FILE_APPEND | \LOCK_EX);
+    }
+
+    /**
+     * Walk path-index refs that carry an explicit host-scoped index_key (3rd column).
+     * Legacy 2-column rows are skipped (cannot reverse md5 filenames safely).
+     *
+     * @return list<array{index_key:string,body_file:string,cache_key:string}>
+     */
+    public static function enumerateHostScopedRefs(): array
+    {
+        $base = self::indexBaseDir();
+        if (!\is_dir($base)) {
+            return [];
+        }
+        $out = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $fileInfo) {
+            if (!$fileInfo instanceof \SplFileInfo || !$fileInfo->isFile()) {
+                continue;
+            }
+            if (!\str_ends_with($fileInfo->getFilename(), '.refs')) {
+                continue;
+            }
+            $lines = @\file($fileInfo->getPathname(), \FILE_IGNORE_NEW_LINES | \FILE_SKIP_EMPTY_LINES);
+            if (!\is_array($lines)) {
+                continue;
+            }
+            foreach ($lines as $line) {
+                $parts = \explode("\t", $line, 3);
+                if (\count($parts) < 3) {
+                    continue;
+                }
+                $bodyFile = \trim((string)$parts[0]);
+                $cacheKey = \trim((string)$parts[1]);
+                $indexKey = \trim((string)$parts[2]);
+                if ($bodyFile === '' || $cacheKey === '' || $indexKey === '') {
+                    continue;
+                }
+                if (!self::isHostScopedIndexKey($indexKey) || !self::isUnderPayloadBase($bodyFile)) {
+                    continue;
+                }
+                $out[] = [
+                    'index_key' => $indexKey,
+                    'body_file' => $bodyFile,
+                    'cache_key' => $cacheKey,
+                ];
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -96,7 +151,7 @@ final class FpcPayloadPathIndex
         }
         $out = [];
         foreach ($lines as $line) {
-            $parts = \explode("\t", $line, 2);
+            $parts = \explode("\t", $line);
             $bodyFile = \trim((string)($parts[0] ?? ''));
             $cacheKey = \trim((string)($parts[1] ?? ''));
             if ($bodyFile === '' || !self::isUnderPayloadBase($bodyFile)) {
@@ -139,72 +194,20 @@ final class FpcPayloadPathIndex
                 }
             }
             $path = self::normalizePathOnly((string)($parts['path'] ?? '/'));
-            // Keep distinguishing query (e.g. guide?view=destinations vs view=routes).
-            // Stripping query collapsed url_rewrite targets onto one cold-disk body.
-            $query = self::normalizeIndexQuery((string)($parts['query'] ?? ''));
+            // FPC index is path-only: query never participates (product variants,
+            // guide view=, storm keys). Aligns with FpcHtmlDiskStore + Coordinator.
 
-            return $scheme . '://' . $authority . $path . ($query !== '' ? '?' . $query : '');
+            return $scheme . '://' . $authority . $path;
         }
 
-        // Path-only (+ optional query) for legacy purge keys.
+        // Path-only for legacy purge keys (strip any query suffix).
         if (\str_contains($raw, '?')) {
             $qPos = \strpos($raw, '?');
-            $pathPart = self::normalizePathOnly(\substr($raw, 0, $qPos));
-            $query = self::normalizeIndexQuery(\substr($raw, $qPos + 1));
 
-            return $pathPart . ($query !== '' ? '?' . $query : '');
+            return self::normalizePathOnly(\substr($raw, 0, $qPos));
         }
 
         return self::normalizePathOnly($raw);
-    }
-
-    /**
-     * Stable query for index keys: drop empty keys, sort, keep content params.
-     */
-    private static function normalizeIndexQuery(string $query): string
-    {
-        $query = \trim($query);
-        if ($query === '') {
-            return '';
-        }
-        \parse_str($query, $params);
-        if (!\is_array($params) || $params === []) {
-            return '';
-        }
-        $ignorable = [
-            '_' => true,
-            'fbclid' => true,
-            'gclid' => true,
-            'gbraid' => true,
-            'wbraid' => true,
-            'msclkid' => true,
-            'yclid' => true,
-            'igshid' => true,
-            'mc_cid' => true,
-            'mc_eid' => true,
-            'ai_perf' => true,
-            'browser_perf' => true,
-            'codex_perf' => true,
-            '_wb_nc' => true,
-            'wls_tpl_perf' => true,
-        ];
-        $kept = [];
-        foreach ($params as $key => $value) {
-            $key = \strtolower(\trim((string)$key));
-            if ($key === '' || isset($ignorable[$key])) {
-                continue;
-            }
-            if (\str_starts_with($key, 'utm_') || \str_starts_with($key, 'mtm_') || \str_starts_with($key, 'pk_')) {
-                continue;
-            }
-            $kept[$key] = $value;
-        }
-        if ($kept === []) {
-            return '';
-        }
-        \ksort($kept);
-
-        return \http_build_query($kept);
     }
 
     /**

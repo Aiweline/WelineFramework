@@ -577,7 +577,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
         ));
     }
 
-    public function testScopedWebsiteSessionCookieAliasBypassesGuestFpc(): void
+    public function testScopedWebsiteSessionCookieAliasDetectsLoggedInSession(): void
     {
         $coordinator = $this->coordinator(new InMemoryCachePool());
         $method = new \ReflectionMethod($coordinator, 'cookieHeaderHasLoggedInFrontendSession');
@@ -586,7 +586,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $this->setKnownLoggedInSession($sid);
 
         // Document login often lands on WELINE_SESSID_{port}; CookieScope later uses _{port}_w0.
-        // resolve() alone would miss the alias and keep serving guest FPC HTML.
+        // Detection must see aliases so build/publish stay blocked; serve still HIT guest FPC.
         self::assertTrue($method->invoke(
             $coordinator,
             'WELINE_SESSID_9555_w0=' . $sid,
@@ -862,7 +862,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertNotSame($legacyV4SchemaNeutral, $currentSchemaNeutral);
     }
 
-    public function testLocalizedHomepageReceiptRejectsAuthorityCookiesAndEvictedPayload(): void
+    public function testLocalizedHomepageReceiptIgnoresPreferenceCookiesAndRejectsEvictedPayload(): void
     {
         $coordinator = $this->coordinator(new InMemoryCachePool());
         $fullUri = 'https://example.test:8443/USD/en_US/';
@@ -882,9 +882,10 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertNull($coordinator->resolveLocalizedHomepageProcessReceipt(
             'https://example.test/USD/en_US/',
         ));
-        self::assertNull($coordinator->resolveLocalizedHomepageProcessReceipt(
+        // Preference / session cookies must not block guest localized homepage receipt.
+        self::assertIsArray($coordinator->resolveLocalizedHomepageProcessReceipt(
             $fullUri,
-            'WELINE_USER_CURRENCY=USD',
+            'WELINE_USER_CURRENCY=USD; WELINE_SESSID=' . str_repeat('b', 32),
         ));
         self::assertNull($coordinator->resolveLocalizedHomepageProcessReceipt(
             'https://example.test:8443/USD/en_US/catalog',
@@ -1199,17 +1200,31 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $hydrate = new \ReflectionMethod($coordinator, 'hydrateSharedPayload');
         $hydrate->setAccessible(true);
 
+        $pageUrl = 'https://externalize-br-' . \uniqid('', true) . '.test/';
         $shared = $externalize->invoke($coordinator, 'externalize-br-key', [
             KeyBuilder::UNIFIED_CACHE_FPC_KEY => $plain,
             'fpc_br_b64' => \base64_encode($br),
             KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
-        ]);
+        ], $pageUrl);
         self::assertIsArray($shared['fpc_body_file'] ?? null);
         self::assertSame('br', $shared['fpc_body_file']['encoding'] ?? null);
-        self::assertStringEndsWith('.br', (string)($shared['fpc_body_file']['path'] ?? ''));
+        $bodyPath = (string)($shared['fpc_body_file']['path'] ?? '');
+        self::assertStringEndsWith('index.html.br', $bodyPath);
+        self::assertStringContainsString(
+            'generated' . \DIRECTORY_SEPARATOR . 'html' . \DIRECTORY_SEPARATOR . 'live',
+            $bodyPath,
+        );
+        self::assertStringNotContainsString(
+            \DIRECTORY_SEPARATOR . 'generations' . \DIRECTORY_SEPARATOR,
+            $bodyPath,
+        );
+        self::assertStringNotContainsString('router-fpc-payloads', $bodyPath);
         self::assertNull($shared[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null);
         self::assertNull($shared['fpc_br_b64'] ?? null);
-        self::assertFileExists((string)$shared['fpc_body_file']['path']);
+        self::assertFileExists($bodyPath);
+        $plainSibling = \preg_replace('/\.br$/i', '', $bodyPath);
+        self::assertIsString($plainSibling);
+        self::assertFileDoesNotExist($plainSibling);
 
         $hydrated = $hydrate->invoke($coordinator, $shared);
         self::assertIsArray($hydrated);
@@ -1219,7 +1234,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $resolve->setAccessible(true);
         self::assertSame($plain, $resolve->invoke($coordinator, $hydrated));
 
-        @\unlink((string)$shared['fpc_body_file']['path']);
+        \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::purgeUrls([$pageUrl]);
         \Weline\Framework\App\Env::set('wls.performance.fpc_shared_file_body_min_bytes', 262144);
     }
 

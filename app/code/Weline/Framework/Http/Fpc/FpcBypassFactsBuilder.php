@@ -61,14 +61,18 @@ final class FpcBypassFactsBuilder
             }
         }
 
+        $pierceOk = FpcPierceStamp::isValidRequest($cookieHeader, $query);
+
         return [
             'query' => $query,
             'cookie_header' => $cookieHeader,
             'headers' => $headersLower,
             'request_path' => $requestPath,
+            'pierce_stamp_valid' => $pierceOk,
             'env' => [
                 'editor_mode' => $editorMode,
                 'cdn_fpc_dev_mode' => $cdnFlag ? '1' : '',
+                'fpc_pierce_stamp' => $pierceOk ? '1' : '',
             ],
         ];
     }

@@ -290,7 +290,9 @@ class RequestLifecycleTrace
                 /** @var \Weline\Framework\Http\Request $request */
                 $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
                 $flag = (string)($request->getGet('wls_tpl_perf') ?? $request->getParam('wls_tpl_perf') ?? '');
-                if ($flag === '1' || \strtolower($flag) === 'true') {
+                if (($flag === '1' || \strtolower($flag) === 'true')
+                    && \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest()
+                ) {
                     return true;
                 }
             }
@@ -315,8 +317,11 @@ class RequestLifecycleTrace
             return false;
         }
         $value = \strtolower((string)$flag);
+        if ($value !== '1' && $value !== 'true') {
+            return false;
+        }
 
-        return $value === '1' || $value === 'true';
+        return \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest();
     }
 
     /**

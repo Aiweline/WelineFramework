@@ -507,6 +507,7 @@ $navItems = [
         'path' => $securityPath,
         'children' => [
             ['key' => 'security', 'label' => __('概览'), 'path' => $securityPath],
+            ['key' => 'fpc_pierce', 'label' => __('FPC 打穿章'), 'path' => '*/backend/wls-panel/fpc-pierce'],
             ['key' => 'security_logs', 'label' => __('攻击日志'), 'path' => $securityLogsPath],
             ['key' => 'security_rules', 'label' => __('规则'), 'path' => $securityRulesPanelPath],
             ['key' => 'security_policy', 'label' => __('项目策略'), 'path' => $securityPolicyPath],
@@ -997,7 +998,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             loading="eager"></iframe>
                 <?php endif; ?>
             </section>
-        <?php elseif (in_array($activePage, ['security', 'security_logs', 'security_rules', 'security_policy', 'security_audit', 'security_probes'], true)): ?>
+        <?php elseif (in_array($activePage, ['security', 'fpc_pierce', 'security_logs', 'security_rules', 'security_policy', 'security_audit', 'security_probes'], true)): ?>
             <?php
             // 导航路径：导航阶段 Fiber 让出后局部字符串也可能被清空。
             $securityProbesPath = '*/backend/wls-panel/security-probes';
@@ -1006,9 +1007,13 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
             $securityPolicyPath = '*/backend/wls-panel/security-policy';
             $securityAuditPath = '*/backend/wls-panel/security-audit';
             $securityPath = '*/backend/wls-panel/security';
+            $fpcPiercePath = '*/backend/wls-panel/fpc-pierce';
+            $fpcPierceRotatePath = '*/backend/wls-panel/fpc-pierce-rotate';
+            $fpcPierceIssuePath = '*/backend/wls-panel/fpc-pierce-issue';
             $securityAdvancedRulesPath = '*/backend/server-monitor/security-rules';
             $escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
             $securityPageIsOverview = $activePage === 'security';
+            $securityPageIsPierce = $activePage === 'fpc_pierce';
             $securityPageIsLogs = $activePage === 'security_logs';
             $securityPageIsRules = $activePage === 'security_rules';
             $securityPageIsPolicy = $activePage === 'security_policy';
@@ -1020,8 +1025,16 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                 'security_policy' => __('项目安全策略'),
                 'security_audit' => __('策略审计'),
                 'security_probes' => __('安全探针'),
+                'fpc_pierce' => __('FPC 打穿章'),
                 default => __('安全概览'),
             };
+            $panelPierceStamp = $this->getData('panelPierceStamp');
+            $panelPierceStamp = is_array($panelPierceStamp) ? $panelPierceStamp : [];
+            $pierceMasked = trim((string)($panelPierceStamp['secret_masked'] ?? ''));
+            $pierceSuffix = trim((string)($panelPierceStamp['query_suffix'] ?? ''));
+            $pierceCookieName = trim((string)($panelPierceStamp['cookie_name'] ?? 'w_weline_fpc_pierce'));
+            $pierceQueryName = trim((string)($panelPierceStamp['query_name'] ?? 'w_fpc_pierce'));
+            $pierceError = trim((string)($panelPierceStamp['error'] ?? ''));
             $panelSecurityProbe = $this->getData('panelSecurityProbe');
             $panelSecurityProbe = is_array($panelSecurityProbe) ? $panelSecurityProbe : [];
             $probeTokenMeta = is_array($panelSecurityProbe['token'] ?? null) ? $panelSecurityProbe['token'] : [];
@@ -1044,6 +1057,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <h2 id="wls-security-title"><?= $escapeHtml($securityPageHeading) ?></h2>
                     </div>
                     <div class="wls-section-actions">
+                        <a class="wls-secondary-button" href="@backend-url{$fpcPiercePath}"><?= __('FPC 打穿章') ?></a>
                         <a class="wls-secondary-button" href="@backend-url{$securityProbesPath}"><?= __('探针') ?></a>
                         <a class="wls-secondary-button" href="@backend-url{$securityRulesPanelPath}"><?= __('规则') ?></a>
                         <a class="wls-secondary-button" href="@backend-url{$securityLogsPath}"><?= __('攻击日志') ?></a>
@@ -1064,6 +1078,71 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     <section class="wls-inline-warning" aria-label="<?= __('安全数据警告') ?>">
                         <?= $escapeHtml($securityPanelError) ?>
                     </section>
+                <?php endif; ?>
+                <?php if ($securityPageIsPierce): ?>
+                <section class="wls-fpc-pierce" data-wls-fpc-pierce aria-label="<?= __('FPC 打穿章') ?>">
+                    <div class="wls-form-title-row">
+                        <div>
+                            <h3><?= __('店面诊断打穿章') ?></h3>
+                            <span class="wls-help-text">
+                                <?= __('公开参数名（_wb_nc / nocache / wls_tpl_perf 等）保持不变；无 Cookie 或查询章时边缘与 WLS 均不认风暴打穿。') ?>
+                            </span>
+                        </div>
+                    </div>
+                    <?php if ($pierceError !== ''): ?>
+                        <section class="wls-inline-error" aria-label="<?= __('打穿章错误') ?>">
+                            <?= $escapeHtml($pierceError) ?>
+                        </section>
+                    <?php endif; ?>
+                    <div class="wls-security-metric-grid" aria-label="<?= __('打穿章状态') ?>">
+                        <article>
+                            <span><?= __('密钥（遮罩）') ?></span>
+                            <strong style="font-size:0.85rem;word-break:break-all;"><?= $escapeHtml($pierceMasked !== '' ? $pierceMasked : '-') ?></strong>
+                        </article>
+                        <article>
+                            <span><?= __('Cookie 名') ?></span>
+                            <strong style="font-size:0.85rem;"><?= $escapeHtml($pierceCookieName) ?></strong>
+                        </article>
+                        <article>
+                            <span><?= __('查询参数名') ?></span>
+                            <strong style="font-size:0.85rem;"><?= $escapeHtml($pierceQueryName) ?></strong>
+                        </article>
+                        <article>
+                            <span><?= __('查询后缀') ?></span>
+                            <strong style="font-size:0.75rem;word-break:break-all;"><?= $escapeHtml($pierceSuffix !== '' ? $pierceSuffix : '-') ?></strong>
+                        </article>
+                    </div>
+                    <div class="wls-form-title-row" style="--w-mt:var(--weline-space-4);">
+                        <div>
+                            <h3><?= __('运维操作') ?></h3>
+                            <span class="wls-help-text">
+                                <?= __('轮换会重写 Nginx pierce map 并 reload；签发 Cookie 仅作用于当前浏览器。') ?>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="wls-section-actions" style="flex-wrap:wrap;gap:var(--weline-space-3);">
+                        <form method="post" action="@backend-url{$fpcPierceRotatePath}" style="display:inline;">
+                            <button type="submit" class="wls-primary-button"><?= __('轮换打穿章') ?></button>
+                        </form>
+                        <form method="post" action="@backend-url{$fpcPierceIssuePath}" style="display:inline;display:flex;gap:var(--weline-space-2);align-items:center;">
+                            <label class="wls-help-text" for="wls-fpc-pierce-ttl"><?= __('Cookie TTL（秒）') ?></label>
+                            <input id="wls-fpc-pierce-ttl" type="number" name="ttl_sec" min="300" max="604800" value="28800"
+                                   style="width:7rem;padding:0.35rem 0.5rem;" />
+                            <button type="submit" class="wls-secondary-button"><?= __('签发本机 Cookie') ?></button>
+                        </form>
+                    </div>
+                    <?php if ($pierceSuffix !== ''): ?>
+                        <section class="wls-inline-warning" style="--w-mt:var(--weline-space-4);" aria-label="<?= __('用法示例') ?>">
+                            <strong style="display:block;--w-mb:var(--weline-space-2);"><?= __('店面诊断用法') ?></strong>
+                            <code style="display:block;word-break:break-all;font-size:0.8rem;">
+                                ?_wb_nc=1&amp;<?= $escapeHtml($pierceSuffix) ?>
+                            </code>
+                            <span class="wls-help-text" style="display:block;--w-mt:var(--weline-space-2);">
+                                <?= __('仅管理员持有后缀；勿把完整 URL 贴到公开工单。') ?>
+                            </span>
+                        </section>
+                    <?php endif; ?>
+                </section>
                 <?php endif; ?>
                 <?php if ($securityPageIsOverview): ?>
                 <?php if ($securityScanWarnings !== []): ?>
@@ -3750,6 +3829,76 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <small><?= __('攻击规则、项目策略与防护日志') ?></small>
                     </a>
                 </div>
+                <?php
+                $panelNginxConfigView = $this->getData('panelNginxConfigView');
+                $panelNginxConfigView = is_array($panelNginxConfigView) ? $panelNginxConfigView : [];
+                $nginxConfigFiles = is_array($panelNginxConfigView['files'] ?? null) ? $panelNginxConfigView['files'] : [];
+                $nginxConfigDir = trim((string)($panelNginxConfigView['conf_dir'] ?? ''));
+                $nginxConfigError = trim((string)($panelNginxConfigView['error'] ?? ''));
+                ?>
+                <section class="wls-nginx-config-view" data-wls-nginx-config-view aria-label="<?= __('托管 Nginx 配置（只读）') ?>" style="--w-mt:var(--weline-space-6);">
+                    <div class="wls-form-title-row">
+                        <div>
+                            <h3><?= __('托管 Nginx 配置（只读）') ?></h3>
+                            <span class="wls-help-text">
+                                <?= __('展示当前磁盘上的托管配置原文，面板不可编辑。打穿章 map 中的密钥已遮罩。') ?>
+                            </span>
+                            <?php if ($nginxConfigDir !== ''): ?>
+                                <span class="wls-help-text" style="display:block;--w-mt:var(--weline-space-1);word-break:break-all;">
+                                    <?= __('目录') ?>：<?= $escapeHtml($nginxConfigDir) ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <span class="wls-status-pill"><?= __('只读') ?></span>
+                    </div>
+                    <?php if ($nginxConfigError !== ''): ?>
+                        <section class="wls-inline-error" aria-label="<?= __('配置读取错误') ?>">
+                            <?= $escapeHtml($nginxConfigError) ?>
+                        </section>
+                    <?php endif; ?>
+                    <?php if ($nginxConfigFiles === []): ?>
+                        <div class="wls-empty-state">
+                            <strong><?= __('未找到托管 Nginx 配置文件。') ?></strong>
+                            <span><?= __('启动或 reload 托管 Nginx 后，配置会出现在此。') ?></span>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($nginxConfigFiles as $nginxFile): ?>
+                            <?php if (!is_array($nginxFile)) { continue; } ?>
+                            <?php
+                            $nfId = trim((string)($nginxFile['id'] ?? ''));
+                            $nfLabel = trim((string)($nginxFile['label'] ?? $nfId));
+                            $nfPath = trim((string)($nginxFile['path'] ?? ''));
+                            $nfExists = !empty($nginxFile['exists']);
+                            $nfBytes = (int)($nginxFile['bytes'] ?? 0);
+                            $nfMtime = (int)($nginxFile['mtime'] ?? 0);
+                            $nfTrunc = !empty($nginxFile['truncated']);
+                            $nfRedacted = !empty($nginxFile['redacted']);
+                            $nfContent = (string)($nginxFile['content'] ?? '');
+                            $nfError = trim((string)($nginxFile['error'] ?? ''));
+                            ?>
+                            <details class="wls-nginx-config-file" <?= $nfId === 'nginx.conf' ? 'open' : '' ?> style="--w-mt:var(--weline-space-4);border:1px solid var(--weline-chrome-border, #ddd);border-radius:var(--weline-radius-sm, 4px);padding:var(--weline-space-3);">
+                                <summary style="cursor:pointer;font-weight:600;">
+                                    <?= $escapeHtml($nfLabel !== '' ? $nfLabel : $nfId) ?>
+                                    <?php if (!$nfExists): ?>
+                                        <span class="wls-status-pill is-off"><?= __('缺失') ?></span>
+                                    <?php else: ?>
+                                        <span class="wls-help-text"><?= $escapeHtml((string)$nfBytes) ?> B<?php if ($nfMtime > 0): ?> · <?= $escapeHtml(date('Y-m-d H:i:s', $nfMtime)) ?><?php endif; ?></span>
+                                        <?php if ($nfTrunc): ?><span class="wls-status-pill"><?= __('已截断') ?></span><?php endif; ?>
+                                        <?php if ($nfRedacted): ?><span class="wls-status-pill"><?= __('已遮罩') ?></span><?php endif; ?>
+                                    <?php endif; ?>
+                                </summary>
+                                <?php if ($nfPath !== ''): ?>
+                                    <div class="wls-help-text" style="--w-mt:var(--weline-space-2);word-break:break-all;"><?= $escapeHtml($nfPath) ?></div>
+                                <?php endif; ?>
+                                <?php if ($nfError !== '' && !$nfExists): ?>
+                                    <section class="wls-inline-warning" style="--w-mt:var(--weline-space-2);"><?= $escapeHtml($nfError) ?></section>
+                                <?php elseif ($nfExists): ?>
+                                    <pre readonly tabindex="0" aria-readonly="true" style="--w-mt:var(--weline-space-3);max-height:28rem;overflow:auto;padding:var(--weline-space-3);background:var(--weline-chrome-surface-raised, #f6f6f6);font-size:0.75rem;line-height:1.45;white-space:pre;word-break:normal;"><?= $escapeHtml($nfContent) ?></pre>
+                                <?php endif; ?>
+                            </details>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </section>
             </section>
         <?php elseif ($activePage === 'projects'): ?>
             <section class="wls-section wls-projects-page">

@@ -180,6 +180,9 @@ final class PreviewExitFloatNavigateContractTest extends TestCase
         self::assertStringContainsString('theme.live_preview_path_prefix', $source);
         self::assertStringContainsString('/~preview/', $source);
         self::assertStringContainsString("'weline_preview_token'", $source);
+        self::assertStringContainsString("'require_pierce_stamp' => true", $source);
+        self::assertStringContainsString("'_wb_nc'", $source);
+        self::assertStringContainsString("'wls_tpl_perf'", $source);
         self::assertStringNotContainsString('preview_token_cookie', $source);
         self::assertStringNotContainsString('cookie_keys', $source);
     }
@@ -190,6 +193,7 @@ final class PreviewExitFloatNavigateContractTest extends TestCase
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('theme.live_preview_path_prefix', $source);
+        self::assertStringContainsString("'require_pierce_stamp' => true", $source);
         self::assertStringNotContainsString('theme.preview_token_cookie', $source);
     }
 

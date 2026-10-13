@@ -143,6 +143,9 @@ final class FpcBypassCollector
                 $match['uri_path_prefixes'] = \array_values(\array_unique($prefixes));
             }
         }
+        if (!empty($matchIn['require_pierce_stamp'])) {
+            $match['require_pierce_stamp'] = true;
+        }
         if ($match === []) {
             return null;
         }

@@ -9,8 +9,8 @@ use Weline\Server\Service\Edge\Nginx\ManagedNginxConfigWriter;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
 
 /**
- * Browsers attach same-origin Cookie to CSS/JS; edge must still cache those
- * assets. Cookie bypass stays on HTML/API only.
+ * Static layers: ^~ /pub/media, ^~ /static → pub, regex → FPC static disk,
+ * then @wls_static_origin (+ optional proxy_cache). No app/code try_files.
  */
 final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
 {
@@ -31,7 +31,7 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         $this->removeTree($this->root);
     }
 
-    public function testEdgeCacheEmitsStaticLocationThatIgnoresCookieBypass(): void
+    public function testEdgeCacheEmitsStaticLocationAndHtmlDiskTryFiles(): void
     {
         $paths = new ManagedNginxPaths($this->root, [
             'runtime_root' => 'runtime',
@@ -58,6 +58,8 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         );
         self::assertStringContainsString('X-Wls-Media-Disk "1"', $config);
         self::assertStringContainsString('try_files $uri =404;', $config);
+        self::assertStringContainsString('location ^~ /static/', $config);
+        self::assertStringContainsString('try_files $uri @wls_static_origin;', $config);
 
         $staticStart = \strpos($config, 'location ~* \.(?:');
         self::assertIsInt(
@@ -78,6 +80,15 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         );
 
         $staticBlock = \substr($config, $staticStart, $genericStart - $staticStart);
+        self::assertStringContainsString(
+            'try_files /generated/static/live/$wls_fpc_html_host$uri @wls_static_origin;',
+            $staticBlock,
+            'Extension statics must try FPC static disk before WLS.',
+        );
+        self::assertStringNotContainsString('/app/code$uri', $staticBlock);
+        self::assertStringContainsString('X-Wls-Static-Disk "1"', $staticBlock);
+        self::assertStringContainsString('X-Wls-Static-Fpc "1"', $staticBlock);
+        self::assertStringContainsString('location @wls_static_origin', $staticBlock);
         self::assertStringContainsString('proxy_cache wls_edge;', $staticBlock);
         self::assertStringContainsString(
             'add_header X-Wls-Edge-Cache $upstream_cache_status always;',
@@ -90,44 +101,110 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             $staticBlock,
             'Static assets must not inherit Cookie/Authorization edge bypass.',
         );
-        self::assertStringNotContainsString(
-            'proxy_no_cache $wls_edge_bypass;',
-            $staticBlock,
-        );
         self::assertStringContainsString(
             'proxy_set_header Cookie "";',
             $staticBlock,
-            'Edge must discard inbound Cookie before proxying public static assets.',
+            'Miss path must discard inbound Cookie before proxying to WLS.',
         );
         self::assertStringContainsString(
             'proxy_set_header Authorization "";',
             $staticBlock,
-            'Edge must discard Authorization before proxying public static assets.',
+            'Miss path must discard Authorization before proxying to WLS.',
         );
 
         $genericBlock = \substr($config, $genericStart);
-        self::assertStringContainsString('proxy_cache_bypass $wls_edge_bypass;', $genericBlock);
+        self::assertStringContainsString('html/live/$wls_fpc_html_host', $config);
+        self::assertStringContainsString('try_files $uri/index.html.br =418;', $genericBlock);
+        self::assertStringContainsString('Content-Encoding br always;', $genericBlock);
+        self::assertStringContainsString('Vary "Accept-Encoding, Cookie" always;', $genericBlock);
         self::assertStringContainsString(
-            'proxy_no_cache $wls_edge_bypass $wls_edge_skip_fpc_miss_status $wls_edge_skip_fpc_miss_weline;',
+            'CDN-Cache-Control "public, max-age=31536000" always;',
             $genericBlock,
-            'HTML edge must refuse to store upstream FPC MISS/BYPASS responses.',
+            'html-disk HIT must emit CDN-Cache-Control so CF bypass_by_default can store.',
         );
         self::assertStringContainsString(
-            'proxy_cache_key "$scheme$request_method$host$request_uri|fpc2$wls_edge_host_generation";',
+            'Cloudflare-CDN-Cache-Control "public, max-age=31536000" always;',
             $genericBlock,
-            'HTML edge cache key generation must bump past MISS-poisoned entries.',
+        );
+        self::assertStringContainsString('Cache-Control "public, max-age=', $genericBlock);
+        self::assertStringContainsString('X-Weline-Cache-Status hit always;', $genericBlock);
+        self::assertStringContainsString('if ($wls_fpc_accepts_br = 0)', $genericBlock);
+        self::assertStringContainsString('X-Weline-FPC-Source html-disk', $genericBlock);
+        self::assertStringContainsString('location @wls_html_origin', $genericBlock);
+        self::assertStringContainsString('proxy_cache off;', $genericBlock);
+        self::assertStringNotContainsString(
+            'proxy_cache wls_edge;',
+            $genericBlock,
+            'Business HTML must not use proxy_cache after URL-tree disk migration.',
+        );
+        self::assertStringNotContainsString(
+            'proxy_cache_key "$scheme$request_method$host$request_uri|fpc2',
+            $config,
+            'HTML |fpc2 proxy_cache key must be retired.',
         );
         self::assertStringContainsString(
+            'map $http_authorization $wls_fpc_html_bypass_auth',
+            $config,
+        );
+        self::assertStringContainsString(
+            'map $request_uri $wls_fpc_html_bypass_preview_path',
+            $config,
+        );
+        self::assertStringContainsString(
+            'map $request_uri $wls_fpc_html_diag_query',
+            $config,
+        );
+        self::assertStringContainsString(
+            '$wls_fpc_pierce_ok',
+            $config,
+        );
+        self::assertStringContainsString(
+            'fpc-pierce.map.conf',
+            $config,
+        );
+        self::assertStringContainsString(
+            'proxy_set_header X-Wls-Fpc-Bypass "";',
+            $config,
+        );
+        self::assertStringContainsString(
+            '$wls_fpc_html_disk_bypass',
+            $config,
+        );
+        self::assertStringContainsString(
+            'map $http_accept_encoding $wls_fpc_accepts_br',
+            $config,
+        );
+        self::assertStringNotContainsString(
             'map "$http_cookie|$http_authorization|$http_upgrade" $wls_edge_bypass',
             $config,
+            'Cookie must not bypass FPC HTML disk try_files.',
         );
+
+        // Non-HTML surfaces must proxy before location / — never pay try_files.
+        $apiPrefixStart = \strpos($config, 'location ^~ /api/');
+        self::assertIsInt($apiPrefixStart, 'Managed nginx must prefix-proxy /api/ without try_files.');
+        self::assertLessThan(
+            $genericStart,
+            $apiPrefixStart,
+            '/api/ origin proxy must precede HTML try_files location /.',
+        );
+        self::assertStringContainsString('location = /bin/query', $config);
+        self::assertLessThan(
+            $genericStart,
+            (int)\strpos($config, 'location = /bin/query'),
+            '/bin/query must precede HTML try_files location /.',
+        );
+        self::assertStringContainsString('location = /api/framework/stream', $config);
         self::assertStringContainsString(
-            'map $upstream_http_x_wls_fpc_status $wls_edge_skip_fpc_miss_status',
+            'location ~* ^/[A-Za-z0-9_-]+/frontend/api(/|$)',
             $config,
         );
-        self::assertStringContainsString(
-            'map $upstream_http_x_weline_fpc $wls_edge_skip_fpc_miss_weline',
-            $config,
+        $apiBlock = \substr($config, $apiPrefixStart, $genericStart - $apiPrefixStart);
+        self::assertStringContainsString('proxy_pass http://wls_backend;', $apiBlock);
+        self::assertStringNotContainsString(
+            'try_files $uri/index.html.br',
+            $apiBlock,
+            'API / BinQuery locations must not run FPC HTML try_files.',
         );
     }
 

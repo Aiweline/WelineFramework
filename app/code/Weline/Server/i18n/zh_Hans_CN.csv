@@ -250,6 +250,7 @@ store,店铺
 "WLS 插件","WLS 插件"
 "WLS 插件商城","WLS 插件商城"
 "WLS 安全","WLS 安全"
+"FPC 打穿章","FPC 打穿章"
 "WLS 攻击日志","WLS 攻击日志"
 "WLS 安全规则","WLS 安全规则"
 "WLS 项目安全策略","WLS 项目安全策略"
@@ -268,6 +269,9 @@ store,店铺
 托管项目已删除。,托管项目已删除。
 安全规则已保存。,安全规则已保存。
 面板插件能力已刷新。,面板插件能力已刷新。
+"FPC 打穿章已轮换，Nginx map 已刷新。","FPC 打穿章已轮换，Nginx map 已刷新。"
+"FPC 打穿章轮换未完全成功，请检查 Nginx map / reload。","FPC 打穿章轮换未完全成功，请检查 Nginx map / reload。"
+"已为本浏览器签发 FPC 打穿章 Cookie。","已为本浏览器签发 FPC 打穿章 Cookie。"
 grid,网格
 "访问 WLS 面板","访问 WLS 面板"
 "查看 WLS 面板仪表盘","查看 WLS 面板仪表盘"
@@ -302,6 +306,14 @@ puzzle,谜
 "刷新 WLS 面板插件能力","刷新 WLS 面板插件能力"
 "查看 WLS 安全","查看 WLS 安全"
 shield,盾
+"查看 FPC 打穿章","查看 FPC 打穿章"
+key,key
+"查看店面 FPC 诊断打穿章","查看店面 FPC 诊断打穿章"
+"轮换 FPC 打穿章","轮换 FPC 打穿章"
+"轮换店面 FPC 诊断打穿章并刷新 Nginx","轮换店面 FPC 诊断打穿章并刷新 Nginx"
+"签发 FPC 打穿章 Cookie","签发 FPC 打穿章 Cookie"
+cookie,cookie
+"为当前浏览器签发 FPC 诊断打穿章 Cookie","为当前浏览器签发 FPC 诊断打穿章 Cookie"
 "查看 WLS 攻击日志","查看 WLS 攻击日志"
 search,搜索
 "查看 WLS 安全规则","查看 WLS 安全规则"
@@ -770,6 +782,22 @@ LiteSSL,精简版SSL
 防护,防护
 高级规则,高级规则
 安全数据警告,安全数据警告
+店面诊断打穿章,店面诊断打穿章
+"公开参数名（_wb_nc / nocache / wls_tpl_perf 等）保持不变；无 Cookie 或查询章时边缘与 WLS 均不认风暴打穿。","公开参数名（_wb_nc / nocache / wls_tpl_perf 等）保持不变；无 Cookie 或查询章时边缘与 WLS 均不认风暴打穿。"
+打穿章错误,打穿章错误
+打穿章状态,打穿章状态
+密钥（遮罩）,密钥（遮罩）
+"Cookie 名","Cookie 名"
+查询参数名,查询参数名
+查询后缀,查询后缀
+运维操作,运维操作
+"轮换会重写 Nginx pierce map 并 reload；签发 Cookie 仅作用于当前浏览器。","轮换会重写 Nginx pierce map 并 reload；签发 Cookie 仅作用于当前浏览器。"
+轮换打穿章,轮换打穿章
+"Cookie TTL（秒）","Cookie TTL（秒）"
+"签发本机 Cookie","签发本机 Cookie"
+用法示例,用法示例
+店面诊断用法,店面诊断用法
+"仅管理员持有后缀；勿把完整 URL 贴到公开工单。","仅管理员持有后缀；勿把完整 URL 贴到公开工单。"
 扫描特征警告,扫描特征警告
 "7 天事件","7 天事件"
 "7 天拦截","7 天拦截"

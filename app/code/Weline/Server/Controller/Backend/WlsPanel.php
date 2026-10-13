@@ -20,6 +20,8 @@ use Weline\Server\Service\WlsPanelProjectRegistryService;
 use Weline\Server\Service\WlsPanelSecurityDataService;
 use Weline\Server\Service\Security\SecurityProbeCatalog;
 use Weline\Server\Service\Security\SecurityProbeTokenService;
+use Weline\Server\Service\Edge\Nginx\ManagedNginxConfigViewService;
+use Weline\Server\Service\Fpc\FpcPierceStampAdminService;
 use Weline\Server\Security\AttackDetector;
 
 #[Acl('Weline_Server::wls_panel', 'WLS 面板', 'grid', '访问 WLS 面板', 'Weline_Backend::system_service_group', accessMode: Acl::ACCESS_MODE_READ)]
@@ -200,6 +202,69 @@ class WlsPanel extends BackendController
     public function getSecurity(): string
     {
         return $this->renderPanel('security', (string)__('WLS 安全'));
+    }
+
+    #[Acl('Weline_Server::wls_panel_fpc_pierce', '查看 FPC 打穿章', 'key', '查看店面 FPC 诊断打穿章', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
+    public function getFpcPierce(): string
+    {
+        return $this->renderPanel('fpc_pierce', (string)__('FPC 打穿章'));
+    }
+
+    #[Acl('Weline_Server::wls_panel_fpc_pierce_rotate', '轮换 FPC 打穿章', 'refresh', '轮换店面 FPC 诊断打穿章并刷新 Nginx', 'Weline_Server::wls_panel_fpc_pierce', accessMode: Acl::ACCESS_MODE_EDIT)]
+    public function postFpcPierceRotate(): string
+    {
+        /** @var FpcPierceStampAdminService $admin */
+        $admin = ObjectManager::getInstance(FpcPierceStampAdminService::class);
+        $result = $admin->rotateAndPublish(true);
+        if ($this->request->isAjax()) {
+            return $this->fetchJson([
+                'success' => (bool)$result['ok'],
+                'message' => (string)$result['message'],
+                'data' => $result,
+            ]);
+        }
+        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('*/backend/wls-panel/fpc-pierce', [
+            'panel_notice' => (bool)$result['ok'] ? 'fpc_pierce_rotated' : 'fpc_pierce_rotate_failed',
+        ]));
+
+        return '';
+    }
+
+    #[Acl('Weline_Server::wls_panel_fpc_pierce_issue', '签发 FPC 打穿章 Cookie', 'cookie', '为当前浏览器签发 FPC 诊断打穿章 Cookie', 'Weline_Server::wls_panel_fpc_pierce', accessMode: Acl::ACCESS_MODE_EDIT)]
+    public function postFpcPierceIssue(): string
+    {
+        /** @var FpcPierceStampAdminService $admin */
+        $admin = ObjectManager::getInstance(FpcPierceStampAdminService::class);
+        $admin->ensurePublished(false);
+        $cookie = $admin->issueBrowserCookie((int)$this->request->getPost('ttl_sec', 28800));
+        $opts = $cookie['options'];
+        \setcookie(
+            (string)$cookie['name'],
+            (string)$cookie['value'],
+            [
+                'expires' => (int)($opts['expires'] ?? 0),
+                'path' => (string)($opts['path'] ?? '/'),
+                'secure' => (bool)($opts['secure'] ?? true),
+                'httponly' => (bool)($opts['httponly'] ?? true),
+                'samesite' => (string)($opts['samesite'] ?? 'Lax'),
+            ]
+        );
+        if ($this->request->isAjax()) {
+            return $this->fetchJson([
+                'success' => true,
+                'message' => 'cookie_issued',
+                'data' => [
+                    'name' => $cookie['name'],
+                    'expires' => (int)($opts['expires'] ?? 0),
+                    'status' => $admin->status(),
+                ],
+            ]);
+        }
+        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('*/backend/wls-panel/fpc-pierce', [
+            'panel_notice' => 'fpc_pierce_cookie_issued',
+        ]));
+
+        return '';
     }
 
     #[Acl('Weline_Server::wls_panel_security_logs', '查看 WLS 攻击日志', 'search', '查看 WLS 攻击日志', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
@@ -444,6 +509,41 @@ class WlsPanel extends BackendController
             }
         }
         $this->assign('panelSecurityProbe', $panelSecurityProbe);
+        $panelPierceStamp = null;
+        if (\in_array($activePage, ['security', 'fpc_pierce'], true)) {
+            try {
+                /** @var FpcPierceStampAdminService $pierceAdmin */
+                $pierceAdmin = ObjectManager::getInstance(FpcPierceStampAdminService::class);
+                $pierceAdmin->ensurePublished(false);
+                $panelPierceStamp = $pierceAdmin->status();
+                // Do not push raw secret into the template scope; suffix is enough for ops copy.
+                unset($panelPierceStamp['secret']);
+            } catch (\Throwable $e) {
+                $panelPierceStamp = [
+                    'error' => $e->getMessage(),
+                    'secret_masked' => '',
+                    'query_suffix' => '',
+                    'cookie_name' => \Weline\Framework\Http\Fpc\FpcPierceStamp::COOKIE_NAME,
+                    'query_name' => \Weline\Framework\Http\Fpc\FpcPierceStamp::QUERY_NAME,
+                ];
+            }
+        }
+        $this->assign('panelPierceStamp', $panelPierceStamp);
+        $panelNginxConfigView = null;
+        if ($activePage === 'nginx') {
+            try {
+                /** @var ManagedNginxConfigViewService $nginxConfigView */
+                $nginxConfigView = ObjectManager::getInstance(ManagedNginxConfigViewService::class);
+                $panelNginxConfigView = $nginxConfigView->snapshot();
+            } catch (\Throwable $e) {
+                $panelNginxConfigView = [
+                    'conf_dir' => '',
+                    'files' => [],
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+        $this->assign('panelNginxConfigView', $panelNginxConfigView);
         $this->assign('panelProjectFormData', $projectRegistry->getFormData((int)$this->request->getGet('edit_project_id', 0)));
         $this->assign('panelNotice', $this->resolvePanelNotice((string)$this->request->getGet('panel_notice', '')));
         $this->assign('panelError', \trim((string)$this->request->getGet('panel_error', '')));
@@ -947,6 +1047,9 @@ class WlsPanel extends BackendController
             'project_removed' => (string)__('托管项目已删除。'),
             'security_rules_saved' => (string)__('安全规则已保存。'),
             'plugins_refreshed' => (string)__('面板插件能力已刷新。'),
+            'fpc_pierce_rotated' => (string)__('FPC 打穿章已轮换，Nginx map 已刷新。'),
+            'fpc_pierce_rotate_failed' => (string)__('FPC 打穿章轮换未完全成功，请检查 Nginx map / reload。'),
+            'fpc_pierce_cookie_issued' => (string)__('已为本浏览器签发 FPC 打穿章 Cookie。'),
             default => '',
         };
     }

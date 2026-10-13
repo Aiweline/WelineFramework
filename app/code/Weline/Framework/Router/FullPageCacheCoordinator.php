@@ -25,6 +25,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\ContentEncodingNegotiator;
 use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
 use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
+use Weline\Framework\Http\Fpc\FpcHtmlDiskStore;
 use Weline\Framework\Http\Fpc\FpcPayloadPathIndex;
 use Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry;
 use Weline\Framework\Http\GuardHeaders;
@@ -86,14 +87,20 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private const DEFAULT_PRIVATE_SESSION_TTL_SECONDS = 300;
     private const PROCESS_FPC_TTL_SECONDS = 3600;
     private const PROCESS_FPC_MAX_ITEMS = 16;
-    /** Keep process L1 small; Shared Memory holds the authority payloads. */
-    private const PROCESS_FPC_MAX_BYTES = 4194304;
+    /**
+     * Process L1 holds pointer receipts (fpc_body_file) + small metadata, not multi-MB bodies.
+     * Shared/html-disk remains authoritative; hydrate on process HIT.
+     */
+    private const PROCESS_FPC_MAX_BYTES = 524288; // 512 KiB of receipts
+    /** Skip process L1 when payload has no disk pointer and inline body exceeds this. */
+    private const PROCESS_FPC_INLINE_MAX_BYTES = 65536; // 64 KiB
     private const PROCESS_LOCALIZED_HOMEPAGE_RECEIPT_MAX_ITEMS = 128;
 
     /** Cookieless `/products` catalog receipts pin Process L1 like homepage. */
     private const PROCESS_CRITICAL_CATALOG_RECEIPT_MAX_ITEMS = 16;
-    private const PROCESS_FORMATTED_FPC_MAX_ITEMS = 16;
-    private const PROCESS_FORMATTED_FPC_MAX_BYTES = 4194304;
+    private const PROCESS_FORMATTED_FPC_MAX_ITEMS = 8;
+    /** Formatted HTTP responses must not duplicate multi-MB page bodies in process L1. */
+    private const PROCESS_FORMATTED_FPC_MAX_BYTES = 262144; // 256 KiB
     private const FRONTEND_LOGIN_SESSION_POSITIVE_TTL_SECONDS = 1.0;
     private const FRONTEND_LOGIN_SESSION_CACHE_MAX_ITEMS = 1024;
     /** Process bag: gzip demand counters by FPC key — must not grow with every unique URI forever. */
@@ -1140,6 +1147,34 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         self::$gzipDemandByCacheKey = [];
     }
 
+    public static function processPayloadTotalBytes(): int
+    {
+        return \max(0, self::$processFpcPayloadTotalBytes)
+            + \max(0, self::$processFormattedFpcTotalBytes);
+    }
+
+    /**
+     * Soft pressure: drop non-pinned process FPC receipts + all formatted HTTP bags.
+     * Homepage / critical catalog receipt identities stay; Shared/html-disk remains authority.
+     */
+    public static function softCompactProcessCache(): int
+    {
+        $before = self::processPayloadTotalBytes();
+        $coord = new self();
+        foreach (\array_keys(self::$processFpcPayloadCache) as $cacheKey) {
+            $cacheKey = (string)$cacheKey;
+            if ($coord->isProcessFpcHomepagePinnedKey($cacheKey)) {
+                continue;
+            }
+            $coord->deleteProcessCachedPayload($cacheKey, true);
+        }
+        foreach (\array_keys(self::$processFormattedFpcCache) as $formattedKey) {
+            $coord->deleteProcessCachedFormattedResponse((string)$formattedKey);
+        }
+
+        return \max(0, $before - self::processPayloadTotalBytes());
+    }
+
     /**
      * Changed / FpcStoreAdapter: clear process L1, cold body files, and Shared keys
      * for the given storefront URLs/paths (path-index + pool delete).
@@ -1149,6 +1184,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     public static function purgeUrls(array $urls): void
     {
         self::clearProcessCache();
+        FpcHtmlDiskStore::purgeUrls($urls);
         $indexedKeys = FpcPayloadPathIndex::purgePaths($urls);
         try {
             /** @var self $coordinator */
@@ -1250,13 +1286,69 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if ($this->isEditorOrPreviewRequest($fullUri) || $this->isExcludedFrontendPath($fullUri)) {
             return null;
         }
-        if ($this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri)) {
-            return null;
-        }
+        // Anonymous shared HTML only on disk: logged-in shoppers may still HIT the
+        // guest shell; login chrome adjusts after Scope/QueryBin (product contract).
+        unset($cookieHeader);
         // Path-level Extra may be missing for probe/orphan URLs; cold-disk presence
         // already proves a prior anonymous FPC publish. Only require global FPC on.
         if (!Env::get('cache.status.router_cache', 1) || !Env::get('cache.status.frontend_cache', 1)) {
             return null;
+        }
+
+        // Prefer URL-tree generated/html (edge/Nginx authority), then legacy path-index.
+        $htmlDisk = FpcHtmlDiskStore::read(
+            $fullUri,
+            $acceptEncoding !== '' ? $acceptEncoding : $this->clientAcceptEncodingHeader(),
+        );
+        if (\is_array($htmlDisk)) {
+            $raw = (string)$htmlDisk['body'];
+            $encoding = ($htmlDisk['encoding'] ?? null) === 'br'
+                ? self::FPC_BODY_FILE_ENCODING_BROTLI
+                : self::FPC_BODY_FILE_ENCODING_IDENTITY;
+            $policyTtl = (int)($this->effectiveFpcPolicy($fullUri)['ttl'] ?? self::MAX_STALE_TTL_SECONDS);
+            if ($policyTtl <= 0) {
+                $policyTtl = self::MAX_STALE_TTL_SECONDS;
+            }
+            $payload = [
+                KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+                KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => [
+                    'Content-Type' => 'text/html; charset=utf-8',
+                ],
+                'policy_ttl' => $policyTtl,
+                self::UNIFIED_CACHE_EXPIRES_AT_KEY => \microtime(true) + $policyTtl,
+            ];
+            if ($encoding === self::FPC_BODY_FILE_ENCODING_BROTLI) {
+                $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY] = \base64_encode($raw);
+            } else {
+                $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] = $raw;
+            }
+            $body = $this->resolvePlaintextBody($payload) ?? '';
+            if ($body !== '' && \Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
+                [$responseBody, $hitEncoding] = $this->resolveEncodedHitBody(
+                    $payload,
+                    $acceptEncoding !== '' ? $acceptEncoding : $this->clientAcceptEncodingHeader(),
+                    'html-disk',
+                );
+                $response = Response::fromContent($responseBody, 200, 'text/html; charset=utf-8');
+                $this->applyCachedHeaders($response, $payload[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
+                if ($hitEncoding !== null) {
+                    $response->setHeader('Content-Encoding', $hitEncoding);
+                    $response->setHeader('Content-Length', (string)\strlen($responseBody));
+                    $this->ensureVaryAcceptEncoding($response);
+                }
+                $this->ensureVaryHeader($response, 'Cookie');
+                if ($mode === 'always-online') {
+                    $response->setHeader('X-Weline-FPC', 'ALWAYS-ONLINE');
+                    $response->setHeader('X-Weline-FPC-Source', 'html-disk');
+                    $response->setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+                } else {
+                    $response->setHeader('X-Weline-FPC', 'HIT');
+                    $response->setHeader('X-Weline-FPC-Source', 'html-disk');
+                    $this->applyFpcHitEdgeCacheHeaders($response, false, $payload);
+                }
+
+                return $this->markCacheHit($response);
+            }
         }
 
         // Host-scoped full URL only — path-only index keys cross websites.
@@ -1337,10 +1429,70 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 RequestContext::set('wls.fpc.cold_disk_durable', true);
             }
 
+            // Anonymous cold-disk HTML is always storefront. Pin area + public
+            // request identity so worker-scope bootstrap can recover channel Scope
+            // (DetectWebsite) and issue HTTPS tokens. Rescue/fast paths often skip
+            // App DetectWebsite and leave RequestAuthority/host empty otherwise.
+            RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
+            $this->primeColdDiskRequestIdentity($fullUri, $method);
+
             return $this->markCacheHit($response);
         }
 
         return null;
+    }
+
+    /**
+     * Seed Context + WelineEnv so FPC cache_hit_response decorators see the
+     * public storefront Host/scheme/URI (not the worker↔nginx hop).
+     */
+    private function primeColdDiskRequestIdentity(string $fullUri, string $method): void
+    {
+        $parts = \parse_url($fullUri);
+        if (!\is_array($parts)) {
+            return;
+        }
+        $scheme = \strtolower((string)($parts['scheme'] ?? ''));
+        $host = \strtolower((string)($parts['host'] ?? ''));
+        $path = (string)($parts['path'] ?? '/');
+        if ($path === '') {
+            $path = '/';
+        }
+        $query = isset($parts['query']) ? ('?' . (string)$parts['query']) : '';
+        $requestUri = $path . $query;
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            $scheme = 'https';
+        }
+        if ($host === '') {
+            return;
+        }
+
+        WelineEnv::set('request.scheme', $scheme, 'FullPageCacheCoordinator cold-disk identity');
+        WelineEnv::set('request.method', \strtoupper($method ?: 'GET'), 'FullPageCacheCoordinator cold-disk identity');
+        WelineEnv::set('request.uri', $requestUri, 'FullPageCacheCoordinator cold-disk identity');
+
+        $context = Context::getCurrent();
+        if (!$context instanceof Context) {
+            return;
+        }
+        $server = (array)$context->get('input.server', []);
+        $server['HTTP_HOST'] = $host;
+        $server['SERVER_NAME'] = $host;
+        $server['REQUEST_METHOD'] = \strtoupper($method ?: 'GET');
+        $server['REQUEST_SCHEME'] = $scheme;
+        $server['REQUEST_URI'] = $requestUri;
+        $server['WELINE_FULL_REQUEST_URI'] = $fullUri;
+        $server['HTTP_X_FORWARDED_PROTO'] = $scheme;
+        $context->set('input', [
+            'method' => \strtoupper($method ?: 'GET'),
+            'scheme' => $scheme,
+            'host' => $host,
+            'uri' => $requestUri,
+            'full_request_uri' => $fullUri,
+            'server' => $server,
+        ]);
+        $context->set('route.is_static', false);
+        $context->set('route.is_media', false);
     }
 
     private function getStaleCachedResponse(string $method): ?Response
@@ -1857,7 +2009,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         string $requestFullUri,
         string $cookieHeader = ''
     ): ?array {
-        if (\trim($cookieHeader) !== '' || !$this->isRootHomepageFullUri($requestFullUri)) {
+        // Guest shell identity ignores request cookies (compat arg retained).
+        unset($cookieHeader);
+        if (!$this->isRootHomepageFullUri($requestFullUri)) {
             return null;
         }
         $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($requestFullUri));
@@ -1887,9 +2041,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         string $requestFullUri,
         string $cookieHeader
     ): ?array {
-        if (\trim($cookieHeader) !== '') {
-            return null;
-        }
+        // Public guest homepage receipt is cookie-independent; signed-in HIT
+        // reuses the same Process identity (Account soft-reconciles chrome).
+        unset($cookieHeader);
 
         $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($requestFullUri));
         if (!KeyBuilder::isValidFullPageCacheKey($fullUri)) {
@@ -2774,6 +2928,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
 
         $firstSegment = \explode('/', \trim($path, '/'))[0] ?? '';
+        // Deploy public webhook: /~wh~{random}[…] — MARKER from DeployWebhookRouteService.
+        if ($firstSegment !== '' && \str_starts_with($firstSegment, '~wh~')) {
+            return true;
+        }
         $blockedPrefixes = \array_filter([
             \strtolower(\trim((string)Env::getAreaRoutePrefix('backend'), '/')),
             \strtolower(\trim((string)Env::getAreaRoutePrefix('rest_backend'), '/')),
@@ -2792,7 +2950,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'tax',
             'rma',
             // Never-cache operable / private / token / webhook / tool surfaces (default-allow model).
-            // Search is NOT listed: it uses @Extra ttl=3600 with query variants.
+            // Search is Extra FPC path-only shell (q/type hydrate client-side); do not hard-exclude.
             'compare',
             'payment',
             'newsletter',
@@ -4151,12 +4309,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return null;
         }
 
-        // LRU touch so hot homepage / catalog HIT stay ahead of later multi-MB
-        // locale warmup inserts under PROCESS_FPC_MAX_* pressure.
+        // LRU touch so hot homepage / catalog HIT stay ahead of later inserts.
         unset(self::$processFpcPayloadCache[$cacheKey]);
         self::$processFpcPayloadCache[$cacheKey] = $payload;
 
-        return $payload;
+        // Process L1 may be pointer-only; hydrate body from html-disk like Shared.
+        $hydrated = $this->hydrateSharedPayload($payload);
+        if ($hydrated === null) {
+            return $this->payloadHasAuthoritativeBody($payload) ? $payload : null;
+        }
+
+        return $hydrated;
     }
 
     /**
@@ -4249,6 +4412,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function setProcessCachedPayload(string $cacheKey, array $payload): void
     {
         $payload = $this->stripPlaintextWhenBrotliAuthority($payload);
+        if (!$this->payloadHasAuthoritativeBody($payload)) {
+            return;
+        }
+        $payload = $this->processL1PointerOnlyPayload($payload);
         if (!$this->payloadHasAuthoritativeBody($payload)) {
             return;
         }
@@ -4402,6 +4569,35 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             self::$processFormattedFpcExpiresAt[$cacheKey],
             self::$processFormattedFpcBytes[$cacheKey]
         );
+    }
+
+    /**
+     * Prefer process L1 pointer receipts when Shared/html-disk already owns the body.
+     * Oversized inline-only payloads skip process L1 (Shared still serves them).
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function processL1PointerOnlyPayload(array $payload): array
+    {
+        $meta = $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] ?? null;
+        if (\is_array($meta) && \trim((string)($meta['path'] ?? '')) !== '') {
+            unset(
+                $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY],
+                $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY],
+                $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY],
+            );
+
+            return $payload;
+        }
+
+        $bytes = $this->estimatePayloadBytes($payload);
+        if ($bytes > self::PROCESS_FPC_INLINE_MAX_BYTES) {
+            // Refuse oversized inline process bags; caller sees empty authoritative and skips L1.
+            return [];
+        }
+
+        return $payload;
     }
 
     /**
@@ -4649,9 +4845,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     }
 
     /**
-     * Keep large rendered bodies out of MemoryService values. Prefer externalizing
-     * the authoritative brotli body as a `.br` file; fall back to plaintext `.html`
-     * only when brotli is unavailable.
+     * Keep large rendered bodies out of MemoryService values. Authority is
+     * URL-tree cold disk (`generated/html/...`); Shared L2 only stores a file
+     * pointer. Legacy `router-fpc-payloads` hash files are read-only compatible
+     * (hydrate) — never remember / write new hash leaves.
      *
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
@@ -4661,16 +4858,39 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         array $payload,
         string $fullUriForPathIndex = '',
     ): array {
-        $indexKey = FpcPayloadPathIndex::normalizeIndexKey($fullUriForPathIndex);
-        // Refuse path-only remember: cold-disk rescue would otherwise cross hosts.
-        if ($indexKey !== '' && !FpcPayloadPathIndex::isHostScopedIndexKey($indexKey)) {
-            $indexKey = '';
-        }
-        $remember = static function (string $file) use ($cacheKey, $indexKey): void {
-            if ($indexKey === '' || $file === '') {
-                return;
+        // $cacheKey kept for call-site / Reflect signature; new writes never touch hash leaves.
+        $publishHtmlDisk = static function (string $plain, string $brotli) use ($fullUriForPathIndex): ?array {
+            if ($fullUriForPathIndex === '' || ($plain === '' && $brotli === '')) {
+                return null;
             }
-            FpcPayloadPathIndex::remember($indexKey, $cacheKey, $file);
+            if (!FpcHtmlDiskStore::publish($fullUriForPathIndex, $plain, $brotli)) {
+                return null;
+            }
+            // Staging window: disk leaf is under generations/{staging}; Shared must
+            // NOT store gen paths. Keep inline body until promote (live leaf exists).
+            if (FpcHtmlDiskStore::stagingGenerationId() !== null) {
+                return null;
+            }
+            if ($brotli !== '') {
+                $brPath = FpcHtmlDiskStore::logicalLiveBodyPath($fullUriForPathIndex, true);
+                if ($brPath !== null && \is_file($brPath)) {
+                    return [
+                        'path' => $brPath,
+                        'bytes' => \strlen($brotli),
+                        'encoding' => self::FPC_BODY_FILE_ENCODING_BROTLI,
+                    ];
+                }
+            }
+            $htmlPath = FpcHtmlDiskStore::logicalLiveBodyPath($fullUriForPathIndex, false);
+            if ($htmlPath === null || !\is_file($htmlPath)) {
+                return null;
+            }
+
+            return [
+                'path' => $htmlPath,
+                'bytes' => \strlen($plain),
+                'encoding' => self::FPC_BODY_FILE_ENCODING_IDENTITY,
+            ];
         };
 
         $bodyFile = $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] ?? null;
@@ -4681,7 +4901,49 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY],
                 $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY],
             );
-            $remember(\trim((string)$bodyFile['path']));
+            $path = \trim((string)$bodyFile['path']);
+            // Retarget generations/ absolute paths onto live logical pointers.
+            if ($this->isHtmlDiskPayloadPath($path)
+                && !$this->isLogicalLiveHtmlDiskPath($path)
+                && $fullUriForPathIndex !== ''
+                && FpcHtmlDiskStore::stagingGenerationId() === null
+            ) {
+                $liveBr = FpcHtmlDiskStore::logicalLiveBodyPath($fullUriForPathIndex, true);
+                $liveHtml = FpcHtmlDiskStore::logicalLiveBodyPath($fullUriForPathIndex, false);
+                if ($liveBr !== null && \is_file($liveBr) && \str_ends_with(\strtolower($path), '.br')) {
+                    $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = [
+                        'path' => $liveBr,
+                        'bytes' => (int)($bodyFile['bytes'] ?? \filesize($liveBr)),
+                        'encoding' => self::FPC_BODY_FILE_ENCODING_BROTLI,
+                    ];
+                } elseif ($liveHtml !== null && \is_file($liveHtml)) {
+                    $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = [
+                        'path' => $liveHtml,
+                        'bytes' => (int)($bodyFile['bytes'] ?? \filesize($liveHtml)),
+                        'encoding' => self::FPC_BODY_FILE_ENCODING_IDENTITY,
+                    ];
+                }
+            }
+            // Legacy hash pointer → migrate body onto html-disk and retarget.
+            if (!$this->isHtmlDiskPayloadPath($path) && $fullUriForPathIndex !== '') {
+                $diskBytes = @\file_get_contents($path);
+                if (\is_string($diskBytes) && $diskBytes !== '') {
+                    if (\str_ends_with(\strtolower($path), '.br')) {
+                        $plain = self::decodeBrotliForHtmlDisk($diskBytes);
+                        if ($plain !== '') {
+                            $meta = $publishHtmlDisk($plain, $diskBytes);
+                            if ($meta !== null) {
+                                $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = $meta;
+                            }
+                        }
+                    } else {
+                        $meta = $publishHtmlDisk($diskBytes, '');
+                        if ($meta !== null) {
+                            $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = $meta;
+                        }
+                    }
+                }
+            }
 
             return $payload;
         }
@@ -4701,23 +4963,19 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             if ($authorityBytes < $minBytes) {
                 return $payload;
             }
-
-            $file = $this->sharedPayloadFilePath($cacheKey, self::FPC_BODY_FILE_ENCODING_BROTLI);
-            if (!$this->writeSharedPayloadFile($file, $brotli)) {
+            $plainForDisk = $plain !== '' ? $plain : self::decodeBrotliForHtmlDisk($brotli);
+            // Disk may be br-only; empty plaintext is OK when brotli authority exists.
+            $meta = $publishHtmlDisk($plainForDisk, $brotli);
+            if ($meta === null) {
+                // No host-scoped URL ⇒ cannot place URL-tree leaf; keep inline Shared body.
                 return $payload;
             }
-
             unset(
                 $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY],
                 $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY],
                 $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY],
             );
-            $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = [
-                'path' => $file,
-                'bytes' => \strlen($brotli),
-                'encoding' => self::FPC_BODY_FILE_ENCODING_BROTLI,
-            ];
-            $remember($file);
+            $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = $meta;
 
             return $payload;
         }
@@ -4726,8 +4984,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return $payload;
         }
 
-        $file = $this->sharedPayloadFilePath($cacheKey, self::FPC_BODY_FILE_ENCODING_IDENTITY);
-        if (!$this->writeSharedPayloadFile($file, $plain)) {
+        $meta = $publishHtmlDisk($plain, '');
+        if ($meta === null) {
             return $payload;
         }
 
@@ -4736,14 +4994,23 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY],
             $payload[self::UNIFIED_CACHE_FPC_BROTLI_B64_KEY],
         );
-        $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = [
-            'path' => $file,
-            'bytes' => \strlen($plain),
-            'encoding' => self::FPC_BODY_FILE_ENCODING_IDENTITY,
-        ];
-        $remember($file);
+        $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] = $meta;
 
         return $payload;
+    }
+
+    private static function decodeBrotliForHtmlDisk(string $brotli): string
+    {
+        if ($brotli === '' || !\function_exists('brotli_uncompress')) {
+            return '';
+        }
+        try {
+            $plain = \brotli_uncompress($brotli);
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return \is_string($plain) ? $plain : '';
     }
 
     /**
@@ -4876,11 +5143,42 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return false;
         }
 
+        if ($this->isHtmlDiskPayloadPath($file)) {
+            return true;
+        }
+
+        // Legacy hash cold-disk: hydrate-only until drained.
         $base = \rtrim($this->sharedPayloadBaseDir(), '\\/') . \DIRECTORY_SEPARATOR;
         $normalizedFile = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $file);
         $normalizedBase = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $base);
 
         return \str_starts_with($normalizedFile, $normalizedBase);
+    }
+
+    private function isHtmlDiskPayloadPath(string $file): bool
+    {
+        if ($file === '') {
+            return false;
+        }
+        $root = \rtrim(FpcHtmlDiskStore::root(), '\\/') . \DIRECTORY_SEPARATOR;
+        $normalizedFile = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $file);
+        $normalizedRoot = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $root);
+
+        return \str_starts_with($normalizedFile, $normalizedRoot);
+    }
+
+    private function isLogicalLiveHtmlDiskPath(string $file): bool
+    {
+        if ($file === '') {
+            return false;
+        }
+        $live = \rtrim(FpcHtmlDiskStore::root(), '\\/')
+            . \DIRECTORY_SEPARATOR . FpcHtmlDiskStore::LIVE_NAME
+            . \DIRECTORY_SEPARATOR;
+        $normalizedFile = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $file);
+        $normalizedLive = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $live);
+
+        return \str_starts_with($normalizedFile, $normalizedLive);
     }
 
     private function privateSessionFpcEnabled(): bool
@@ -5715,13 +6013,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      */
     private function filterGetParamsForCacheKey(array $params): array
     {
-        foreach (\array_keys($params) as $key) {
-            if ($this->isIgnorableCacheQueryParam((string)$key)) {
-                unset($params[$key]);
+        // Path-only product FPC: drop every query param except diagnostic storm keys
+        // (_wb_nc / wls_tpl_perf) which must stay out of IGNORABLE and keep a distinct
+        // Process/Shared identity so storm MISS is never promoted into clean-URL HIT KPI.
+        $kept = [];
+        foreach ($params as $key => $value) {
+            if ($this->isCacheKeyRetainedQueryParam((string)$key)) {
+                $kept[$key] = $value;
             }
         }
 
-        return $params;
+        return $kept;
     }
 
     /**
@@ -5733,9 +6035,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $keys = [];
         foreach (\array_keys($params) as $key) {
             $key = (string)$key;
-            if ($this->isIgnorableCacheQueryParam($key)) {
-                $keys[] = $key;
+            if ($this->isCacheKeyRetainedQueryParam($key)) {
+                continue;
             }
+            $keys[] = $key;
         }
 
         return $keys;
@@ -5751,14 +6054,28 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $kept = [];
         foreach ($segments as $segment) {
             $rawKey = \explode('=', $segment, 2)[0] ?? '';
-            if ($this->isIgnorableCacheQueryParam((string)\urldecode($rawKey))) {
+            if (!$this->isCacheKeyRetainedQueryParam((string)\urldecode($rawKey))) {
                 continue;
             }
-
             $kept[] = $segment;
         }
 
         return \implode('&', $kept);
+    }
+
+    /**
+     * Diagnostic storm keys retained in the Process/Shared cache identity.
+     * Product/marketing query never participates — FPC is path-only.
+     */
+    private function isCacheKeyRetainedQueryParam(string $key): bool
+    {
+        $key = \strtolower(\trim($key));
+        if ($key !== '_wb_nc' && $key !== 'wls_tpl_perf') {
+            return false;
+        }
+
+        // Storm identity only when the install pierce stamp is present.
+        return \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest();
     }
 
     private function isIgnorableCacheQueryParam(string $key): bool

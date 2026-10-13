@@ -12,8 +12,8 @@ use Weline\Framework\Router\FullPageCacheCoordinator;
  *
  * - Diagnostic storm keys (_wb_nc / wls_tpl_perf) MUST NOT enter IGNORABLE —
  *   they remain build-through / cold-bypass; never promote storm MISS→HIT KPI.
- * - Product FPC path still excludes first-segment "search" (do not "fix" by
- *   enabling search FPC bodies). Tip bags warm via Clear warmUp('search') only.
+ * - Search Extra is path-only shell (not hard-excluded); tip bags warm via
+ *   Clear warmUp('search') only — never promote storm MISS via tip warm.
  */
 final class FullPageCacheDiagTrackContractTest extends TestCase
 {
@@ -39,17 +39,39 @@ final class FullPageCacheDiagTrackContractTest extends TestCase
         }
     }
 
-    public function testProductFpcStillBlocksSearchPathSegment(): void
+    public function testProductQueryIsPathOnlyButStormKeysRemainInCacheIdentity(): void
     {
         $source = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Router/FullPageCacheCoordinator.php'
         );
-        // Keep product rule: search results never share one FPC body.
-        self::assertMatchesRegularExpression(
-            "/\\/\\/ Search results vary by q\\/type\\/category_id; never share one FPC body\\.\\s*'search',/",
+        self::assertStringContainsString('isCacheKeyRetainedQueryParam', $source);
+        self::assertStringContainsString("'_wb_nc'", $source);
+        self::assertStringContainsString("'wls_tpl_perf'", $source);
+        self::assertStringContainsString('FpcPierceStamp::isValidCurrentRequest', $source);
+
+        $coordinator = (new \ReflectionClass(FullPageCacheCoordinator::class))->newInstanceWithoutConstructor();
+        $filter = new \ReflectionMethod(FullPageCacheCoordinator::class, 'filterQueryStringForCacheKey');
+        $filter->setAccessible(true);
+        self::assertSame('', $filter->invoke($coordinator, 'size=s&style_type=hong-se-jiu&utm_source=x'));
+        // Without pierce stamp, storm keys must not retain a distinct cache identity.
+        self::assertSame('', $filter->invoke($coordinator, 'size=s&_wb_nc=1'));
+        self::assertSame('', $filter->invoke($coordinator, 'wls_tpl_perf=1&gclid=abc'));
+    }
+
+    public function testProductFpcDoesNotHardExcludeSearchPathSegment(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Router/FullPageCacheCoordinator.php'
+        );
+        // Search Extra path-only shell (ttl=3600); hard-exclude must stay removed.
+        self::assertStringNotContainsString(
+            "// Search results vary by q/type/category_id; never share one FPC body.\n            'search',",
             $source,
         );
-        self::assertStringContainsString("'search',", $source);
+        self::assertDoesNotMatchRegularExpression(
+            "/blockedPrefixes\\s*=\\s*\\\\array_filter\\(\\[(?:.|\\n)*?'search',/",
+            $source,
+        );
     }
 
     /**

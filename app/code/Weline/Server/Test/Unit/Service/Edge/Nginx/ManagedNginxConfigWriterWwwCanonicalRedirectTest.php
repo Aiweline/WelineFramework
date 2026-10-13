@@ -63,6 +63,7 @@ final class ManagedNginxConfigWriterWwwCanonicalRedirectTest extends TestCase
         self::assertStringContainsString('WLS apex->www canonical redirect', $conf);
         self::assertStringContainsString('server_name example.com;', $conf);
         self::assertStringContainsString('location ^~ /api/', $conf);
+        self::assertStringContainsString('location = /bin/query', $conf);
         self::assertStringContainsString(
             'return 301 https://www.example.com$request_uri;',
             $conf,

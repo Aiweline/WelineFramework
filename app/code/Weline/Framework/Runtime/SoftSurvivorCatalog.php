@@ -21,7 +21,9 @@ final class SoftSurvivorCatalog
             'Weline\\Framework\\Phrase\\DictionaryCacheNamespace::$bagRefs' => self::ROLE_CONTENT,
             'Weline\\Framework\\View\\Taglib\\Ast\\NodePool::$textNodes' => self::ROLE_CONTENT,
             'Weline\\Framework\\View\\TemplateCacheManager' => self::ROLE_CONTENT,
-            'Weline\\Framework\\Router\\FullPageCacheCoordinator::$processFpcPayloadCache' => self::ROLE_REGISTRY,
+            // Process FPC bags hold rebuildable pointer receipts (body on Shared/html-disk).
+            // Soft may unload non-pinned entries; homepage/critical receipts stay via softCompact.
+            'Weline\\Framework\\Router\\FullPageCacheCoordinator::$processFpcPayloadCache' => self::ROLE_CONTENT,
             'Weline\\Framework\\Service\\Query\\QueryProviderRegistry::$processCompiledRegistry' => self::ROLE_REGISTRY,
             'Weline\\Widget\\Service\\WidgetRegistry::$staticCachedRegistry' => self::ROLE_REGISTRY,
             'Weline\\Framework\\Event\\EventRegistry::$runtimeRegistryCache' => self::ROLE_REGISTRY,
