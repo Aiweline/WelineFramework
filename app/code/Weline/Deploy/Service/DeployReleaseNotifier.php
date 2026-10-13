@@ -15,6 +15,7 @@ class DeployReleaseNotifier
     public const TOPIC = NotificationTopicProvider::TOPIC_DEPLOY_RELEASE;
 
     public const PHASE_QUEUED = 'queued';
+    public const PHASE_DEFERRED = 'deferred';
     public const PHASE_DRAIN_START = 'drain_start';
     public const PHASE_STARTED = 'started';
     public const PHASE_BACKUP = 'backup';
@@ -45,6 +46,7 @@ class DeployReleaseNotifier
     /** @var array<string, string> */
     private const PHASE_TYPES = [
         self::PHASE_QUEUED => 'info',
+        self::PHASE_DEFERRED => 'info',
         self::PHASE_DRAIN_START => 'info',
         self::PHASE_STARTED => 'info',
         self::PHASE_BACKUP => 'info',
@@ -128,6 +130,7 @@ class DeployReleaseNotifier
 
         return match ($phase) {
             self::PHASE_QUEUED => (string)__('Deploy：Webhook 已入队%{1}', [$hint !== '' ? ' · ' . $hint : '']),
+            self::PHASE_DEFERRED => (string)__('Deploy：已排队等待进行中发布%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_DRAIN_START => (string)__('Deploy：开始消费队列%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_STARTED => (string)__('Deploy：开始发布%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_BACKUP => (string)__('Deploy：备份中'),

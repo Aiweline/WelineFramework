@@ -44,6 +44,7 @@ final class DeployReleaseNotifierContractTest extends TestCase
             'failed',
             'drain_skipped',
             'webhook_miss',
+            'deferred',
             'workdir_blocked',
             'rollback_started',
             'rollback_success',

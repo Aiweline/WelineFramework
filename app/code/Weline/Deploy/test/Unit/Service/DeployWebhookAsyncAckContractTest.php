@@ -45,5 +45,8 @@ final class DeployWebhookAsyncAckContractTest extends TestCase
         self::assertStringContainsString("'transport' => 'queue'", $source);
         self::assertStringContainsString('DeployReleaseNotifier', $source);
         self::assertStringContainsString('PHASE_QUEUED', $source);
+        self::assertStringContainsString('PHASE_DEFERRED', $source);
+        self::assertStringContainsString('hasInFlight', $source);
+        self::assertStringContainsString('DeployReleaseFlightGate', $source);
     }
 }

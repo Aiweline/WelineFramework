@@ -37,6 +37,7 @@ class DeployOrchestratorService
         private readonly DeployProjectCommandPolicyService $commandPolicyService,
         private readonly DeploySiteBackupService $siteBackupService,
         private readonly DeployReleaseNotifier $releaseNotifier,
+        private readonly DeployReleaseFlightGate $flightGate,
     ) {
         $this->isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
     }
@@ -56,7 +57,7 @@ class DeployOrchestratorService
      *     config?:array<string,mixed>,
      *     printer:Printing|null
      * } $params
-     * @return array{success:bool, release_id:string, deploy_version:string, message:string}
+     * @return array{success:bool, release_id:string, deploy_version:string, message:string, busy?:bool}
      */
     public function release(array $params): array
     {
@@ -74,25 +75,11 @@ class DeployOrchestratorService
         /** @var Printing|null $printer */
         $printer = $params['printer'] ?? null;
 
-        $releaseId = $this->runtimeService->generateReleaseId($versionHint ?? 'release');
         $log = static function (string $message) use ($printer): void {
             if ($printer) {
                 $printer->note($message);
             }
         };
-
-        $this->historyService->start($releaseId, $trigger, $refType, $ref, $versionHint, $gitTag, $releaseContext);
-        $startedAt = time();
-        $notifyBase = static function (array $extra = []) use ($releaseId, $trigger, $ref, $startedAt): array {
-            return array_merge([
-                'release_id' => $releaseId,
-                'trigger' => $trigger,
-                'ref' => $ref,
-                'elapsed_s' => max(0, time() - $startedAt),
-            ], $extra);
-        };
-        $log(__('开始发布：%{1}', [$releaseId]));
-        $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_STARTED, $notifyBase());
 
         $deployRoot = '';
         $config = [];
@@ -103,11 +90,41 @@ class DeployOrchestratorService
         $versionStampWritten = false;
         $gitCommit = '';
         $deployVersion = '';
+        $releaseId = '';
+        $notifyBase = static fn(array $extra = []): array => $extra;
 
         try {
             $config = $this->loadConfig($runtimeConfig);
             $deployRoot = $this->resolveDeployRoot($config);
             $releaseContext['deploy_root'] = $deployRoot;
+
+            // Single-flight before any history/notify/Git — busy must not auto-rollback.
+            if (!$this->flightGate->tryAcquire($deployRoot)) {
+                $log(__('发布繁忙：已有进行中的发布，本任务将排队重试。'));
+
+                return [
+                    'success' => false,
+                    'busy' => true,
+                    'release_id' => '',
+                    'deploy_version' => '',
+                    'message' => DeployReleaseFlightGate::BUSY_MESSAGE,
+                ];
+            }
+
+            $releaseId = $this->runtimeService->generateReleaseId($versionHint ?? 'release');
+            $this->historyService->start($releaseId, $trigger, $refType, $ref, $versionHint, $gitTag, $releaseContext);
+            $startedAt = time();
+            $notifyBase = static function (array $extra = []) use ($releaseId, $trigger, $ref, $startedAt): array {
+                return array_merge([
+                    'release_id' => $releaseId,
+                    'trigger' => $trigger,
+                    'ref' => $ref,
+                    'elapsed_s' => max(0, time() - $startedAt),
+                ], $extra);
+            };
+            $log(__('开始发布：%{1}', [$releaseId]));
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_STARTED, $notifyBase());
+
             $preCommit = $this->gitService->getFullCommit($deployRoot);
             $preBranch = $this->gitService->getCurrentBranch($deployRoot);
             $preCurrent = $this->runtimeService->getCurrent($deployRoot);
@@ -227,6 +244,16 @@ class DeployOrchestratorService
             ];
         } catch (\Throwable $throwable) {
             $error = $throwable->getMessage();
+            if ($releaseId === '') {
+                $log(__('发布失败：%{1}', [$error]));
+
+                return [
+                    'success' => false,
+                    'release_id' => '',
+                    'deploy_version' => '',
+                    'message' => $error,
+                ];
+            }
             $outputTail = $this->clipNotifyTail($error);
             $rollbackNote = $this->autoRollbackAfterReleaseFailure(
                 $gitUpdateStarted,
@@ -259,6 +286,8 @@ class DeployOrchestratorService
                 'deploy_version' => '',
                 'message' => $error,
             ];
+        } finally {
+            $this->flightGate->release();
         }
     }
 

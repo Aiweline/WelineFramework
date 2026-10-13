@@ -27,5 +27,6 @@ final class DeployWebhookQueueContractTest extends TestCase
         self::assertStringContainsString("'status' => 'pending'", $queue);
         self::assertStringContainsString('function findByRef', $queue);
         self::assertStringContainsString('function listByStatus', $queue);
+        self::assertStringContainsString('function hasInFlight', $queue);
     }
 }

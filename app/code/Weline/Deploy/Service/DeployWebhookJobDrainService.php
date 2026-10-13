@@ -40,7 +40,13 @@ class DeployWebhookJobDrainService
         $failed += (int)($external['failed'] ?? 0);
         $skipped += (int)($external['skipped'] ?? 0);
 
-        foreach ($this->queue->listPending($limit) as $job) {
+        // Serialize: never start a pending release while another is in-flight.
+        $effectiveLimit = 1;
+        foreach ($this->queue->listPending(max(1, $limit)) as $job) {
+            if ($this->queue->hasInFlight()) {
+                $messages[] = 'defer pending: release_busy';
+                break;
+            }
             $processed++;
             $jobId = (string)($job['id'] ?? '');
             $ref = trim((string)($job['ref'] ?? ''));
@@ -54,6 +60,11 @@ class DeployWebhookJobDrainService
                     'reason' => 'invalid_job',
                 ]);
                 continue;
+            }
+
+            if ($processed > $effectiveLimit) {
+                $messages[] = 'defer remaining pending: single-flight';
+                break;
             }
 
             if (!$this->queue->updateJob($jobId, ['status' => 'running', 'started_at' => time()])) {

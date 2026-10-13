@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Deploy\Console\Deploy;
 
 use Weline\Deploy\Service\DeployOrchestratorService;
+use Weline\Deploy\Service\DeployReleaseFlightGate;
 use Weline\Deploy\Service\DeployWebhookExternalJobReconciler;
 use Weline\Deploy\Service\DeployWebhookJobQueue;
 use Weline\Deploy\Service\DeployWebhookRefResolver;
@@ -93,14 +94,19 @@ class Release extends CommandAbstract
         ]);
 
         $success = !empty($result['success']);
+        $busy = !empty($result['busy']);
         $this->closeoutJob($jobId, $success, $result);
-        $this->printResultTrailer($jobId, $success, $result);
+        $this->printResultTrailer($jobId, $success, $result, $busy);
 
         if ($success) {
             $this->printer->note('');
             $this->printer->success(__('发布 ID：%{1}', [$result['release_id']]));
             $this->printer->success(__('版本：%{1}', [$result['deploy_version']]));
             $this->printer->success(__('探测：php bin/w deploy:release:status'));
+        } elseif ($busy) {
+            $this->printer->note(__('发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。'));
+            // Exit 0 so systemd-run / reconciler do not treat busy as hard failure.
+            return;
         } else {
             $this->printer->error(__('发布失败：%{1}', [$result['message']]));
             exit(1);
@@ -149,6 +155,19 @@ class Release extends CommandAbstract
 
             return;
         }
+        // Busy: re-queue for Cron/`deploy:webhook:drain` — do not mark failed (no rollback).
+        if (!empty($result['busy'])) {
+            $this->jobQueue->updateJob($jobId, [
+                'status' => 'pending',
+                'pid' => null,
+                'transport' => 'queue',
+                'message' => (string)($result['message'] ?? DeployReleaseFlightGate::BUSY_MESSAGE),
+                'updated_at' => time(),
+                'reconcile_source' => 'release_cli_busy',
+            ]);
+
+            return;
+        }
         $this->jobQueue->updateJob($jobId, [
             'status' => 'failed',
             'message' => (string)($result['message'] ?? 'release_failed'),
@@ -160,12 +179,13 @@ class Release extends CommandAbstract
     /**
      * Machine trailer for systemd log + ExternalJobReconciler (locale-independent).
      *
-     * @param array{success?:bool,release_id?:string,deploy_version?:string,message?:string} $result
+     * @param array{success?:bool,busy?:bool,release_id?:string,deploy_version?:string,message?:string} $result
      */
-    private function printResultTrailer(string $jobId, bool $success, array $result): void
+    private function printResultTrailer(string $jobId, bool $success, array $result, bool $busy = false): void
     {
         $payload = [
             'success' => $success,
+            'busy' => $busy,
             'job_id' => $jobId,
             'release_id' => (string)($result['release_id'] ?? ''),
             'deploy_version' => (string)($result['deploy_version'] ?? ''),

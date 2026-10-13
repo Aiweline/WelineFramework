@@ -15,6 +15,7 @@ class DeployWebhookAsyncDispatcher
     public function __construct(
         private readonly DeployWebhookJobQueue $jobQueue,
         private readonly DeployReleaseNotifier $releaseNotifier,
+        private readonly DeployReleaseFlightGate $flightGate,
     ) {
     }
 
@@ -119,7 +120,31 @@ class DeployWebhookAsyncDispatcher
             ];
         }
 
+        // Single-flight: if another release is in-flight (or lock held), stay pending for drain.
+        if ($this->jobQueue->hasInFlight() || $this->flightGate->isLocked($deployRoot)) {
+            @file_put_contents($logPath, "# transport=queue (deferred: release_busy)\n", FILE_APPEND);
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_DEFERRED, [
+                'job_id' => $jobId,
+                'ref' => $ref,
+                'trigger' => 'webhook',
+                'log_path' => $logPath,
+                'reason' => DeployReleaseFlightGate::BUSY_MESSAGE,
+            ]);
+
+            return [
+                'ok' => true,
+                'pid' => null,
+                'log_path' => $logPath,
+                'command' => 'queue',
+                'error' => '',
+                'job_id' => $jobId,
+                'transport' => 'queue',
+            ];
+        }
+
         // Optional fast path: systemd-run outside WLS cgroup (sudoers optional).
+        // Narrow race (two POSTs both pass hasInFlight): child deploy:release takes flock;
+        // loser returns busy and is re-queued — never Git/auto-rollback.
         $systemd = $this->systemdRunDetach($deployRoot, $argv, $logPath, $pidFile);
         if (!empty($systemd['ok'])) {
             $this->jobQueue->updateJob($jobId, [

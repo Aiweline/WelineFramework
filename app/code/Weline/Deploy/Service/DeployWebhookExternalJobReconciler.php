@@ -66,6 +66,21 @@ class DeployWebhookExternalJobReconciler
                 continue;
             }
 
+            if ($evidence['kind'] === 'busy') {
+                $this->queue->updateJob($jobId, [
+                    'status' => 'pending',
+                    'pid' => null,
+                    'transport' => 'queue',
+                    'message' => (string)($evidence['message'] ?? DeployReleaseFlightGate::BUSY_MESSAGE),
+                    'updated_at' => time(),
+                    'reconcile_source' => self::SOURCE . '_busy',
+                ]);
+                $reconciled++;
+                $skipped++;
+                $messages[] = $jobId . ': requeued busy';
+                continue;
+            }
+
             if ($evidence['kind'] === 'failed') {
                 $this->queue->updateJob($jobId, [
                     'status' => 'failed',
@@ -177,10 +192,19 @@ class DeployWebhookExternalJobReconciler
                 'release_id' => (string)($data['release_id'] ?? ''),
             ];
         }
+        $message = (string)($data['message'] ?? 'release_failed');
+        if (!empty($data['busy']) || $message === DeployReleaseFlightGate::BUSY_MESSAGE) {
+            return [
+                'kind' => 'busy',
+                'message' => $message !== '' ? $message : DeployReleaseFlightGate::BUSY_MESSAGE,
+                'deploy_version' => (string)($data['deploy_version'] ?? ''),
+                'release_id' => (string)($data['release_id'] ?? ''),
+            ];
+        }
 
         return [
             'kind' => 'failed',
-            'message' => (string)($data['message'] ?? 'release_failed'),
+            'message' => $message,
             'deploy_version' => (string)($data['deploy_version'] ?? ''),
             'release_id' => (string)($data['release_id'] ?? ''),
         ];

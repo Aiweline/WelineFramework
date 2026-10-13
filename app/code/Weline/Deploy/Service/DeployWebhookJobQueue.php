@@ -64,6 +64,57 @@ class DeployWebhookJobQueue
     }
 
     /**
+     * True when a release job is already claimed (running or live external dispatch).
+     * Stale dispatched_external (dead pid + aged) do not block — reconciler will close them.
+     */
+    public function hasInFlight(int $staleExternalGraceSeconds = 120): bool
+    {
+        $dir = $this->queueDir();
+        $files = glob($dir . DIRECTORY_SEPARATOR . '*.json') ?: [];
+        $now = time();
+        foreach ($files as $file) {
+            $job = $this->readJob($file);
+            if ($job === null) {
+                continue;
+            }
+            $status = (string)($job['status'] ?? '');
+            if ($status === 'running') {
+                return true;
+            }
+            if ($status !== 'dispatched_external') {
+                continue;
+            }
+            $pid = (int)($job['pid'] ?? 0);
+            if ($pid > 0 && $this->isProcessAlive($pid)) {
+                return true;
+            }
+            $updated = (int)($job['updated_at'] ?? $job['created_at'] ?? 0);
+            if ($updated > 0 && ($now - $updated) < $staleExternalGraceSeconds) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isProcessAlive(int $pid): bool
+    {
+        if ($pid <= 0) {
+            return false;
+        }
+        if (\function_exists('posix_kill')) {
+            return @\posix_kill($pid, 0);
+        }
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            return false;
+        }
+        $out = [];
+        @exec('kill -0 ' . $pid . ' 2>/dev/null', $out, $code);
+
+        return $code === 0;
+    }
+
+    /**
      * @return list<array<string,mixed>>
      */
     public function listByStatus(string $status, int $limit = 5): array
