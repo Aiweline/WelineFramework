@@ -6,6 +6,7 @@ namespace Weline\Deploy\Service;
 
 /**
  * Execute pending webhook release jobs in a CLI/cron process (not the WLS HTTP request cgroup).
+ * Also reconciles dispatched_external jobs whose systemd-run process has exited.
  */
 class DeployWebhookJobDrainService
 {
@@ -15,11 +16,12 @@ class DeployWebhookJobDrainService
         private readonly DeployOrchestratorService $orchestrator,
         private readonly DeployConfigService $configService,
         private readonly DeployReleaseNotifier $releaseNotifier,
+        private readonly DeployWebhookExternalJobReconciler $externalReconciler,
     ) {
     }
 
     /**
-     * @return array{processed:int,ok:int,failed:int,skipped:int,messages:list<string>}
+     * @return array{processed:int,ok:int,failed:int,skipped:int,reconciled:int,messages:list<string>}
      */
     public function drain(int $limit = 3): array
     {
@@ -28,6 +30,15 @@ class DeployWebhookJobDrainService
         $failed = 0;
         $skipped = 0;
         $messages = [];
+
+        $external = $this->externalReconciler->reconcile(20);
+        $reconciled = (int)($external['reconciled'] ?? 0);
+        foreach ($external['messages'] ?? [] as $msg) {
+            $messages[] = 'external: ' . (string)$msg;
+        }
+        $ok += (int)($external['ok'] ?? 0);
+        $failed += (int)($external['failed'] ?? 0);
+        $skipped += (int)($external['skipped'] ?? 0);
 
         foreach ($this->queue->listPending($limit) as $job) {
             $processed++;
@@ -128,6 +139,6 @@ class DeployWebhookJobDrainService
             }
         }
 
-        return compact('processed', 'ok', 'failed', 'skipped', 'messages');
+        return compact('processed', 'ok', 'failed', 'skipped', 'reconciled', 'messages');
     }
 }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Deploy\Console\Deploy;
 
 use Weline\Deploy\Service\DeployOrchestratorService;
+use Weline\Deploy\Service\DeployWebhookExternalJobReconciler;
+use Weline\Deploy\Service\DeployWebhookJobQueue;
 use Weline\Deploy\Service\DeployWebhookRefResolver;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\Console\Server\TablePrinter;
@@ -18,6 +20,7 @@ class Release extends CommandAbstract
         Printing $printer,
         private readonly DeployOrchestratorService $orchestrator,
         private readonly DeployWebhookRefResolver  $refResolver,
+        private readonly DeployWebhookJobQueue     $jobQueue,
     ) {
         $this->printer = $printer;
     }
@@ -39,6 +42,7 @@ class Release extends CommandAbstract
                 '-f, --force'            => '强制拉取',
                 '--no-backup'            => '跳过整站 tar（默认；Git 版本即回滚面）',
                 '--backup'               => '发布前额外打整站 tar（可选，非默认）',
+                '--job-id=<id>'          => 'Webhook 异步任务 ID（systemd-run 快路径收口队列）',
                 '-h, --help'             => '显示帮助信息',
             ],
             [
@@ -66,6 +70,7 @@ class Release extends CommandAbstract
         if (isset($args['no-backup'])) {
             $noBackup = true;
         }
+        $jobId = $this->resolveJobId($args);
 
         // 解析 ref 类型
         $refInfo = $this->refResolver->resolve($ref, [
@@ -87,7 +92,11 @@ class Release extends CommandAbstract
             'printer'              => $this->printer,
         ]);
 
-        if ($result['success']) {
+        $success = !empty($result['success']);
+        $this->closeoutJob($jobId, $success, $result);
+        $this->printResultTrailer($jobId, $success, $result);
+
+        if ($success) {
             $this->printer->note('');
             $this->printer->success(__('发布 ID：%{1}', [$result['release_id']]));
             $this->printer->success(__('版本：%{1}', [$result['deploy_version']]));
@@ -96,5 +105,77 @@ class Release extends CommandAbstract
             $this->printer->error(__('发布失败：%{1}', [$result['message']]));
             exit(1);
         }
+    }
+
+    /**
+     * @param array<string,mixed> $args
+     */
+    private function resolveJobId(array $args): string
+    {
+        $direct = trim((string)($args['job-id'] ?? $args['job_id'] ?? ''));
+        if ($direct !== '') {
+            return $direct;
+        }
+        foreach ($args as $key => $value) {
+            if (is_string($key) && (str_starts_with($key, 'job-id=') || str_starts_with($key, '--job-id='))) {
+                $parts = explode('=', $key, 2);
+
+                return trim((string)($parts[1] ?? ''));
+            }
+            if (is_string($value) && str_starts_with($value, '--job-id=')) {
+                return trim(substr($value, strlen('--job-id=')));
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array{success?:bool,release_id?:string,deploy_version?:string,message?:string} $result
+     */
+    private function closeoutJob(string $jobId, bool $success, array $result): void
+    {
+        if ($jobId === '') {
+            return;
+        }
+        if ($success) {
+            $this->jobQueue->updateJob($jobId, [
+                'status' => 'done',
+                'release_id' => (string)($result['release_id'] ?? ''),
+                'deploy_version' => (string)($result['deploy_version'] ?? ''),
+                'finished_at' => time(),
+                'reconcile_source' => 'release_cli',
+            ]);
+
+            return;
+        }
+        $this->jobQueue->updateJob($jobId, [
+            'status' => 'failed',
+            'message' => (string)($result['message'] ?? 'release_failed'),
+            'finished_at' => time(),
+            'reconcile_source' => 'release_cli',
+        ]);
+    }
+
+    /**
+     * Machine trailer for systemd log + ExternalJobReconciler (locale-independent).
+     *
+     * @param array{success?:bool,release_id?:string,deploy_version?:string,message?:string} $result
+     */
+    private function printResultTrailer(string $jobId, bool $success, array $result): void
+    {
+        $payload = [
+            'success' => $success,
+            'job_id' => $jobId,
+            'release_id' => (string)($result['release_id'] ?? ''),
+            'deploy_version' => (string)($result['deploy_version'] ?? ''),
+            'message' => (string)($result['message'] ?? ''),
+        ];
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            return;
+        }
+        // Plain stdout so systemd StandardOutput=append captures it into webhook-async log.
+        echo DeployWebhookExternalJobReconciler::RESULT_TRAILER_PREFIX . $json . "\n";
     }
 }

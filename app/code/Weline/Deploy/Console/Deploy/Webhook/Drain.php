@@ -19,7 +19,7 @@ class Drain extends CommandAbstract
 
     public function tip(): string
     {
-        return (string)__('消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）');
+        return (string)__('消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（CLI/cron；不依赖 sudo）');
     }
 
     public function help(): array|string
@@ -28,7 +28,7 @@ class Drain extends CommandAbstract
             'deploy:webhook:drain',
             $this->tip(),
             [
-                '--limit=<n>' => '最多处理几条 pending（默认 3）',
+                '--limit=<n>' => '最多处理几条 pending（默认 3）；同时收口 dispatched_external',
                 '-h, --help' => '显示帮助',
             ],
             [
@@ -46,11 +46,12 @@ class Drain extends CommandAbstract
         }
         $result = $this->drainService->drain($limit);
         $this->printer->note(sprintf(
-            'processed=%d ok=%d failed=%d skipped=%d',
+            'processed=%d ok=%d failed=%d skipped=%d reconciled=%d',
             $result['processed'],
             $result['ok'],
             $result['failed'],
-            $result['skipped']
+            $result['skipped'],
+            (int)($result['reconciled'] ?? 0)
         ));
         foreach ($result['messages'] as $message) {
             $this->printer->note((string)$message);

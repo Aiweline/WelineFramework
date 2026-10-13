@@ -24,7 +24,7 @@ class DeployWebhookDrainCron implements CronTaskInterface
 
     public function tip(): string
     {
-        return (string)__('消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）');
+        return (string)__('消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（不依赖 sudo）');
     }
 
     public function cron_time(): string
@@ -39,11 +39,12 @@ class DeployWebhookDrainCron implements CronTaskInterface
         $result = $drain->drain(3);
 
         return sprintf(
-            'ok processed=%d success=%d failed=%d skipped=%d',
+            'ok processed=%d success=%d failed=%d skipped=%d reconciled=%d',
             (int)$result['processed'],
             (int)$result['ok'],
             (int)$result['failed'],
-            (int)$result['skipped']
+            (int)$result['skipped'],
+            (int)($result['reconciled'] ?? 0)
         );
     }
 

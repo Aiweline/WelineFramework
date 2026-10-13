@@ -20,10 +20,12 @@ final class DeployWebhookQueueContractTest extends TestCase
         $cron = (string)file_get_contents($base . '/Cron/DeployWebhookDrainCron.php');
         self::assertStringContainsString("'* * * * *'", $cron);
         self::assertStringContainsString('DeployWebhookJobDrainService', $cron);
+        self::assertStringContainsString('reconciled=', $cron);
 
         $queue = (string)file_get_contents($base . '/Service/DeployWebhookJobQueue.php');
         self::assertStringContainsString('webhook-queue', $queue);
         self::assertStringContainsString("'status' => 'pending'", $queue);
         self::assertStringContainsString('function findByRef', $queue);
+        self::assertStringContainsString('function listByStatus', $queue);
     }
 }

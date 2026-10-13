@@ -37,6 +37,7 @@ final class DeployWebhookAsyncAckContractTest extends TestCase
 
         self::assertStringContainsString('deploy:release', $source);
         self::assertStringContainsString('--no-backup', $source);
+        self::assertStringContainsString('--job-id=', $source);
         self::assertStringContainsString('resolvePhpBinary', $source);
         self::assertStringContainsString('jobQueue', $source);
         self::assertStringContainsString('enqueue', $source);

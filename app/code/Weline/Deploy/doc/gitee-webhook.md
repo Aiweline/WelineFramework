@@ -61,3 +61,9 @@ curl -s -X POST 'https://你的域名/~wh~...' \
 - `403 invalid webhook token`：Gitee 密码与后台 `webhook_secret` 不一致
 - `branch mismatch` / `trigger_mode_*`：检查后台触发模式与分支过滤
 - `Tracked files have local changes`：部署目录有本地改动，先清理再部署
+
+### 推送成功但站上未见入队
+
+1. `curl -sS 'https://你的域名/~wh~...?health=1'` 须 `{"ok":true}`（URL 必须与 `deploy:webhook:setup --base-url=...` 输出一致）
+2. Gitee WebHook：触发事件是否勾选 **Push**（分支模式）或 **Tag Push**；密码与 `webhook_secret` 字节级一致
+3. 站侧 access/deploy 日志在推送时刻有无对该 `~wh~` 的 POST；无请求=平台未打到站（DNS/防火墙/错误 URL），非队列逻辑故障

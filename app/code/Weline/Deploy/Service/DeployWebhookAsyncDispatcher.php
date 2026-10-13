@@ -76,7 +76,7 @@ class DeployWebhookAsyncDispatcher
             $argv[] = '--no-backup';
         }
 
-        $header = '# webhook-async spawn ' . date('c') . "\n# php=" . $phpBin . "\n# argv=" . implode(' ', $argv) . "\n";
+        $header = '# webhook-async spawn ' . date('c') . "\n# php=" . $phpBin . "\n";
         @file_put_contents($logPath, $header);
 
         // Always enqueue first — Cron drain does not need sudo and is the durable guarantee.
@@ -93,7 +93,13 @@ class DeployWebhookAsyncDispatcher
             ];
         }
         $jobId = (string)$queued['job_id'];
-        @file_put_contents($logPath, '# job_id=' . $jobId . "\n", FILE_APPEND);
+        // job_id known only after enqueue — append before any detach spawn.
+        $argv[] = '--job-id=' . $jobId;
+        @file_put_contents(
+            $logPath,
+            '# job_id=' . $jobId . "\n# argv=" . implode(' ', $argv) . "\n",
+            FILE_APPEND
+        );
         $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_QUEUED, [
             'job_id' => $jobId,
             'ref' => $ref,

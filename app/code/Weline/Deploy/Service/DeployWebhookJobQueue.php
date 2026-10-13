@@ -60,6 +60,19 @@ class DeployWebhookJobQueue
      */
     public function listPending(int $limit = 5): array
     {
+        return $this->listByStatus('pending', $limit);
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    public function listByStatus(string $status, int $limit = 5): array
+    {
+        $status = trim($status);
+        if ($status === '' || $limit < 1) {
+            return [];
+        }
+
         $dir = $this->queueDir();
         $files = glob($dir . DIRECTORY_SEPARATOR . '*.json') ?: [];
         sort($files);
@@ -69,7 +82,7 @@ class DeployWebhookJobQueue
             if ($job === null) {
                 continue;
             }
-            if (($job['status'] ?? '') !== 'pending') {
+            if (($job['status'] ?? '') !== $status) {
                 continue;
             }
             $out[] = $job;
