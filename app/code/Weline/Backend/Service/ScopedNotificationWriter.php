@@ -14,9 +14,13 @@ use Weline\Framework\Runtime\ScopeIdentity;
  */
 final class ScopedNotificationWriter
 {
+    private readonly NotificationOriginContext $originContext;
+
     public function __construct(
         private readonly SystemNotification $notificationModel,
+        ?NotificationOriginContext $originContext = null,
     ) {
+        $this->originContext = $originContext ?? new NotificationOriginContext();
     }
 
     /**
@@ -31,6 +35,9 @@ final class ScopedNotificationWriter
      */
     public function write(array $data): array
     {
+        // 收录时统一打上来源上下文（CLI/FPM/WLS + 区域 + Website Scope）；渠道适配器禁止各自硬编码。
+        $data = $this->originContext->enrich($data);
+
         $topic = \trim((string)($data['topic'] ?? 'system_info'));
         $type = \trim((string)($data['type'] ?? 'info'));
         $title = \trim((string)($data['title'] ?? ''));

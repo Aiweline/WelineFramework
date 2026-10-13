@@ -65,7 +65,9 @@ class SystemNotificationObserver implements ObserverInterface
             'metadata' => $notification->getMetadata(),
             'notify_users' => $result['notify_users'],
             'require_explicit_recipients' => $result['require_explicit_recipients'],
+            'scope' => $notification->getScope(),
             'scope_hash' => $notification->getScopeHash(),
+            'source_module' => $notification->getSourceModule(),
             'dedupe_key' => $notification->getDedupeKey(),
         ]);
     }

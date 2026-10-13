@@ -30,7 +30,7 @@ class TelegramAdapterTest extends TestCase
             'topic_code' => 'bt_server_health',
             'type' => 'error',
             'title' => 'BT 服务器不可访问',
-            'content' => '服务器1 timeout',
+            'content' => "服务器1 timeout\n\n--- weline-notification-origin ---\n运行模式: cli",
             'recipient_name' => 'admin',
             'contact' => ['contact_name' => '运维群'],
         ]);
@@ -39,6 +39,8 @@ class TelegramAdapterTest extends TestCase
         $this->assertArrayHasKey('text', $message);
         $this->assertStringContainsString('BT 服务器不可访问', $message['text']);
         $this->assertStringContainsString('运维群', $message['text']);
+        // Adapter only forwards already-enriched content; does not invent site labels.
+        $this->assertStringContainsString('weline-notification-origin', $message['text']);
     }
 
     public function testGetConfigFieldsContainsBotTokenAndChatId(): void
@@ -49,6 +51,7 @@ class TelegramAdapterTest extends TestCase
 
         $this->assertContains('bot_token', $fieldNames);
         $this->assertContains('chat_id', $fieldNames);
+        $this->assertNotContains('instance_label', $fieldNames);
     }
 
     public function testSendReturnsFalseWhenConfigMissing(): void

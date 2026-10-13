@@ -6,6 +6,8 @@ namespace Weline\Backend\Adapter\Notification;
 
 use Weline\Backend\Api\Notification\ChannelAdapterInterface;
 use Weline\Backend\Enum\NotificationType;
+use Weline\Backend\Service\NotificationOriginContext;
+use Weline\Framework\Manager\ObjectManager;
 
 class TelegramAdapter implements ChannelAdapterInterface
 {
@@ -94,11 +96,24 @@ class TelegramAdapter implements ChannelAdapterInterface
 
     public function test(array $config): bool
     {
+        /** @var NotificationOriginContext $origin */
+        $origin = ObjectManager::getInstance(NotificationOriginContext::class);
+        $enriched = $origin->enrich([
+            'topic' => 'system_info',
+            'type' => 'info',
+            'title' => (string) __('Telegram 渠道测试'),
+            'content' => (string) __('这是一条测试消息，如果您收到了它，说明 Telegram 渠道配置是可用的。'),
+            'source_module' => 'Weline_Backend',
+        ]);
+
         $testNotification = [
             'topic_code' => 'system_info',
             'type' => 'info',
-            'title' => __('Telegram 渠道测试'),
-            'content' => __('这是一条测试消息，如果您收到了它，说明 Telegram 渠道配置是可用的。'),
+            'title' => $enriched['title'],
+            'content' => $enriched['content'],
+            'metadata' => $enriched['metadata'] ?? [],
+            'scope' => $enriched['scope'] ?? '',
+            'source_module' => 'Weline_Backend',
         ];
 
         return $this->send($testNotification, $config);
