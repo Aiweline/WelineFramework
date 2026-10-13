@@ -2986,3 +2986,32 @@ body:has(.account-index) :is(.w-tabs__tab, .w-nav a, .w-nav button):focus-visibl
         border-block-start: var(--daocharms-rule-width) solid var(--color-border-default);
     }
 }
+
+/* UI19: full-width labeled social providers (ref Continue with Google/Facebook) */
+body.account-auth-layout .account-social-login[data-w-component="account-social-login"] .account-social-login__list--logos {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: stretch;
+    gap: 0.75rem;
+}
+
+body.account-auth-layout .account-social-login[data-w-component="account-social-login"] a.account-social-login__btn--logo {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: var(--daocharms-control-height, 2.75rem) !important;
+    border-radius: var(--daocharms-radius-sm) !important;
+    gap: 0.65rem;
+    padding: 0.55rem 1rem !important;
+    line-height: 1.2;
+}
+
+body.account-auth-layout .account-social-login[data-w-component="account-social-login"] a.account-social-login__btn--logo::after {
+    content: attr(aria-label);
+    font-size: 0.92rem;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    color: var(--color-text);
+    white-space: nowrap;
+}
