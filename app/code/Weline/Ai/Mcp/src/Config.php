@@ -307,7 +307,7 @@ final class Config
                     'build/**', 'tmp/**', '**/tmp/**', 'dev/tmp/**', 'test-results/**', 'evidence/**', 'private/**', '.superpowers/**',
                     'Users/**', 'pub/errors/**', 'pub/readme/**', 'pub/source/**', 'pub/sitemaps/**',
                     'pub/theme_previews/**', 'setup/static/**', 'setup/server_installer/**',
-                    'setup/step/**', 'docs/assets/**', '**/extends/**/server/**',
+                    'setup/step/**', 'dev/docs/assets/**', '**/extends/**/server/**',
                     '.idea/**', '.vscode/**', 'coverage/**', '.cache/**', '**/.phpunit.result.cache',
                     'dist/**', 'out/**', 'log/**', 'logs/**', 'tmp_cache/**', 'vendor-bin/**',
                     '.scannerwork/**', 'build-cache/**', 'nbproject/**', '.nyc_output/**',

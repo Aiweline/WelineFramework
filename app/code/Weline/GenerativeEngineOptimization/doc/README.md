@@ -84,7 +84,7 @@
 ## 🔗 相关链接
 
 - [模块README](../README.md)
-- [WelineFramework文档](../../../docs/dev/开发文档.md)
+- [WelineFramework文档](../../../app/code/Weline/Framework/doc/README.md)
 
 ---
 

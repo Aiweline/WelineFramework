@@ -211,7 +211,7 @@ index:
     - setup/static/**
     - setup/server_installer/**
     - setup/step/**
-    - docs/assets/**
+    - dev/docs/assets/**
     - **/extends/**/server/**
     - .idea/**
     - .vscode/**

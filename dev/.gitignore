@@ -33,6 +33,10 @@ ai/archive/**/*.log
 !ai-command/
 !ai-command/**
 
+# 保留项目级文档（原仓库根 docs/ + 根 doc/ 合并至此）
+!docs/
+!docs/**
+
 !docker/
 !docker/**
 

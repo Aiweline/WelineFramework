@@ -1,16 +1,16 @@
 # WelineFramework
 
-![WelineFramework — WLS in-memory runtime](./docs/assets/readme/weline-framework-og.jpg)
+![WelineFramework — WLS in-memory runtime](./dev/docs/assets/readme/weline-framework-og.jpg)
 
 **WelineFramework** is a PHP 8.4+ modular business framework. Its signature runtime **WLS** keeps the app **in memory** — HTTP Workers, Session Server, Memory Server, and hot reload — while traditional FPM remains a first-class deploy path.
 
 [Official Website](https://www.aiweline.com) ·
-[Framework Docs](./docs/weline/README.md) ·
-[Docs](./docs/README.md) ·
-[Architecture](./docs/weline/README.md) ·
+[Framework Docs](./dev/docs/weline/README.md) ·
+[Docs](./dev/docs/README.md) ·
+[Architecture](./dev/docs/weline/README.md) ·
 [WLS](./app/code/Weline/Server/doc/README.md) ·
 [Deploy](./app/code/Weline/Deploy/doc/README.md) ·
-[Languages](./docs/readme/README.md) ·
+[Languages](./dev/docs/readme/README.md) ·
 [AI Engineering Entry](./AGENTS.md)
 
 ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777bb4?logo=php&logoColor=white)
@@ -23,11 +23,11 @@
 
 [English](./README.md) |
 [Simplified Chinese](./README.zh-CN.md) |
-[Japanese](./docs/readme/README.ja.md) |
-[Korean](./docs/readme/README.ko.md) |
-[German](./docs/readme/README.de.md) |
-[French](./docs/readme/README.fr.md) |
-[More languages](./docs/readme/README.md)
+[Japanese](./dev/docs/readme/README.ja.md) |
+[Korean](./dev/docs/readme/README.ko.md) |
+[German](./dev/docs/readme/README.de.md) |
+[French](./dev/docs/readme/README.fr.md) |
+[More languages](./dev/docs/readme/README.md)
 
 ---
 
@@ -110,11 +110,11 @@ Local sibling checkout (optional): `../框架GUI` next to this framework root.
 ## Read Next
 
 - [Simplified Chinese README](./README.zh-CN.md): Chinese entry for local developers.
-- [Framework docs](./docs/weline/README.md): developer guide and architecture documentation.
-- [Project docs index](./docs/README.md): repository-level documentation entry.
-- [Architecture overview](./docs/weline/README.md): framework layers, runtime, routing, ORM, events, and extension model.
+- [Framework docs](./dev/docs/weline/README.md): developer guide and architecture documentation.
+- [Project docs index](./dev/docs/README.md): repository-level documentation entry.
+- [Architecture overview](./dev/docs/weline/README.md): framework layers, runtime, routing, ORM, events, and extension model.
 - [WLS documentation](./app/code/Weline/Server/doc/README.md): WLS runtime and service orchestration.
-- [Multilingual README index](./docs/readme/README.md): onboarding entries for global developers.
+- [Multilingual README index](./dev/docs/readme/README.md): onboarding entries for global developers.
 
 For more product capabilities, industry scenarios, and business solutions, visit [www.aiweline.com](https://www.aiweline.com).
 

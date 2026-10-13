@@ -615,7 +615,7 @@ try {
         'build', 'tmp', 'test-results', 'evidence', 'private', '.superpowers', 'Users',
         '.idea', '.vscode', 'coverage', '.cache', 'dist', 'out', 'log', 'logs', 'tmp_cache',
         'vendor-bin', 'vendor-bin/bin', '.scannerwork', 'build-cache', 'nbproject', '.nyc_output',
-        'pub', 'setup', 'docs/assets', 'pub/errors', 'pub/readme', 'pub/source', 'pub/sitemaps',
+        'pub', 'setup', 'dev/docs/assets', 'pub/errors', 'pub/readme', 'pub/source', 'pub/sitemaps',
         'pub/theme_previews', 'setup/static', 'setup/server_installer', 'setup/step',
         'extends', 'extends/foo', 'extends/foo/server', 'extends/foo/client',
     ] as $directory) {
@@ -647,7 +647,7 @@ try {
         "<?php\nfinal class McpServer { public function run(): void {} }\n",
     );
     file_put_contents($fixtureRoot . '/ui/panel.html', "<!doctype html><main>Execution panel</main>\n");
-    file_put_contents($fixtureRoot . '/docs/README.md', "# MCP architecture and usage\n");
+    file_put_contents($fixtureRoot . '/dev/docs/README.md', "# MCP architecture and usage\n");
     file_put_contents($fixtureRoot . '/scripts/install.php', "<?php\nreturn true;\n");
     file_put_contents($fixtureRoot . '/.cursor/session.md', "cursor context\n");
     file_put_contents($fixtureRoot . '/.claude/rules.md', "claude rules\n");
@@ -668,7 +668,7 @@ try {
     file_put_contents($fixtureRoot . '/setup/static/setup.php', "<?php\nreturn true;\n");
     file_put_contents($fixtureRoot . '/setup/server_installer/installer.php', "<?php\nreturn true;\n");
     file_put_contents($fixtureRoot . '/setup/step/step.php', "<?php\nreturn true;\n");
-    file_put_contents($fixtureRoot . '/docs/assets/main.js', "export default {};\n");
+    file_put_contents($fixtureRoot . '/dev/docs/assets/main.js', "export default {};\n");
     file_put_contents($fixtureRoot . '/.idea/workspace.xml', "<xml/>\n");
     file_put_contents($fixtureRoot . '/.vscode/settings.json', "{}\n");
     file_put_contents($fixtureRoot . '/coverage/coverage.xml', "<?xml version=\"1.0\"?>\n<coverage/>\n");
@@ -711,7 +711,7 @@ try {
         'private/secret.md', '.superpowers/manifest.md', 'Users/local.txt',
         'pub/errors/error.php', 'pub/readme/readme.php', 'pub/source/source.php',
         'pub/sitemaps/site.php', 'pub/theme_previews/theme.php', 'setup/static/setup.php',
-        'setup/server_installer/installer.php', 'setup/step/step.php', 'docs/assets/main.js',
+        'setup/server_installer/installer.php', 'setup/step/step.php', 'dev/docs/assets/main.js',
         'extends/foo/server/Server.php',
         '.idea/workspace.xml', '.vscode/settings.json', 'coverage/coverage.xml', '.cache/index.php',
         'dist/dist.php', 'out/index.php', 'log/service.log', 'logs/debug.log',

@@ -931,7 +931,7 @@ final class McpSkillCatalog
                         'app/code/Weline/Framework/doc/ai/skills/performance-cold-chaos-dig/SKILL.md',
                         'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
                         'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
-                        'docs/版本计划/v3/PHP8.4+框架优化/12-性能基准与目标.md',
+                        'app/code/Weline/Framework/doc/3-开发/性能基准与目标-PHP84规划摘录.md',
                         'app/code/Weline/Ai/doc/AI工程交付流程.md',
                     ],
                     'must_query_scope' => '必须检查性能；深懂框架结构+业务特性；审查缓存合规；与架构师共同定制优化方向；禁拆壳药方；冷切/假写粘性实测走 performance-cold-chaos-dig；查出问题后拉起项目经理安排；开发后证据复审',

@@ -1,15 +1,15 @@
 # WelineFramework
 
-![WelineFramework 封面](./docs/assets/readme/weline-framework-cover.zh-CN.png)
+![WelineFramework 封面](./dev/docs/assets/readme/weline-framework-cover.zh-CN.png)
 
 **WelineFramework** 是 PHP 8.4+ 模块化业务框架。招牌运行时 **WLS** 让应用**常驻内存**——HTTP Worker、Session Server、Memory Server 与热重载——同时传统 FPM 仍是一等部署路径。
 
 [官网](https://www.aiweline.com) ·
-[开发者入口](./docs/weline/开发者入口.md) ·
-[文档](./docs/README.md) ·
-[架构](./docs/weline/README.md) ·
+[开发者入口](./dev/docs/weline/开发者入口.md) ·
+[文档](./dev/docs/README.md) ·
+[架构](./dev/docs/weline/README.md) ·
 [WLS](./app/code/Weline/Server/doc/README.md) ·
-[多语言 README](./docs/readme/README.md) ·
+[多语言 README](./dev/docs/readme/README.md) ·
 [AI 工程入口](./AGENTS.md)
 
 ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777bb4?logo=php&logoColor=white)
@@ -21,11 +21,11 @@
 
 [English](./README.md) |
 [简体中文](./README.zh-CN.md) |
-[日本語](./docs/readme/README.ja.md) |
-[한국어](./docs/readme/README.ko.md) |
-[Deutsch](./docs/readme/README.de.md) |
-[Français](./docs/readme/README.fr.md) |
-[更多语言](./docs/readme/README.md)
+[日本語](./dev/docs/readme/README.ja.md) |
+[한국어](./dev/docs/readme/README.ko.md) |
+[Deutsch](./dev/docs/readme/README.de.md) |
+[Français](./dev/docs/readme/README.fr.md) |
+[更多语言](./dev/docs/readme/README.md)
 
 ---
 
@@ -87,11 +87,11 @@ Weline 控制中心是**独立**多端桌面/代理 UI（与本仓同级，不�
 
 ## 继续阅读
 
-- [开发者入口](./docs/weline/开发者入口.md)：完整能力介绍、安装说明、开发路径和命令速查。
-- [项目文档索引](./docs/README.md)：项目级文档总入口。
-- [架构总览](./docs/weline/README.md)：框架分层、运行时、路由、ORM、事件与扩展。
+- [开发者入口](./dev/docs/weline/开发者入口.md)：完整能力介绍、安装说明、开发路径和命令速查。
+- [项目文档索引](./dev/docs/README.md)：项目级文档总入口。
+- [架构总览](./dev/docs/weline/README.md)：框架分层、运行时、路由、ORM、事件与扩展。
 - [WLS 文档导航](./app/code/Weline/Server/doc/README.md)：WLS 运行时与服务编排文档。
-- [多语言 README](./docs/readme/README.md)：全球开发者入口索引。
+- [多语言 README](./dev/docs/readme/README.md)：全球开发者入口索引。
 
 更多产品能力、行业方案和业务场景，请访问 [www.aiweline.com](https://www.aiweline.com)。
 

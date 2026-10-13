@@ -167,7 +167,7 @@ inode 后每轮最多清理 32 个。
 ## 🔗 相关链接
 
 - [框架文档](../../Framework/doc/README.md)
-- [开发文档总览](../../../../../docs/dev/开发文档.md)
+- [开发文档总览](../../../../../app/code/Weline/Framework/doc/README.md)
 - [统一知识库与 MCP 协议](./统一知识库与MCP协议.md)
 
 ## 📅 更新记录

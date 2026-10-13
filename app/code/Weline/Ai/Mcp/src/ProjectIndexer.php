@@ -52,7 +52,7 @@ final class ProjectIndexer
         '~^users(?:/|$)~',
         '~^pub/(?:static|media|errors|readme|source|sitemaps|theme_previews)(?:/|$)~',
         '~^setup/(?:static|server_installer|step)(?:/|$)~',
-        '~^docs/assets(?:/|$)~',
+        '~^dev/docs/assets(?:/|$)~',
         '~(?:^|/)view/tpl(?:/|$)~',
         '~(?:^|/)static/libs(?:/|$)~',
     ];
@@ -1128,7 +1128,7 @@ final class ProjectIndexer
     private function isRetainedKnowledgePath(string $path): bool
     {
         return $path === 'AGENTS.md'
-            || str_starts_with($path, 'docs/weline/')
+            || str_starts_with($path, 'dev/docs/weline/')
             || preg_match('~^app/code/[^/]+/[^/]+/doc(?:/|$)~', $path) === 1;
     }
 
@@ -1337,7 +1337,7 @@ final class ProjectIndexer
             return 'rule';
         }
         if (preg_match('~^app/code/[^/]+/[^/]+/doc(?:/|$)~', $path) === 1
-            || str_starts_with($path, 'docs/weline/')
+            || str_starts_with($path, 'dev/docs/weline/')
             || in_array($extension, ['md', 'markdown', 'txt'], true)) {
             return 'doc';
         }

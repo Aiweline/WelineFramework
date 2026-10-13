@@ -1988,7 +1988,7 @@ final class GuidanceWorkflowCatalog
                 'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
                 'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
                 'app/code/Weline/Framework/doc/ai/skills/performance-cold-chaos-dig/SKILL.md',
-                'docs/版本计划/v3/PHP8.4+框架优化/12-性能基准与目标.md',
+                'app/code/Weline/Framework/doc/3-开发/性能基准与目标-PHP84规划摘录.md',
                 'app/code/Weline/Ai/doc/AI工程交付流程.md',
             ],
             'companion_skills' => [

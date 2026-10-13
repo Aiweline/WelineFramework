@@ -464,7 +464,7 @@ A: 查看日志文件：`var/log/system.log`，模块会记录所有 API 调用�
 
 如有问题，请查看：
 - 模块计划文档：`app/code/Weline/Cdn/计划.md`
-- 开发文档：`docs/dev/开发文档.md`
+- 开发文档：`app/code/Weline/Framework/doc/README.md`
 - 常见错误：`AI-常犯错误.md`
 
 ## 更新日志

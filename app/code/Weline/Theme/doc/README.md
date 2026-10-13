@@ -11,7 +11,7 @@
 5. [`../view/theme/README.md`](../view/theme/README.md)
 6. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
-   - **布局固化与应用部件默认注入（权威 · 纯 PHTML）**：[`布局固化与默认注入.md`](./布局固化与默认注入.md) — **两步勿混**：①关系固化（槽位/部件→派生 PHTML）；②Taglib 编译（源/派生→按语种 `com_*`）。结构、参数、语言配置变更均重固；有派生文件优先选它，否则用原模板；固化目录不保留侧车；仅人工卸载可省略必装。
+   - **布局固化与应用部件默认注入（权威 · 纯 PHTML）**：[`布局固化与默认注入.md`](./布局固化与默认注入.md) — **两步勿混**：①关系固化（槽位/部件→派生 PHTML）；②Taglib 编译（源/派生→按语种 `com_*`）。结构、参数、语言配置变更均重固；有派生文件优先选它，否则用原模板；固化目录不保留侧车；仅人工卸载可省略必装。**改 `app/design` 后**见同文 §3.5（`theme:upgrade` / 排水；**禁止手抄** `generated/theme-layout-entities/`；`theme:layout-solidify-status` / `WELINE_THEME_SOLIDIFY_DEBUG`）。Composer path 须 symlink：Framework [`Composer-path-symlink合同.md`](../../Framework/doc/3-开发/Composer-path-symlink合同.md)。
    - **Theme 机制边界（严重）**：[`开发/spec/theme-mechanism-not-foreign-content.md`](./开发/spec/theme-mechanism-not-foreign-content.md) — Theme 只负责机制；禁止外模块主内容空挂 Theme required 注入。
    - **主题固化物版本模型与历史实施记录**：[`开发/spec/layout-entity-per-version-isolation.md`](./开发/spec/layout-entity-per-version-isolation.md) — 版本独占、持久修订、单页发布与 Scope 继承；当前产物及读取合同以纯 PHTML 权威文为准，历史测试不代表本次改造已验收。
    - 部件：[`部件开发指南.md`](./部件开发指南.md)

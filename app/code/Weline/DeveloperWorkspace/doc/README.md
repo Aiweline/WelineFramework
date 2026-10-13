@@ -14,7 +14,7 @@
 
 ## 浏览器文档页 API 契约
 
-- `/dev/tool/docs` 与 `/dev/tool/docs/api` 是前台独立工具页：控制器 `layoutType=blank.full`，模板必须是内容片段（禁止自绘完整 HTML），由前端主题空白全屏布局提供 document shell、Theme head/body hooks，以及 Frontend Header Base（Theme head → `Weline_Frontend::templates/public/head.phtml`）；页面只追加 docs/api 专用 CSS/JS，并在需要时调用 `Weline.load('api')`。
+- `/dev/tool/docs` 与 `/dev/tool/docs/api` 是前台独立工具页：控制器 `layoutType=blank.full`，模板必须是内容片段（禁止自绘完整 HTML），由前端主题空白全屏布局提供 document shell、Theme head/body hooks，以及 Frontend Header Base（Theme head → `Weline_Frontend::templates/public/head.phtml`）；页面只追加 dev/docs/api 专用 CSS/JS，并在需要时调用 `Weline.load('api')`。
 - 公开文档目录和搜索只调用 `developer_workspace.docsRequest`；该操作仅允许 `GET /dev/tool/docs/{tree|documents|document|search}`，并保留原 JSON 形状。
 - API 调用测试工作台属于框架开发基础设施：Frontend Worker 继续走 `Weline.Api.resource(provider)[operation](params)`；本轮明确要求文档 REST 调试与登录经原生 `sendHttp` 保留 HTTP 状态、Header 和原始 JSON 响应，不再使用 `Weline.Api.request`。普通业务请求契约保持不变。
 - 调试客户端的功能基线包括 REST/Worker 请求编辑、示例导入、Token、沙盒/正式环境、语言货币、状态/耗时/大小/Header/Body 响应诊断、SDK 下载与指南；迁移 UI 时不得删减这些产品能力。

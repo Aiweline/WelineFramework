@@ -9,6 +9,7 @@ SEO Head 使用当前 Store 的名称和独立入口覆盖 Website 默认值，�
 
 可选：可完成 `prepare_project` 并调用 `resolve_task_context` 检索后再按返回来源阅读（编码不强制）：
 
+0. 站点 FPC 烘焙命令：`website-fpc-bake.md`（`website:fpc:bake`；交叉 Framework FPC 离线烘焙）
 1. `app/code/Weline/Websites/doc/default-website-and-request-detection.md`
 2. `app/code/Weline/Websites/doc/store-saleschannel-scope.md`（Store/渠道/三段 Scope，商城内核 P1a）
 3. `app/code/Weline/Websites/doc/scope-select标签使用指南.md`（后台 **`<w:scope>`** 四级范围选择：Global/网站/店铺/渠道）
