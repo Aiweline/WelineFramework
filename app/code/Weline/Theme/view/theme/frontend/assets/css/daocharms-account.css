@@ -909,6 +909,8 @@ body.account-dashboard-layout aside.account-sidebar {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* UI23: keep stone ledge + vessel in frame (ref 23-orders hero) */
+    object-position: center 62%;
 }
 @media (max-width: 899px) {
     .daocharms-account-hero.is-visible:not([hidden]) {
@@ -959,6 +961,15 @@ body.account-dashboard-layout:has([data-account-section="b2b-identity"]:not([hid
     padding: 1.5rem 0 2rem;
     max-inline-size: 32rem;
 }
+/* Beat later .account-orders__empty dashed/center shell (ui/23 empty is quiet left stack) */
+.account-orders.daocharms-account-orders .account-orders__empty.daocharms-account-orders__empty {
+    text-align: start;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 1.5rem 0 2rem;
+    max-inline-size: 32rem;
+}
 .daocharms-account-orders__empty-title {
     margin: 0;
     font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
@@ -983,8 +994,21 @@ body.account-dashboard-layout:has([data-account-section="b2b-identity"]:not([hid
 .daocharms-account-wishlist__empty {
     display: grid;
     gap: 1rem;
+    justify-items: start;
     padding: 1.25rem 0 2rem;
     max-inline-size: 28rem;
+}
+.daocharms-account-wishlist.is-empty .daocharms-account-wishlist__sample,
+.daocharms-account-wishlist.is-empty .storefront-wishlist__count {
+    display: none;
+}
+/* Beat dashed/center .storefront-wishlist__empty shell (ui/24 empty is quiet left stack) */
+.daocharms-account-wishlist .storefront-wishlist__empty.daocharms-account-wishlist__empty {
+    text-align: start;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 1.25rem 0 2rem;
 }
 
 /* ui/22 Overview panel */
@@ -1852,6 +1876,14 @@ button.account-form__btn--primary:hover {
     background: color-mix(in srgb, var(--color-bg-primary) 88%, var(--color-bg-secondary));
     color: var(--color-text-secondary);
 }
+.daocharms-account-wishlist .storefront-wishlist__empty.daocharms-account-wishlist__empty {
+    text-align: start;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 1.25rem 0 2rem;
+    max-inline-size: 28rem;
+}
 
 .storefront-wishlist__cta {
     display: inline-flex;
@@ -2320,6 +2352,70 @@ button.account-form__btn--primary:hover {
 @media (max-width: 899px) {
     .daocharms-account-settings__form--profile.account-form,
     .daocharms-account-settings__form--profile {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* UI26: Password summary row (稿面单行 · Change password →) */
+.daocharms-account-settings__password {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem 1.25rem;
+    align-items: center;
+    margin-top: 1.25rem;
+    padding: 1.15rem 0;
+    border-block: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+.daocharms-account-settings__password-title {
+    display: block;
+    margin: 0 0 0.35rem;
+    font-family: var(--font-family-serif, "Cormorant Garamond", Georgia, serif);
+    font-size: 1.05rem;
+    font-weight: 400;
+    color: var(--color-text);
+}
+.daocharms-account-settings__password-copy {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+.daocharms-account-settings__password-link {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+    cursor: pointer;
+    font: inherit;
+    white-space: nowrap;
+}
+.daocharms-account-settings__password-link:hover,
+.daocharms-account-settings__password-link:focus-visible {
+    color: var(--color-primary, #2f4f3e);
+}
+.daocharms-account-settings__form--password {
+    margin-top: 1rem;
+}
+.daocharms-account-settings__form--password.is-collapsed {
+    display: none !important;
+}
+.daocharms-account-settings__password.is-editing {
+    display: none;
+}
+.daocharms-account-settings__form--password .account-form__btn--ghost {
+    appearance: none;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    background: transparent;
+    color: var(--color-text);
+    min-height: var(--daocharms-control-height, 2.75rem);
+    padding: 0.3rem 0.95rem;
+    cursor: pointer;
+}
+@media (max-width: 719px) {
+    .daocharms-account-settings__password {
         grid-template-columns: minmax(0, 1fr);
     }
 }
