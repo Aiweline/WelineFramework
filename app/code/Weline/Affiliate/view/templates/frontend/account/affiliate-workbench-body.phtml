@@ -3,7 +3,12 @@
  * Affiliate account-center workbench details.
  *
  * Included from affiliate-summary-card.phtml with prepared summary variables.
+ *
+ * Mobile card labels: td[data-label] + CSS attr(data-label) — never hardcode locale in CSS content.
  */
+$affiliateTdLabel = static function (string $source): string {
+    return ' data-label="' . htmlspecialchars((string) __($source), ENT_QUOTES, 'UTF-8') . '"';
+};
 ?>
 <div class="weline-affiliate-account-card__subsection" data-affiliate-workbench>
     <div class="weline-affiliate-account-card__section-head">
@@ -76,14 +81,14 @@
             <?php else: ?>
                 <?php foreach ($withdrawalRecords as $withdrawal): ?>
                     <tr>
-                        <td><?= htmlspecialchars($formatDate($withdrawal['requested_at'] ?? ''), ENT_QUOTES) ?></td>
-                        <td><?= $formatAmount($withdrawal['amount'] ?? 0, $withdrawal['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
-                        <td><?= htmlspecialchars((string) ($withdrawal['method'] ?? 'manual'), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars((string) ($withdrawal['account_label'] ?? ''), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars($statusLabel($withdrawal['status'] ?? ''), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars($formatDate($withdrawal['processed_at'] ?? ''), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars($formatDate($withdrawal['paid_at'] ?? ''), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars((string) ($withdrawal['note'] ?? '-'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('申请时间') ?>><?= htmlspecialchars($formatDate($withdrawal['requested_at'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('金额') ?>><?= $formatAmount($withdrawal['amount'] ?? 0, $withdrawal['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('方式') ?>><?= htmlspecialchars((string) ($withdrawal['method'] ?? 'manual'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('收款账户') ?>><?= htmlspecialchars((string) ($withdrawal['account_label'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('状态') ?>><?= htmlspecialchars($statusLabel($withdrawal['status'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('处理时间') ?>><?= htmlspecialchars($formatDate($withdrawal['processed_at'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('打款时间') ?>><?= htmlspecialchars($formatDate($withdrawal['paid_at'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('备注') ?>><?= htmlspecialchars((string) ($withdrawal['note'] ?? '-'), ENT_QUOTES) ?></td>
                     </tr>
                 <?php endforeach; ?>
             <?php endif; ?>
@@ -120,17 +125,17 @@
                 <tbody>
                 <?php foreach ($shareLinks as $link): ?>
                     <tr>
-                        <td>
+                        <td<?= $affiliateTdLabel('推广目标') ?>>
                             <strong><?= htmlspecialchars((string) ($link['target_label'] ?? '-'), ENT_QUOTES) ?></strong>
                             <div class="weline-affiliate-account-card__muted weline-affiliate-account-card__mono"><?= htmlspecialchars((string) ($link['tracking_url'] ?? ''), ENT_QUOTES) ?></div>
                         </td>
-                        <td><?= htmlspecialchars((string) ($link['channel'] ?? '-'), ENT_QUOTES) ?></td>
-                        <td><?= (int) ($link['click_count'] ?? 0) ?></td>
-                        <td><?= (int) ($link['registered_count'] ?? 0) ?></td>
-                        <td><?= (int) ($link['wishlist_count'] ?? 0) ?> / <?= (int) ($link['add_to_cart_count'] ?? 0) ?></td>
-                        <td><?= (int) ($link['order_count'] ?? 0) ?></td>
-                        <td><?= $formatAmount($link['commission_amount'] ?? 0, $link['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
-                        <td><?= htmlspecialchars($formatDate($link['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('渠道') ?>><?= htmlspecialchars((string) ($link['channel'] ?? '-'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('点击') ?>><?= (int) ($link['click_count'] ?? 0) ?></td>
+                        <td<?= $affiliateTdLabel('注册') ?>><?= (int) ($link['registered_count'] ?? 0) ?></td>
+                        <td<?= $affiliateTdLabel('收藏/加购') ?>><?= (int) ($link['wishlist_count'] ?? 0) ?> / <?= (int) ($link['add_to_cart_count'] ?? 0) ?></td>
+                        <td<?= $affiliateTdLabel('订单') ?>><?= (int) ($link['order_count'] ?? 0) ?></td>
+                        <td<?= $affiliateTdLabel('佣金') ?>><?= $formatAmount($link['commission_amount'] ?? 0, $link['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('创建时间') ?>><?= htmlspecialchars($formatDate($link['created_at'] ?? ''), ENT_QUOTES) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -166,16 +171,16 @@
                 <tbody>
                 <?php foreach ($referredCustomers as $customer): ?>
                     <tr>
-                        <td>
+                        <td<?= $affiliateTdLabel('客户') ?>>
                             <strong><?= htmlspecialchars((string) ($customer['email_masked'] ?? '***'), ENT_QUOTES) ?></strong>
                             <div class="weline-affiliate-account-card__muted"><?= htmlspecialchars((string) ($customer['name'] ?? ''), ENT_QUOTES) ?></div>
                         </td>
-                        <td><?= htmlspecialchars((string) ($customer['source'] ?? '-'), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars($formatDate($customer['registered_at'] ?? ''), ENT_QUOTES) ?></td>
-                        <td><?= (int) ($customer['order_count'] ?? 0) ?></td>
-                        <td><?= (int) ($customer['paid_order_count'] ?? 0) ?></td>
-                        <td><?= $formatAmount($customer['total_amount'] ?? 0, $customer['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
-                        <td><?= htmlspecialchars($formatDate($customer['last_order_at'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('来源') ?>><?= htmlspecialchars((string) ($customer['source'] ?? '-'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('注册时间') ?>><?= htmlspecialchars($formatDate($customer['registered_at'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('订单数') ?>><?= (int) ($customer['order_count'] ?? 0) ?></td>
+                        <td<?= $affiliateTdLabel('支付订单') ?>><?= (int) ($customer['paid_order_count'] ?? 0) ?></td>
+                        <td<?= $affiliateTdLabel('成交金额') ?>><?= $formatAmount($customer['total_amount'] ?? 0, $customer['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('最近下单') ?>><?= htmlspecialchars($formatDate($customer['last_order_at'] ?? ''), ENT_QUOTES) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -211,13 +216,13 @@
                 <tbody>
                 <?php foreach ($promotedProducts as $product): ?>
                     <tr>
-                        <td><strong><?= htmlspecialchars((string) ($product['product_name'] ?? '-'), ENT_QUOTES) ?></strong></td>
-                        <td><?= htmlspecialchars((string) ($product['sku'] ?? '-'), ENT_QUOTES) ?></td>
-                        <td><?= (int) ($product['share_count'] ?? 0) ?> / <?= (int) ($product['click_count'] ?? 0) ?></td>
-                        <td><?= (int) ($product['view_count'] ?? 0) ?> / <?= (int) ($product['wishlist_count'] ?? 0) ?> / <?= (int) ($product['add_to_cart_count'] ?? 0) ?></td>
-                        <td><?= (int) ($product['order_count'] ?? 0) ?></td>
-                        <td><?= $formatAmount($product['base_amount'] ?? 0, $product['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
-                        <td><?= $formatAmount($product['commission_amount'] ?? 0, $product['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('商品') ?>><strong><?= htmlspecialchars((string) ($product['product_name'] ?? '-'), ENT_QUOTES) ?></strong></td>
+                        <td<?= $affiliateTdLabel('SKU') ?>><?= htmlspecialchars((string) ($product['sku'] ?? '-'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('分享/点击') ?>><?= (int) ($product['share_count'] ?? 0) ?> / <?= (int) ($product['click_count'] ?? 0) ?></td>
+                        <td<?= $affiliateTdLabel('浏览/收藏/加购') ?>><?= (int) ($product['view_count'] ?? 0) ?> / <?= (int) ($product['wishlist_count'] ?? 0) ?> / <?= (int) ($product['add_to_cart_count'] ?? 0) ?></td>
+                        <td<?= $affiliateTdLabel('订单') ?>><?= (int) ($product['order_count'] ?? 0) ?></td>
+                        <td<?= $affiliateTdLabel('净商品额') ?>><?= $formatAmount($product['base_amount'] ?? 0, $product['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('佣金') ?>><?= $formatAmount($product['commission_amount'] ?? 0, $product['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -284,14 +289,14 @@
                 <tbody>
                 <?php foreach ($affiliateOrders as $order): ?>
                     <tr>
-                        <td><strong><?= htmlspecialchars((string) ($order['increment_id'] ?? '-'), ENT_QUOTES) ?></strong></td>
-                        <td><?= htmlspecialchars((string) ($order['customer_email_masked'] ?? '***'), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars((string) ($order['product_names'] ?? '-'), ENT_QUOTES) ?></td>
-                        <td><?= $formatAmount($order['order_total'] ?? 0, $order['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
-                        <td><?= $formatAmount($order['base_amount'] ?? 0, $order['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
-                        <td><?= $formatAmount($order['commission_amount'] ?? 0, $order['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
-                        <td><?= htmlspecialchars($statusLabel($order['commission_status'] ?? ''), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars($formatDate($order['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('订单') ?>><strong><?= htmlspecialchars((string) ($order['increment_id'] ?? '-'), ENT_QUOTES) ?></strong></td>
+                        <td<?= $affiliateTdLabel('买家') ?>><?= htmlspecialchars((string) ($order['customer_email_masked'] ?? '***'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('商品') ?>><?= htmlspecialchars((string) ($order['product_names'] ?? '-'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('订单金额') ?>><?= $formatAmount($order['order_total'] ?? 0, $order['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('结算基数') ?>><?= $formatAmount($order['base_amount'] ?? 0, $order['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('佣金') ?>><?= $formatAmount($order['commission_amount'] ?? 0, $order['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('状态') ?>><?= htmlspecialchars($statusLabel($order['commission_status'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('下单时间') ?>><?= htmlspecialchars($formatDate($order['created_at'] ?? ''), ENT_QUOTES) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -361,15 +366,15 @@
                 <tbody>
                 <?php foreach ($commissionLedger as $ledger): ?>
                     <tr>
-                        <td><?= htmlspecialchars($formatDate($ledger['created_at'] ?? ''), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars((string) ($ledger['increment_id'] ?? '-'), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars((string) ($ledger['product_name'] ?? '-'), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars((string) ($ledger['customer_email_masked'] ?? '***'), ENT_QUOTES) ?></td>
-                        <td><?= $formatAmount($ledger['base_amount'] ?? 0, $ledger['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
-                        <td><?= htmlspecialchars($formatPercent($ledger['commission_rate'] ?? 0), ENT_QUOTES) ?></td>
-                        <td><?= $formatAmount($ledger['commission_amount'] ?? 0, $ledger['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
-                        <td><?= htmlspecialchars($statusLabel($ledger['status'] ?? ''), ENT_QUOTES) ?></td>
-                        <td><?= htmlspecialchars((string) ($ledger['reason'] ?? '-'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('时间') ?>><?= htmlspecialchars($formatDate($ledger['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('订单') ?>><?= htmlspecialchars((string) ($ledger['increment_id'] ?? '-'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('商品') ?>><?= htmlspecialchars((string) ($ledger['product_name'] ?? '-'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('买家') ?>><?= htmlspecialchars((string) ($ledger['customer_email_masked'] ?? '***'), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('基数') ?>><?= $formatAmount($ledger['base_amount'] ?? 0, $ledger['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('比例') ?>><?= htmlspecialchars($formatPercent($ledger['commission_rate'] ?? 0), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('佣金') ?>><?= $formatAmount($ledger['commission_amount'] ?? 0, $ledger['currency_code'] ?? ($summaryCurrency ?? 'USD')) ?></td>
+                        <td<?= $affiliateTdLabel('状态') ?>><?= htmlspecialchars($statusLabel($ledger['status'] ?? ''), ENT_QUOTES) ?></td>
+                        <td<?= $affiliateTdLabel('原因') ?>><?= htmlspecialchars((string) ($ledger['reason'] ?? '-'), ENT_QUOTES) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

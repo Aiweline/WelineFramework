@@ -36,9 +36,21 @@ use Weline\Product\Api\Data\StorefrontPriceContext;
 use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
 use Weline\Product\Service\ProductQuoteRequestCaptchaGuard;
 use Weline\Product\Service\ProductStorefrontBreadcrumbBuilder;
+use Weline\Product\Service\StorefrontPdpChromeThemeCopyLoader;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('product-info');
+$addToCartPhrase = '加入购物车';
+try {
+    /** @var StorefrontPdpChromeThemeCopyLoader $pdpChrome */
+    $pdpChrome = ObjectManager::getInstance(StorefrontPdpChromeThemeCopyLoader::class);
+    $themeAddPhrase = trim((string)$pdpChrome->addToCartPhrase());
+    if ($themeAddPhrase !== '') {
+        $addToCartPhrase = $themeAddPhrase;
+    }
+} catch (\Throwable) {
+    // Unbound theme / missing pack → Product default phrase.
+}
 $showBrand = filter_var($this->getData('show_brand') ?? true, FILTER_VALIDATE_BOOLEAN);
 $showSupplier = filter_var($this->getData('show_supplier') ?? true, FILTER_VALIDATE_BOOLEAN);
 $quickAdd = filter_var($this->getData('quick_add') ?? false, FILTER_VALIDATE_BOOLEAN);
@@ -1066,16 +1078,22 @@ if ($productBreadcrumbs === []) {
                             </select>
                         </div>
                         <?php if ($productId > 0): ?>
+                            <?php
+                            $wishlistLabelIdle = (string)__('加入收藏');
+                            $wishlistLabelActive = (string)__('已收藏');
+                            ?>
                             <button type="button"
                                     class="product-native-detail__wishlist btn-wishlist"
                                     data-testid="product-add-wishlist"
                                     data-product-id="<?= (int)$productId ?>"
                                     data-weline-load="compareShopper,storefrontShopperToast"
-                                    title="<?= $escape(__('加入收藏')) ?>"
-                                    aria-label="<?= $escape(__('加入收藏')) ?>"
+                                    data-wishlist-label-idle="<?= $escape($wishlistLabelIdle) ?>"
+                                    data-wishlist-label-active="<?= $escape($wishlistLabelActive) ?>"
+                                    title="<?= $escape($wishlistLabelIdle) ?>"
+                                    aria-label="<?= $escape($wishlistLabelIdle) ?>"
                                     aria-pressed="false">
                                 <w:icon name="heart" size="sm"></w:icon>
-                                <span class="product-native-detail__wishlist-label"><?= __('加入收藏') ?></span>
+                                <span class="product-native-detail__wishlist-label"><?= $escape($wishlistLabelIdle) ?></span>
                             </button>
                         <?php endif; ?>
                     </div>
@@ -1096,7 +1114,7 @@ if ($productBreadcrumbs === []) {
                             </button>
                         <?php else: ?>
                             <button type="button" class="product-native-detail__add" disabled>
-                                <?= __('加入购物车') ?>
+                                <?= __($addToCartPhrase) ?>
                             </button>
                             <button type="button" class="product-native-detail__buy-now" disabled>
                                 <?= __('立即结账') ?>
@@ -1114,7 +1132,7 @@ if ($productBreadcrumbs === []) {
                     // Theme slot injections can early-return empty when widget data bag lacks offer.
                     // Failsafe CTAs use the parent product-info offer; JS moves them into the slot if empty.
                     $failsafeAddEnabled = $sellable && $offerUuid !== '';
-                    $failsafeAddLabel = $failsafeAddEnabled ? __('加入购物车') : __('暂不可售');
+                    $failsafeAddLabel = $failsafeAddEnabled ? __($addToCartPhrase) : __('暂不可售');
                     ?>
                     <div class="product-native-detail__purchase-failsafe" data-purchase-failsafe hidden>
                         <div class="weline-cart-product-add-to-cart"
@@ -1314,7 +1332,7 @@ if ($productBreadcrumbs === []) {
     <?php if (!$quickAdd && !$quoteOnly && !$isPreviewMode && !$currencyUnavailable): ?>
         <?php
         // Sticky dock proxies live Cart/Checkout CTAs — no second commerce source.
-        $stickyAddLabel = ($sellable && $offerUuid !== '') ? __('加入购物车') : __('暂不可售');
+        $stickyAddLabel = ($sellable && $offerUuid !== '') ? __($addToCartPhrase) : __('暂不可售');
         ?>
         <div class="product-native-detail__sticky-purchase"
              data-testid="product-sticky-purchase"
@@ -1404,6 +1422,6 @@ if ($productBreadcrumbs === []) {
             ];
         },
         $videos,
-    )), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), ENT_QUOTES, 'UTF-8') ?>" data-v2="<?= htmlspecialchars((string)((int)$productId), ENT_QUOTES, 'UTF-8') ?>" data-v3="<?= htmlspecialchars((string)(json_encode($currencySymbolClientMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), ENT_QUOTES, 'UTF-8') ?>" data-v4="<?= htmlspecialchars((string)(json_encode((string)__('按项目确认库存'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v5="<?= htmlspecialchars((string)(json_encode((string)__('仅剩 %{1} 件', ['%{1}']), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v6="<?= htmlspecialchars((string)(json_encode((string)__('有货'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v7="<?= htmlspecialchars((string)(json_encode((string)__('暂时缺货'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v8="<?= htmlspecialchars((string)(json_encode((string)__('规格'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v9="<?= htmlspecialchars((string)(json_encode((string)__('选择图片或视频'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v10="<?= htmlspecialchars((string)(json_encode((string)__('查看商品视频'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v11="<?= htmlspecialchars((string)(json_encode((string)__('查看商品图片'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v12="<?= htmlspecialchars((string)(json_encode((string)__('按项目确认库存'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v13="<?= htmlspecialchars((string)(json_encode((string)__('下单前请联系客服核实所选款式及目的地的预计发货与运输时间'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v14="<?= htmlspecialchars((string)(json_encode((string)__('当前规格暂不可售'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v15="<?= htmlspecialchars((string)(json_encode((string)__('加入购物车'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v16="<?= htmlspecialchars((string)(json_encode((string)__('暂不可售'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v17="<?= htmlspecialchars((string)(json_encode((string)__('暂时缺货'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>"></span>
+    )), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), ENT_QUOTES, 'UTF-8') ?>" data-v2="<?= htmlspecialchars((string)((int)$productId), ENT_QUOTES, 'UTF-8') ?>" data-v3="<?= htmlspecialchars((string)(json_encode($currencySymbolClientMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), ENT_QUOTES, 'UTF-8') ?>" data-v4="<?= htmlspecialchars((string)(json_encode((string)__('按项目确认库存'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v5="<?= htmlspecialchars((string)(json_encode((string)__('仅剩 %{1} 件', ['%{1}']), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v6="<?= htmlspecialchars((string)(json_encode((string)__('有货'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v7="<?= htmlspecialchars((string)(json_encode((string)__('暂时缺货'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v8="<?= htmlspecialchars((string)(json_encode((string)__('规格'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v9="<?= htmlspecialchars((string)(json_encode((string)__('选择图片或视频'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v10="<?= htmlspecialchars((string)(json_encode((string)__('查看商品视频'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v11="<?= htmlspecialchars((string)(json_encode((string)__('查看商品图片'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v12="<?= htmlspecialchars((string)(json_encode((string)__('按项目确认库存'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v13="<?= htmlspecialchars((string)(json_encode((string)__('下单前请联系客服核实所选款式及目的地的预计发货与运输时间'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v14="<?= htmlspecialchars((string)(json_encode((string)__('当前规格暂不可售'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v15="<?= htmlspecialchars((string)(json_encode((string)__($addToCartPhrase), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v16="<?= htmlspecialchars((string)(json_encode((string)__('暂不可售'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v17="<?= htmlspecialchars((string)(json_encode((string)__('暂时缺货'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>"></span>
 
 <span hidden data-widget-script="product-product-info-1" data-v0="<?= htmlspecialchars((string)((int)$productId), ENT_QUOTES, 'UTF-8') ?>" data-v1="<?= htmlspecialchars((string)(json_encode((string)__('请填写邮箱或手机号'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v2="<?= htmlspecialchars((string)(json_encode((string)__('提交失败，请稍后重试。'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v3="<?= htmlspecialchars((string)(json_encode((string)__('提交成功，我们会尽快联系您。'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v4="<?= htmlspecialchars((string)(json_encode((string)__('提交失败，请稍后重试。'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>" data-v5="<?= htmlspecialchars((string)(json_encode((string)__('提交失败，请稍后重试。'), JSON_UNESCAPED_UNICODE)), ENT_QUOTES, 'UTF-8') ?>"></span>

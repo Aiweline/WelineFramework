@@ -420,57 +420,11 @@ min-width: 0;
 overflow-wrap: anywhere;
 }
 .weline-affiliate-account-card__table td::before {
+content: attr(data-label);
 color: var(--color-text-secondary-light, #647084);
 font-size: 11px;
 font-weight: 760;
 line-height: 1.35;
 text-transform: none;
 }
-[data-affiliate-withdrawals-table] td:nth-child(1)::before { content: "申请时间"; }
-[data-affiliate-withdrawals-table] td:nth-child(2)::before { content: "金额"; }
-[data-affiliate-withdrawals-table] td:nth-child(3)::before { content: "方式"; }
-[data-affiliate-withdrawals-table] td:nth-child(4)::before { content: "收款账户"; }
-[data-affiliate-withdrawals-table] td:nth-child(5)::before { content: "状态"; }
-[data-affiliate-withdrawals-table] td:nth-child(6)::before { content: "处理时间"; }
-[data-affiliate-withdrawals-table] td:nth-child(7)::before { content: "打款时间"; }
-[data-affiliate-withdrawals-table] td:nth-child(8)::before { content: "备注"; }
-[data-affiliate-share-links-table] td:nth-child(1)::before { content: "推广目标"; }
-[data-affiliate-share-links-table] td:nth-child(2)::before { content: "渠道"; }
-[data-affiliate-share-links-table] td:nth-child(3)::before { content: "点击"; }
-[data-affiliate-share-links-table] td:nth-child(4)::before { content: "注册"; }
-[data-affiliate-share-links-table] td:nth-child(5)::before { content: "收藏/加购"; }
-[data-affiliate-share-links-table] td:nth-child(6)::before { content: "订单"; }
-[data-affiliate-share-links-table] td:nth-child(7)::before { content: "佣金"; }
-[data-affiliate-share-links-table] td:nth-child(8)::before { content: "创建时间"; }
-[data-affiliate-referred-customers-table] td:nth-child(1)::before { content: "客户"; }
-[data-affiliate-referred-customers-table] td:nth-child(2)::before { content: "来源"; }
-[data-affiliate-referred-customers-table] td:nth-child(3)::before { content: "注册时间"; }
-[data-affiliate-referred-customers-table] td:nth-child(4)::before { content: "订单数"; }
-[data-affiliate-referred-customers-table] td:nth-child(5)::before { content: "支付订单"; }
-[data-affiliate-referred-customers-table] td:nth-child(6)::before { content: "成交金额"; }
-[data-affiliate-referred-customers-table] td:nth-child(7)::before { content: "最近下单"; }
-[data-affiliate-products-table] td:nth-child(1)::before { content: "商品"; }
-[data-affiliate-products-table] td:nth-child(2)::before { content: "SKU"; }
-[data-affiliate-products-table] td:nth-child(3)::before { content: "分享/点击"; }
-[data-affiliate-products-table] td:nth-child(4)::before { content: "浏览/收藏/加购"; }
-[data-affiliate-products-table] td:nth-child(5)::before { content: "订单"; }
-[data-affiliate-products-table] td:nth-child(6)::before { content: "净商品额"; }
-[data-affiliate-products-table] td:nth-child(7)::before { content: "佣金"; }
-[data-affiliate-orders-table] td:nth-child(1)::before { content: "订单"; }
-[data-affiliate-orders-table] td:nth-child(2)::before { content: "买家"; }
-[data-affiliate-orders-table] td:nth-child(3)::before { content: "商品"; }
-[data-affiliate-orders-table] td:nth-child(4)::before { content: "订单金额"; }
-[data-affiliate-orders-table] td:nth-child(5)::before { content: "结算基数"; }
-[data-affiliate-orders-table] td:nth-child(6)::before { content: "佣金"; }
-[data-affiliate-orders-table] td:nth-child(7)::before { content: "状态"; }
-[data-affiliate-orders-table] td:nth-child(8)::before { content: "下单时间"; }
-[data-affiliate-commissions-table] td:nth-child(1)::before { content: "时间"; }
-[data-affiliate-commissions-table] td:nth-child(2)::before { content: "订单"; }
-[data-affiliate-commissions-table] td:nth-child(3)::before { content: "商品"; }
-[data-affiliate-commissions-table] td:nth-child(4)::before { content: "买家"; }
-[data-affiliate-commissions-table] td:nth-child(5)::before { content: "基数"; }
-[data-affiliate-commissions-table] td:nth-child(6)::before { content: "比例"; }
-[data-affiliate-commissions-table] td:nth-child(7)::before { content: "佣金"; }
-[data-affiliate-commissions-table] td:nth-child(8)::before { content: "状态"; }
-[data-affiliate-commissions-table] td:nth-child(9)::before { content: "原因"; }
 }

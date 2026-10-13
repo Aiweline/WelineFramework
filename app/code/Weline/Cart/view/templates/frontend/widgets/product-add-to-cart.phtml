@@ -20,7 +20,9 @@
  * @widget.placement {injection}
  */
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Product\Service\StorefrontPdpChromeThemeCopyLoader;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('product-add-to-cart');
@@ -29,6 +31,17 @@ $escape = static fn(mixed $value): string => htmlspecialchars(
     ENT_QUOTES | ENT_SUBSTITUTE,
     'UTF-8'
 );
+$addToCartPhrase = '加入购物车';
+try {
+    /** @var StorefrontPdpChromeThemeCopyLoader $pdpChrome */
+    $pdpChrome = ObjectManager::getInstance(StorefrontPdpChromeThemeCopyLoader::class);
+    $themeAddPhrase = trim((string)$pdpChrome->addToCartPhrase());
+    if ($themeAddPhrase !== '') {
+        $addToCartPhrase = $themeAddPhrase;
+    }
+} catch (\Throwable) {
+    // Unbound theme / missing pack → Cart default phrase.
+}
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
     || (bool)($this->getData('editor_mode') ?? false);
 try {
@@ -71,7 +84,7 @@ if (!empty($offer['currency_unavailable'])) {
 }
 // Quote-only is inquiry CTA only — never enable add-to-cart.
 $buttonEnabled = !$quoteOnly && ($isPreviewMode || ($sellable && $offerUuid !== ''));
-$buttonLabel = ($sellable && $offerUuid !== '') ? __('加入购物车') : __('暂不可售');
+$buttonLabel = ($sellable && $offerUuid !== '') ? __($addToCartPhrase) : __('暂不可售');
 if ($quoteOnly) {
     // Product owns the quote CTA; Cart must not render a dead "仅询价" button.
     return;

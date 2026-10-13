@@ -228,7 +228,6 @@ id属性不能为空,"The id attribute cannot be empty"
 提交失败，请稍后重试。,"Submission failed. Please try again later."
 商品未找到,"Product not found"
 商品不存在或当前不可用。,"The product does not exist or is currently unavailable."
-请选择规格后再加入购物车。,"Please select the specifications and then add to cart."
 商品详情,"Product details"
 汉服商品,"Hanfu products"
 正品汉服：,"Authentic Hanfu:"
@@ -522,10 +521,10 @@ DPI,DPI
 当前规格暂不可售,"This option is currently unavailable"
 数量,Quantity
 购买数量,Quantity
-加入收藏,加入收藏
+加入收藏,"Add to Favorites"
+已收藏,Saved
 购买操作,"Purchase actions"
 提交询价,"Submit quote request"
-加入购物车,"Add to Cart"
 立即结账,"Proceed to checkout"
 暂不可售,"Currently unavailable"
 前往购物车,"Go to cart"
@@ -548,6 +547,7 @@ DPI,DPI
 查看商品视频,"View product video"
 查看商品图片,"View product images"
 下单前请联系客服核实所选款式及目的地的预计发货与运输时间,"Before ordering, contact us to confirm estimated dispatch and transit times for your chosen style and destination"
+加入购物车,"Add to Cart"
 请填写邮箱或手机号,"Please provide an email or phone number"
 提交成功，我们会尽快联系您。,"Submitted successfully. We will contact you soon."
 "Customers also viewed","Customers also viewed"
@@ -1000,6 +1000,7 @@ read,read
 "至少选择一个活动 Store 才能发布","You must select at least one activity category for your store listing."
 库存模块当前不可用，商品其他信息仍可编辑,"The inventory module is currently unavailable, but other product information can still be edited."
 库存读取失败，请稍后重试,"Inventory read failed. Please try again later."
+请选择规格后再加入购物车。,"Please select the specifications and then add to cart."
 "URL 长度不能超过 512","URL length must not exceed 512"
 "字段长度不能超过 %{1}","Field length must not exceed %{1}"
 "店铺/产品地址须以 http:// 或 https:// 开头","Store/product URL must start with http:// or https://"
@@ -1307,7 +1308,7 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 "必须与当前 env 配置一致的 mig_clone_* 数据库","Databases named `mig_clone_*` that must be consistent with the current environment configuration."
 "cutover/rollback 必填的切换状态版本","Required switchover/rollback version status."
 "rollback 目标：dual_read（默认）或 legacy","Rollback target: dual_read (default) or legacy."
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
+加入购物袋,"Add to bag"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计
@@ -1315,10 +1316,29 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 去结算,去结算
 收起悬浮,收起悬浮
 展开悬浮,展开悬浮
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
+按价格从低到高排序,"Sort by: Price: Low to High"
+按价格从高到低排序,"Sort by: Price: High to Low"
+"按名称 A-Z 排序","Sort by: Name: A-Z"
+按精选排序,"Sort by: Featured"
 "%{1} 件物件","%{1} objects"
+排序：价格从低到高,"Sort: Price: Low to High"
+排序：价格从高到低,"Sort: Price: High to Low"
+"排序：名称 A-Z","Sort: Name: A-Z"
+排序：默认,"Sort: Default"
 该系列暂无物件。,"No objects in this collection yet."
 先看看现有的作品。,"Explore the pieces currently available."
 "浏览全部物件 →","Browse all objects →"
+为日常新添一件。,"New to your everyday."
+"探索符号 →","Explore Symbols →"
+"探索形状 →","Explore Shapes →"
+"探索材质 →","Explore Materials →"
+近期上架的仪式物件。,"Recently added ritual objects."
+仪式物件,仪式物件
+"查看物件 →","View object →"
+订阅新品（RSS）→,"Subscribe to new arrivals (RSS) →"
+按符号、形状或材质探索,"Explore by symbol, shape or material"
+按符号、形状或材质探索。,"Explore by symbol, shape or material."
 跨境配送,"International delivery"
 制作或备货时间与国际运输时间分开计算,"Production or preparation time is separate from international transit time"
 新品汉服,"New Hanfu Arrivals"
@@ -1559,22 +1579,5 @@ AI翻译,"AI Translation"
 大小:,Size:
 类型:,Type:
 请输入有效本品免邮额度,"Enter a valid free-shipping threshold for this product"
-"查看物件 →","View object →"
 符号,SYMBOL
 形状,SHAPE
-为日常新添一件。,"New to your everyday."
-近期上架的仪式物件。,"Recently added ritual objects."
-订阅新品（RSS）→,"Subscribe to new arrivals (RSS) →"
-按符号、形状或材质探索。,"Explore by symbol, shape or material."
-按符号、形状或材质探索,"Explore by symbol, shape or material"
-"探索符号 →","Explore Symbols →"
-"探索形状 →","Explore Shapes →"
-"探索材质 →","Explore Materials →"
-按精选排序,"Sort by: Featured"
-按价格从低到高排序,"Sort by: Price: Low to High"
-按价格从高到低排序,"Sort by: Price: High to Low"
-"按名称 A-Z 排序","Sort by: Name: A-Z"
-排序：默认,"Sort: Default"
-排序：价格从低到高,"Sort: Price: Low to High"
-排序：价格从高到低,"Sort: Price: High to Low"
-"排序：名称 A-Z","Sort: Name: A-Z"

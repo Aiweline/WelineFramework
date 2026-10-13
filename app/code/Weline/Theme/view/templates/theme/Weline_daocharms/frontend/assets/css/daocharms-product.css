@@ -78,19 +78,7 @@ body.daocharms-pdp .product-native-detail__price-fraction {
     font-size: 0.72em;
 }
 
-/* UI 07：短描述（短字段空时用稿面仪式句；有 bullets 时仍优先真实短描述） */
-body.daocharms-pdp .product-native-detail__summary-panel:not(:has(.product-native-detail__bullets li)) > .product-native-detail__price-block::after {
-    content: "A ruyi-crowned yin-yang pendant in natural obsidian — a quiet form for everyday ritual.";
-    display: block;
-    margin: 0.85rem 0 0;
-    max-width: 28rem;
-    font-family: var(--font-family-body, system-ui, sans-serif);
-    font-size: 0.98rem;
-    font-weight: 400;
-    line-height: 1.55;
-    color: var(--color-text-secondary, #4a4a48);
-    letter-spacing: 0;
-}
+/* UI 07：短描述只来自商品 short_description / bullets；禁止 CSS content 写死稿面句 */
 
 body.daocharms-pdp .product-native-detail__stage,
 body.daocharms-pdp .product-native-detail__stage-wrap {
@@ -512,14 +500,12 @@ body.daocharms-pdp .product-native-detail__selling-mode:empty {
     display: none !important;
 }
 
-/* UI 07：材质眉固定 NATURAL OBSIDIAN（藏 Amazon 式「品牌:」行，避免抢眉） */
-body.daocharms-pdp .product-native-detail__brand {
+/* UI 07：材质眉用真实 attribute-set / brand 节点；藏 Amazon 式「品牌:」行 */
+body.daocharms-pdp .product-native-detail__brand[data-testid="product-brand"] {
     display: none !important;
 }
 
-body.daocharms-pdp .product-native-detail__summary-panel > .product-native-detail__title::before,
-body.daocharms-pdp .product-native-detail__summary-panel:has(.product-native-detail__brand) > .product-native-detail__title::before {
-    content: "NATURAL OBSIDIAN";
+body.daocharms-pdp .product-native-detail__brand[data-testid="product-brand-fallback"] {
     display: block;
     margin: 0 0 0.55rem;
     font-family: var(--font-family-body, system-ui, sans-serif);
@@ -569,6 +555,9 @@ body.daocharms-pdp .product-native-detail__buybox {
     align-items: baseline;
     row-gap: 0.75rem;
     column-gap: 0;
+    /* Narrow column: hide wishlist label (icon + title/aria remain). */
+    container-type: inline-size;
+    container-name: daocharms-buybox;
 }
 
 /* 默认占满整行。注意：actions 为 display:contents 时，子 .widget-wrapper
@@ -705,8 +694,9 @@ body.daocharms-pdp .product-native-detail .affiliate-share-apply-cta {
     display: inline-flex !important;
     align-items: center;
     gap: 0.35rem;
-    font-size: 0 !important;
-    letter-spacing: 0 !important;
+    font-size: 0.875rem !important;
+    font-weight: 400;
+    letter-spacing: 0.02em;
     min-height: auto !important;
     padding: 0 !important;
     border: 0 !important;
@@ -715,14 +705,6 @@ body.daocharms-pdp .product-native-detail .affiliate-share-apply-cta {
     box-shadow: none !important;
     text-decoration: underline;
     text-underline-offset: 0.22em;
-}
-
-body.daocharms-pdp .product-native-detail .affiliate-share-apply-cta::after {
-    content: "Share & earn";
-    font-size: 0.875rem;
-    font-weight: 400;
-    letter-spacing: 0.02em;
-    color: inherit;
 }
 
 /* Ask a friend 与 Share & earn 同排 */
@@ -859,20 +841,12 @@ body.daocharms-pdp [weline-code="theme.product.section_2"] {
     }
 }
 
-/* UI 07/42：主 CTA 文案 Add to bag（压过模块默认 Add to Cart） */
+/* UI 07/42：主 CTA 文案来自模板 __()（默认「加入购物车」）；禁止 CSS content 压文案 */
 body.daocharms-pdp .product-native-detail__add,
 body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__add {
-    font-size: 0 !important;
-    letter-spacing: 0 !important;
-}
-
-body.daocharms-pdp .product-native-detail__add::after,
-body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__add::after {
-    content: "Add to bag";
     font-size: 0.875rem;
     font-weight: 500;
     letter-spacing: 0.04em;
-    color: inherit;
 }
 
 @media (max-width: 767px) {
@@ -1023,19 +997,22 @@ body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-nati
     }
 }
 
-/* UI42：数量行 + Add to wishlist（心形 + 文案，对齐图集） */
+/* UI42：数量行 + wishlist（心形；文案单行，放不下则藏字只留心形） */
 body.daocharms-pdp .product-native-detail__qty-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem 1.25rem;
+    container-type: inline-size;
+    container-name: daocharms-qty-row;
 }
 
 body.daocharms-pdp .product-native-detail__qty-controls {
     display: inline-flex;
     align-items: center;
     gap: 0.55rem;
+    flex: 0 0 auto;
     min-inline-size: 0;
 }
 
@@ -1043,6 +1020,9 @@ body.daocharms-pdp .product-native-detail__wishlist {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    max-inline-size: 100%;
     margin: 0;
     padding: 0;
     border: 0;
@@ -1060,22 +1040,27 @@ body.daocharms-pdp .product-native-detail__wishlist svg {
     flex: 0 0 auto;
 }
 
+/* Label text comes from template i18n (__()); never hardcode locale strings in CSS content. */
 body.daocharms-pdp .product-native-detail__wishlist-label {
-    font-size: 0 !important;
-    letter-spacing: 0 !important;
-}
-
-body.daocharms-pdp .product-native-detail__wishlist-label::after {
-    content: "Add to wishlist";
     font-size: 0.8rem;
     font-weight: 400;
     letter-spacing: 0.01em;
     color: var(--color-text-secondary, #565959);
     text-decoration: underline;
     text-underline-offset: 0.18em;
+    white-space: nowrap;
 }
 
-body.daocharms-pdp .product-native-detail__wishlist.is-active .product-native-detail__wishlist-label::after,
-body.daocharms-pdp .product-native-detail__wishlist[aria-pressed="true"] .product-native-detail__wishlist-label::after {
-    content: "Saved";
+/* qty-row 仍是 flex 盒时：放不下单行文案就藏字 */
+@container daocharms-qty-row (max-width: 22rem) {
+    .product-native-detail__wishlist-label {
+        display: none !important;
+    }
+}
+
+/* desktop display:contents 时 qty-row 无盒：改看 buybox 列宽 */
+@container daocharms-buybox (max-width: 22rem) {
+    .product-native-detail__wishlist-label {
+        display: none !important;
+    }
 }
