@@ -24,7 +24,15 @@
         return '';
     }
 
-    function cookieNames(explicitWebsiteId) {
+    function primaryCookieName(explicitWebsiteId) {
+        var websiteId = String(explicitWebsiteId || resolveWebsiteId(null) || '').trim();
+        if (websiteId !== '' && /^\d+$/.test(websiteId)) {
+            return COOKIE_NAME + '_w' + websiteId;
+        }
+        return COOKIE_NAME;
+    }
+
+    function readCookieNames(explicitWebsiteId) {
         var names = [];
         var add = function (name) {
             var value = String(name || '').trim();
@@ -32,18 +40,16 @@
                 names.push(value);
             }
         };
-        var websiteId = String(explicitWebsiteId || resolveWebsiteId(null) || '').trim();
-        if (websiteId !== '' && /^\d+$/.test(websiteId)) {
-            add(COOKIE_NAME + '_w' + websiteId);
-        }
-        // Keep already-scoped site cookies in sync when site id is missing.
+        // Prefer active website jar, then unscoped, then any leftover scoped /
+        // legacy names (migration read only — write never fans out).
+        add(primaryCookieName(explicitWebsiteId));
+        add(COOKIE_NAME);
         String(document.cookie || '').split(';').forEach(function (part) {
             var key = String(part.split('=')[0] || '').trim();
-            if (/^weline_selling_mode_w\d+$/.test(key)) {
+            if (/^weline_selling_mode_w\d+$/.test(key) || key === 'selling_mode') {
                 add(key);
             }
         });
-        add(COOKIE_NAME);
         return names;
     }
 
@@ -53,7 +59,7 @@
     }
 
     function readCookie() {
-        var names = cookieNames();
+        var names = readCookieNames();
         for (var i = 0; i < names.length; i += 1) {
             var value = String(readCookieValue(names[i]) || '').toLowerCase();
             if (value === 'toc' || value === 'tob') {
@@ -67,15 +73,22 @@
         var mode = value === 'tob' ? 'tob' : 'toc';
         var maxAge = COOKIE_DAYS * 24 * 60 * 60;
         var secure = global.location && String(global.location.protocol) === 'https:' ? '; Secure' : '';
-        cookieNames(resolveWebsiteId(root)).forEach(function (name) {
-            document.cookie = name + '=' + encodeURIComponent(mode)
-                + '; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+        var primary = primaryCookieName(resolveWebsiteId(root));
+        // One preference → one jar entry. Expire leftovers only when present.
+        document.cookie = primary + '=' + encodeURIComponent(mode)
+            + '; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+        var expireSuffix = '; path=/; max-age=0; SameSite=Lax' + secure;
+        String(document.cookie || '').split(';').forEach(function (part) {
+            var key = String(part.split('=')[0] || '').trim();
+            if (!key || key === primary) {
+                return;
+            }
+            if (key === COOKIE_NAME
+                || key === 'selling_mode'
+                || /^weline_selling_mode_w\d+$/.test(key)) {
+                document.cookie = key + '=' + expireSuffix;
+            }
         });
-        // Drop legacy bare cookie that can fight website-scoped preference.
-        try {
-            document.cookie = 'selling_mode=' + encodeURIComponent(mode)
-                + '; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
-        } catch (eLegacy) {}
     }
 
     function isCustomerLoggedIn(root) {
@@ -1788,7 +1801,10 @@
             i18n: i18n,
             bindAccountIdentities: bindAllAccountIdentities,
             cookieName: COOKIE_NAME,
-            cookieNames: cookieNames,
+            primaryCookieName: primaryCookieName,
+            readCookieNames: readCookieNames,
+            // Alias kept for older callers that asked for candidate names.
+            cookieNames: readCookieNames,
             readCookie: readCookie,
             writeCookie: writeCookie
         };

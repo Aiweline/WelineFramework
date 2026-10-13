@@ -101,4 +101,15 @@ final class HeaderCollectorTest extends TestCase
         self::assertSame('', (string)$byName['WELINE_SESSID']['value']);
         self::assertArrayNotHasKey('WELINE_SESSID_w544', $byName);
     }
+
+    public function testClearCookiesDropsEveryPendingSetCookie(): void
+    {
+        $collector = HeaderCollector::getInstance();
+        $collector->setCookie('WELINE_SESSID', 'sid', \time() + 3600, '/', '', true, true, 'Lax');
+        $collector->setCookie('WELINE_WEBSITE_ID', '0', \time() + 3600, '/', '', false, false, 'Lax');
+
+        self::assertNotSame([], $collector->getCookies());
+        $collector->clearCookies();
+        self::assertSame([], $collector->getCookies());
+    }
 }

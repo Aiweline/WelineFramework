@@ -1212,12 +1212,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     /**
      * Return the exact immutable homepage receipt proven during READY.
      *
-     * The public request can omit the default language/currency cookies while
-     * the warmup receipt intentionally carries them. Reconstructing that
-     * identity in a transport adapter creates a different FPC variant and
-     * forces every otherwise-hot homepage request back through Framework.
-     * Only an anonymous root request for the same origin may reuse the
-     * receipt; all personalized/non-root requests retain their own facts.
+     * Guest homepage HTML is cookie-independent (locale/currency live in the
+     * frozen full_uri + cache_key). Signed-in shoppers and preference cookies
+     * may reuse the same origin root receipt; Account soft-reconciles chrome.
+     * Non-root / wrong-origin requests still retain their own facts.
      *
      * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
      */
@@ -1225,9 +1223,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         string $requestFullUri,
         string $cookieHeader = ''
     ): ?array {
-        if (\trim($cookieHeader) !== '') {
-            return null;
-        }
+        // Cookie header is ignored for guest-shell receipt identity (compat arg).
+        unset($cookieHeader);
 
         $receipt = $this->normalizeHomepageWarmupReceipt($this->homepageCacheWarmupReceipt);
         if ($receipt === [] || !isset($receipt['cache_key'])) {
@@ -10705,8 +10702,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $headers['Content-Type'] = 'text/event-stream; charset=utf-8';
         }
 
+        // Shared anonymous FPC shell (HIT / build / prime): never merge Set-Cookie.
+        $suppressCookies = (bool)WelineEnv::get('response.from_cache', false)
+            || (\class_exists(\Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::class)
+                && \Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::isArmed());
         $this->setPendingResponseState([
-            'cookies' => $headerCollector->getCookies(),
+            'cookies' => $suppressCookies ? [] : $headerCollector->getCookies(),
             'headers' => $headers,
             'status_code' => $headerCollector->getStatusCode(),
             'explicit' => $headerCollector->hasExplicitStatusCode(),

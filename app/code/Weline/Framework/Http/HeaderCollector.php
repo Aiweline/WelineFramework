@@ -156,6 +156,15 @@ class HeaderCollector implements HeaderCollectorInterface
         bool $httpOnly = true,
         string $sameSite = 'Lax'
     ): static {
+        // Shared anonymous FPC shell (HIT / build / homepage prime): never queue Set-Cookie.
+        if (\class_exists(\Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::class, false)
+            || \class_exists(\Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::class)
+        ) {
+            if (\Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::isArmed()) {
+                return $this;
+            }
+        }
+
         $originalName = \trim($name);
         // Cookie name/Path isolation is contributed by modules via CookieScope
         // event. Protocol cookies keep Path=/ and the exact wire name.
@@ -305,6 +314,13 @@ class HeaderCollector implements HeaderCollectorInterface
                 unset($this->cookies[$key]);
             }
         }
+        return $this;
+    }
+
+    public function clearCookies(): static
+    {
+        $this->cookies = [];
+
         return $this;
     }
 

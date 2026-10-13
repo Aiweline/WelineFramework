@@ -129,6 +129,13 @@ interface HeaderCollectorInterface
     public function removeCookie(string $name): static;
 
     /**
+     * Drop every pending Set-Cookie (shared FPC HIT / anonymous shell serve).
+     *
+     * @return static
+     */
+    public function clearCookies(): static;
+
+    /**
      * 发送已收集的响应头（FPM 模式：调用 header()/setcookie()）
      *
      * @param bool $sendStatusCode 是否发送 HTTP 状态码，默认 true

@@ -259,10 +259,14 @@ NGINX;
         default 0;
         "~*^/~preview/" 1;
     }
-    # Deploy public webhook MARKER (~wh~{random}) — never HTML disk HIT.
-    map \$request_uri \$wls_fpc_html_bypass_webhook_path {
+    # Deploy webhook MARKER (~wh~{random}): pierce stamp required (same as diag).
+    map \$request_uri \$wls_fpc_html_webhook_path {
         default 0;
         "~*^/~wh~" 1;
+    }
+    map "\$wls_fpc_pierce_ok\$wls_fpc_html_webhook_path" \$wls_fpc_html_webhook_bypass {
+        default 0;
+        "11" 1;
     }
     # Diagnostic / editor query bypass only with a valid install pierce stamp.
     map \$request_uri \$wls_fpc_html_diag_query {
@@ -273,7 +277,7 @@ NGINX;
         default 0;
         "11" 1;
     }
-    map "\$wls_fpc_html_bypass_auth\$wls_fpc_html_bypass_upgrade\$wls_fpc_html_bypass_preview_path\$wls_fpc_html_bypass_webhook_path\$wls_fpc_html_diag_bypass" \$wls_fpc_html_disk_bypass {
+    map "\$wls_fpc_html_bypass_auth\$wls_fpc_html_bypass_upgrade\$wls_fpc_html_bypass_preview_path\$wls_fpc_html_webhook_bypass\$wls_fpc_html_diag_bypass" \$wls_fpc_html_disk_bypass {
         default 0;
         "~1" 1;
     }
@@ -402,29 +406,19 @@ NGINX;
 
         // Keep in sync with WorkerPolicyKernel::PATH_SCAN_STATIC_EXTENSIONS.
         // FPC static mirror: generated/static/live/{Host}{uri} (WLS fills on cold).
+        // Do NOT proxy_cache @wls_static_origin: a cache HIT skips WLS and never
+        // remirrors into the FPC disk tree (DEV module-prefix URLs would stick on origin).
         $staticExt = 'avif|css|eot|gif|ico|jpe?g|js|map|mjs|m4a|aac|mp3|mp4|ogg|otf|png|svg|ttf|wasm|wav|webm|webp|woff2?';
-        $staticOriginCacheDirectives = $edgeCache
-            ? <<<NGINX
-            proxy_cache wls_edge;
-            proxy_cache_key "\$scheme\$request_method\$host\$request_uri";
-            proxy_cache_methods GET HEAD;
-            proxy_cache_valid 200 {$ttl}s;
-            proxy_cache_valid 301 302 {$ttl}s;
-            proxy_cache_lock on;
-            proxy_cache_lock_timeout 5s;
-            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
-            proxy_cache_background_update on;
-            proxy_cache_revalidate on;
-            add_header X-Wls-Edge-Cache \$upstream_cache_status always;
-NGINX
-            : "            proxy_cache off;\n";
         $staticCacheLocationBlock = <<<NGINX
 
         # Module / DEV statics: FPC disk by Host+path, then WLS (which mirrors).
         # ^~ /pub/media and ^~ /static already won above for those prefixes.
+        # open_file_cache_errors off: a cold try_files miss must not be cached, or
+        # workers keep skipping the leaf WLS just mirrored (intermittent Static-Cache).
         location ~* \.(?:{$staticExt})$ {
 {$httpRedirectLocation}
             root {$quotedProjectRoot};
+            open_file_cache_errors off;
             try_files /generated/static/live/\$wls_fpc_html_host\$uri @wls_static_origin;
             expires 365d;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
@@ -454,7 +448,8 @@ NGINX
             proxy_buffers 32 64k;
             proxy_busy_buffers_size 128k;
             proxy_max_temp_file_size 0;
-{$staticOriginCacheDirectives}{$locationProtocolHeaders}
+            proxy_cache off;
+{$locationProtocolHeaders}
         }
 NGINX;
 
@@ -573,6 +568,8 @@ http {
 {$fpcHtmlDiskHitHeaders}{$httpRedirectLocation}{$locationProtocolHeaders}
         }
         location @wls_html_origin {
+            # Avoid stacking gzip_vary Accept-Encoding on upstream's merged Vary.
+            gzip_vary off;
 {$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
 {$httpRedirectLocation}
@@ -1170,6 +1167,7 @@ NGINX;
 {$fpcHtmlDiskHitHeaders}
         }
         location @wls_html_origin_distinct_{$originName} {
+            gzip_vary off;
 {$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
@@ -1902,6 +1900,9 @@ NGINX;
      * Aligns with Framework FullPageCacheCoordinator::applyFpcHitEdgeCacheHeaders
      * so Cloudflare bypass_by_default can store the response. Disk is body-only;
      * these are static edge-policy headers, not a replayed header bag.
+     *
+     * gzip_vary off (location): http-level gzip_vary on would emit a second
+     * Vary: Accept-Encoding alongside add_header Vary "Accept-Encoding, Cookie".
      */
     private function buildFpcHtmlDiskHitHeaderBlock(): string
     {
@@ -1921,6 +1922,7 @@ NGINX;
             : 'public, max-age=0, must-revalidate';
 
         return <<<NGINX
+            gzip_vary off;
             add_header Content-Encoding br always;
             add_header Vary "Accept-Encoding, Cookie" always;
             add_header Cache-Control "{$browserDirective}" always;

@@ -973,7 +973,6 @@ class App
             || $normalizedPath === '/framework/stream';
     }
 
-
     private function isFrontendScopeBootstrapRequestUri(string $requestUri): bool
     {
         $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: $requestUri);
@@ -1733,7 +1732,9 @@ class App
 
     private function shouldSuppressResponseCookiesForCurrentRequest(): bool
     {
-        if (InternalHomepagePrime::isCurrentRequest()) {
+        if (\Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::isArmed()
+            || InternalHomepagePrime::isCurrentRequest()
+        ) {
             return true;
         }
         if (InternalHomepagePrime::hasServerOnlyMarker() && \function_exists('w_log_warning')) {

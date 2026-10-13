@@ -85,14 +85,24 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             $staticBlock,
             'Extension statics must try FPC static disk before WLS.',
         );
+        self::assertStringContainsString(
+            'open_file_cache_errors off;',
+            $staticBlock,
+            'Cold try_files miss must not be open_file_cache-poisoned after WLS mirrors.',
+        );
         self::assertStringNotContainsString('/app/code$uri', $staticBlock);
         self::assertStringContainsString('X-Wls-Static-Disk "1"', $staticBlock);
         self::assertStringContainsString('X-Wls-Static-Fpc "1"', $staticBlock);
         self::assertStringContainsString('location @wls_static_origin', $staticBlock);
-        self::assertStringContainsString('proxy_cache wls_edge;', $staticBlock);
         self::assertStringContainsString(
-            'add_header X-Wls-Edge-Cache $upstream_cache_status always;',
+            'proxy_cache off;',
             $staticBlock,
+            'Static origin must not proxy_cache: HIT would skip WLS remirror into FPC disk.',
+        );
+        self::assertStringNotContainsString(
+            'proxy_cache wls_edge;',
+            $staticBlock,
+            'FPC static disk is the durable L2 for module/DEV extension URLs.',
         );
         self::assertMatchesRegularExpression('/\bcss\b/', $staticBlock);
         self::assertMatchesRegularExpression('/\bjs\b/', $staticBlock);
@@ -116,7 +126,13 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         self::assertStringContainsString('html/live/$wls_fpc_html_host', $config);
         self::assertStringContainsString('try_files $uri/index.html.br =418;', $genericBlock);
         self::assertStringContainsString('Content-Encoding br always;', $genericBlock);
+        self::assertStringContainsString('gzip_vary off;', $genericBlock);
         self::assertStringContainsString('Vary "Accept-Encoding, Cookie" always;', $genericBlock);
+        self::assertMatchesRegularExpression(
+            '/location @wls_html_origin\s*\{[^}]*gzip_vary off;/s',
+            $genericBlock,
+            'HTML origin must turn off gzip_vary so upstream Vary is not stacked.',
+        );
         self::assertStringContainsString(
             'CDN-Cache-Control "public, max-age=31536000" always;',
             $genericBlock,
@@ -153,6 +169,20 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         self::assertStringContainsString(
             'map $request_uri $wls_fpc_html_diag_query',
             $config,
+        );
+        self::assertStringContainsString(
+            'map $request_uri $wls_fpc_html_webhook_path',
+            $config,
+        );
+        self::assertStringContainsString(
+            '$wls_fpc_pierce_ok$wls_fpc_html_webhook_path',
+            $config,
+            'Deploy /~wh~ must require pierce stamp (same gate as diag).',
+        );
+        self::assertStringNotContainsString(
+            '$wls_fpc_html_bypass_webhook_path$',
+            $config,
+            'Unconditional webhook bypass must not remain in disk_bypass OR-chain.',
         );
         self::assertStringContainsString(
             '$wls_fpc_pierce_ok',

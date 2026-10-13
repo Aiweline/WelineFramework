@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Session\Strategy;
 
+use Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress;
 use Weline\Framework\Runtime\InternalHomepagePrime;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Session\Storage\SessionStorageInterface;
@@ -356,12 +357,13 @@ final class WlsStrategy implements SessionStrategyInterface
     }
 
     /**
-     * The READY-gate homepage prime is an internal, anonymous cache build.
-     * It must never allocate persistent session state or emit Set-Cookie,
+     * Shared anonymous FPC shell (homepage prime, HIT serve, or shareable SSR build)
+     * must never allocate persistent session state or emit Set-Cookie,
      * including when controller/template code starts Session lazily.
      */
     private function isInternalHomepageFpcPrimeRequest(): bool
     {
-        return InternalHomepagePrime::isCurrentRequest();
+        return SharedFpcSetCookieSuppress::isArmed()
+            || InternalHomepagePrime::isCurrentRequest();
     }
 }

@@ -5,6 +5,7 @@ namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\WlsRequest;
 use Weline\Framework\Runtime\RequestContext;
@@ -21,11 +22,13 @@ final class WlsRuntimePendingResponseStatusTest extends TestCase
             Context::leave();
         }
         HeaderCollector::reset();
+        WelineEnv::set('response.from_cache', false, 'unit-test');
     }
 
     protected function tearDown(): void
     {
         HeaderCollector::reset();
+        WelineEnv::set('response.from_cache', false, 'unit-test');
         RequestContext::cleanup();
         if (Context::hasCurrent()) {
             Context::leave();
@@ -54,6 +57,42 @@ final class WlsRuntimePendingResponseStatusTest extends TestCase
         self::assertSame(['status_code' => 200, 'explicit' => true, 'sse_started' => false], $status);
         self::assertSame(['status_code' => null, 'explicit' => false, 'sse_started' => false], $runtime->consumePendingResponseStatus());
         self::assertSame(['Content-Type' => 'application/json'], $runtime->consumePendingHeaders());
+    }
+
+    public function testSnapshotDropsPendingCookiesWhenResponseFromCache(): void
+    {
+        $runtime = new class extends WlsRuntime {
+            public function capture(HeaderCollector $collector): void
+            {
+                $this->snapshotPendingResponseState($collector);
+            }
+        };
+
+        $collector = HeaderCollector::getInstance();
+        $collector->setCookie('WELINE_SESSID', 'should-not-emit', \time() + 3600, '/', '', true, true, 'Lax');
+        WelineEnv::set('response.from_cache', true, 'unit-test');
+
+        $runtime->capture($collector);
+
+        self::assertSame([], $runtime->consumePendingCookies());
+    }
+
+    public function testSnapshotDropsPendingCookiesWhenSharedFpcSuppressArmed(): void
+    {
+        $runtime = new class extends WlsRuntime {
+            public function capture(HeaderCollector $collector): void
+            {
+                $this->snapshotPendingResponseState($collector);
+            }
+        };
+
+        $collector = HeaderCollector::getInstance();
+        $collector->setCookie('WELINE_SESSID', 'bootstrap', \time() + 3600, '/', '', true, true, 'Lax');
+        self::assertNotSame([], $collector->getCookies());
+        \Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::arm('unit_ssr');
+        self::assertSame([], $collector->getCookies());
+        $runtime->capture($collector);
+        self::assertSame([], $runtime->consumePendingCookies());
     }
 
     public function testPendingResponseStateStaysFiberLocalAcrossConcurrentFibers(): void

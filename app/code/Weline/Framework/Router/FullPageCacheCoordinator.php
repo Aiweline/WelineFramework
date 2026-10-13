@@ -28,6 +28,7 @@ use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
 use Weline\Framework\Http\Fpc\FpcHtmlDiskStore;
 use Weline\Framework\Http\Fpc\FpcPayloadPathIndex;
 use Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry;
+use Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress;
 use Weline\Framework\Http\GuardHeaders;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Response;
@@ -891,6 +892,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
             return false;
         }
+
+        // Shareable anonymous shells never publish Set-Cookie; drop leftovers so the
+        // gate is not blocked by Session/route cookies queued before FPC probe.
+        SharedFpcSetCookieSuppress::arm('can_publish');
+        $response->getHeaderCollectorInstance()->clearCookies();
 
         if ($response->getStatusCode() !== 200 || $response->getBody() === '') {
             FpcDiag::event('can_publish', [
@@ -2936,8 +2942,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
 
         $firstSegment = \explode('/', \trim($path, '/'))[0] ?? '';
-        // Deploy public webhook: /~wh~{random}[…] — MARKER from DeployWebhookRouteService.
-        if ($firstSegment !== '' && \str_starts_with($firstSegment, '~wh~')) {
+        // Deploy /~wh~…: FPM hard-exclude (always origin). WLS uses pierce-gated FpcBypass instead.
+        if ($firstSegment !== '' && \str_starts_with($firstSegment, '~wh~') && !Runtime::isWls()) {
             return true;
         }
         $blockedPrefixes = \array_filter([
@@ -4671,6 +4677,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function markCacheHit(Response $response): Response
     {
         WelineEnv::set('response.from_cache', true, 'FullPageCacheCoordinator cache hit');
+        // Arms HeaderCollector setCookie no-op + clears any bootstrap jar already queued.
+        SharedFpcSetCookieSuppress::arm('cache_hit');
+        $responseCollector = $response->getHeaderCollectorInstance();
+        if ($responseCollector !== HeaderCollector::getInstance()) {
+            $responseCollector->clearCookies();
+        }
 
         // Early FPC responses intentionally bypass App::run_after. Give
         // request-scoped response decorators a narrow hook without replaying
@@ -4684,6 +4696,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 throw new \RuntimeException(__('FPC 命中响应装饰器返回了无效响应'));
             }
             $response = $decorated;
+            // Decorators must not reintroduce Set-Cookie onto a shared HIT body.
+            SharedFpcSetCookieSuppress::arm('cache_hit_after_decorate');
+            $decoratedCollector = $response->getHeaderCollectorInstance();
+            if ($decoratedCollector !== HeaderCollector::getInstance()) {
+                $decoratedCollector->clearCookies();
+            }
         }
 
         return $response;

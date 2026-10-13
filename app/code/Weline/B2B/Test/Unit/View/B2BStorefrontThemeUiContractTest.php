@@ -111,7 +111,12 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
 
         $modules = self::bp('app/code/Weline/B2B/view/statics/frontend/weline.modules.js');
         $modulesContent = (string)file_get_contents($modules);
-        self::assertStringContainsString('selling-mode.js?v=20261010-extras-rebuild1', $modulesContent);
+        self::assertStringContainsString('selling-mode.js?v=20261013-single-cookie1', $modulesContent);
+        self::assertStringContainsString('function primaryCookieName', $jsContent);
+        self::assertStringContainsString('function readCookieNames', $jsContent);
+        self::assertStringContainsString('One preference → one jar entry', $jsContent);
+        self::assertStringNotContainsString('cookieNames(resolveWebsiteId(root)).forEach', $jsContent);
+        self::assertStringNotContainsString("document.cookie = 'selling_mode=' + encodeURIComponent(mode)", $jsContent);
         self::assertStringContainsString('WelineMiniCartExtras.rebuild', $jsContent);
         self::assertStringContainsString('checkout-tob.js?v=20261010-shell-toc-wins1', $modulesContent);
         self::assertStringContainsString('data-b2b-retail-only-switch-toc', $jsContent);

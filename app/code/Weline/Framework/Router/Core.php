@@ -18,6 +18,7 @@ use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
@@ -856,6 +857,21 @@ class Core
             || ($prefixedCompact !== '' && $normalized === $prefixedCompact);
     }
 
+    private function isFrontendScopeBootstrapApiUrl(string $url): bool
+    {
+        $normalized = \strtolower(\trim($url, '/'));
+        $restFrontendPrefix = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/'));
+        $prefixed = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/frontend/scope-bootstrap' : '';
+        $prefixedCompact = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/frontend/scopebootstrap' : '';
+
+        return $normalized === 'frontend/scope-bootstrap'
+            || $normalized === 'frontend/scopebootstrap'
+            || $normalized === 'api/frontend/scope-bootstrap'
+            || $normalized === 'api/frontend/scopebootstrap'
+            || ($prefixed !== '' && $normalized === $prefixed)
+            || ($prefixedCompact !== '' && $normalized === $prefixedCompact);
+    }
+
     private function isExternalBinQueryApiUrl(string $url): bool
     {
         $normalized = \strtolower(\trim($url, '/'));
@@ -973,21 +989,6 @@ class Core
         ];
 
         return $this->route();
-    }
-
-    private function isFrontendScopeBootstrapApiUrl(string $url): bool
-    {
-        $normalized = \strtolower(\trim($url, '/'));
-        $restFrontendPrefix = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/'));
-        $prefixed = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/frontend/scope-bootstrap' : '';
-        $prefixedCompact = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/frontend/scopebootstrap' : '';
-
-        return $normalized === 'frontend/scope-bootstrap'
-            || $normalized === 'frontend/scopebootstrap'
-            || $normalized === 'api/frontend/scope-bootstrap'
-            || $normalized === 'api/frontend/scopebootstrap'
-            || ($prefixed !== '' && $normalized === $prefixed)
-            || ($prefixedCompact !== '' && $normalized === $prefixedCompact);
     }
 
     private function routeFrontendScopeBootstrapApi()
@@ -1879,6 +1880,16 @@ class Core
         # HEAD 请求应该被允许访问 GET 方法的路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
         $routeProfile['fpc'] = $fpcCoordinator === null ? 'disabled' : ($fpcBuildLock === null ? 'wait_miss' : 'build_lock');
         $routeProfileMark('fpc_probe');
+        // Anonymous shareable FPC SSR (build lock or canBuild shell): never Set-Cookie.
+        // Logged-in / non-shareable wait_miss keeps normal Session/route cookies.
+        if ($fpcCoordinator !== null) {
+            $fpcMethodForCookie = $this->request->getMethod() ?: 'GET';
+            if ($fpcBuildLock !== null) {
+                SharedFpcSetCookieSuppress::arm('build_lock');
+            } elseif ($fpcCoordinator->canBuildCachedResponse($fpcMethodForCookie)) {
+                SharedFpcSetCookieSuppress::arm('anonymous_shareable_ssr');
+            }
+        }
         $routeMethod = $this->router['class']['request_method'] ?? '';
         $currentRequestMethod = $this->request->getMethod();
         if ('' !== $routeMethod) {
