@@ -80,6 +80,17 @@ final class DeployFpcInvalidationContractTest extends TestCase
         self::assertFalse($result['purged']);
     }
 
+    public function testAfterReleaseHelperExistsAndReleaseTriggerConstant(): void
+    {
+        self::assertSame('release', DeployFpcInvalidation::TRIGGER_RELEASE);
+        $src = (string)file_get_contents(
+            BP . 'app/code/Weline/Framework/Deploy/DeployFpcInvalidation.php'
+        );
+        self::assertStringContainsString('function afterRelease', $src);
+        self::assertStringContainsString('purgeFpcAll: true', $src);
+        self::assertStringContainsString("'deploy_release'", $src);
+    }
+
     public function testResolverSourceIncludesDeployNamespace(): void
     {
         $src = (string)file_get_contents(

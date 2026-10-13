@@ -128,6 +128,17 @@ class PublicApiAuthRouteMatcher
         'framework/csppolicy',
     ];
 
+    /**
+     * Storefront Scope hole-punch — anonymous POST; auth is HTTPS + same-origin
+     * + path/rate gates inside ScopeBootstrap / ScopeHolePunchSecurityGate.
+     */
+    private const WORKER_SCOPE_BOOTSTRAP_PATH_PATTERNS = [
+        'api/frontend/scope-bootstrap',
+        'api/frontend/scopebootstrap',
+        'frontend/scope-bootstrap',
+        'frontend/scopebootstrap',
+    ];
+
     private const AUTH_CONTROLLERS = ['Auth', 'Challenge'];
 
     private const AUTH_ACTIONS = [
@@ -152,6 +163,7 @@ class PublicApiAuthRouteMatcher
             $this->matchesWorkerQueryBinRoute($request)
             || $this->matchesWorkerStreamRoute($request)
             || $this->matchesWorkerCspPolicyRoute($request)
+            || $this->matchesWorkerScopeBootstrapRoute($request)
         ) {
             return true;
         }
@@ -284,6 +296,32 @@ class PublicApiAuthRouteMatcher
 
         foreach ($paths as $path) {
             if ($this->matchesPath((string) $path, self::WORKER_CSP_POLICY_PATH_PATTERNS)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesWorkerScopeBootstrapRoute(Request $request): bool
+    {
+        $controllerClass = (string) ($request->getRouterData('controller') ?? '');
+        if (
+            $controllerClass !== ''
+            && class_exists($controllerClass)
+            && is_a($controllerClass, \Weline\Frontend\Controller\Api\ScopeBootstrap::class, true)
+        ) {
+            return true;
+        }
+
+        $paths = array_filter([
+            $request->getRouteUrlPath(),
+            $request->getPath(),
+            (string) ($request->getRouterData('module_path') ?? ''),
+        ]);
+
+        foreach ($paths as $path) {
+            if ($this->matchesPath((string) $path, self::WORKER_SCOPE_BOOTSTRAP_PATH_PATTERNS)) {
                 return true;
             }
         }

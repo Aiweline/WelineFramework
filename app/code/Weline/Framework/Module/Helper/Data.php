@@ -294,6 +294,7 @@ class Data extends AbstractHelper
                             ];
                             $this->collectFrontendQueryBinRouteAlias($name, $params);
                             $this->collectFrontendStreamRouteAlias($name, $params);
+                            $this->collectFrontendScopeBootstrapRouteAlias($name, $params);
                             $this->collectFrontendApiDemoRouteAlias($name, $params);
 
                             // 原始路由与 baseRouter 路由不一致时，注册原始路由
@@ -992,6 +993,38 @@ class Data extends AbstractHelper
 
         $aliasParams = $params;
         $aliasParams['base_router'] = 'api-demo';
+        $aliasParams['router'] = preg_replace('#^api/#', '', $route) ?: $route;
+
+        $this->collected_route_registrations[] = [
+            'type' => RegisterDataInterface::ROUTER,
+            'module_name' => $moduleName,
+            'params' => $aliasParams,
+        ];
+    }
+
+    /**
+     * Browser POSTs /api/frontend/scope-bootstrap; Router::Api() matches after
+     * removing the outer /api segment (same strip-prefix pattern as query-bin).
+     *
+     * @param array<string, mixed> $params
+     */
+    private function collectFrontendScopeBootstrapRouteAlias(string $moduleName, array $params): void
+    {
+        $route = (string)($params['router'] ?? '');
+        if (!str_starts_with($route, 'api/frontend/scope-bootstrap')) {
+            return;
+        }
+
+        $class = (string)($params['class'] ?? '');
+        if (
+            $class === ''
+            || !is_a($class, \Weline\Frontend\Controller\Api\ScopeBootstrap::class, true)
+        ) {
+            return;
+        }
+
+        $aliasParams = $params;
+        $aliasParams['base_router'] = 'frontend';
         $aliasParams['router'] = preg_replace('#^api/#', '', $route) ?: $route;
 
         $this->collected_route_registrations[] = [

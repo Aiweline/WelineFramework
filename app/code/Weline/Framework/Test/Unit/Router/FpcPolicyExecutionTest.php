@@ -142,7 +142,10 @@ final class FpcPolicyExecutionTest extends TestCase
         $payload = ['fpc_expires_at' => microtime(true) + 12, 'policy_ttl' => 30];
         $this->invoke('applyFpcHitEdgeCacheHeaders', $response, false, $payload);
         self::assertMatchesRegularExpression('/^public, max-age=(?:10|11|12)$/', $response->getHeader('CDN-Cache-Control'));
-        self::assertMatchesRegularExpression('/^public, max-age=(?:10|11|12)$/', $response->getHeader('Cache-Control'));
+        self::assertMatchesRegularExpression(
+            '/^public, max-age=(?:10|11|12), must-revalidate$/',
+            $response->getHeader('Cache-Control')
+        );
         $this->invoke('applyFpcHitEdgeCacheHeaders', $response, true, $payload);
         self::assertSame('no-store', $response->getHeader('CDN-Cache-Control'));
         self::assertSame('no-store', $response->getHeader('Cloudflare-CDN-Cache-Control'));

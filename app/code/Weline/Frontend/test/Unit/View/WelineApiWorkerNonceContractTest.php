@@ -19,8 +19,8 @@ final class WelineApiWorkerNonceContractTest extends TestCase
         self::assertStringContainsString("'visitor.trackPixel': true", $script);
         self::assertStringContainsString('isTelemetryCapability', $script);
         self::assertStringContainsString("lane === 'telemetry'", $script);
-        self::assertStringContainsString('const sessionSnapshot = workerSession;', $script);
-        self::assertStringContainsString('workerSession === sessionSnapshot', $script);
+        self::assertStringContainsString('const sessionSnapshot = peekSession(config);', $script);
+        self::assertStringContainsString('peekSession(config) === sessionSnapshot', $script);
         self::assertStringContainsString('enqueueSignedRequest', $script);
         self::assertStringContainsString('await ensureSession(config);', $script);
         self::assertStringContainsString('Weline worker session is unavailable.', $script);
@@ -45,12 +45,18 @@ final class WelineApiWorkerNonceContractTest extends TestCase
         self::assertStringContainsString('shouldDedupeDefaultErrorToast', $script);
         self::assertStringContainsString('cooling down after capacity', $script);
         self::assertStringContainsString('createDedicatedWorkerFromScriptUrl', $script);
+        self::assertStringContainsString('wrapQueryBinWorkerTransport', $script);
+        self::assertStringContainsString('new SharedWorker(scriptUrl', $script);
         self::assertStringContainsString('inflightWorkerScriptBoots', $script);
         self::assertStringContainsString('URL.createObjectURL', $script);
         self::assertStringContainsString('new Worker(blobUrl)', $script);
         self::assertStringContainsString('createUrlWorker', $script);
         self::assertStringContainsString('createBlobWorker', $script);
-        self::assertStringContainsString('createBlobWorker().catch(() => createUrlWorker())', $script);
+        self::assertStringContainsString('createSharedWorker', $script);
+        self::assertStringContainsString(
+            'createSharedWorker().catch(() => createBlobWorker().catch(() => createUrlWorker()))',
+            $script,
+        );
         self::assertStringContainsString('same-origin Worker blocked', $script);
         self::assertStringContainsString('recoverWorkerAfterTimeout', $script);
         self::assertStringContainsString('workerRecoverPromise', $script);

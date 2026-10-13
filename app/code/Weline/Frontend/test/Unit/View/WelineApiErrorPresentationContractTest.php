@@ -66,10 +66,19 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         self::assertStringContainsString('request_scope_already_conflicts', $script);
         self::assertStringContainsString('scope_context_conflict', $script);
         self::assertStringContainsString('scope_reload_required', $script);
+        self::assertStringContainsString('scope_binding_required', $script);
+        self::assertStringContainsString('deploy_reload_required', $script);
+        self::assertStringContainsString("i18nText('站点已更新')", $script);
+        self::assertStringContainsString("i18nText('商城范围未就绪')", $script);
         self::assertStringContainsString('autoReload: true', $script);
         self::assertStringContainsString('maybeAutoReloadForScopeConflict', $script);
         self::assertStringContainsString('weline.api.scope_reload_at', $script);
         self::assertStringContainsString('window.location.reload()', $script);
+        // autoReload must run before silent / onHttpError short-circuit.
+        self::assertStringContainsString(
+            'presentation.autoReload && maybeAutoReloadForScopeConflict(presentation)',
+            $script,
+        );
         // Main-thread client must adopt the new page bootstrap (not throw sticky 409).
         self::assertStringContainsString(
             'client.config.scopeBootstrapId = freshConfig.scopeBootstrapId;',
@@ -87,8 +96,8 @@ final class WelineApiErrorPresentationContractTest extends TestCase
             \dirname(__DIR__, 3) . '/view/statics/js/weline-api-worker.js',
         );
         self::assertStringContainsString('SharedWorker survives full navigations', $script);
-        self::assertStringContainsString('workerScopeBootstrapId !== config.scopeBootstrapId', $script);
-        self::assertStringContainsString("workerScopeBootstrapId = '';", $script);
+        self::assertStringContainsString('entry.scopeBootstrapId !== config.scopeBootstrapId', $script);
+        self::assertStringContainsString('sessionsByUrlKey.delete(urlKey)', $script);
         self::assertStringNotContainsString(
             "throw Object.assign(new Error('The page Worker bootstrap changed while this worker was active.')",
             $script,

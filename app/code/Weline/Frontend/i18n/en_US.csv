@@ -122,3 +122,5 @@ Weline,Weline
 检测到渠道或店铺切换，正在刷新页面。,"A channel or store switch was detected. Refreshing the page."
 商城范围冲突,"Store scope conflict"
 当前请求与页面商城范围不一致，正在刷新页面。,"This request does not match the page store scope. Refreshing the page."
+站点已更新,"Site updated"
+检测到新版本部署，正在刷新页面以继续。,"A new deploy was detected. Refreshing the page to continue."

@@ -94,7 +94,11 @@
         || normalizeLangCode(fallback || '')
         || '';
 
-    const readScopeBootstrapId = () => {
+    const SCOPE_BOOTSTRAP_OPAQUE = /^[A-Za-z0-9_-]{43}$/;
+    let holePunchBootstrapId = '';
+    let holePunchInFlight = null;
+
+    const readScopeBootstrapIdFromMeta = () => {
         const nodes = document.querySelectorAll('meta[name="weline-worker-scope-bootstrap"]');
         if (nodes.length === 0) {
             return '';
@@ -106,12 +110,94 @@
         }
 
         const bootstrapId = String(nodes[0].getAttribute('content') || '').trim();
-        if (!/^[A-Za-z0-9_-]{43}$/.test(bootstrapId)) {
+        if (!SCOPE_BOOTSTRAP_OPAQUE.test(bootstrapId)) {
             const error = new Error('[Weline.Api] worker Scope bootstrap marker is invalid.');
             error.code = 'scope_bootstrap_invalid';
             throw error;
         }
         return bootstrapId;
+    };
+
+    const readScopeBootstrapId = () => {
+        const fromMeta = readScopeBootstrapIdFromMeta();
+        if (fromMeta) {
+            return fromMeta;
+        }
+        return holePunchBootstrapId && SCOPE_BOOTSTRAP_OPAQUE.test(holePunchBootstrapId)
+            ? holePunchBootstrapId
+            : '';
+    };
+
+    /**
+     * Anonymous FPC / generated/html pages have no meta stamp. Hole-punch
+     * Host+path once; SharedWorker indexes by URL identity key.
+     */
+    const ensureScopeBootstrapHolePunch = () => {
+        const existing = readScopeBootstrapId();
+        if (existing) {
+            return Promise.resolve(existing);
+        }
+        if (holePunchInFlight) {
+            return holePunchInFlight;
+        }
+        const path = String((window.location && window.location.pathname) || '/');
+        holePunchInFlight = fetch('/api/frontend/scope-bootstrap', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ path: path }),
+        }).then((res) => {
+            if (res.status === 204) {
+                return '';
+            }
+            if (res.status === 429) {
+                const error = new Error('[Weline.Api] Scope hole-punch rate limited.');
+                error.code = 'scope_bootstrap_rate_limited';
+                error.status = 429;
+                throw error;
+            }
+            if (!res.ok) {
+                const error = new Error('[Weline.Api] Scope hole-punch failed.');
+                error.code = 'scope_bootstrap_hole_punch_failed';
+                error.status = res.status;
+                throw error;
+            }
+            return res.json();
+        }).then((payload) => {
+            const serverDeploy = payload && payload.deploy_version != null
+                ? String(payload.deploy_version).trim()
+                : '';
+            const pageDeploy = String(
+                (window.Weline && window.Weline.config && (
+                    window.Weline.config.deployVersion || window.Weline.config.deploy_version
+                )) || ''
+            ).trim();
+            if (serverDeploy !== '' && pageDeploy !== '' && serverDeploy !== pageDeploy) {
+                const error = new Error('[Weline.Api] Deploy generation changed. Reload required.');
+                error.code = 'deploy_reload_required';
+                error.status = 409;
+                try {
+                    maybeAutoReloadForScopeConflict(resolveErrorPresentation(error));
+                } catch (_reloadError) {
+                    // Presentation helpers may not be ready on extreme early boot.
+                }
+                throw error;
+            }
+            const id = payload && payload.ok
+                ? String(payload.bootstrap_id || '').trim()
+                : '';
+            if (id && SCOPE_BOOTSTRAP_OPAQUE.test(id)) {
+                holePunchBootstrapId = id;
+                return id;
+            }
+            return '';
+        }).finally(() => {
+            holePunchInFlight = null;
+        });
+        return holePunchInFlight;
     };
 
     const normalizeLocale = (value) => {
@@ -624,6 +710,11 @@
                 message: i18nText('当前页面商城范围已过期，正在刷新以继续。'),
                 autoReload: true,
             },
+            scope_binding_required: {
+                title: i18nText('商城范围未就绪'),
+                message: i18nText('页面绑定信息缺失或已失效，正在刷新以继续。'),
+                autoReload: true,
+            },
             scope_context_conflict: {
                 title: i18nText('商城范围已变更'),
                 message: i18nText('检测到渠道或店铺切换，正在刷新页面。'),
@@ -632,6 +723,11 @@
             request_scope_already_conflicts: {
                 title: i18nText('商城范围冲突'),
                 message: i18nText('当前请求与页面商城范围不一致，正在刷新页面。'),
+                autoReload: true,
+            },
+            deploy_reload_required: {
+                title: i18nText('站点已更新'),
+                message: i18nText('检测到新版本部署，正在刷新页面以继续。'),
                 autoReload: true,
             },
         };
@@ -824,21 +920,81 @@
     const inflightWorkerScriptBoots = new Map();
 
     /**
-     * Blob-first (abortable fetch; Worker only after body arrives).
-     * Fall back to same-origin URL Worker when Blob/CSP fails —
-     * Blob path requires worker-src blob: (see SecurityHeaderDefaults::CSP).
-     * Historical: URL-first + 80ms early-accept left Network `script` pending forever,
-     * and timeout recover re-`new Worker(url)` flooded identical pending rows.
+     * Unify SharedWorker.port and Dedicated Worker behind postMessage/addEventListener/terminate.
+     * SharedWorker reset closes only this tab's port (process stays for other tabs).
+     */
+    const wrapQueryBinWorkerTransport = (raw, kind) => {
+        if (kind === 'shared') {
+            const port = raw && raw.port ? raw.port : null;
+            if (!port || typeof port.postMessage !== 'function') {
+                throw new Error('[Weline.Api] SharedWorker port is unavailable.');
+            }
+            if (typeof port.start === 'function') {
+                port.start();
+            }
+            return {
+                kind: 'shared',
+                raw,
+                postMessage: (message) => port.postMessage(message),
+                addEventListener: (type, listener, options) => {
+                    if (type === 'error' || type === 'messageerror') {
+                        if (raw && typeof raw.addEventListener === 'function') {
+                            raw.addEventListener(type, listener, options);
+                        }
+                        return;
+                    }
+                    port.addEventListener(type, listener, options);
+                },
+                removeEventListener: (type, listener, options) => {
+                    if (type === 'error' || type === 'messageerror') {
+                        if (raw && typeof raw.removeEventListener === 'function') {
+                            raw.removeEventListener(type, listener, options);
+                        }
+                        return;
+                    }
+                    port.removeEventListener(type, listener, options);
+                },
+                terminate: () => {
+                    try {
+                        if (typeof port.close === 'function') {
+                            port.close();
+                        }
+                    } catch (_error) {
+                        /* ignore */
+                    }
+                },
+            };
+        }
+        return {
+            kind: 'dedicated',
+            raw,
+            postMessage: (message) => raw.postMessage(message),
+            addEventListener: (type, listener, options) => raw.addEventListener(type, listener, options),
+            removeEventListener: (type, listener, options) => raw.removeEventListener(type, listener, options),
+            terminate: () => {
+                try {
+                    raw.terminate();
+                } catch (_error) {
+                    /* ignore */
+                }
+            },
+        };
+    };
+
+    /**
+     * Prefer true SharedWorker (stable same-origin URL — blob URLs cannot share across tabs).
+     * Fall back to Dedicated: Blob-first then same-origin URL Worker
+     * (Blob path requires worker-src blob: — see SecurityHeaderDefaults::CSP).
      */
     const createDedicatedWorkerFromScriptUrl = (workerUrl, options = {}) => {
-        if (!window.Worker) {
-            return Promise.reject(new Error(
-                '[Weline.Api] Worker is unavailable; direct frontend API fallback is disabled.'
-            ));
-        }
         const scriptUrl = String(workerUrl || '');
         if (!scriptUrl) {
             return Promise.reject(new Error('[Weline.Api] workerUrl is not configured.'));
+        }
+        if (typeof window.SharedWorker !== 'function' && typeof window.Worker !== 'function') {
+            return Promise.reject(new Error(
+                '[Weline.Api] Worker is unavailable; direct frontend API fallback is disabled.'
+            ));
         }
 
         const existingBoot = inflightWorkerScriptBoots.get(scriptUrl);
@@ -875,6 +1031,51 @@
                 }
             };
 
+            const createSharedWorker = () => new Promise((resolve, reject) => {
+                if (typeof window.SharedWorker !== 'function') {
+                    reject(new Error('[Weline.Api] SharedWorker unavailable.'));
+                    return;
+                }
+                let settled = false;
+                let shared = null;
+                try {
+                    // Stable name + URL ⇒ one process across tabs (not blob:).
+                    shared = new SharedWorker(scriptUrl, { name: 'weline-query-bin' });
+                } catch (error) {
+                    reject(error);
+                    return;
+                }
+                const finishOk = () => {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    try {
+                        shared.removeEventListener('error', onError);
+                    } catch (_e) { /* ignore */ }
+                    clearFetchTimeout();
+                    try {
+                        resolve(wrapQueryBinWorkerTransport(shared, 'shared'));
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                const onError = () => {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    try {
+                        shared.removeEventListener('error', onError);
+                    } catch (_e) { /* ignore */ }
+                    reject(new Error('[Weline.Api] SharedWorker blocked by CSP or failed to boot.'));
+                };
+                if (typeof shared.addEventListener === 'function') {
+                    shared.addEventListener('error', onError);
+                }
+                window.setTimeout(finishOk, 80);
+            });
+
             const createBlobWorker = () => fetch(scriptUrl, fetchInit).then((response) => {
                 clearFetchTimeout();
                 if (!response.ok) {
@@ -884,6 +1085,9 @@
             }).then((code) => {
                 if (!code || !String(code).trim()) {
                     throw new Error('[Weline.Api] worker script body is empty.');
+                }
+                if (typeof window.Worker !== 'function') {
+                    throw new Error('[Weline.Api] Worker is unavailable.');
                 }
                 const blob = new Blob([code], { type: 'text/javascript' });
                 const blobUrl = URL.createObjectURL(blob);
@@ -897,7 +1101,7 @@
                             /* ignore */
                         }
                     }, 5000);
-                    return worker;
+                    return wrapQueryBinWorkerTransport(worker, 'dedicated');
                 } catch (error) {
                     try {
                         URL.revokeObjectURL(blobUrl);
@@ -912,6 +1116,10 @@
             });
 
             const createUrlWorker = () => new Promise((resolve, reject) => {
+                if (typeof window.Worker !== 'function') {
+                    reject(new Error('[Weline.Api] Worker is unavailable.'));
+                    return;
+                }
                 let settled = false;
                 let worker = null;
                 try {
@@ -929,7 +1137,7 @@
                         worker.removeEventListener('error', onError);
                     } catch (_e) { /* ignore */ }
                     clearFetchTimeout();
-                    resolve(worker);
+                    resolve(wrapQueryBinWorkerTransport(worker, 'dedicated'));
                 };
                 const onError = () => {
                     if (settled) {
@@ -949,8 +1157,8 @@
                 window.setTimeout(finishOk, 80);
             });
 
-            // Blob first: one fetch until response; never stack URL Worker script loads on timeout.
-            return createBlobWorker().catch(() => createUrlWorker());
+            // SharedWorker first (true cross-tab); Dedicated Blob then URL as fallback.
+            return createSharedWorker().catch(() => createBlobWorker().catch(() => createUrlWorker()));
         })();
 
         inflightWorkerScriptBoots.set(scriptUrl, boot);
@@ -1095,9 +1303,8 @@
             || config.defaultCurrency,
             config
         );
-        // This value is intentionally sourced only from the server-injected
-        // non-executable marker. Runtime/global JavaScript config is not a
-        // trusted Scope authority.
+        // Prefer legacy meta stamp when present; otherwise hole-punch fills
+        // holePunchBootstrapId (Host+path). Runtime globals are not authority.
         config.scopeBootstrapId = readScopeBootstrapId();
         config.cacheCatalog = (apiConfig.cacheCatalog && typeof apiConfig.cacheCatalog === 'object')
             ? apiConfig.cacheCatalog
@@ -1985,16 +2192,21 @@
         }
 
         warmup() {
-            if (!this.config.scopeBootstrapId) {
-                return Promise.resolve(null);
-            }
             if (this.scopeWarmupComplete) {
                 return Promise.resolve(null);
             }
             if (!this.scopeWarmupPromise) {
-                this.scopeWarmupPromise = this.sendToWorker({
-                    type: 'scope-bootstrap',
-                    options: { silent: true },
+                this.scopeWarmupPromise = ensureScopeBootstrapHolePunch().then((bootstrapId) => {
+                    if (bootstrapId) {
+                        this.config.scopeBootstrapId = bootstrapId;
+                    }
+                    if (!this.config.scopeBootstrapId) {
+                        return null;
+                    }
+                    return this.sendToWorker({
+                        type: 'scope-bootstrap',
+                        options: { silent: true },
+                    });
                 }).then((result) => {
                     this.scopeWarmupComplete = true;
                     return result;
@@ -2051,7 +2263,8 @@
         }
 
         dispatchToWorker(payload) {
-            if (payload && payload.type !== 'scope-bootstrap' && this.config.scopeBootstrapId) {
+            if (payload && payload.type !== 'scope-bootstrap') {
+                // Hole-punch (or legacy meta) before QueryBin so anonymous FPC pages work.
                 return this.warmup().then(() => this.sendToWorker(payload));
             }
             return this.sendToWorker(payload);
@@ -2141,6 +2354,7 @@
                         deployVersion: this.config.deployVersion,
                         workerBuildId: this.config.workerBuildId,
                         locale: this.config.locale,
+                        host: (window.location && window.location.host) || '',
                         pathname: this.config.pathname || (window.location && window.location.pathname) || '/',
                         currency: this.config.currency,
                         defaultCurrency: this.config.defaultCurrency,
@@ -2357,6 +2571,13 @@
                 showBackendAclDeniedUi(error);
                 return;
             }
+            // Deploy / Scope generation drift must auto-reload even when the page
+            // installs onHttpError or marks the call silent — otherwise stale HTML
+            // after release never recovers.
+            const presentation = resolveErrorPresentation(error || {});
+            if (presentation.autoReload && maybeAutoReloadForScopeConflict(presentation)) {
+                return;
+            }
             if (silent) return;
             const requestCb = requestOptions && (requestOptions.onError || requestOptions.onHttpError);
             if (typeof requestCb === 'function') {
@@ -2541,6 +2762,7 @@
             if (isWorkerHandshakeCooldownNoise(error)) {
                 return;
             }
+            // autoReload already attempted in handleHttpError; keep as toast-path fallback.
             if (maybeAutoReloadForScopeConflict(presentation)) {
                 return;
             }

@@ -4,8 +4,10 @@ declare(strict_types=1);
 namespace Weline\Frontend\Controller\Api;
 
 use Weline\Frontend\Controller\FrontendRestController;
+use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Binary\EmergencyPacket;
+use Weline\Framework\Deploy\DeployFpcInvalidation;
 use Weline\Framework\Binary\Limits;
 use Weline\Framework\Binary\WelineBinaryCodec;
 use Weline\Framework\Env\WelineEnv;
@@ -284,6 +286,7 @@ class QueryBin extends FrontendRestController
             || \preg_match(self::RUNTIME_IDENTIFIER_PATTERN, $workerBuildId) !== 1) {
             throw new FrontendQueryException('protocol_error', 'Handshake is missing deploy version or worker build id.', 400);
         }
+        $this->assertClientDeployGenerationCurrent($deployVersion);
 
         $scopeBootstrapId = $payload['scope_bootstrap_id'] ?? '';
         if (!\is_string($scopeBootstrapId)) {
@@ -681,6 +684,48 @@ class QueryBin extends FrontendRestController
     {
         $currency = \strtoupper(\trim((string)$value));
         return State::isAllowedCurrencyCode($currency) ? $currency : '';
+    }
+
+    /**
+     * Stale HTML still carries an old deploy_version after release. Refuse
+     * handshake so the client can auto-reload onto the current generation.
+     */
+    private function assertClientDeployGenerationCurrent(string $clientDeployVersion): void
+    {
+        $serverStamp = $this->currentServerDeployVersion();
+        if ($serverStamp === '') {
+            return;
+        }
+        // Dev sticky: both sides on literal "dev" is fine; only mismatch forces reload.
+        if (\strcasecmp($serverStamp, $clientDeployVersion) === 0) {
+            return;
+        }
+
+        throw new FrontendQueryException(
+            'deploy_reload_required',
+            'Storefront deploy generation changed. Reload the page to continue.',
+            409,
+        );
+    }
+
+    private function currentServerDeployVersion(): string
+    {
+        try {
+            $fromEnv = \trim((string)Env::get('deploy_version', ''));
+            if ($fromEnv !== '') {
+                return $fromEnv;
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+        try {
+            /** @var DeployFpcInvalidation $invalidation */
+            $invalidation = ObjectManager::getInstance(DeployFpcInvalidation::class);
+
+            return \trim($invalidation->readDeployStamp());
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     private function assertProtocolHeaders(): void

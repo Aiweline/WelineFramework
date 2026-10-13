@@ -17,10 +17,12 @@
     const encoder = new TextEncoder();
     const decoder = new TextDecoder('utf-8', { fatal: true });
 
-    let workerSession = null;
-    let workerScopeBootstrapId = '';
-    let workerBackendBootstrapId = '';
+    // SharedWorker survives full navigations: URL-keyed sessions stay in one process
+    // across tabs; Dedicated Worker falls back to the same map per tab.
+    /** @type {Map<string, {session:object, scopeBootstrapId:string, backendBootstrapId:string}>} */
+    const sessionsByUrlKey = new Map();
     let handshakePromise = null;
+    let handshakePromiseKey = '';
     let handshakeCooldownUntil = 0;
     let handshakeBackoffMs = 0;
     // Interactive commerce/UI calls (cart, purchase panel, …) must not wait behind
@@ -64,81 +66,107 @@
         'compare.clear': ['compare.list', 'compare.pageView'],
     });
 
-    self.addEventListener('message', async (event) => {
-        const message = event.data || {};
-        const id = message.id;
-        if (!id) return;
-        const workerStartedAt = (typeof performance !== 'undefined' && performance.now)
-            ? performance.now()
-            : Date.now();
+    /**
+     * SharedWorker + Dedicated: bind one message port. SharedWorker keeps
+     * sessionsByUrlKey across tabs; each tab owns its MessagePort.
+     */
+    const attachQueryBinPort = (port) => {
+        if (!port || typeof port.postMessage !== 'function') {
+            return;
+        }
+        port.addEventListener('message', async (event) => {
+            const message = event.data || {};
+            const id = message.id;
+            if (!id) return;
+            const workerStartedAt = (typeof performance !== 'undefined' && performance.now)
+                ? performance.now()
+                : Date.now();
 
-        const workerElapsedMs = () => Math.max(0, Math.round(
-            ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - workerStartedAt
-        ));
+            const workerElapsedMs = () => Math.max(0, Math.round(
+                ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - workerStartedAt
+            ));
 
-        try {
-            const config = normalizeConfig(message.config || {});
-            await ensureResponseCacheDeployVersion(config);
-            if (message.type === 'scope-bootstrap' || message.type === 'backend-bootstrap') {
-                const session = await ensureSession(config);
-                self.postMessage({
+            try {
+                const config = normalizeConfig(message.config || {});
+                await ensureResponseCacheDeployVersion(config);
+                if (message.type === 'scope-bootstrap' || message.type === 'backend-bootstrap') {
+                    const session = await ensureSession(config);
+                    port.postMessage({
+                        id,
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        headers: {},
+                        workerElapsedMs: workerElapsedMs(),
+                        body: {
+                            ok: true,
+                            data: {
+                                scope_bound: session.scope_bound === true,
+                                attested_area: String(session.attested_area || 'frontend'),
+                                expires_at: Number(session.expires_at || 0),
+                            },
+                            error: null,
+                            request_id: '',
+                        },
+                        maintenance: false,
+                    });
+                    return;
+                }
+                const packetPayload = buildPayload(message, config);
+                const capability = resolveCapability(packetPayload);
+                const result = await dispatchCachedOrNetwork(message, config, packetPayload, capability);
+                port.postMessage({
                     id,
-                    ok: true,
-                    status: 200,
-                    statusText: 'OK',
+                    ok: result.responseOk && result.body && result.body.ok === true,
+                    status: result.status,
+                    statusText: result.statusText,
+                    headers: result.headers,
+                    workerElapsedMs: workerElapsedMs(),
+                    body: result.body,
+                    maintenance: detectMaintenance(result.status, result.body, result.headers),
+                });
+            } catch (error) {
+                port.postMessage({
+                    id,
+                    ok: false,
+                    status: error && error.status ? error.status : 0,
+                    statusText: '',
                     headers: {},
                     workerElapsedMs: workerElapsedMs(),
                     body: {
-                        ok: true,
-                        data: {
-                            scope_bound: session.scope_bound === true,
-                            attested_area: String(session.attested_area || 'frontend'),
-                            expires_at: Number(session.expires_at || 0),
+                        ok: false,
+                        data: null,
+                        error: {
+                            code: error && error.code ? error.code : 'protocol_error',
+                            message: error instanceof Error ? error.message : String(error),
+                            details: error && error.details ? String(error.details) : '',
+                            responseKind: error && error.responseKind ? String(error.responseKind) : '',
                         },
-                        error: null,
                         request_id: '',
                     },
                     maintenance: false,
+                    error: error instanceof Error ? error.message : String(error),
                 });
-                return;
             }
-            const packetPayload = buildPayload(message, config);
-            const capability = resolveCapability(packetPayload);
-            let result = await dispatchCachedOrNetwork(message, config, packetPayload, capability);
-            self.postMessage({
-                id,
-                ok: result.responseOk && result.body && result.body.ok === true,
-                status: result.status,
-                statusText: result.statusText,
-                headers: result.headers,
-                workerElapsedMs: workerElapsedMs(),
-                body: result.body,
-                maintenance: detectMaintenance(result.status, result.body, result.headers),
-            });
-        } catch (error) {
-            self.postMessage({
-                id,
-                ok: false,
-                status: error && error.status ? error.status : 0,
-                statusText: '',
-                headers: {},
-                workerElapsedMs: workerElapsedMs(),
-                body: {
-                    ok: false,
-                    data: null,
-                    error: {
-                        code: error && error.code ? error.code : 'protocol_error',
-                        message: error instanceof Error ? error.message : String(error),
-                        details: error && error.details ? String(error.details) : '',
-                        responseKind: error && error.responseKind ? String(error.responseKind) : '',
-                    },
-                    request_id: '',
-                },
-                maintenance: false,
-                error: error instanceof Error ? error.message : String(error),
-            });
+        });
+        if (typeof port.start === 'function') {
+            port.start();
         }
-    });
+    };
+
+    // SharedWorker: connect ports only. Dedicated: self is the message port.
+    const isSharedWorkerScope = (typeof SharedWorkerGlobalScope !== 'undefined')
+        && (self instanceof SharedWorkerGlobalScope);
+    if (isSharedWorkerScope) {
+        self.addEventListener('connect', (event) => {
+            const ports = event && event.ports ? event.ports : [];
+            if (ports[0]) {
+                attachQueryBinPort(ports[0]);
+            }
+        });
+    } else {
+        attachQueryBinPort(self);
+    }
 
     function normalizeConfig(config) {
         const deployVersion = String(config.deployVersion || config.deploy_version || 'dev').trim();
@@ -558,10 +586,18 @@
             await clearResponseCacheNotMatchingDeploy(next);
             return;
         }
-        if (workerSession && workerSession.deploy_version !== next) {
-            workerSession = null;
-        }
+        // Deploy rotation: drop all URL-keyed storefront sessions in this worker.
+        sessionsByUrlKey.clear();
         await clearResponseCacheNotMatchingDeploy(next);
+    }
+
+    function peekSession(config) {
+        const entry = sessionsByUrlKey.get(urlScopeIdentityKey(config));
+        return entry && entry.session ? entry.session : null;
+    }
+
+    function clearSession(config) {
+        sessionsByUrlKey.delete(urlScopeIdentityKey(config));
     }
 
     function memoryGetFresh(key) {
@@ -694,20 +730,35 @@
         return value;
     }
 
+    function urlScopeIdentityKey(config) {
+        const host = String(config.host || config.authorityHost || '').trim().toLowerCase();
+        let path = String(config.pathname || config.path || '/').trim() || '/';
+        if (path.charAt(0) !== '/') {
+            path = '/' + path;
+        }
+        const q = path.indexOf('?');
+        if (q !== -1) {
+            path = path.slice(0, q);
+        }
+        return host + '\0' + path;
+    }
+
     async function ensureSession(config) {
         const now = Math.floor(Date.now() / 1000);
+        const urlKey = urlScopeIdentityKey(config);
+        let entry = sessionsByUrlKey.get(urlKey) || null;
 
-        // SharedWorker survives full navigations (retail ↔ /b2b). A new page comes
-        // with a fresh Scope bootstrap Cookie+meta; drop the previous session and
-        // handshake again instead of throwing a sticky 409 toast.
-        if (workerSession && (
-            workerScopeBootstrapId !== config.scopeBootstrapId ||
-            workerBackendBootstrapId !== config.backendBootstrapId
+        // URL-keyed multi-session: retail ↔ /b2b keep distinct slots. Same URL with
+        // a rotated hole-punch/meta bootstrap id replaces that slot only.
+        if (entry && (
+            entry.scopeBootstrapId !== config.scopeBootstrapId ||
+            entry.backendBootstrapId !== config.backendBootstrapId
         )) {
-            workerSession = null;
-            workerScopeBootstrapId = '';
-            workerBackendBootstrapId = '';
+            sessionsByUrlKey.delete(urlKey);
+            entry = null;
         }
+
+        const workerSession = entry ? entry.session : null;
 
         if (
             workerSession &&
@@ -720,27 +771,32 @@
 
         if (workerSession && workerSession.scope_bound === true && workerSession.attested_area !== 'backend') {
             // Scope bootstrap Cookie is one-shot; after deploy/build/expiry drift the
-            // page must reload to mint a fresh bootstrap marker.
+            // page must hole-punch again (or reload) for a fresh bootstrap id.
+            sessionsByUrlKey.delete(urlKey);
             throw Object.assign(new Error('The page Scope has expired or changed. Reload the page to continue.'), {
                 code: 'scope_reload_required',
                 status: 401,
             });
         }
         if (workerSession && workerSession.attested_area === 'backend') {
-            // Backend PHP Session may still be valid while the Worker token or
-            // page bootstrap bridge is stale (WLS reload, deploy rotation, etc.).
-            workerSession = null;
+            sessionsByUrlKey.delete(urlKey);
         }
 
-        if (!handshakePromise) {
+        if (!handshakePromise || handshakePromiseKey !== urlKey) {
+            handshakePromiseKey = urlKey;
             handshakePromise = (async () => {
                 const session = await handshake(config);
-                workerSession = session;
-                workerScopeBootstrapId = config.scopeBootstrapId;
-                workerBackendBootstrapId = config.backendBootstrapId;
+                sessionsByUrlKey.set(urlKey, {
+                    session: session,
+                    scopeBootstrapId: String(config.scopeBootstrapId || ''),
+                    backendBootstrapId: String(config.backendBootstrapId || ''),
+                });
                 return session;
             })().finally(() => {
-                handshakePromise = null;
+                if (handshakePromiseKey === urlKey) {
+                    handshakePromise = null;
+                    handshakePromiseKey = '';
+                }
             });
         }
 
@@ -809,7 +865,9 @@
             const code = body && body.error && body.error.code
                 ? String(body.error.code)
                 : 'auth_error';
-            if (
+            if (code === 'deploy_reload_required') {
+                sessionsByUrlKey.clear();
+            } else if (
                 response.status === 502
                 || response.status === 503
                 || response.status === 504
@@ -896,7 +954,7 @@
             // The session is still valid — only mint a fresh nonce and retry once.
             result = await postSigned(config, payload, capability, lane);
         } else if (!result.responseOk && shouldInvalidateWorkerSession(result.status, result.body)) {
-            workerSession = null;
+            clearSession(config);
             result = await postSigned(config, payload, capability, lane);
         }
         // Worker bounce / nginx 502 / admission 503: retry without killing the session
@@ -926,23 +984,28 @@
     }
 
     function shouldInvalidateWorkerSession(status, body) {
+        const code = body && body.error && typeof body.error.code === 'string'
+            ? body.error.code.toLowerCase()
+            : '';
+        // Deploy generation drift: drop stale session; main thread auto-reloads.
+        // Do not retry handshake with the same old page stamp.
+        if (code === 'deploy_reload_required') {
+            return false;
+        }
         if (status !== 401) {
             return false;
         }
         if (isNonceReuse(status, body)) {
             return false;
         }
-        const code = body && body.error && typeof body.error.code === 'string'
-            ? body.error.code.toLowerCase()
-            : '';
         return code === 'auth_error' || code === 'backend_attestation_invalid';
     }
 
     async function postSigned(config, payload, capability, lane) {
         return enqueueSignedRequest(async () => {
             await ensureSession(config);
-            // Snapshot for this request: dual lanes may refresh/clear workerSession concurrently.
-            const sessionSnapshot = workerSession;
+            // Snapshot for this request: dual lanes may refresh/clear URL slots concurrently.
+            const sessionSnapshot = peekSession(config);
             if (!sessionSnapshot || typeof sessionSnapshot.signing_secret !== 'string' || sessionSnapshot.signing_secret === '') {
                 throw Object.assign(new Error('Weline worker session is unavailable.'), {
                     code: 'auth_error',
@@ -1058,8 +1121,8 @@
             }
             if (shouldInvalidateWorkerSession(response.status, body)) {
                 // Only clear if we still own the live session (another lane may have refreshed).
-                if (workerSession === sessionSnapshot) {
-                    workerSession = null;
+                if (peekSession(config) === sessionSnapshot) {
+                    clearSession(config);
                 }
             }
             return {

@@ -168,7 +168,8 @@
 |------|------|------|
 | `deploy_version` stamp | `var/deploy/current.json` | 缺文件或字面 `dev` 为缺陷态；切 prod / release 须写出可观测非 sticky-dev 值 |
 | FPC fingerprint ns | `global/storefront/deploy` | 进 `StorefrontCacheKeyContextResolver`；与 `theme_static_version`、mtime `assetVersion` 职责分离 |
-| 失效 helper | `DeployFpcInvalidation` | Mode\Set prod：**bump + 必须 purge_fpc_all**；日常 Upgrade：**优先 bump**，空跑勿 thrash 全清 |
+| 失效 helper | `DeployFpcInvalidation` | Mode\Set prod / **正式 Release**：bump + **必须 purge_fpc_all**；日常 Upgrade：优先 bump，空跑勿 thrash 全清 |
+| 浏览器 HTML | FPC HIT `Cache-Control` | 短 `max-age` + **`must-revalidate`**；响应头 `X-Weline-Deploy-Version`；旧页撞验章 → Frontend `deploy_reload_required` 自动 reload |
 | 事件场 `prod_after.deploy_version` | Deploy 模块 `register.php` 版本 | **≠** stamp；供 Visitor 等旁路，不作店面呈现权威 |
 
 ## Taglib callback 例外（常见 404 坑）

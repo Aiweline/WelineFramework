@@ -7,10 +7,8 @@ namespace Weline\Websites\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
 use Weline\Framework\Http\Response;
-use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestExitException;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 use Weline\Framework\Service\Query\Store\FrontendWorkerStateStoreInterface;
@@ -18,6 +16,9 @@ use Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding;
 use Weline\Framework\Service\Query\Value\FrontendWorkerScopeRolloutDecision;
 use Weline\Websites\Service\FrontendWorkerScopeBootstrapResponseService;
 
+/**
+ * HTML Scope stamp retired — decorate is a no-op; hole-punch owns bootstrap.
+ */
 final class FrontendWorkerScopeBootstrapResponseServiceTest extends TestCase
 {
     public const TOKEN = 'scope-token-secret-value-that-must-not-enter-html';
@@ -68,7 +69,7 @@ final class FrontendWorkerScopeBootstrapResponseServiceTest extends TestCase
         TestBootstrapScopeProvider::reset();
     }
 
-    public function testAuthoritativeHtmlGetsOpaqueMetaAndHostOnlyHttpOnlyCookie(): void
+    public function testDecorateDoesNotInjectHtmlStampOrCookies(): void
     {
         $now = time();
         TestBootstrapScopeProvider::$binding = new FrontendWorkerScopeBinding(
@@ -89,323 +90,29 @@ final class FrontendWorkerScopeBootstrapResponseServiceTest extends TestCase
         $decorated = $service->decorate(Response::html($html));
 
         self::assertInstanceOf(Response::class, $decorated);
-        self::assertStringContainsString('name="weline-worker-scope-bootstrap"', $decorated->getBody());
-        self::assertMatchesRegularExpression(
-            '/name="weline-worker-scope-bootstrap" content="[A-Za-z0-9_-]{43}"/',
-            $decorated->getBody(),
-        );
+        self::assertSame($html, $decorated->getBody());
+        self::assertStringNotContainsString('weline-worker-scope-bootstrap', $decorated->getBody());
         self::assertStringNotContainsString(self::TOKEN, $decorated->getBody());
-        self::assertSame('private, no-store, max-age=0, must-revalidate', $decorated->getHeader('Cache-Control'));
-
-        $cookies = array_values($decorated->getCookies());
-        self::assertGreaterThanOrEqual(1, \count($cookies));
-        $cookie = null;
-        foreach ($cookies as $candidate) {
-            if (\preg_match('/^__Host-Weline-Worker-Scope-Bootstrap-[A-Za-z0-9_-]{43}$/D', (string)($candidate['name'] ?? '')) === 1
-                && (string)($candidate['value'] ?? '') === self::TOKEN
-            ) {
-                $cookie = $candidate;
-                break;
-            }
-        }
-        self::assertNotNull($cookie);
-        self::assertMatchesRegularExpression(
-            '/^__Host-Weline-Worker-Scope-Bootstrap-[A-Za-z0-9_-]{43}$/D',
-            $cookie['name'],
-        );
-        self::assertSame(self::TOKEN, $cookie['value']);
-        self::assertSame('/', $cookie['path']);
-        self::assertSame('', $cookie['domain']);
-        self::assertTrue($cookie['secure']);
-        self::assertTrue($cookie['httpOnly']);
-        self::assertSame('Lax', $cookie['sameSite']);
-        self::assertGreaterThan($now, $cookie['expire']);
-        self::assertLessThanOrEqual($now + 120, $cookie['expire']);
-
-        $requestState = json_encode(RequestContext::all(), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-        self::assertStringNotContainsString(self::TOKEN, $requestState);
-        self::assertSame(1, TestBootstrapScopeProvider::$issueCalls);
-        self::assertGreaterThanOrEqual(1, $store->transactions);
-    }
-
-    public function testDecorateExpiresStaleSiblingScopeBootstrapCookies(): void
-    {
-        $now = time();
-        TestBootstrapScopeProvider::$binding = new FrontendWorkerScopeBinding(
-            $this->scope,
-            'shop.example.test',
-            hash('sha256', self::TOKEN),
-            $now,
-            $now + 1800,
-            true,
-        );
-        $staleName = FrontendWorkerSessionService::SCOPE_BOOTSTRAP_COOKIE_PREFIX
-            . 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-        $_SERVER['HTTP_COOKIE'] = $staleName . '=stale-token; other=1';
-        try {
-            $service = new FrontendWorkerScopeBootstrapResponseService(
-                new TestBootstrapScopeProvider(),
-                new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
-            );
-            $decorated = $service->decorate(
-                Response::html('<!doctype html><html><head><title>Store</title></head><body>Ready</body></html>')
-            );
-            self::assertInstanceOf(Response::class, $decorated);
-            $cookies = array_values($decorated->getCookies());
-            $expired = null;
-            $fresh = null;
-            foreach ($cookies as $cookie) {
-                $name = (string)($cookie['name'] ?? '');
-                if ($name === $staleName) {
-                    $expired = $cookie;
-                }
-                if (($cookie['value'] ?? '') === self::TOKEN) {
-                    $fresh = $cookie;
-                }
-            }
-            self::assertNotNull($expired);
-            self::assertSame('', (string)($expired['value'] ?? ''));
-            self::assertLessThanOrEqual(1, (int)($expired['expire'] ?? 0));
-            self::assertNotNull($fresh);
-        } finally {
-            unset($_SERVER['HTTP_COOKIE']);
-        }
-    }
-
-    public function testInternalStorefrontWarmupKeepsAnonymousHtmlCookieFree(): void
-    {
-        $previousFlag = $_SERVER['WLS_INTERNAL_WARMUP'] ?? null;
-        $_SERVER['WLS_INTERNAL_WARMUP'] = '1';
-        try {
-            $now = time();
-            TestBootstrapScopeProvider::$binding = new FrontendWorkerScopeBinding(
-                $this->scope,
-                'shop.example.test',
-                hash('sha256', self::TOKEN),
-                $now,
-                $now + 1800,
-                true,
-            );
-            $service = new FrontendWorkerScopeBootstrapResponseService(
-                new TestBootstrapScopeProvider(),
-                new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
-            );
-            $response = Response::html('<html><body>Warmup</body></html>');
-
-            self::assertSame($response, $service->decorate($response));
-            self::assertStringNotContainsString('weline-worker-scope-bootstrap', $response->getBody());
-            self::assertSame([], $response->getCookies());
-        } finally {
-            if ($previousFlag === null) {
-                unset($_SERVER['WLS_INTERNAL_WARMUP']);
-            } else {
-                $_SERVER['WLS_INTERNAL_WARMUP'] = $previousFlag;
-            }
-        }
-    }
-
-    public function testMissingChannelScopeFailsClosedWhenBindingRequired(): void
-    {
-        $this->clearInstalledScopeIdentity();
-        TestBootstrapScopeProvider::$mode = FrontendWorkerScopeRolloutDecision::MODE_ON;
-        $service = new FrontendWorkerScopeBootstrapResponseService(
-            new TestBootstrapScopeProvider(),
-            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
-        );
-
-        try {
-            $service->decorate(Response::html(
-                '<!doctype html><html><head><title>Home</title></head><body>Home</body></html>',
-            ));
-            self::fail('Expected FrontendWorkerScopeException when channel Scope is missing.');
-        } catch (FrontendWorkerScopeException $exception) {
-            self::assertSame('worker_scope_bootstrap_scope_missing', $exception->reason);
-            self::assertSame(503, $exception->httpStatus);
-        }
-    }
-
-    public function testIneligibleCachedHtmlFailsClosedWhenBindingRequired(): void
-    {
-        // Simulate early FPC/cold-disk hit: cache flag set, but request Context is
-        // not a normal frontend decorate surface (static route).
-        Context::getCurrent()?->set('route.is_static', true);
-        \Weline\Framework\Env\WelineEnv::set(
-            'response.from_cache',
-            true,
-            'FrontendWorkerScopeBootstrapResponseServiceTest ineligible cached html',
-        );
-        TestBootstrapScopeProvider::$mode = FrontendWorkerScopeRolloutDecision::MODE_ON;
-        $service = new FrontendWorkerScopeBootstrapResponseService(
-            new TestBootstrapScopeProvider(),
-            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
-        );
-        $html = '<!doctype html><html><head><title>Cached</title></head><body>Public</body></html>';
-
-        try {
-            $service->decorate(Response::html($html));
-            self::fail('Expected FrontendWorkerScopeException for ineligible cached HTML under binding.');
-        } catch (FrontendWorkerScopeException $exception) {
-            self::assertSame('worker_scope_bootstrap_fpc_context_missing', $exception->reason);
-            self::assertSame(503, $exception->httpStatus);
-        }
-    }
-
-    public function testCliSystemMetaNeverDecoratesOrFailClosed(): void
-    {
-        if (!\Weline\Framework\Runtime\Runtime::isCli()) {
-            self::markTestSkipped('Contract locks CLI SAPI skip; run under cli/phpdbg.');
-        }
-        // Real bin/w uses FpmRuntime meta.type=system; keep body intact.
-        Context::leave();
-        Context::enter(new Context([
-            'meta' => ['type' => 'system', 'mode' => 'fpm', 'process_tag' => 'CLI'],
-            'input' => [
-                'method' => 'GET',
-                'scheme' => 'https',
-                'host' => 'cli.example.test',
-                'uri' => '/',
-                'full_request_uri' => 'https://cli.example.test/',
-                'server' => [
-                    'HTTP_HOST' => 'cli.example.test',
-                    'REQUEST_METHOD' => 'GET',
-                    'REQUEST_SCHEME' => 'https',
-                    'REQUEST_URI' => '/',
-                ],
-            ],
-            'route' => [
-                'area' => RequestContext::AREA_FRONTEND,
-                'is_static' => false,
-                'is_media' => false,
-            ],
-        ]));
-        RequestContext::setId('scope-bootstrap-cli-system-test');
-        $this->clearInstalledScopeIdentity();
-        TestBootstrapScopeProvider::$mode = FrontendWorkerScopeRolloutDecision::MODE_ON;
-        $service = new FrontendWorkerScopeBootstrapResponseService(
-            new TestBootstrapScopeProvider(),
-            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
-        );
-        $response = Response::html(
-            '<!doctype html><html><head><title>CLI</title></head><body>status-ok</body></html>',
-        );
-
-        self::assertSame($response, $service->decorate($response));
-        self::assertStringNotContainsString('weline-worker-scope-bootstrap', $response->getBody());
-        self::assertStringContainsString('status-ok', $response->getBody());
-        self::assertSame(0, TestBootstrapScopeProvider::$issueCalls);
-    }
-
-    public function testMissingChannelScopeSkippedWhenRolloutOff(): void
-    {
-        $this->clearInstalledScopeIdentity();
-        TestBootstrapScopeProvider::$mode = FrontendWorkerScopeRolloutDecision::MODE_OFF;
-        $service = new FrontendWorkerScopeBootstrapResponseService(
-            new TestBootstrapScopeProvider(),
-            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
-        );
-        $response = Response::html(
-            '<!doctype html><html><head><title>Home</title></head><body>Home</body></html>',
-        );
-
-        self::assertSame($response, $service->decorate($response));
-        self::assertStringNotContainsString('weline-worker-scope-bootstrap', $response->getBody());
-    }
-
-    private function clearInstalledScopeIdentity(): void
-    {
-        $context = Context::getCurrent();
-        self::assertNotNull($context);
-        $path = (new \ReflectionClass(RequestContext::class))
-            ->getConstant('SCOPE_IDENTITY_PATH');
-        self::assertIsString($path);
-        $context->set($path, null);
-        self::assertNull(RequestContext::scopeIdentity());
-    }
-
-    public function testRequestCancellationIsNotTurnedIntoMaintenanceResponse(): void
-    {
-        TestBootstrapScopeProvider::$issueException = new RequestExitException();
-        $service = new FrontendWorkerScopeBootstrapResponseService(
-            new TestBootstrapScopeProvider(),
-            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
-        );
-
-        $this->expectException(RequestExitException::class);
-        $service->decorate(Response::html('<!doctype html><html><head><title>Home</title></head><body>Home</body></html>'));
-    }
-
-    public function testStorefrontNotFoundHtmlGetsBootstrapWithoutChangingItsStatus(): void
-    {
-        $now = time();
-        TestBootstrapScopeProvider::$binding = new FrontendWorkerScopeBinding(
-            $this->scope, 'shop.example.test', hash('sha256', self::TOKEN),
-            $now, $now + 1800, true,
-        );
-        $store = new BootstrapMemoryStateStore();
-        $service = new FrontendWorkerScopeBootstrapResponseService(
-            new TestBootstrapScopeProvider(), new FrontendWorkerSessionService($store),
-        );
-        $response = Response::html('<html><head></head><body>Not found</body></html>', 404);
-
-        $decorated = $service->decorate($response);
-
-        self::assertSame(404, $decorated->getStatusCode());
-        self::assertStringContainsString('Not found', $decorated->getBody());
-        self::assertMatchesRegularExpression(
-            '/name="weline-worker-scope-bootstrap" content="[A-Za-z0-9_-]{43}"/',
-            $decorated->getBody(),
-        );
-        self::assertStringNotContainsString(self::TOKEN, $decorated->getBody());
-        self::assertCount(1, $decorated->getCookies());
-        self::assertSame(1, TestBootstrapScopeProvider::$issueCalls);
-    }
-
-    public function testPersistentFinalResponseDecorates404OnlyOnce(): void
-    {
-        $now = time();
-        TestBootstrapScopeProvider::$binding = new FrontendWorkerScopeBinding(
-            $this->scope, 'shop.example.test', hash('sha256', self::TOKEN),
-            $now, $now + 1800, true,
-        );
-        $service = new FrontendWorkerScopeBootstrapResponseService(
-            new TestBootstrapScopeProvider(),
-            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
-        );
-        $observer = new \Weline\Websites\Observer\FrontendWorkerScopeBootstrapResponse($service);
-        $event = new \Weline\Framework\Event\Event(
-            'Weline_Framework_Http::response_ready',
-            ['response' => Response::html('<html><head></head><body>Not found</body></html>', 404)],
-        );
-        $runtimeMode = new \ReflectionProperty(\Weline\Framework\Runtime\Runtime::class, 'mode');
-        $previousMode = $runtimeMode->getValue();
-        $runtimeMode->setValue(null, \Weline\Framework\Runtime\Runtime::WLS);
-        try {
-            $observer->execute($event);
-            $observer->execute($event);
-            $response = $event->getData('response');
-            self::assertSame(404, $response->getStatusCode());
-            self::assertSame(1, substr_count($response->getBody(), 'name="weline-worker-scope-bootstrap"'));
-            self::assertCount(1, $response->getCookies());
-            self::assertSame(1, TestBootstrapScopeProvider::$issueCalls);
-        } finally {
-            $runtimeMode->setValue(null, $previousMode);
-        }
-    }
-
-    public function testServerErrorHtmlDoesNotIssueBootstrap(): void
-    {
-        $store = new BootstrapMemoryStateStore();
-        $service = new FrontendWorkerScopeBootstrapResponseService(
-            new TestBootstrapScopeProvider(), new FrontendWorkerSessionService($store),
-        );
-        $response = Response::html('<html><head></head><body>Error</body></html>', 500);
-        self::assertSame($response, $service->decorate($response));
-        self::assertSame([], $response->getCookies());
+        self::assertSame([], $decorated->getCookies());
         self::assertSame(0, TestBootstrapScopeProvider::$issueCalls);
         self::assertSame(0, $store->transactions);
     }
 
-    public function testOffModeHasZeroTokenCookieHeaderAndStoreSideEffects(): void
+    public function testDecorateIsIdempotentWithoutStamp(): void
+    {
+        $service = new FrontendWorkerScopeBootstrapResponseService(
+            new TestBootstrapScopeProvider(),
+            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
+        );
+        $html = '<!doctype html><html><head></head><body>x</body></html>';
+        $first = $service->decorate(Response::html($html));
+        $second = $service->decorate($first);
+        self::assertSame($first, $second);
+        self::assertStringNotContainsString('weline-worker-scope-bootstrap', $second->getBody());
+        self::assertSame(0, TestBootstrapScopeProvider::$issueCalls);
+    }
+
+    public function testOffModeStillNoSideEffects(): void
     {
         TestBootstrapScopeProvider::$mode = FrontendWorkerScopeRolloutDecision::MODE_OFF;
         $store = new BootstrapMemoryStateStore();
@@ -420,7 +127,6 @@ final class FrontendWorkerScopeBootstrapResponseServiceTest extends TestCase
         self::assertSame($response, $result);
         self::assertSame('<html><head></head><body>Public</body></html>', $response->getBody());
         self::assertSame([], $response->getCookies());
-        self::assertNull($response->getHeader('Cache-Control'));
         self::assertSame(0, TestBootstrapScopeProvider::$issueCalls);
         self::assertSame(0, $store->transactions);
     }
@@ -435,6 +141,7 @@ final class BootstrapMemoryStateStore implements FrontendWorkerStateStoreInterfa
     public function transaction(callable $callback): mixed
     {
         ++$this->transactions;
+
         return $callback($this->state);
     }
 
@@ -466,7 +173,7 @@ final class TestBootstrapScopeProvider implements FrontendWorkerScopeProviderInt
 
     public function requiresBinding(string $requestScheme): bool
     {
-        return in_array(self::$mode, [
+        return \in_array(self::$mode, [
             FrontendWorkerScopeRolloutDecision::MODE_ALLOWLIST,
             FrontendWorkerScopeRolloutDecision::MODE_ON,
         ], true);
@@ -476,6 +183,7 @@ final class TestBootstrapScopeProvider implements FrontendWorkerScopeProviderInt
     {
         $enabled = self::$mode !== FrontendWorkerScopeRolloutDecision::MODE_OFF
             && self::$mode !== FrontendWorkerScopeRolloutDecision::MODE_SHADOW;
+
         return new FrontendWorkerScopeRolloutDecision(
             self::$mode,
             $enabled,
@@ -498,6 +206,7 @@ final class TestBootstrapScopeProvider implements FrontendWorkerScopeProviderInt
         if (self::$issueException !== null) {
             throw self::$issueException;
         }
+
         return FrontendWorkerScopeBootstrapResponseServiceTest::TOKEN;
     }
 

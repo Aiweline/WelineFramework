@@ -1340,7 +1340,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 if ($mode === 'always-online') {
                     $response->setHeader('X-Weline-FPC', 'ALWAYS-ONLINE');
                     $response->setHeader('X-Weline-FPC-Source', 'html-disk');
-                    $response->setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+                    $response->setHeader(
+                        'Cache-Control',
+                        'public, max-age=60, must-revalidate, stale-while-revalidate=300'
+                    );
+                    $this->applyDeployGenerationResponseHeaders($response);
                 } else {
                     $response->setHeader('X-Weline-FPC', 'HIT');
                     $response->setHeader('X-Weline-FPC-Source', 'html-disk');
@@ -1416,7 +1420,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 $response->setHeader('X-Weline-FPC', 'ALWAYS-ONLINE');
                 $response->setHeader('X-Weline-FPC-Source', 'cold-disk');
                 $response->setHeader('X-WLS-Degrade', 'always-online-cold-disk');
-                $response->setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+                $response->setHeader(
+                    'Cache-Control',
+                    'public, max-age=60, must-revalidate, stale-while-revalidate=300'
+                );
+                $this->applyDeployGenerationResponseHeaders($response);
                 RequestContext::set('wls.fpc.hit_source', 'always-online-cold-disk');
                 RequestContext::set('wls.fpc.stale', true);
                 RequestContext::set('wls.fpc.always_online', true);
@@ -4251,7 +4259,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if ($stale || $maxAge <= 0) {
             $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
         } else {
-            // HTML 浏览器短缓存（默认 60s）；CDN 仍用上面的一年级 maxAge。
+            // HTML 浏览器短缓存（默认 60s）+ must-revalidate：发版后过期必须回源换世代。
+            // CDN 仍用上面的一年级 maxAge。
             // 可配：wls.performance.fpc_browser_max_age_seconds（需完整 Env 引导）。
             $browserTtl = 60;
             if (\defined('BP') && \defined('DS') && \defined('APP_CODE_PATH')) {
@@ -4261,11 +4270,39 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $response->setHeader(
                 'Cache-Control',
                 $browserTtl > 0
-                    ? 'public, max-age=' . $browserTtl
+                    ? 'public, max-age=' . $browserTtl . ', must-revalidate'
                     : 'public, max-age=0, must-revalidate'
             );
         }
+        $this->applyDeployGenerationResponseHeaders($response);
         GuardHeaders::writeCacheStatus($response, GuardHeaders::STATUS_HIT);
+    }
+
+    /**
+     * Pin current deploy_version on storefront HTML so operators / clients can
+     * observe generation; empty stamp is omitted (dev without current.json).
+     */
+    private function applyDeployGenerationResponseHeaders(Response $response): void
+    {
+        $stamp = '';
+        try {
+            if (\defined('BP') && \defined('DS') && \defined('APP_CODE_PATH')) {
+                $stamp = \trim((string)Env::get('deploy_version', ''));
+            }
+        } catch (\Throwable) {
+            $stamp = '';
+        }
+        if ($stamp === '') {
+            try {
+                $stamp = \trim((string)(new \Weline\Framework\Deploy\DeployFpcInvalidation())->readDeployStamp());
+            } catch (\Throwable) {
+                $stamp = '';
+            }
+        }
+        if ($stamp === '') {
+            return;
+        }
+        $response->setHeader('X-Weline-Deploy-Version', $stamp);
     }
 
     /**

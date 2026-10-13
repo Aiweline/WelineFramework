@@ -306,6 +306,28 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         }
     }
 
+    public function testMatchesScopeBootstrapHolePunchPublicRoute(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        foreach ([
+            'frontend/scope-bootstrap',
+            'api/frontend/scope-bootstrap',
+            'frontend/scopebootstrap',
+            'api/frontend/scopebootstrap',
+        ] as $path) {
+            $this->assertTrue(
+                $matcher->matches($this->createRequestMock(
+                    $path,
+                    'ScopeBootstrap',
+                    'postIndex',
+                    'Weline\\Frontend\\Controller\\Api\\ScopeBootstrap'
+                )),
+                $path
+            );
+        }
+    }
+
     private function createRequestMock(string $routeUrlPath, string $controller, string $action, string $controllerClass): Request
     {
         return new class($routeUrlPath, $controller, $action, $controllerClass) extends Request {

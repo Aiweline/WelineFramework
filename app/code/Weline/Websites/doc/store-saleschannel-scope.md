@@ -111,13 +111,13 @@
 
 `allowlist/on` 的 QueryBin 握手在创建 Session 前就要求 opaque bootstrap；缺失时返回 401 `scope_binding_required` 且不写入 Session 容量。已声明但无法构造的 Scope provider、keyring 或 Worker 状态后端返回 503，不能伪装成普通 401、不能回退未绑定 Session。
 
-页面只能看到唯一的 43 字符 opaque meta ID。完整 Scope Token 放在 `__Host-` 前缀、`Secure + HttpOnly + SameSite=Lax + Path=/` 且无 `Domain` 的 Cookie 中，一次性交换成功后用相同属性清除；Token、签名密钥、完整指纹和 Worker HMAC secret 不进入页面 JavaScript。QueryBin 的二进制输出保护日志也只能记录异常输出的字节数和 SHA-256，不得记录原文片段。
+**打洞章（现行）**：匿名 FPC / `generated/html` 静盘 HTML **不得**注入 `weline-worker-scope-bootstrap` meta。店面 JS 调 **`POST` only** `/api/frontend/scope-bootstrap`（Host+path，与 DetectWebsite 同规则）取得 opaque `bootstrap_id`。硬门禁：HTTPS、同源（`Origin` / `Sec-Fetch-Site=same-origin`）、path 形状、解析 Scope 后按客户端 IP 走 `ScopeRateLimiter`（默认 30 次/60s，`security.scope_hole_punch.limit|window`；不可用 fail-closed 503）。完整 Scope Token 仍只在 `__Host-` 前缀、`Secure + HttpOnly + SameSite=Lax + Path=/` 且无 `Domain` 的 Cookie 中。Token、签名密钥、完整指纹和 Worker HMAC secret 不进入页面 JavaScript。QueryBin 的二进制输出保护日志也只能记录异常输出的字节数和 SHA-256，不得记录原文片段。Worker 按 URL 身份键（规范化 Host+path）索引多会话。
 
-Token 的 Host claim 必须使用 Framework 的 `RequestAuthority`：标准 `HTTP_HOST` 是主事实，冻结的 `WELINE_FULL_REQUEST_URI` 只做一致性校验或缺失 fallback；两者非空但不一致、任一非法或最终缺失均 fail closed。不能读取 parser-derived `input.host`、`SERVER_NAME`、监听器 `SERVER_PORT` 或 `X-Forwarded-Host`。签发页与 `query-bin` 握手必须对同一规范 authority 做精确校验，专用端口不能被忽略或静默归一为默认端口。
+Token 的 Host claim 必须使用 Framework 的 `RequestAuthority`：标准 `HTTP_HOST` 是主事实，冻结的 `WELINE_FULL_REQUEST_URI` 只做一致性校验或缺失 fallback；两者非空但不一致、任一非法或最终缺失均 fail closed。不能读取 parser-derived `input.host`、`SERVER_NAME`、监听器 `SERVER_PORT` 或 `X-Forwarded-Host`。签发与 `query-bin` 握手必须对同一规范 authority 做精确校验，专用端口不能被忽略或静默归一为默认端口。
 
-最终响应装饰覆盖三个面：WLS 正常响应使用 `App::run_after`，FPM 正常响应使用 `Http::response_ready`，FPC 早期命中使用 `Fpc::cache_hit_response`。FPC 只保存共享 HTML，bootstrap/Cookie 必须命中后生成；allowlist/on 权威路径若无法安全装饰，返回 503 而不是发送可降级页面。
+遗留 HTML 出站盖章路径已退役（`FrontendWorkerScopeBootstrapResponseService::decorate` 为 no-op）。allowlist/on 下缺章由打洞补齐，**禁止**再对未盖章缓存 HTML fail-closed 成 503 维护页。
 
-WLS 的匿名首页 FPC prime 是共享缓存构建请求，必须通过框架统一的 `InternalHomepagePrime` 判定跳过 Scope bootstrap；不得给 prime 响应写入一次性 Cookie 或 `private/no-store`。正常公网请求与共享 FPC 命中仍在最终响应边缘逐请求生成 bootstrap，READY 门禁继续严格拒绝任何带 Cookie 的共享预热响应。
+WLS 的匿名首页 FPC prime 是共享缓存构建请求，必须通过框架统一的 `InternalHomepagePrime` 判定跳过打洞；不得给 prime 响应写入一次性 Cookie 或 `private/no-store`。READY 门禁继续严格拒绝任何带 Cookie 的共享预热响应。
 
 ## 缓存维度
 

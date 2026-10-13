@@ -51,7 +51,8 @@ final class DeployPostDeployPolicyContractTest extends TestCase
             BP . 'app/code/Weline/Deploy/Observer/ReleaseAfter.php'
         );
         self::assertStringContainsString('DeployFpcInvalidation', $src);
-        self::assertStringContainsString('afterUpgrade', $src);
+        self::assertStringContainsString('afterRelease', $src);
+        self::assertStringNotContainsString('afterUpgrade(true)', $src);
         self::assertStringNotContainsString('recursiveCopy', $src);
     }
 

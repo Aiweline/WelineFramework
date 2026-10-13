@@ -12,7 +12,7 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * 部署期店面 FPC / 呈现世代失效（contracts C-HELPER / C-PURGE / C-BUMP / C-NS / C-STAMP）。
  *
- * 唯一写侧入口：Mode\Set prod、Deploy\Upgrade 完成点（及将来 release 旁路）。
+ * 唯一写侧入口：Mode\Set prod、Deploy\Upgrade、正式 Release 完成点。
  * 经 w_changed → InvalidationEffect；业务模块禁止 new 本类绕道。
  */
 final class DeployFpcInvalidation
@@ -21,6 +21,7 @@ final class DeployFpcInvalidation
 
     public const TRIGGER_MODE_SET_PROD = 'mode_set_prod';
     public const TRIGGER_UPGRADE = 'upgrade';
+    public const TRIGGER_RELEASE = 'release';
 
     public const CURRENT_JSON_REL = 'var/deploy/current.json';
 
@@ -36,6 +37,29 @@ final class DeployFpcInvalidation
             self::TRIGGER_MODE_SET_PROD,
             purgeFpcAll: true,
             reason: 'deploy_mode_set_prod',
+            stamp: $stamp,
+        );
+
+        return [
+            'stamp' => $stamp,
+            'invalidated' => true,
+            'purged' => true,
+        ];
+    }
+
+    /**
+     * 正式 Release / 迁站：与 Mode\Set prod 同级——可观测 stamp + bump ns + purge_fpc_all。
+     * Orchestrator 通常已写出 current.json；此处 ensure 防 sticky-dev，并全清旧呈现。
+     *
+     * @return array{stamp:string,invalidated:bool,purged:bool}
+     */
+    public function afterRelease(): array
+    {
+        $stamp = $this->ensureObservableDeployStamp('release');
+        $this->publishInvalidation(
+            self::TRIGGER_RELEASE,
+            purgeFpcAll: true,
+            reason: 'deploy_release',
             stamp: $stamp,
         );
 

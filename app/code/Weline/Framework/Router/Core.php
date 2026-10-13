@@ -781,6 +781,10 @@ class Core
             return $this->routeFrontendCspPolicyApi();
         }
 
+        if (!$is_api_admin && $this->isFrontendScopeBootstrapApiUrl($url)) {
+            return $this->routeFrontendScopeBootstrapApi();
+        }
+
         if ($is_api_admin && $this->isBackendFrameworkQueryApiUrl($url)) {
             return $this->routeBackendFrameworkQueryApi();
         }
@@ -964,6 +968,40 @@ class Core
                 'controller_name' => 'CspPolicy',
                 'method' => 'getIndex',
                 'request_method' => 'GET',
+            ],
+            'type' => 'api',
+        ];
+
+        return $this->route();
+    }
+
+    private function isFrontendScopeBootstrapApiUrl(string $url): bool
+    {
+        $normalized = \strtolower(\trim($url, '/'));
+        $restFrontendPrefix = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/'));
+        $prefixed = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/frontend/scope-bootstrap' : '';
+        $prefixedCompact = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/frontend/scopebootstrap' : '';
+
+        return $normalized === 'frontend/scope-bootstrap'
+            || $normalized === 'frontend/scopebootstrap'
+            || $normalized === 'api/frontend/scope-bootstrap'
+            || $normalized === 'api/frontend/scopebootstrap'
+            || ($prefixed !== '' && $normalized === $prefixed)
+            || ($prefixedCompact !== '' && $normalized === $prefixedCompact);
+    }
+
+    private function routeFrontendScopeBootstrapApi()
+    {
+        $this->router = [
+            'module' => 'Weline_Frontend',
+            'module_path' => APP_CODE_PATH . 'Weline' . DS . 'Frontend' . DS,
+            'router' => 'frontend',
+            'class' => [
+                'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
+                'name' => \Weline\Frontend\Controller\Api\ScopeBootstrap::class,
+                'controller_name' => 'ScopeBootstrap',
+                'method' => 'postIndex',
+                'request_method' => 'POST',
             ],
             'type' => 'api',
         ];
