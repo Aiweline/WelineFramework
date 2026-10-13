@@ -165,7 +165,7 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 **禁止**：只写 `~/.cursor/rules` 不进 Catalog；或只改 Catalog 不写宿主全局。  
 **仍禁止**：把手写项目内 `.cursor/rules` 当规则源（coldstart 仍只由 MCP 生成）。  
 **冲突裁决**：仓内 `hard_constraints` / 文档 > 宿主全局 `.mdc`。  
-示例：`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_review_requires_impact_surface` ↔ `plan-review-requires-impact-surface.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`；`browser_operator_non_preemptive` ↔ `browser-operator-non-preemptive.mdc`；`e2e_ai_record_into_module_formal_path` ↔ `e2e-ai-record-formal-path.mdc`；`full_release_requires_commerce_pathway_e2e` ↔ `full-release-commerce-e2e.mdc`；`automation_test_report_durable_evidence` ↔ `automation-test-report-evidence.mdc`；`theme_inverse_raised_paper_ink_pin` ↔ `theme-inverse-raised-paper-ink.mdc`；`theme_frontend_must_obey_tokens_and_surface_roles` ↔ `theme-frontend-obey-tokens-and-surfaces.mdc`；`business_forbids_sql_dialect` ↔ `business-forbids-sql-dialect.mdc`。
+示例：`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_review_requires_impact_surface` ↔ `plan-review-requires-impact-surface.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`；`user_facing_brief_plain_report` ↔ `user-facing-brief-plain-report.mdc`；`browser_operator_non_preemptive` ↔ `browser-operator-non-preemptive.mdc`；`e2e_ai_record_into_module_formal_path` ↔ `e2e-ai-record-formal-path.mdc`；`full_release_requires_commerce_pathway_e2e` ↔ `full-release-commerce-e2e.mdc`；`automation_test_report_durable_evidence` ↔ `automation-test-report-evidence.mdc`；`theme_inverse_raised_paper_ink_pin` ↔ `theme-inverse-raised-paper-ink.mdc`；`theme_frontend_must_obey_tokens_and_surface_roles` ↔ `theme-frontend-obey-tokens-and-surfaces.mdc`；`business_forbids_sql_dialect` ↔ `business-forbids-sql-dialect.mdc`。
 
 ### 4.2 面向用户结论置尾（`user_facing_verdict_last`，强制）
 
@@ -180,6 +180,20 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 **豁免**：无决定性结论的闲聊；中途进度汇报（该回合最终收口仍须末尾给结论）。
 
 宿主常带：`~/.cursor/rules/user-facing-verdict-last.mdc`（与 MCP 双写，见 §4.1）。
+
+### 4.3 面向用户简述汇报（`user_facing_brief_plain_report`，强制）
+
+面向用户的**进度 / 收口 / 计划说明**须用人听得懂的话：先说**什么问题**，再说**怎么改**（或已怎么改），**结论放末尾**（与 §4.2 配套）。用户说「简述」/「说简述」时，立即按同结构总结**本次计划/会话**。
+
+| 允许 / 必须 | 禁止 |
+|------|------|
+| 默认结构：问题（1–2 句）→ 改法（1–2 句）→ 结论置尾 | 主叙事只有模块名 / 路径 / 规则 id |
+| 「简述」显式触发：立即会话/计划摘要 | 开场堆流程复述却不说问题与改法 |
+| 技术路径、命令、证据数字可后置 | 用黑话/路径堆砌替代白话主叙事 |
+
+**豁免**：纯闲聊；用户明确要求技术深挖或完整 diff；中途一句进度（该回合最终收口仍须简述结构 + 结论置尾）。
+
+宿主常带：`~/.cursor/rules/user-facing-brief-plain-report.mdc`（与 MCP 双写，见 §4.1）。
 
 ## 5. Codex CLI 宿主委派（`host_delegate_explore_plan_review_to_codex_cli`，**用户显式 opt-in**）
 

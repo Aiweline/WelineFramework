@@ -83,6 +83,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **审查计划须证据（硬门槛，`plan_review_requires_code_evidence`）**：审查/批准/驳回/汇审计划时，必须先读计划正文再探测当前磁盘代码（Read/Grep），先写证据再给结论；**「是否通过」放在全文最后**；禁止空想或开篇先下判。证据不足只写「未探测，暂不结论」。
 - **审查计划须影响面（硬门槛，`plan_review_requires_impact_surface`）**：自审/审查/汇审时，在代码证据之外须级联探测爆炸半径与隐患——**优先 AOCI** → **不可用则 Weline MCP** → **再不可用则宿主原生**；标明 tier；汇报 blast radius + 隐患（用户裁决是否扩修）；三级均失败且计划会改码/改耐久文档 → 只能「未探测影响面，暂不结论」。
 - **面向用户结论置尾（硬门槛，`user_facing_verdict_last`）**：凡需明确结论的用户问法（是不是/能不能/好了吗/是否通过/选哪项等），依据与过程在前，**对应形式的最终结论放在回复末尾**；禁止中段先答再大段解释。计划审查「是否通过置尾」是本条特化。
+- **面向用户简述汇报（硬门槛，`user_facing_brief_plain_report`）**：进度/收口/计划说明用人话：**什么问题 → 怎么改 → 结论置尾**；用户说「简述」立即按同结构总结本次计划/会话；技术路径与证据可后置，禁止用黑话替代主叙事。
 - **简单需求可跳过计划**：同时满足时可记 `plan_complexity=simple` + `plan_skip_rationale`≥24 字并跳过 Plan Mode——单模块、无新建扩展点发明、无多章计划、约 ≤2 小时/单表面、前后端架构无歧义。**跳过计划 ≠ 跳过验收**（`requirement_acceptance_always`）。同一条件走**监工**，不叫团队。对外每句以 `监工:` 开头。
 - **前后端范围（硬，`requirement_fe_be_scope_analysis`）**：每条需求须分析并记录 `fe_be_scope=frontend|backend|both|na` 及各侧要点；禁止只做一侧却漏该做的另一侧。
 - **验收不可省（硬，`requirement_acceptance_always`）**：宣称完成前必须有真实验收证据。**先测后报**：禁止在验收未跑通前向用户写「已完成 / 已修好 / 可验收 / PASS」；未测只能「代码已改，验收未完成」。触及 Web/UI 时，即使不做 Playwright e2e（仅 simple 豁免），也必须本机 **真机 Web 测试（WB-OP）**：导航 → `browser_click`/`browser_fill` → **`browser_take_screenshot` + 宿主 Read 截图审图**（裁切/溢出/密度；`acceptance_phase_requires_shentu`）；curl / CDP `Runtime.evaluate` / 尺寸 metrics / 截图未 Read / DOM 抽取不能替代；可见裁切须同回合修；禁止甩用户测。feature 另须满足上款 **UC 闭环**（`requirement_use_case_closed_loop_acceptance`）。
