@@ -94,52 +94,91 @@
         || normalizeLangCode(fallback || '')
         || '';
 
-    const SCOPE_BOOTSTRAP_OPAQUE = /^[A-Za-z0-9_-]{43}$/;
-    /** Hole-punch must not hang forever; queued QueryBin calls wait on this Promise. */
-    const SCOPE_HOLE_PUNCH_TIMEOUT_MS = 12000;
-    /** Soft tip cooldown while callers wait for Scope token (avoid spam on filter clicks). */
+    /**
+     * Ensure long-lived HttpOnly Scope stamp (Cookie). Not a one-shot opaque bridge.
+     * Timeout name kept for tip-contract compatibility; tip waits for stamp/handshake,
+     * not for an opaque bootstrap_id.
+     */
+    // Cold DetectWebsite punch can exceed 12s; keep headroom so Abort ≠ perpetual tip loop.
+    const SCOPE_HOLE_PUNCH_TIMEOUT_MS = 20000;
+    /** Soft tip cooldown while callers wait for Scope stamp (avoid spam on filter clicks). */
     const SCOPE_WAIT_TIP_COOLDOWN_MS = 4500;
-    /** Delay before tip so fast hole-punch does not flash. */
+    /** Delay before tip so fast stamp ensure / Cookie re-verify does not flash. */
     const SCOPE_WAIT_TIP_DELAY_MS = 280;
-    let holePunchBootstrapId = '';
-    let holePunchInFlight = null;
+    /** Tab memory: long Scope Cookie was ensured for this host+canonical (HttpOnly invisible to JS). */
+    const SCOPE_STAMP_MEMORY_KEY = 'weline.api.scopeStampKey';
+    /** Same-page memory: Scope already ensured (HttpOnly Cookie cannot be read from JS). */
+    let scopeStampEnsuredKey = '';
+    let scopeStampInFlight = null;
     let scopeWaitTipAt = 0;
     let scopeWaitTipTimer = null;
 
-    const readScopeBootstrapIdFromMeta = () => {
-        const nodes = document.querySelectorAll('meta[name="weline-worker-scope-bootstrap"]');
-        if (nodes.length === 0) {
+    const readRememberedScopeStampKey = () => {
+        try {
+            return String(sessionStorage.getItem(SCOPE_STAMP_MEMORY_KEY) || '');
+        } catch (_storageError) {
             return '';
         }
-        if (nodes.length !== 1) {
-            const error = new Error('[Weline.Api] expected exactly one worker Scope bootstrap marker.');
-            error.code = 'scope_bootstrap_invalid';
-            throw error;
-        }
-
-        const bootstrapId = String(nodes[0].getAttribute('content') || '').trim();
-        if (!SCOPE_BOOTSTRAP_OPAQUE.test(bootstrapId)) {
-            const error = new Error('[Weline.Api] worker Scope bootstrap marker is invalid.');
-            error.code = 'scope_bootstrap_invalid';
-            throw error;
-        }
-        return bootstrapId;
     };
 
-    const readScopeBootstrapId = () => {
-        const fromMeta = readScopeBootstrapIdFromMeta();
-        if (fromMeta) {
-            return fromMeta;
+    const rememberScopeStampKey = (stampKey) => {
+        const key = String(stampKey || '');
+        if (key === '') {
+            return;
         }
-        return holePunchBootstrapId && SCOPE_BOOTSTRAP_OPAQUE.test(holePunchBootstrapId)
-            ? holePunchBootstrapId
-            : '';
+        try {
+            sessionStorage.setItem(SCOPE_STAMP_MEMORY_KEY, key);
+        } catch (_storageError) {
+            /* private mode — page memory still works */
+        }
+    };
+
+    const forgetScopeStampKey = () => {
+        try {
+            sessionStorage.removeItem(SCOPE_STAMP_MEMORY_KEY);
+        } catch (_storageError) {
+            /* ignore */
+        }
+    };
+
+    const isScopeStampAlreadyEnsured = (ids) => {
+        const stampKey = pageScopeSessionKey(ids || {});
+        if (scopeStampEnsuredKey === stampKey) {
+            return true;
+        }
+        return readRememberedScopeStampKey() === stampKey;
     };
 
     /**
-     * Anonymous FPC / generated/html pages have no meta stamp. Hole-punch
-     * Host+path once; SharedWorker indexes by URL identity key.
+     * Mirror ScopeIdentity::fromLayerIds placeholder codes for SharedWorker slot keys.
+     * @param {number} websiteId
+     * @param {number} storeId
+     * @param {number} channelId
+     * @returns {string}
      */
+    const buildScopeCanonicalFromIds = (websiteId, storeId, channelId) => {
+        websiteId = Math.max(0, Number(websiteId) || 0);
+        storeId = Math.max(0, Number(storeId) || 0);
+        channelId = Math.max(0, Number(channelId) || 0);
+        const websiteCode = websiteId === 0 ? 'default' : ('id-' + websiteId);
+        if (channelId > 0) {
+            const storeCode = storeId === 0 ? 'default' : ('id-' + storeId);
+            return ['channel', String(websiteId), websiteCode, storeCode, 'id-' + channelId, 'normal', 'v1'].join('|');
+        }
+        if (storeId > 0) {
+            return ['store', String(websiteId), websiteCode, 'id-' + storeId, '', 'normal', 'v1'].join('|');
+        }
+        return ['website', String(websiteId), websiteCode, '', '', '', 'v1'].join('|');
+    };
+
+    const pageScopeSessionKey = (ids) => {
+        const host = String((window.location && window.location.host) || '').trim().toLowerCase();
+        const websiteId = Number((ids && ids.website_id) || 0) || 0;
+        const storeId = Number((ids && ids.store_id) || 0) || 0;
+        const channelId = Number((ids && ids.channel_id) || 0) || 0;
+        return host + '\0' + buildScopeCanonicalFromIds(websiteId, storeId, channelId);
+    };
+
     const clearScopeWaitTipSchedule = () => {
         if (scopeWaitTipTimer) {
             window.clearTimeout(scopeWaitTipTimer);
@@ -147,13 +186,21 @@
         }
     };
 
-    const ensureScopeBootstrapHolePunch = () => {
-        const existing = readScopeBootstrapId();
-        if (existing) {
-            return Promise.resolve(existing);
+    /**
+     * Anonymous FPC / generated/html: POST scope-bootstrap only when this tab has
+     * not yet ensured a long Scope stamp for the current host+canonical.
+     * Tab memory (sessionStorage) survives full navigations; in-page memory is hot.
+     * Long Token stays HttpOnly Cookie only — memory stores the Scope key, never the Token.
+     */
+    const ensureScopeStamp = (ids) => {
+        const stampKey = pageScopeSessionKey(ids || {});
+        // Design: long visa already ensured this tab+Scope → skip POST (not once-per-document only).
+        if (isScopeStampAlreadyEnsured(ids)) {
+            scopeStampEnsuredKey = stampKey;
+            return Promise.resolve(true);
         }
-        if (holePunchInFlight) {
-            return holePunchInFlight;
+        if (scopeStampInFlight) {
+            return scopeStampInFlight;
         }
         const path = String((window.location && window.location.pathname) || '/');
         const controller = typeof AbortController === 'function' ? new AbortController() : null;
@@ -167,6 +214,13 @@
                 }
             }, SCOPE_HOLE_PUNCH_TIMEOUT_MS);
         }
+        const pageLocale = resolveCurrentLanguage(
+            (window.Weline && window.Weline.config && (
+                window.Weline.config.locale
+                || window.Weline.config.currentLang
+                || (window.Weline.config.api && window.Weline.config.api.locale)
+            )) || ''
+        );
         const fetchOptions = {
             method: 'POST',
             credentials: 'same-origin',
@@ -174,41 +228,52 @@
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
             },
-            body: JSON.stringify({ path: path }),
+            // locale: API path has no /en_US segment; server arms tip language from this.
+            body: JSON.stringify({ path: path, locale: pageLocale || undefined }),
         };
         if (controller) {
             fetchOptions.signal = controller.signal;
         }
-        holePunchInFlight = fetch('/api/frontend/scope-bootstrap', fetchOptions).then((res) => {
+        scopeStampInFlight = fetch('/api/frontend/scope-bootstrap', fetchOptions).then((res) => {
             if (res.status === 204) {
-                return '';
+                // Server: long Cookie already valid — skip re-issue.
+                return { ok: true, skipped: true };
             }
             if (res.status === 429) {
-                const error = new Error('[Weline.Api] Scope hole-punch rate limited.');
+                const error = new Error('[Weline.Api] Scope stamp ensure rate limited.');
                 error.code = 'scope_bootstrap_rate_limited';
                 error.status = 429;
                 throw error;
             }
             if (!res.ok) {
-                const error = new Error('[Weline.Api] Scope hole-punch failed.');
+                const error = new Error('[Weline.Api] Scope stamp ensure failed.');
                 error.code = 'scope_bootstrap_hole_punch_failed';
                 error.status = res.status;
                 throw error;
             }
             return res.json();
         }).then((payload) => {
-            const serverDeploy = payload && payload.deploy_version != null
-                ? String(payload.deploy_version).trim()
+            // Warm locale tip cache from ScopeBootstrap (mismatch path may lack QueryBin tip).
+            try {
+                rememberScopeTipsFromPayload(payload);
+            } catch (_tipWarmError) {
+                // Cache is best-effort.
+            }
+            // Storefront generation = Scope-published theme version (not system deploy).
+            const serverThemeId = payload && payload.theme_published_version_id != null
+                ? String(payload.theme_published_version_id).trim()
                 : '';
-            const pageDeploy = String(
+            const pageThemeId = String(
                 (window.Weline && window.Weline.config && (
-                    window.Weline.config.deployVersion || window.Weline.config.deploy_version
+                    window.Weline.config.themePublishedVersionId
+                    || window.Weline.config.theme_published_version_id
                 )) || ''
             ).trim();
-            if (serverDeploy !== '' && pageDeploy !== '' && serverDeploy !== pageDeploy) {
-                const error = new Error('[Weline.Api] Deploy generation changed. Reload required.');
+            if (serverThemeId !== '' && pageThemeId !== '' && serverThemeId !== pageThemeId) {
+                const error = new Error('[Weline.Api] Theme published generation changed. Reload required.');
                 error.code = 'deploy_reload_required';
                 error.status = 409;
+                error.tip = readScopeTipCache(currentStorefrontLocale(), 'deploy_reload_required');
                 try {
                     maybeAutoReloadForScopeConflict(resolveErrorPresentation(error));
                 } catch (_reloadError) {
@@ -216,17 +281,21 @@
                 }
                 throw error;
             }
-            const id = payload && payload.ok
-                ? String(payload.bootstrap_id || '').trim()
-                : '';
-            if (id && SCOPE_BOOTSTRAP_OPAQUE.test(id)) {
-                holePunchBootstrapId = id;
-                return id;
+            // Success does not require bootstrap_id (opaque bridge retired for storefront).
+            if (payload && (payload.ok === true || payload.skipped === true)) {
+                scopeStampEnsuredKey = stampKey;
+                rememberScopeStampKey(stampKey);
+                return true;
             }
-            return '';
+            const error = new Error('[Weline.Api] Scope stamp ensure returned an unexpected payload.');
+            error.code = 'scope_bootstrap_hole_punch_failed';
+            error.status = 0;
+            throw error;
         }).catch((error) => {
+            forgetScopeStampKey();
+            scopeStampEnsuredKey = '';
             if (error && (error.name === 'AbortError' || error.code === 'ABORT_ERR')) {
-                const timedOut = new Error('[Weline.Api] Scope hole-punch timed out.');
+                const timedOut = new Error('[Weline.Api] Scope stamp ensure timed out.');
                 timedOut.code = 'scope_bootstrap_timeout';
                 timedOut.status = 0;
                 throw timedOut;
@@ -236,10 +305,13 @@
             if (timeoutId) {
                 window.clearTimeout(timeoutId);
             }
-            holePunchInFlight = null;
+            scopeStampInFlight = null;
         });
-        return holePunchInFlight;
+        return scopeStampInFlight;
     };
+
+    // Alias: historical name used by tip/warmup call sites; not an opaque-id path.
+    const ensureScopeBootstrapHolePunch = ensureScopeStamp;
 
     const normalizeLocale = (value) => {
         const locale = String(value || '').trim();
@@ -702,6 +774,114 @@
         return value || phrase;
     };
 
+    const SCOPE_TIP_CACHE_KEY = 'weline.api.scope_tips_by_locale';
+    const SCOPE_TIP_CODES = {
+        scope_reload_required: true,
+        scope_binding_required: true,
+        scope_context_conflict: true,
+        request_scope_already_conflicts: true,
+        deploy_reload_required: true,
+    };
+
+    const currentStorefrontLocale = () => {
+        try {
+            const cfg = (window.Weline && window.Weline.config) || {};
+            const api = cfg.api && typeof cfg.api === 'object' ? cfg.api : {};
+            return normalizeLocale(
+                resolveCurrentLanguage(
+                    api.locale || api.currentLang || cfg.locale || cfg.currentLang || ''
+                )
+            ) || 'zh_Hans_CN';
+        } catch (_error) {
+            return 'zh_Hans_CN';
+        }
+    };
+
+    const normalizeScopeTip = (tip) => {
+        if (!tip || typeof tip !== 'object') {
+            return null;
+        }
+        const title = String(tip.title || '').trim();
+        const message = String(tip.message || '').trim();
+        if (title === '' && message === '') {
+            return null;
+        }
+        const locale = normalizeLocale(tip.locale) || '';
+        return {
+            title: title || message,
+            message: message || title,
+            locale,
+        };
+    };
+
+    const readScopeTipCacheBag = () => {
+        try {
+            const raw = sessionStorage.getItem(SCOPE_TIP_CACHE_KEY);
+            if (!raw) {
+                return {};
+            }
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_error) {
+            return {};
+        }
+    };
+
+    const writeScopeTipCacheBag = (bag) => {
+        try {
+            sessionStorage.setItem(SCOPE_TIP_CACHE_KEY, JSON.stringify(bag || {}));
+        } catch (_error) {
+            // sessionStorage may be blocked.
+        }
+    };
+
+    const writeScopeTipCache = (locale, code, tip) => {
+        const loc = normalizeLocale(locale) || currentStorefrontLocale();
+        const tipCode = String(code || '').trim();
+        const normalized = normalizeScopeTip(tip);
+        if (!loc || !tipCode || !normalized || !SCOPE_TIP_CODES[tipCode]) {
+            return;
+        }
+        const bag = readScopeTipCacheBag();
+        if (!bag[loc] || typeof bag[loc] !== 'object') {
+            bag[loc] = {};
+        }
+        bag[loc][tipCode] = {
+            title: normalized.title,
+            message: normalized.message,
+        };
+        writeScopeTipCacheBag(bag);
+    };
+
+    const readScopeTipCache = (locale, code) => {
+        const loc = normalizeLocale(locale) || currentStorefrontLocale();
+        const tipCode = String(code || '').trim();
+        if (!loc || !tipCode) {
+            return null;
+        }
+        const bag = readScopeTipCacheBag();
+        const byCode = bag[loc] && typeof bag[loc] === 'object' ? bag[loc] : null;
+        return normalizeScopeTip(byCode && byCode[tipCode] ? byCode[tipCode] : null);
+    };
+
+    const rememberScopeTipsFromPayload = (payload) => {
+        if (!payload || typeof payload !== 'object') {
+            return;
+        }
+        const locale = normalizeLocale(payload.tips_locale)
+            || currentStorefrontLocale();
+        const tips = payload.tips && typeof payload.tips === 'object' ? payload.tips : null;
+        if (tips) {
+            Object.keys(tips).forEach((code) => {
+                writeScopeTipCache(locale, code, tips[code]);
+            });
+        }
+        const err = payload.error && typeof payload.error === 'object' ? payload.error : null;
+        if (err && err.tip) {
+            writeScopeTipCache(locale || (err.tip && err.tip.locale), err.code || '', err.tip);
+        }
+    };
+
     const resolveErrorPresentation = (error) => {
         const status = Number(error && error.status ? error.status : 0) || 0;
         const code = String((error && error.code) || '').trim() || 'request_failed';
@@ -711,6 +891,25 @@
             || rawMessage
             || ''
         ).trim();
+        const locale = currentStorefrontLocale();
+        // Prefer server tip (envelope) → browser locale cache → Chinese-source i18nText fallback.
+        let serverTip = normalizeScopeTip(error && error.tip);
+        if (!serverTip) {
+            const envelope = readErrorEnvelope(error);
+            const nested = envelope && envelope.error && typeof envelope.error === 'object'
+                ? envelope.error
+                : null;
+            serverTip = normalizeScopeTip(nested && nested.tip);
+            if (serverTip) {
+                writeScopeTipCache(serverTip.locale || locale, code, serverTip);
+            }
+        } else {
+            writeScopeTipCache(serverTip.locale || locale, code, serverTip);
+        }
+        const cachedTip = (!serverTip && SCOPE_TIP_CODES[code])
+            ? readScopeTipCache(locale, code)
+            : null;
+        const localeTip = serverTip || cachedTip;
         const byCode = {
             origin_unreachable: {
                 title: i18nText('源站暂时不可用'),
@@ -766,7 +965,7 @@
             },
             deploy_reload_required: {
                 title: i18nText('站点已更新'),
-                message: i18nText('店面部署版本已变更。请重新加载页面以继续。'),
+                message: i18nText('主题已发布新版本。请重新加载页面以继续。'),
                 autoReload: true,
             },
             scope_bootstrap_timeout: {
@@ -796,13 +995,19 @@
             && rawMessage !== ''
             && rawMessage !== (byCode.protocol_error && byCode.protocol_error.message)
             && !/^(Empty binary|Worker request|Missing Weline|Invalid query|Handshake|Request scheme|Request authority|Unsupported)/i.test(rawMessage);
-        const title = (preset && !preferServerMessage)
-            ? preset.title
-            : i18nText('请求失败');
-        let message = (preset && !preferServerMessage)
-            ? preset.message
-            : (rawMessage || i18nText('请求失败，请稍后重试。'));
-        if (!preset && !preferServerMessage && status > 0 && !/\bHTTP\s+\d+/i.test(message)) {
+        let title;
+        let message;
+        if (localeTip && SCOPE_TIP_CODES[code] && !preferServerMessage) {
+            title = localeTip.title;
+            message = localeTip.message;
+        } else if (preset && !preferServerMessage) {
+            title = preset.title;
+            message = preset.message;
+        } else {
+            title = i18nText('请求失败');
+            message = rawMessage || i18nText('请求失败，请稍后重试。');
+        }
+        if (!preset && !preferServerMessage && !localeTip && status > 0 && !/\bHTTP\s+\d+/i.test(message)) {
             message = `${message} (HTTP ${status})`;
         }
         const displayCode = status > 0 ? `${code}:${status}` : code;
@@ -1336,7 +1541,6 @@
             currency: '',
             onHttpError: null,
             requestTimeoutMs: 15000,
-            scopeBootstrapId: '',
         }, apiConfig);
 
         config.workerUrl = withDevCacheBust(sameOriginUrl(apiConfig.workerUrl || getDefaultWorkerUrl(), getDefaultWorkerUrl()));
@@ -1360,6 +1564,13 @@
             || config.workerBuildId
             || 'dev'
         );
+        config.themePublishedVersionId = String(
+            apiConfig.themePublishedVersionId
+            || apiConfig.theme_published_version_id
+            || runtimeConfig.themePublishedVersionId
+            || runtimeConfig.theme_published_version_id
+            || ''
+        );
         config.area = String(apiConfig.area || apiConfig.context || config.area || '');
         config.defaultCurrency = normalizeCurrencyCode(
             apiConfig.defaultCurrency || apiConfig.default_currency || runtimeConfig.defaultCurrency || runtimeConfig.default_currency || 'CNY'
@@ -1382,9 +1593,7 @@
             || config.defaultCurrency,
             config
         );
-        // Prefer legacy meta stamp when present; otherwise hole-punch fills
-        // holePunchBootstrapId (Host+path). Runtime globals are not authority.
-        config.scopeBootstrapId = readScopeBootstrapId();
+        // Scope stamp is HttpOnly Cookie only — never read Token / opaque id into page JS.
         config.cacheCatalog = (apiConfig.cacheCatalog && typeof apiConfig.cacheCatalog === 'object')
             ? apiConfig.cacheCatalog
             : {};
@@ -1403,20 +1612,33 @@
         }
         client.config.endpoint = freshConfig.endpoint;
         client.config.workerUrl = freshConfig.workerUrl;
-        if (String(client.config.deployVersion || '') !== String(freshConfig.deployVersion || '')) {
+        if (String(client.config.themePublishedVersionId || '') !== String(freshConfig.themePublishedVersionId || '')
+            || String(client.config.deployVersion || '') !== String(freshConfig.deployVersion || '')) {
             client.responseCacheL1.clear();
         }
         client.config.deployVersion = freshConfig.deployVersion;
         client.config.workerBuildId = freshConfig.workerBuildId;
+        client.config.themePublishedVersionId = freshConfig.themePublishedVersionId;
         client.config.locale = freshConfig.locale;
         client.config.pathname = freshConfig.pathname;
         client.config.currency = freshConfig.currency;
         client.config.defaultCurrency = freshConfig.defaultCurrency;
         client.config.availableCurrencies = freshConfig.availableCurrencies;
         client.config.area = freshConfig.area;
-        // Channel/store navigations mint a new bootstrap meta; adopt it so the
-        // SharedWorker can re-handshake instead of freezing on a sticky conflict.
-        client.config.scopeBootstrapId = freshConfig.scopeBootstrapId;
+        // Channel/store navigations change Scope identity; adopt ids and clear
+        // page stamp memory so ensure may POST again for the new Scope.
+        const prevScopeKey = pageScopeSessionKey(client.config);
+        client.config.website_id = freshConfig.website_id;
+        client.config.store_id = freshConfig.store_id;
+        client.config.channel_id = freshConfig.channel_id;
+        const nextScopeKey = pageScopeSessionKey(client.config);
+        if (prevScopeKey !== nextScopeKey) {
+            if (scopeStampEnsuredKey === prevScopeKey) {
+                scopeStampEnsuredKey = '';
+            }
+            client.scopeWarmupComplete = false;
+            client.scopeWarmupPromise = null;
+        }
         return client;
     };
 
@@ -2275,13 +2497,8 @@
                 return Promise.resolve(null);
             }
             if (!this.scopeWarmupPromise) {
-                this.scopeWarmupPromise = ensureScopeBootstrapHolePunch().then((bootstrapId) => {
-                    if (bootstrapId) {
-                        this.config.scopeBootstrapId = bootstrapId;
-                    }
-                    if (!this.config.scopeBootstrapId) {
-                        return null;
-                    }
+                this.scopeWarmupPromise = ensureScopeStamp(this.config).then(() => {
+                    // Handshake uses credentials Cookie only — no scope_bootstrap_id.
                     return this.sendToWorker({
                         type: 'scope-bootstrap',
                         options: { silent: true },
@@ -2300,11 +2517,16 @@
         }
 
         /**
-         * Soft tip while QueryBin callers wait for Scope token — not an error toast.
-         * Coalesced + delayed so filter spam and fast hole-punch stay quiet.
+         * Soft tip while QueryBin callers wait for first Scope stamp ensure — not an error toast.
+         * Long HttpOnly visa already ensured (page/tab memory) ⇒ never tip again.
+         * Not "still punching opaque bootstrap". Coalesced + delayed so filter spam stays quiet.
          */
         notifyScopeBootstrapWaiting() {
             if (this.scopeWarmupComplete) {
+                return;
+            }
+            // Authorized long Scope Cookie path: tip is only for the first ensure.
+            if (isScopeStampAlreadyEnsured(this.config)) {
                 return;
             }
             if (scopeWaitTipTimer) {
@@ -2312,7 +2534,7 @@
             }
             scopeWaitTipTimer = window.setTimeout(() => {
                 scopeWaitTipTimer = null;
-                if (this.scopeWarmupComplete) {
+                if (this.scopeWarmupComplete || isScopeStampAlreadyEnsured(this.config)) {
                     return;
                 }
                 const now = Date.now();
@@ -2427,9 +2649,9 @@
 
         dispatchToWorker(payload) {
             if (payload && payload.type !== 'scope-bootstrap') {
-                // Hole-punch (or legacy meta) before QueryBin so anonymous FPC pages work.
-                // While token is still in flight, queue the call and tip "请稍等片刻" — do not error.
-                if (!this.scopeWarmupComplete) {
+                // Ensure Scope stamp + Worker session before QueryBin (anonymous FPC OK).
+                // Tip only while first long-visa ensure is pending — not after Cookie authorized.
+                if (!this.scopeWarmupComplete && !isScopeStampAlreadyEnsured(this.config)) {
                     this.notifyScopeBootstrapWaiting();
                 }
                 return this.warmup().then(() => this.sendToWorker(payload));
@@ -2520,13 +2742,13 @@
                         endpoint: this.config.endpoint,
                         deployVersion: this.config.deployVersion,
                         workerBuildId: this.config.workerBuildId,
+                        themePublishedVersionId: this.config.themePublishedVersionId || '',
                         locale: this.config.locale,
                         host: (window.location && window.location.host) || '',
                         pathname: this.config.pathname || (window.location && window.location.pathname) || '/',
                         currency: this.config.currency,
                         defaultCurrency: this.config.defaultCurrency,
                         availableCurrencies: this.config.availableCurrencies,
-                        scopeBootstrapId: this.config.scopeBootstrapId,
                         cacheCatalog: this.config.cacheCatalog || {},
                         website_id: this.config.website_id,
                         store_id: this.config.store_id,
@@ -2642,6 +2864,14 @@
             error.status = data.status || 0;
             error.details = serverError.details || '';
             error.responseKind = serverError.responseKind || '';
+            error.tip = normalizeScopeTip(serverError.tip);
+            if (error.tip) {
+                writeScopeTipCache(
+                    error.tip.locale || currentStorefrontLocale(),
+                    error.code,
+                    error.tip,
+                );
+            }
             error.response = {
                 ok: false,
                 status: data.status || 0,

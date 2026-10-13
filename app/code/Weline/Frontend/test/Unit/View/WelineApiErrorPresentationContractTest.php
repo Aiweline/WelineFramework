@@ -73,15 +73,28 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         self::assertStringContainsString('autoReload: true', $script);
         self::assertStringContainsString('maybeAutoReloadForScopeConflict', $script);
         self::assertStringContainsString('weline.api.scope_reload_at', $script);
+        self::assertStringContainsString('weline.api.scope_tips_by_locale', $script);
+        self::assertStringContainsString('rememberScopeTipsFromPayload', $script);
+        self::assertStringContainsString('readScopeTipCache', $script);
+        self::assertStringContainsString('writeScopeTipCache', $script);
+        self::assertStringContainsString('error.tip = normalizeScopeTip(serverError.tip)', $script);
         self::assertStringContainsString('window.location.reload()', $script);
         // autoReload must run before silent / onHttpError short-circuit.
         self::assertStringContainsString(
             'presentation.autoReload && maybeAutoReloadForScopeConflict(presentation)',
             $script,
         );
-        // Main-thread client must adopt the new page bootstrap (not throw sticky 409).
+        // Main-thread client must adopt Scope ids on channel/store navigations.
         self::assertStringContainsString(
-            'client.config.scopeBootstrapId = freshConfig.scopeBootstrapId;',
+            'client.config.website_id = freshConfig.website_id;',
+            $script,
+        );
+        self::assertStringContainsString(
+            'client.config.store_id = freshConfig.store_id;',
+            $script,
+        );
+        self::assertStringContainsString(
+            'client.config.channel_id = freshConfig.channel_id;',
             $script,
         );
         self::assertStringNotContainsString(
@@ -90,16 +103,77 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         );
     }
 
-    public function testWorkerRehandshakesWhenScopeBootstrapChanges(): void
+    public function testWorkerReusesSessionByScopeCanonicalKey(): void
     {
         $script = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/view/statics/js/weline-api-worker.js',
         );
         self::assertStringContainsString('SharedWorker survives full navigations', $script);
-        self::assertStringContainsString('entry.scopeBootstrapId !== config.scopeBootstrapId', $script);
-        self::assertStringContainsString('sessionsByUrlKey.delete(urlKey)', $script);
+        self::assertStringContainsString('sessionsByScopeKey', $script);
+        self::assertStringContainsString('function scopeSessionIdentityKey(config)', $script);
+        self::assertStringContainsString('buildScopeCanonicalFromIds', $script);
+        self::assertStringContainsString('Must NOT use Host+path', $script);
+        // Storefront handshake must not send one-shot opaque bootstrap id.
+        self::assertStringContainsString('never send scope_bootstrap_id', $script);
+        self::assertStringNotContainsString('handshakePayload.scope_bootstrap_id', $script);
+        self::assertStringNotContainsString('sessionsByUrlKey', $script);
         self::assertStringNotContainsString(
             "throw Object.assign(new Error('The page Worker bootstrap changed while this worker was active.')",
+            $script,
+        );
+    }
+
+    public function testApiWaitsForScopeBootstrapWithSoftPleaseWaitTip(): void
+    {
+        $script = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/statics/js/weline-api.js',
+        );
+        self::assertStringContainsString('notifyScopeBootstrapWaiting', $script);
+        self::assertStringContainsString('renderScopeWaitTip', $script);
+        self::assertStringContainsString("i18nText('请稍等片刻...')", $script);
+        self::assertStringContainsString('SCOPE_HOLE_PUNCH_TIMEOUT_MS', $script);
+        self::assertStringContainsString("timedOut.code = 'scope_bootstrap_timeout'", $script);
+        self::assertStringContainsString('scope_bootstrap_timeout:', $script);
+        // Tip waits for first long-visa ensure — not opaque bootstrap punching.
+        self::assertStringContainsString('Not "still punching opaque bootstrap"', $script);
+        self::assertStringContainsString('isScopeStampAlreadyEnsured', $script);
+        self::assertStringContainsString('SCOPE_STAMP_MEMORY_KEY', $script);
+        self::assertStringContainsString('Authorized long Scope Cookie path', $script);
+        self::assertStringContainsString('const ensureScopeStamp = (ids) => {', $script);
+        // Cross-page: ensure must honor sessionStorage before fetch (not page-memory only).
+        self::assertStringContainsString('if (isScopeStampAlreadyEnsured(ids)) {', $script);
+        self::assertStringContainsString('rememberScopeStampKey(stampKey)', $script);
+        self::assertStringContainsString('Success does not require bootstrap_id', $script);
+        self::assertStringNotContainsString('SCOPE_BOOTSTRAP_OPAQUE', $script);
+        self::assertStringNotContainsString('readScopeBootstrapId', $script);
+        // Non-bootstrap QueryBin must queue behind warmup; tip only when stamp not yet ensured.
+        self::assertStringContainsString('!isScopeStampAlreadyEnsured(this.config)', $script);
+        self::assertStringContainsString('notifyScopeBootstrapWaiting()', $script);
+        self::assertStringContainsString('return this.warmup().then(() => this.sendToWorker(payload));', $script);
+        // Eager warmup even without meta (FPC stamp ensure).
+        self::assertStringContainsString('ApiModule.bootstrapScope().catch((error) => {', $script);
+        self::assertStringNotContainsString(
+            "if (readScopeBootstrapId() !== '') {\n            ApiModule.bootstrapScope()",
+            $script,
+        );
+        // Full module must always promote onto Weline.Api (stub must not stick).
+        self::assertStringContainsString('window.Weline.Api = ApiModule;', $script);
+        self::assertStringContainsString(
+            'Always promote — stub must not remain if full module loaded',
+            $script,
+        );
+    }
+
+    public function testWelineJsPreservesFullApiAcrossInit(): void
+    {
+        $script = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/statics/js/weline.js',
+        );
+        self::assertStringContainsString('window.Weline.Api.__full === true', $script);
+        self::assertStringContainsString('_promoteFullApi', $script);
+        self::assertStringContainsString('bootstrapScope: async () => {', $script);
+        self::assertStringContainsString(
+            'never leave a stub on top of an already-full WelineApiModule',
             $script,
         );
     }

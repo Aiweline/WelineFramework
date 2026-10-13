@@ -62,9 +62,9 @@ if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
     } catch (\Throwable) {
     }
 }
-// Seed Weline.Api error-presentation i18nText phrases (not page-scanned __()),
-// then drop multiline / oversized docs so storefront runtime JSON stays small.
-$i18nWords = \Weline\Frontend\Helper\FrontendRuntimeI18nDictionary::mergeApiErrorPresentationPhrases(
+// Drop multiline / oversized docs so storefront runtime JSON stays small.
+// Scope/theme reload tips are NOT seeded here — server returns locale tip; client caches by lang.
+$i18nWords = \Weline\Frontend\Helper\FrontendRuntimeI18nDictionary::filterForClient(
     is_array($i18nWords) ? $i18nWords : []
 );
 $deployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
@@ -179,9 +179,12 @@ $runtime = [
         'workerUrl' => $workerUrl,
         'endpoint' => $queryBinUrl,
         'queryBinUrl' => $queryBinUrl,
-        // Mirror root stamps into api so mergeApiConfig() alone cannot fall back to "dev".
+        // Mirror root stamps into api so mergeApiConfig() alone cannot fall back to "dev"
+        // or drop themePublishedVersionId (SharedWorker handshake → QueryBin 409).
         'deployVersion' => $deployVersion,
         'workerBuildId' => $workerBuildId,
+        'themePublishedVersionId' => $themePublishedVersionId,
+        'themePublishedVersion' => $themePublishedVersion,
         'locale' => $currentLang,
         'currency' => $currentCurrency,
         'availableCurrencies' => $availableCurrencies,

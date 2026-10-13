@@ -8,6 +8,9 @@ namespace Weline\Frontend\Helper;
  * Filters Phrase/JsWords bags before they are embedded into the storefront
  * runtime JSON. Event catalogs and other backend docs often call __() on
  * multi-line descriptions; dumping those into every page freezes the browser.
+ *
+ * Scope / theme-generation reload tips are NOT merged into the page bag —
+ * QueryBin/ScopeBootstrap return locale tip; the client caches by language.
  */
 final class FrontendRuntimeI18nDictionary
 {

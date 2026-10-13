@@ -4,10 +4,11 @@ declare(strict_types=1);
 namespace Weline\Frontend\Controller\Api;
 
 use Weline\Frontend\Controller\FrontendRestController;
-use Weline\Framework\App\Env;
+use Weline\Frontend\Helper\FrontendScopeReloadTip;
+use Weline\Frontend\Helper\StorefrontGenerationIdentity;
+use Weline\Frontend\Service\ScopeHolePunchSecurityGate;
 use Weline\Framework\App\State;
 use Weline\Framework\Binary\EmergencyPacket;
-use Weline\Framework\Deploy\DeployFpcInvalidation;
 use Weline\Framework\Binary\Limits;
 use Weline\Framework\Binary\WelineBinaryCodec;
 use Weline\Framework\Env\WelineEnv;
@@ -47,6 +48,7 @@ class QueryBin extends FrontendRestController
         private readonly WelineBinaryCodec $codec,
         private readonly FrontendQueryGateway $gateway,
         private readonly FrontendWorkerSessionService $sessionService,
+        private readonly ScopeHolePunchSecurityGate $scopeHolePunchSecurityGate,
         private readonly ?RuntimeProviderResolver $runtimeProviderResolver = null,
         private readonly ?QueryProviderRegistry $queryProviderRegistry = null,
         private readonly ?BinQueryCachePolicy $binQueryCachePolicy = null,
@@ -151,13 +153,21 @@ class QueryBin extends FrontendRestController
                 'code' => $exception->getErrorCode(),
                 'status' => $exception->getHttpStatus(),
             ]);
+            $errorCode = $exception->getErrorCode();
+            $errorPayload = [
+                'code' => $errorCode,
+                'message' => $exception->getMessage(),
+            ];
+            // Scope / theme-generation expiry: return locale tip for toast + browser cache.
+            $tip = FrontendScopeReloadTip::build($errorCode);
+            if ($tip !== null) {
+                $errorPayload['message'] = $tip['message'];
+                $errorPayload['tip'] = $tip;
+            }
             $payload = [
                 'ok' => false,
                 'data' => null,
-                'error' => [
-                    'code' => $exception->getErrorCode(),
-                    'message' => $exception->getMessage(),
-                ],
+                'error' => $errorPayload,
                 'request_id' => $requestId,
             ];
             $statusCode = $exception->getHttpStatus();
@@ -280,23 +290,38 @@ class QueryBin extends FrontendRestController
     {
         $deployVersion = $payload['deploy_version'] ?? 'dev';
         $workerBuildId = $payload['worker_build_id'] ?? 'dev';
+        $themePublishedVersionId = $payload['theme_published_version_id'] ?? '';
         if (!\is_string($deployVersion)
             || !\is_string($workerBuildId)
             || \preg_match(self::RUNTIME_IDENTIFIER_PATTERN, $deployVersion) !== 1
             || \preg_match(self::RUNTIME_IDENTIFIER_PATTERN, $workerBuildId) !== 1) {
             throw new FrontendQueryException('protocol_error', 'Handshake is missing deploy version or worker build id.', 400);
         }
-        $this->assertClientDeployGenerationCurrent($deployVersion);
-
-        $scopeBootstrapId = $payload['scope_bootstrap_id'] ?? '';
-        if (!\is_string($scopeBootstrapId)) {
-            throw new FrontendQueryException(
-                'scope_bootstrap_invalid',
-                'Worker Scope bootstrap ID must be a string.',
-                400,
-            );
+        if (!\is_string($themePublishedVersionId)) {
+            throw new FrontendQueryException('protocol_error', 'Handshake theme published version id must be a string.', 400);
         }
-        $scopeBootstrapId = \trim($scopeBootstrapId);
+        $themePublishedVersionId = \trim($themePublishedVersionId);
+        if ($themePublishedVersionId !== ''
+            && \preg_match(self::RUNTIME_IDENTIFIER_PATTERN, $themePublishedVersionId) !== 1) {
+            throw new FrontendQueryException('protocol_error', 'Handshake theme published version id is invalid.', 400);
+        }
+        // Storefront generation = Scope-published theme version (not system deploy stamp).
+        $this->assertClientThemeGenerationCurrent($themePublishedVersionId);
+
+        // Legacy opaque storefront bridge field is ignored (retired). Clients must not
+        // send it; presence alone does not mint a session.
+        if (\array_key_exists('scope_bootstrap_id', $payload)
+            && $payload['scope_bootstrap_id'] !== null
+            && $payload['scope_bootstrap_id'] !== ''
+        ) {
+            if (!\is_string($payload['scope_bootstrap_id'])) {
+                throw new FrontendQueryException(
+                    'protocol_error',
+                    'Worker handshake no longer accepts storefront scope_bootstrap_id.',
+                    400,
+                );
+            }
+        }
         $backendBootstrapId = $payload['backend_bootstrap_id'] ?? '';
         if (!\is_string($backendBootstrapId)) {
             throw new FrontendQueryException(
@@ -306,16 +331,10 @@ class QueryBin extends FrontendRestController
             );
         }
         $backendBootstrapId = \trim($backendBootstrapId);
-        if ($scopeBootstrapId !== '' && $backendBootstrapId !== '') {
-            throw new FrontendQueryException(
-                'protocol_error',
-                'Worker handshake cannot combine storefront and backend bootstraps.',
-                400,
-            );
-        }
 
-        if ($scopeBootstrapId === '' && $backendBootstrapId === '') {
+        if ($backendBootstrapId === '') {
             $provider = $this->resolveScopeProvider(false);
+            $requiresBinding = false;
             if ($provider instanceof FrontendWorkerScopeProviderInterface) {
                 try {
                     $requiresBinding = $provider->requiresBinding($this->requestScheme());
@@ -329,79 +348,78 @@ class QueryBin extends FrontendRestController
                         $exception,
                     );
                 }
-                if ($requiresBinding) {
+            }
+
+            if (!$requiresBinding) {
+                $session = $this->sessionService->createSession(
+                    $deployVersion,
+                    $workerBuildId,
+                    null,
+                    $themePublishedVersionId,
+                );
+            } else {
+                if (!$provider instanceof FrontendWorkerScopeProviderInterface) {
+                    throw new FrontendQueryException(
+                        'scope_service_unavailable',
+                        'Worker Scope provider is unavailable.',
+                        503,
+                    );
+                }
+                $cookieName = FrontendWorkerSessionService::SCOPE_COOKIE_NAME;
+                $scopeToken = $this->readOptionalSingleCookie($cookieName);
+                if ($scopeToken === null || $scopeToken === '') {
                     throw new FrontendQueryException(
                         'scope_binding_required',
-                        'Worker Scope bootstrap is required for this request.',
+                        'Worker Scope Cookie is required for this request.',
                         401,
                     );
                 }
-            }
-            $session = $this->sessionService->createSession($deployVersion, $workerBuildId);
-        } elseif ($scopeBootstrapId !== '') {
-            $cookieName = FrontendWorkerSessionService::scopeBootstrapCookieName($scopeBootstrapId);
-            $scopeToken = $this->readSingleCookie(
-                $cookieName,
-                'scope_bootstrap_invalid',
-                'Worker Scope bootstrap Cookie',
-            );
-            $provider = $this->resolveScopeProvider(true);
-            if (!$provider instanceof FrontendWorkerScopeProviderInterface) {
-                throw new FrontendQueryException(
-                    'scope_service_unavailable',
-                    'Worker Scope provider is unavailable.',
-                    503,
-                );
-            }
 
-            try {
-                $binding = $provider->verifyToken(
-                    $scopeToken,
-                    $this->requestScheme(),
-                    $this->authorityHost(),
-                );
-            } catch (FrontendWorkerScopeException $exception) {
-                throw $this->scopeFailure($exception);
-            } catch (\Throwable $exception) {
-                throw new FrontendQueryException(
-                    'scope_service_unavailable',
-                    'Worker Scope verification is unavailable.',
-                    503,
-                    $exception,
-                );
-            }
-            if ($binding === null) {
-                throw new FrontendQueryException(
-                    'scope_bootstrap_invalid',
-                    'Worker Scope bootstrap is not active for this request.',
-                    401,
-                );
-            }
-
-            try {
-                $session = $this->sessionService->createSessionFromScopeBootstrap(
-                    $deployVersion,
-                    $workerBuildId,
-                    $scopeBootstrapId,
-                    $binding->tokenFingerprint,
-                    $binding->digest(),
-                );
-            } catch (FrontendQueryException $exception) {
-                if ($exception->getHttpStatus() >= 500) {
-                    throw $exception;
+                try {
+                    $binding = $provider->verifyToken(
+                        $scopeToken,
+                        $this->requestScheme(),
+                        $this->authorityHost(),
+                    );
+                } catch (FrontendWorkerScopeException $exception) {
+                    throw $this->scopeFailure($exception);
+                } catch (\Throwable $exception) {
+                    throw new FrontendQueryException(
+                        'scope_service_unavailable',
+                        'Worker Scope verification is unavailable.',
+                        503,
+                        $exception,
+                    );
                 }
-                throw new FrontendQueryException(
-                    'scope_bootstrap_invalid',
-                    'Worker Scope bootstrap is invalid, expired, or already consumed.',
-                    401,
-                    $exception,
-                );
+                if ($binding === null) {
+                    throw new FrontendQueryException(
+                        'scope_bootstrap_invalid',
+                        'Worker Scope Cookie is not active for this request.',
+                        401,
+                    );
+                }
+
+                try {
+                    $session = $this->sessionService->createSession(
+                        $deployVersion,
+                        $workerBuildId,
+                        $binding,
+                        $themePublishedVersionId,
+                    );
+                } catch (FrontendQueryException $exception) {
+                    if ($exception->getHttpStatus() >= 500) {
+                        throw $exception;
+                    }
+                    throw new FrontendQueryException(
+                        'scope_bootstrap_invalid',
+                        'Worker Scope Cookie is invalid or expired.',
+                        401,
+                        $exception,
+                    );
+                }
+                // Long-lived Scope Cookie is retained after handshake (not cleared).
+                RequestContext::set('query_bin.expire_legacy_scope_bootstrap_cookies', true);
             }
-            RequestContext::set('query_bin.bootstrap_cookie_clear', [
-                'name' => $cookieName,
-                'secure' => true,
-                'same_site' => 'Lax',
-            ]);
         } else {
             $secureCookie = $this->requestScheme() === 'https';
             if (!$secureCookie && !(\defined('DEV') && DEV)) {
@@ -471,7 +489,7 @@ class QueryBin extends FrontendRestController
     }
 
     /**
-     * @return array{session:string, capability:string, nonce:string, timestamp:string, body_hash:string, signature:string, deploy_version:string, worker_build_id:string}
+     * @return array{session:string, capability:string, nonce:string, timestamp:string, body_hash:string, signature:string, deploy_version:string, worker_build_id:string, theme_published_version_id:string}
      */
     private function readSignedHeaders(): array
     {
@@ -484,6 +502,7 @@ class QueryBin extends FrontendRestController
             'signature' => $this->serverHeader('X-Weline-Worker-Signature'),
             'deploy_version' => $this->serverHeader('X-Weline-Deploy-Version') ?: 'dev',
             'worker_build_id' => $this->serverHeader('X-Weline-Worker-Build-Id') ?: 'dev',
+            'theme_published_version_id' => $this->serverHeader('X-Weline-Theme-Published-Version-Id'),
         ];
 
         foreach (['session', 'capability', 'nonce', 'timestamp', 'body_hash', 'signature'] as $key) {
@@ -507,6 +526,7 @@ class QueryBin extends FrontendRestController
             $headers['session'],
             $headers['deploy_version'],
             $headers['worker_build_id'],
+            $headers['theme_published_version_id'],
         );
 
         $timestamp = (int)$headers['timestamp'];
@@ -536,12 +556,15 @@ class QueryBin extends FrontendRestController
 
         // Revalidate the session and consume the nonce under one store lock.
         // Concurrent replays can pass the read-only HMAC phase, but only one
-        // request can commit the nonce.
+        // request can commit the nonce. Theme id must match the HMAC-phase
+        // validateSession call — empty here would 401 storefront sessions that
+        // stored Scope-published theme_published_version_id.
         $committedSession = $this->sessionService->validateSessionAndConsumeNonce(
             $headers['session'],
             $headers['deploy_version'],
             $headers['worker_build_id'],
             $headers['nonce'],
+            $headers['theme_published_version_id'],
         );
         if (!\hash_equals((string)$session['secret'], (string)$committedSession['secret'])) {
             throw new FrontendQueryException('auth_error', 'Worker session changed during validation.', 401);
@@ -687,45 +710,25 @@ class QueryBin extends FrontendRestController
     }
 
     /**
-     * Stale HTML still carries an old deploy_version after release. Refuse
-     * handshake so the client can auto-reload onto the current generation.
+     * Stale HTML still carries an old themePublishedVersionId after theme publish.
+     * Refuse handshake so the client can auto-reload onto the current Scope generation.
+     * System deploy_version alone must not force reload.
      */
-    private function assertClientDeployGenerationCurrent(string $clientDeployVersion): void
+    private function assertClientThemeGenerationCurrent(string $clientThemePublishedVersionId): void
     {
-        $serverStamp = $this->currentServerDeployVersion();
-        if ($serverStamp === '') {
+        $serverId = StorefrontGenerationIdentity::currentVersionId();
+        if ($serverId === '') {
             return;
         }
-        // Dev sticky: both sides on literal "dev" is fine; only mismatch forces reload.
-        if (\strcasecmp($serverStamp, $clientDeployVersion) === 0) {
+        if (\strcasecmp($serverId, $clientThemePublishedVersionId) === 0) {
             return;
         }
 
         throw new FrontendQueryException(
             'deploy_reload_required',
-            'Storefront deploy generation changed. Reload the page to continue.',
+            '主题已发布新版本。请重新加载页面以继续。',
             409,
         );
-    }
-
-    private function currentServerDeployVersion(): string
-    {
-        try {
-            $fromEnv = \trim((string)Env::get('deploy_version', ''));
-            if ($fromEnv !== '') {
-                return $fromEnv;
-            }
-        } catch (\Throwable) {
-            // fall through
-        }
-        try {
-            /** @var DeployFpcInvalidation $invalidation */
-            $invalidation = ObjectManager::getInstance(DeployFpcInvalidation::class);
-
-            return \trim($invalidation->readDeployStamp());
-        } catch (\Throwable) {
-            return '';
-        }
     }
 
     private function assertProtocolHeaders(): void
@@ -754,7 +757,9 @@ class QueryBin extends FrontendRestController
             return;
         }
 
-        if (\rtrim($origin, '/') !== $currentOrigin) {
+        // Reuse hole-punch Origin equivalence (apex ↔ Worker listen port e.g. :9555).
+        // Exact string equality falsely 401s after 308 to managed Nginx apex.
+        if (!$this->scopeHolePunchSecurityGate->originMatchesExpected($origin, $currentOrigin)) {
             throw new FrontendQueryException('auth_error', 'Worker request origin mismatch.', 401);
         }
     }
@@ -788,13 +793,30 @@ class QueryBin extends FrontendRestController
         string $label,
     ): string
     {
-        $rawHeader = (string)$this->request->getServer('HTTP_COOKIE');
-        if ($rawHeader === '' || \strlen($rawHeader) > 65536) {
+        $value = $this->readOptionalSingleCookie($expectedName, $errorCode, $label);
+        if ($value === null || $value === '') {
             throw new FrontendQueryException(
                 $errorCode,
                 $label . ' is missing or invalid.',
                 401,
             );
+        }
+
+        return $value;
+    }
+
+    /**
+     * Read a single cookie value when present. Missing → null.
+     * Duplicated / oversized / control-char values still fail closed.
+     */
+    private function readOptionalSingleCookie(
+        string $expectedName,
+        string $invalidErrorCode = 'scope_bootstrap_invalid',
+        string $invalidLabel = 'Worker Scope Cookie',
+    ): ?string {
+        $rawHeader = (string)$this->request->getServer('HTTP_COOKIE');
+        if ($rawHeader === '' || \strlen($rawHeader) > 65536) {
+            return null;
         }
 
         $matches = [];
@@ -805,13 +827,16 @@ class QueryBin extends FrontendRestController
             }
             $matches[] = \urldecode($pair[1]);
         }
+        if ($matches === []) {
+            return null;
+        }
         if (\count($matches) !== 1
             || $matches[0] === ''
             || \strlen($matches[0]) > 8192
             || \preg_match('/[\x00-\x1F\x7F]/', $matches[0]) === 1) {
             throw new FrontendQueryException(
-                $errorCode,
-                $label . ' is missing, duplicated, or invalid.',
+                $invalidErrorCode,
+                $invalidLabel . ' is missing, duplicated, or invalid.',
                 401,
             );
         }
@@ -1182,6 +1207,10 @@ class QueryBin extends FrontendRestController
 
     private function expireConsumedBootstrapCookie(Response $response): Response
     {
+        if (RequestContext::get('query_bin.expire_legacy_scope_bootstrap_cookies') === true) {
+            $this->expireLegacyStorefrontScopeBootstrapCookies($response);
+        }
+
         $cookie = RequestContext::get('query_bin.bootstrap_cookie_clear');
         if (!\is_array($cookie)
             || \array_keys($cookie) !== ['name', 'secure', 'same_site']
@@ -1207,6 +1236,35 @@ class QueryBin extends FrontendRestController
             $cookie['same_site'],
         );
         return $response;
+    }
+
+    /**
+     * Migration: expire leftover opaque `__Host-Weline-Worker-Scope-Bootstrap-*` cookies.
+     * Never clears the stable long-lived {@see FrontendWorkerSessionService::SCOPE_COOKIE_NAME}.
+     */
+    private function expireLegacyStorefrontScopeBootstrapCookies(Response $response): void
+    {
+        $rawHeader = (string)$this->request->getServer('HTTP_COOKIE');
+        if ($rawHeader === '' || \strlen($rawHeader) > 65536) {
+            return;
+        }
+        $prefix = FrontendWorkerSessionService::SCOPE_BOOTSTRAP_COOKIE_PREFIX;
+        $seen = [];
+        foreach (\explode(';', $rawHeader) as $part) {
+            $pair = \explode('=', \trim($part), 2);
+            if ($pair === [] || $pair[0] === '') {
+                continue;
+            }
+            $name = \urldecode($pair[0]);
+            if ($name === ''
+                || isset($seen[$name])
+                || !\str_starts_with($name, $prefix)
+            ) {
+                continue;
+            }
+            $seen[$name] = true;
+            $response->setCookie($name, '', \time() - 3600, '/', '', true, true, 'Lax');
+        }
     }
 
     /**

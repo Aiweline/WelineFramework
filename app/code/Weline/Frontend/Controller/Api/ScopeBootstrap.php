@@ -5,19 +5,20 @@ declare(strict_types=1);
 namespace Weline\Frontend\Controller\Api;
 
 use Weline\Frontend\Controller\FrontendRestController;
+use Weline\Frontend\Helper\FrontendScopeReloadTip;
+use Weline\Frontend\Helper\StorefrontGenerationIdentity;
 use Weline\Frontend\Service\ScopeHolePunchSecurityGate;
-use Weline\Framework\App\Env;
-use Weline\Framework\Deploy\DeployFpcInvalidation;
+use Weline\Framework\App\State;
 use Weline\Framework\Http\Response;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Websites\Service\FrontendWorkerScopeHolePunchService;
 
 /**
- * Storefront Scope hole-punch: Host+path → HttpOnly bootstrap cookie + opaque id.
+ * Storefront Scope hole-punch: Host+path → stable HttpOnly Scope Cookie (no opaque id).
  *
  * POST-only. Hard gate: HTTPS, same-origin, path shape, Scope+IP rate limit.
+ * JSON returns stamp metadata only; Token stays in Cookie.
  */
 class ScopeBootstrap extends FrontendRestController
 {
@@ -37,6 +38,10 @@ class ScopeBootstrap extends FrontendRestController
         if (($transport['ok'] ?? false) !== true) {
             return $this->deny($response, $transport);
         }
+
+        // Hole-punch URL is /api/... (no locale segment); page path is in the body.
+        // Arm request locale so tips match the storefront page language.
+        $this->armRequestLocaleFromPagePath((string)($transport['path'] ?? ''));
 
         $clientIp = (string)$transport['client_ip'];
         try {
@@ -91,38 +96,52 @@ class ScopeBootstrap extends FrontendRestController
             return $this->deny($response, $result);
         }
 
+        $generation = StorefrontGenerationIdentity::current();
         $response->setHttpResponseCode(200);
         $response->setBody(\json_encode([
             'ok' => true,
-            'bootstrap_id' => $result['bootstrap_id'],
             'expires_at' => $result['expires_at'],
             'mode' => $result['mode'],
-            'deploy_version' => $this->currentDeployVersion(),
+            // Storefront generation authority = Scope-published theme version (not system deploy).
+            'theme_published_version_id' => $generation['theme_published_version_id'],
+            'theme_published_version' => $generation['theme_published_version'],
+            // Warm client locale tip cache (hole-punch may detect mismatch without QueryBin tip).
+            'tips' => FrontendScopeReloadTip::catalogForCurrentLocale(),
+            'tips_locale' => FrontendScopeReloadTip::currentLocale(),
         ], \JSON_UNESCAPED_UNICODE) ?: '{"ok":false}');
 
         return $response;
     }
 
     /**
-     * Current storefront deploy generation for client stale-page detection.
+     * Prefer locale from JSON body, else first path segment of the page path.
      */
-    private function currentDeployVersion(): string
+    private function armRequestLocaleFromPagePath(string $pagePath): void
     {
+        $locale = '';
         try {
-            $fromEnv = \trim((string)Env::get('deploy_version', ''));
-            if ($fromEnv !== '') {
-                return $fromEnv;
+            $rawBody = (string)$this->request->getBody();
+            if ($rawBody !== '') {
+                $decoded = \json_decode($rawBody, true);
+                if (\is_array($decoded)) {
+                    $locale = \trim((string)($decoded['locale'] ?? $decoded['lang'] ?? ''));
+                }
             }
         } catch (\Throwable) {
-            // fall through
+            $locale = '';
+        }
+        if ($locale === '') {
+            $trim = \trim($pagePath, '/');
+            $first = $trim === '' ? '' : \explode('/', $trim, 2)[0];
+            $locale = \trim((string)$first);
+        }
+        if ($locale === '') {
+            return;
         }
         try {
-            /** @var DeployFpcInvalidation $invalidation */
-            $invalidation = ObjectManager::getInstance(DeployFpcInvalidation::class);
-
-            return \trim($invalidation->readDeployStamp());
+            State::setRequestLanguageOverride($locale);
         } catch (\Throwable) {
-            return '';
+            // Fail-open: tips fall back to area default language.
         }
     }
 
