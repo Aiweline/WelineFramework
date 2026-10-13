@@ -20,6 +20,7 @@ use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\File\Scan;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService;
+use Weline\Theme\Service\ThemeDesignImageStaticUrl;
 use Weline\Theme\Service\ThemeResourceGateway;
 use Weline\Theme\Service\ThemeStaticNamespaceService;
 
@@ -176,11 +177,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 设计主题根下 {area}/assets/... 会被搬到 /static/{ns}/{area}/...，但模板
         // <theme:js>Weline_Theme::theme/{area}/...</theme:js> 生成的 URL 是
         // /static/{ns}/Weline/Theme/view/theme/{area}/...。PROD / NG / WLS 快路径
-        // 缺文件直接 404，不会走 ThemeResourceGateway 延迟补发。须双写到 Theme 模块路径。
-        $this->printing->warning(__('开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径...'));
+        // 缺文件直接 404，不会走 ThemeResourceGateway 延迟补发。CSS/JS/字体须双写到
+        // Theme 模块路径；图片不双写——继承换背景图即可，CSS url 重写指向 area 原地址。
+        $this->printing->warning(__('开始将设计主题 area 非图片资源双写到 Weline/Theme/view/theme URL 路径...'));
         $mirrored = $this->publishDesignAreaAssetsIntoThemeModuleNamespace($theme, $publicThemePath, $modules);
         $this->printing->success(
-            __('设计 area→Theme 模块路径：') . $mirrored . __(' 个文件')
+            __('设计 area→Theme 模块路径（跳过图片）：') . $mirrored . __(' 个文件')
         );
     }
 
@@ -269,14 +271,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
-     * Mirror design-theme `{area}/**` runtime assets into the URL namespace used by
-     * `<theme:*>` / `Weline_Theme::theme/{area}/...` tags:
+     * Mirror design-theme `{area}/**` non-image runtime assets into the URL
+     * namespace used by `<theme:*>` / `Weline_Theme::theme/{area}/...` tags:
      * `/static/{ns}/Weline/Theme/view/theme/{area}/...`.
      *
      * Design overlay copy already writes `/static/{ns}/{area}/...` (relative to
-     * theme root). That path is NOT what theme tags emit, so PROD WLS fastpath
-     * 404s unless this second publish runs (or a request-time gateway publish
-     * happens — which NG/WLS missing-file fastpath does not).
+     * theme root). CSS/JS/fonts still need this second publish for theme-tag URLs
+     * (PROD WLS fastpath 404s otherwise). Images stay on the area path only —
+     * themes inherit widgets and swap backgrounds without duplicating bitmaps.
      *
      * @param list<string> $moduleFilter when non-empty and excludes Weline_Theme, skip
      */
@@ -305,6 +307,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
             foreach ($this->listThemeAssetRelativePaths($areaRoot, $extensionSet) as $relativePath) {
                 if (self::isExcludedPublishPath($themeRoot, $areaRoot . '/' . $relativePath)) {
+                    continue;
+                }
+                $extension = strtolower((string)pathinfo($relativePath, PATHINFO_EXTENSION));
+                if (ThemeDesignImageStaticUrl::isImageExtension($extension)) {
                     continue;
                 }
 

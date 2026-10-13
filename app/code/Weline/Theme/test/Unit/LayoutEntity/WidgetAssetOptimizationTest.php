@@ -151,4 +151,33 @@ final class WidgetAssetOptimizationTest extends TestCase
         self::assertStringContainsString('url("/fixed.woff")', $rewritten);
         self::assertStringContainsString('url(data:image/png;base64,xyz)', $rewritten);
     }
+
+    public function testCssImageUrlsFromThemeModuleBasePreferDesignAreaPath(): void
+    {
+        $publisher = new WidgetAssetArtifactPublisher();
+        $css = '.x{background:url("../images/component-kit/backgrounds/header-mountains.webp")}';
+        $base = 'https://shop.test/static/Weline/hanfu/Weline/Theme/view/theme/frontend/assets/css/hanfu-ink.css';
+        $rewritten = $publisher->rewriteCssUrls($css, $base);
+        self::assertStringContainsString(
+            'url("https://shop.test/static/Weline/hanfu/frontend/assets/images/component-kit/backgrounds/header-mountains.webp")',
+            $rewritten,
+        );
+        self::assertStringNotContainsString(
+            '/Weline/Theme/view/theme/frontend/assets/images/component-kit/backgrounds/header-mountains.webp',
+            $rewritten,
+        );
+    }
+
+    public function testCssAbsoluteModuleThemeImageUrlsRemapToDesignArea(): void
+    {
+        $publisher = new WidgetAssetArtifactPublisher();
+        $css = '.x{background:url("/Weline/Theme/view/theme/frontend/assets/images/ink/ox-cloth-caravan.webp?v=20260921-ox1")}';
+        $base = 'https://shop.test/static/Weline/hanfu/Weline/Theme/view/theme/frontend/assets/css/hanfu-account.css';
+        $rewritten = $publisher->rewriteCssUrls($css, $base);
+        self::assertStringContainsString(
+            'url("https://shop.test/static/Weline/hanfu/frontend/assets/images/ink/ox-cloth-caravan.webp?v=20260921-ox1")',
+            $rewritten,
+        );
+        self::assertStringNotContainsString('/Weline/Theme/view/theme/frontend/assets/images/ink/', $rewritten);
+    }
 }

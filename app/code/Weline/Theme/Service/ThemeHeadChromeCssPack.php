@@ -198,7 +198,7 @@ final class ThemeHeadChromeCssPack
         }
         $scopeFp = $this->resolvePackScopeFingerprint($area);
         $key = hash('sha256', json_encode([
-            'theme-head-chrome-v4',
+            'theme-head-chrome-v6',
             $area,
             $pack,
             $minify,

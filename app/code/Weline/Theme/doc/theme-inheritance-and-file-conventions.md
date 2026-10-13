@@ -54,6 +54,19 @@
 - 业务模块 `view/theme` 主要用于贡献新 layout/partial/component/widget，不应该被当成覆盖默认主题的首选位置。
 - 同一逻辑 key 命中后，后面的层不会再覆盖它。
 
+### 设计主题多路径 = 继承/发布正常（`theme_design_multi_path_is_inheritance_normal`）
+
+在**同一个** `app/design/{Vendor}/{theme}/` 根下，常见会同时看到：
+
+1. 现代权威源：`{frontend|backend}/assets/...`（或同 area 下 widgets/layouts/partials）
+2. 兼容布局：`theme/{area}/...` 或 `view/theme/{area}/...`
+3. `theme:upgrade` 等发布步骤把 area 下的 **CSS/JS/字体等**双写到 `Weline/Theme/view/theme/...`，以匹配店面 `/static/{Vendor}/{theme}/Weline/Theme/view/theme/...` URL 命名空间。**图片**（png/webp/…）不双写：只发到 `/static/{Vendor}/{theme}/{area}/assets/...`（设计原地址）；主题继承部件后换背景图即可。CSS 打包重写 `url(...)` 时对图片（含相对路径、带 query 的绝对 `/Weline/Theme/view/theme/...` 与 `/static/{ns}/Weline/Theme/view/theme/...`）一律落回该 area 路径，避免「CSS 发了、图没发进 Theme 镜像」的 404。
+
+这些是继承发现链与发布合同的**预期落点**，不是「同文件复制了多份所以要删」。Agent **禁止**把它们标成架构级多拷贝隐患并擅自删除一侧。改皮肤：在设计主题权威 area 源上编辑 → `theme:upgrade` 再同步发布面。
+
+正例：DaoCharms 的 `frontend/assets/css/daocharms-*.css` 与同主题下 `Weline/Theme/view/theme/frontend/assets/css/` 双写并存；背景 webp 只在 `{area}/assets/images/...`。  
+反例：把设计主题皮肤误放在无主题 `register` 的 `app/code/.../view/templates/theme/...` 树里——那不是本条所说的继承多路径。
+
 ### 全局资产与 Token overlay
 
 `assets/css/theme.css`、`assets/js/theme.js` 是 Weline_Theme 的全局组件和运行时入口。活动设计主题不得以同逻辑 key 覆盖它们来复制 Card、Bootstrap adapter 或主题切换；同路径文件会使默认层完全失效。

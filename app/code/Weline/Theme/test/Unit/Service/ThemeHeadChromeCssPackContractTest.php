@@ -37,7 +37,7 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertStringContainsString('storefront-shopper-toast-amazon.css', $src);
         self::assertStringContainsString('theme_css_merge', $src);
         self::assertStringContainsString('warmAreaPacks', $src);
-        self::assertStringContainsString('theme-head-chrome-v4', $src);
+        self::assertStringContainsString('theme-head-chrome-v6', $src);
         self::assertStringContainsString('themeOverlayAbsorbed', $src);
         self::assertStringContainsString('OVERLAY_LIST_RELATIVE', $src);
         self::assertStringContainsString('collectThemeOverlaySources', $src);

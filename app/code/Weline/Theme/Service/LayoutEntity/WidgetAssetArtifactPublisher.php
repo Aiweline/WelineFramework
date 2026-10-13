@@ -418,19 +418,33 @@ class WidgetAssetArtifactPublisher
             $i = $cursor + 1;
             // Escaped URL values need CSS escape decoding; retain the original external file instead.
             if (str_contains($value, '\\')) { throw new \RuntimeException('Escaped CSS URL retains its original resource'); }
-            if ($value === '' || preg_match('~^(?:[a-z][a-z0-9+.-]*:|/|#)~i', $value)) {
+            if ($value === '' || preg_match('~^(?:[a-z][a-z0-9+.-]*:|#)~i', $value)) {
                 $output .= substr($content, $start, $i - $start);
                 continue;
             }
             $parts = parse_url($sourceUrl);
+            $origin = isset($parts['host']) ? (($parts['scheme'] ?? 'https') . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '')) : '';
+            $nsHint = \Weline\Theme\Service\ThemeDesignImageStaticUrl::staticNamespaceFromUrl($sourceUrl);
+            // Absolute root paths: still remap legacy Theme-module image mirrors to design area.
+            if (str_starts_with($value, '/')) {
+                $remapped = \Weline\Theme\Service\ThemeDesignImageStaticUrl::remapModuleThemePathToDesignArea($value, $nsHint);
+                if ($remapped === $value) {
+                    $output .= substr($content, $start, $i - $start);
+                    continue;
+                }
+                $output .= 'url("' . ($origin !== '' && str_starts_with($remapped, '/') ? $origin . $remapped : $remapped) . '")';
+                continue;
+            }
             $base = dirname($parts['path'] ?? '/') . '/' . $value;
             $segments = [];
             foreach (explode('/', $base) as $segment) {
                 if ($segment === '..') { array_pop($segments); }
                 elseif ($segment !== '.' && $segment !== '') { $segments[] = $segment; }
             }
-            $origin = isset($parts['host']) ? (($parts['scheme'] ?? 'https') . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '')) : '';
-            $output .= 'url("' . $origin . '/' . implode('/', $segments) . '")';
+            $resolvedPath = '/' . implode('/', $segments);
+            // Design images use the area publish path, not the Theme-module dual-write URL.
+            $resolvedPath = \Weline\Theme\Service\ThemeDesignImageStaticUrl::remapModuleThemePathToDesignArea($resolvedPath, $nsHint);
+            $output .= 'url("' . ($origin !== '' ? $origin . $resolvedPath : $resolvedPath) . '")';
         }
         return $output;
     }
