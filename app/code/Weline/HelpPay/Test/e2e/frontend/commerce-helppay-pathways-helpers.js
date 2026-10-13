@@ -116,10 +116,12 @@ async function hardRefreshStorefront(page) {
     let next = current;
     try {
       const u = new URL(current);
-      u.searchParams.set('_e2e_theme_nc', String(Date.now()));
+      // Path-only PDP: query bust 301s store-channel product URLs to /products/.
+      u.searchParams.delete('_e2e_theme_nc');
+      u.searchParams.delete('_wb_nc');
       next = u.toString();
     } catch (_) {
-      next = current.includes('?') ? `${current}&_e2e_theme_nc=${Date.now()}` : `${current}?_e2e_theme_nc=${Date.now()}`;
+      next = current;
     }
     await page.goto(next, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(async () => {
       await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
@@ -216,7 +218,9 @@ async function gotoPdp(page, gotoFrontend, pdpPath) {
     : `${origin}${pdpPath.startsWith('/') ? '' : '/'}${pdpPath}`;
   try {
     const u = new URL(abs);
-    u.searchParams.set('_e2e_theme_nc', String(Date.now()));
+    // Path-only PDP: never append `_e2e_theme_nc` (store-channel 301 → /products/).
+    u.searchParams.delete('_e2e_theme_nc');
+    u.searchParams.delete('_wb_nc');
     abs = u.toString();
   } catch (_) {}
   try {
@@ -234,27 +238,60 @@ async function gotoPdp(page, gotoFrontend, pdpPath) {
   ).first();
   await cta.waitFor({ state: 'attached', timeout: 60000 });
   await dismissNoise(page).catch(() => {});
-  // Force-reveal HelpPay CTAs: runtime may leave .w-helppay-cta[hidden] after mount race.
+  // Force-reveal HelpPay CTAs: B2B default tob / sticky dock / purchase-panel may leave
+  // ancestors [hidden] or display:none !important; pathway capture only needs product_id.
+  await forceRevealHelpPayCtas(page);
+}
+
+/**
+ * Pin retail mode and unhide HelpPay CTAs (and ancestors) for e2e pathway capture.
+ * @param {import('@playwright/test').Page} page
+ */
+async function forceRevealHelpPayCtas(page) {
   await page.evaluate(() => {
+    try {
+      window.sessionStorage.setItem('weline_cart_type_explicit', 'toc');
+      window.sessionStorage.setItem('weline_selling_mode', 'toc');
+    } catch (_) {}
     document.documentElement.setAttribute('data-selling-mode', 'toc');
-    document.querySelectorAll('.w-helppay-cta, [data-helppay-placement], [data-testid="product-quick-pay"], [data-testid="product-help-pay"], [data-helppay-quick-pay], [data-helppay-open]').forEach((el) => {
+    document.querySelectorAll('[data-selling-mode]').forEach((n) => {
+      try { n.setAttribute('data-selling-mode', 'toc'); } catch (_) {}
+    });
+    try {
+      window.dispatchEvent(new CustomEvent('weline:selling-mode-changed', {
+        detail: { selling_mode: 'toc', cart_type: 'toc' },
+      }));
+    } catch (_) {}
+    const sel = '.w-helppay-cta, [data-helppay-placement], [data-testid="product-quick-pay"], [data-testid="product-help-pay"], [data-testid="product-quick-pay-wrap"], [data-helppay-quick-pay], [data-helppay-open]';
+    document.querySelectorAll(sel).forEach((el) => {
       let node = el;
-      while (node && node !== document.body) {
+      while (node && node !== document.documentElement) {
         if (node.hasAttribute && node.hasAttribute('hidden')) {
           node.hidden = false;
           node.removeAttribute('hidden');
         }
         if (node.style) {
-          if (node.style.display === 'none') node.style.display = '';
-          if (node.style.visibility === 'hidden') node.style.visibility = 'visible';
+          node.style.setProperty('display', 'block', 'important');
+          node.style.setProperty('visibility', 'visible', 'important');
+          node.style.setProperty('opacity', '1', 'important');
+        }
+        if (node.getAttribute && node.getAttribute('aria-hidden') === 'true') {
+          node.setAttribute('aria-hidden', 'false');
         }
         node = node.parentElement;
       }
       el.hidden = false;
       el.removeAttribute('hidden');
-      el.style.visibility = 'visible';
-      el.style.display = '';
+      if (el.style) {
+        el.style.setProperty('display', el.tagName === 'BUTTON' || el.tagName === 'A' ? 'inline-flex' : 'block', 'important');
+        el.style.setProperty('visibility', 'visible', 'important');
+        el.style.setProperty('opacity', '1', 'important');
+      }
     });
+    if (window.WelineModules && window.WelineModules.helpPayShare
+      && typeof window.WelineModules.helpPayShare.syncQuickPayCtas === 'function') {
+      try { window.WelineModules.helpPayShare.syncQuickPayCtas(); } catch (_) {}
+    }
   }).catch(() => {});
 }
 
@@ -629,6 +666,7 @@ module.exports = {
   prepareCustomer,
   storefrontOrigin,
   gotoPdp,
+  forceRevealHelpPayCtas,
   readPdpProductContext,
   runQuickPayCaptureEvidence,
   runHelpPayFriendCaptureEvidence,

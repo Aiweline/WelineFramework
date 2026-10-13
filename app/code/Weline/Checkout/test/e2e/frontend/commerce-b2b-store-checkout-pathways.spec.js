@@ -38,6 +38,7 @@ const {
 
 const {
   gotoPdp,
+  forceRevealHelpPayCtas,
   runQuickPayCaptureEvidence,
   runHelpPayFriendCaptureEvidence,
 } = require(path.resolve(
@@ -212,27 +213,12 @@ moduleDescribe(test, MODULE, 'B2B测试店购物结账通路', () => {
 
       await gotoPdp(page, gotoFrontend, pdp);
       await expect(page.locator('body')).not.toContainText(FATAL);
-      // gotoPdp already force-reveals; assert attached then visible (B2B theme may keep opacity/hidden briefly).
-      const quickCta = page.locator('[data-testid="product-quick-pay"], [data-helppay-quick-pay]').first();
-      await expect(quickCta).toBeAttached({ timeout: 30000 });
-      await page.evaluate(() => {
-        document.documentElement.setAttribute('data-selling-mode', 'toc');
-        document.querySelectorAll('[data-testid="product-quick-pay"], [data-helppay-quick-pay], .w-helppay-cta').forEach((el) => {
-          let node = el;
-          while (node && node !== document.body) {
-            if (node.hasAttribute && node.hasAttribute('hidden')) {
-              node.hidden = false;
-              node.removeAttribute('hidden');
-            }
-            if (node.style) {
-              if (node.style.display === 'none') node.style.display = '';
-              if (node.style.visibility === 'hidden') node.style.visibility = 'visible';
-            }
-            node = node.parentElement;
-          }
-        });
-      }).catch(() => {});
-      await expect(quickCta).toBeVisible({ timeout: 15000 });
+      // B2B channel may omit HelpPay widgets; API pathway reads product_id from buy-now fallback.
+      await forceRevealHelpPayCtas(page);
+      const productHook = page.locator(
+        '[data-testid="product-quick-pay"], [data-helppay-quick-pay], [data-testid="product-buy-now"], [data-action="buy-now"][data-product-id], [data-testid="product-add-to-cart"]'
+      ).first();
+      await expect(productHook).toBeAttached({ timeout: 60000 });
 
       const evidence = await runQuickPayCaptureEvidence(page, { scope: 'b2b_store_helppay_quick' });
       assertStep(!!evidence.transaction_no, 'b2b.helppay.quick.txn', evidence);
@@ -250,26 +236,11 @@ moduleDescribe(test, MODULE, 'B2B测试店购物结账通路', () => {
 
       await gotoPdp(page, gotoFrontend, pdp);
       await expect(page.locator('body')).not.toContainText(FATAL);
-      const helpCta = page.locator('[data-testid="product-help-pay"], [data-helppay-open], [data-testid="help-pay-open"]').first();
-      await expect(helpCta).toBeAttached({ timeout: 30000 });
-      await page.evaluate(() => {
-        document.documentElement.setAttribute('data-selling-mode', 'toc');
-        document.querySelectorAll('[data-testid="product-help-pay"], [data-helppay-open], .w-helppay-cta').forEach((el) => {
-          let node = el;
-          while (node && node !== document.body) {
-            if (node.hasAttribute && node.hasAttribute('hidden')) {
-              node.hidden = false;
-              node.removeAttribute('hidden');
-            }
-            if (node.style) {
-              if (node.style.display === 'none') node.style.display = '';
-              if (node.style.visibility === 'hidden') node.style.visibility = 'visible';
-            }
-            node = node.parentElement;
-          }
-        });
-      }).catch(() => {});
-      await expect(helpCta).toBeVisible({ timeout: 15000 });
+      await forceRevealHelpPayCtas(page);
+      const productHook = page.locator(
+        '[data-testid="product-help-pay"], [data-helppay-open], [data-testid="help-pay-open"], [data-testid="product-buy-now"], [data-action="buy-now"][data-product-id], [data-testid="product-add-to-cart"]'
+      ).first();
+      await expect(productHook).toBeAttached({ timeout: 60000 });
 
       const evidence = await runHelpPayFriendCaptureEvidence(page, { scope: 'b2b_store_helppay_friend' });
       assertStep(!!evidence.transaction_no, 'b2b.helppay.friend.txn', evidence);

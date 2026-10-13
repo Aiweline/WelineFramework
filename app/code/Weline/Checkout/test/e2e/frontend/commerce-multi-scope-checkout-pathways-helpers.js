@@ -81,7 +81,9 @@ async function gotoMultiScope(page, routePath, gotoFrontend) {
   try {
     const u = new URL(abs);
     if (!/^\/customer(\/|$)/i.test(u.pathname)) {
-      u.searchParams.set('_e2e_theme_nc', String(Date.now()));
+      // Path-only PDP: do not append `_e2e_theme_nc` (301 → /products/ on store channels).
+      u.searchParams.delete('_e2e_theme_nc');
+      u.searchParams.delete('_wb_nc');
       abs = u.toString();
     }
   } catch (_) {}
@@ -121,9 +123,15 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
         window.Weline.config.theme_published_version_id = '';
       }
     } catch (e) {}
-    let api = window.Weline.Api;
-    if (!api || typeof api.resource !== 'function') {
-      api = await window.Weline.load('api');
+    let api = window.Weline && window.Weline.Api;
+    if (!api || api.__full !== true || typeof api.resource !== 'function') {
+      const loaded = await window.Weline.load('api');
+      if (loaded && loaded.__full === true) {
+        window.Weline.Api = loaded;
+        api = loaded;
+      } else {
+        api = loaded || api;
+      }
     }
     try {
       if (window.Weline && window.Weline.config) {
@@ -275,10 +283,16 @@ async function applyCouponViaApi(page, code = COUPON, mode = 'toc') {
       }
     } catch (_) {}
     let api = window.Weline && window.Weline.Api;
-    if (!api || typeof api.resource !== 'function') {
-      api = await window.Weline.load('api');
+    if (!api || api.__full !== true || typeof api.resource !== 'function') {
+      const loaded = await window.Weline.load('api');
+      if (loaded && loaded.__full === true) {
+        window.Weline.Api = loaded;
+        api = loaded;
+      } else {
+        api = loaded || api;
+      }
     }
-    if (typeof api.bootstrapScope === 'function') {
+    if (api && typeof api.bootstrapScope === 'function') {
       try { await api.bootstrapScope(); } catch (_) {}
     }
     let guestToken = '';

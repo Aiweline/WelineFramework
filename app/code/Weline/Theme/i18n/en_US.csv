@@ -887,6 +887,66 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+小计,Subtotal
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+去结算,"Proceed to Checkout"
+查看购物车,"View cart"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
+指南,Guide
+分类,Classification
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
+个人中心,"Personal center"
+面包屑,"bread crumbs"
+分类展示图,"Category showcase image"
+查看全部,"View all"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+官方社交媒体,"Official social media"
+商品,Products
+查看商品图,"View product image"
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+购物车是空的,"Shopping cart is empty"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+零售车,零售车
+批发车,批发车
+继续购物,"Continue shopping"
+正在前往结算...,"Proceeding to checkout..."
+运费将在结算时计算,"Shipping calculated at checkout"
+税费,Tax
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+本次应付定金,"Deposit due now"
+本单共计,"Order total"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+收起明细,"Collapse details"
+展开明细,"Expand details"
+零售,Retail
+迷你购物车金额小计,"Mini-cart money summary"
+关闭通知,"Close notification"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -913,11 +973,6 @@ FAQ/常见问题,FAQ
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -938,7 +993,6 @@ NEW,NEW
 上一页,"Previous page"
 下一页,"Next page"
 末页,"Last page"
-指南,Guide
 抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
 您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
 请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
@@ -960,14 +1014,8 @@ ERROR,ERROR
 网络错误,"Network error"
 无法连接到服务器，请检查网络连接。,"Unable to connect to the server, please check your network connection."
 分页导航,"Pagination navigation"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
 缺货,"Out of Stock"
 联系询价,联系询价
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
 我的,mine
@@ -980,16 +1028,12 @@ ERROR,ERROR
 语言,language
 货币,currency
 关闭菜单,"Close menu"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -999,12 +1043,8 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
-购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
-小计,Subtotal
-查看购物车,"View cart"
-去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1108,12 +1148,8 @@ Weline,Weline
 查看更多,"View more"
 距离结束,"Ends in"
 精选轮播,"Featured Carousel"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
-官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1135,35 +1171,6 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
-商品,Products
-查看商品图,"View product image"
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-零售车,零售车
-批发车,批发车
-继续购物,"Continue shopping"
-正在前往结算...,"Proceeding to checkout..."
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-运费将在结算时计算,"Shipping calculated at checkout"
-税费,Tax
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-本次应付定金,"Deposit due now"
-本单共计,"Order total"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-收起明细,"Collapse details"
-展开明细,"Expand details"
-零售,Retail
-迷你购物车金额小计,"Mini-cart money summary"
-关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -2256,8 +2263,8 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "开始发布模块 view/theme 资源到主题命名空间（含继承回退）...","开始发布模块 view/theme 资源到主题命名空间（含继承回退）..."
 模块主题资源：,模块主题资源：
 "个文件已发布到 /static/","个文件已发布到 /static/"
-"开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径...","开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径..."
-"设计 area→Theme 模块路径：","设计 area→Theme 模块路径："
+"开始将设计主题 area 非图片资源双写到 Weline/Theme/view/theme URL 路径...","开始将设计主题 area 非图片资源双写到 Weline/Theme/view/theme URL 路径..."
+"设计 area→Theme 模块路径（跳过图片）：","设计 area→Theme 模块路径（跳过图片）："
 "设置了 -t 参数，但却没有-t参数值！","The -t parameter was set, but no -t parameter value was provided!"
 "设置了 -s/--scope 参数，但却没有范围值！","-s/--scope was set but no scope value was provided!"
 无法创建主题静态资源目录：,"Unable to create theme static resource directory:"
@@ -2310,14 +2317,10 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径...","开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径..."
+"设计 area→Theme 模块路径：","设计 area→Theme 模块路径："
 搜索筛选,"Search and filter"
-迷你购物车,迷你购物车
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-Pagination,Pagination
-Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
-Next,Next
 选择作用范围,"Select scope."
 搜索作用范围,"Search scope."
 未找到匹配作用范围,"No matching scope found."
@@ -2331,7 +2334,6 @@ Next,Next
 "店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","Configure the storefront theme under Website Info → Storefront Theme; otherwise it falls back to the registered Theme Default. Backend skin is set in System Config."
 各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,"Storefront themes are configured in Website Info; this list only shows installed themes and bindings."
 所选主题版本不属于当前网站范围,"Selected theme version does not belong to this website scope"
-个人中心,"Personal center"
 登录,"Log in"
 登录页工具,"Login page tools"
 主题布局预固化,"Solidifying theme layouts"

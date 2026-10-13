@@ -298,63 +298,46 @@ textarea::-webkit-scrollbar-thumb:hover,
 @media (min-width: 769px) {
     .header-belt {
         flex-direction: row;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
         gap: var(--spacing-md);
     }
-    
+
+    /*
+     * Belt continuum owned by header-chrome-amazon.css (nowrap + search yield).
+     * Do NOT re-declare flex-wrap:wrap / search own-row mid breakpoints here —
+     * dual write caused mid-width tools-under-search drift (审图).
+     */
     .header-belt-row-1 {
         display: flex;
-        flex-wrap: wrap;
-        align-items: flex-start;
+        flex-wrap: nowrap;
+        align-items: center;
         justify-content: space-between;
         width: 100%;
         gap: var(--spacing-md);
         flex: 1 1 100%;
     }
-    
+
     .header-belt-left {
-        flex: 0 0 auto;
+        flex: 0 1 auto;
         order: 1;
+        min-width: 0;
         min-height: var(--size-control-md);
     }
-    
+
     .header-search-wrapper {
-        flex: 1 1 var(--layout-sidebar-width);
+        flex: 1 1 0;
         max-width: var(--size-content-640);
-        margin: 0 auto;
+        margin: 0;
         min-width: 0;
         order: 2;
     }
-    
+
     .header-actions {
         flex: 0 0 auto;
         margin-left: auto;
         order: 3;
         min-height: var(--size-control-md);
-    }
-}
-
-/* ≤1100（含移动端）：搜索整行落到 Logo/操作区下面，避免再窄时挤回同行 */
-@media (max-width: 1100px) {
-    .header-belt-row-1 .header-search-wrapper {
-        flex: 0 0 100%;
-        max-width: none;
-        min-width: 0;
-        width: 100%;
-        margin: 0;
-        order: 4;
-    }
-}
-
-@media (min-width: 769px) and (max-width: 1100px) {
-    .header-belt-row-1 .header-belt-left {
-        order: 1;
-    }
-
-    .header-belt-row-1 .header-actions {
-        order: 2;
-        margin-left: auto;
     }
 }
 

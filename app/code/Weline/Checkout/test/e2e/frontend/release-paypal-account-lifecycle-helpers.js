@@ -218,17 +218,29 @@ async function ensureFpcBypassHeaders(page) {
   context.__welineE2eFpcBypass = true;
 }
 
+/**
+ * Path-only PDP/PLP: unknown query (incl. `_e2e_theme_nc`) can 301 → /products/.
+ * Cache bust via FPC-bypass headers only — strip leftover e2e theme query stamps.
+ */
+function stripE2eThemeQuery(urlLike) {
+  try {
+    const u = new URL(String(urlLike || ''), 'https://p05113ef3.test.weline.com');
+    u.searchParams.delete('_e2e_theme_nc');
+    u.searchParams.delete('_wb_nc');
+    return u.pathname + (u.search || '') + (u.hash || '');
+  } catch (_) {
+    return String(urlLike || '').replace(/([?&])_e2e_theme_nc=\d+/g, '$1').replace(/[?&]$/, '');
+  }
+}
+
 async function gotoStorefront(page, pdpPath) {
   await ensureFpcBypassHeaders(page);
   let path = pdpPath.startsWith('http') ? pdpPath : `${storefrontOrigin()}${pdpPath.startsWith('/') ? '' : '/'}${pdpPath}`;
   try {
     const u = new URL(path);
-    // Never stamp account/auth URLs — login referer with `_e2e_theme_nc` fails session asserts.
-    if (!/^\/customer(\/|$)/i.test(u.pathname)
-      && !u.searchParams.has('_wb_nc')
-      && !u.searchParams.has('_e2e_theme_nc')) {
-      u.searchParams.set('_e2e_theme_nc', String(Date.now()));
-    }
+    // Path-only catalog: never append bust query (301 to /products/ on store channels).
+    u.searchParams.delete('_e2e_theme_nc');
+    u.searchParams.delete('_wb_nc');
     path = u.toString();
   } catch (_) {
     // relative already absolutized above
@@ -246,15 +258,49 @@ async function gotoStorefront(page, pdpPath) {
   }
 }
 
+/**
+ * Promote stub Weline.Api → full ApiModule. Stub arrow methods use lexical `this`
+ * and throw `_promoteFullApi` of undefined when called before weline-api.js wins.
+ */
+async function ensureFullWelineApiInPage() {
+  // runs inside page.evaluate
+  let api = window.Weline && window.Weline.Api;
+  if (api && api.__full === true && typeof api.resource === 'function') {
+    return true;
+  }
+  if (!window.Weline || typeof window.Weline.load !== 'function') {
+    return false;
+  }
+  const loaded = await window.Weline.load('api');
+  if (loaded && loaded.__full === true) {
+    window.Weline.Api = loaded;
+    return true;
+  }
+  if (api && typeof api._promoteFullApi === 'function') {
+    try {
+      api._promoteFullApi(loaded);
+    } catch (_) {}
+  }
+  return !!(window.Weline.Api && window.Weline.Api.__full === true);
+}
+
 async function waitForWelineApi(page, timeout = 90000) {
   await page.waitForFunction(() => !!(window.Weline && (
     (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
     || typeof window.Weline.load === 'function'
   )), null, { timeout });
   await page.evaluate(async () => {
-    if ((!window.Weline.Api || typeof window.Weline.Api.resource !== 'function')
-      && typeof window.Weline.load === 'function') {
-      await window.Weline.load('api');
+    let api = window.Weline && window.Weline.Api;
+    if (api && api.__full === true && typeof api.resource === 'function') {
+      return;
+    }
+    if (typeof window.Weline.load === 'function') {
+      const loaded = await window.Weline.load('api');
+      if (loaded && loaded.__full === true) {
+        window.Weline.Api = loaded;
+      } else if (api && typeof api._promoteFullApi === 'function') {
+        try { api._promoteFullApi(loaded); } catch (_) {}
+      }
     }
   });
 }
@@ -292,10 +338,12 @@ async function hardRefreshStorefront(page) {
     let next = current;
     try {
       const u = new URL(current);
-      u.searchParams.set('_e2e_theme_nc', String(Date.now()));
+      // Drop e2e bust query — FPC bypass headers are enough; query breaks path-only PDP.
+      u.searchParams.delete('_e2e_theme_nc');
+      u.searchParams.delete('_wb_nc');
       next = u.toString();
     } catch (_) {
-      next = current.includes('?') ? `${current}&_e2e_theme_nc=${Date.now()}` : `${current}?_e2e_theme_nc=${Date.now()}`;
+      next = current;
     }
     await page.goto(next, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(async () => {
       await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
@@ -330,23 +378,90 @@ async function reloadIfThemeGenerationStale(page) {
 }
 
 /**
+ * After hard refresh: hole-punch Scope and adopt server theme_published_version_id
+ * onto the page/client config so QueryBin stops throwing deploy_reload_required.
+ * Empty page stamp skips the Scope mismatch gate, but Worker still needs a matching badge.
+ */
+async function rewarmScopeAfterThemeRefresh(page) {
+  await neutralizeStaleThemeStamp(page);
+  await waitForWelineApi(page);
+  await page.evaluate(async () => {
+    try {
+      if (window.Weline && window.Weline.config) {
+        window.Weline.config.themePublishedVersionId = '';
+        window.Weline.config.theme_published_version_id = '';
+      }
+      const pathName = String((window.location && window.location.pathname) || '/');
+      let serverThemeId = '';
+      try {
+        const res = await fetch('/api/frontend/scope-bootstrap', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ path: pathName }),
+        });
+        if (res.ok && res.status !== 204) {
+          const payload = await res.json().catch(() => null);
+          serverThemeId = payload && payload.theme_published_version_id != null
+            ? String(payload.theme_published_version_id).trim()
+            : '';
+        }
+      } catch (_) {}
+      let api = window.Weline && window.Weline.Api;
+      if (!api || api.__full !== true || typeof api.resource !== 'function') {
+        if (window.Weline && typeof window.Weline.load === 'function') {
+          const loaded = await window.Weline.load('api');
+          if (loaded && loaded.__full === true) {
+            window.Weline.Api = loaded;
+            api = loaded;
+          } else {
+            api = loaded || api;
+          }
+        }
+      }
+      if (serverThemeId && window.Weline && window.Weline.config) {
+        window.Weline.config.themePublishedVersionId = serverThemeId;
+        window.Weline.config.theme_published_version_id = serverThemeId;
+      }
+      if (api && typeof api.getClient === 'function') {
+        try {
+          const client = api.getClient();
+          if (client && client.config && serverThemeId) {
+            client.config.themePublishedVersionId = serverThemeId;
+            client.config.theme_published_version_id = serverThemeId;
+          }
+        } catch (_) {}
+      }
+      if (api && typeof api.bootstrapScope === 'function') {
+        await api.bootstrapScope().catch(() => {});
+      }
+    } catch (_) {}
+  }).catch(() => {});
+}
+
+/**
  * Run page.evaluate; on theme-generation mismatch (throw OR soft-caught result), hard-refresh and retry.
+ * Sibling theme:upgrade mid-suite can advance Scope for several generations — retry beyond one refresh.
  */
 async function evaluateWithThemeReload(page, fn, arg) {
   await ensureFpcBypassHeaders(page);
+  const maxAttempts = 5;
   let lastErr = null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  // Proactive Scope theme adopt before first call (B2B channel often lands with stale HTML stamp).
+  await rewarmScopeAfterThemeRefresh(page).catch(() => {});
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     await page.evaluate(() => { window.__WELINE_E2E_RELOAD_REQUESTED = false; }).catch(() => {});
-    await neutralizeStaleThemeStamp(page);
+    await waitForWelineApi(page).catch(() => {});
     try {
       const result = await page.evaluate(fn, arg);
       const reloadRequested = await page.evaluate(() => !!window.__WELINE_E2E_RELOAD_REQUESTED).catch(() => false);
-      if ((resultLooksThemeStale(result) || reloadRequested) && attempt < 1) {
+      if ((resultLooksThemeStale(result) || reloadRequested) && attempt < maxAttempts - 1) {
         // Soft stamp clear first; if Worker generation already advanced (sibling
         // theme:upgrade), hard-refresh non-account URLs so QueryBin stops returning HTML.
         const url = String(page.url() || '');
         if (!/\/customer(\/|$)/i.test(url)) {
           await hardRefreshStorefront(page);
+          await rewarmScopeAfterThemeRefresh(page);
         } else {
           await neutralizeStaleThemeStamp(page);
         }
@@ -357,12 +472,13 @@ async function evaluateWithThemeReload(page, fn, arg) {
       lastErr = err;
       const msg = String(err && err.message || err);
       const reloadRequested = await page.evaluate(() => !!window.__WELINE_E2E_RELOAD_REQUESTED).catch(() => false);
-      if ((!isThemeGenerationStaleMessage(msg) && !reloadRequested) || attempt >= 1) {
+      if ((!isThemeGenerationStaleMessage(msg) && !reloadRequested) || attempt >= maxAttempts - 1) {
         throw err;
       }
       const url = String(page.url() || '');
       if (!/\/customer(\/|$)/i.test(url)) {
         await hardRefreshStorefront(page);
+        await rewarmScopeAfterThemeRefresh(page);
       } else {
         await neutralizeStaleThemeStamp(page);
       }

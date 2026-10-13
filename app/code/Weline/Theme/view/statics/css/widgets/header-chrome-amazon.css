@@ -248,8 +248,9 @@
 
 .weline-header .header-belt-row-1 {
     display: flex;
+    /* Mobile may wrap (search own row ≤768). Desktop ≥769 forces nowrap below. */
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     width: min(100%, var(--weline-layout-content-max-width));
     max-width: 100%;
@@ -376,10 +377,14 @@
 }
 
 .weline-header .header-search-wrapper {
-    flex: 1 1 var(--sidebar-width);
+    /*
+     * Search is the yield lane: flex-basis 0 + grow/shrink so ZH/账户/购物车金额
+     * keep one row; never shove .header-actions onto a second line (审图).
+     */
+    flex: 1 1 0;
     max-width: var(--size-content-640);
-    min-width: var(--token-size-12rem);
-    margin: 0 auto;
+    min-width: var(--token-size-8rem);
+    margin: 0;
     position: relative;
     display: block !important;
     visibility: visible;
@@ -400,12 +405,13 @@
     gap: var(--spacing-xs);
     /*
      * Tools keep intrinsic width (never shrink to 0 — that shoved cart
-     * off-screen). Search yields space / drops to its own row instead.
+     * off-screen). Search yields via flex:1 1 0; desktop belt is nowrap so
+     * tools never wrap under a still-wide search (审图：账户/金额出现应缩搜索).
      *
      * Do NOT make this flex item a size container: inline-size containment
      * ignores children on the inline axis, so width resolves to 0px and the
      * language/currency/account/cart cluster overflows and visually stacks.
-     * Progressive density uses viewport @media below (CQ alone also raced JS hydrate).
+     * Soft density (≤920) only when even min search cannot fit full labels.
      */
     flex: 0 0 auto;
     margin-left: auto;
@@ -476,47 +482,33 @@
 }
 
 @media (min-width: 769px) {
+    /*
+     * Desktop continuum (single authority — do not re-declare in header-default):
+     * one row; search shrinks; tools stay. Search own-row only at ≤768.
+     */
+    .weline-header .header-belt-row-1 {
+        flex-wrap: nowrap;
+        align-items: center;
+    }
+
     .weline-header .header-belt-row-1 .header-search-wrapper {
         order: 2;
+        flex: 1 1 0;
+        min-width: var(--token-size-8rem);
+        max-width: var(--size-content-640);
+        width: auto;
+        margin: 0;
     }
 
     .weline-header .header-belt-row-1 .header-belt-left {
         order: 1;
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: min(42%, var(--token-size-22rem));
     }
 
     .weline-header .header-belt-row-1 .header-actions {
         order: 3;
-    }
-}
-
-/*
- * ≤1100 (含 ≤768)：搜索始终独立成行，避免 769–1100 已换行、再窄却又挤回 Logo 行的断层。
- * Do NOT drop search at ~1480 — that leaves a dead mid gap on the logo row
- * while tools are still density-collapsed (审图：空档还这么宽就别收右侧).
- *
- * `.weline-header .header-search-wrapper { flex: 1 1 280px }` 特异性高于
- * header-default 的移动端整行规则，故必须在此用同前缀覆盖到 ≤768。
- */
-@media (max-width: 1100px) {
-    .weline-header .header-belt-row-1 .header-search-wrapper {
-        flex: 0 0 100%;
-        max-width: none;
-        min-width: 0;
-        width: 100%;
-        margin: 0;
-        order: 4;
-    }
-}
-
-@media (min-width: 769px) and (max-width: 1100px) {
-    /* Logo row = left + tools; reserve ~22rem for ZH/USD/avatar/cart. */
-    .weline-header .header-belt-row-1 .header-belt-left {
-        flex: 0 1 auto;
-        max-width: min(42%, calc(100% - var(--token-size-22rem)));
-        min-width: 0;
-    }
-
-    .weline-header .header-belt-row-1 .header-actions {
         flex: 0 0 auto;
         margin-left: auto;
     }
@@ -1482,14 +1474,13 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 }
 
 /*
- * Progressive density — only when the row is actually tight (≤1100):
- * search own row (above); cart money/label off; signed-in avatar-only;
- * guest account copy off; delivery line-1 off.
- * Desktop mid widths keep search in the belt mid gap + full tool labels.
+ * Soft progressive density — only when even min search (8rem) + full tools
+ * cannot fit (≤920). Mid desktop keeps「我的账户」+ 购物车金额; search yields.
  * Never hide language/currency current/code (flag+chevrons alone unreadable).
+ * Do NOT density-collapse at ≥1480 / 1680 (mid gap still free).
  */
 
-@media (min-width: 769px) and (max-width: 1100px) {
+@media (min-width: 769px) and (max-width: 920px) {
     .weline-header .header-cart .cart-info {
         display: none !important;
     }
@@ -1525,9 +1516,7 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
         flex: 0 1 auto;
         max-width: min(42%, var(--token-size-18rem));
     }
-}
 
-@media (min-width: 769px) and (max-width: 920px) {
     /* Keep ZH / $ USD labels — do not strip to orphan chevrons. */
     .weline-header .header-belt .location-line-2,
     .weline-header .header-belt .delivery-line-2 {
@@ -1659,7 +1648,7 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
         max-width: var(--token-size-5-5rem);
     }
 
-    /* Phone: icon-only cart — cart-info was only hidden 769–1100, so ≤768 still
+    /* Phone: icon-only cart — cart-info was only hidden 769–920, so ≤768 still
      * painted「购物车 / 零售 · $…」inside a 5.5rem tool slot and shoved the badge. */
     .weline-header .header-cart .cart-info,
     .weline-header .header-cart .cart-label {
@@ -1684,7 +1673,7 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
         display: none !important;
     }
 
-    /* Re-assert own-row (order after tools) — same continuum as ≤1100. */
+    /* Re-assert own-row (order after tools) — phone continuum only. */
     .weline-header .header-belt-row-1 .header-search-wrapper {
         display: block !important;
         order: 3;

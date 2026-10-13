@@ -133,11 +133,11 @@ final class MiniCartBadgeCornerContractTest extends TestCase
             '/\.wc-theme_widget_mini_cart_icon\s+\.cart-info\s*\{[^}]*width:\s*fit-content/s',
             $widget,
         );
-        // Density ≤1100 continuum: search own row through mobile (no jump-back at 768)
-        // + cart money off + signed-in avatar-only at tablet band.
+        // Density ≤1360 continuum: search own row through mobile (no jump-back at 768)
+        // + cart money off + signed-in avatar-only at mid band (avoids tools-wrap-under-search).
         // Wider viewports keep search in the belt mid gap and full tool labels.
         self::assertMatchesRegularExpression(
-            '/@media\s*\(max-width:\s*1100px\)[\s\S]{0,600}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
+            '/@media\s*\(max-width:\s*1360px\)[\s\S]{0,600}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
             $chrome,
         );
         self::assertMatchesRegularExpression(
@@ -160,10 +160,10 @@ final class MiniCartBadgeCornerContractTest extends TestCase
             'phone must hide More chrome; scroll owns overflow',
         );
         self::assertMatchesRegularExpression(
-            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]{0,400}?cart-info[\s\S]{0,120}?display:\s*none/s',
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1360px\)[\s\S]{0,400}?cart-info[\s\S]{0,120}?display:\s*none/s',
             $chrome,
         );
-        // ≤768 must also hide cart-info (769–1100 alone left phone with text inside 5.5rem slot).
+        // ≤768 must also hide cart-info (769–1360 alone left phone with text inside 5.5rem slot).
         self::assertMatchesRegularExpression(
             '/@media\s*\(max-width:\s*768px\)[\s\S]{0,2400}?\.header-cart \.cart-info[\s\S]{0,120}?display:\s*none\s*!important/s',
             $chrome,
@@ -174,7 +174,7 @@ final class MiniCartBadgeCornerContractTest extends TestCase
             $chrome,
         );
         self::assertMatchesRegularExpression(
-            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]{0,800}?data-auth-state="signed-in"[\s\S]{0,400}?\.register-text/s',
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1360px\)[\s\S]{0,800}?data-auth-state="signed-in"[\s\S]{0,400}?\.register-text/s',
             $chrome,
         );
         self::assertDoesNotMatchRegularExpression(
