@@ -163,7 +163,7 @@ $checks = [
             static fn (bool $hit, mixed $notice): bool => $hit || (is_string($notice) && str_contains($notice, 'Weline UI 2.0') && str_contains($notice, 'w-field')),
             false,
         ),
-    'startup and MCP instructions stay compact pointers' => strlen(ToolService::instructions()) < 2_000
+    'startup and MCP instructions stay compact pointers' => strlen(ToolService::instructions()) < 2_200
         && strlen(json_encode($contract['session_startup_notices'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) < 2_000
         && !str_contains(ToolService::instructions(), 'required 默认 JSON 注入')
         && !str_contains(implode("\n", $contract['session_startup_notices']), 'Every feature MUST Agent-run Playwright e2e to PASS'),
@@ -837,6 +837,7 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'self-review')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_code_evidence')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_impact_surface')
+            && str_contains((string) ($rule['summary'] ?? ''), 'scheme_requires_architecture_review')
             && str_contains((string) ($rule['summary'] ?? ''), 'SwitchMode')
             && (str_contains((string) ($rule['summary'] ?? ''), 'Build')
                 || str_contains((string) ($rule['summary'] ?? ''), '批准'))
@@ -944,12 +945,27 @@ $checks = [
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'plan_review_requires_impact_surface'
-            && str_contains((string) ($rule['summary'] ?? ''), 'CASCADE')
-            && str_contains((string) ($rule['summary'] ?? ''), 'AOCI')
+            && str_contains((string) ($rule['summary'] ?? ''), 'HARD AOCI ATTEMPT FIRST')
+            && str_contains((string) ($rule['summary'] ?? ''), 'aoci_search')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBID skipping AOCI')
+            && str_contains((string) ($rule['summary'] ?? ''), 'aoci_unavailable')
             && str_contains((string) ($rule['summary'] ?? ''), 'Weline MCP')
             && str_contains((string) ($rule['summary'] ?? ''), 'host-native')
             && str_contains((string) ($rule['summary'] ?? ''), '未探测影响面，暂不结论')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan-review-requires-impact-surface.mdc')),
+        false,
+    ),
+    'hard_constraints include scheme_requires_architecture_review' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'scheme_requires_architecture_review'
+            && str_contains((string) ($rule['summary'] ?? ''), 'ANY engineering')
+            && str_contains((string) ($rule['summary'] ?? ''), 'mechanism')
+            && str_contains((string) ($rule['summary'] ?? ''), 'owning_module')
+            && str_contains((string) ($rule['summary'] ?? ''), 'not_to_do')
+            && str_contains((string) ($rule['summary'] ?? ''), 'architecture-grade')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan_complexity=simple')
+            && str_contains((string) ($rule['summary'] ?? ''), 'scheme-requires-architecture-review.mdc')),
         false,
     ),
     'hard_constraints include user_facing_verdict_last' => array_reduce(
@@ -2353,6 +2369,10 @@ $checks = [
         ToolService::instructions(),
         'plan_review_requires_impact_surface'
     ),
+    'mcp instructions mention scheme_requires_architecture_review' => str_contains(
+        ToolService::instructions(),
+        'scheme_requires_architecture_review'
+    ),
     'mcp instructions mention user_facing_verdict_last' => str_contains(
         ToolService::instructions(),
         'user_facing_verdict_last'
@@ -2375,6 +2395,14 @@ $checks = [
             && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_impact_surface')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan-review-requires-impact-surface.mdc')),
+        false,
+    ),
+    'global_rules_dual_write mentions scheme_requires_architecture_review mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'scheme_requires_architecture_review')
+            && str_contains((string) ($rule['summary'] ?? ''), 'scheme-requires-architecture-review.mdc')),
         false,
     ),
     'global_rules_dual_write mentions plan_complete_self_review_then_implement mirror' => array_reduce(
