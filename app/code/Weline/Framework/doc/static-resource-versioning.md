@@ -176,6 +176,8 @@
 | 浏览器 HTML | FPC HIT `Cache-Control` | 短 `max-age` + **`must-revalidate`**；系统戳响应头 `X-Weline-Deploy-Version` 仅观测/静态破缓；**店面世代权威** = Scope 已发布 `themePublishedVersionId`（ScopeBootstrap / QueryBin）；旧页主题发布身份不一致 → Frontend `deploy_reload_required` 自动 reload |
 | 事件场 `prod_after.deploy_version` | Deploy 模块 `register.php` 版本 | **≠** stamp；供 Visitor 等旁路，不作店面呈现权威 |
 
+**开发者维护店面世代 / 前端工作流（必读）**：[`../../Frontend/doc/架构/店面世代与前端工作流.md`](../../Frontend/doc/架构/店面世代与前端工作流.md)（含总图、维护场景表、回归最小集）。系统发版与主题发布必须分轴，禁止把 `deploy_version` 再接回店面 reload。
+
 ## Taglib callback 例外（常见 404 坑）
 
 `@static(...)` **只在 `.phtml` 编译期 AST 中解析**。Taglib `callback()` / `runtime_callback()` 返回的 HTML 字符串**不会**二次解析其中的 `@static`；裸写会导致浏览器请求 `.../@static(Module::css/foo.css)` 并 404。

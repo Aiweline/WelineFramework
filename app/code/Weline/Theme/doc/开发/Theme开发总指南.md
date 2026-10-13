@@ -32,7 +32,9 @@
    - **CSS/PHTML 变量强约束（`REQ-THEME-0007`）**：`app/code/Weline/Theme/doc/theme-css-variables-only.md`（审计清单：`theme-hardcoded-visual-audit.md`）
    - **theme.css 架构 vs 风格（硬）**：`app/code/Weline/Theme/doc/theme-css-architecture-vs-style.md`
    - Theme.js：`app/code/Weline/Theme/doc/Theme.js使用指南.md`
+   - **主题发布 ↔ 店面世代身份（维护必读）**：`app/code/Weline/Theme/doc/架构/主题开发与店面世代.md`
    - 浏览器业务请求：`app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
+   - 前端勾连总图：`app/code/Weline/Frontend/doc/架构/店面世代与前端工作流.md`
    - Taglib：`app/code/Weline/Taglib/doc/README.md`
 
 不要先读 `view/tpl`、`generated/`、旧计划文档或历史任务记录来猜当前规则。
@@ -483,7 +485,9 @@ component 负责：
 - `app/code/Weline/Theme/doc/widget-slot-attributes.md`
 - `app/code/Weline/Theme/doc/frontend-section-weline-code.md`
 - `app/code/Weline/Theme/doc/Theme.js使用指南.md`
+- `app/code/Weline/Theme/doc/架构/主题开发与店面世代.md`
 - `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
+- `app/code/Weline/Frontend/doc/架构/店面世代与前端工作流.md`
 - `app/code/Weline/Taglib/doc/README.md`
 - `app/code/Weline/Framework/doc/4-内置标签/01-lang标签使用指南.md`（前端 i18n 首选）
 

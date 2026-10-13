@@ -20,5 +20,7 @@ final class ThemePublishedVersionRuntimeResolverContractTest extends TestCase
         self::assertStringNotContainsString('ThemeRuntimeLayoutResolver', $src);
         self::assertStringContainsString('default.__website__.default', $src);
         self::assertMatchesRegularExpression('/Authority is ThemeScopeVersion/', $src);
+        self::assertStringContainsString('resolveGenerationIdentity', $src);
+        self::assertStringContainsString('not system deploy_version', $src);
     }
 }

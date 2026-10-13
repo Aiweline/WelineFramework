@@ -15,6 +15,15 @@ class FrontendRuntimeThemeVersionContractTest extends TestCore
         self::assertStringContainsString('themePublishedVersionId', $src);
         self::assertStringContainsString('themePublishedVersion', $src);
         self::assertStringContainsString('deployVersion', $src);
+        // api subtree must mirror theme stamps (same pattern as deployVersion) for Worker handshake.
+        self::assertMatchesRegularExpression(
+            "/'api'\\s*=>\\s*\\[[\\s\\S]*?'themePublishedVersionId'\\s*=>\\s*\\\$themePublishedVersionId/",
+            $src
+        );
+        self::assertMatchesRegularExpression(
+            "/'api'\\s*=>\\s*\\[[\\s\\S]*?'themePublishedVersion'\\s*=>\\s*\\\$themePublishedVersion/",
+            $src
+        );
         self::assertStringContainsString('ThemePublishedVersionRuntimeResolver', $src);
         self::assertStringContainsString('weline-api.js', $src);
         self::assertStringContainsString('account-session.js', $src);

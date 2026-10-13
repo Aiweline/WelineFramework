@@ -16,6 +16,7 @@ use Weline\Framework\Runtime\ProcessSharedInterface;
  * Resolve the published ThemeScopeVersion (theme version V) for storefront runtime tags.
  *
  * Authority is ThemeScopeVersion selection / is_published — not ThemeLayoutVersion page axis.
+ * Storefront generation / Worker identity is this Scope-published version id — not system deploy_version.
  */
 class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
 {
@@ -24,10 +25,33 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
      */
     public function resolve(?int $themeId = null, string $pageType = 'homepage'): array
     {
+        $full = $this->resolveGenerationIdentity($themeId, $pageType);
+
+        return [
+            'themePublishedVersionId' => $full['themePublishedVersionId'],
+            'themePublishedVersion' => $full['themePublishedVersion'],
+        ];
+    }
+
+    /**
+     * Scope-level storefront generation identity for FE↔BE handshake pairing.
+     * Empty id means skip generation enforcement (same spirit as empty deploy stamp).
+     *
+     * @return array{
+     *   themePublishedVersionId: string,
+     *   themePublishedVersion: string,
+     *   themeId: int,
+     *   canonicalScope: string
+     * }
+     */
+    public function resolveGenerationIdentity(?int $themeId = null, string $pageType = 'homepage'): array
+    {
         unset($pageType);
         $empty = [
             'themePublishedVersionId' => '',
             'themePublishedVersion' => '',
+            'themeId' => 0,
+            'canonicalScope' => '',
         ];
 
         try {
@@ -56,6 +80,8 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                     return [
                         'themePublishedVersionId' => (string)$published->getVersionId(),
                         'themePublishedVersion' => $name,
+                        'themeId' => $candidateThemeId,
+                        'canonicalScope' => (string)$scope,
                     ];
                 }
             }

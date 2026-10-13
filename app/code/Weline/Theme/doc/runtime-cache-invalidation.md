@@ -43,7 +43,9 @@
 
 ## 前台发布回执
 
-- `ThemePublishedVersionRuntimeResolver` 按请求 `ScopeIdentity` 祖先链解析 `theme_layout_version.is_published`；链上未命中时回退该 theme+pageType 任意已发布版本，保证 Website 已发布时 HTML `themePublishedVersion*` 非空。
+- `ThemePublishedVersionRuntimeResolver` 按请求 `ScopeIdentity` 祖先链解析已发布 `ThemeScopeVersion`；保证 Website 已发布时 HTML `themePublishedVersion*` 非空。`resolveGenerationIdentity()` 是店面世代权威（非系统 `deploy_version`）。
+- **主题开发 ↔ 发布身份**：[`架构/主题开发与店面世代.md`](./架构/主题开发与店面世代.md)。
+- **开发者维护前端勾连**：发布后如何 hole-punch / handshake / Worker 一对一身份，见 Frontend [`架构/店面世代与前端工作流.md`](../../Frontend/doc/架构/店面世代与前端工作流.md)。
 
 ## Chrome partial 输出缓存
 

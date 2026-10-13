@@ -7,9 +7,10 @@
 1. [`需求.md`](./需求.md)
 2. [`开发日志.md`](./开发日志.md)
 3. [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md)
-4. [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
-5. [`../view/theme/README.md`](../view/theme/README.md)
-6. 按任务继续读：
+4. **主题开发与店面世代（发布如何变成前端身份）**：[`架构/主题开发与店面世代.md`](./架构/主题开发与店面世代.md) — 开发者维护必读
+5. [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)
+6. [`../view/theme/README.md`](../view/theme/README.md)
+7. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
    - **布局固化与应用部件默认注入（权威 · 纯 PHTML）**：[`布局固化与默认注入.md`](./布局固化与默认注入.md) — **两步勿混**：①关系固化（槽位/部件→派生 PHTML）；②Taglib 编译（源/派生→按语种 `com_*`）。结构、参数、语言配置变更均重固；有派生文件优先选它，否则用原模板；固化目录不保留侧车；仅人工卸载可省略必装。**改 `app/design` 后**见同文 §3.5（`theme:upgrade` / 排水；**禁止手抄** `generated/theme-layout-entities/`；`theme:layout-solidify-status` / `WELINE_THEME_SOLIDIFY_DEBUG`）。Composer path 须 symlink：Framework [`Composer-path-symlink合同.md`](../../Framework/doc/3-开发/Composer-path-symlink合同.md)。
    - **Theme 机制边界（严重）**：[`开发/spec/theme-mechanism-not-foreign-content.md`](./开发/spec/theme-mechanism-not-foreign-content.md) — Theme 只负责机制；禁止外模块主内容空挂 Theme required 注入。
@@ -26,9 +27,11 @@
    - **预览三态权威（可视化 / 版本真实预览 / 正式）**：[`preview-and-runtime-modes.md`](./preview-and-runtime-modes.md) — 参数为主 · Token 反解析为准 · RequestContext 为准；技能 `weline-theme-development`
    - 可视化编辑器：[`visual-editor/README.md`](./visual-editor/README.md)；跨帧热路径：[`visual-editor/preview-frame-bus.md`](./visual-editor/preview-frame-bus.md)
    - 版本与发布：[`version-control/README.md`](./version-control/README.md)
+   - 运行时缓存失效：[`runtime-cache-invalidation.md`](./runtime-cache-invalidation.md)
    - Theme.js：[`Theme.js使用指南.md`](./Theme.js使用指南.md)
    - WLS 视图预热贡献：[`worker-view-warmup-contributions.md`](./worker-view-warmup-contributions.md)
    - 浏览器请求：[`../../Frontend/doc/Weline.Api使用指南.md`](../../Frontend/doc/Weline.Api使用指南.md)
+   - 店面世代前端勾连：[`../../Frontend/doc/架构/店面世代与前端工作流.md`](../../Frontend/doc/架构/店面世代与前端工作流.md)
 
 本 README 现在只做 Theme 模块索引，不再承载旧时代的 `theme.xml`、`design/frontend/default/layout.html`、`{block}` / `{include}` 那套示例。
 

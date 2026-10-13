@@ -1,6 +1,8 @@
 # 主题版本、草稿与发布
 
 > 目标契约，2026-09-25 更新；业务实现待开展。完整设计及改删清单见[主题固化物实施方案](../开发/spec/layout-entity-per-version-isolation.md)。旧 `ThemeLayoutVersion` 页面级版本模型已退出目标方案，当前代码仍需按实施任务替换。
+>
+> **与店面前端勾连**：已发布版本的 `themePublishedVersionId` 即店面世代身份（非系统 `deploy_version`）。主题开发者必读 [主题开发与店面世代](../架构/主题开发与店面世代.md) 与 Frontend [店面世代与前端工作流](../../Frontend/doc/架构/店面世代与前端工作流.md)。
 
 ## 一个版本表示什么
 
