@@ -929,6 +929,11 @@ class App
         ) {
             return;
         }
+        // Scope hole-punch must only emit the protocol bootstrap cookie — never
+        // eager-mint/reassert WELINE_CUSTOMER_SESSID* and risk racing the login jar.
+        if ($this->isFrontendScopeBootstrapRequestUri($requestUri)) {
+            return;
+        }
 
         if ($this->canDeferFrontendSessionStart($requestMethod)) {
             return;
@@ -954,6 +959,9 @@ class App
         if ($this->isFrontendQueryBinRequestUri($requestUri)) {
             return true;
         }
+        if ($this->isFrontendScopeBootstrapRequestUri($requestUri)) {
+            return true;
+        }
 
         $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: $requestUri);
         $normalizedPath = '/' . \ltrim($path, '/');
@@ -963,6 +971,26 @@ class App
         $normalizedPath = \strtolower($normalizedPath);
         return $normalizedPath === \strtolower($streamPath)
             || $normalizedPath === '/framework/stream';
+    }
+
+
+    private function isFrontendScopeBootstrapRequestUri(string $requestUri): bool
+    {
+        $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: $requestUri);
+        $normalizedPath = \strtolower('/' . \ltrim($path, '/'));
+        $restPrefix = \trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/');
+        $prefixed = $restPrefix !== ''
+            ? '/' . \strtolower($restPrefix) . '/frontend/scope-bootstrap'
+            : '';
+
+        return $normalizedPath === '/api/frontend/scope-bootstrap'
+            || $normalizedPath === '/frontend/scope-bootstrap'
+            || $normalizedPath === '/api/frontend/scopebootstrap'
+            || $normalizedPath === '/frontend/scopebootstrap'
+            || ($prefixed !== '' && (
+                $normalizedPath === $prefixed
+                || $normalizedPath === \str_replace('scope-bootstrap', 'scopebootstrap', $prefixed)
+            ));
     }
 
     private function canDeferFrontendSessionStart(string $requestMethod): bool

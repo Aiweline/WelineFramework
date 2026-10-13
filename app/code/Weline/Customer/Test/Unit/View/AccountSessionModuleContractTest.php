@@ -94,6 +94,9 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('isTrustedSignedInCache', $js);
         self::assertStringContainsString('isBrowserSignedInSnapshot', $js);
         self::assertStringContainsString('syncSessionAtPersonalCenter', $js);
+        self::assertStringContainsString('preserved: true', $js);
+        self::assertStringContainsString('skipGuestNegativeCache: true', $js);
+        self::assertStringContainsString('must NOT bounce to login', $js);
         self::assertStringContainsString('个人中心由 account-index.js 同步会话', $js);
         // Seed SSR sessionUser on personal center before paintOnly (parallel-load race belt).
         self::assertStringContainsString('seedPersonalCenterSessionFromSsr', $js);

@@ -264,7 +264,7 @@ final class ScopeHolePunchSecurityGate
 
         $origin = \trim((string)$request->getServer('HTTP_ORIGIN', ''));
         if ($origin !== '') {
-            return \hash_equals(\rtrim($expected, '/'), \rtrim($origin, '/'));
+            return $this->originMatchesExpected($origin, $expected);
         }
 
         // Browser fetch without Origin is unusual for credentialed POST; require
@@ -272,6 +272,100 @@ final class ScopeHolePunchSecurityGate
         $fetchSite = \strtolower(\trim((string)$request->getServer('HTTP_SEC_FETCH_SITE', '')));
 
         return $fetchSite === 'same-origin';
+    }
+
+    /**
+     * Same-site Origin vs request authority.
+     *
+     * Worker listen ports (e.g. :9555) 308 to managed Nginx apex (no port). After
+     * that hop, browsers may still send Origin with the listen port while
+     * RequestAuthority is apex — exact string equality falsely 403s hole-punch and
+     * breaks QueryBin account.current → login↔account loops.
+     *
+     * Host+scheme must match. Ports may differ only when one side is the scheme
+     * default (443/80) and the other is a non-default same-host listen port.
+     */
+    public function originMatchesExpected(string $origin, string $expected): bool
+    {
+        $left = $this->parseOriginParts($origin);
+        $right = $this->parseOriginParts($expected);
+        if ($left === null || $right === null) {
+            return false;
+        }
+        if ($left['scheme'] !== $right['scheme']
+            || !\hash_equals($left['host'], $right['host'])
+        ) {
+            return false;
+        }
+
+        $leftPort = $this->effectiveOriginPort($left['scheme'], $left['port']);
+        $rightPort = $this->effectiveOriginPort($right['scheme'], $right['port']);
+        if ($leftPort === $rightPort) {
+            return true;
+        }
+
+        $default = $left['scheme'] === 'https' ? 443 : 80;
+
+        // Apex ↔ Worker listen on the same host only (one side scheme-default).
+        return ($leftPort === $default) !== ($rightPort === $default);
+    }
+
+    /**
+     * @return array{scheme:string,host:string,port:int|null}|null
+     */
+    private function parseOriginParts(string $origin): ?array
+    {
+        $origin = \rtrim(\trim($origin), '/');
+        if ($origin === '' || \preg_match('#^https?://#i', $origin) !== 1) {
+            return null;
+        }
+        try {
+            $parts = \parse_url($origin);
+        } catch (\ValueError) {
+            return null;
+        }
+        if (!\is_array($parts)) {
+            return null;
+        }
+        $scheme = \strtolower(\trim((string)($parts['scheme'] ?? '')));
+        $host = \strtolower(\trim((string)($parts['host'] ?? ''), '[]'));
+        if (!\in_array($scheme, ['http', 'https'], true) || $host === '') {
+            return null;
+        }
+        // Reject userinfo / path / query / fragment — Origin must be scheme://host[:port].
+        if (isset($parts['user']) || isset($parts['pass']) || isset($parts['path'])
+            || isset($parts['query']) || isset($parts['fragment'])
+        ) {
+            // parse_url may omit path for bare origin; empty path is fine.
+            if (isset($parts['user']) || isset($parts['pass'])
+                || isset($parts['query']) || isset($parts['fragment'])
+            ) {
+                return null;
+            }
+            $path = (string)($parts['path'] ?? '');
+            if ($path !== '' && $path !== '/') {
+                return null;
+            }
+        }
+        $port = isset($parts['port']) ? (int)$parts['port'] : null;
+        if ($port !== null && ($port < 1 || $port > 65535)) {
+            return null;
+        }
+
+        return [
+            'scheme' => $scheme,
+            'host' => $host,
+            'port' => $port,
+        ];
+    }
+
+    private function effectiveOriginPort(string $scheme, ?int $port): int
+    {
+        if ($port !== null && $port > 0) {
+            return $port;
+        }
+
+        return $scheme === 'https' ? 443 : 80;
     }
 
     private function clientIp(Request $request): string

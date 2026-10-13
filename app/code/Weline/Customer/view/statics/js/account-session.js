@@ -1037,30 +1037,49 @@
         /**
          * Personal center only (account-index.js): one account.current to refresh browser
          * snapshot + header. Session dead → clear local chrome and go login.
+         *
+         * Hard: if SSR/prior already has a resolvable identity, QueryBin/Scope transport
+         * failure or a false guest must NOT bounce to login (that loops with Login SSR
+         * 302 back to account when the document session is still alive).
          */
         async syncSessionAtPersonalCenter() {
+            const priorUser = this.resolveUserIdentity(this.frontendUser)
+                ? this.frontendUser
+                : null;
             let status = null;
             try {
-                status = await this.checkFrontendUserLogin({ force: true });
+                status = await this.checkFrontendUserLogin({
+                    force: true,
+                    skipGuestNegativeCache: true,
+                });
             } catch (_error) {
-                status = { isLogin: false, user: null };
+                status = null;
             }
             const user = status && (status.user || this.frontendUser);
-            if (!status || !status.isLogin || !this.resolveUserIdentity(user)) {
-                this.beginAuthBoundary('logout');
-                try {
-                    window.location.assign(this.resolveAccountLoginUrl());
-                } catch (_nav) {
-                    // ignore
-                }
-                return { synced: false, isLogin: false, redirected: true };
+            if (status && status.isLogin && this.resolveUserIdentity(user)) {
+                this.frontendUser = user;
+                document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+                    this.applyHeaderSignedIn(root, user);
+                });
+                this.refreshAccountMenuSignals().catch(() => {});
+                return { synced: true, isLogin: true, user };
             }
-            this.frontendUser = user;
-            document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
-                this.applyHeaderSignedIn(root, user);
-            });
-            this.refreshAccountMenuSignals().catch(() => {});
-            return { synced: true, isLogin: true, user };
+            if (priorUser) {
+                // Preserve SSR/prior signed-in chrome; keep trying silently later.
+                this.frontendUser = priorUser;
+                this.writeFrontendSessionCache({ isLogin: true, user: priorUser });
+                document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+                    this.applyHeaderSignedIn(root, priorUser);
+                });
+                return { synced: false, isLogin: true, preserved: true };
+            }
+            this.beginAuthBoundary('logout');
+            try {
+                window.location.assign(this.resolveAccountLoginUrl());
+            } catch (_nav) {
+                // ignore
+            }
+            return { synced: false, isLogin: false, redirected: true };
         }
 
         resolveSignedInLeaveUrl() {

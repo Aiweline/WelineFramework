@@ -60,13 +60,42 @@ final class ScopeHolePunchSecurityGateContractTest extends TestCase
     public function testControllerIsPostOnly(): void
     {
         $src = (string)\file_get_contents(
-            BP . 'app/code/Weline/Frontend/Controller/Api/ScopeBootstrap.php'
+            \dirname(__DIR__, 3) . '/Controller/Api/ScopeBootstrap.php'
         );
         self::assertStringContainsString('function postIndex', $src);
         self::assertStringNotContainsString('function getIndex', $src);
         self::assertStringContainsString('ScopeHolePunchSecurityGate', $src);
         self::assertStringContainsString("'deploy_version'", $src);
         self::assertStringContainsString('currentDeployVersion', $src);
+    }
+
+    public function testOriginMatchesExpectedAcceptsWorkerListenPortVsApex(): void
+    {
+        $gate = $this->gate();
+        self::assertTrue($gate->originMatchesExpected(
+            'https://p05113ef3.test.weline.com:9555',
+            'https://p05113ef3.test.weline.com',
+        ));
+        self::assertTrue($gate->originMatchesExpected(
+            'https://p05113ef3.test.weline.com',
+            'https://p05113ef3.test.weline.com:9555',
+        ));
+        self::assertTrue($gate->originMatchesExpected(
+            'https://p05113ef3.test.weline.com',
+            'https://p05113ef3.test.weline.com',
+        ));
+        self::assertFalse($gate->originMatchesExpected(
+            'https://evil.example.com:9555',
+            'https://p05113ef3.test.weline.com',
+        ));
+        self::assertFalse($gate->originMatchesExpected(
+            'http://p05113ef3.test.weline.com:9555',
+            'https://p05113ef3.test.weline.com',
+        ));
+        self::assertFalse($gate->originMatchesExpected(
+            'https://p05113ef3.test.weline.com:9555',
+            'https://p05113ef3.test.weline.com:9443',
+        ));
     }
 
     private function gate(): ScopeHolePunchSecurityGate
