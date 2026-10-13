@@ -836,6 +836,7 @@ $checks = [
             && ($rule['id'] ?? '') === 'plan_complete_self_review_then_implement'
             && str_contains((string) ($rule['summary'] ?? ''), 'self-review')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_code_evidence')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_impact_surface')
             && str_contains((string) ($rule['summary'] ?? ''), 'SwitchMode')
             && (str_contains((string) ($rule['summary'] ?? ''), 'Build')
                 || str_contains((string) ($rule['summary'] ?? ''), '批准'))
@@ -937,6 +938,18 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'LAST')
             && str_contains((string) ($rule['summary'] ?? ''), '未探测，暂不结论')
             && str_contains((string) ($rule['summary'] ?? ''), '空想')),
+        false,
+    ),
+    'hard_constraints include plan_review_requires_impact_surface' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'plan_review_requires_impact_surface'
+            && str_contains((string) ($rule['summary'] ?? ''), 'CASCADE')
+            && str_contains((string) ($rule['summary'] ?? ''), 'AOCI')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Weline MCP')
+            && str_contains((string) ($rule['summary'] ?? ''), 'host-native')
+            && str_contains((string) ($rule['summary'] ?? ''), '未探测影响面，暂不结论')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan-review-requires-impact-surface.mdc')),
         false,
     ),
     'hard_constraints include user_facing_verdict_last' => array_reduce(
@@ -2326,6 +2339,10 @@ $checks = [
         ToolService::instructions(),
         'plan_review_requires_code_evidence'
     ),
+    'mcp instructions mention plan_review_requires_impact_surface' => str_contains(
+        ToolService::instructions(),
+        'plan_review_requires_impact_surface'
+    ),
     'mcp instructions mention user_facing_verdict_last' => str_contains(
         ToolService::instructions(),
         'user_facing_verdict_last'
@@ -2337,6 +2354,14 @@ $checks = [
     'mcp instructions mention global_rules_dual_write_mcp_and_host' => str_contains(
         ToolService::instructions(),
         'global_rules_dual_write_mcp_and_host'
+    ),
+    'global_rules_dual_write mentions plan_review_requires_impact_surface mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_impact_surface')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan-review-requires-impact-surface.mdc')),
+        false,
     ),
     'global_rules_dual_write mentions plan_complete_self_review_then_implement mirror' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],

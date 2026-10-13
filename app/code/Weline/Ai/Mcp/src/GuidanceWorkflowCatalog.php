@@ -396,7 +396,7 @@ final class GuidanceWorkflowCatalog
                     'DEFAULT (host_plan_mode_for_planning): Agent itself enables host Plan Mode before architecture/plan—Cursor SwitchMode target_mode_id=plan—FORBID asking the user to click into Plan Mode.',
                     'SIMPLE SKIP: plan_complexity=simple + rationale≥24 (single module, ≤~2h, no new extension invention)—still MUST accept (requirement_acceptance_always); Web touch → Browser WB-OP visual+logic even without e2e.',
                     'Complete architecture_design + chapter plan in Plan Mode; forbid production PHP/phtml/CSS while planning.',
-                    'After plan body complete (plan_complete_self_review_then_implement): Agent self-reviews with plan_review_requires_code_evidence; on 通过/有条件通过 SwitchMode→agent and implement—FORBID waiting for user Build/批准计划/点击计划 to start.',
+                    'After plan body complete (plan_complete_self_review_then_implement): Agent self-reviews with plan_review_requires_code_evidence + plan_review_requires_impact_surface (AOCI→MCP→native cascade for blast radius + smells); on 通过/有条件通过 SwitchMode→agent and implement—FORBID waiting for user Build/批准计划/点击计划 to start.',
                     'On 不通过 or conditions needing a user product decision: stop and report; user 先别开发 may still wait. Codex opt-in keeps Plan Mode as approval container.',
                     'If host has no Plan Mode: plan read-only in chat; record host_plan_mode=unavailable + rationale≥24; then still self-review→implement when eligible (unless simple skip already coding).',
                     'Plan body (plan_content_focus_only): ONLY 背景 + 方案 + 细节; forbid unrelated narrative that drifts the topic.',
