@@ -45,7 +45,7 @@ final class ThemePublishedVersionRuntimeResolverTest extends TestCase
     {
         $controller = $this->read('app/code/Weline/Theme/Controller/Backend/ThemeEditor.php');
 
-        self::assertStringContainsString('clearAllThemeRelatedCaches(', $controller);
+        self::assertStringContainsString('invalidateAfterVersionPublish(', $controller);
         self::assertStringContainsString('flushFullPageCache(?ThemeEditorContext $context', $controller);
         self::assertStringContainsString('flushFullPageCache($context, $themeId)', $controller);
         self::assertStringContainsString('theme_scope_structural_conflict', $controller);
@@ -57,9 +57,9 @@ final class ThemePublishedVersionRuntimeResolverTest extends TestCase
         $service = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspaceRequestService.php');
 
         self::assertStringContainsString("!empty(\$result['blocked'])", $service);
-        self::assertStringContainsString('clearAllThemeRelatedCaches(', $service);
+        self::assertStringContainsString('bumpScopedStaticAndInvalidate(', $service);
         self::assertLessThan(
-            \strpos($service, 'clearAllThemeRelatedCaches('),
+            \strpos($service, 'bumpScopedStaticAndInvalidate('),
             \strpos($service, "!empty(\$result['blocked'])"),
         );
     }

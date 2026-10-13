@@ -7,31 +7,32 @@ namespace Weline\Theme\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 主题可视化发布须 bump theme.static_version；模板禁止硬编码 @static ?v=。
+ * 主题可视化发布须按 scope+theme+themeVersionId bump；禁止再写全局 theme_static_version。
  */
 final class ThemeStaticVersionPublishContractTest extends TestCase
 {
-    public function testBumpStaticVersionIsPublicAndWiredFromPublishPaths(): void
+    public function testBumpStaticVersionIsVersionScopedAndWiredFromPublishPaths(): void
     {
         $versionService = $this->read('app/code/Weline/Theme/Service/ThemeLayoutVersionService.php');
-        self::assertStringContainsString('public function bumpStaticVersion(int $themeId): string', $versionService);
-        self::assertStringContainsString("setConfig('theme_static_version'", $versionService);
-        self::assertStringContainsString("setConfig('theme.static_version'", $versionService);
+        self::assertStringContainsString('function bumpStaticVersion(', $versionService);
+        self::assertStringContainsString('theme_static_versions', $versionService);
+        self::assertStringContainsString('staticVersionMapKey', $versionService);
+        self::assertStringNotContainsString("setConfig('theme_static_version'", $versionService);
 
         $trait = $this->read('app/code/Weline/Framework/View/TraitTemplate.php');
-        self::assertStringContainsString("getConfig('theme_static_version')", $trait);
+        self::assertStringContainsString('theme_static_versions', $trait);
+        self::assertStringContainsString('ThemeApplicationContext::current', $trait);
 
         $scopedRequest = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspaceRequestService.php');
         self::assertStringContainsString('ThemeLayoutVersionService $layoutVersions', $scopedRequest);
         self::assertStringContainsString('bumpStaticVersion(', $scopedRequest);
+        self::assertStringContainsString('invalidateAfterVersionPublish', $scopedRequest);
+        self::assertStringNotContainsString('clearAllThemeRelatedCaches(', $scopedRequest);
 
         $editor = $this->read('app/code/Weline/Theme/Controller/Backend/ThemeEditor.php');
-        self::assertStringContainsString('bumpStaticVersion($themeId)', $editor);
-        self::assertGreaterThanOrEqual(
-            1,
-            substr_count($editor, 'bumpStaticVersion($themeId)'),
-            'Standard publish finalize must bump static version.',
-        );
+        self::assertStringContainsString('bumpStaticVersion(', $editor);
+        self::assertStringContainsString('invalidateAfterVersionPublish', $editor);
+        self::assertStringNotContainsString('clearAllThemeRelatedCaches($resolvedThemeId', $editor);
         self::assertStringContainsString('finalizeStandardLayoutPublish(', $editor);
     }
 

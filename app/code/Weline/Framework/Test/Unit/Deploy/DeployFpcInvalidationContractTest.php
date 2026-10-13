@@ -91,8 +91,16 @@ final class DeployFpcInvalidationContractTest extends TestCase
             BP . 'app/code/Weline/Framework/Deploy/DeployFpcInvalidation.php'
         );
         self::assertStringContainsString('function afterRelease', $src);
-        self::assertStringContainsString('purgeFpcAll: true', $src);
-        self::assertStringContainsString("'deploy_release'", $src);
+        // System release: stamp only — must not publishInvalidation with purge_fpc_all.
+        self::assertStringNotContainsString("'deploy_release'", $src);
+        $afterRelease = (string)(preg_match(
+            '/function afterRelease\(\): array\s*\{(.*?)\n    \}/s',
+            $src,
+            $m
+        ) === 1 ? $m[1] : '');
+        self::assertStringContainsString('ensureObservableDeployStamp', $afterRelease);
+        self::assertStringNotContainsString('publishInvalidation', $afterRelease);
+        self::assertStringNotContainsString('purgeFpcAll: true', $afterRelease);
     }
 
     public function testResolverSourceIncludesDeployNamespace(): void

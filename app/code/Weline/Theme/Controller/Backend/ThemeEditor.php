@@ -189,8 +189,8 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 可视化编辑发布主题后清理缓存：必须清理全部主题相关缓存（chrome/FPC/模板/generated）。
-     * 发布后不调用会导致前台仍显示旧 HTML 或重复部件。
+     * 可视化编辑发布后：只失效当前范围/主题版本相关缓存。
+     * 禁止 clearAllThemeRelatedCaches（会清空全部网站 FPC）。
      */
     private function flushFullPageCache(?ThemeEditorContext $context = null, ?int $themeId = null): void
     {
@@ -199,7 +199,39 @@ class ThemeEditor extends BackendController
             $resolvedThemeId = ($themeId !== null && $themeId > 0)
                 ? $themeId
                 : (($context instanceof ThemeEditorContext && $context->themeId > 0) ? $context->themeId : null);
-            $cleaner->clearAllThemeRelatedCaches($resolvedThemeId, 'theme_editor_publish');
+            if ($context instanceof ThemeEditorContext) {
+                $app = $context->application;
+                $ownerScope = trim((string)($app?->versionOwnerScope ?? ''));
+                if ($ownerScope === '') {
+                    $ownerScope = trim((string)$context->scope->storageScope);
+                }
+                $versionId = max(0, (int)($app?->themeVersionId ?? 0));
+                $tid = ($resolvedThemeId !== null && $resolvedThemeId > 0)
+                    ? $resolvedThemeId
+                    : max(0, (int)($app?->themeId ?? 0));
+                if ($tid >= 1 && $ownerScope !== '') {
+                    $identity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+                        themeId: $tid,
+                        canonicalScope: $ownerScope,
+                        storeMode: trim((string)($app?->versionOwnerStoreMode ?? $context->scope->storeMode)),
+                        area: $context->area === 'backend'
+                            ? \Weline\Theme\Api\Version\ThemeVersionIdentity::AREA_BACKEND
+                            : \Weline\Theme\Api\Version\ThemeVersionIdentity::AREA_FRONTEND,
+                        themeVersionId: $versionId,
+                        mode: \Weline\Theme\Api\Version\ThemeVersionIdentity::MODE_FORMAL,
+                        contentRevision: max(0, (int)($app?->contentRevision ?? 0)),
+                    );
+                    $cleaner->invalidateAfterVersionPublish($identity, 'theme_editor_publish');
+
+                    return;
+                }
+            }
+            if ($context instanceof ThemeEditorContext) {
+                $scopeContext = ObjectManager::getInstance(
+                    \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class
+                )->fromStorageScope($context->scope->storageScope, true);
+                $cleaner->clearScopedCaches($scopeContext, $resolvedThemeId, 'theme_editor_publish');
+            }
         } catch (\Throwable $e) {
             // A successful publish must not be rolled back only because a
             // best-effort runtime cache invalidation step failed.
@@ -1051,7 +1083,16 @@ class ThemeEditor extends BackendController
         $this->ensureCurrentPublishedLayoutBaked($context);
 
         $emit('static_version', (string)__('更新静态资源版本'), 75);
-        $this->versionService->bumpStaticVersion($themeId);
+        $app = $context->application;
+        $ownerScope = trim((string)($app?->versionOwnerScope ?? ''));
+        if ($ownerScope === '') {
+            $ownerScope = trim((string)$context->scope->storageScope);
+        }
+        $this->versionService->bumpStaticVersion(
+            $themeId,
+            $ownerScope,
+            max(0, (int)($app?->themeVersionId ?? 0)),
+        );
 
         $emit('generate_cache', (string)__('重建主题生成缓存'), 85);
         $this->cacheGenerator->clearCache($themeId);

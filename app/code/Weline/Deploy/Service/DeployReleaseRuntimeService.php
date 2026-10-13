@@ -72,8 +72,8 @@ class DeployReleaseRuntimeService
     {
         Env::getInstance()->setConfig('deploy_version', $deployVersion);
         Env::getInstance()->setConfig('worker_build_id', $workerBuildId);
-        Env::getInstance()->setConfig('theme_static_version', $deployVersion);
-        Env::getInstance()->setConfig('theme.static_version', $deployVersion);
+        // theme_static_version is owned by Theme version publish (scoped composite key).
+        // System release must not bust storefront ?v= for all websites/themes/versions.
     }
 
     private function filePathForRoot(?string $root): string

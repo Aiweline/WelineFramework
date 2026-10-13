@@ -225,7 +225,7 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
         $source = $this->themeEditorSource();
         $finalize = $this->extractMethod($source, 'finalizeStandardLayoutPublish');
         self::assertStringContainsString('ensureCurrentPublishedLayoutBaked(', $finalize);
-        self::assertStringContainsString('bumpStaticVersion($themeId)', $finalize);
+        self::assertStringContainsString('bumpStaticVersion(', $finalize);
         self::assertStringContainsString('clearCache($themeId)', $finalize);
         self::assertStringContainsString('flushFullPageCache(', $finalize);
 

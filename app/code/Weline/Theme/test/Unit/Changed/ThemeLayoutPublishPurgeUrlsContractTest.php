@@ -42,7 +42,7 @@ final class ThemeLayoutPublishPurgeUrlsContractTest extends TestCase
         self::assertNotContains(InvalidationEffect::CODE_PURGE_FPC_ALL, $codes);
     }
 
-    public function testPublishWithoutUrlsKeepsPurgeAll(): void
+    public function testPublishWithWebsiteContextNeverPurgesAllEvenWithoutUrls(): void
     {
         /** @var ResourceChangeFactory $factory */
         $factory = ObjectManager::getInstance(ResourceChangeFactory::class);
@@ -67,6 +67,7 @@ final class ThemeLayoutPublishPurgeUrlsContractTest extends TestCase
         foreach ($type->recipe($change) as $effect) {
             $codes[] = $effect->code;
         }
-        self::assertContains(InvalidationEffect::CODE_PURGE_FPC_ALL, $codes);
+        self::assertContains(InvalidationEffect::CODE_PURGE_FPC_URLS, $codes);
+        self::assertNotContains(InvalidationEffect::CODE_PURGE_FPC_ALL, $codes);
     }
 }

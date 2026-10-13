@@ -51,25 +51,19 @@ final class DeployFpcInvalidation
     }
 
     /**
-     * 正式 Release / 迁站：与 Mode\Set prod 同级——可观测 stamp + bump ns + purge_fpc_all。
-     * Orchestrator 通常已写出 current.json；此处 ensure 防 sticky-dev，并全清旧呈现。
+     * 正式 Release：仅保证 deploy stamp 可观测（非 sticky-dev）。
+     * 零碰 FPC——不 bump deploy ns、不 purge_fpc_all（店面 HTML/NG HIT 保持至主题/业务失效）。
      *
      * @return array{stamp:string,invalidated:bool,purged:bool}
      */
     public function afterRelease(): array
     {
         $stamp = $this->ensureObservableDeployStamp('release');
-        $this->publishInvalidation(
-            self::TRIGGER_RELEASE,
-            purgeFpcAll: true,
-            reason: 'deploy_release',
-            stamp: $stamp,
-        );
 
         return [
             'stamp' => $stamp,
-            'invalidated' => true,
-            'purged' => true,
+            'invalidated' => false,
+            'purged' => false,
         ];
     }
 

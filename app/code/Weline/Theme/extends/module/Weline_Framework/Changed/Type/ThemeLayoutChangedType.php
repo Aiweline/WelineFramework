@@ -37,11 +37,18 @@ final class ThemeLayoutChangedType implements ChangedTypeInterface
                 ? ['website/' . $code . '/theme', 'website/' . $code]
                 : ['global/storefront/theme'];
         }
+        $urls = $this->stringList($impact['urls'] ?? []);
+        $previousUrls = $this->stringList($impact['previous_urls'] ?? []);
+        // Website-scoped publish must never fall back to empty urls (would tempt purge_all).
+        if ($urls === [] && $change->hasWebsiteContext()) {
+            $urls = ['/'];
+        }
+
         return [
             'namespaces' => $namespaces,
             'previous_namespaces' => $this->stringList($impact['previous_namespaces'] ?? []),
-            'urls' => $this->stringList($impact['urls'] ?? []),
-            'previous_urls' => $this->stringList($impact['previous_urls'] ?? []),
+            'urls' => $urls,
+            'previous_urls' => $previousUrls,
         ];
     }
 
@@ -59,9 +66,8 @@ final class ThemeLayoutChangedType implements ChangedTypeInterface
                 is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
                 is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
             );
-            // Scoped layout publish with concrete storefront URLs → selective purge
-            // (policy/home/etc). Whole-theme disaster with empty urls keeps purge_all.
-            if ($urls !== []) {
+            // Website / scoped publish: selective purge only. Never purge_fpc_all for one site.
+            if ($change->hasWebsiteContext() || $urls !== []) {
                 return [
                     new InvalidationEffect(InvalidationEffect::CODE_BUMP_NAMESPACES, InvalidationEffect::PHASE_SYNC),
                     new InvalidationEffect(InvalidationEffect::CODE_PURGE_FPC_URLS, InvalidationEffect::PHASE_AFTER_COMMIT),
@@ -70,6 +76,7 @@ final class ThemeLayoutChangedType implements ChangedTypeInterface
                 ];
             }
 
+            // Truly global (no website, no urls): platform disaster path only.
             return [
                 new InvalidationEffect(InvalidationEffect::CODE_BUMP_NAMESPACES, InvalidationEffect::PHASE_SYNC),
                 new InvalidationEffect(

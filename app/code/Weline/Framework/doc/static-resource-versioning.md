@@ -171,8 +171,9 @@
 |------|------|------|
 | `deploy_version` stamp | `var/deploy/current.json` | 缺文件或字面 `dev` 为缺陷态；切 prod / release 须写出可观测非 sticky-dev 值 |
 | FPC fingerprint ns | `global/storefront/deploy` | 进 `StorefrontCacheKeyContextResolver`；与 `theme_static_version`、mtime `assetVersion` 职责分离 |
-| 失效 helper | `DeployFpcInvalidation` | Mode\Set prod / **正式 Release**：bump + **必须 purge_fpc_all**；日常 Upgrade：优先 bump，空跑勿 thrash 全清 |
-| 浏览器 HTML | FPC HIT `Cache-Control` | 短 `max-age` + **`must-revalidate`**；响应头 `X-Weline-Deploy-Version`；旧页撞验章 → Frontend `deploy_reload_required` 自动 reload |
+| 失效 helper | `DeployFpcInvalidation` | Mode\Set prod：bump + purge_fpc_all；**正式 Release：零碰 FPC**（仅可观测 stamp）；日常 Upgrade：优先 bump，空跑勿 thrash 全清 |
+| 主题静态戳 | `theme_static_versions` map | 键=`versionOwnerScope\|themeId\|themeVersionId`；运营发布只 bump 该版；旧全局 `theme_static_version` 仅无上下文回退 |
+| 浏览器 HTML | FPC HIT `Cache-Control` | 短 `max-age` + **`must-revalidate`**；系统戳响应头 `X-Weline-Deploy-Version` 仅观测/静态破缓；**店面世代权威** = Scope 已发布 `themePublishedVersionId`（ScopeBootstrap / QueryBin）；旧页主题发布身份不一致 → Frontend `deploy_reload_required` 自动 reload |
 | 事件场 `prod_after.deploy_version` | Deploy 模块 `register.php` 版本 | **≠** stamp；供 Visitor 等旁路，不作店面呈现权威 |
 
 ## Taglib callback 例外（常见 404 坑）
@@ -185,5 +186,5 @@
 
 - 开发环境在未配置 `theme_static_version` / `theme.static_version` 时，框架按资源文件内容生成稳定的 `dev_*` 指纹并附加到 URL。
 - 文件内容变化后 URL 同步变化，普通页面刷新即可取得新的 CSS/JS；内容不变时 URL 保持稳定，不制造随机请求。
-- 生产环境不在请求期计算文件哈希，继续使用顶层 `theme_static_version`（权威）或兼容的 `theme.static_version` / 资源编译清单。注意：`theme` 会被主题元数据整表刷新，静态版本必须写顶层键。
+- 生产环境不在请求期计算文件哈希：优先 `theme_static_versions[{scope}|{themeId}|{themeVersionId}]`（当前 `ThemeApplicationContext`）；无上下文时回退旧顶层 `theme_static_version` / `theme.static_version`。运营发布禁止再 bump 全局单键。
 - 模块不得自行拼接时间戳、随机数或硬编码版本参数，也不得改写为内联脚本来规避缓存。

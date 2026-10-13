@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Scoped;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeScopeReleaseBatch;
 use Weline\Theme\Model\ThemeScopeWorkspace;
@@ -146,11 +149,9 @@ final class ThemeScopedWorkspaceRequestService
         $publishedThemeId = $context->themeId > 0
             ? $context->themeId
             : (int)($result['payload']['theme_id'] ?? 0);
-        $result['static_version'] = $this->layoutVersions->bumpStaticVersion(
-            $publishedThemeId > 0 ? $publishedThemeId : 0,
-        );
-        $result['cache_invalidation'] = $this->cacheCleaner->clearAllThemeRelatedCaches(
-            $publishedThemeId > 0 ? $publishedThemeId : null,
+        [$result['static_version'], $result['cache_invalidation']] = $this->bumpScopedStaticAndInvalidate(
+            $context,
+            $publishedThemeId,
             'theme_scoped_publish',
         );
         $this->workspace->invalidateRequestLoadCache();
@@ -469,11 +470,9 @@ final class ThemeScopedWorkspaceRequestService
         $cacheError = null;
         $cacheInvalidation = [];
         try {
-            $result['static_version'] = $this->layoutVersions->bumpStaticVersion(
+            [$result['static_version'], $cacheInvalidation] = $this->bumpScopedStaticAndInvalidate(
+                $context,
                 $context->themeId > 0 ? $context->themeId : 0,
-            );
-            $cacheInvalidation = $this->cacheCleaner->clearAllThemeRelatedCaches(
-                $context->themeId > 0 ? $context->themeId : null,
                 $reason,
             );
             $failures = \is_array($cacheInvalidation['failures'] ?? null)
@@ -644,5 +643,58 @@ final class ThemeScopedWorkspaceRequestService
         }
 
         return $value;
+    }
+
+    /**
+     * Bump only this theme version's static stamp + scoped cache invalidation.
+     * Never calls clearAllThemeRelatedCaches (would purge every website FPC).
+     *
+     * @return array{0:string,1:array<string,mixed>}
+     */
+    private function bumpScopedStaticAndInvalidate(
+        ThemeEditorContext $context,
+        int $themeId,
+        string $reason,
+    ): array {
+        $app = $context->application;
+        $ownerScope = trim((string)($app?->versionOwnerScope ?? ''));
+        if ($ownerScope === '') {
+            $ownerScope = trim((string)$context->scope->storageScope);
+        }
+        $themeVersionId = max(0, (int)($app?->themeVersionId ?? 0));
+        $resolvedThemeId = $themeId > 0 ? $themeId : max(0, (int)($app?->themeId ?? 0));
+        $staticVersion = $themeVersionId >= 1
+            ? $this->layoutVersions->bumpStaticVersion($resolvedThemeId, $ownerScope, $themeVersionId)
+            : '';
+
+        $invalidation = ['reason' => $reason, 'theme_id' => $resolvedThemeId > 0 ? $resolvedThemeId : null, 'steps' => [], 'failures' => []];
+        try {
+            if ($resolvedThemeId >= 1 && $ownerScope !== '') {
+                $identity = new ThemeVersionIdentity(
+                    themeId: $resolvedThemeId,
+                    canonicalScope: $ownerScope,
+                    storeMode: trim((string)($app?->versionOwnerStoreMode ?? $context->scope->storeMode)),
+                    area: $context->area === 'backend'
+                        ? ThemeVersionIdentity::AREA_BACKEND
+                        : ThemeVersionIdentity::AREA_FRONTEND,
+                    themeVersionId: $themeVersionId,
+                    mode: ThemeVersionIdentity::MODE_FORMAL,
+                    contentRevision: max(0, (int)($app?->contentRevision ?? 0)),
+                );
+                $invalidation = $this->cacheCleaner->invalidateAfterVersionPublish($identity, $reason);
+            } else {
+                $scopeContext = ObjectManager::getInstance(ScopeHierarchyInterface::class)
+                    ->fromStorageScope($context->scope->storageScope, true);
+                $invalidation = $this->cacheCleaner->clearScopedCaches(
+                    $scopeContext,
+                    $resolvedThemeId > 0 ? $resolvedThemeId : null,
+                    $reason,
+                );
+            }
+        } catch (\Throwable $e) {
+            $invalidation['failures']['scoped_invalidate'] = $e->getMessage();
+        }
+
+        return [$staticVersion, $invalidation];
     }
 }

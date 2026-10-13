@@ -92,7 +92,7 @@ php bin/w deploy:build
 | `deploy:release` / Orchestrator | **是**：空 `POST_DEPLOY` 默认 `php bin/w setup:upgrade`；白名单亦允许 `deploy:upgrade` |
 | `core:update` | **否**（静态铺平）— 须再跑 `setup:upgrade` 或 `deploy:upgrade`；**会**派发 `core_update_after`（Theme 可清布局固化物） |
 
-发布成功后 `release_after` 经 `DeployFpcInvalidation` bump `global/storefront/deploy`（禁 Observer 内拷贝静态）。
+发布成功后 `release_after` **零碰 FPC / 零写主题静态戳**（店面失效由主题版本发布与业务 ChangedType 自管）。
 
 ## 触发模式
 

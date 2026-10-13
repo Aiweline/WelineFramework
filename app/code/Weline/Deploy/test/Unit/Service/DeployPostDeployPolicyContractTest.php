@@ -45,15 +45,16 @@ final class DeployPostDeployPolicyContractTest extends TestCase
         self::assertStringContainsString('默认执行 setup:upgrade', $src);
     }
 
-    public function testReleaseAfterCallsDeployFpcInvalidation(): void
+    public function testReleaseAfterDoesNotTouchFpcOrThemeStaticVersion(): void
     {
         $src = (string)file_get_contents(
             BP . 'app/code/Weline/Deploy/Observer/ReleaseAfter.php'
         );
-        self::assertStringContainsString('DeployFpcInvalidation', $src);
-        self::assertStringContainsString('afterRelease', $src);
-        self::assertStringNotContainsString('afterUpgrade(true)', $src);
+        self::assertStringNotContainsString('use Weline\\Framework\\Deploy\\DeployFpcInvalidation', $src);
+        self::assertStringNotContainsString("setConfig('theme_static_version'", $src);
+        self::assertStringNotContainsString('->afterRelease(', $src);
         self::assertStringNotContainsString('recursiveCopy', $src);
+        self::assertStringContainsString('Intentionally empty', $src);
     }
 
     public function testCoreUpdateDocumentsFollowUpUpgrade(): void
@@ -63,6 +64,6 @@ final class DeployPostDeployPolicyContractTest extends TestCase
         );
         self::assertStringContainsString('setup:upgrade', $src);
         self::assertStringContainsString('deploy:upgrade', $src);
-        self::assertStringContainsString('不算生产静态发布完成', $src);
+        self::assertStringContainsString('不算静态发布完成', $src);
     }
 }

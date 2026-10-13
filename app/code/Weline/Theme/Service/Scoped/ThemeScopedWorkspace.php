@@ -3118,22 +3118,32 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 $previewPath = \trim((string)$previewPath);
                 if ($previewPath !== '') {
                     $urls = [$previewPath];
-                    // Homepage layout still invalidates locale roots when present as `/`.
-                    if ($previewPath === '/') {
-                        $urls = ['/'];
-                    }
                 }
             } catch (\Throwable) {
                 $urls = ['/'];
             }
         }
+        if ($themeVersionId === null || $themeVersionId < 1) {
+            $appVer = (int)($context->application?->themeVersionId ?? 0);
+            if ($appVer > 0) {
+                $after['theme_version_id'] = $appVer;
+            }
+        }
+        [$websiteId, $websiteCode, $storefrontOrigin] = $this->resolvePublishWebsiteFace($context);
+        if ($namespaces === [] && is_string($websiteCode) && $websiteCode !== '') {
+            $namespaces = ['website/' . $websiteCode . '/theme', 'website/' . $websiteCode];
+        }
+        $absoluteUrls = $this->absolutizeStorefrontUrls($urls, $storefrontOrigin);
+        // Prefer host-scoped absolutes for disk FPC; keep relative if origin unresolved
+        // so UrlMatrix / path-index still receive material urls (never empty → purge_all).
+        $urls = $absoluteUrls !== [] ? $absoluteUrls : $urls;
         $change = ObjectManager::getInstance(ResourceChangeFactory::class)->create(
             resourceType: $resourceType,
             resourceId: $resourceId,
             action: 'publish',
             revision: $revision,
-            websiteId: null,
-            websiteCode: null,
+            websiteId: $websiteId,
+            websiteCode: $websiteCode,
             before: [],
             after: $after,
             changedFields: ['published_release', 'static_version', 'theme_version_id'],
@@ -3146,6 +3156,78 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             resourceScope: $context->scope->storageScope,
         );
         \w_changed($change);
+    }
+
+    /**
+     * Website face from ScopeIdentity (caller-installed scope) — Theme does not invent Website rows.
+     *
+     * @return array{0:?int,1:?string,2:string}
+     */
+    private function resolvePublishWebsiteFace(ThemeEditorContext $context): array
+    {
+        $websiteId = null;
+        $websiteCode = null;
+        $origin = '';
+        try {
+            $scopeContext = ObjectManager::getInstance(ScopeHierarchyInterface::class)
+                ->fromStorageScope($context->scope->storageScope, true);
+            $identity = $scopeContext->identity ?? null;
+            if ($identity instanceof ScopeIdentity && $identity->websiteId !== null) {
+                $websiteId = (int)$identity->websiteId;
+                $websiteCode = $identity->websiteCode !== null ? (string)$identity->websiteCode : null;
+            }
+        } catch (\Throwable) {
+            // leave null
+        }
+        if ($websiteId !== null) {
+            try {
+                if (\class_exists(\Weline\Theme\Service\InstallLocalStorefrontBaseResolver::class)) {
+                    $resolver = ObjectManager::getInstance(
+                        \Weline\Theme\Service\InstallLocalStorefrontBaseResolver::class
+                    );
+                    $origin = \trim((string)($resolver->resolveForWebsite(
+                        $websiteId,
+                        (string)($websiteCode ?? '')
+                    ) ?? ''));
+                }
+            } catch (\Throwable) {
+                $origin = '';
+            }
+        }
+
+        return [$websiteId, $websiteCode, \rtrim($origin, '/')];
+    }
+
+    /**
+     * FpcHtmlDiskStore only accepts http(s)://host/... — relative paths are disk no-ops.
+     *
+     * @param list<string> $urls
+     * @return list<string>
+     */
+    private function absolutizeStorefrontUrls(array $urls, string $origin): array
+    {
+        $origin = \rtrim(\trim($origin), '/');
+        $out = [];
+        foreach ($urls as $url) {
+            $url = \trim((string)$url);
+            if ($url === '') {
+                continue;
+            }
+            if (\preg_match('#^https?://#i', $url) === 1) {
+                $out[$url] = $url;
+                continue;
+            }
+            if ($origin === '') {
+                continue;
+            }
+            if ($url[0] !== '/') {
+                $url = '/' . $url;
+            }
+            $absolute = $origin . ($url === '/' ? '/' : $url);
+            $out[$absolute] = $absolute;
+        }
+
+        return \array_values($out);
     }
 
     public function invalidateRequestLoadCache(): void

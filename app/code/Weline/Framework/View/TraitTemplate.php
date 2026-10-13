@@ -342,11 +342,8 @@ trait TraitTemplate
             // 清理可能残留的 ? 或 &
             $data = rtrim($data, '?&');
             
-            // 优先级：预览 Token（可选）> DEV 内容指纹 > 配置的全局版本号。
-            // theme_static_version 是**全局戳**，只在主题发布链路（bumpStaticVersion）
-            // 变更；改模块 JS/CSS 不会动它。若让它压过 DEV 内容指纹，就会出现
-            // 「改了源文件、普通刷新仍命中旧 UI」——这正是 TaglibInlineTagsTest
-            // 「开发环境静态资源必须带内容指纹」所钉住的判据。
+            // 优先级：预览 Token（可选）> DEV 内容指纹 > 当前主题版本范围戳（复合键 map）。
+            // 运营发布只 bump 该 scope+theme+themeVersionId；禁止再用全局单键 bust 全站。
             // 编译期静态镜像（theme:css/js tryStaticMirror）必须传 allowPreviewVersion=false，
             // 否则会把 ?v=preview_xxxx 烘进按 theme_id 分片的 com 产物，预览结束后仍污染店面 URL。
             $version = $allowPreviewVersion ? $this->getPreviewStaticResourceVersion() : null;
@@ -392,14 +389,37 @@ trait TraitTemplate
     }
 
     /**
-     * 配置里声明的全局静态版本号（发布时由 bumpStaticVersion 更新）。
-     *
-     * 优先顶层 theme_static_version：不被 WelineTheme 整表写入 theme 元数据覆盖。
+     * 当前请求主题版本的静态戳（scope|themeId|themeVersionId map）。
+     * 无 ThemeApplicationContext 时回退只读旧全局键（兼容 CLI/中性编译）。
      *
      * @return string|null
      */
     private function getConfiguredStaticResourceVersion(): ?string
     {
+        try {
+            $ctx = \Weline\Framework\Runtime\ThemeApplicationContext::current('frontend', 'runtime')
+                ?? \Weline\Framework\Runtime\ThemeApplicationContext::current('frontend', 'editor')
+                ?? \Weline\Framework\Runtime\ThemeApplicationContext::current('frontend', 'preview')
+                ?? \Weline\Framework\Runtime\ThemeApplicationContext::current('backend', 'runtime')
+                ?? \Weline\Framework\Runtime\ThemeApplicationContext::current('backend', 'editor');
+            if ($ctx instanceof \Weline\Framework\Runtime\ThemeApplicationContext) {
+                $scope = trim((string)$ctx->versionOwnerScope);
+                if ($scope === '') {
+                    $scope = trim((string)$ctx->scopeKey);
+                }
+                $mapKey = $scope . '|' . max(0, (int)$ctx->themeId) . '|' . max(0, (int)$ctx->themeVersionId);
+                $map = Env::getInstance()->getConfig('theme_static_versions', []);
+                if (is_array($map)) {
+                    $scoped = trim((string)($map[$mapKey] ?? ''));
+                    if ($scoped !== '') {
+                        return $scoped;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // fall through to legacy
+        }
+
         $staticVersion = Env::getInstance()->getConfig('theme_static_version');
         if (!$staticVersion) {
             $staticVersion = Env::getInstance()->getConfig('theme.static_version');

@@ -37,10 +37,15 @@ final class ThemeChangedType implements ChangedTypeInterface
                 ? ['website/' . $code . '/theme', 'website/' . $code]
                 : ['global/storefront/theme'];
         }
+        $urls = $this->stringList($impact['urls'] ?? []);
+        if ($urls === [] && $change->hasWebsiteContext()) {
+            $urls = ['/'];
+        }
+
         return [
             'namespaces' => $namespaces,
             'previous_namespaces' => $this->stringList($impact['previous_namespaces'] ?? []),
-            'urls' => $this->stringList($impact['urls'] ?? []),
+            'urls' => $urls,
             'previous_urls' => $this->stringList($impact['previous_urls'] ?? []),
         ];
     }
@@ -54,6 +59,15 @@ final class ThemeChangedType implements ChangedTypeInterface
         }
         $action = $change->action();
         if ($action === 'publish' || $action === 'unpublish') {
+            if ($change->hasWebsiteContext()) {
+                return [
+                    new InvalidationEffect(InvalidationEffect::CODE_BUMP_NAMESPACES, InvalidationEffect::PHASE_SYNC),
+                    new InvalidationEffect(InvalidationEffect::CODE_PURGE_FPC_URLS, InvalidationEffect::PHASE_AFTER_COMMIT),
+                    new InvalidationEffect(InvalidationEffect::CODE_THEME_RUNTIME_CLEAR, InvalidationEffect::PHASE_AFTER_COMMIT),
+                    new InvalidationEffect(InvalidationEffect::CODE_CDN_PURGE, InvalidationEffect::PHASE_AFTER_COMMIT),
+                ];
+            }
+
             return [
                 new InvalidationEffect(InvalidationEffect::CODE_BUMP_NAMESPACES, InvalidationEffect::PHASE_SYNC),
                 new InvalidationEffect(

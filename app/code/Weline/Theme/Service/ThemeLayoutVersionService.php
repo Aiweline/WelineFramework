@@ -557,17 +557,58 @@ readonly class ThemeLayoutVersionService
     }
     
     /**
-     * 按主题版本 bump 静态资源 URL 版本号（可视化/布局发布后调用）。
-     *
-     * 版本号格式：{themeVersion}_{timestamp}
-     * 例如：1.0.0_1738500000
-     *
-     * @return string 写入的 theme.static_version；失败时返回空串
+     * Env map key for one published theme version's static stamp.
+     * Format: {versionOwnerScope}|{themeId}|{themeVersionId}
      */
-    public function bumpStaticVersion(int $themeId): string
-    {
+    public static function staticVersionMapKey(
+        string $versionOwnerScope,
+        int $themeId,
+        int $themeVersionId,
+    ): string {
+        return trim($versionOwnerScope) . '|' . max(0, $themeId) . '|' . max(0, $themeVersionId);
+    }
+
+    /**
+     * Resolve ?v= stamp for a concrete theme version (AAV1 ≠ AAV2).
+     */
+    public static function resolveStaticVersionFor(
+        string $versionOwnerScope,
+        int $themeId,
+        int $themeVersionId,
+    ): ?string {
+        $key = self::staticVersionMapKey($versionOwnerScope, $themeId, $themeVersionId);
+        if ($key === '|0|0' || !str_contains($key, '|')) {
+            return null;
+        }
         try {
-            if ($themeId <= 0) {
+            $map = Env::getInstance()->getConfig('theme_static_versions', []);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!is_array($map)) {
+            return null;
+        }
+        $stamp = trim((string)($map[$key] ?? ''));
+
+        return $stamp !== '' ? $stamp : null;
+    }
+
+    /**
+     * Bump static URL version for one theme version only (scope + theme + version).
+     * Does not write the legacy global theme_static_version key.
+     *
+     * 版本号格式：{themePackageVersion}_{timestamp}
+     *
+     * @return string 写入的范围戳；失败时返回空串
+     */
+    public function bumpStaticVersion(
+        int $themeId,
+        string $versionOwnerScope = '',
+        int $themeVersionId = 0,
+    ): string {
+        try {
+            $versionOwnerScope = trim($versionOwnerScope);
+            if ($themeId <= 0 || $versionOwnerScope === '' || $themeVersionId < 1) {
                 return '';
             }
             $theme = $this->welineTheme->reset()->load($themeId);
@@ -577,13 +618,13 @@ readonly class ThemeLayoutVersionService
             }
 
             $staticVersion = $themeVersion . '_' . time();
-            // 顶层键：避免被 WelineTheme::setConfig('theme', row) 整表覆盖。
-            Env::getInstance()->setConfig('theme_static_version', $staticVersion);
-            // 兼容旧读者；可能被主题元数据刷新冲掉，不以它为准。
-            try {
-                Env::getInstance()->setConfig('theme.static_version', $staticVersion);
-            } catch (\Throwable) {
+            $key = self::staticVersionMapKey($versionOwnerScope, $themeId, $themeVersionId);
+            $map = Env::getInstance()->getConfig('theme_static_versions', []);
+            if (!is_array($map)) {
+                $map = [];
             }
+            $map[$key] = $staticVersion;
+            Env::getInstance()->setConfig('theme_static_versions', $map);
 
             return $staticVersion;
         } catch (\Throwable) {
