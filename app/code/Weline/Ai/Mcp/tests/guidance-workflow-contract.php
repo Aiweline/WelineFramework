@@ -836,6 +836,7 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'plan_complete_self_review_then_implement'
             && str_contains((string) ($rule['summary'] ?? ''), 'self-review')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_three_lenses')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_code_evidence')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_impact_surface')
             && str_contains((string) ($rule['summary'] ?? ''), 'scheme_requires_architecture_review')
@@ -843,6 +844,19 @@ $checks = [
             && (str_contains((string) ($rule['summary'] ?? ''), 'Build')
                 || str_contains((string) ($rule['summary'] ?? ''), '批准'))
             && str_contains((string) ($rule['summary'] ?? ''), 'FORBID')),
+        false,
+    ),
+    'hard_constraints include plan_review_three_lenses' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'plan_review_three_lenses'
+            && str_contains((string) ($rule['summary'] ?? ''), 'THREE independent review lenses')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_code_evidence')
+            && str_contains((string) ($rule['summary'] ?? ''), 'scheme_requires_architecture_review')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_impact_surface')
+            && str_contains((string) ($rule['summary'] ?? ''), 'aoci_search')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBID 通过')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan-review-three-lenses.mdc')),
         false,
     ),
     'hard_constraints include host_delegate_explore_plan_review_to_codex_cli' => array_reduce(
@@ -1721,6 +1735,29 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'widgets')),
         false,
     ),
+    'hard_constraints include theme_design_multi_path_is_inheritance_normal' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_design_multi_path_is_inheritance_normal'
+            && str_contains((string) ($rule['summary'] ?? ''), 'app/design')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'inheritance')
+                || str_contains((string) ($rule['summary'] ?? ''), '继承'))
+            && (str_contains((string) ($rule['summary'] ?? ''), 'FORBID')
+                || str_contains((string) ($rule['summary'] ?? ''), '禁止'))
+            && (str_contains((string) ($rule['summary'] ?? ''), 'duplicate')
+                || str_contains((string) ($rule['summary'] ?? ''), '拷贝')
+                || str_contains((string) ($rule['summary'] ?? ''), 'smell'))),
+        false,
+    ),
+    'mcp_operational include theme_design_multi_path_is_inheritance_normal' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_design_multi_path_is_inheritance_normal'
+            && str_contains((string) ($rule['summary'] ?? ''), 'app/design')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'FORBID')
+                || str_contains((string) ($rule['summary'] ?? ''), '禁止'))),
+        false,
+    ),
     'mcp_operational include session_learning_knowledge_conflict_gate report schema' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -2367,6 +2404,10 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'learning_rule_extraction_must_be_abstract')),
         false,
     ),
+    'mcp instructions mention plan_review_three_lenses' => str_contains(
+        ToolService::instructions(),
+        'plan_review_three_lenses'
+    ),
     'mcp instructions mention plan_review_requires_code_evidence' => str_contains(
         ToolService::instructions(),
         'plan_review_requires_code_evidence'
@@ -2378,6 +2419,14 @@ $checks = [
     'mcp instructions mention scheme_requires_architecture_review' => str_contains(
         ToolService::instructions(),
         'scheme_requires_architecture_review'
+    ),
+    'global_rules_dual_write mentions plan_review_three_lenses mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_three_lenses')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan-review-three-lenses.mdc')),
+        false,
     ),
     'mcp instructions mention user_facing_verdict_last' => str_contains(
         ToolService::instructions(),
