@@ -266,13 +266,19 @@ final class FooterDefaultLinksHelper
             return [];
         }
 
-        // Official Chang'an Hanfu profiles (ops-registered 2026-09-22). Keep http(s)
+        // Official Chang'an Hanfu profiles (roster refreshed 2026-10-13). Keep http(s)
         // so Organization.sameAs / footer launch readiness emit actionable Trust signals — never `#`.
+        // Source of truth for the roster: websites/changanhanfu.com/credentials/social-accounts.md.
+        // Instagram is deliberately absent: @changanhanfu was removed/banned and an appeal is
+        // pending, so advertising it would emit a dead link plus a broken Trust signal. Re-add it
+        // here once the profile is restored and verified.
         return [
             ['name' => 'YouTube', 'icon' => 'fab fa-youtube', 'url' => 'https://www.youtube.com/@changanhanfu'],
             ['name' => 'X', 'icon' => 'fab fa-twitter', 'url' => 'https://x.com/changanhanfu'],
-            ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/changanhanfu/'],
             ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => 'https://www.tiktok.com/@changanhanfu_hq'],
+            ['name' => 'Facebook', 'icon' => 'fab fa-facebook', 'url' => 'https://www.facebook.com/profile.php?id=61595373054093'],
+            ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => 'https://www.pinterest.com/changanhanfu/'],
+            ['name' => 'Bluesky', 'icon' => 'fab fa-bluesky', 'url' => 'https://bsky.app/profile/changanhanfu.bsky.social'],
         ];
     }
 
@@ -352,6 +358,8 @@ final class FooterDefaultLinksHelper
             'discord' => 'discord',
             'reddit' => 'reddit',
             'snapchat' => 'snapchat',
+            'bluesky' => 'bluesky',
+            'bsky.app' => 'bluesky',
             'x.com' => 'x',
             'twitter' => 'x',
             'fab fa-x' => 'x',

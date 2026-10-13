@@ -6,6 +6,7 @@ namespace Weline\Theme\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Helper\FooterDefaultLinksHelper;
+use Weline\Theme\Helper\SocialIconHelper;
 
 final class FooterDefaultLinksHelperTest extends TestCase
 {
@@ -79,11 +80,18 @@ final class FooterDefaultLinksHelperTest extends TestCase
         $items = FooterDefaultLinksHelper::defaultSocialItems('default');
 
         $this->assertSame(
-            ['YouTube', 'X', 'Instagram', 'TikTok'],
+            ['YouTube', 'X', 'TikTok', 'Facebook', 'Pinterest', 'Bluesky'],
             array_column($items, 'name'),
         );
         $this->assertSame(
-            ['fab fa-youtube', 'fab fa-twitter', 'fab fa-instagram', 'fab fa-tiktok'],
+            [
+                'fab fa-youtube',
+                'fab fa-twitter',
+                'fab fa-tiktok',
+                'fab fa-facebook',
+                'fab fa-pinterest',
+                'fab fa-bluesky',
+            ],
             array_column($items, 'icon'),
         );
         foreach ($items as $item) {
@@ -93,10 +101,26 @@ final class FooterDefaultLinksHelperTest extends TestCase
             [
                 'https://www.youtube.com/@changanhanfu',
                 'https://x.com/changanhanfu',
-                'https://www.instagram.com/changanhanfu/',
                 'https://www.tiktok.com/@changanhanfu_hq',
+                'https://www.facebook.com/profile.php?id=61595373054093',
+                'https://www.pinterest.com/changanhanfu/',
+                'https://bsky.app/profile/changanhanfu.bsky.social',
             ],
             FooterDefaultLinksHelper::defaultSameAsUrls('default'),
+        );
+    }
+
+    /**
+     * The banned/removed @changanhanfu Instagram profile must never be advertised in the
+     * footer row nor fed into Organization.sameAs (dead profile = broken Trust signal).
+     */
+    public function testRemovedInstagramProfileIsNotAdvertisedOrFedIntoSameAs(): void
+    {
+        $serialized = strtolower((string)json_encode(FooterDefaultLinksHelper::defaultSocialItems('default')));
+        self::assertStringNotContainsString('instagram', $serialized);
+        self::assertStringNotContainsString(
+            'instagram',
+            strtolower(implode(' ', FooterDefaultLinksHelper::defaultSameAsUrls('default'))),
         );
     }
 
@@ -132,6 +156,23 @@ final class FooterDefaultLinksHelperTest extends TestCase
             'name' => 'TikTok',
             'url' => 'https://www.tiktok.com/@changanhanfu_hq',
         ]));
+        self::assertSame('facebook', FooterDefaultLinksHelper::resolveSocialPlatformCode([
+            'name' => 'Facebook',
+            'url' => 'https://www.facebook.com/profile.php?id=61595373054093',
+        ]));
+        self::assertSame('pinterest', FooterDefaultLinksHelper::resolveSocialPlatformCode([
+            'name' => 'Pinterest',
+            'url' => 'https://www.pinterest.com/changanhanfu/',
+        ]));
+        // Bluesky has no FontAwesome class in the pinned icon set, so it must resolve to a
+        // platform code that SocialIconHelper can actually render an SVG for.
+        self::assertSame('bluesky', FooterDefaultLinksHelper::resolveSocialPlatformCode([
+            'name' => 'Bluesky',
+            'icon' => 'fab fa-bluesky',
+            'url' => 'https://bsky.app/profile/changanhanfu.bsky.social',
+        ]));
+        self::assertNotNull(SocialIconHelper::getIcon('bluesky'));
+        self::assertSame('#0285ff', SocialIconHelper::getColor('bluesky'));
     }
 
     public function testNormalizeSocialItemsOnlyReturnsActionableProfileLinks(): void
