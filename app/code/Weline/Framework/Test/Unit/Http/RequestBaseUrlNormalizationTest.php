@@ -70,6 +70,30 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         self::assertSame('https://www.yonocashgames.com', $request->getBaseHost());
     }
 
+    public function testBaseHostUpgradesHttpWebsiteUrlWhenRequestIsHttps(): void
+    {
+        $server = [
+            'REQUEST_URI' => '/category/women',
+            'REQUEST_METHOD' => 'GET',
+            'REQUEST_SCHEME' => 'https',
+            'HTTPS' => 'on',
+            'HTTP_X_FORWARDED_PROTO' => 'https',
+            'HTTP_HOST' => 'p05113ef3.test.weline.com',
+            'SERVER_NAME' => 'p05113ef3.test.weline.com',
+            'SERVER_PORT' => '9555',
+            'WLS_PORT' => '9555',
+            // Cabin still http while public edge is https — must not bake http <base>.
+            'WELINE_WEBSITE_URL' => 'http://p05113ef3.test.weline.com',
+        ];
+        $_SERVER = $server;
+        WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
+
+        $request = new class extends RequestAbstract {
+        };
+
+        self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
+    }
+
     public function testBaseHostStripsPollutedRestAreaPathFromWebsiteUrl(): void
     {
         $server = [

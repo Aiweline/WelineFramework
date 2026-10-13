@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Frontend\Controller\Api;
 
 use Weline\Frontend\Controller\FrontendRestController;
+use Weline\Frontend\Service\ScopeHolePunchSecurityGate;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Runtime\RequestAuthority;
@@ -24,7 +25,8 @@ class Stream extends FrontendRestController
 {
     public function __construct(
         private readonly FrontendWorkerSessionService $sessionService,
-        private readonly FrontendQueryGateway $gateway
+        private readonly FrontendQueryGateway $gateway,
+        private readonly ScopeHolePunchSecurityGate $scopeHolePunchSecurityGate,
     ) {
     }
 
@@ -99,7 +101,8 @@ class Stream extends FrontendRestController
             return;
         }
 
-        if (\rtrim($origin, '/') !== $currentOrigin) {
+        // Same apex ↔ Worker listen-port equivalence as QueryBin / hole-punch gate.
+        if (!$this->scopeHolePunchSecurityGate->originMatchesExpected($origin, $currentOrigin)) {
             throw new FrontendQueryException('auth_error', 'Worker stream origin mismatch.', 401);
         }
     }

@@ -65,8 +65,10 @@ final class ScopeHolePunchSecurityGateContractTest extends TestCase
         self::assertStringContainsString('function postIndex', $src);
         self::assertStringNotContainsString('function getIndex', $src);
         self::assertStringContainsString('ScopeHolePunchSecurityGate', $src);
-        self::assertStringContainsString("'deploy_version'", $src);
-        self::assertStringContainsString('currentDeployVersion', $src);
+        self::assertStringContainsString("'theme_published_version_id'", $src);
+        self::assertStringContainsString('StorefrontGenerationIdentity', $src);
+        self::assertStringNotContainsString('currentDeployVersion', $src);
+        self::assertStringNotContainsString("'bootstrap_id'", $src);
     }
 
     public function testOriginMatchesExpectedAcceptsWorkerListenPortVsApex(): void
@@ -96,6 +98,30 @@ final class ScopeHolePunchSecurityGateContractTest extends TestCase
             'https://p05113ef3.test.weline.com:9555',
             'https://p05113ef3.test.weline.com:9443',
         ));
+    }
+
+    public function testQueryBinAndStreamReuseOriginMatchesExpected(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $queryBin = (string)\file_get_contents(
+            $moduleRoot . '/Controller/Api/QueryBin.php'
+        );
+        $stream = (string)\file_get_contents(
+            $moduleRoot . '/Controller/Api/Stream.php'
+        );
+        self::assertStringContainsString('ScopeHolePunchSecurityGate', $queryBin);
+        self::assertStringContainsString('originMatchesExpected', $queryBin);
+        self::assertStringContainsString('ScopeHolePunchSecurityGate', $stream);
+        self::assertStringContainsString('originMatchesExpected', $stream);
+        // Forbid reintroducing exact Origin string equality (apex vs :9555 false 401).
+        self::assertStringNotContainsString(
+            "\\rtrim(\$origin, '/') !== \$currentOrigin",
+            $queryBin
+        );
+        self::assertStringNotContainsString(
+            "\\rtrim(\$origin, '/') !== \$currentOrigin",
+            $stream
+        );
     }
 
     private function gate(): ScopeHolePunchSecurityGate

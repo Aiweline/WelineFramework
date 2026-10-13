@@ -22,17 +22,15 @@ use Weline\Framework\Service\Query\FrontendWorkerSessionService;
  * Scope hole-punch for anonymous FPC / generated/html pages.
  *
  * Resolves channel Scope from Host+path (same installer as DetectWebsite), issues
- * the Scope token + HttpOnly bootstrap cookie, and returns the opaque bootstrap_id
- * for SharedWorker / QueryBin. Never injects HTML meta stamps.
+ * the Scope token into a stable HttpOnly Cookie, and returns stamp metadata only
+ * (no opaque bootstrap_id). Never injects HTML meta stamps or Token into JSON.
  */
 final class FrontendWorkerScopeHolePunchService
 {
-    private const OPAQUE_ID_PATTERN = '/^[A-Za-z0-9_-]{43}$/D';
     private const MAX_PATH_BYTES = 2048;
 
     public function __construct(
         private readonly FrontendWorkerScopeProviderInterface $scopeProvider,
-        private readonly FrontendWorkerSessionService $workerSessionService,
     ) {
     }
 
@@ -40,7 +38,7 @@ final class FrontendWorkerScopeHolePunchService
      * @param (callable(ScopeIdentity):(?array{ok?:false,error?:string,status?:int,retry_after?:int}))|null $beforeIssue
      *        Optional gate after Scope resolve / before token mint (e.g. IP rate limit).
      *        Return a deny array to abort without issuing; null to continue.
-     * @return array{bootstrap_id:string,expires_at:int,mode:string}|array{ok:false,error:string,status:int,retry_after?:int}|null
+     * @return array{expires_at:int,mode:string}|array{ok:false,error:string,status:int,retry_after?:int}|null
      *         null when rollout off/shadow/token disabled
      */
     public function punch(Response $response, string $pagePath = '', ?callable $beforeIssue = null): ?array
@@ -55,6 +53,39 @@ final class FrontendWorkerScopeHolePunchService
                     ? (string)\__('无效的请求主机。')
                     : 'Invalid request host.',
             );
+        }
+
+        // Fast path: long HttpOnly Cookie already verifies — do not re-run DetectWebsite
+        // installNavigationScope / re-mint (those cold paths can exceed client 12s abort).
+        $existingToken = $this->readExistingScopeCookie();
+        if ($existingToken !== '') {
+            $existingBinding = null;
+            try {
+                $existingBinding = $this->scopeProvider->verifyToken(
+                    $existingToken,
+                    $scheme !== '' ? $scheme : 'https',
+                    $authorityHost,
+                );
+            } catch (FrontendWorkerScopeException) {
+                $existingBinding = null;
+            }
+            if ($existingBinding !== null && $existingBinding->tokenExpiresAt > \time()) {
+                $decision = $this->scopeProvider->rollout(
+                    $existingBinding->scope,
+                    $scheme !== '' ? $scheme : 'https',
+                );
+                if ($decision->isOff() || $decision->isShadow() || !$decision->tokenEnabled) {
+                    return null;
+                }
+                $this->expireLegacyScopeBootstrapCookies($response);
+                $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+                $response->setHeader('Pragma', 'no-cache');
+
+                return [
+                    'expires_at' => $existingBinding->tokenExpiresAt,
+                    'mode' => (string)$decision->mode,
+                ];
+            }
         }
 
         $scope = RequestContext::scopeIdentity();
@@ -109,21 +140,9 @@ final class FrontendWorkerScopeHolePunchService
             );
         }
 
-        $bootstrap = $this->workerSessionService->createScopeBootstrap($binding);
-        $bootstrapId = $bootstrap['bootstrap_id'] ?? null;
-        $cookieName = $bootstrap['cookie_name'] ?? null;
-        $expiresAt = $bootstrap['expires_at'] ?? null;
-        if (!\is_string($bootstrapId)
-            || \preg_match(self::OPAQUE_ID_PATTERN, $bootstrapId) !== 1
-            || !\is_string($cookieName)
-            || !\hash_equals(
-                FrontendWorkerSessionService::SCOPE_BOOTSTRAP_COOKIE_PREFIX . $bootstrapId,
-                $cookieName,
-            )
-            || !\is_int($expiresAt)
-            || $expiresAt <= \time()
-            || $expiresAt > $binding->tokenExpiresAt
-        ) {
+        $expiresAt = $binding->tokenExpiresAt;
+        $now = \time();
+        if ($expiresAt <= $now) {
             throw new FrontendWorkerScopeException(
                 'worker_scope_hole_punch_contract_invalid',
                 503,
@@ -133,13 +152,13 @@ final class FrontendWorkerScopeHolePunchService
             );
         }
 
-        $this->expireStaleScopeBootstrapCookies($response, $cookieName);
+        $cookieName = FrontendWorkerSessionService::SCOPE_COOKIE_NAME;
+        $this->expireLegacyScopeBootstrapCookies($response);
         $response->setCookie($cookieName, $token, $expiresAt, '/', '', true, true, 'Lax');
         $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
         $response->setHeader('Pragma', 'no-cache');
 
         return [
-            'bootstrap_id' => $bootstrapId,
             'expires_at' => $expiresAt,
             'mode' => (string)$decision->mode,
         ];
@@ -233,12 +252,18 @@ final class FrontendWorkerScopeHolePunchService
         return \strtolower(\trim((string)($_SERVER['HTTP_HOST'] ?? '')));
     }
 
-    private function expireStaleScopeBootstrapCookies(Response $response, string $keepCookieName): void
+    /**
+     * One-shot jar cleanup: expire leftover opaque bootstrap cookies.
+     * The long-lived Scope Cookie is never cleared here.
+     */
+    private function expireLegacyScopeBootstrapCookies(Response $response): void
     {
         $cookieHeader = (string)($_SERVER['HTTP_COOKIE'] ?? '');
-        if ($cookieHeader === '') {
+        if ($cookieHeader === '' || \strlen($cookieHeader) > 65536) {
             return;
         }
+        $prefix = FrontendWorkerSessionService::SCOPE_BOOTSTRAP_COOKIE_PREFIX;
+        $seen = [];
         foreach (\explode(';', $cookieHeader) as $part) {
             $part = \trim($part);
             if ($part === '' || !\str_contains($part, '=')) {
@@ -247,12 +272,37 @@ final class FrontendWorkerScopeHolePunchService
             [$name] = \explode('=', $part, 2);
             $name = \trim($name);
             if ($name === ''
-                || !\str_starts_with($name, FrontendWorkerSessionService::SCOPE_BOOTSTRAP_COOKIE_PREFIX)
-                || \hash_equals($keepCookieName, $name)
+                || isset($seen[$name])
+                || !\str_starts_with($name, $prefix)
             ) {
                 continue;
             }
+            $seen[$name] = true;
             $response->setCookie($name, '', 1, '/', '', true, true, 'Lax');
         }
+    }
+
+    /**
+     * Read stable long Scope Cookie from the raw Cookie header (HttpOnly; not JS-visible).
+     */
+    private function readExistingScopeCookie(): string
+    {
+        $cookieHeader = (string)($_SERVER['HTTP_COOKIE'] ?? '');
+        if ($cookieHeader === '' || \strlen($cookieHeader) > 65536) {
+            return '';
+        }
+        $needle = FrontendWorkerSessionService::SCOPE_COOKIE_NAME . '=';
+        foreach (\explode(';', $cookieHeader) as $part) {
+            $part = \trim($part);
+            if ($part === '' || !\str_starts_with($part, $needle)) {
+                continue;
+            }
+            $value = \substr($part, \strlen($needle));
+            $value = \rawurldecode($value);
+
+            return \is_string($value) ? \trim($value) : '';
+        }
+
+        return '';
     }
 }

@@ -34,6 +34,15 @@
 - 禁止 `axios`
 - 禁止手写 query-bin URL
 
+### 店面世代与维护（开发者必读）
+
+维护发版、多站、409 reload、Worker 握手前必读：
+
+- [`架构/店面世代与前端工作流.md`](./架构/店面世代与前端工作流.md)
+- Theme 侧（主题怎么开发 / 发布如何变成身份）：[`../../Theme/doc/架构/主题开发与店面世代.md`](../../Theme/doc/架构/主题开发与店面世代.md)
+
+要点：店面身份 = **Scope 已发布 `themePublishedVersionId`**，不是全站系统 `deploy_version`。
+
 ### 主题设计资料
 
 `doc/主题设计/` 目录现在只保留为**补充型资料**，主要用于理解视觉 token、变量、颜色与历史设计结构。
@@ -67,9 +76,11 @@
 1. AI 入口（可选）：可 `prepare_project` 后调用 `resolve_task_context` 检索；编码用宿主原生编辑
 2. Theme 约束：由同一 Guidance Bundle 返回命中的 Theme 文档与 Hash
 3. Theme 总指南：[`../../Theme/doc/开发/Theme开发总指南.md`](../../Theme/doc/开发/Theme开发总指南.md)
-4. 浏览器请求：[`Weline.Api使用指南.md`](./Weline.Api使用指南.md)
-5. 主题资料索引：[`主题设计/README.md`](./主题设计/README.md)
-6. Hook / Event / 具体前端模块文档：按任务命中相关文档
+4. Theme 发布身份：[`../../Theme/doc/架构/主题开发与店面世代.md`](../../Theme/doc/架构/主题开发与店面世代.md)
+5. 浏览器请求：[`Weline.Api使用指南.md`](./Weline.Api使用指南.md)
+6. **店面世代 / 发版维护**：[`架构/店面世代与前端工作流.md`](./架构/店面世代与前端工作流.md)
+7. 主题资料索引：[`主题设计/README.md`](./主题设计/README.md)
+8. Hook / Event / 具体前端模块文档：按任务命中相关文档
 
 ## 依赖关系
 

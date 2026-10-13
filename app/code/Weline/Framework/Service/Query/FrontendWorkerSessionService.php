@@ -61,6 +61,12 @@ final class FrontendWorkerSessionService
     private const STORE_FILE = self::STORE_DIRECTORY . 'store.json';
     private const LOCK_FILE = self::STORE_DIRECTORY . 'store.lock';
     private const META_KEY = '_meta';
+    /** Stable long-lived storefront Scope Token Cookie (HttpOnly). Handshake must not clear it. */
+    public const SCOPE_COOKIE_NAME = '__Host-Weline-Worker-Scope';
+    /**
+     * @deprecated Storefront opaque bootstrap Cookie prefix. Expire-only during migration;
+     *             new storefront path uses {@see self::SCOPE_COOKIE_NAME}.
+     */
     public const SCOPE_BOOTSTRAP_COOKIE_PREFIX = '__Host-Weline-Worker-Scope-Bootstrap-';
     public const BACKEND_BOOTSTRAP_SECURE_COOKIE_PREFIX = '__Host-Weline-Worker-Backend-Bootstrap-';
     public const BACKEND_BOOTSTRAP_DEV_COOKIE_PREFIX = 'Weline-Worker-Backend-Bootstrap-';
@@ -140,16 +146,18 @@ final class FrontendWorkerSessionService
     }
 
     /**
-     * @return array{worker_session_token:string, signing_secret:string, expires_at:int, deploy_version:string, worker_build_id:string, scope_bound:bool}
+     * @return array{worker_session_token:string, signing_secret:string, expires_at:int, deploy_version:string, worker_build_id:string, scope_bound:bool, theme_published_version_id?:string}
      */
     public function createSession(
         string $deployVersion,
         string $workerBuildId,
         ?FrontendWorkerScopeBinding $scopeBinding = null,
+        string $themePublishedVersionId = '',
     ): array
     {
         $this->assertRuntimeIdentifier($deployVersion, 'deploy version');
         $this->assertRuntimeIdentifier($workerBuildId, 'worker build ID');
+        $themePublishedVersionId = $this->normalizeOptionalThemePublishedVersionId($themePublishedVersionId);
         $token = $this->randomToken(32);
         $secret = $this->randomToken(32);
 
@@ -157,6 +165,7 @@ final class FrontendWorkerSessionService
             $deployVersion,
             $workerBuildId,
             $scopeBinding,
+            $themePublishedVersionId,
             $token,
             $secret,
         ): array {
@@ -170,6 +179,7 @@ final class FrontendWorkerSessionService
                 $scopeBinding,
                 null,
                 $now,
+                $themePublishedVersionId,
             );
             $store->insert(
                 FrontendWorkerCredentialType::SESSION,
@@ -184,8 +194,9 @@ final class FrontendWorkerSessionService
     }
 
     /**
-     * Create a short-lived, one-time bridge between the HttpOnly Scope Token
-     * verification result and a subsequent worker handshake.
+     * @deprecated Storefront opaque bootstrap retired. Prefer stable
+     *             {@see self::SCOPE_COOKIE_NAME} + {@see createSession} with binding.
+     *             Kept for unit coverage of credential-store CAS until fully removed.
      *
      * @return array{bootstrap_id:string,cookie_name:string,expires_at:int}
      */
@@ -251,6 +262,9 @@ final class FrontendWorkerSessionService
         throw new \LogicException('Scope bootstrap retry loop terminated unexpectedly.');
     }
 
+    /**
+     * @deprecated Storefront opaque bootstrap retired. See {@see createScopeBootstrap}.
+     */
     public function peekScopeBootstrap(
         string $bootstrapId,
         string $tokenFingerprint,
@@ -270,10 +284,10 @@ final class FrontendWorkerSessionService
     }
 
     /**
-     * Atomically consume a Scope bootstrap and create its bound worker
-     * session under the same store lock. Failed proof checks never consume it.
+     * @deprecated Storefront opaque bootstrap retired. Prefer
+     *             {@see createSession} with a verified {@see FrontendWorkerScopeBinding}.
      *
-     * @return array{worker_session_token:string, signing_secret:string, expires_at:int, deploy_version:string, worker_build_id:string, scope_bound:bool}
+     * @return array{worker_session_token:string, signing_secret:string, expires_at:int, deploy_version:string, worker_build_id:string, scope_bound:bool, theme_published_version_id?:string}
      */
     public function createSessionFromScopeBootstrap(
         string $deployVersion,
@@ -281,9 +295,11 @@ final class FrontendWorkerSessionService
         string $bootstrapId,
         string $tokenFingerprint,
         string $expectedBindingDigest,
+        string $themePublishedVersionId = '',
     ): array {
         $this->assertRuntimeIdentifier($deployVersion, 'deploy version');
         $this->assertRuntimeIdentifier($workerBuildId, 'worker build ID');
+        $themePublishedVersionId = $this->normalizeOptionalThemePublishedVersionId($themePublishedVersionId);
         $this->assertOpaqueId($bootstrapId, 'Invalid worker Scope bootstrap ID.');
         $this->assertSha256($tokenFingerprint, 'Invalid worker Scope Token fingerprint.');
         $this->assertSha256($expectedBindingDigest, 'Invalid worker Scope binding digest.');
@@ -296,6 +312,7 @@ final class FrontendWorkerSessionService
             $bootstrapId,
             $tokenFingerprint,
             $expectedBindingDigest,
+            $themePublishedVersionId,
             $token,
             $secret,
         ): array {
@@ -316,6 +333,7 @@ final class FrontendWorkerSessionService
                 $binding,
                 null,
                 $now,
+                $themePublishedVersionId,
             );
             $store->insert(
                 FrontendWorkerCredentialType::SESSION,
@@ -535,23 +553,34 @@ final class FrontendWorkerSessionService
     }
 
     /**
-     * @return array{secret:string, deploy_version:string, worker_build_id:string, created_at:int, expires_at:int, scope_binding?:FrontendWorkerScopeBinding}
+     * @return array{secret:string, deploy_version:string, worker_build_id:string, created_at:int, expires_at:int, scope_binding?:FrontendWorkerScopeBinding, theme_published_version_id?:string}
      */
-    public function validateSession(string $token, string $deployVersion, string $workerBuildId): array
-    {
+    public function validateSession(
+        string $token,
+        string $deployVersion,
+        string $workerBuildId,
+        string $themePublishedVersionId = '',
+    ): array {
         $this->assertRuntimeIdentifier($deployVersion, 'deploy version');
         $this->assertRuntimeIdentifier($workerBuildId, 'worker build ID');
+        $themePublishedVersionId = $this->normalizeOptionalThemePublishedVersionId($themePublishedVersionId);
         if ($token === '') {
             throw new FrontendQueryException('auth_error', 'Missing worker session token.', 401);
         }
 
-        return $this->withCredentialTransaction(function (FrontendWorkerCredentialTransactionInterface $store) use ($token, $deployVersion, $workerBuildId): array {
+        return $this->withCredentialTransaction(function (FrontendWorkerCredentialTransactionInterface $store) use (
+            $token,
+            $deployVersion,
+            $workerBuildId,
+            $themePublishedVersionId,
+        ): array {
             $now = $store->now();
             return $this->assertSession(
                 $store->find(FrontendWorkerCredentialType::SESSION, $token, null, $now),
                 $deployVersion,
                 $workerBuildId,
                 $now,
+                $themePublishedVersionId,
             );
         });
     }
@@ -656,16 +685,21 @@ final class FrontendWorkerSessionService
     /**
      * Validate the worker session and consume the nonce under a single store lock.
      *
-     * @return array{secret:string, deploy_version:string, worker_build_id:string, created_at:int, expires_at:int, scope_binding?:FrontendWorkerScopeBinding}
+     * Theme id must match the HMAC-phase {@see validateSession} argument — hardcoding
+     * empty here fails storefront sessions that stored a Scope-published theme version.
+     *
+     * @return array{secret:string, deploy_version:string, worker_build_id:string, created_at:int, expires_at:int, scope_binding?:FrontendWorkerScopeBinding, theme_published_version_id?:string}
      */
     public function validateSessionAndConsumeNonce(
         string $token,
         string $deployVersion,
         string $workerBuildId,
-        string $nonce
+        string $nonce,
+        string $themePublishedVersionId = '',
     ): array {
         $this->assertRuntimeIdentifier($deployVersion, 'deploy version');
         $this->assertRuntimeIdentifier($workerBuildId, 'worker build ID');
+        $themePublishedVersionId = $this->normalizeOptionalThemePublishedVersionId($themePublishedVersionId);
         if ($token === '') {
             throw new FrontendQueryException('auth_error', 'Missing worker session token.', 401);
         }
@@ -673,7 +707,13 @@ final class FrontendWorkerSessionService
             throw new FrontendQueryException('auth_error', 'Invalid worker nonce.', 401);
         }
 
-        return $this->withCredentialTransaction(function (FrontendWorkerCredentialTransactionInterface $store) use ($token, $deployVersion, $workerBuildId, $nonce): array {
+        return $this->withCredentialTransaction(function (FrontendWorkerCredentialTransactionInterface $store) use (
+            $token,
+            $deployVersion,
+            $workerBuildId,
+            $nonce,
+            $themePublishedVersionId,
+        ): array {
             $now = $store->now();
             $retainedNonceBucket = $store->countRetainedInCapacityBucket(
                 FrontendWorkerCredentialType::NONCE,
@@ -685,6 +725,7 @@ final class FrontendWorkerSessionService
                 $deployVersion,
                 $workerBuildId,
                 $now,
+                $themePublishedVersionId,
             );
             if ($store->find(FrontendWorkerCredentialType::NONCE, $nonce, $token, $now) !== null) {
                 throw new FrontendQueryException('auth_error', 'Worker nonce has already been used.', 401);
@@ -927,9 +968,11 @@ final class FrontendWorkerSessionService
         ?FrontendWorkerScopeBinding $scopeBinding,
         ?FrontendWorkerBackendBinding $backendBinding,
         int $now,
+        string $themePublishedVersionId = '',
     ): array {
         $this->assertRuntimeIdentifier($deployVersion, 'deploy version');
         $this->assertRuntimeIdentifier($workerBuildId, 'worker build ID');
+        $themePublishedVersionId = $this->normalizeOptionalThemePublishedVersionId($themePublishedVersionId);
         if ($scopeBinding !== null && $backendBinding !== null) {
             throw new FrontendQueryException('auth_error', 'Worker session authority is ambiguous.', 401);
         }
@@ -959,23 +1002,31 @@ final class FrontendWorkerSessionService
             'created_at' => $now,
             'expires_at' => $expiresAt,
         ];
+        if ($themePublishedVersionId !== '' && $attestedArea === FrontendWorkerExecutionContext::AREA_FRONTEND) {
+            $storedSession['theme_published_version_id'] = $themePublishedVersionId;
+        }
         if ($scopeBinding !== null) {
             $storedSession['scope_binding'] = $scopeBinding->toArray();
         }
         if ($backendBinding !== null) {
             $storedSession['backend_binding'] = $backendBinding->toArray();
         }
+        $public = [
+            'worker_session_token' => $token,
+            'signing_secret' => $secret,
+            'expires_at' => $expiresAt,
+            'deploy_version' => $deployVersion,
+            'worker_build_id' => $workerBuildId,
+            'scope_bound' => $scopeBinding !== null,
+            'attested_area' => $attestedArea,
+        ];
+        if (isset($storedSession['theme_published_version_id'])) {
+            $public['theme_published_version_id'] = $themePublishedVersionId;
+        }
+
         return [
             'stored' => $storedSession,
-            'public' => [
-                'worker_session_token' => $token,
-                'signing_secret' => $secret,
-                'expires_at' => $expiresAt,
-                'deploy_version' => $deployVersion,
-                'worker_build_id' => $workerBuildId,
-                'scope_bound' => $scopeBinding !== null,
-                'attested_area' => $attestedArea,
-            ],
+            'public' => $public,
         ];
     }
 
@@ -1092,6 +1143,9 @@ final class FrontendWorkerSessionService
         }
     }
 
+    /**
+     * @deprecated Storefront opaque bootstrap Cookie names retired.
+     */
     public static function scopeBootstrapCookieName(string $bootstrapId): string
     {
         if (preg_match(self::OPAQUE_ID_PATTERN, $bootstrapId) !== 1) {
@@ -1128,6 +1182,17 @@ final class FrontendWorkerSessionService
                 400,
             );
         }
+    }
+
+    private function normalizeOptionalThemePublishedVersionId(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+        $this->assertRuntimeIdentifier($value, 'theme published version id');
+
+        return $value;
     }
 
     /**
@@ -1182,22 +1247,21 @@ final class FrontendWorkerSessionService
     }
 
     /**
-     * @return array{secret:string,deploy_version:string,worker_build_id:string,attested_area:string,created_at:int,expires_at:int,scope_binding?:FrontendWorkerScopeBinding,backend_binding?:FrontendWorkerBackendBinding}
+     * @return array{secret:string,deploy_version:string,worker_build_id:string,attested_area:string,created_at:int,expires_at:int,scope_binding?:FrontendWorkerScopeBinding,backend_binding?:FrontendWorkerBackendBinding,theme_published_version_id?:string}
      */
-    private function assertSession(mixed $session, string $deployVersion, string $workerBuildId, int $now): array
-    {
+    private function assertSession(
+        mixed $session,
+        string $deployVersion,
+        string $workerBuildId,
+        int $now,
+        string $themePublishedVersionId = '',
+    ): array {
         if (!\is_array($session)) {
             throw new FrontendQueryException('auth_error', 'Invalid worker session token.', 401);
         }
         $expiresAt = self::effectiveSessionExpiresAt($session, $now);
         if ($expiresAt <= $now) {
             throw new FrontendQueryException('auth_error', 'Expired worker session token.', 401);
-        }
-        if ((string)($session['deploy_version'] ?? '') !== $deployVersion) {
-            throw new FrontendQueryException('auth_error', 'Worker session deployment mismatch.', 401);
-        }
-        if ((string)($session['worker_build_id'] ?? '') !== $workerBuildId) {
-            throw new FrontendQueryException('auth_error', 'Worker build mismatch.', 401);
         }
         $attestedArea = $session['attested_area'] ?? FrontendWorkerExecutionContext::AREA_FRONTEND;
         if (!\is_string($attestedArea)
@@ -1208,6 +1272,22 @@ final class FrontendWorkerSessionService
             throw new FrontendQueryException('auth_error', 'Worker session area is invalid.', 401);
         }
 
+        $storedThemeId = \trim((string)($session['theme_published_version_id'] ?? ''));
+        $themePublishedVersionId = $this->normalizeOptionalThemePublishedVersionId($themePublishedVersionId);
+        if ($attestedArea === FrontendWorkerExecutionContext::AREA_FRONTEND && $storedThemeId !== '') {
+            // Storefront identity = Scope-published theme version (not system deploy stamp).
+            if ($storedThemeId !== $themePublishedVersionId) {
+                throw new FrontendQueryException('auth_error', 'Worker session theme generation mismatch.', 401);
+            }
+        } else {
+            if ((string)($session['deploy_version'] ?? '') !== $deployVersion) {
+                throw new FrontendQueryException('auth_error', 'Worker session deployment mismatch.', 401);
+            }
+            if ((string)($session['worker_build_id'] ?? '') !== $workerBuildId) {
+                throw new FrontendQueryException('auth_error', 'Worker build mismatch.', 401);
+            }
+        }
+
         $result = [
             'secret' => (string)($session['secret'] ?? ''),
             'deploy_version' => (string)($session['deploy_version'] ?? ''),
@@ -1216,6 +1296,9 @@ final class FrontendWorkerSessionService
             'created_at' => (int)($session['created_at'] ?? 0),
             'expires_at' => $expiresAt,
         ];
+        if ($storedThemeId !== '') {
+            $result['theme_published_version_id'] = $storedThemeId;
+        }
         if (array_key_exists('scope_binding', $session)) {
             if ($attestedArea !== FrontendWorkerExecutionContext::AREA_FRONTEND) {
                 throw new FrontendQueryException('auth_error', 'Backend Worker session contains storefront Scope.', 401);

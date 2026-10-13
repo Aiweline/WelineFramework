@@ -15,6 +15,14 @@
 
 QueryProvider/Graph/Stream 的实际传输由 API Worker 处理，前端代码不应依赖或拼接 `query-bin` 路径。
 
+### 店面世代身份（维护必读）
+
+店面是否强制刷新、Worker 会话是否同代，权威是 **当前 Scope 已发布主题版本**（`themePublishedVersionId`），**不是**系统 `deploy_version`。完整流程、维护场景与禁止事项见：
+
+- [`架构/店面世代与前端工作流.md`](./架构/店面世代与前端工作流.md)
+
+业务代码不得自行比戳或手写第二套世代门禁；只走 `Weline.Api.*`，由 ScopeBootstrap / QueryBin / Worker 链路处理。
+
 ### 页面 bootstrap 与 Dedicated Worker
 
 页面响应由服务端写入唯一的 opaque bootstrap meta，`weline-api.js` 加载后立即预热 Dedicated Worker。业务代码不得读取后再复制、缓存或自行设置 bootstrap ID；页面缺少、重复或格式错误时必须停止请求并刷新页面。

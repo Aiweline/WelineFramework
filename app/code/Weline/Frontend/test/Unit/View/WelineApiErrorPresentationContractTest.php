@@ -142,7 +142,13 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         self::assertStringContainsString('const ensureScopeStamp = (ids) => {', $script);
         // Cross-page: ensure must honor sessionStorage before fetch (not page-memory only).
         self::assertStringContainsString('if (isScopeStampAlreadyEnsured(ids)) {', $script);
-        self::assertStringContainsString('rememberScopeStampKey(stampKey)', $script);
+        self::assertStringContainsString('rememberScopeStampKey(stampKey, expiresAt)', $script);
+        self::assertStringContainsString('SCOPE_STAMP_SKEW_MS', $script);
+        self::assertStringContainsString('isScopeBindingMissingError', $script);
+        // Binding miss must drop optimistic memory (Reload otherwise loops forever).
+        self::assertStringContainsString('forgetScopeStampKey();', $script);
+        self::assertStringContainsString('Drop optimistic stamp memory before reload', $script);
+        self::assertStringContainsString('allowRepunch && isScopeBindingMissingError(error)', $script);
         self::assertStringContainsString('Success does not require bootstrap_id', $script);
         self::assertStringNotContainsString('SCOPE_BOOTSTRAP_OPAQUE', $script);
         self::assertStringNotContainsString('readScopeBootstrapId', $script);

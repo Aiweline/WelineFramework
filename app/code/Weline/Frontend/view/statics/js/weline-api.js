@@ -107,33 +107,61 @@
     const SCOPE_WAIT_TIP_DELAY_MS = 280;
     /** Tab memory: long Scope Cookie was ensured for this host+canonical (HttpOnly invisible to JS). */
     const SCOPE_STAMP_MEMORY_KEY = 'weline.api.scopeStampKey';
+    /** Refresh / re-punch this many ms before Cookie expires_at (unix seconds → ms). */
+    const SCOPE_STAMP_SKEW_MS = 60000;
+    /** Soft TTL when server returns 204 without expires_at (align ScopeToken ≈1800s). */
+    const SCOPE_STAMP_SOFT_TTL_SEC = 1800;
     /** Same-page memory: Scope already ensured (HttpOnly Cookie cannot be read from JS). */
     let scopeStampEnsuredKey = '';
     let scopeStampInFlight = null;
     let scopeWaitTipAt = 0;
     let scopeWaitTipTimer = null;
 
-    const readRememberedScopeStampKey = () => {
+    /**
+     * @returns {{key:string,expiresAt:number}|null} expiresAt = unix seconds; 0 = unknown/legacy
+     */
+    const readRememberedScopeStamp = () => {
         try {
-            return String(sessionStorage.getItem(SCOPE_STAMP_MEMORY_KEY) || '');
+            const raw = String(sessionStorage.getItem(SCOPE_STAMP_MEMORY_KEY) || '');
+            if (raw === '') {
+                return null;
+            }
+            // Legacy plain key (no expiry) — force re-ensure so Cookie + TTL stay honest.
+            if (raw.charAt(0) !== '{') {
+                return { key: raw, expiresAt: 0 };
+            }
+            const parsed = JSON.parse(raw);
+            const key = String((parsed && parsed.key) || '').trim();
+            if (key === '') {
+                return null;
+            }
+            return {
+                key,
+                expiresAt: Math.max(0, Number((parsed && parsed.expiresAt) || 0) || 0),
+            };
         } catch (_storageError) {
-            return '';
+            return null;
         }
     };
 
-    const rememberScopeStampKey = (stampKey) => {
+    const rememberScopeStampKey = (stampKey, expiresAtUnix) => {
         const key = String(stampKey || '');
         if (key === '') {
             return;
         }
+        let expiresAt = Math.max(0, Number(expiresAtUnix) || 0);
+        if (expiresAt <= 0) {
+            expiresAt = Math.floor(Date.now() / 1000) + SCOPE_STAMP_SOFT_TTL_SEC;
+        }
         try {
-            sessionStorage.setItem(SCOPE_STAMP_MEMORY_KEY, key);
+            sessionStorage.setItem(SCOPE_STAMP_MEMORY_KEY, JSON.stringify({ key, expiresAt }));
         } catch (_storageError) {
             /* private mode — page memory still works */
         }
     };
 
     const forgetScopeStampKey = () => {
+        scopeStampEnsuredKey = '';
         try {
             sessionStorage.removeItem(SCOPE_STAMP_MEMORY_KEY);
         } catch (_storageError) {
@@ -146,7 +174,24 @@
         if (scopeStampEnsuredKey === stampKey) {
             return true;
         }
-        return readRememberedScopeStampKey() === stampKey;
+        const remembered = readRememberedScopeStamp();
+        if (!remembered || remembered.key !== stampKey) {
+            return false;
+        }
+        // Unknown/legacy expiry → re-punch (Cookie may already be gone).
+        if (!(remembered.expiresAt > 0)) {
+            return false;
+        }
+        return (remembered.expiresAt * 1000) > (Date.now() + SCOPE_STAMP_SKEW_MS);
+    };
+
+    const isScopeBindingMissingError = (error) => {
+        const code = String((error && error.code) || '').toLowerCase();
+        if (code === 'scope_binding_required') {
+            return true;
+        }
+        const message = String((error && error.message) || '');
+        return code === 'auth_error' && /Scope Cookie is required/i.test(message);
     };
 
     /**
@@ -284,7 +329,8 @@
             // Success does not require bootstrap_id (opaque bridge retired for storefront).
             if (payload && (payload.ok === true || payload.skipped === true)) {
                 scopeStampEnsuredKey = stampKey;
-                rememberScopeStampKey(stampKey);
+                const expiresAt = Number(payload && payload.expires_at) || 0;
+                rememberScopeStampKey(stampKey, expiresAt);
                 return true;
             }
             const error = new Error('[Weline.Api] Scope stamp ensure returned an unexpected payload.');
@@ -293,7 +339,6 @@
             throw error;
         }).catch((error) => {
             forgetScopeStampKey();
-            scopeStampEnsuredKey = '';
             if (error && (error.name === 'AbortError' || error.code === 'ABORT_ERR')) {
                 const timedOut = new Error('[Weline.Api] Scope stamp ensure timed out.');
                 timedOut.code = 'scope_bootstrap_timeout';
@@ -1027,6 +1072,9 @@
         if (!presentation || !presentation.autoReload) {
             return false;
         }
+        // Drop optimistic stamp memory before reload — otherwise skip-POST + missing Cookie
+        // loops on "Page binding is missing or expired" forever.
+        forgetScopeStampKey();
         try {
             const now = Date.now();
             const last = Number(sessionStorage.getItem(SCOPE_RELOAD_GUARD_KEY) || 0) || 0;
@@ -2497,13 +2545,21 @@
                 return Promise.resolve(null);
             }
             if (!this.scopeWarmupPromise) {
-                this.scopeWarmupPromise = ensureScopeStamp(this.config).then(() => {
+                const runWarmup = (allowRepunch) => ensureScopeStamp(this.config).then(() => {
                     // Handshake uses credentials Cookie only — no scope_bootstrap_id.
                     return this.sendToWorker({
                         type: 'scope-bootstrap',
                         options: { silent: true },
                     });
-                }).then((result) => {
+                }).catch((error) => {
+                    // Tab memory said OK but Cookie gone → one silent re-punch, no stuck Reload modal.
+                    if (allowRepunch && isScopeBindingMissingError(error)) {
+                        forgetScopeStampKey();
+                        return runWarmup(false);
+                    }
+                    throw error;
+                });
+                this.scopeWarmupPromise = runWarmup(true).then((result) => {
                     this.scopeWarmupComplete = true;
                     clearScopeWaitTipSchedule();
                     return result;

@@ -759,6 +759,29 @@ abstract class RequestAbstract extends RequestFilter
                 if ($websiteScheme !== 'http' && $websiteScheme !== 'https') {
                     $websiteScheme = $currentScheme;
                 }
+                // Managed Nginx terminates TLS while Worker often sees http + website_url
+                // still stored as http://. Baking <base href="http://…"> on an https
+                // document makes relative /Weline/... scripts resolve to http → mixed
+                // content → Weline.Api never loads. Prefer the live request scheme,
+                // then WLS_PUBLIC_ORIGIN (instance public https) when wire is cleartext.
+                if ($websiteScheme === 'http') {
+                    if ($currentScheme === 'https' || self::detectScheme() === 'https') {
+                        $websiteScheme = 'https';
+                    } else {
+                        $publicOrigin = \trim((string)(
+                            $_SERVER['WLS_PUBLIC_ORIGIN']
+                            ?? $_ENV['WLS_PUBLIC_ORIGIN']
+                            ?? \getenv('WLS_PUBLIC_ORIGIN')
+                            ?: ''
+                        ));
+                        if ($publicOrigin !== '') {
+                            $publicScheme = \strtolower((string)(\parse_url($publicOrigin, PHP_URL_SCHEME) ?? ''));
+                            if ($publicScheme === 'https') {
+                                $websiteScheme = 'https';
+                            }
+                        }
+                    }
+                }
                 $websitePortExplicit = $hostsAligned && isset($parsed['port']);
                 $resolvedPort = ($hostsAligned && isset($parsed['port'])) ? (string)(int)$parsed['port'] : '';
                 if ($resolvedPort === '') {

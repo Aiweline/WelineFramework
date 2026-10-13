@@ -1205,6 +1205,12 @@ class WlsRequest extends Request
     public function getBaseHost(): string
     {
         $currentScheme = $this->isSecure() ? 'https' : 'http';
+        // Managed nginx sets X-Forwarded-Proto=https while the Worker wire is
+        // cleartext H1. isSecure() is trust-gated; detectScheme() still sees
+        // the forwarded proto via w_env and must win for <base>/@url scheme.
+        if ($currentScheme !== 'https' && self::detectScheme() === 'https') {
+            $currentScheme = 'https';
+        }
         $host = $this->parsedHost ?: (string)($this->getHeader('Host') ?? '');
         if ($host === '') {
             throw new \RuntimeException('Host is not available for current request.');
@@ -1235,6 +1241,24 @@ class WlsRequest extends Request
                 $websiteScheme = \strtolower((string)($parsed['scheme'] ?? ''));
                 if ($websiteScheme !== 'http' && $websiteScheme !== 'https') {
                     $websiteScheme = $currentScheme;
+                }
+                // Same as RequestAbstract: TLS edge / public_origin + http website_url
+                // must not bake <base href="http://…"> (mixed content kills relative Api).
+                if ($websiteScheme === 'http') {
+                    if ($currentScheme === 'https') {
+                        $websiteScheme = 'https';
+                    } else {
+                        $publicOrigin = \trim((string)(
+                            \w_env('server.wls_public_origin', '')
+                            ?: ($_SERVER['WLS_PUBLIC_ORIGIN'] ?? $_ENV['WLS_PUBLIC_ORIGIN'] ?? \getenv('WLS_PUBLIC_ORIGIN') ?: '')
+                        ));
+                        if ($publicOrigin !== '') {
+                            $publicScheme = \strtolower((string)(\parse_url($publicOrigin, PHP_URL_SCHEME) ?? ''));
+                            if ($publicScheme === 'https') {
+                                $websiteScheme = 'https';
+                            }
+                        }
+                    }
                 }
                 $websitePortExplicit = $hostsAligned && isset($parsed['port']);
                 $resolvedPort = ($hostsAligned && isset($parsed['port'])) ? (string)(int)$parsed['port'] : '';

@@ -1,7 +1,12 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
+// Document <base> must follow live getBaseHost()/getFrontendUrl at render time.
+// Compile-time @url{'/'} (and Theme storefront chrome cache) can freeze http://
+// while the TLS edge + WLS_PUBLIC_ORIGIN are https — path-absolute /Weline/...
+// scripts then mixed-content fail and Weline.Api never loads.
+$storefrontBaseHref = rtrim((string)$this->getFrontendUrl('/'), '/') . '/';
 ?>
-<base href="@url{'/'}">
+<base href="<?= htmlspecialchars($storefrontBaseHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <w:theme:font src="LXGWWenKai-Regular.ttf" family="LXGW WenKai" weight="400" display="swap"/>

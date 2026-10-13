@@ -40,8 +40,14 @@ final class StorefrontPixelBootstrapWidgetContractTest extends TestCase
         self::assertStringContainsString('header-widget-eager', $svc);
         self::assertStringContainsString('__WelinePixelPending', $svc);
         self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20261009-prod-console1'", $svc);
-        self::assertStringContainsString("@\\filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api.js')", $svc);
-        self::assertStringContainsString("@\\filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api-worker.js')", $svc);
+        // Api/Worker bust with Frontend deploy assetVersion — not sticky Pixel version.
+        self::assertStringContainsString('resolveFrontendApiAssetVersion', $svc);
+        self::assertStringContainsString('var/deploy/current.json', $svc);
+        // Storefront with Frontend runtime must not dual-inject Api (scope-bootstrap loop).
+        self::assertStringContainsString('hasFrontendRuntime', $svc);
+        self::assertStringContainsString('weline-frontend-runtime-config', $svc);
+        self::assertStringContainsString('hasApiScript', $svc);
+        self::assertStringContainsString('!window.WelineApiConfig.workerUrl', $svc);
     }
 
     public function testThemeAndHanfuHeadersDeclarePixelBootstrapSlot(): void

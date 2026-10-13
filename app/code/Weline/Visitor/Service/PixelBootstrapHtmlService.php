@@ -114,18 +114,15 @@ class PixelBootstrapHtmlService
         $scriptUrl = $this->moduleStaticUrl('Weline/Visitor', 'js/pixel.js') . '?v=' . self::PIXEL_SCRIPT_VERSION;
         // pixel.js 通过 Weline.Api.resource('visitor') 走 worker 通道上报；
         // 自建整页的渲染链路没有 theme.js，需要一并加载 API 运行时。
-        // Bust api/worker with Frontend source mtime so sticky PIXEL_SCRIPT_VERSION
-        // cannot pin an obsolete SharedWorker/Scope client after Frontend edits.
-        $apiJsMtime = @\filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api.js');
-        $workerJsMtime = @\filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api-worker.js');
+        // Api/Worker must share Frontend deploy assetVersion — NEVER Pixel's sticky
+        // PIXEL_SCRIPT_VERSION (looked like "old theme" and dual-loaded Scope client).
+        $frontendAssetVersion = $this->resolveFrontendApiAssetVersion();
         $apiScriptUrl = $this->moduleStaticUrl('Weline/Frontend', 'js/weline-api.js')
-            . '?v=' . self::PIXEL_SCRIPT_VERSION
-            . ($apiJsMtime ? ('-' . (string)$apiJsMtime) : '');
+            . '?v=' . \rawurlencode($frontendAssetVersion);
         // 自建页面无 theme.js 提供的 DEV 标记，weline-api.js 会按 PROD 规则解析 worker URL，
         // 这里由服务端直接给出正确地址，避免 404。
         $workerScriptUrl = $this->moduleStaticUrl('Weline/Frontend', 'js/weline-api-worker.js')
-            . '?v=' . self::PIXEL_SCRIPT_VERSION
-            . ($workerJsMtime ? ('-' . (string)$workerJsMtime) : '');
+            . '?v=' . \rawurlencode($frontendAssetVersion);
         $safePixelName = \htmlspecialchars($pixelName, \ENT_QUOTES, 'UTF-8');
         $eagerJs = $eager ? 'true' : 'false';
 
@@ -219,14 +216,37 @@ class PixelBootstrapHtmlService
 
         window.__WelinePixelLazyLoaded = true;
         window.__WelinePixelName = '{$safePixelName}';
+        // Prefer Frontend ModuleLoader (weline.js + runtime-config). Only self-inject
+        // Api on self-built pages without that runtime — never dual-load on storefront
+        // (eager Pixel runs before defer weline.js → second Api → scope-bootstrap spam / 401).
         if (!(window.Weline && window.Weline.Api && window.Weline.Api.__full)) {
-            window.WelineApiConfig = Object.assign({}, window.WelineApiConfig || {}, {
-                workerUrl: '{$workerScriptUrl}'
-            });
-            var apiScript = document.createElement('script');
-            apiScript.src = '{$apiScriptUrl}';
-            apiScript.async = true;
-            document.head.appendChild(apiScript);
+            var hasFrontendRuntime = false;
+            try {
+                hasFrontendRuntime = !!(document.getElementById('weline-frontend-runtime-config')
+                    || document.querySelector('script[src*="weline.js"]'));
+            } catch (_runtimeDetectError) {
+                hasFrontendRuntime = false;
+            }
+            if (!hasFrontendRuntime) {
+                var hasApiScript = false;
+                try {
+                    hasApiScript = Array.prototype.some.call(document.scripts || [], function (s) {
+                        return /\\/weline-api\\.js(\\?|$)/i.test(String(s && s.src || ''));
+                    });
+                } catch (_hasApiScriptError) {
+                    hasApiScript = false;
+                }
+                if (!hasApiScript) {
+                    window.WelineApiConfig = Object.assign({}, window.WelineApiConfig || {});
+                    if (!window.WelineApiConfig.workerUrl) {
+                        window.WelineApiConfig.workerUrl = '{$workerScriptUrl}';
+                    }
+                    var apiScript = document.createElement('script');
+                    apiScript.src = '{$apiScriptUrl}';
+                    apiScript.async = true;
+                    document.head.appendChild(apiScript);
+                }
+            }
         }
         var script = document.createElement('script');
         script.src = '{$scriptUrl}';
@@ -405,6 +425,42 @@ HTML;
             'language' => (string)WelineEnv::server('WELINE_USER_LANG', (string)($_SERVER['WELINE_USER_LANG'] ?? '')),
             'currency' => (string)WelineEnv::server('WELINE_USER_CURRENCY', (string)($_SERVER['WELINE_USER_CURRENCY'] ?? '')),
         ];
+    }
+
+    /**
+     * Align api/worker cache-bust with Frontend header assetVersion
+     * (deploy_version + max Frontend api/worker/weline.js mtime).
+     */
+    private function resolveFrontendApiAssetVersion(): string
+    {
+        $deployVersion = '';
+        $deployMetaPath = BP . 'var/deploy/current.json';
+        if (\is_file($deployMetaPath)) {
+            try {
+                $decoded = \json_decode((string)@\file_get_contents($deployMetaPath), true);
+                if (\is_array($decoded)) {
+                    $deployVersion = \trim((string)($decoded['deploy_version'] ?? ''));
+                }
+            } catch (\Throwable) {
+                $deployVersion = '';
+            }
+        }
+        if ($deployVersion === '') {
+            $deployVersion = 'dev';
+        }
+        $mtime = 0;
+        foreach ([
+            BP . 'app/code/Weline/Frontend/view/statics/js/weline-api.js',
+            BP . 'app/code/Weline/Frontend/view/statics/js/weline-api-worker.js',
+            BP . 'app/code/Weline/Frontend/view/statics/js/weline.js',
+        ] as $path) {
+            $t = @\filemtime($path);
+            if (\is_int($t) && $t > $mtime) {
+                $mtime = $t;
+            }
+        }
+
+        return $deployVersion . ($mtime > 0 ? ('-' . (string)$mtime) : '');
     }
 
     /**

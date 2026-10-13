@@ -55,6 +55,10 @@ final class QueryBinScopeHandshakeTest extends TestCase
             FrontendWorkerScopeProviderInterface::class => RequiredScopeProvider::class,
         ]));
         $this->enterHttpsContext();
+        $this->installRequest($controller, [
+            'HTTP_HOST' => 'shop.example.test',
+            'WELINE_FULL_REQUEST_URI' => 'https://shop.example.test/api/framework/query-bin',
+        ]);
 
         try {
             $this->handshake($controller, [
@@ -95,7 +99,7 @@ final class QueryBinScopeHandshakeTest extends TestCase
         self::assertSame([], $store->state);
     }
 
-    public function testScopeBootstrapStoreFailurePreservesServiceUnavailableStatus(): void
+    public function testScopeCookieStoreFailurePreservesServiceUnavailableStatus(): void
     {
         $this->enterHttpsContext();
         $store = new InspectableFrontendWorkerStateStore();
@@ -111,7 +115,6 @@ final class QueryBinScopeHandshakeTest extends TestCase
             true,
         );
         RequiredScopeProvider::$binding = $binding;
-        $bootstrap = $sessionService->createScopeBootstrap($binding);
 
         $controller = $this->controller(
             $store,
@@ -121,7 +124,7 @@ final class QueryBinScopeHandshakeTest extends TestCase
             $sessionService,
         );
         $this->installRequest($controller, [
-            'HTTP_COOKIE' => $bootstrap['cookie_name'] . '=scope-token',
+            'HTTP_COOKIE' => FrontendWorkerSessionService::SCOPE_COOKIE_NAME . '=scope-token',
             'HTTP_HOST' => 'shop.example.test',
             'WELINE_FULL_REQUEST_URI' => 'https://shop.example.test/api/framework/query-bin',
         ]);
@@ -136,25 +139,77 @@ final class QueryBinScopeHandshakeTest extends TestCase
                 'type' => 'handshake',
                 'deploy_version' => 'test-deploy',
                 'worker_build_id' => 'test-worker',
-                'scope_bootstrap_id' => $bootstrap['bootstrap_id'],
             ]);
-            self::fail('Scope bootstrap store failure was unexpectedly downgraded.');
+            self::fail('Scope Cookie session store failure was unexpectedly downgraded.');
         } catch (FrontendQueryException $exception) {
             self::assertSame('worker_capacity_exhausted', $exception->getErrorCode());
             self::assertSame(503, $exception->getHttpStatus());
         }
     }
 
+    public function testScopeCookieHandshakeCreatesBoundSessionWithoutOpaqueBootstrap(): void
+    {
+        $this->enterHttpsContext();
+        $store = new InspectableFrontendWorkerStateStore();
+        $sessionService = new FrontendWorkerSessionService($store);
+        $scope = ScopeIdentity::channel(0, 'default', 'main', 'web', ScopeIdentity::MODE_TEST);
+        $now = time();
+        $binding = new FrontendWorkerScopeBinding(
+            $scope,
+            'shop.example.test',
+            hash('sha256', 'scope-token'),
+            $now,
+            $now + 1800,
+            true,
+        );
+        RequiredScopeProvider::$binding = $binding;
+
+        $controller = $this->controller(
+            $store,
+            $this->registry([
+                FrontendWorkerScopeProviderInterface::class => RequiredScopeProvider::class,
+            ]),
+            $sessionService,
+        );
+        $this->installRequest($controller, [
+            'HTTP_COOKIE' => FrontendWorkerSessionService::SCOPE_COOKIE_NAME . '=scope-token',
+            'HTTP_HOST' => 'shop.example.test',
+            'WELINE_FULL_REQUEST_URI' => 'https://shop.example.test/api/framework/query-bin',
+        ]);
+
+        $result = $this->handshake($controller, [
+            'type' => 'handshake',
+            'deploy_version' => 'test-deploy',
+            'worker_build_id' => 'test-worker',
+        ]);
+
+        self::assertTrue($result['ok'] ?? false);
+        self::assertIsArray($result['data'] ?? null);
+        self::assertTrue(($result['data']['scope_bound'] ?? false) === true);
+        self::assertSame(
+            true,
+            \Weline\Framework\Runtime\RequestContext::get('query_bin.expire_legacy_scope_bootstrap_cookies'),
+        );
+        self::assertNull(
+            \Weline\Framework\Runtime\RequestContext::get('query_bin.bootstrap_cookie_clear'),
+        );
+    }
+
     public function testBinaryOutputGuardNeverLogsCapturedBytes(): void
     {
-        $source = (string)file_get_contents(
+        $queryBin = (string)file_get_contents(
             dirname(__DIR__, 5) . '/Frontend/Controller/Api/QueryBin.php'
         );
+        self::assertStringContainsString('BinaryOutputGuard::begin', $queryBin);
+        self::assertStringContainsString('BinaryOutputGuard::end', $queryBin);
 
-        self::assertStringContainsString("'sha256' => \\hash('sha256', \$preExisting)", $source);
-        self::assertStringContainsString("'sha256' => \\hash('sha256', \$captured)", $source);
-        self::assertStringNotContainsString("mb_substr(\\trim(\$preExisting)", $source);
-        self::assertStringNotContainsString("mb_substr(\\trim(\$captured)", $source);
+        $guard = (string)file_get_contents(
+            dirname(__DIR__, 5) . '/Framework/Http/BinaryOutputGuard.php'
+        );
+        self::assertStringContainsString("'sha256' => \\hash('sha256', \$preExisting)", $guard);
+        self::assertStringContainsString("'sha256' => \\hash('sha256', \$captured)", $guard);
+        self::assertStringNotContainsString('mb_substr(\\trim($preExisting)', $guard);
+        self::assertStringNotContainsString('mb_substr(\\trim($captured)', $guard);
     }
 
     private function controller(
@@ -174,6 +229,13 @@ final class QueryBinScopeHandshakeTest extends TestCase
     /** @param array<string, mixed> $payload @return array<string, mixed> */
     private function handshake(QueryBin $controller, array $payload): array
     {
+        $serverThemeId = \Weline\Frontend\Helper\StorefrontGenerationIdentity::currentVersionId();
+        if ($serverThemeId !== ''
+            && (!isset($payload['theme_published_version_id'])
+                || (string)$payload['theme_published_version_id'] === '')
+        ) {
+            $payload['theme_published_version_id'] = $serverThemeId;
+        }
         $method = new \ReflectionMethod(QueryBin::class, 'handleHandshake');
         $result = $method->invoke($controller, $payload, 'test-request');
         self::assertIsArray($result);

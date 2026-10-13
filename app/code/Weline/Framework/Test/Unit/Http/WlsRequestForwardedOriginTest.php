@@ -222,6 +222,92 @@ final class WlsRequestForwardedOriginTest extends TestCase
         }
     }
 
+    public function testHttpWebsiteUrlUpgradesWhenRequestIsHttps(): void
+    {
+        $prevWlsPort = \getenv('WLS_PORT');
+        \putenv('WLS_PORT=9555');
+        try {
+            $request = $this->createRequest(
+                "Host: p05113ef3.test.weline.com\r\n"
+                . "X-Forwarded-Proto: https\r\n",
+                [
+                    'HTTPS' => 'on',
+                    'REQUEST_SCHEME' => 'https',
+                    'WLS_PORT' => 9555,
+                    'WLS_TRUST_FORWARDED_HEADERS' => '1',
+                ],
+            );
+            \Weline\Framework\Env\WelineEnv::getInstance()->initFromSnapshot(
+                [],
+                [],
+                [],
+                [],
+                [
+                    'WELINE_WEBSITE_URL' => 'http://p05113ef3.test.weline.com',
+                    'HTTP_HOST' => 'p05113ef3.test.weline.com',
+                    'REQUEST_SCHEME' => 'https',
+                    'HTTPS' => 'on',
+                    'HTTP_X_FORWARDED_PROTO' => 'https',
+                ],
+            );
+
+            self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
+        } finally {
+            if ($prevWlsPort === false) {
+                \putenv('WLS_PORT');
+            } else {
+                \putenv('WLS_PORT=' . $prevWlsPort);
+            }
+            \Weline\Framework\Env\WelineEnv::getInstance()->reset();
+        }
+    }
+
+    public function testHttpWebsiteUrlUpgradesFromPublicOriginWhenWireIsHttp(): void
+    {
+        $prevWlsPort = \getenv('WLS_PORT');
+        $prevPublicOrigin = \getenv('WLS_PUBLIC_ORIGIN');
+        \putenv('WLS_PORT=9555');
+        \putenv('WLS_PUBLIC_ORIGIN=https://p05113ef3.test.weline.com');
+        try {
+            $request = $this->createRequest(
+                "Host: p05113ef3.test.weline.com\r\n",
+                [
+                    'HTTPS' => '',
+                    'REQUEST_SCHEME' => 'http',
+                    'WLS_PORT' => 9555,
+                    'WLS_PUBLIC_ORIGIN' => 'https://p05113ef3.test.weline.com',
+                    'WLS_TRUST_FORWARDED_HEADERS' => '0',
+                ],
+            );
+            \Weline\Framework\Env\WelineEnv::getInstance()->initFromSnapshot(
+                [],
+                [],
+                [],
+                [],
+                [
+                    'WELINE_WEBSITE_URL' => 'http://p05113ef3.test.weline.com',
+                    'HTTP_HOST' => 'p05113ef3.test.weline.com',
+                    'REQUEST_SCHEME' => 'http',
+                    'WLS_PUBLIC_ORIGIN' => 'https://p05113ef3.test.weline.com',
+                ],
+            );
+
+            self::assertSame('https://p05113ef3.test.weline.com', $request->getBaseHost());
+        } finally {
+            if ($prevWlsPort === false) {
+                \putenv('WLS_PORT');
+            } else {
+                \putenv('WLS_PORT=' . $prevWlsPort);
+            }
+            if ($prevPublicOrigin === false) {
+                \putenv('WLS_PUBLIC_ORIGIN');
+            } else {
+                \putenv('WLS_PUBLIC_ORIGIN=' . $prevPublicOrigin);
+            }
+            \Weline\Framework\Env\WelineEnv::getInstance()->reset();
+        }
+    }
+
     public function testPureWlsPublicOriginKeepsListenPortEvenWhenWebsiteUrlOmitsIt(): void
     {
         $prevWlsPort = \getenv('WLS_PORT');

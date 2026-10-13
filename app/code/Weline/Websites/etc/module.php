@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.8.108',
+    "version" => '1.8.111',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
@@ -21,6 +21,7 @@ return [
         'Weline_Server' => '*',
         'Weline_Product' => '*',
         'Weline_Theme' => '*',
+        'Weline_Seo' => '*',
     ],
     "provides" => [
         \Weline\Websites\Api\Theme\ThemeApplicationRepositoryInterface::class => \Weline\Websites\Service\OrmThemeApplicationRepository::class,

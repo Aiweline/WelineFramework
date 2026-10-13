@@ -17,10 +17,10 @@
     const encoder = new TextEncoder();
     const decoder = new TextDecoder('utf-8', { fatal: true });
 
-    // SharedWorker survives full navigations: URL-keyed sessions stay in one process
+    // SharedWorker survives full navigations: Scope-keyed sessions stay in one process
     // across tabs; Dedicated Worker falls back to the same map per tab.
-    /** @type {Map<string, {session:object, scopeBootstrapId:string, backendBootstrapId:string}>} */
-    const sessionsByUrlKey = new Map();
+    /** @type {Map<string, {session:object, backendBootstrapId:string}>} */
+    const sessionsByScopeKey = new Map();
     let handshakePromise = null;
     let handshakePromiseKey = '';
     let handshakeCooldownUntil = 0;
@@ -68,7 +68,7 @@
 
     /**
      * SharedWorker + Dedicated: bind one message port. SharedWorker keeps
-     * sessionsByUrlKey across tabs; each tab owns its MessagePort.
+     * sessionsByScopeKey (Scope canonical + authority) across tabs; each tab owns its MessagePort.
      */
     const attachQueryBinPort = (port) => {
         if (!port || typeof port.postMessage !== 'function') {
@@ -171,18 +171,20 @@
     function normalizeConfig(config) {
         const deployVersion = String(config.deployVersion || config.deploy_version || 'dev').trim();
         const workerBuildId = String(config.workerBuildId || config.worker_build_id || 'dev').trim();
+        // theme id must arrive via page config.api (mirrored in base.phtml) or runtime root.
+        const themePublishedVersionId = String(
+            config.themePublishedVersionId || config.theme_published_version_id || ''
+        ).trim();
         if (!/^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$/.test(deployVersion)
             || !/^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$/.test(workerBuildId)) {
             throw Object.assign(new Error('Invalid Weline worker deploy/build identifier.'), {
                 code: 'protocol_error',
             });
         }
-        const rawScopeBootstrapId = String(
-            config.scopeBootstrapId || config.scope_bootstrap_id || ''
-        ).trim();
-        if (rawScopeBootstrapId !== '' && !/^[A-Za-z0-9_-]{43}$/.test(rawScopeBootstrapId)) {
-            throw Object.assign(new Error('Invalid Weline worker Scope bootstrap ID.'), {
-                code: 'scope_bootstrap_invalid',
+        if (themePublishedVersionId !== ''
+            && !/^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$/.test(themePublishedVersionId)) {
+            throw Object.assign(new Error('Invalid Weline theme published version id.'), {
+                code: 'protocol_error',
             });
         }
         const rawBackendBootstrapId = String(
@@ -193,15 +195,11 @@
                 code: 'backend_attestation_invalid',
             });
         }
-        if (rawScopeBootstrapId !== '' && rawBackendBootstrapId !== '') {
-            throw Object.assign(new Error('Worker storefront and backend bootstraps are mutually exclusive.'), {
-                code: 'protocol_error',
-            });
-        }
         const normalized = {
             endpoint: config.endpoint || '/api/framework/query-bin',
             deployVersion,
             workerBuildId,
+            themePublishedVersionId,
             locale: normalizeLocale(
                 config.locale
                 || config.currentLang
@@ -210,11 +208,11 @@
                 || ''
             ),
             pathname: String(config.pathname || config.path || ''),
+            host: String(config.host || config.authorityHost || '').trim().toLowerCase(),
             defaultCurrency: normalizeCurrencyCode(config.defaultCurrency || config.default_currency || 'CNY'),
             availableCurrencies: normalizeCurrencyList(
                 config.availableCurrencies || config.supportedCurrencies || config.currencyCodes || config.currencies || []
             ),
-            scopeBootstrapId: rawScopeBootstrapId,
             backendBootstrapId: rawBackendBootstrapId,
             cacheCatalog: (config.cacheCatalog && typeof config.cacheCatalog === 'object') ? config.cacheCatalog : {},
             website_id: Number(config.website_id || 0) || 0,
@@ -586,18 +584,18 @@
             await clearResponseCacheNotMatchingDeploy(next);
             return;
         }
-        // Deploy rotation: drop all URL-keyed storefront sessions in this worker.
-        sessionsByUrlKey.clear();
+        // Deploy rotation: drop all Scope-keyed storefront sessions in this worker.
+        sessionsByScopeKey.clear();
         await clearResponseCacheNotMatchingDeploy(next);
     }
 
     function peekSession(config) {
-        const entry = sessionsByUrlKey.get(urlScopeIdentityKey(config));
+        const entry = sessionsByScopeKey.get(scopeSessionIdentityKey(config));
         return entry && entry.session ? entry.session : null;
     }
 
     function clearSession(config) {
-        sessionsByUrlKey.delete(urlScopeIdentityKey(config));
+        sessionsByScopeKey.delete(scopeSessionIdentityKey(config));
     }
 
     function memoryGetFresh(key) {
@@ -730,70 +728,92 @@
         return value;
     }
 
-    function urlScopeIdentityKey(config) {
+    /**
+     * Mirror ScopeIdentity::fromLayerIds placeholder codes (website / store / channel).
+     */
+    function buildScopeCanonicalFromIds(websiteId, storeId, channelId) {
+        websiteId = Math.max(0, Number(websiteId) || 0);
+        storeId = Math.max(0, Number(storeId) || 0);
+        channelId = Math.max(0, Number(channelId) || 0);
+        const websiteCode = websiteId === 0 ? 'default' : ('id-' + websiteId);
+        if (channelId > 0) {
+            const storeCode = storeId === 0 ? 'default' : ('id-' + storeId);
+            return ['channel', String(websiteId), websiteCode, storeCode, 'id-' + channelId, 'normal', 'v1'].join('|');
+        }
+        if (storeId > 0) {
+            return ['store', String(websiteId), websiteCode, 'id-' + storeId, '', 'normal', 'v1'].join('|');
+        }
+        return ['website', String(websiteId), websiteCode, '', '', '', 'v1'].join('|');
+    }
+
+    /**
+     * Session slot key: authorityHost + Scope canonical (or backend bootstrap id).
+     * Must NOT use Host+path — same storefront Scope reuses one badge across pages.
+     */
+    function scopeSessionIdentityKey(config) {
         const host = String(config.host || config.authorityHost || '').trim().toLowerCase();
-        let path = String(config.pathname || config.path || '/').trim() || '/';
-        if (path.charAt(0) !== '/') {
-            path = '/' + path;
+        if (config.backendBootstrapId) {
+            return host + '\0backend\0' + String(config.backendBootstrapId);
         }
-        const q = path.indexOf('?');
-        if (q !== -1) {
-            path = path.slice(0, q);
-        }
-        return host + '\0' + path;
+        return host + '\0' + buildScopeCanonicalFromIds(
+            config.website_id,
+            config.store_id,
+            config.channel_id
+        );
     }
 
     async function ensureSession(config) {
         const now = Math.floor(Date.now() / 1000);
-        const urlKey = urlScopeIdentityKey(config);
-        let entry = sessionsByUrlKey.get(urlKey) || null;
+        const scopeKey = scopeSessionIdentityKey(config);
+        let entry = sessionsByScopeKey.get(scopeKey) || null;
 
-        // URL-keyed multi-session: retail ↔ /b2b keep distinct slots. Same URL with
-        // a rotated hole-punch/meta bootstrap id replaces that slot only.
-        if (entry && (
-            entry.scopeBootstrapId !== config.scopeBootstrapId ||
-            entry.backendBootstrapId !== config.backendBootstrapId
-        )) {
-            sessionsByUrlKey.delete(urlKey);
+        // Backend bootstrap rotation replaces that slot only. Storefront slots are
+        // keyed by Scope canonical (+ authority) — no opaque bootstrap id.
+        if (entry && entry.backendBootstrapId !== String(config.backendBootstrapId || '')) {
+            sessionsByScopeKey.delete(scopeKey);
             entry = null;
         }
 
         const workerSession = entry ? entry.session : null;
 
+        const sessionThemeId = String(workerSession && workerSession.theme_published_version_id || '').trim();
+        const configThemeId = String(config.themePublishedVersionId || '').trim();
+        // Storefront identity is Scope-published theme version. Empty≠non-empty must not
+        // reuse: server assertSession throws "theme generation mismatch" when stored id
+        // differs from the signed request header (including empty request vs stored id).
+        const themeGenerationMatches = sessionThemeId === configThemeId;
         if (
             workerSession &&
             workerSession.expires_at > now + 5 &&
-            workerSession.deploy_version === config.deployVersion &&
-            workerSession.worker_build_id === config.workerBuildId
+            themeGenerationMatches
         ) {
             return workerSession;
         }
 
-        if (workerSession && workerSession.scope_bound === true && workerSession.attested_area !== 'backend') {
-            // Scope bootstrap Cookie is one-shot; after deploy/build/expiry drift the
-            // page must hole-punch again (or reload) for a fresh bootstrap id.
-            sessionsByUrlKey.delete(urlKey);
-            throw Object.assign(new Error('The page Scope has expired or changed. Reload the page to continue.'), {
-                code: 'scope_reload_required',
-                status: 401,
-            });
-        }
-        if (workerSession && workerSession.attested_area === 'backend') {
-            sessionsByUrlKey.delete(urlKey);
+        if (workerSession && !themeGenerationMatches) {
+            // Drop every Scope slot — SharedWorker may hold a prior-generation badge
+            // under the same or sibling identity key after theme publish / selection flip.
+            sessionsByScopeKey.clear();
+            entry = null;
+        } else if (workerSession && workerSession.scope_bound === true && workerSession.attested_area !== 'backend') {
+            // Long-lived HttpOnly Scope Cookie remains; drop expired badge and re-handshake.
+            sessionsByScopeKey.delete(scopeKey);
+            entry = null;
+        } else if (workerSession && workerSession.attested_area === 'backend') {
+            sessionsByScopeKey.delete(scopeKey);
         }
 
-        if (!handshakePromise || handshakePromiseKey !== urlKey) {
-            handshakePromiseKey = urlKey;
+        if (!handshakePromise || handshakePromiseKey !== scopeKey) {
+            handshakePromiseKey = scopeKey;
             handshakePromise = (async () => {
                 const session = await handshake(config);
-                sessionsByUrlKey.set(urlKey, {
+                sessionsByScopeKey.set(scopeKey, {
                     session: session,
-                    scopeBootstrapId: String(config.scopeBootstrapId || ''),
                     backendBootstrapId: String(config.backendBootstrapId || ''),
                 });
                 return session;
             })().finally(() => {
-                if (handshakePromiseKey === urlKey) {
+                if (handshakePromiseKey === scopeKey) {
                     handshakePromise = null;
                     handshakePromiseKey = '';
                 }
@@ -827,10 +847,9 @@
             type: 'handshake',
             deploy_version: config.deployVersion,
             worker_build_id: config.workerBuildId,
+            theme_published_version_id: config.themePublishedVersionId || '',
         };
-        if (config.scopeBootstrapId) {
-            handshakePayload.scope_bootstrap_id = config.scopeBootstrapId;
-        }
+        // Storefront: long HttpOnly Scope Cookie only — never send scope_bootstrap_id.
         if (config.backendBootstrapId) {
             handshakePayload.backend_bootstrap_id = config.backendBootstrapId;
         }
@@ -849,6 +868,7 @@
                     'X-Weline-Worker-Protocol': WORKER_PROTOCOL,
                     'X-Weline-Deploy-Version': config.deployVersion,
                     'X-Weline-Worker-Build-Id': config.workerBuildId,
+                    'X-Weline-Theme-Published-Version-Id': config.themePublishedVersionId || '',
                 },
                 body: rawBody,
             });
@@ -866,7 +886,7 @@
                 ? String(body.error.code)
                 : 'auth_error';
             if (code === 'deploy_reload_required') {
-                sessionsByUrlKey.clear();
+                sessionsByScopeKey.clear();
             } else if (
                 response.status === 502
                 || response.status === 503
@@ -987,6 +1007,9 @@
         const code = body && body.error && typeof body.error.code === 'string'
             ? body.error.code.toLowerCase()
             : '';
+        const message = body && body.error && body.error.message
+            ? String(body.error.message)
+            : '';
         // Deploy generation drift: drop stale session; main thread auto-reloads.
         // Do not retry handshake with the same old page stamp.
         if (code === 'deploy_reload_required') {
@@ -997,6 +1020,11 @@
         }
         if (isNonceReuse(status, body)) {
             return false;
+        }
+        if (/theme generation mismatch/i.test(message)) {
+            // Prior-generation SharedWorker badges must not survive one soft retry.
+            sessionsByScopeKey.clear();
+            return true;
         }
         return code === 'auth_error' || code === 'backend_attestation_invalid';
     }
@@ -1046,6 +1074,7 @@
                         'X-Weline-Worker-Protocol': WORKER_PROTOCOL,
                         'X-Weline-Deploy-Version': config.deployVersion,
                         'X-Weline-Worker-Build-Id': config.workerBuildId,
+                        'X-Weline-Theme-Published-Version-Id': config.themePublishedVersionId || '',
                         'X-Weline-Worker-Session': sessionSnapshot.worker_session_token,
                         'X-Weline-Worker-Capability': capability,
                         'X-Weline-Worker-Nonce': nonce,
