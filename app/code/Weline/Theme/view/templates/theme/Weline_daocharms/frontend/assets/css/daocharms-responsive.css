@@ -946,6 +946,28 @@ body.daocharms-pdp :is(
 
 /* —— 200% text: allow wrap, avoid clipping task chrome —— */
 @media (max-width: 767px) {
+    /* UI40–43：窄屏薄条购物车仅图标+角标（桌面同类规则锁在 chrome ≥1024，窄屏仍会露出 Retail） */
+    body:is(.daocharms-storefront,.daocharms-page,.theme-layout-homepage,.daocharms-products,.daocharms-pdp,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
+    .weline-header .header-cart :is(
+        .cart-label,
+        .cart-text,
+        .mini-cart-label,
+        .header-cart-label,
+        .cart-subtotal,
+        .cart-total,
+        .mini-cart-subtotal,
+        .cart-type-caption,
+        .cart-type-sep,
+        .action-line-1,
+        .action-line-2,
+        .header-cart-amount,
+        .cart-amount,
+        [data-mini-cart-type-caption],
+        [data-cart-subtotal-text]
+    ) {
+        display: none !important;
+    }
+
     body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) :is(
         .weline-product-card .wpc-title,
         .wpc-name,

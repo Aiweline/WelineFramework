@@ -1,0 +1,3140 @@
+/* Shared DaoCharms policy / FAQ / QA / 404 surfaces */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--color-text, #1a1c1f);
+    background: var(--color-bg-canvas);
+}
+
+.daocharms-page__inner {
+    width: min(100%, var(--weline-layout-content-max-width, 44rem));
+    margin-inline: auto;
+    padding: clamp(2rem, 4vw, 3rem) var(--weline-layout-content-padding-inline, 1rem) clamp(3rem, 6vw, 4.5rem);
+}
+
+.daocharms-page__eyebrow {
+    margin: 0 0 .5rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-size: .72rem;
+    color: var(--daocharms-ink-slate, #5c6570);
+}
+
+.daocharms-page__inner h1 {
+    margin: 0 0 1rem;
+    font-size: clamp(1.75rem, 4vw, 2.35rem);
+    font-weight: 400;
+    letter-spacing: .04em;
+}
+
+.daocharms-page__meta {
+    margin: 0 0 1.5rem;
+    font-size: .85rem;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+.daocharms-page__inner h2 {
+    margin: 2rem 0 .75rem;
+    font-size: 1.15rem;
+    font-weight: 500;
+    letter-spacing: .03em;
+}
+
+.daocharms-page__inner h3 {
+    margin: 1.35rem 0 .4rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.daocharms-page__inner p,
+.daocharms-page__inner li {
+    margin: 0 0 .85rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+.daocharms-page__inner ul,
+.daocharms-page__inner ol {
+    margin: 0 0 1rem;
+    padding-inline-start: 1.2rem;
+}
+
+.daocharms-page__note {
+    margin-top: 1.5rem;
+    padding: 1rem 1.1rem;
+    border: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #d8d2c6);
+    border-radius: var(--daocharms-radius-md, .35rem);
+    background: color-mix(in srgb, var(--color-bg-secondary, #ede9e1) 55%, transparent);
+    font-size: .9rem;
+}
+
+.daocharms-page__ops {
+    margin: 0 0 1.25rem;
+    padding: .85rem 1rem;
+    border-left: 3px solid var(--daocharms-brass-accent);
+    background: color-mix(in srgb, var(--daocharms-brass-accent) 12%, var(--color-bg-canvas));
+    font-size: .88rem;
+    line-height: 1.6;
+    color: var(--color-text, #1a1c1f);
+}
+
+.daocharms-page__dl {
+    margin: 0 0 1.25rem;
+    display: grid;
+    gap: .65rem;
+}
+
+.daocharms-page__dl div {
+    display: grid;
+    gap: .15rem;
+}
+
+.daocharms-page__dl dt {
+    margin: 0;
+    font-size: .78rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #5c6570);
+}
+
+.daocharms-page__dl dd {
+    margin: 0;
+    line-height: 1.65;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+.daocharms-page__dl a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: .15em;
+}
+
+.daocharms-page__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-top: 1.5rem;
+}
+
+.daocharms-page__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.4rem;
+    padding: .35rem 1.1rem;
+    border: 1px solid var(--color-border-default, #c9c2b6);
+    border-radius: var(--daocharms-radius-sm, 2px);
+    text-decoration: none;
+    color: var(--color-text, #1a1c1f);
+    font-size: .9rem;
+    background: transparent;
+    box-shadow: none;
+}
+
+.daocharms-page__btn--primary {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+}
+
+.daocharms-page__elements {
+    display: grid;
+    gap: .75rem;
+    margin: 1.25rem 0;
+}
+
+@media (min-width: 720px) {
+    .daocharms-page__elements {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+.daocharms-page__element {
+    padding: .9rem 1rem;
+    border: 1px solid var(--color-border-subtle, #d8d2c6);
+    border-radius: .35rem;
+    background: var(--color-bg-primary, #fff);
+}
+
+.daocharms-page__element strong {
+    display: block;
+    margin-bottom: .35rem;
+    color: var(--color-text, #1a1c1f);
+}
+
+.daocharms-page__breadcrumb {
+    border-bottom: 1px solid var(--color-border-subtle, #d8d2c6);
+    background: color-mix(in srgb, var(--color-bg-secondary, #ede9e1) 70%, transparent);
+}
+
+.daocharms-page__policy-list {
+    list-style: none;
+    margin: 1.25rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: .65rem;
+}
+
+.daocharms-page__policy-list a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .85rem 1rem;
+    border: 1px solid var(--color-border-subtle, #d8d2c6);
+    border-radius: var(--daocharms-radius-md, .35rem);
+    text-decoration: none;
+    color: var(--color-text, #1a1c1f);
+    background: var(--color-bg-primary, #fff);
+    letter-spacing: .02em;
+    transition: border-color .2s ease;
+}
+
+.daocharms-page__policy-list a:hover {
+    border-color: var(--daocharms-brass-accent);
+}
+
+/*
+ * Soft-hide non-DaoCharms chrome (Amazon / 汉服站泄漏).
+ * Required injection widgets stay in DOM; category nav (Balance & Harmony / By Symbol…) untouched.
+ * Prefer class + testid over href so Amazon chrome !important cannot resurrect links.
+ */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-deals-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-blog-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="header-deals-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="header-blog-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-nav-extensions .header-deals-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-nav-extensions .header-blog-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-policy-links,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-policy-links-slot,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-slot-id="header-policy-links"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-popular-links a[href*="mamian"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-popular-links a[href*="hanfu"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-widget-code="header-popular"] a[href*="hanfu"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .search-type-option[data-value="blog"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .search-type-option[data-label*="Hanfu"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .search-type-option[data-label*="News Center"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .search-type-option[data-display-label*="Hanfu"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .search-type-option[data-display-label*="Blog:"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-search-hot a[href*="hanfu"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-search-hot a[href*="mamian"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-search-hot-word[href*="hanfu"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-search-hot-word[href*="mamian"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) a.header-nav-extension-link[href*="promotion/deals"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) a.header-nav-extension-link[href$="/blog"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) a.header-nav-extension-link[href$="/blog/"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header a[href*="promotion/deals"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header a[href*="/deals"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .nav-links-list a[href*="promotion/deals"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .nav-links-list a[href$="/blog"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .nav-more-menu a[href*="promotion/deals"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .nav-more-menu a[href$="/blog"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-belt a[href*="promotion/deals"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href*="promotion/deals"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar li:has(> a[href*="promotion/deals"]),
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href$="/blog"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar li:has(> a[href$="/blog"]) {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* Amazon-style category quick shortcuts bleed into DaoCharms ritual storefront.
+ * header-default.css loads AFTER this file — beat it with higher specificity + !important.
+ * Keep required widget in DOM; remove from paint / a11y / tab order. */
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [weline-code="theme.header.sidebar_quick"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [weline-code="theme.header.sidebar_quick"] *,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) section[weline-code="theme.header.sidebar_quick"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar-section--quick,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar-section--quick *,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar .sidebar-shortcuts,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar .sidebar-shortcuts *,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar .sidebar-shortcuts-list,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar .sidebar-section-title:has(+ .sidebar-shortcuts),
+html body.theme-layout-homepage.daocharms-storefront [weline-code="theme.header.sidebar_quick"],
+html body.theme-layout-homepage.daocharms-storefront .categories-sidebar-section--quick,
+html body.theme-layout-homepage .categories-sidebar-section--quick,
+html body.theme-layout-homepage .categories-sidebar .sidebar-shortcuts,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href*="best-seller"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href*="bestseller"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href*="/best-sellers"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href*="new-product"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href*="new-arrival"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href*="/new-arrivals"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href*="promotion/deals"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar a[href*="/deals"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar li:has(> a[href*="best-seller"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar li:has(> a[href*="bestseller"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar li:has(> a[href*="/best-sellers"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar li:has(> a[href*="new-product"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar li:has(> a[href*="/new-arrivals"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar li:has(> a[href*="promotion/deals"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar-section:has(.sidebar-section-title):has(a[href*="best-seller"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar-section:has(.sidebar-section-title):has(a[href*="/best-sellers"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar-section:has(.sidebar-section-title):has(a[href*="/new-arrivals"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar-section:has(.sidebar-section-title):has(a[href*="promotion/deals"]),
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-sidebar-group="popular"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar-section--popular,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .sidebar-popular-links,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [weline-code="theme.widget.header_deals_link"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    max-width: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    clip-path: inset(50%) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    opacity: 0 !important;
+}
+
+/* Footer-above empty after removing duplicate trust */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer-above-slot:empty,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer-above-slot:not(:has(.weline-template-widget)):not(:has([data-widget-code])):not(:has([data-newsletter-root])) {
+    display: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+}
+
+/*
+ * Required footer extension widgets must stay in DOM, but when publish dumps them
+ * outside .weline-footer they render as bare browser-blue links. Hide orphans;
+ * in-footer slots keep the ritual chrome below.
+ */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) main ~ .theme-published-slot[data-slot-id^="footer-"]:not(.weline-footer-above-slot),
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .homepage-layout__bottom-slot ~ .theme-published-slot[data-slot-id^="footer-"]:not(.weline-footer-above-slot),
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .theme-layout-homepage > .theme-published-slot[data-slot-id^="footer-"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .theme-layout-root > .theme-published-slot[data-slot-id^="footer-"] {
+    display: none !important;
+}
+
+/* Brand-wrong / duplicate platform defaults — keep required widgets in DOM */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .footer-social-login-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .footer-campaign-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .footer-promote-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .footer-publish-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .footer-news-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .footer-blog-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="footer-social-login-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="footer-campaign-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="footer-promote-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="footer-publish-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="footer-news-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="footer-blog-link"],
+/* Help extras that duplicate curated ritual links */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .footer-faq-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .footer-returns-policy-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .footer-shipping-info-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="footer-faq-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="footer-returns-policy-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-testid="footer-shipping-info-link"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer a[href*="blog/category/news"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer a[href*="guide/social-login"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer a[href*="/affiliate"],
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer a[href*="promotion/deals"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+}
+
+/* Hide Explore/payment columns when extension slot only held hidden brand-wrong links */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-section[data-footer-group="partner"]:not(:has(a:not(.footer-promote-link):not(.footer-publish-link))),
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-section[data-footer-group="payment"]:not(:has(a:not(.footer-social-login-link):not(.footer-campaign-link))) {
+    display: none !important;
+}
+
+/* Ritual footer chrome — quieter Amazon column kit */
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-nav {
+    padding-block: var(--daocharms-section-space, clamp(2.5rem, 5vw, 4.25rem)) var(--weline-space-6, 1.5rem);
+}
+
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-content {
+    gap: clamp(1.75rem, 3vw, 2.75rem) clamp(1.25rem, 2.5vw, 2.5rem);
+}
+
+/* UI 01：六栏 IA（含右侧 Help 轨分隔） */
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-content--cols-6.daocharms-footer__nav-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-section--help-rail {
+    padding-inline-start: clamp(.75rem, 1.5vw, 1.25rem);
+    border-inline-start: var(--daocharms-rule-width, 1px) solid color-mix(in srgb, var(--daocharms-brass-muted) 34%, transparent);
+}
+
+@media screen and (max-width: 1100px) {
+    .daocharms-footer[data-daocharms-footer-widget="1"] .footer-content--cols-6.daocharms-footer__nav-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .daocharms-footer[data-daocharms-footer-widget="1"] .footer-section--help-rail {
+        padding-inline-start: 0;
+        border-inline-start: 0;
+    }
+}
+
+@media screen and (max-width: 640px) {
+    .daocharms-footer[data-daocharms-footer-widget="1"] .footer-content--cols-6.daocharms-footer__nav-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-section__title {
+    margin: 0 0 var(--weline-space-4, 1rem);
+    padding: 0 0 var(--weline-space-3, .75rem);
+    border-block-end: var(--daocharms-rule-width, 1px) solid color-mix(in srgb, var(--daocharms-brass-muted) 28%, transparent);
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: var(--font-size-sm, .875rem);
+    font-weight: var(--font-weight-normal, 400);
+    letter-spacing: var(--daocharms-label-tracking, .07em);
+    text-transform: none;
+    color: var(--color-text) !important;
+}
+
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-section__links,
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-section__extras {
+    gap: var(--weline-space-3, .75rem);
+}
+
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-section__link,
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-section__extras a:not([style*="display: none"]) {
+    font-size: .9rem;
+    letter-spacing: .01em;
+    line-height: 1.55;
+    color: var(--color-text-secondary) !important;
+    transition: color var(--daocharms-transition, 220ms ease);
+}
+
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-section__link:hover,
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-section__extras a:hover {
+    color: var(--color-text) !important;
+}
+
+/* Kept help extras (account / orders / support) read as primary, not afterthought */
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-my-account-link,
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-my-orders-link,
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-contact-service-link,
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-payment-methods-link,
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-currency-rates-link {
+    color: var(--color-text-secondary) !important;
+    opacity: 1 !important;
+}
+
+/* Brand tagline band — package/03-brand-guidelines.md
+ * Scope on footer widget itself (not body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))) so PDP / inherited
+ * layouts still get the ritual brand band. Inner uses .footer-container for same
+ * content max-width / gutter as the link columns below.
+ */
+.daocharms-footer[data-daocharms-footer-widget="1"] .daocharms-footer__tagline {
+    margin: 0;
+    padding: var(--weline-space-8, 2rem) 0 var(--weline-space-6, 1.5rem);
+    border-bottom: var(--daocharms-rule-width, 1px) solid color-mix(in srgb, var(--daocharms-brass-muted) 18%, transparent);
+    background: transparent;
+}
+
+/* 审图·贴边：页脚内容壳在视口≈版心时 padding-inline 归零会贴边，强制 gutter 地板 */
+.daocharms-footer[data-daocharms-footer-widget="1"] .footer-container {
+    padding-inline: max(
+        var(--weline-layout-content-padding-inline, 0px),
+        var(--spacing-container-padding, var(--weline-space-5, 1.25rem))
+    );
+}
+
+.daocharms-footer[data-daocharms-footer-widget="1"] .daocharms-footer__tagline-inner {
+    display: grid;
+    gap: var(--weline-space-2, 0.5rem);
+    justify-items: start;
+    text-align: left;
+}
+
+.daocharms-footer[data-daocharms-footer-widget="1"] .daocharms-footer__tagline-brand {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: var(--font-size-xl, 1.25rem);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    line-height: var(--line-height-tight, 1.25);
+    color: var(--color-text);
+}
+
+.daocharms-footer[data-daocharms-footer-widget="1"] .daocharms-footer__tagline-text {
+    margin: 0;
+    max-width: var(--daocharms-copy-measure, 32rem);
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.05rem, 2vw, 1.25rem);
+    font-weight: 400;
+    font-style: normal;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    line-height: 1.45;
+    color: var(--color-text);
+}
+
+/* Extension-slot bare <a> must inherit footer chrome, never browser-default blue.
+ * Exclude brand-wrong links so this rule cannot resurrect display:block after hide. */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-section__extras,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-section__extras a:not(.footer-social-login-link):not(.footer-campaign-link):not(.footer-promote-link):not(.footer-publish-link):not(.footer-news-link):not(.footer-blog-link),
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-payment-account-link:not(.footer-social-login-link):not(.footer-campaign-link),
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer a[class*="footer-"][class*="-link"]:not(.footer-social-login-link):not(.footer-campaign-link):not(.footer-promote-link):not(.footer-publish-link):not(.footer-news-link):not(.footer-blog-link) {
+    display: block;
+    text-decoration: none !important;
+    color: var(--color-text-secondary) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-section__extras a:not(.footer-social-login-link):not(.footer-campaign-link):not(.footer-promote-link):not(.footer-publish-link):not(.footer-news-link):not(.footer-blog-link):hover,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-payment-account-link:not(.footer-social-login-link):not(.footer-campaign-link):hover {
+    color: var(--color-text) !important;
+}
+
+/* Quiet newsletter band above footer
+ * 审图·宽度留白（2026-09-24b）：原 1rem 贴边 + 右侧客服圆钮压内容。
+ * 加宽 gutter；inline-end 预留 CS float；!important 压过 widget padding-inline 简写。 */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .daocharms-footer-newsletter .newsletter-band,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .wc-theme_widget_footer_newsletter .newsletter-band,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-daocharms-newsletter="1"] .newsletter-band {
+    background: var(--color-bg-secondary, #f1f0ef);
+    border-block: 1px solid var(--color-border-subtle, #e5e2dc);
+    padding-block: clamp(1.5rem, 3vw, 2.25rem);
+    padding-inline-start: max(
+        var(--weline-layout-content-padding-inline, 0px),
+        clamp(1.75rem, 4.5vw, 3rem)
+    ) !important;
+    padding-inline-end: max(
+        var(--weline-layout-content-padding-inline, 0px),
+        clamp(1.75rem, 4.5vw, 3rem),
+        6rem
+    ) !important;
+}
+
+/* 订阅表单占满右栏，避免 28rem 限宽在宽版心内右侧空一块 */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .daocharms-footer-newsletter .newsletter-controls,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .wc-theme_widget_footer_newsletter .newsletter-controls,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-daocharms-newsletter="1"] .newsletter-controls {
+    max-inline-size: 100%;
+}
+
+/* 审图·贴边：商品列表壳（发布投影可能仍带旧 padding:0 token） */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .products-layout__container {
+    padding-inline: max(
+        var(--weline-layout-content-padding-inline, 0px),
+        var(--spacing-container-padding, var(--weline-space-5, 1.25rem))
+    ) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .daocharms-footer-newsletter .newsletter-title,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-daocharms-newsletter="1"] .newsletter-title {
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-weight: 400;
+    letter-spacing: 0.03em;
+    color: var(--color-text, #262422);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .daocharms-footer-newsletter .newsletter-description,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-daocharms-newsletter="1"] .newsletter-description {
+    color: var(--color-text-secondary, #4a5560);
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .daocharms-footer-newsletter .newsletter-button,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [data-daocharms-newsletter="1"] .newsletter-button {
+    background: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+    color: var(--color-text-on-primary, #fff) !important;
+}
+
+/* Footer contrast — global ink `a` + amazon chrome lost the cascade; force on-dark muted */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer a,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-section__link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-legal__links a,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-back-to-top,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-back-to-top__text,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-locale__logo-text {
+    color: var(--color-text-secondary) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer a:hover,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-section__link:hover,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-legal__links a:hover,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-back-to-top:hover {
+    color: var(--color-text) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-section__title,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-legal__copy,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-legal__entity {
+    color: var(--color-text) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-legal__entity {
+    margin: 0.65rem 0 0;
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    text-align: center;
+    color: var(--color-text-secondary) !important;
+    font-weight: 400;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-legal__prefs {
+    margin: 0.5rem 0 0;
+    font-size: var(--font-size-xs, 0.75rem);
+    line-height: 1.5;
+    color: var(--color-text-secondary) !important;
+    text-align: center;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-legal__prefs a {
+    color: inherit !important;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-footer .footer-legal__prefs a:hover {
+    color: var(--color-text) !important;
+}
+
+/* Header chrome contrast — 浅底头：导航用次级灰绿；热搜在 inverse belt 内
+ * --color-text* 会被洗白，必须改吃 --color-primary（2026-10-09 审图）。 */
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header a:not(.btn):not(.w-button):not(.button):not([class*="btn-"]):not(.header-search-hot-word):not(.header-logo__link),
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header .category-link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header .nav-links-list a {
+    color: var(--color-text-secondary) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header :is(.header-search-hot-word, .header-search-hot-label, .w-search-hot-word, .w-search-hot-label),
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-belt.w-surface-inverse :is(.header-search-hot-word, a.header-search-hot-word, .header-search-hot-label) {
+    color: var(--color-primary) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header a:not(.btn):not(.w-button):not(.button):not([class*="btn-"]):not(.header-search-hot-word):not(.header-logo__link):hover,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header .category-link:hover,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header .nav-links-list a:hover {
+    color: var(--color-text) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header .header-search-hot-word:hover,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header .header-search-hot-word:focus-visible {
+    color: var(--color-primary-hover, var(--color-primary)) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header .header-search-hot-word {
+    background: color-mix(in srgb, var(--color-bg-secondary) 45%, transparent) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-belt.w-surface-inverse .header-logo__link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-belt[data-surface="inverse"] .header-logo__link,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header .header-logo__link.w-surface,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-header a.header-logo__link {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    --w-surface-bg: transparent !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-belt.w-surface-inverse .logo-wordmark,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-belt.w-surface-inverse .logo-wordmark__cn,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-belt.w-surface-inverse .logo-wordmark__en {
+    color: var(--color-text) !important;
+}
+
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-logo img,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .header-logo__link img,
+body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) img.logo-image {
+    background: transparent !important;
+    width: auto !important;
+    max-inline-size: min(11.5rem, 42vw);
+    height: var(--header-logo-height, 2.25rem);
+    max-block-size: var(--header-logo-height, 2.25rem);
+    object-fit: contain;
+    object-position: left center;
+}
+
+/* work_mode: design_theme — PDP Apple-style hue diffusion (floor wash from image bg)
+ * Note: PDP may not carry body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)); do not gate these rules on it. */
+.product-native-detail__description-body:has([data-dc-hue-root="1"]) {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    overflow: visible;
+}
+
+[data-dc-hue-root="1"].dc-hue-root,
+.dc-hue-root[data-dc-hue-root="1"] {
+    display: block;
+}
+
+[data-dc-hue-root="1"] .dc-hue-floor {
+    --dc-floor-bg: transparent;
+    margin: 0 0 clamp(0.75rem, 1.5vw, 1.5rem);
+    padding: clamp(1.5rem, 3vw, 2.75rem) clamp(1rem, 3vw, 2rem);
+    background: var(--dc-floor-bg);
+    border: 0;
+    border-radius: 0;
+}
+
+[data-dc-hue-root="1"] .dc-hue-floor[data-dc-hue="bleed"] {
+    /* near-white studio: expand white so photo edges dissolve */
+    --dc-floor-bg: #ffffff;
+    background: #ffffff;
+}
+
+[data-dc-hue-root="1"] .dc-hue-floor[data-dc-hue="diffuse"] {
+    /* textured scenes: soft wash from sampled `--dc-floor-bg` */
+    background: var(--dc-floor-bg);
+}
+
+[data-dc-hue-root="1"] .dc-hue-floor .weline-detail-feature,
+[data-dc-hue-root="1"] .dc-hue-floor .weline-detail-prose,
+[data-dc-hue-root="1"] .dc-hue-floor .weline-detail-figure-stack,
+[data-dc-hue-root="1"] .dc-hue-floor .weline-detail-figure {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+[data-dc-hue-root="1"] .dc-hue-floor .weline-detail-feature {
+    margin: 0;
+    padding: 0;
+    border-top: 0;
+}
+
+[data-dc-hue-root="1"] .dc-hue-floor .weline-detail-prose {
+    border-top: 0;
+    padding-inline: 0;
+}
+
+[data-dc-hue-root="1"] .dc-hue-floor img {
+    background: transparent !important;
+}
+
+/* 通栏方图楼层：widget CSS 只给 `--portrait` 写了满宽规则，squareish 落到通用
+ * `img{width:auto}` → 1211px 方图在通栏里缩成一小块居中（2026-09-26 886 真机截图所见）。
+ * 通栏的本意是「图片边缘融进楼层底色」，所以方图必须铺满楼层内容宽度。 */
+[data-dc-hue-root="1"] .dc-hue-floor .weline-detail-figure-stack--fullbleed .weline-detail-figure,
+[data-dc-hue-root="1"] .dc-hue-floor .weline-detail-figure-stack--fullbleed .weline-detail-figure-row {
+    width: 100%;
+    max-width: 100%;
+    margin-inline: auto;
+}
+
+[data-dc-hue-root="1"] .dc-hue-floor .weline-detail-figure-stack--fullbleed img {
+    display: block;
+    width: min(100%, 46rem);
+    max-width: 100%;
+    height: auto;
+    margin-inline: auto;
+    object-fit: contain;
+}
+
+/* —— Dao Notes / journal hub (layoutType=journal) —— */
+body.daocharms-journal-hub {
+    color: var(--color-text, #1a1c1f);
+    background: var(--color-bg-canvas);
+}
+
+.daocharms-journal-hub__inner {
+    width: min(100%, var(--weline-layout-content-max-width, 56rem));
+    margin-inline: auto;
+    padding: clamp(2rem, 4vw, 3rem) var(--weline-layout-content-padding-inline, 1rem) clamp(3rem, 6vw, 4.5rem);
+}
+
+.daocharms-journal-hub__hero {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.25rem;
+    border-block-end: 1px solid var(--color-border-subtle, #d8d2c6);
+    background:
+        radial-gradient(ellipse at 12% 0%, color-mix(in srgb, var(--daocharms-brass-accent) 14%, transparent), transparent 55%);
+}
+
+.daocharms-journal-hub__hero h1 {
+    margin: 0 0 .75rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.85rem, 4vw, 2.5rem);
+    font-weight: 400;
+    letter-spacing: .04em;
+}
+
+.daocharms-journal-hub__lede {
+    margin: 0;
+    max-width: 38rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+.daocharms-journal-hub__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin: 1.25rem 0 1.5rem;
+}
+
+.daocharms-journal-hub__chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: .25rem .85rem;
+    border: 1px solid var(--color-border-default, #c9c2b6);
+    border-radius: .35rem;
+    text-decoration: none;
+    font-size: .82rem;
+    letter-spacing: .03em;
+    color: var(--color-text, #1a1c1f);
+    background: var(--color-bg-primary, #fff);
+    transition: border-color .2s ease, color .2s ease;
+}
+
+.daocharms-journal-hub__chip:hover,
+.daocharms-journal-hub__chip:focus-visible {
+    border-color: var(--daocharms-brass-accent);
+    color: var(--daocharms-ink-slate, #5c6570);
+}
+
+.daocharms-journal-hub__grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+    margin-bottom: 1.5rem;
+}
+
+@media (min-width: 720px) {
+    .daocharms-journal-hub__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.daocharms-journal-hub__card {
+    padding: 1.15rem 1.2rem;
+    border: 1px solid var(--color-border-subtle, #d8d2c6);
+    border-radius: var(--daocharms-radius-md, .35rem);
+    background: var(--color-bg-primary, #fff);
+}
+
+.daocharms-journal-hub__card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem .75rem;
+    margin: 0 0 .55rem;
+    font-size: .72rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #5c6570);
+}
+
+.daocharms-journal-hub__card-lens {
+    color: var(--daocharms-brass-accent);
+}
+
+.daocharms-journal-hub__card-title {
+    margin: 0 0 .5rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.15rem;
+    font-weight: 500;
+    letter-spacing: .02em;
+    color: var(--color-text, #1a1c1f);
+}
+
+.daocharms-journal-hub__card-excerpt {
+    margin: 0;
+    line-height: 1.65;
+    font-size: .95rem;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+.daocharms-journal-hub__editorial {
+    margin-top: 0;
+}
+
+.daocharms-journal-hub__editorial strong {
+    display: block;
+    margin-bottom: .35rem;
+    font-weight: 600;
+    color: var(--color-text, #1a1c1f);
+}
+
+/*
+ * End-of-file belt: Popular Links / Best Sellers / New Product Launch / Today's Deals.
+ * Must outrank late-loaded header-default / chrome widgets (same !important, higher specificity).
+ */
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [weline-code="theme.header.sidebar_quick"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [weline-code="theme.header.sidebar_quick"] a,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [weline-code="theme.header.sidebar_quick"] button,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar-section.categories-sidebar-section--quick,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar-section.categories-sidebar-section--quick a,
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar .sidebar-shortcuts-list a[href*="/best-sellers"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar .sidebar-shortcuts-list a[href*="/new-arrivals"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .categories-sidebar .sidebar-shortcuts-list a[href*="promotion/deals"],
+html body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) [weline-code="theme.widget.header_deals_link"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* —— Wu Wei Sanctuary hub (layoutType=sanctuary) —— */
+body.daocharms-sanctuary-hub {
+    color: var(--color-text, #1a1c1f);
+    background: var(--color-bg-canvas);
+}
+
+.daocharms-sanctuary-hub__inner {
+    width: min(100%, var(--weline-layout-content-max-width, 44rem));
+    margin-inline: auto;
+    padding: clamp(2rem, 4vw, 3rem) var(--weline-layout-content-padding-inline, 1rem) clamp(3rem, 6vw, 4.5rem);
+}
+
+.daocharms-sanctuary-hub__hero {
+    margin-bottom: 1.25rem;
+    padding-bottom: 1.25rem;
+    border-block-end: 1px solid var(--color-border-subtle, #d8d2c6);
+    background:
+        radial-gradient(ellipse at 88% 0%, color-mix(in srgb, var(--daocharms-brass-accent) 12%, transparent), transparent 52%);
+}
+
+.daocharms-sanctuary-hub__hero h1 {
+    margin: 0 0 .75rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.85rem, 4vw, 2.5rem);
+    font-weight: 400;
+    letter-spacing: .04em;
+}
+
+.daocharms-sanctuary-hub__lede {
+    margin: 0;
+    max-width: 38rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+.daocharms-sanctuary-hub__ritual h2 {
+    margin: 1.75rem 0 1rem;
+    font-size: 1.15rem;
+    font-weight: 500;
+    letter-spacing: .03em;
+}
+
+.daocharms-sanctuary-hub__steps {
+    list-style: none;
+    margin: 0 0 1.25rem;
+    padding: 0;
+    display: grid;
+    gap: .85rem;
+}
+
+.daocharms-sanctuary-hub__step {
+    display: grid;
+    grid-template-columns: 2rem 1fr;
+    gap: .85rem;
+    align-items: start;
+    padding: .9rem 1rem;
+    border: 1px solid var(--color-border-subtle, #d8d2c6);
+    border-radius: var(--daocharms-radius-md, .35rem);
+    background: var(--color-bg-primary, #fff);
+}
+
+.daocharms-sanctuary-hub__step-n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    font-size: .85rem;
+    letter-spacing: .04em;
+    color: var(--daocharms-ink-slate, #5c6570);
+    border: 1px solid var(--color-border-default, #c9c2b6);
+}
+
+.daocharms-sanctuary-hub__step-title {
+    margin: 0 0 .25rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.daocharms-sanctuary-hub__step p {
+    margin: 0;
+}
+
+/* —— Shop collections hub (layoutType=shop) —— */
+body.daocharms-shop-hub {
+    color: var(--color-text, #1a1c1f);
+    background: var(--color-bg-canvas);
+}
+
+.daocharms-shop-hub__inner {
+    width: min(100%, var(--weline-layout-content-max-width, 56rem));
+    margin-inline: auto;
+    padding: clamp(2rem, 4vw, 3rem) var(--weline-layout-content-padding-inline, 1rem) clamp(3rem, 6vw, 4.5rem);
+}
+
+.daocharms-shop-hub__hero {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.25rem;
+    border-block-end: 1px solid var(--color-border-subtle, #d8d2c6);
+}
+
+.daocharms-shop-hub__hero h1 {
+    margin: 0 0 .75rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.85rem, 4vw, 2.5rem);
+    font-weight: 400;
+    letter-spacing: .04em;
+}
+
+.daocharms-shop-hub__lede {
+    margin: 0;
+    max-width: 40rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+.daocharms-shop-hub__grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+    margin-bottom: 1.5rem;
+}
+
+@media (min-width: 720px) {
+    .daocharms-shop-hub__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.daocharms-shop-hub__card {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 1.1rem 1.15rem;
+    border: 1px solid var(--color-border-subtle, #d8d2c6);
+    border-radius: var(--daocharms-radius-md, 2px);
+    background: var(--color-bg-primary, #fff);
+    box-shadow: none;
+}
+
+.daocharms-shop-hub__card--later {
+    background: color-mix(in srgb, var(--color-bg-secondary, #ede9e1) 45%, var(--color-bg-primary, #fff));
+}
+
+.daocharms-shop-hub__media {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    margin-bottom: .85rem;
+    border-radius: var(--daocharms-radius-sm, .25rem);
+}
+
+.daocharms-shop-hub__status {
+    margin: 0 0 .45rem;
+    font-size: .72rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #5c6570);
+}
+
+.daocharms-shop-hub__status--live {
+    color: var(--daocharms-brass-accent);
+}
+
+.daocharms-shop-hub__card-title {
+    margin: 0 0 .45rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.15rem;
+    font-weight: 500;
+}
+
+.daocharms-shop-hub__card-body {
+    margin: 0 0 .85rem;
+    flex: 1;
+    line-height: 1.65;
+    font-size: .95rem;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+.daocharms-shop-hub__card-cta {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.4rem;
+    padding: .3rem .95rem;
+    text-decoration: none;
+    font-size: .9rem;
+    letter-spacing: var(--daocharms-label-tracking, .07em);
+    /* 全局 body a:not(…) 链接规则特异性极高，实心 CTA 须 !important 保住浅色字 */
+    color: var(--color-on-primary) !important;
+    border: var(--daocharms-rule-width, 1px) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm, 2px);
+    background: var(--color-primary);
+    box-shadow: none;
+}
+
+.daocharms-shop-hub__card-cta:hover,
+.daocharms-shop-hub__card-cta:focus-visible {
+    color: var(--color-on-primary) !important;
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+}
+
+/* —— Daoist Lounge Wear hub (layoutType=lounge) —— */
+body.daocharms-lounge-hub {
+    color: var(--color-text, #1a1c1f);
+    background: var(--color-bg-canvas);
+}
+
+.daocharms-lounge-hub__inner {
+    width: min(100%, var(--weline-layout-content-max-width, 44rem));
+    margin-inline: auto;
+    padding: clamp(2rem, 4vw, 3rem) var(--weline-layout-content-padding-inline, 1rem) clamp(3rem, 6vw, 4.5rem);
+}
+
+.daocharms-lounge-hub__hero {
+    margin-bottom: 1.25rem;
+    padding-bottom: 1.25rem;
+    border-block-end: 1px solid var(--color-border-subtle, #d8d2c6);
+    background:
+        radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--daocharms-brass-accent) 11%, transparent), transparent 55%);
+}
+
+.daocharms-lounge-hub__hero h1 {
+    margin: 0 0 .75rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.85rem, 4vw, 2.5rem);
+    font-weight: 400;
+    letter-spacing: .04em;
+}
+
+.daocharms-lounge-hub__lede {
+    margin: 0;
+    max-width: 38rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary, #4a4a48);
+}
+
+.daocharms-lounge-hub__notes {
+    display: grid;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.daocharms-lounge-hub__note {
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--color-border-subtle, #d8d2c6);
+    border-radius: var(--daocharms-radius-md, .35rem);
+    background: var(--color-bg-primary, #fff);
+}
+
+.daocharms-lounge-hub__note-label {
+    margin: 0 0 .4rem;
+    font-size: .78rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #5c6570);
+}
+
+.daocharms-lounge-hub__note p {
+    margin: 0;
+}
+
+/* Quiet newsletter popup — design inherit (no gufeng stationery)
+ * 审图·趴地（2026-09-24）：footer 内嵌 + 祖先 transform 困住 fixed。
+ * CSS 自含视口居中；JS mountPopupToBody 挂到 body。不依赖 body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))。 */
+.daocharms-newsletter-popup,
+[data-daocharms-newsletter-popup="1"] {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    pointer-events: none;
+}
+
+.daocharms-newsletter-popup.is-open,
+[data-daocharms-newsletter-popup="1"].is-open {
+    pointer-events: auto;
+}
+
+.daocharms-newsletter-popup .popup-overlay,
+[data-daocharms-newsletter-popup="1"] .popup-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    background: color-mix(in srgb, var(--color-bg-dark, #222528) 55%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.45s ease;
+}
+
+.daocharms-newsletter-popup.is-open .popup-overlay,
+[data-daocharms-newsletter-popup="1"].is-open .popup-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.daocharms-newsletter-popup .popup-stage,
+[data-daocharms-newsletter-popup="1"] .popup-stage {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -44%) scale(0.96) !important;
+    box-sizing: border-box;
+    width: min(24rem, 92vw) !important;
+    max-width: min(24rem, 92vw) !important;
+    background: transparent;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.4s ease;
+}
+
+.daocharms-newsletter-popup.is-open .popup-stage,
+[data-daocharms-newsletter-popup="1"].is-open .popup-stage {
+    transform: translate(-50%, -50%) scale(1) !important;
+    opacity: 1 !important;
+    pointer-events: auto;
+}
+
+.daocharms-newsletter-popup .letter-shell,
+.daocharms-newsletter-popup .daocharms-popup-panel,
+[data-daocharms-newsletter-popup="1"] .daocharms-popup-panel {
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
+    line-height: normal;
+    background: var(--color-bg-primary, #f7f7f6) !important;
+    border: 1px solid var(--color-border-subtle, #e5e2df);
+    border-radius: var(--daocharms-radius-md, 2px);
+    box-shadow: none;
+    filter: none !important;
+    overflow: visible;
+}
+
+.daocharms-newsletter-popup .letter-shell__art {
+    display: none !important;
+}
+
+.daocharms-newsletter-popup .letter-shell__form,
+.daocharms-newsletter-popup .daocharms-popup-panel__body,
+[data-daocharms-newsletter-popup="1"] .daocharms-popup-panel__body {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    inset: auto !important;
+    opacity: 1 !important;
+    transform: none !important;
+    padding: clamp(1.5rem, 4vw, 2rem) clamp(1.25rem, 3.5vw, 1.75rem);
+    gap: var(--daocharms-ritual-spacing, 1.25rem);
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: visible;
+}
+
+.daocharms-newsletter-popup .daocharms-popup-eyebrow {
+    margin: 0;
+    font-size: 0.72rem;
+    letter-spacing: var(--daocharms-label-tracking, 0.05em);
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #4a5560);
+}
+
+.daocharms-newsletter-popup .popup-title,
+[data-daocharms-newsletter-popup="1"] .popup-title {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.35rem, 3.2vw, 1.65rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking, 0.03em);
+    line-height: var(--daocharms-heading-leading, 1.3);
+    color: var(--color-text, #262422);
+}
+
+.daocharms-newsletter-popup .daocharms-popup-lede {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    color: var(--color-text-secondary, #5c5854);
+}
+
+.daocharms-newsletter-popup .popup-close {
+    position: absolute !important;
+    top: 0.65rem !important;
+    right: 0.65rem !important;
+    left: auto !important;
+    background: var(--color-bg-secondary, #e8e6e3);
+    border-color: var(--color-border-default, #d9d6d4);
+    color: var(--color-text-muted, #7a7570);
+    box-shadow: none;
+}
+
+.daocharms-newsletter-popup .popup-close:hover {
+    color: var(--color-text);
+    border-color: var(--color-border-default);
+}
+
+.daocharms-newsletter-popup .popup-input {
+    background: var(--color-bg-canvas, #f1f0ef);
+    border-color: var(--color-border-default, #d9d6d4);
+}
+
+.daocharms-newsletter-popup .newsletter-topics {
+    justify-content: flex-start;
+    color: var(--color-text-secondary, #5c5854);
+}
+
+.daocharms-newsletter-popup .newsletter-topic input[type="checkbox"] {
+    accent-color: var(--color-primary);
+}
+
+.daocharms-newsletter-popup .popup-submit,
+[data-daocharms-newsletter-popup="1"] .popup-submit {
+    background: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+    color: var(--color-text-on-primary, #fff) !important;
+}
+
+.daocharms-newsletter-popup .popup-note,
+[data-daocharms-newsletter-popup="1"] .popup-note {
+    color: var(--color-text-muted, #7a7570);
+}
+
+.daocharms-newsletter-popup .popup-note a {
+    color: var(--daocharms-brass-accent);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.daocharms-newsletter-popup .newsletter-success {
+    background: var(--color-primary-bg-subtle);
+    color: var(--color-text, #262422);
+    border-radius: var(--daocharms-radius-sm, 2px);
+}
+
+/* chrome-launch-cleanup 1790219376 */
+
+/* ==========================================================================
+   Content, support & policy surfaces — designs 11–18 · 29–37
+   Theme tokens only; whitespace-led hierarchy; few containers.
+   ========================================================================== */
+
+/* —— Wu Wei Sanctuary hub (11) —— */
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__inner {
+    width: min(100%, var(--weline-layout-content-max-width, 72rem));
+    padding-inline: 0;
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__hero {
+    display: grid;
+    grid-template-columns: 1fr;
+    margin-block-end: 0;
+    padding-block-end: 0;
+    border-block-end: 0;
+    background: none;
+    overflow: hidden;
+}
+
+@media (min-width: 960px) {
+    body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__hero {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+        min-block-size: clamp(28rem, 52vw, 36rem);
+    }
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__hero-copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: .85rem;
+    padding: clamp(2rem, 4vw, 3.25rem) clamp(1.25rem, 4vw, 3.5rem);
+    background: var(--color-bg-secondary, #e8efe9);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__hero .daocharms-page__eyebrow {
+    margin: 0;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    font-size: .72rem;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__hero h1 {
+    margin: 0;
+    font-size: clamp(2.1rem, 4.8vw, 3.15rem);
+    line-height: 1.1;
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 400;
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__tagline {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.15rem, 2.2vw, 1.45rem);
+    line-height: 1.35;
+    color: var(--color-text);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__lede {
+    margin: 0;
+    max-inline-size: 34rem;
+    line-height: 1.75;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__coming {
+    margin: .35rem 0 0;
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__coming-btn {
+    display: inline-block;
+    padding: .7rem 1.15rem;
+    border: var(--daocharms-rule-width, 1px) solid var(--color-border-default, #c9c2b6);
+    border-radius: var(--daocharms-radius-sm, .25rem);
+    /* UI11 稿面米色块：secondary 暖砂混 primary，勿用纯白 primary */
+    background: color-mix(in srgb, var(--color-bg-secondary, #D8CEBF) 88%, var(--color-bg-primary, #f5f5f0));
+    color: var(--color-text);
+    font-size: .9rem;
+    line-height: 1.3;
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__roadmap {
+    margin: .35rem 0 0;
+    padding-block-start: .95rem;
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-default, #c9c2b6);
+    max-inline-size: 34rem;
+    font-size: .86rem;
+    line-height: 1.65;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__hero-media {
+    margin: 0;
+    min-block-size: 16rem;
+    background: var(--color-bg-tertiary, #dfe6df);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__hero-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* Five-minute ritual — numbered editorial row */
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__ritual {
+    margin-inline: var(--weline-layout-content-padding-inline, 1rem);
+    padding-block: clamp(1.75rem, 4vw, 2.75rem);
+    border-block: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__ritual-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem 1.5rem;
+    margin-block-end: clamp(1.25rem, 3vw, 1.75rem);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__ritual h2 {
+    margin: 0;
+    font-size: .72rem;
+    font-weight: 400;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__ritual-aside {
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1rem;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__steps {
+    grid-template-columns: 1fr;
+    gap: clamp(1.25rem, 3vw, 1.75rem) 0;
+    margin: 0;
+    padding-block-start: 0;
+    border-block-start: 0;
+}
+
+@media (min-width: 900px) {
+    body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__steps {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0;
+    }
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__step {
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+
+@media (min-width: 900px) {
+    body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__step {
+        padding-inline-end: 1.25rem;
+    }
+
+    body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__step:not(:first-child) {
+        padding-inline-start: 1.25rem;
+        border-inline-start: var(--daocharms-rule-width) solid var(--color-border-default);
+    }
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__step-n {
+    display: block;
+    width: auto;
+    height: auto;
+    margin-block-end: .5rem;
+    border: 0;
+    border-radius: 0;
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+    line-height: 1;
+    color: var(--color-text);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__step-title {
+    margin: 0 0 .4rem;
+    font-size: 1.1rem;
+    font-weight: 400;
+    letter-spacing: .02em;
+    color: var(--color-text);
+}
+
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__step p {
+    margin: 0;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+}
+
+/* Closing strip — safety note + one primary action above a hairline rule */
+.daocharms-hub__closing {
+    display: grid;
+    gap: clamp(1.25rem, 3vw, 2rem);
+    margin-inline: var(--weline-layout-content-padding-inline, 1rem);
+    padding-block: clamp(1.25rem, 3vw, 1.75rem) clamp(2rem, 4vw, 3rem);
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+@media (min-width: 900px) {
+    .daocharms-hub__closing {
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        align-items: center;
+    }
+}
+
+.daocharms-hub__closing .daocharms-page__note {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: .9rem;
+    line-height: 1.65;
+    color: var(--color-text-secondary);
+}
+
+.daocharms-hub__closing .daocharms-page__note strong {
+    margin-inline-end: .5rem;
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+.daocharms-hub__closing .daocharms-page__actions {
+    margin: 0;
+}
+
+@media (min-width: 900px) {
+    .daocharms-hub__closing .daocharms-page__actions {
+        justify-content: flex-end;
+    }
+}
+
+/* —— Daoist Lounge Wear hub (12) —— */
+body.daocharms-lounge-hub .daocharms-lounge-hub__inner {
+    width: min(100%, var(--weline-layout-content-max-width, 72rem));
+    padding-inline: 0;
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__hero {
+    display: grid;
+    grid-template-columns: 1fr;
+    margin-block-end: 0;
+    padding-block-end: 0;
+    border-block-end: 0;
+    background: none;
+    overflow: hidden;
+}
+
+@media (min-width: 960px) {
+    body.daocharms-lounge-hub .daocharms-lounge-hub__hero {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+        min-block-size: clamp(28rem, 52vw, 36rem);
+    }
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__hero-copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: .9rem;
+    padding: clamp(2rem, 4vw, 3.25rem) clamp(1.25rem, 4vw, 3.5rem);
+    background: var(--color-bg-secondary, #e8efe9);
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__hero .daocharms-page__eyebrow {
+    margin: 0;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    font-size: .72rem;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__hero h1 {
+    margin: 0;
+    font-size: clamp(2.1rem, 4.8vw, 3.15rem);
+    line-height: 1.1;
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 400;
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__lede {
+    margin: 0;
+    max-inline-size: 34rem;
+    line-height: 1.75;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__coming {
+    margin: .25rem 0 0;
+    padding: .9rem 1.1rem;
+    border-radius: var(--daocharms-radius-sm, .25rem);
+    background: var(--color-bg-primary, #ede9e0);
+    color: var(--color-text-secondary);
+    font-size: .9rem;
+    line-height: 1.6;
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__hero-actions {
+    margin: .35rem 0 0;
+    padding: 0;
+    border: 0;
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__hero-media {
+    margin: 0;
+    min-block-size: 16rem;
+    background: var(--color-bg-tertiary, #dfe6df);
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__hero-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__notes {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin: 0;
+    padding: clamp(1.75rem, 4vw, 2.75rem) var(--weline-layout-content-padding-inline, 1rem);
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-default);
+    background: var(--color-bg-primary, #fff);
+}
+
+@media (min-width: 900px) {
+    body.daocharms-lounge-hub .daocharms-lounge-hub__notes {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__note {
+    padding: clamp(1rem, 2.5vw, 1.35rem) 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+
+@media (min-width: 900px) {
+    body.daocharms-lounge-hub .daocharms-lounge-hub__note {
+        padding-inline-end: 1.35rem;
+    }
+
+    body.daocharms-lounge-hub .daocharms-lounge-hub__note:not(:first-child) {
+        padding-inline-start: 1.35rem;
+        border-inline-start: var(--daocharms-rule-width) solid var(--color-border-default);
+    }
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__note-n {
+    display: block;
+    margin-block-end: .45rem;
+    font-size: .85rem;
+    letter-spacing: .08em;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__note-label {
+    margin: 0 0 .55rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.15rem;
+    font-weight: 400;
+    letter-spacing: .02em;
+    text-transform: none;
+    color: var(--color-text);
+}
+
+body.daocharms-lounge-hub .daocharms-lounge-hub__note p {
+    margin: 0;
+    max-inline-size: none;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+    font-size: .98rem;
+}
+
+/* —— Policy / terms reading treatment (31–37 · 34) —— */
+main[data-layout="policy"] .daocharms-page__inner {
+    width: min(100%, var(--daocharms-copy-measure));
+    padding-block-start: clamp(2rem, 4vw, 3.25rem);
+}
+
+main[data-layout="policy"] .daocharms-page__eyebrow {
+    margin-block-end: .75rem;
+    color: var(--color-text-secondary);
+}
+
+main[data-layout="policy"] .daocharms-page__inner h1 {
+    margin-block: 0 .6rem;
+    font-size: clamp(2rem, 4.6vw, 2.9rem);
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking);
+    font-weight: 400;
+    color: var(--color-text);
+}
+
+/* Policy name reads as a subtitle under the display headline */
+.daocharms-policy__subtitle {
+    margin: 0 0 .5rem;
+    font-size: clamp(1.15rem, 2.4vw, 1.4rem);
+    font-weight: 400;
+    line-height: 1.4;
+    color: var(--color-text);
+}
+
+main[data-layout="policy"] .daocharms-page__meta {
+    margin-block: 0 clamp(1.5rem, 3vw, 2rem);
+    padding-block-end: 0;
+    font-size: .8rem;
+    letter-spacing: .02em;
+    color: var(--color-text-secondary);
+}
+
+main[data-layout="policy"] .daocharms-page__inner p,
+main[data-layout="policy"] .daocharms-page__inner li {
+    line-height: 1.8;
+    color: var(--color-text-secondary);
+}
+
+main[data-layout="policy"] .daocharms-page__inner > p:first-of-type {
+    color: var(--color-text-secondary);
+    max-inline-size: var(--daocharms-copy-measure);
+}
+
+/* Each section opens with a hairline rule and a clear heading (§3/§4) */
+main[data-layout="policy"] .daocharms-page__inner h2 {
+    margin-block: clamp(2rem, 4vw, 2.75rem) 1rem;
+    padding-block-start: clamp(1.25rem, 3vw, 1.75rem);
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-default);
+    font-size: clamp(1.05rem, 2vw, 1.2rem);
+    font-weight: 400;
+    letter-spacing: .02em;
+    color: var(--color-text);
+}
+
+main[data-layout="policy"] .daocharms-page__inner h3 {
+    margin-block: 1.5rem .5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+main[data-layout="policy"] .daocharms-page__inner :is(ul, ol) {
+    padding-inline-start: 1.15rem;
+}
+
+main[data-layout="policy"] .daocharms-page__inner li {
+    margin-block-end: .65rem;
+}
+
+main[data-layout="policy"] .daocharms-page__note,
+main[data-layout="policy"] .daocharms-page__ops {
+    margin-block-start: clamp(1.5rem, 3vw, 2rem);
+    padding: 1rem 1.15rem;
+    border: 0;
+    border-radius: var(--daocharms-radius-sm);
+    background: color-mix(in srgb, var(--color-bg-secondary) 45%, var(--color-bg-primary));
+    color: var(--color-text-secondary);
+    font-size: .9rem;
+    line-height: 1.65;
+}
+
+main[data-layout="policy"] .daocharms-page__inner a:not(.daocharms-page__btn) {
+    color: var(--color-link);
+    text-underline-offset: .15em;
+}
+
+/* Policy index fallback */
+.daocharms-page__policy-list {
+    margin-block: 1.5rem 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0;
+}
+
+.daocharms-page__policy-list li {
+    margin: 0;
+}
+
+.daocharms-page__policy-list a {
+    display: block;
+    padding-block: .85rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+    color: var(--color-text);
+    font-size: 1.05rem;
+    text-decoration: none;
+}
+
+.daocharms-page__policy-list li:first-child a {
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+.daocharms-page__policy-list a:hover {
+    color: var(--color-link-hover);
+}
+
+/* —— FAQ (29) —— */
+body.daocharms-faq .daocharms-faq__hero {
+    padding-block: clamp(2.5rem, 6vw, 4rem) clamp(1.5rem, 3vw, 2rem);
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+    background: color-mix(in srgb, var(--color-bg-secondary) 55%, var(--color-bg-canvas));
+}
+
+.daocharms-faq__hero-inner,
+.daocharms-faq__body,
+.daocharms-faq__cta-inner {
+    width: min(100%, var(--weline-layout-content-max-width, 64rem));
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline, 1rem);
+}
+
+.daocharms-faq__hero-inner {
+    display: grid;
+    gap: clamp(1.25rem, 3vw, 2.5rem);
+    align-items: center;
+}
+
+@media (min-width: 900px) {
+    .daocharms-faq__hero-inner {
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+    }
+}
+
+.daocharms-faq__hero-media {
+    margin: 0;
+    overflow: hidden;
+    aspect-ratio: 16 / 10;
+    background: var(--color-bg-secondary);
+}
+
+.daocharms-faq__hero-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+body.daocharms-faq .daocharms-faq__hero h1 {
+    margin: 0 0 .75rem;
+    font-size: clamp(2.1rem, 5vw, 3.25rem);
+    line-height: 1.1;
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body.daocharms-faq .daocharms-faq__lede {
+    margin: 0 0 clamp(1.25rem, 3vw, 1.75rem);
+    max-inline-size: var(--daocharms-copy-measure);
+    line-height: 1.75;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-faq .daocharms-faq__search {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem;
+    max-inline-size: 32rem;
+}
+
+.daocharms-faq__search-icon {
+    position: absolute;
+    inset-inline-start: .9rem;
+    inset-block-start: 50%;
+    width: .8rem;
+    height: .8rem;
+    margin-block-start: -.4rem;
+    border: var(--daocharms-rule-width) solid var(--color-text-secondary);
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+body.daocharms-faq .daocharms-faq__search input[type="search"] {
+    flex: 1 1 14rem;
+    min-height: var(--daocharms-control-height);
+    padding-inline: 2.4rem .85rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+    font: inherit;
+}
+
+body.daocharms-faq .daocharms-faq__search input[type="search"]:focus-visible {
+    outline: var(--daocharms-focus-ring-width) solid var(--color-primary);
+    outline-offset: 1px;
+}
+
+body.daocharms-faq .daocharms-faq__search .daocharms-page__btn {
+    min-height: var(--daocharms-control-height);
+    cursor: pointer;
+    font: inherit;
+}
+
+body.daocharms-faq .daocharms-faq__body {
+    display: grid;
+    gap: clamp(1.75rem, 4vw, 3.5rem);
+    grid-template-columns: 1fr;
+    padding-block: clamp(2rem, 4vw, 3rem) clamp(2.5rem, 5vw, 3.5rem);
+}
+
+@media (min-width: 900px) {
+    body.daocharms-faq .daocharms-faq__body {
+        grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+    }
+}
+
+body.daocharms-faq .daocharms-faq__nav ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: .25rem;
+}
+
+body.daocharms-faq .daocharms-faq__nav a {
+    display: block;
+    padding-block: .55rem;
+    padding-inline-start: .85rem;
+    border-inline-start: 3px solid transparent;
+    color: var(--color-text-secondary);
+    font-size: .95rem;
+    text-decoration: none;
+}
+
+body.daocharms-faq .daocharms-faq__nav a:hover {
+    color: var(--color-text);
+    border-inline-start-color: var(--color-border-default);
+}
+
+body.daocharms-faq .daocharms-faq__nav a:focus-visible {
+    outline: var(--daocharms-focus-ring-width) solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+body.daocharms-faq .daocharms-faq__group + .daocharms-faq__group {
+    margin-block-start: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+body.daocharms-faq .daocharms-faq__group-title {
+    margin: 0 0 .5rem;
+    font-size: .72rem;
+    font-weight: 400;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-faq .daocharms-faq__item {
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+body.daocharms-faq .daocharms-faq__group .daocharms-faq__item:last-child {
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+body.daocharms-faq .daocharms-faq__summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 3rem;
+    padding-block: .9rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+body.daocharms-faq .daocharms-faq__summary::-webkit-details-marker {
+    display: none;
+}
+
+body.daocharms-faq .daocharms-faq__summary:focus-visible {
+    outline: var(--daocharms-focus-ring-width) solid var(--color-primary);
+    outline-offset: -2px;
+}
+
+body.daocharms-faq .daocharms-faq__question {
+    /* ui/29：问答行标题为衬线展示体（与 h1/CTA 同族），答案保持正文体 */
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.05rem;
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--color-text);
+}
+
+/* Caret: a hairline chevron, rotates when the item is open */
+.daocharms-faq__caret {
+    flex: 0 0 auto;
+    width: .55rem;
+    height: .55rem;
+    border-inline-end: var(--daocharms-rule-width) solid var(--color-text-secondary);
+    border-block-end: var(--daocharms-rule-width) solid var(--color-text-secondary);
+    transform: rotate(45deg);
+    transition: transform var(--daocharms-transition-out);
+}
+
+body.daocharms-faq .daocharms-faq__item[open] .daocharms-faq__caret {
+    transform: rotate(225deg);
+}
+
+body.daocharms-faq .daocharms-faq__answer {
+    padding-block: 0 1.15rem;
+}
+
+body.daocharms-faq .daocharms-faq__answer p {
+    margin: 0;
+    max-inline-size: var(--daocharms-copy-measure);
+    line-height: 1.75;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-faq .daocharms-faq__cta {
+    position: relative;
+    padding-block: clamp(2.5rem, 6vw, 4rem);
+    isolation: isolate;
+    color: var(--color-text);
+    background:
+        linear-gradient(105deg, color-mix(in srgb, var(--color-bg-canvas) 88%, transparent) 0%, color-mix(in srgb, var(--color-bg-canvas) 55%, transparent) 48%, transparent 78%),
+        var(--daocharms-faq-cta-image, none) center / cover no-repeat,
+        color-mix(in srgb, var(--color-bg-secondary) 40%, var(--color-bg-primary));
+}
+
+body.daocharms-faq .daocharms-faq__cta h2 {
+    margin: 0 0 .75rem;
+    font-size: clamp(1.5rem, 3.2vw, 2rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body.daocharms-faq .daocharms-faq__cta p {
+    margin: 0 0 1.25rem;
+    max-inline-size: var(--daocharms-copy-measure);
+    line-height: 1.75;
+    color: var(--color-text-secondary);
+}
+
+/* —— Contact (30) —— */
+body.daocharms-contact {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--color-text);
+    background: var(--color-bg-canvas);
+}
+
+body.daocharms-contact .daocharms-contact__breadcrumb {
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+body.daocharms-contact .daocharms-contact__inner {
+    width: min(100%, var(--weline-layout-content-max-width, 64rem));
+    margin-inline: auto;
+    padding-block: clamp(2rem, 4vw, 3.25rem) clamp(2.5rem, 5vw, 4rem);
+    padding-inline: 1.5rem !important;
+}
+
+body.daocharms-contact .daocharms-contact__grid {
+    display: grid;
+    gap: clamp(1.5rem, 3vw, 2.5rem);
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 860px) {
+    body.daocharms-contact .daocharms-contact__grid {
+        grid-template-columns: minmax(0, 1.3fr) minmax(0, .85fr);
+        align-items: start;
+    }
+}
+
+body.daocharms-contact .daocharms-contact__grid--secondary {
+    margin-block-start: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+/* UI30：稿面左列影像 + 右列表单（次栅格 DOM 序为表单优先，视觉 order 翻转） */
+body.daocharms-contact .daocharms-contact__media {
+    margin: 0 0 clamp(1.15rem, 2.5vw, 1.75rem);
+    overflow: hidden;
+    aspect-ratio: 16 / 10;
+    background: var(--color-bg-secondary);
+}
+
+body.daocharms-contact .daocharms-contact__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 58%;
+}
+
+body.daocharms-contact .daocharms-contact__faq-link {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: .18em;
+}
+
+body.daocharms-contact .daocharms-contact__faq-link:hover,
+body.daocharms-contact .daocharms-contact__faq-link:focus-visible {
+    color: var(--color-primary, #2f4f3e);
+}
+
+@media (min-width: 860px) {
+    body.daocharms-contact .daocharms-contact__grid--secondary {
+        grid-template-columns: minmax(0, .95fr) minmax(0, 1.15fr);
+    }
+
+    body.daocharms-contact .daocharms-contact__grid--secondary > :first-child {
+        order: 2;
+    }
+
+    body.daocharms-contact .daocharms-contact__grid--secondary > :last-child {
+        order: 1;
+    }
+}
+
+body.daocharms-contact .daocharms-contact__panel {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+
+body.daocharms-contact .daocharms-contact__panel--stacked {
+    margin-block-start: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+body.daocharms-contact .daocharms-contact__eyebrow {
+    margin: 0 0 .6rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    font-size: .72rem;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-contact h1 {
+    margin: 0 0 1rem;
+    font-size: clamp(2rem, 4.6vw, 2.9rem);
+    line-height: 1.15;
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body.daocharms-contact h2 {
+    margin: 0 0 1rem;
+    padding-block-end: .75rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+    font-size: 1.15rem;
+    font-weight: 400;
+    letter-spacing: .02em;
+    color: var(--color-text);
+}
+
+body.daocharms-contact p {
+    margin: 0 0 .85rem;
+    line-height: 1.75;
+    color: var(--color-text-secondary);
+    max-inline-size: var(--daocharms-copy-measure);
+}
+
+body.daocharms-contact .daocharms-contact__small {
+    font-size: .88rem;
+}
+
+body.daocharms-contact .daocharms-contact__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-block-start: 1.25rem;
+}
+
+body.daocharms-contact .daocharms-contact__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--daocharms-control-height);
+    padding: .35rem 1.15rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: transparent;
+    color: var(--color-text);
+    font-size: .92rem;
+    text-decoration: none;
+}
+
+body.daocharms-contact .daocharms-contact__btn:hover {
+    border-color: var(--color-text-secondary);
+}
+
+body.daocharms-contact .daocharms-contact__btn:focus-visible {
+    outline: var(--daocharms-focus-ring-width) solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+body.daocharms-contact .daocharms-contact__btn--primary {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+}
+
+/* Label-persistent detail rows */
+body.daocharms-contact .daocharms-contact__method {
+    padding-block: .9rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+body.daocharms-contact .daocharms-contact__method:last-child {
+    border-block-end: 0;
+}
+
+body.daocharms-contact .daocharms-contact__method h3 {
+    margin: 0 0 .35rem;
+    font-size: .72rem;
+    font-weight: 400;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-contact .daocharms-contact__method p {
+    margin: 0 0 .35rem;
+    color: var(--color-text);
+    max-inline-size: var(--daocharms-copy-measure);
+}
+
+body.daocharms-contact .daocharms-contact__method p:last-child {
+    margin-block-end: 0;
+}
+
+body.daocharms-contact .daocharms-contact__form {
+    display: grid;
+    gap: .85rem;
+    margin-block-start: 1rem;
+    max-inline-size: var(--daocharms-copy-measure);
+}
+
+body.daocharms-journal-hub .daocharms-journal-hub__inner,
+body.daocharms-sanctuary-hub .daocharms-sanctuary-hub__inner,
+body.daocharms-lounge-hub .daocharms-lounge-hub__inner {
+    /* ≥1440 视口下全局 flush 令 padding token 塌成 0，版式留白用静态值（§15-about 先例） */
+    padding-inline: 1.5rem !important;
+}
+
+/* —— About / brand story (15) —— */
+body.daocharms-about {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--color-text);
+    background: var(--color-bg-canvas);
+}
+
+body.daocharms-about .daocharms-about__breadcrumb {
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+/* UI 15 split hero */
+body.daocharms-about .daocharms-about__hero {
+    width: min(100%, 72rem);
+    max-width: 100%;
+    margin-inline: auto !important;
+    padding: clamp(2rem, 4vw, 3rem) 1.5rem;
+    display: grid;
+    gap: clamp(1.5rem, 4vw, 3rem);
+    align-items: center;
+    border: 0;
+    background: none;
+}
+
+@media (min-width: 900px) {
+    body.daocharms-about .daocharms-about__hero {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+        gap: clamp(2rem, 5vw, 4rem);
+    }
+}
+
+body.daocharms-about .daocharms-about__hero-copy .daocharms-page__eyebrow {
+    margin: 0 0 .75rem;
+}
+
+body.daocharms-about .daocharms-about__hero h1 {
+    margin: 0 0 1.15rem;
+    max-inline-size: 14ch;
+    font-size: clamp(2.1rem, 5vw, 3.25rem);
+    line-height: 1.12;
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking);
+    color: var(--color-text);
+}
+
+body.daocharms-about .daocharms-about__lede {
+    margin: 0;
+    max-inline-size: var(--daocharms-copy-measure);
+    line-height: 1.75;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-about .daocharms-about__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.35rem;
+    margin-block-start: 1.5rem;
+}
+
+body.daocharms-about .daocharms-about__text-link {
+    color: var(--color-text);
+    font-size: .95rem;
+    text-decoration: underline;
+    text-underline-offset: .2em;
+}
+
+body.daocharms-about .daocharms-about__hero-media {
+    margin: 0;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+    background: var(--color-bg-secondary);
+}
+
+body.daocharms-about .daocharms-about__hero-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+body.daocharms-about .daocharms-about__philosophy {
+    width: min(100%, 72rem);
+    max-width: 100%;
+    margin-inline: auto !important;
+    padding: clamp(2rem, 4vw, 3.25rem) 1.5rem;
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-default);
+}
+
+body.daocharms-about .daocharms-about__section-eyebrow {
+    margin: 0 0 1.35rem;
+    font-size: .7rem;
+    letter-spacing: var(--daocharms-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-about .daocharms-about__grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 800px) {
+    body.daocharms-about .daocharms-about__grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+    }
+
+    body.daocharms-about .daocharms-about__card:not(:first-child) {
+        padding-inline-start: 1.35rem;
+        border-inline-start: var(--daocharms-rule-width) solid var(--color-border-default);
+    }
+}
+
+body.daocharms-about .daocharms-about__card {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+
+body.daocharms-about .daocharms-about__mark {
+    display: block;
+    margin: 0 0 .65rem;
+    color: var(--color-text-secondary);
+    font-size: 1.35rem;
+    line-height: 1;
+}
+
+body.daocharms-about .daocharms-about__card-title {
+    margin: 0 0 .5rem;
+    font-size: 1.25rem;
+    font-weight: 400;
+    letter-spacing: .02em;
+    color: var(--color-text);
+}
+
+body.daocharms-about .daocharms-about__card p {
+    margin: 0;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+    font-size: .92rem;
+}
+
+body.daocharms-about .daocharms-about__statement {
+    width: min(100%, 42rem);
+    max-width: 100%;
+    margin-inline: auto !important;
+    padding: clamp(2.5rem, 6vw, 4rem) 1.5rem clamp(3rem, 7vw, 5rem);
+    text-align: center;
+}
+
+body.daocharms-about .daocharms-about__statement h2 {
+    margin: 0 0 1rem;
+    font-size: clamp(1.45rem, 3vw, 1.9rem);
+    font-weight: 400;
+    letter-spacing: .02em;
+    line-height: var(--daocharms-heading-leading);
+    color: var(--color-text);
+}
+
+body.daocharms-about .daocharms-about__statement p {
+    margin: 0 0 .85rem;
+    line-height: 1.75;
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-about .daocharms-about__operator {
+    margin-block-start: 1.25rem !important;
+    font-size: .78rem;
+    letter-spacing: .04em;
+    color: var(--color-text-secondary);
+}
+
+
+/* ============================================================================
+ * 政策页三栏壳（差异清单 §8 ③ / §2 #12 #13 #14，2026-09-26）
+ *
+ * 设计稿：左导航 | 正文 | 右栏（≈200 / 630 / 270 on 1440）。
+ * 覆盖 7 个布局：policy/{shipping,refund,privacy,cookie,disclaimer,accessibility} + terms。
+ * 正文 H2 锚点由 includes/daocharms-policy-shell.php 的 toc() 生成，链接走
+ * StorefrontHref::fragmentHref()（店面有 <base href>，裸 "#id" 会跳首页）。
+ * ========================================================================== */
+
+.daocharms-policy__shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(1.75rem, 4vw, 3.25rem);
+    width: min(100%, 78rem);
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline, 1rem);
+    padding-block: clamp(2rem, 4vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+    align-items: start;
+}
+
+@media (min-width: 64rem) {
+    .daocharms-policy__shell {
+        grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr) minmax(11rem, 16rem);
+    }
+
+    /* UI37 accessibility / UI34 terms：仅左导航 + 正文（无右栏） */
+    .daocharms-policy__shell--a11y,
+    .daocharms-policy__shell--terms {
+        grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr);
+    }
+}
+
+/* UI34：稿面无右栏；即便旧 DOM 残留 rail 也不占位 */
+.daocharms-policy__shell--terms > .daocharms-policy__rail {
+    display: none !important;
+}
+
+/* UI37：正文内双栏（左 aim/report · 右 limits/compat/contact） */
+@media (min-width: 56rem) {
+    .daocharms-policy__shell--a11y .policy-document-plain-inner {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        column-gap: clamp(1.5rem, 3.5vw, 2.75rem);
+        row-gap: clamp(1.25rem, 2.5vw, 2rem);
+        align-items: start;
+    }
+
+    .daocharms-policy__shell--a11y .policy-document-plain-inner > .policy-section#section-1 {
+        grid-column: 1;
+        grid-row: 1;
+        margin-top: 0;
+    }
+
+    .daocharms-policy__shell--a11y .policy-document-plain-inner > .policy-section#section-4 {
+        grid-column: 1;
+        grid-row: 2;
+        margin-top: 0;
+    }
+
+    .daocharms-policy__shell--a11y .policy-document-plain-inner > .policy-section#section-2 {
+        grid-column: 2;
+        grid-row: 1;
+        margin-top: 0;
+        padding-inline-start: clamp(1rem, 2vw, 1.5rem);
+        border-inline-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #C7D0C8);
+    }
+
+    .daocharms-policy__shell--a11y .policy-document-plain-inner > .policy-section#section-3 {
+        grid-column: 2;
+        grid-row: 2;
+        margin-top: 0;
+        padding-inline-start: clamp(1rem, 2vw, 1.5rem);
+        border-inline-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #C7D0C8);
+    }
+
+    .daocharms-policy__shell--a11y .policy-document-plain-inner > .policy-section#section-5 {
+        grid-column: 2;
+        grid-row: 3;
+        margin-top: 0;
+        padding-inline-start: clamp(1rem, 2vw, 1.5rem);
+        border-inline-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #C7D0C8);
+    }
+}
+
+/* UI37：页底自然影像带（全幅） */
+.daocharms-policy__band {
+    margin: 0;
+    width: 100%;
+    line-height: 0;
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #C7D0C8);
+}
+
+.daocharms-policy__band-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-block-size: clamp(7rem, 18vw, 12rem);
+    object-fit: cover;
+    object-position: center;
+}
+
+/* 壳内正文不再自行居中/限宽：由网格列决定版心，避免「列内再居中」的双重收窄。
+ * ⚠️ 选择器必须带 `main[data-layout="policy"]` 前缀：文件上方既有
+ *   `main[data-layout="policy"] .daocharms-page__inner { width: min(100%, 32rem) }`（特异性 0,2,1），
+ *   只写 `.daocharms-policy__shell .daocharms-page__inner`（0,2,0）会被它压住 ——
+ *   实测正文被卡在 512px、右侧空出 221px 死区。这里用 (0,3,1) 压回去。 */
+main[data-layout="policy"] .daocharms-policy__shell .daocharms-page__inner {
+    width: 100%;
+    max-inline-size: none;
+    margin-inline: 0;
+    padding-inline: 0;
+    padding-block-start: 0;
+}
+
+/* ---------- 左导航 ---------- */
+
+.daocharms-policy__nav {
+    position: sticky;
+    top: clamp(1rem, 3vw, 2rem);
+    align-self: start;
+}
+
+.daocharms-policy__nav-title {
+    margin: 0 0 .85rem;
+    font-family: var(--font-family-base);
+    font-size: .72rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking, .07em);
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #53665B);
+}
+
+.daocharms-policy__nav-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: .125rem;
+    border-inline-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #C7D0C8);
+}
+
+/* ⚠️ 颜色必须 !important：全局 body a:not(…)（11 枚 :not，特异性 (0,11,2)，
+ *   见 daocharms-ritual.css）会把所有链接刷成 --color-link 深墨绿。
+ *   本主题既定做法即 !important（daocharms-pages.css 内已有 123 处先例）。 */
+.daocharms-policy__nav-link {
+    display: block;
+    margin-inline-start: calc(-1 * var(--daocharms-rule-width, 1px));
+    padding: .5rem .75rem;
+    border-inline-start: 2px solid transparent;
+    font-family: var(--font-family-base);
+    font-size: .92rem;
+    line-height: 1.5;
+    color: var(--color-text-secondary, #53665B) !important;
+    text-decoration: none;
+    transition: color var(--daocharms-transition-out, 140ms ease-out),
+        background-color var(--daocharms-transition-out, 140ms ease-out);
+}
+
+.daocharms-policy__nav-link:hover {
+    color: var(--color-text, #203B34) !important;
+    background-color: color-mix(in srgb, var(--color-primary, #203B34) 5%, transparent);
+}
+
+/* 当前页：左侧强调条 + 浅底 + 加粗。不只靠颜色（§7 可访问性）。 */
+.daocharms-policy__nav-link.is-active {
+    border-inline-start-color: var(--color-primary, #203B34);
+    background-color: color-mix(in srgb, var(--color-primary, #203B34) 8%, transparent);
+    color: var(--color-text, #203B34) !important;
+    font-weight: 500;
+}
+
+/* ---------- 右栏 ---------- */
+
+/* 右栏吸附：目录要跟着正文滚动才有意义（privacy 14 节、页高 4700+px，
+ * 不吸附的话右栏 80% 的高度是空白，目录早滚出视口）。 */
+.daocharms-policy__rail {
+    display: grid;
+    gap: clamp(1.25rem, 3vw, 2rem);
+    align-self: start;
+    position: sticky;
+    top: clamp(1rem, 3vw, 2rem);
+    max-block-size: calc(100vh - clamp(2rem, 6vw, 4rem));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.daocharms-policy__toc-title {
+    margin: 0 0 .85rem;
+    font-family: var(--font-family-base);
+    font-size: .72rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking, .07em);
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #53665B);
+}
+
+.daocharms-policy__toc-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: .4rem;
+}
+
+.daocharms-policy__toc-link {
+    font-family: var(--font-family-base);
+    font-size: .85rem;
+    line-height: 1.5;
+    color: var(--color-text-secondary, #53665B) !important;
+    text-decoration: none;
+}
+
+.daocharms-policy__toc-link:hover {
+    color: var(--color-text, #203B34) !important;
+    text-decoration: underline;
+}
+
+.daocharms-policy__quote {
+    margin: 0;
+    padding-block-start: clamp(1rem, 2vw, 1.5rem);
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #C7D0C8);
+}
+
+.daocharms-policy__quote p {
+    margin: 0;
+    font-family: var(--font-family-display);
+    font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+    font-style: italic;
+    line-height: 1.5;
+    color: var(--color-text, #203B34);
+}
+
+/* UI31 右栏影像：引语下竖向自然图 + 全大写标语（对照 gray-green-natural/ui/31-shipping） */
+.daocharms-policy__rail-figure {
+    margin: 0;
+    display: grid;
+    gap: .75rem;
+}
+
+.daocharms-policy__rail-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    border-radius: 0;
+}
+
+.daocharms-policy__rail-caption {
+    margin: 0;
+    font-family: var(--font-family-base);
+    font-size: .68rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking, .08em);
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #53665B);
+}
+
+.daocharms-policy__rail-brand {
+    margin: -.35rem 0 0;
+    font-family: var(--font-family-base);
+    font-size: .68rem;
+    font-weight: 500;
+    letter-spacing: var(--daocharms-label-tracking, .1em);
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #53665B);
+}
+
+/* UI32：右栏影像在引语之上（figure 与 quote 相邻即可，无需再加边线） */
+.daocharms-policy__rail-figure + .daocharms-policy__quote {
+    padding-block-start: clamp(.85rem, 1.8vw, 1.25rem);
+}
+
+/* UI36 disclaimer：右栏高大静物（香炉/书），贴近稿面竖幅比例 */
+.daocharms-policy__rail-figure--tall .daocharms-policy__rail-image {
+    aspect-ratio: 388 / 723;
+    object-fit: cover;
+    max-block-size: min(42rem, 78vh);
+}
+
+/* UI35 cookie：How we use them — 图标行（对照 gray-green-natural/ui/35-cookie） */
+.daocharms-cookie-types {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0;
+}
+
+.daocharms-cookie-types__item {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(6.5rem, 8.5rem) 1fr;
+    gap: .85rem 1.1rem;
+    align-items: start;
+    margin: 0;
+    padding-block: clamp(.85rem, 1.6vw, 1.15rem);
+    border-block-end: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #C7D0C8);
+}
+
+.daocharms-cookie-types__item:first-child {
+    border-block-start: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #C7D0C8);
+}
+
+.daocharms-cookie-types__icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border-subtle, #C7D0C8);
+    background: color-mix(in srgb, var(--color-bg-primary, #E9EFEB) 70%, transparent);
+    position: relative;
+}
+
+.daocharms-cookie-types__icon::before {
+    content: "";
+    position: absolute;
+    inset: 28%;
+    background: var(--daocharms-ink-slate, #53665B);
+    opacity: .85;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.daocharms-cookie-types__item[data-type="essential"] .daocharms-cookie-types__icon::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1'/%3E%3C/svg%3E");
+}
+
+.daocharms-cookie-types__item[data-type="functional"] .daocharms-cookie-types__icon::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Cpath d='M4 8h10M14 8a2 2 0 1 0 4 0 2 2 0 0 0-4 0ZM4 16h6M10 16a2 2 0 1 0 4 0 2 2 0 0 0-4 0ZM16 16h4'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Cpath d='M4 8h10M14 8a2 2 0 1 0 4 0 2 2 0 0 0-4 0ZM4 16h6M10 16a2 2 0 1 0 4 0 2 2 0 0 0-4 0ZM16 16h4'/%3E%3C/svg%3E");
+}
+
+.daocharms-cookie-types__item[data-type="analytics"] .daocharms-cookie-types__icon::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Cpath d='M4 19V5M4 19h16M8 16V10M12 16V7M16 16v-4'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Cpath d='M4 19V5M4 19h16M8 16V10M12 16V7M16 16v-4'/%3E%3C/svg%3E");
+}
+
+.daocharms-cookie-types__item[data-type="marketing"] .daocharms-cookie-types__icon::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Cpath d='M3 11v2a1 1 0 0 0 1 1h2l6 4V6L6 10H4a1 1 0 0 0-1 1Zm14.5-3.5a6 6 0 0 1 0 9M16 9.5a3.5 3.5 0 0 1 0 5'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Cpath d='M3 11v2a1 1 0 0 0 1 1h2l6 4V6L6 10H4a1 1 0 0 0-1 1Zm14.5-3.5a6 6 0 0 1 0 9M16 9.5a3.5 3.5 0 0 1 0 5'/%3E%3C/svg%3E");
+}
+
+.daocharms-cookie-types__name {
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    font-weight: 600;
+    color: var(--color-text, #203B34);
+    padding-block-start: .35rem;
+}
+
+.daocharms-cookie-types__desc {
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    line-height: 1.55;
+    color: var(--color-text-secondary, #53665B);
+    padding-block-start: .3rem;
+}
+
+@media (max-width: 720px) {
+    .daocharms-cookie-types__item {
+        grid-template-columns: 2.25rem 1fr;
+        grid-template-rows: auto auto;
+    }
+
+    .daocharms-cookie-types__name {
+        grid-column: 2;
+    }
+
+    .daocharms-cookie-types__desc {
+        grid-column: 2;
+    }
+}
+
+/* ---------- 政策页 hero（32-refund，§2 #14） ----------
+ * UI32 已挂 refund-hero 全幅影像（--daocharms-policy-hero-image）；无图时退回色调带。
+ * ⚠️ 必须是**全幅**（贴左右边）且**有下边线**，否则只是一层很淡的顶雾，
+ *   渐变会在标题中间就淡没（实测 max ΔL≈20、y≈125 归零，正好切过 H1）。
+ *   文字用内层容器对齐版心。 */
+
+.daocharms-policy__hero {
+    background: color-mix(in srgb, var(--daocharms-ink-slate, #53665B) 10%, var(--color-bg-primary, #E9EFEB));
+    border-block-end: var(--daocharms-rule-width, 1px) solid var(--color-border-subtle, #C7D0C8);
+}
+
+/* UI32：全幅自然影像 + 左侧可读叠层（文案仍由 HTML 输出，不烤进图） */
+.daocharms-policy__hero--image {
+    position: relative;
+    isolation: isolate;
+    min-block-size: clamp(12rem, 28vw, 18rem);
+    background-color: color-mix(in srgb, var(--daocharms-ink-slate, #53665B) 18%, var(--color-bg-primary, #E9EFEB));
+    /* 左侧重纱盖住稿面烤进图的 SUPPORT 叠字；右半保留湖石影像 */
+    background-image: linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--color-bg-primary, #F5F3EC) 96%, transparent) 0%,
+            color-mix(in srgb, var(--color-bg-primary, #F5F3EC) 88%, transparent) 28%,
+            color-mix(in srgb, var(--color-bg-primary, #F5F3EC) 45%, transparent) 48%,
+            transparent 68%
+        ),
+        var(--daocharms-policy-hero-image);
+    background-size: cover;
+    background-position: center right;
+    background-repeat: no-repeat;
+}
+
+.daocharms-policy__hero-inner {
+    display: grid;
+    gap: .5rem;
+    width: min(100%, 78rem);
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline, 1rem);
+    padding-block: clamp(2.5rem, 6vw, 4rem) clamp(1.5rem, 3vw, 2rem);
+}
+
+.daocharms-policy__hero--image .daocharms-policy__hero-inner {
+    position: relative;
+    z-index: 1;
+    max-inline-size: min(100%, 36rem);
+    padding-block: clamp(3rem, 8vw, 5rem) clamp(2rem, 4vw, 3rem);
+}
+
+.daocharms-policy__hero-eyebrow {
+    margin: 0;
+    font-family: var(--font-family-base);
+    font-size: .72rem;
+    letter-spacing: var(--daocharms-label-tracking, .07em);
+    text-transform: uppercase;
+    color: var(--daocharms-ink-slate, #53665B);
+}
+
+.daocharms-policy__hero-title {
+    margin: 0;
+    font-family: var(--font-family-display);
+    font-size: clamp(2rem, 4.6vw, 2.9rem);
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: var(--daocharms-heading-tracking, .035em);
+    color: var(--color-text, #203B34);
+}
+
+/* ==================================================================
+ * 联系表单（30-contact，差异清单 §8 ③-b / P0 #1）
+ * 设计稿：websites/daocharms.com/design/gray-green-natural/ui/30-contact.webp
+ *
+ *  - 面板是**平铺**的（无边框 / 无圆角 / 无阴影）——沿用本文件上方 __panel 的既有重置。
+ *  - 字段标签 sentence case、常显在控件上方，约 .9rem，**字距为 0**。注意：不要套用本主题
+ *    sidebar 的「全大写 + 字距」微标签样式（__method h3 / __eyebrow），设计稿明确不是那种。
+ *  - 必填星号**与标签同色**（不是红色），紧跟标签一个空格。
+ *  - 行 1「姓名 | 邮箱」、行 2「主题 | 订单号」各两列约 48/48；行 3「留言」全宽。
+ *  - 勾选行是**两列**：左「勾选框 + 回形针 + 下划线标签」，右「说明文字」与上方右列对齐。
+ *  - 提交按钮：内联宽度（设计稿约 200px）、实心深绿、浅灰绿字、直角、约 40px 高。
+ *
+ * ⚠️ 控件形态**不在此处重定义**：daocharms-forms.css:243 已给
+ *   body.daocharms-contact :is(input, select, textarea, .w-input)
+ *   设了 border-radius: var(--daocharms-radius-sm)=2px、border-color #C7D0C8、
+ *   background var(--color-bg-primary)=#F5F3EC；控件高 --daocharms-control-height=44px。
+ *   与设计稿的「直角 + 浅灰绿 1px 描边 + 近白底 + 约 44px 高」逐项吻合，
+ *   故此处只补**布局与尺寸**，不复制颜色声明（避免同一件事两处维护）。
+ * ================================================================== */
+
+/* 设计稿把表单放在一块**暖白面板**上，不是直接铺在冷灰绿画布上。
+ * 逐像素取样（ui/30-contact.webp）：画布 #E8EFEA(232,239,234)，面板 #F5F3EF(245,243,239)，
+ * 相差约 13 个 R 单位——冷↔暖的可见跳变；面板**无边框、无圆角、无阴影**（边缘直接从画布色跳到
+ * 面板色，无深色描边、无投影）。
+ * 本主题令牌 --color-bg-canvas #E9EFEB / --color-bg-primary #F5F3EC 与设计稿几乎逐值吻合，
+ * 故直接复用令牌，不新造颜色。
+ * 选择器与上方 __panel 重置同为 (0,2,1)，靠**源序在后**取胜（本规则在其后）。 */
+body.daocharms-contact .daocharms-contact__panel--form {
+    background: var(--color-bg-primary, #F5F3EC);
+    padding: clamp(1.5rem, 3vw, 2.5rem) clamp(1.25rem, 2.5vw, 2rem);
+}
+
+/* 面板内的控件要比面板再浅一档（设计稿：输入框内部 #F8F8F3 vs 面板 #F5F3EF）。
+ * 不加这条，控件底色与面板同为 --color-bg-primary，整块表单只剩描边可辨。
+ * 必须 !important：daocharms-forms.css:243 与共享 theme.css 都给控件设过 background，
+ * 其中 theme.css 的 input[type="text"]:not([class]) 一族特异性高于本选择器。 */
+body.daocharms-contact .daocharms-contact__panel--form :is(
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea
+) {
+    background: color-mix(in srgb, #fff 45%, var(--color-bg-primary, #F5F3EC)) !important;
+}
+
+body.daocharms-contact .daocharms-contact__form-lead {
+    margin: 0 0 clamp(1.25rem, 2.4vw, 1.75rem);
+    color: var(--color-text-secondary);
+    max-inline-size: var(--daocharms-copy-measure);
+}
+
+/* 真表单要占满右列；旧「无收件箱」指引块是 div，仍按可读行宽收窄（见本文件上方既有规则）。
+ * 选择器用 form.daocharms-contact__form (0,2,2) 压过既有的 (0,2,1)，且不误伤那个 div。 */
+body.daocharms-contact form.daocharms-contact__form {
+    max-inline-size: none;
+    gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+body.daocharms-contact .daocharms-contact__field-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(1rem, 2vw, 1.5rem);
+    align-items: start;
+}
+
+@media (min-width: 34rem) {
+    body.daocharms-contact .daocharms-contact__field-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+body.daocharms-contact .daocharms-contact__field {
+    display: grid;
+    gap: .5rem;
+    align-content: start;
+}
+
+body.daocharms-contact .daocharms-contact__field > label {
+    font-family: var(--font-family-base);
+    font-size: .9rem;
+    font-weight: 400;
+    line-height: 1.35;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--color-text-secondary);
+}
+
+/* 必填星号与标签同色（设计稿）。星号已 aria-hidden，语义由 required 属性承担。 */
+body.daocharms-contact .daocharms-contact__req {
+    color: inherit;
+}
+
+/* ⚠️ min-height 必须 !important（2026-09-26 实测，勿"优化"掉）：
+ * daocharms-forms.css:25-48 有一条
+ *   body:is(.daocharms-storefront,…,:has(.blog-layout)) :is(input:not([type=…])×8, select, textarea, .w-input)
+ *   { min-height: 2.5rem }
+ * 它靠 8 层 :not([type=…]) 把特异性堆到 (0,9,2)，本选择器只有 (0,2,2) ⇒ 不加 !important
+ * 实测 computed min-height 恒为 40px（设计稿要 44px = 主题自己的 --daocharms-control-height）。
+ * 想靠"再堆选择器"赢过 (0,9,2) 只会写出同样脆的怪物，故沿用本文件既有惯例用 !important。 */
+body.daocharms-contact .daocharms-contact__field :is(input, select, textarea) {
+    inline-size: 100%;
+    min-height: var(--daocharms-control-height, 2.75rem) !important;
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    line-height: 1.4;
+}
+
+body.daocharms-contact .daocharms-contact__field textarea {
+    min-height: 8.75rem;
+    padding-block: .6rem;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+/* 占位符要比标签浅，但**不能浅到读不出**。
+ * 实测（像素通道，measure-full-1440.png）：70% 混色只有 2.91:1 —— 太浅。
+ * 设计稿自己的占位符 #969696 落在输入框 #F8F8F3 上更是只有 2.78:1，即设计稿比我们更浅；
+ * 但本主题的验收口径是「无不可读文字」，故取 80%（实测约 3.6:1）：
+ * 仍明显浅于标签（#53665B，实测 5.15:1，不会与已填值混淆），又高于设计稿本身的对比度。
+ * 浏览器 UA 对 ::placeholder 的默认值各家不同，显式声明才能被像素通道稳定复核。 */
+body.daocharms-contact .daocharms-contact__field ::placeholder {
+    color: color-mix(in srgb, var(--color-text-secondary) 80%, transparent);
+    opacity: 1;
+}
+
+/* 勾选行左格：勾选框 + 回形针 + 下划线标签 */
+body.daocharms-contact .daocharms-contact__check {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: .5rem;
+    padding-block-start: .2rem;
+}
+
+body.daocharms-contact .daocharms-contact__check input[type="checkbox"] {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin: .15rem 0 0;
+    accent-color: var(--color-primary);
+}
+
+body.daocharms-contact .daocharms-contact__check label {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .9rem;
+    line-height: 1.4;
+    color: var(--color-text);
+    cursor: pointer;
+    text-decoration: underline;
+    /* 设计稿此处**有**可见下划线（link 式暗示）。原先用 --color-border-subtle #D5DCD6，
+     * 落在面板 #F5F3EC 上对比度仅约 1.1:1 ⇒ 等于没有，独立视觉复核直接判「无下划线」。
+     * 改为 50% 的正文墨色：实测约 3.2:1，看得见但仍是安静的细线，不会抢成链接。 */
+    text-decoration-color: color-mix(in srgb, var(--color-text) 50%, transparent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: .2em;
+}
+
+body.daocharms-contact .daocharms-contact__clip {
+    flex: none;
+    color: var(--color-text-secondary);
+}
+
+/* 勾选行右格：说明文字，与上方右列字段左对齐 */
+body.daocharms-contact .daocharms-contact__form-help {
+    margin: 0;
+    padding-block-start: .2rem;
+    color: var(--color-text-secondary);
+}
+
+/* 错误提示位（差异清单 §2 #1 的四个子检查之一）：紧贴所属字段下方
+ * （.daocharms-contact__field 是 grid，本节点即第三行）。
+ * 颜色 / 字号**不在此声明**——复用主题既有契约 daocharms-forms.css:147-151 的 .form-error
+ * （--color-danger #b42318 + .8125rem），避免同一件事两处维护；
+ * 失效字段的红边同样由 forms.css:141 的 [aria-invalid="true"] 规则负责（特异性 (0,4,1)
+ * 高于 forms.css:243 的 border-color (0,2,1)，实测生效）。
+ * 此处只补「空时不占位」：:empty 退出 grid 项，否则 grid 的 gap 会多留一行空白。 */
+body.daocharms-contact .daocharms-contact__error {
+    margin: 0;
+}
+
+body.daocharms-contact .daocharms-contact__error:empty {
+    display: none;
+}
+
+body.daocharms-contact .daocharms-contact__submit {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .4rem;
+    min-inline-size: 12.5rem;
+    min-height: 2.5rem;
+    margin-block-start: .35rem;
+    padding: .45rem 1.5rem;
+    border: var(--daocharms-rule-width, 1px) solid var(--color-primary);
+    border-radius: var(--daocharms-radius-sm, 2px);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-family: var(--font-family-base);
+    font-size: .95rem;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background var(--daocharms-transition-out), border-color var(--daocharms-transition-out);
+}
+
+body.daocharms-contact .daocharms-contact__submit:hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+}
+
+body.daocharms-contact .daocharms-contact__submit:focus-visible {
+    outline: var(--daocharms-focus-ring-width, 2px) solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* 控件焦点环。不加这条，键盘 Tab 到字段时只有共享 theme.css 那层很弱的描边变化
+ * （独立视觉复核：「有指示但很弱，无环无光晕」）。与按钮同一套焦点令牌。 */
+body.daocharms-contact .daocharms-contact__panel--form :is(input, select, textarea):focus-visible {
+    outline: var(--daocharms-focus-ring-width, 2px) solid var(--color-primary);
+    outline-offset: 1px;
+}
+
+/* 兜底直链（无 JS，或想直接用自己的邮箱客户端时） */
+body.daocharms-contact .daocharms-contact__form-fallback {
+    margin-block-start: clamp(1rem, 2vw, 1.5rem);
+    color: var(--color-text-secondary);
+}
+
+body.daocharms-contact .daocharms-contact__form-fallback a {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: .2em;
+}
