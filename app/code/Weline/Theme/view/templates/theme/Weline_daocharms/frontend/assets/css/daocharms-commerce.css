@@ -151,6 +151,66 @@ body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.wel
     font-size: 0.875rem;
 }
 
+/* UI 03 desktop：Sort by: Featured 面文案 + 透明 select 覆盖（手机 pill 仍走 responsive） */
+@media (min-width: 768px) {
+    body.daocharms-products .product-storefront__sort--daocharms-face {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-height: 2.5rem;
+        padding: 0.35rem 2rem 0.35rem 0.75rem;
+        border: var(--daocharms-rule-width) solid var(--color-border-default);
+        border-radius: var(--daocharms-radius-sm);
+        background: var(--color-bg-primary);
+        color: var(--color-text);
+        font-size: 0.875rem;
+    }
+
+    body.daocharms-products .product-storefront__sort--daocharms-face .product-storefront__sort-face {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip: auto;
+        pointer-events: none;
+        z-index: 1;
+        color: var(--color-text);
+        white-space: nowrap;
+    }
+
+    body.daocharms-products .product-storefront__sort--daocharms-face::after {
+        content: "";
+        width: 0.4rem;
+        height: 0.4rem;
+        margin-inline-start: 0.15rem;
+        border-right: 1.5px solid currentColor;
+        border-bottom: 1.5px solid currentColor;
+        transform: rotate(45deg) translateY(-0.08rem);
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0.75;
+    }
+
+    body.daocharms-products .product-storefront__sort--daocharms-face .product-storefront__sort-select {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        border: 0 !important;
+        background: transparent;
+        appearance: none;
+        -webkit-appearance: none;
+        opacity: 0;
+        cursor: pointer;
+        z-index: 2;
+        color: transparent;
+    }
+}
+
 body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .product-storefront__notice {
     grid-column: 1 / -1;
     margin: 0;
@@ -244,6 +304,14 @@ body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.wel
     border-color: transparent;
     box-shadow: none;
     transform: none;
+}
+
+/* UI 03 PLP：列表卡主图偏上裁切，贴近稿面物件落点（棚拍图仍非岩面资产） */
+body.daocharms-products .weline-product-card .wpc-image,
+body.daocharms-products .weline-product-card img.wpc-image,
+body.daocharms-products .weline-product-card .wpc-media img {
+    object-fit: cover;
+    object-position: center 28%;
 }
 
 body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .weline-product-card .wpc-media {
@@ -514,8 +582,10 @@ body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.wel
     color: var(--color-text);
 }
 
-/* The rail renders a presentational marker; it must read as a real checkbox. */
-body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__radio {
+/* The rail renders a presentational marker; it must read as a real checkbox (UI 03 square). */
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__check,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__radio,
+body.daocharms-products .w-filters--daocharms .w-filters__check {
     position: relative;
     flex: 0 0 auto;
     inline-size: 1rem;
@@ -523,14 +593,18 @@ body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.wel
     border: var(--daocharms-rule-width) solid var(--color-border-default);
     border-radius: var(--daocharms-radius-sm);
     background: var(--color-bg-primary);
+    box-sizing: border-box;
 }
 
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:is(.is-active, [aria-current="true"]) .w-filters__check,
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:has(input:checked) .w-filters__check,
 body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:is(.is-active, [aria-current="true"]) .w-filters__radio,
 body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:has(input:checked) .w-filters__radio {
     border-color: var(--color-primary);
     background: var(--color-primary);
 }
 
+body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:is(.is-active, [aria-current="true"]) .w-filters__check::after,
 body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout)) .w-filters__option:is(.is-active, [aria-current="true"]) .w-filters__radio::after {
     content: "";
     position: absolute;
@@ -2060,9 +2134,27 @@ body.daocharms-shop-hub .daocharms-shop-hub__media {
     height: auto;
     aspect-ratio: 4 / 3;
     object-fit: cover;
+    object-position: 50% 45%;
     margin-bottom: 0;
-    border-radius: var(--daocharms-radius-sm);
+    border-radius: 0;
     background: var(--color-bg-secondary);
+}
+
+/* UI 02：各格焦点略偏，贴近稿面主体（吊坠 / 香器 / 碗 / 织物） */
+body.daocharms-shop-hub .daocharms-shop-hub__card[data-shop-collection="wearable"] .daocharms-shop-hub__media {
+    object-position: 50% 42%;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card[data-shop-collection="sanctuary"] .daocharms-shop-hub__media {
+    object-position: 55% 40%;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card[data-shop-collection="home"] .daocharms-shop-hub__media {
+    object-position: 45% 55%;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__card[data-shop-collection="lounge"] .daocharms-shop-hub__media {
+    object-position: 50% 35%;
 }
 
 body.daocharms-shop-hub .daocharms-shop-hub__body {
@@ -2145,29 +2237,60 @@ body.daocharms-shop-hub .daocharms-shop-hub__card--later .daocharms-shop-hub__ca
     background: transparent;
 }
 
-/* UI 02：五行测验横条 */
-body.daocharms-shop-hub .daocharms-shop-hub__quiz {
+/* UI 02：底部分栏 — 左 quieter inbox 提示 / 右五行测验 */
+body.daocharms-shop-hub .daocharms-shop-hub__bottom {
     display: grid;
-    grid-template-columns: minmax(8rem, 12rem) 1fr auto;
-    gap: var(--weline-space-4, 1rem);
-    align-items: center;
+    grid-template-columns: 1fr;
+    gap: 1rem;
     margin-block: clamp(2rem, 4vw, 3.5rem) 0;
-    padding: clamp(1rem, 2vw, 1.35rem) clamp(1rem, 2.5vw, 1.75rem);
-    border: var(--daocharms-rule-width) solid var(--color-border-default);
-    background: var(--color-bg-canvas);
+    padding-block: 1.35rem;
+    border-block-start: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+@media (min-width: 720px) {
+    body.daocharms-shop-hub .daocharms-shop-hub__bottom {
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.35fr);
+        align-items: center;
+        gap: 1.75rem;
+    }
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__inbox-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.05rem, 2vw, 1.25rem);
+    color: var(--color-text-primary);
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__inbox-glyph {
+    display: inline-block;
+    width: 0.85rem;
+    height: 1.1rem;
+    flex: 0 0 auto;
+    border-radius: 60% 40% 55% 45%;
+    background: color-mix(in srgb, var(--color-primary) 55%, transparent);
+    transform: rotate(-25deg);
+    opacity: 0.75;
+}
+
+body.daocharms-shop-hub .daocharms-shop-hub__quiz {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: var(--color-text) !important;
     text-decoration: none;
 }
 
 body.daocharms-shop-hub .daocharms-shop-hub__quiz:hover,
 body.daocharms-shop-hub .daocharms-shop-hub__quiz:focus-visible {
-    border-color: var(--color-primary);
-    color: var(--color-text) !important;
-}
-
-body.daocharms-shop-hub .daocharms-shop-hub__quiz-kicker {
-    font-size: 0.85rem;
-    color: var(--color-text-secondary);
+    color: var(--color-primary) !important;
 }
 
 body.daocharms-shop-hub .daocharms-shop-hub__quiz-copy {
@@ -2189,16 +2312,6 @@ body.daocharms-shop-hub .daocharms-shop-hub__quiz-copy span {
 body.daocharms-shop-hub .daocharms-shop-hub__quiz-arrow {
     font-size: 1.25rem;
     color: var(--color-primary);
-}
-
-@media (max-width: 719px) {
-    body.daocharms-shop-hub .daocharms-shop-hub__quiz {
-        grid-template-columns: 1fr auto;
-    }
-
-    body.daocharms-shop-hub .daocharms-shop-hub__quiz-kicker {
-        grid-column: 1 / -1;
-    }
 }
 
 /* ==========================================================================
@@ -3220,6 +3333,8 @@ body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__media 
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* UI 04：物件落在石面，偏上裁切保留台面上下文 */
+    object-position: center 28%;
 }
 
 body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__body {
@@ -3332,6 +3447,105 @@ body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__explor
     body.daocharms-products .new-arrivals-page--daocharms .new-arrivals-page__grid {
         grid-template-columns: minmax(0, 1fr);
     }
+}
+
+/* —— UI 05 category rail：意图导航（无方勾）+ By Symbol 手风琴 —— */
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__section--intent-nav {
+    padding-block-end: 0.85rem;
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__section--intent-nav .w-filters__option--nav {
+    display: flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding-inline-start: 0.75rem;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    border-inline-start: 2px solid transparent;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__dept.is-current {
+    display: flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding-inline-start: 0.75rem;
+    border-inline-start: 2px solid var(--color-text);
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__dept.is-current .w-filters__current {
+    border: 0;
+    padding: 0;
+    font-weight: inherit;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__disclosure > .w-filters__summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__disclosure > .w-filters__summary::-webkit-details-marker {
+    display: none;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__disclosure > .w-filters__summary::after {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg);
+    opacity: 0.7;
+}
+
+body:has(.amz-plp--daocharms) .w-filters--daocharms[data-rail="category"] .w-filters__disclosure[open] > .w-filters__summary::after {
+    transform: rotate(-135deg) translateY(0.1rem);
+}
+
+/* UI 05 Sort: Default 面文案 */
+.amz-plp--daocharms .amz-plp__sort--daocharms-face {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 2rem 0.35rem 0.75rem;
+    border: var(--daocharms-rule-width) solid var(--color-border-default);
+    border-radius: var(--daocharms-radius-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+    font-size: 0.875rem;
+}
+
+.amz-plp--daocharms .amz-plp__sort--daocharms-face .amz-plp__sort-face {
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.amz-plp--daocharms .amz-plp__sort--daocharms-face::after {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg) translateY(-0.08rem);
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.amz-plp--daocharms .amz-plp__sort--daocharms-face .amz-plp__sort-select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 /* —— UI 05 category：Hero 左文右 Banner · objects 工具栏 · 空态 —— */
@@ -3545,14 +3759,17 @@ body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-fil
 
 .storefront-search--daocharms .storefront-search__hero {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
     gap: clamp(1.25rem, 3vw, 2.5rem);
     align-items: end;
+    padding-block-end: clamp(1rem, 2vw, 1.5rem);
+    border-block-end: var(--daocharms-rule-width) solid var(--color-border-subtle);
 }
 
 .storefront-search--daocharms .storefront-search__hero-copy {
     display: grid;
-    gap: 1.25rem;
+    gap: 1.35rem;
+    align-content: end;
 }
 
 .storefront-search--daocharms .storefront-search__title {
@@ -3561,28 +3778,30 @@ body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-fil
     font-size: clamp(2rem, 4.5vw, 3rem);
     font-weight: 500;
     line-height: 1.12;
+    color: var(--color-text);
 }
 
 .storefront-search--daocharms .storefront-search__hero-form {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0;
     align-items: stretch;
-    max-width: 36rem;
+    max-width: 34rem;
 }
 
 .storefront-search--daocharms .storefront-search__hero-field {
     display: flex;
-    flex: 1 1 14rem;
+    flex: 1 1 auto;
     align-items: center;
-    gap: 0.5rem;
     min-height: 2.85rem;
-    padding: 0 0.9rem;
-    background: color-mix(in srgb, var(--color-bg-secondary) 70%, var(--color-bg-canvas));
+    padding: 0 0.95rem;
+    border: 1px solid var(--color-border-subtle, #d5d0c8);
+    background: var(--color-bg-canvas, #fff);
 }
 
 .storefront-search--daocharms .storefront-search__hero-input {
     flex: 1 1 auto;
+    width: 100%;
     border: 0;
     background: transparent;
     color: var(--color-text);
@@ -3591,8 +3810,9 @@ body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-fil
 }
 
 .storefront-search--daocharms .storefront-search__hero-submit {
+    flex: 0 0 auto;
     min-height: 2.85rem;
-    padding: 0 1.35rem;
+    padding: 0 1.45rem;
     border: 0;
     background: var(--color-primary, #2f4f3e);
     color: var(--color-on-primary, #fff);
@@ -3602,22 +3822,26 @@ body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-fil
 
 .storefront-search--daocharms .storefront-search__hero-aside {
     display: grid;
-    gap: 0.75rem;
+    gap: 0.85rem;
+    justify-items: start;
 }
 
 .storefront-search--daocharms .storefront-search__hero-aside-text {
     margin: 0;
-    max-width: 16rem;
-    color: var(--color-text-secondary);
-    font-size: 0.95rem;
-    line-height: 1.5;
-    text-decoration: underline;
-    text-underline-offset: 0.35em;
-    text-decoration-thickness: 1px;
+    max-width: 14rem;
+    color: var(--color-text);
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: 1.05rem;
+    line-height: 1.45;
+    text-decoration: none;
+    border-block-end: 1px solid var(--color-text);
+    padding-block-end: 0.45rem;
 }
 
 .storefront-search--daocharms .storefront-search__hero-media {
     overflow: hidden;
+    width: 100%;
+    max-width: 22rem;
     background: var(--color-bg-secondary);
 }
 
@@ -3625,8 +3849,9 @@ body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-fil
     display: block;
     width: 100%;
     height: auto;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 4 / 5;
     object-fit: cover;
+    object-position: center 35%;
 }
 
 .storefront-search--daocharms .storefront-search__tabs {
@@ -3721,46 +3946,21 @@ body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-fil
 
 .storefront-search--daocharms .storefront-search__explore-card {
     position: relative;
-    display: grid;
-    align-content: end;
-    min-height: 11rem;
+    display: block;
+    aspect-ratio: 960 / 370;
+    min-height: 9.5rem;
     overflow: hidden;
-    color: #fff;
+    color: var(--color-text);
     text-decoration: none;
+    background: var(--color-bg-secondary);
 }
 
 .storefront-search--daocharms .storefront-search__explore-card img {
-    position: absolute;
-    inset: 0;
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
-}
-
-.storefront-search--daocharms .storefront-search__explore-card::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, transparent 35%, rgba(15, 17, 17, 0.55) 100%);
-}
-
-.storefront-search--daocharms .storefront-search__explore-kicker,
-.storefront-search--daocharms .storefront-search__explore-label {
-    position: relative;
-    z-index: 1;
-    padding-inline: 1rem;
-}
-
-.storefront-search--daocharms .storefront-search__explore-kicker {
-    font-size: 0.7rem;
-    letter-spacing: var(--daocharms-label-tracking);
-    text-transform: uppercase;
-}
-
-.storefront-search--daocharms .storefront-search__explore-label {
-    padding-block: 0.15rem 1rem;
-    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
-    font-size: 1.15rem;
+    object-position: center;
 }
 
 .storefront-search--daocharms .visually-hidden {
@@ -3887,11 +4087,171 @@ body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-fil
     font-size: 0.875rem;
 }
 
-/* —— UI 09 cart：Your bag hero · Retail/Wholesale tabs · service strip —— */
-.weline-cart-shell--daocharms .weline-cart-shell__header {
+/* UI 08 — cards row (no label gutter) + attribute matrix below */
+.storefront-compare--daocharms .dc-compare {
+    --dc-compare-label-col: 6.5rem;
+    --dc-compare-gap: clamp(1.5rem, 4vw, 3rem);
+    width: 100%;
+    max-width: 48rem;
+}
+
+.storefront-compare--daocharms .dc-compare-cards {
     display: grid;
+    grid-template-columns: repeat(var(--dc-compare-cols, 2), minmax(0, 1fr));
+    column-gap: var(--dc-compare-gap);
+    margin-inline-start: var(--dc-compare-label-col);
+    margin-block-end: 0.35rem;
+}
+
+.storefront-compare--daocharms .dc-compare-matrix {
+    display: grid;
+    grid-template-columns: var(--dc-compare-label-col) repeat(var(--dc-compare-cols, 2), minmax(0, 1fr));
+    column-gap: var(--dc-compare-gap);
+    align-items: stretch;
+}
+
+.storefront-compare--daocharms .dc-compare-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.55rem;
+    margin-block-end: 1.35rem;
+    min-width: 0;
+}
+
+.storefront-compare--daocharms .dc-compare-card__media {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--color-surface-muted, #eef1ed) 70%, transparent);
+}
+
+.storefront-compare--daocharms .dc-compare-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.storefront-compare--daocharms .dc-compare-card__name {
+    margin: 0.35rem 0 0;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+    font-weight: 400;
+    letter-spacing: var(--daocharms-heading-tracking, 0.01em);
+    line-height: 1.35;
+    color: var(--color-text, #262422);
+}
+
+.storefront-compare--daocharms .dc-compare-card__name a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.storefront-compare--daocharms .dc-compare-card__price {
+    margin: 0;
+    font-family: var(--font-family-ui, Inter, sans-serif);
+    font-size: 0.95rem;
+    color: var(--color-text, #262422);
+}
+
+.storefront-compare--daocharms .dc-compare-card__bag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: min(100%, 12.5rem);
+    min-height: 2.65rem;
+    margin-block-start: 0.35rem;
+    padding: 0.55rem 1.1rem;
+    border: 0;
+    border-radius: var(--daocharms-radius-sm, 2px);
+    background: var(--color-primary, #203B34);
+    color: var(--color-on-primary, #E9EFEB);
+    font-family: var(--font-family-ui, Inter, sans-serif);
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+}
+
+.storefront-compare--daocharms .dc-compare-card__bag:hover,
+.storefront-compare--daocharms .dc-compare-card__bag:focus-visible {
+    filter: brightness(1.06);
+}
+
+.storefront-compare--daocharms .dc-compare-card__remove {
+    background: none;
+    border: 0;
+    padding: 0.15rem 0;
+    color: var(--color-text-secondary, #565959);
+    font-family: var(--font-family-ui, Inter, sans-serif);
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.22em;
+    cursor: pointer;
+}
+
+.storefront-compare--daocharms .dc-compare-grid__label,
+.storefront-compare--daocharms .dc-compare-grid__cell {
+    padding-block: 0.85rem;
+    border-top: 1px solid var(--color-border-subtle, #e5e2df);
+    font-family: var(--font-family-ui, Inter, sans-serif);
+    font-size: 0.9rem;
+    color: var(--color-text, #262422);
+    line-height: 1.45;
+}
+
+.storefront-compare--daocharms .dc-compare-grid__label {
+    color: var(--color-text-secondary, #565959);
+    font-weight: 400;
+}
+
+.storefront-compare--daocharms .dc-compare-grid__cell {
+    text-align: left;
+    min-width: 0;
+}
+
+@media (max-width: 720px) {
+    .storefront-compare--daocharms .dc-compare {
+        --dc-compare-label-col: 4.5rem;
+        --dc-compare-gap: 0.85rem;
+    }
+
+    .storefront-compare--daocharms .dc-compare-cards {
+        margin-inline-start: 0;
+    }
+
+    .storefront-compare--daocharms .dc-compare-card__bag {
+        width: 100%;
+        min-height: 2.4rem;
+        font-size: 0.8125rem;
+    }
+}
+
+/* —— UI 09 cart：Your bag hero · Retail/Wholesale tabs · service strip ——
+ * 压过 cart-page-amazon「tabs 左 · 标题右」——稿面是标题左满宽、标签在下。 */
+body:has(.weline-cart-shell) .weline-cart-shell--daocharms.weline-cart-shell--amazon .weline-cart-shell__header,
+.weline-cart-shell--daocharms.weline-cart-shell--amazon .weline-cart-shell__header {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
     gap: 1rem;
     margin-block-end: clamp(1.25rem, 2.5vw, 1.75rem);
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--daocharms.weline-cart-shell--amazon .weline-cart-shell__heading,
+.weline-cart-shell--daocharms.weline-cart-shell--amazon .weline-cart-shell__heading,
+body:has(.weline-cart-shell) .weline-cart-shell--daocharms.weline-cart-shell--amazon .weline-cart-shell__header > h1,
+.weline-cart-shell--daocharms.weline-cart-shell--amazon .weline-cart-shell__header > h1 {
+    margin-left: 0 !important;
+    margin-inline-start: 0 !important;
+    text-align: start !important;
+    width: 100%;
+    order: 0;
 }
 
 .weline-cart-shell--daocharms .weline-cart-shell__eyebrow {
@@ -3920,7 +4280,17 @@ body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-fil
     display: none !important;
 }
 
-.weline-cart-shell--daocharms .weline-cart-shell__type-host {
+/* 稿面无「Price」列头（amazon 右对齐表头会落到摘要旁） */
+body:has(.weline-cart-shell) .weline-cart-shell--daocharms .weline-cart-shell__price-head,
+.weline-cart-shell--daocharms .weline-cart-shell__price-head {
+    display: none !important;
+}
+
+body:has(.weline-cart-shell) .weline-cart-shell--daocharms.weline-cart-shell--amazon .weline-cart-shell__type-host,
+.weline-cart-shell--daocharms.weline-cart-shell--amazon .weline-cart-shell__type-host {
+    order: 1;
+    width: 100%;
+    margin: 0 !important;
     border-block-end: 1px solid var(--color-border-subtle, #e5e2df);
     padding-block-end: 0;
 }
@@ -4140,4 +4510,61 @@ body:has(.storefront-search--daocharms) [data-testid="storefront-search-type-fil
     border: 0 !important;
     letter-spacing: 0.04em;
     font-weight: 500;
+    width: 100%;
+}
+
+/* UI 10 稿面无 Express 折页卡 — 收进 Contact/Shipping 主链 */
+.weline-checkout--daocharms .weline-checkout__express-host,
+.weline-checkout--daocharms [data-checkout-express-host] {
+    display: none !important;
+}
+
+/* UI10：摘要白卡（稿面 raised paper；页底 sage，卡面近白） */
+.weline-checkout--daocharms .weline-checkout__summary {
+    background: var(--color-bg-elevated, #ffffff) !important;
+    border: 1px solid var(--color-border-subtle, #e5e2df) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: clamp(1.15rem, 2.5vw, 1.6rem);
+}
+
+.weline-checkout--daocharms .weline-checkout__summary-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin: 0 0 0.85rem;
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
+    font-weight: 400;
+}
+
+.weline-checkout--daocharms .weline-checkout__summary-count {
+    font-family: var(--font-family-body, system-ui, sans-serif);
+    font-size: 0.85rem;
+    color: var(--color-text-secondary, #565959);
+    letter-spacing: 0;
+}
+
+.weline-checkout--daocharms .weline-checkout__mindful {
+    margin: 0.9rem 0 0;
+    text-align: center;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--color-text-secondary, #565959);
+}
+
+/* UI 09/10：稿面无 HelpPay「Ask a friend」折页 → 购物袋/结账全隐 */
+body:has(.weline-cart-shell) .w-helppay-cta,
+body:has(.weline-cart-shell) .helppay-cta,
+body:has(.weline-cart-shell) [class*="helppay-cta"],
+body:has(.weline-checkout) .w-helppay-cta,
+body:has(.weline-checkout) .helppay-cta,
+body:has(.weline-checkout) [class*="helppay-cta"],
+body:has(.weline-checkout) button:has([data-helppay-open]),
+.weline-cart-shell .w-helppay-cta,
+.weline-cart-shell [data-helppay-open],
+.weline-checkout .w-helppay-cta,
+.weline-checkout [data-helppay-open] {
+    display: none !important;
 }

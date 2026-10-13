@@ -593,18 +593,20 @@ body.guide-layout .guide-bottom-slot:has(.wc-theme_widget_contact_info) {
         gap: var(--spacing-md, 1rem);
     }
 
-    /* 配送槽保留 DOM，桌面不占主视觉（结账仍可注入） */
+    /*
+     * 配送槽：桌面安静头无 Ship to。
+     * 旧 sr-only（1×1 + clip）仍会被 .w-header-delivery-entry 以 flex 画出 232×47，
+     * 结账页真机可见 → 桌面直接 display:none（槽 DOM 仍在 HTML，只是不绘）。
+     */
     body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.account-dashboard__body),:has(.account-index),:has(.new-arrivals-page),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
-    .weline-header .header-location {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
+    .weline-header :is(
+        .header-location,
+        .header-location-slot,
+        .w-header-delivery-entry,
+        .delivery-entry,
+        .location-link
+    ) {
+        display: none !important;
     }
 
     /* 宽搜 → 图标；展开时下拉面板 */
@@ -800,15 +802,45 @@ body.guide-layout .guide-bottom-slot:has(.wc-theme_widget_contact_info) {
         display: none !important;
     }
 
-    /* UI 01：账户仅图标（无 Hello / My account 字标） */
+    /* UI 01/08：账户仅线描人像图标（无 Hello / My account 字标 / 登录首字母「E」） */
     body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.account-dashboard__body),:has(.account-index),:has(.new-arrivals-page),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
     .weline-header .header-user-area,
     body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.account-dashboard__body),:has(.account-index),:has(.new-arrivals-page),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
-    .weline-header .header-user-area .account-link {
+    .weline-header .header-user-area .account-link,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.account-dashboard__body),:has(.account-index),:has(.new-arrivals-page),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
+    .weline-header .account-link {
         max-inline-size: 2.75rem;
         min-inline-size: 2.5rem;
         gap: 0;
         overflow: hidden;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.account-dashboard__body),:has(.account-index),:has(.new-arrivals-page),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
+    .weline-header .account-link :is(
+        .account-avatar__letter,
+        .account-avatar__fallback,
+        [data-account-avatar-fallback],
+        [data-account-avatar-letter],
+        .account-avatar__img
+    ) {
+        display: none !important;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.account-dashboard__body),:has(.account-index),:has(.new-arrivals-page),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
+    .weline-header .account-link :is(.account-avatar, [data-account-avatar-wrap]) {
+        display: none !important;
+    }
+
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.account-dashboard__body),:has(.account-index),:has(.new-arrivals-page),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
+    .weline-header .account-link > svg,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.account-dashboard__body),:has(.account-index),:has(.new-arrivals-page),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
+    .weline-header .account-link .w-icon,
+    body:is(.daocharms-storefront,.daocharms-page,.account-auth-layout,.account-challenge-layout,.account-logout-layout,.account-dashboard-layout,:has(.account-dashboard),:has(.account-dashboard__body),:has(.account-index),:has(.new-arrivals-page),:has(.weline-cart-shell),:has(.weline-checkout),:has(.amz-plp),:has(.storefront-compare),:has(.w-currency-guide),:has(.amazon-payment-guide-layout),:has(.blog-layout))
+    .weline-header .account-link svg {
+        display: block !important;
+        inline-size: 1.25rem;
+        block-size: 1.25rem;
+        margin-inline: auto;
     }
 
     /* UI 01：购物车仅图标 + 角标；隐藏 Retail / 金额字标 */

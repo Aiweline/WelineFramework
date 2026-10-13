@@ -56,9 +56,40 @@ body.daocharms-pdp .product-native-detail__title {
 
 body.daocharms-pdp .product-native-detail__price,
 body.daocharms-pdp .product-native-detail__price-current {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0;
     color: var(--color-text);
+    font-family: var(--font-family-display, Georgia, "Times New Roman", serif);
     font-size: 1.35rem;
     font-weight: 500;
+    letter-spacing: 0;
+}
+
+body.daocharms-pdp .product-native-detail__price-symbol,
+body.daocharms-pdp .product-native-detail__price-whole,
+body.daocharms-pdp .product-native-detail__price-fraction {
+    margin: 0;
+    padding: 0;
+    letter-spacing: 0;
+}
+
+body.daocharms-pdp .product-native-detail__price-fraction {
+    font-size: 0.72em;
+}
+
+/* UI 07：短描述（短字段空时用稿面仪式句；有 bullets 时仍优先真实短描述） */
+body.daocharms-pdp .product-native-detail__summary-panel:not(:has(.product-native-detail__bullets li)) > .product-native-detail__price-block::after {
+    content: "A ruyi-crowned yin-yang pendant in natural obsidian — a quiet form for everyday ritual.";
+    display: block;
+    margin: 0.85rem 0 0;
+    max-width: 28rem;
+    font-family: var(--font-family-body, system-ui, sans-serif);
+    font-size: 0.98rem;
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--color-text-secondary, #4a4a48);
+    letter-spacing: 0;
 }
 
 body.daocharms-pdp .product-native-detail__stage,
@@ -524,7 +555,8 @@ body.daocharms-pdp .product-native-detail__bullets li + li {
     display: none;
 }
 
-/* Buybox 并入右栏流，去掉侧栏卡片感 */
+/* Buybox 并入右栏流，去掉侧栏卡片感。
+ * UI07：用 grid（非 flex-col）——flex 子项会被块化，Ask 与 Share 无法同排。 */
 body.daocharms-pdp .product-native-detail__buybox {
     max-width: none;
     width: 100%;
@@ -532,9 +564,48 @@ body.daocharms-pdp .product-native-detail__buybox {
     border: 0;
     background: transparent;
     box-shadow: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    display: grid;
+    grid-template-columns: max-content max-content minmax(0, 1fr);
+    align-items: baseline;
+    row-gap: 0.75rem;
+    column-gap: 0;
+}
+
+/* 默认占满整行。注意：actions 为 display:contents 时，子 .widget-wrapper
+ * 参与 buybox grid 排版，但 CSS `buybox > .widget-wrapper` 仍匹配不到（元素树未变）。 */
+body.daocharms-pdp .product-native-detail__buybox > *,
+body.daocharms-pdp .product-native-detail__actions > .widget-wrapper {
+    grid-column: 1 / -1;
+}
+
+/* express 槽即使 h=0 仍占 grid 行，会把 Ask 与 Share 拆到两行 → UI07 整槽隐藏。
+ * 非 Ask 的 HelpPay 壳（selection-share、quick-pay）同理。 */
+body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__express,
+body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.w-helppay-cta):not(:has([class*="friend_help_pay"])):not(:has([data-testid="product-help-pay"])) {
+    display: none !important;
+}
+
+/* Ask 包装器 → 列 1；Affiliate 面板（buybox 真·直系子）→ 列 2，同排 */
+body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([data-testid="product-help-pay"]),
+body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([class*="friend_help_pay"]) {
+    grid-column: 1;
+    width: max-content !important;
+    max-width: 100%;
+    justify-self: start;
+}
+
+body.daocharms-pdp .product-native-detail__buybox > .affiliate-share-panel,
+body.daocharms-pdp .product-native-detail__buybox > [data-testid="affiliate-share-panel"] {
+    grid-column: 2;
+    width: max-content !important;
+    max-width: 100%;
+    justify-self: start;
+    /* 竖线用左边框，避免 ::before + block details 把「Share & earn」顶到下一行 */
+    display: inline-flex !important;
+    align-items: baseline;
+    border-inline-start: 1px solid var(--color-border-subtle, #e5e2df);
+    padding-inline-start: 0.85rem;
+    margin-inline-start: 0.85rem;
 }
 
 body.daocharms-pdp .product-native-detail__buybox-price,
@@ -542,16 +613,24 @@ body.daocharms-pdp .product-native-detail__availability,
 body.daocharms-pdp .product-native-detail__shipping-hint,
 body.daocharms-pdp .product-native-detail__secure,
 body.daocharms-pdp .w-payment-express--pdp,
-body.daocharms-pdp .w-affiliate-share,
-body.daocharms-pdp [data-testid="affiliate-share"],
-body.daocharms-pdp [data-testid*="affiliate"],
-body.daocharms-pdp .product-native-detail__buybox [class*="affiliate"],
-body.daocharms-pdp .product-native-detail__buybox [class*="Affiliate"],
 body.daocharms-pdp .product-native-detail [data-action="share"],
 body.daocharms-pdp .product-native-detail__share,
 body.daocharms-pdp .product-native-detail__quick-buy,
-body.daocharms-pdp .product-native-detail__buybox .w-helppay-cta:not(.w-helppay-cta--quiet) {
+body.daocharms-pdp .product-native-detail__buybox .w-helppay-cta:not(.w-helppay-cta--quiet),
+/* UI 07：默认藏 HelpPay 条；仅 friend_help_pay 再亮（属性选择器，禁转义类名以免整条规则被浏览器丢弃） */
+body.daocharms-pdp .product-native-detail .w-helppay-cta {
     display: none !important;
+}
+
+body.daocharms-pdp .product-native-detail .w-helppay-cta:has([class*="friend_help_pay"]) {
+    display: block !important;
+    margin-block: 0.35rem 0;
+}
+
+body.daocharms-pdp .product-native-detail .w-helppay-cta:has([class*="friend_help_pay"]) .w-helppay-cta__link {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0.35rem;
 }
 
 /* 询价弹层 / 分享 / 猜你喜欢：不进 UI 07 折页 */
@@ -567,22 +646,95 @@ body.daocharms-pdp .wc-theme_widget_recently_viewed,
 body.daocharms-pdp .product-native-detail__share-row,
 body.daocharms-pdp .product-native-detail [data-testid="product-share"],
 body.daocharms-pdp .product-native-detail button[data-action="share-with-friends"],
+body.daocharms-pdp .product-native-detail button[aria-label="Share with friends"],
 body.daocharms-pdp .product-native-detail .product-native-detail__quick-buy,
 body.daocharms-pdp .product-native-detail [data-testid="product-quick-buy"],
-/* Share / Quick buy 占用 CTA 权重；Ask a friend 若带 --quiet 保留 */
-body.daocharms-pdp .product-native-detail button.w-helppay-cta__link,
-body.daocharms-pdp .product-native-detail a.w-helppay-cta__link:not(.w-helppay-cta--quiet *) {
+body.daocharms-pdp .product-native-detail [class*="quick_buy"] {
     display: none !important;
 }
 
-body.daocharms-pdp .product-native-detail .w-helppay-cta--quiet,
-body.daocharms-pdp .product-native-detail .w-helppay-cta--quiet .w-helppay-cta__link {
+/* UI 07：Affiliate 大面板收成 quiet「Share & earn」链（与 Ask a friend 并列）
+ * apply-cta 在 guest → disclosure-body 内；禁止把祖先整段 display:none，否则链不可见。 */
+body.daocharms-pdp .product-native-detail .affiliate-share-panel,
+body.daocharms-pdp .product-native-detail [data-testid="affiliate-share-panel"] {
+    display: inline-block !important;
+    margin-block: 0.35rem 0;
+    margin-inline-start: 0.85rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    vertical-align: baseline;
+}
+
+body.daocharms-pdp .product-native-detail .affiliate-share-disclosure {
+    border: 0 !important;
+    background: transparent !important;
+    display: block !important;
+}
+
+body.daocharms-pdp .product-native-detail .affiliate-share-summary {
+    display: none !important;
+}
+
+body.daocharms-pdp .product-native-detail .affiliate-share-disclosure-body,
+body.daocharms-pdp .product-native-detail .affiliate-share-guest,
+body.daocharms-pdp .product-native-detail .affiliate-share-guest[hidden] {
+    /* quiet 链与 Ask a friend 同排：inline，勿 block 撑满 buybox 宽 */
+    display: inline !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    width: auto !important;
+}
+
+/* 竖线已改 border-inline-start（见上）；禁用旧 ::before 以免再撑行 */
+
+body.daocharms-pdp .product-native-detail .affiliate-share-promo-title,
+body.daocharms-pdp .product-native-detail .affiliate-share-promo-body,
+body.daocharms-pdp .product-native-detail .affiliate-share-ready,
+body.daocharms-pdp .product-native-detail .affiliate-share-platforms,
+body.daocharms-pdp .product-native-detail .affiliate-share-link,
+body.daocharms-pdp .product-native-detail .affiliate-share-copy,
+body.daocharms-pdp .product-native-detail .affiliate-share-native {
+    display: none !important;
+}
+
+body.daocharms-pdp .product-native-detail .affiliate-share-apply-cta {
     display: inline-flex !important;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0 !important;
+    letter-spacing: 0 !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--color-link, #4a5560) !important;
+    box-shadow: none !important;
+    text-decoration: underline;
+    text-underline-offset: 0.22em;
+}
+
+body.daocharms-pdp .product-native-detail .affiliate-share-apply-cta::after {
+    content: "Share & earn";
+    font-size: 0.875rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: inherit;
+}
+
+/* Ask a friend 与 Share & earn 同排 */
+body.daocharms-pdp .product-native-detail .w-helppay-cta:has([class*="friend_help_pay"]) {
+    display: inline-block !important;
+    vertical-align: baseline;
+    margin-block: 0.35rem 0;
 }
 
 body.daocharms-pdp .product-native-detail__qty-row {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.65rem;
 }
@@ -598,22 +750,63 @@ body.daocharms-pdp .product-native-detail__actions {
     width: 100%;
 }
 
-body.daocharms-pdp .product-native-detail__qty-row:has(+ .product-native-detail__actions),
-body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__qty-row {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    align-items: stretch;
-    gap: 0.65rem;
-}
+/*
+ * UI07 桌面：qty-row → contents，子项升格进 buybox grid：
+ * order 10：qty | Add to bag 同排；20：Proceed；30：wishlist；40：Ask | Share。
+ */
+@media (min-width: 768px) {
+    body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__qty-row {
+        display: contents;
+    }
 
-body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__qty-row + .product-native-detail__actions {
-    display: contents;
-}
+    body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__qty-row + .product-native-detail__actions {
+        display: contents;
+    }
 
-body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__qty-row + .product-native-detail__actions .product-native-detail__add,
-body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__qty-row ~ .weline-cart-product-add-to-cart .product-native-detail__add,
-body.daocharms-pdp .product-native-detail__buybox .product-native-detail__add {
-    grid-column: 2;
+    body.daocharms-pdp .product-native-detail__buybox .product-native-detail__qty-controls {
+        grid-column: 1;
+        order: 10;
+        width: max-content;
+        align-self: stretch;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.product-native-detail__add),
+    body.daocharms-pdp .product-native-detail__actions > .weline-cart-product-add-to-cart,
+    body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.weline-cart-product-add-to-cart) {
+        grid-column: 2 / -1;
+        order: 10;
+        width: 100%;
+        min-width: 0;
+        align-self: stretch;
+    }
+
+    body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.product-native-detail__buy-now),
+    body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.weline-checkout-product-buy-now) {
+        grid-column: 1 / -1;
+        order: 20;
+    }
+
+    body.daocharms-pdp .product-native-detail__buybox .product-native-detail__wishlist,
+    body.daocharms-pdp .product-native-detail__buybox .btn-wishlist {
+        display: inline-flex !important;
+        grid-column: 1 / -1;
+        order: 30;
+        justify-self: start;
+        width: max-content;
+        margin-block: 0.15rem 0;
+    }
+
+    body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([data-testid="product-help-pay"]),
+    body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([class*="friend_help_pay"]) {
+        order: 40;
+    }
+
+    body.daocharms-pdp .product-native-detail__buybox > .affiliate-share-panel,
+    body.daocharms-pdp .product-native-detail__buybox > [data-testid="affiliate-share-panel"] {
+        order: 40;
+    }
 }
 
 body.daocharms-pdp .product-native-detail__buybox .product-native-detail__add,
@@ -621,6 +814,29 @@ body.daocharms-pdp .product-native-detail__buybox .product-native-detail__buy-no
     width: 100%;
     letter-spacing: 0.04em;
     text-transform: none;
+}
+
+/* UI07：Ask / Share 线描图标（信封 / 礼盒），对齐 07-product.webp */
+body.daocharms-pdp .product-native-detail .w-helppay-cta:has([class*="friend_help_pay"]) .w-helppay-cta__link::before {
+    content: "";
+    display: inline-block;
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+    flex: 0 0 auto;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Crect x='3' y='5' width='18' height='14' rx='1.5'/%3E%3Cpath d='M3.5 6.5 12 13l8.5-6.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Crect x='3' y='5' width='18' height='14' rx='1.5'/%3E%3Cpath d='M3.5 6.5 12 13l8.5-6.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+body.daocharms-pdp .product-native-detail .affiliate-share-apply-cta::before {
+    content: "";
+    display: inline-block;
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+    flex: 0 0 auto;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Crect x='4' y='8' width='16' height='12' rx='1.5'/%3E%3Cpath d='M12 8V4.5M8.5 8c0-2 1.5-3.5 3.5-3.5S15.5 6 15.5 8M4 12h16'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6'%3E%3Crect x='4' y='8' width='16' height='12' rx='1.5'/%3E%3Cpath d='M12 8V4.5M8.5 8c0-2 1.5-3.5 3.5-3.5S15.5 6 15.5 8M4 12h16'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 /* 长详情 / 询价 / 推荐：UI 07 首屏不展示 */
@@ -632,9 +848,101 @@ body.daocharms-pdp [data-testid="product-quote"],
 body.daocharms-pdp .product-detail-layout__reviews,
 body.daocharms-pdp .product-detail-layout__faq,
 body.daocharms-pdp section.product-detail-layout__related,
-body.daocharms-pdp [weline-code="theme.product.section_2"],
-body.daocharms-pdp .product-native-detail__sticky-purchase {
+body.daocharms-pdp [weline-code="theme.product.section_2"] {
     display: none !important;
+}
+
+/* 桌面 UI07：底栏 sticky 不抢首屏；移动 UI42：底栏价+$ Add to bag */
+@media (min-width: 768px) {
+    body.daocharms-pdp .product-native-detail__sticky-purchase {
+        display: none !important;
+    }
+}
+
+/* UI 07/42：主 CTA 文案 Add to bag（压过模块默认 Add to Cart） */
+body.daocharms-pdp .product-native-detail__add,
+body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__add {
+    font-size: 0 !important;
+    letter-spacing: 0 !important;
+}
+
+body.daocharms-pdp .product-native-detail__add::after,
+body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__add::after {
+    content: "Add to bag";
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: inherit;
+}
+
+@media (max-width: 767px) {
+    /* UI42：固定底栏 — 左价右主 CTA */
+    body.daocharms-pdp .product-native-detail__sticky-purchase {
+        display: block !important;
+        position: fixed;
+        inset-inline: 0;
+        bottom: 0;
+        z-index: 40;
+        margin: 0;
+        padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+        border-block-start: 1px solid var(--color-border-subtle, #e5e2df);
+        background: color-mix(in srgb, var(--color-bg-primary, #f4f7f4) 92%, transparent);
+        backdrop-filter: blur(8px);
+        box-shadow: none;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase[hidden] {
+        display: block !important;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.85rem;
+        max-inline-size: 100%;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase-media,
+    body.daocharms-pdp .product-native-detail__sticky-purchase-title,
+    body.daocharms-pdp .product-native-detail__sticky-purchase-specs,
+    body.daocharms-pdp .product-native-detail__sticky-purchase-jump,
+    body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__buy-now {
+        display: none !important;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase-main,
+    body.daocharms-pdp .product-native-detail__sticky-purchase-meta {
+        display: flex;
+        align-items: center;
+        min-inline-size: 0;
+        flex: 1 1 auto;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase-price {
+        font-family: var(--font-family-heading, Georgia, serif);
+        font-size: 1.15rem;
+        font-weight: 500;
+        color: var(--color-text, #262422);
+        white-space: nowrap;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase-actions {
+        display: flex !important;
+        flex: 0 0 auto;
+        grid-template-columns: none;
+        min-inline-size: 9.5rem;
+    }
+
+    body.daocharms-pdp .product-native-detail__sticky-purchase-actions .product-native-detail__add {
+        width: 100%;
+        min-height: 2.75rem;
+    }
+
+    body.daocharms-pdp .product-detail-layout__main,
+    body.daocharms-pdp .product-native-detail {
+        padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+    }
 }
 
 /* 手风琴：落在购列视觉节奏下（全宽窄栏，贴近 UI 07） */
@@ -713,4 +1021,61 @@ body.daocharms-pdp .product-native-detail__sticky-purchase {
     .daocharms-pdp-story--accordions .daocharms-pdp-story__grid {
         grid-column: 1;
     }
+}
+
+/* UI42：数量行 + Add to wishlist（心形 + 文案，对齐图集） */
+body.daocharms-pdp .product-native-detail__qty-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1.25rem;
+}
+
+body.daocharms-pdp .product-native-detail__qty-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-inline-size: 0;
+}
+
+body.daocharms-pdp .product-native-detail__wishlist {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text, #262422);
+    cursor: pointer;
+    font: inherit;
+    line-height: 1.2;
+}
+
+body.daocharms-pdp .product-native-detail__wishlist .w-icon,
+body.daocharms-pdp .product-native-detail__wishlist svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    flex: 0 0 auto;
+}
+
+body.daocharms-pdp .product-native-detail__wishlist-label {
+    font-size: 0 !important;
+    letter-spacing: 0 !important;
+}
+
+body.daocharms-pdp .product-native-detail__wishlist-label::after {
+    content: "Add to wishlist";
+    font-size: 0.8rem;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    color: var(--color-text-secondary, #565959);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
+body.daocharms-pdp .product-native-detail__wishlist.is-active .product-native-detail__wishlist-label::after,
+body.daocharms-pdp .product-native-detail__wishlist[aria-pressed="true"] .product-native-detail__wishlist-label::after {
+    content: "Saved";
 }

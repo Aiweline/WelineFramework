@@ -29,45 +29,18 @@
     }
 }
 
-/* Desktop quiet chrome: Ship-to slot stays in DOM but must not paint/focus (UI 01/08/32)
- * 实测：仅裁 .header-location 时，内层 .w-header-delivery-entry 仍可能 flex 出 232px 并进 a11y 树。 */
+/*
+ * Desktop quiet chrome：无 Ship to（UI 01/08/10）。
+ * 结账页 body 往往无 .daocharms-*，须 :has(.weline-checkout)。
+ * sr-only/clip 挡不住内层 .w-header-delivery-entry flex 绘出 → display:none。
+ */
 @media screen and (min-width: 1100px) {
-  body.daocharms-storefront .weline-header .header-location,
-  body.daocharms-page .weline-header .header-location,
-  body:has(.daocharms-storefront) .weline-header .header-location,
-  body:has(.storefront-compare) .weline-header .header-location {
-    position: absolute !important;
-    inset-inline-start: 0 !important;
-    inset-block-start: 0 !important;
-    width: 1px !important;
-    height: 1px !important;
-    max-width: 1px !important;
-    max-height: 1px !important;
-    margin: -1px !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    clip: rect(0, 0, 0, 0) !important;
-    clip-path: inset(50%) !important;
-    white-space: nowrap !important;
-    border: 0 !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-  body.daocharms-storefront .weline-header .header-location *,
-  body.daocharms-page .weline-header .header-location *,
-  body:has(.daocharms-storefront) .weline-header .header-location *,
-  body:has(.storefront-compare) .weline-header .header-location * {
-    position: static !important;
-    width: 1px !important;
-    height: 1px !important;
-    max-width: 1px !important;
-    max-height: 1px !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    visibility: hidden !important;
+  html body.daocharms-storefront .weline-header :is(.header-location, .header-location-slot, .w-header-delivery-entry, .delivery-entry, .location-link),
+  html body.daocharms-page .weline-header :is(.header-location, .header-location-slot, .w-header-delivery-entry, .delivery-entry, .location-link),
+  html body:has(.storefront-compare) .weline-header :is(.header-location, .header-location-slot, .w-header-delivery-entry, .delivery-entry, .location-link),
+  html body:has(.weline-checkout) .weline-header :is(.header-location, .header-location-slot, .w-header-delivery-entry, .delivery-entry, .location-link),
+  html body:has(.weline-cart-shell) .weline-header :is(.header-location, .header-location-slot, .w-header-delivery-entry, .delivery-entry, .location-link) {
+    display: none !important;
   }
 }
 /*
@@ -164,4 +137,4 @@ html body.daocharms-pdp .product-native-detail .affiliate-share-apply-cta {
 /* bump 1791808120 */
 
 /* bump 1791804340 */
-/* force-hash 1791804515808687000 */
+/* force-hash 1791806521934123000 */
