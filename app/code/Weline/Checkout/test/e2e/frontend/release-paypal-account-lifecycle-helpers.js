@@ -356,41 +356,13 @@ async function hardRefreshStorefront(page) {
   await waitForWelineApi(page);
 }
 
-async function neutralizeStaleThemeStamp(page) {
-  await page.evaluate(() => {
-    try {
-      if (window.Weline && window.Weline.config) {
-        window.Weline.config.themePublishedVersionId = '';
-        window.Weline.config.theme_published_version_id = '';
-      }
-    } catch (_) {}
-  }).catch(() => {});
-}
-
-async function reloadIfThemeGenerationStale(page) {
-  const stale = await page.evaluate(() => {
-    const tip = String(document.body && document.body.innerText || '');
-    return /主题已发布新版本|reload the page to continue|deploy_reload_required/i.test(tip);
-  }).catch(() => false);
-  if (!stale) return false;
-  await hardRefreshStorefront(page);
-  return true;
-}
-
 /**
- * After hard refresh: hole-punch Scope and adopt server theme_published_version_id
- * onto the page/client config so QueryBin stops throwing deploy_reload_required.
- * Empty page stamp skips the Scope mismatch gate, but Worker still needs a matching badge.
+ * QueryBin assertClientThemeGenerationCurrent requires client stamp === server id.
+ * Clearing to '' always 409s when server has a published id — adopt Scope id instead.
  */
-async function rewarmScopeAfterThemeRefresh(page) {
-  await neutralizeStaleThemeStamp(page);
-  await waitForWelineApi(page);
+async function neutralizeStaleThemeStamp(page) {
   await page.evaluate(async () => {
     try {
-      if (window.Weline && window.Weline.config) {
-        window.Weline.config.themePublishedVersionId = '';
-        window.Weline.config.theme_published_version_id = '';
-      }
       const pathName = String((window.location && window.location.pathname) || '/');
       let serverThemeId = '';
       try {
@@ -407,6 +379,49 @@ async function rewarmScopeAfterThemeRefresh(page) {
             : '';
         }
       } catch (_) {}
+      if (!serverThemeId) return;
+      window.__WELINE_E2E_THEME_ID = serverThemeId;
+      if (window.Weline && window.Weline.config) {
+        window.Weline.config.themePublishedVersionId = serverThemeId;
+        window.Weline.config.theme_published_version_id = serverThemeId;
+        if (window.Weline.config.api && typeof window.Weline.config.api === 'object') {
+          window.Weline.config.api.themePublishedVersionId = serverThemeId;
+          window.Weline.config.api.theme_published_version_id = serverThemeId;
+        }
+      }
+      const api = window.Weline && window.Weline.Api;
+      if (api && api.__full === true && typeof api.getClient === 'function') {
+        try {
+          const client = api.getClient();
+          if (client && client.config) {
+            client.config.themePublishedVersionId = serverThemeId;
+            client.config.theme_published_version_id = serverThemeId;
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }).catch(() => {});
+}
+
+async function reloadIfThemeGenerationStale(page) {
+  const stale = await page.evaluate(() => {
+    const tip = String(document.body && document.body.innerText || '');
+    return /主题已发布新版本|reload the page to continue|deploy_reload_required/i.test(tip);
+  }).catch(() => false);
+  if (!stale) return false;
+  await hardRefreshStorefront(page);
+  return true;
+}
+
+/**
+ * After hard refresh: promote full Api, adopt Scope theme id, force Worker re-handshake
+ * so prior-generation SharedWorker badges (stale HTML stamp) are dropped.
+ */
+async function rewarmScopeAfterThemeRefresh(page) {
+  await waitForWelineApi(page);
+  await neutralizeStaleThemeStamp(page);
+  await page.evaluate(async () => {
+    try {
       let api = window.Weline && window.Weline.Api;
       if (!api || api.__full !== true || typeof api.resource !== 'function') {
         if (window.Weline && typeof window.Weline.load === 'function') {
@@ -419,20 +434,23 @@ async function rewarmScopeAfterThemeRefresh(page) {
           }
         }
       }
-      if (serverThemeId && window.Weline && window.Weline.config) {
-        window.Weline.config.themePublishedVersionId = serverThemeId;
-        window.Weline.config.theme_published_version_id = serverThemeId;
-      }
+      const serverThemeId = String(
+        (window.Weline && window.Weline.config && (
+          window.Weline.config.themePublishedVersionId
+          || window.Weline.config.theme_published_version_id
+        )) || ''
+      ).trim();
       if (api && typeof api.getClient === 'function') {
-        try {
-          const client = api.getClient();
-          if (client && client.config && serverThemeId) {
-            client.config.themePublishedVersionId = serverThemeId;
-            client.config.theme_published_version_id = serverThemeId;
-          }
-        } catch (_) {}
-      }
-      if (api && typeof api.bootstrapScope === 'function') {
+        const client = api.getClient();
+        if (client && client.config && serverThemeId) {
+          client.config.themePublishedVersionId = serverThemeId;
+          client.config.theme_published_version_id = serverThemeId;
+        }
+        // Prefer normal warmup with adopted stamp — forceHandshake can navigate away.
+        if (client && typeof client.warmup === 'function') {
+          await client.warmup().catch(() => {});
+        }
+      } else if (api && typeof api.bootstrapScope === 'function') {
         await api.bootstrapScope().catch(() => {});
       }
     } catch (_) {}

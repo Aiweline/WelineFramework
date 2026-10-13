@@ -115,14 +115,17 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
   );
 
   const added = await evaluateWithThemeReload(page, async (cartMode) => {
-    // Pin-clear inside the page world: SharedWorker may still hold a prior badge, and
-    // Weline.load('api') can rehydrate themePublishedVersionId from HTML before cart.add.
-    try {
-      if (window.Weline && window.Weline.config) {
-        window.Weline.config.themePublishedVersionId = '';
-        window.Weline.config.theme_published_version_id = '';
+    // load('api') may rehydrate stamp from stale HTML — re-pin Scope-adopted id.
+    const pinTheme = () => {
+      const id = String(window.__WELINE_E2E_THEME_ID || '').trim();
+      if (!id || !window.Weline || !window.Weline.config) return;
+      window.Weline.config.themePublishedVersionId = id;
+      window.Weline.config.theme_published_version_id = id;
+      if (window.Weline.config.api && typeof window.Weline.config.api === 'object') {
+        window.Weline.config.api.themePublishedVersionId = id;
       }
-    } catch (e) {}
+    };
+    pinTheme();
     let api = window.Weline && window.Weline.Api;
     if (!api || api.__full !== true || typeof api.resource !== 'function') {
       const loaded = await window.Weline.load('api');
@@ -133,12 +136,7 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
         api = loaded || api;
       }
     }
-    try {
-      if (window.Weline && window.Weline.config) {
-        window.Weline.config.themePublishedVersionId = '';
-        window.Weline.config.theme_published_version_id = '';
-      }
-    } catch (e2) {}
+    pinTheme();
     const buyNow = document.querySelector('[data-testid="product-add-to-cart"][data-product-id]')
       || document.querySelector('[data-testid="product-buy-now"][data-product-id]')
       || document.querySelector('[data-action="add"][data-product-id]')
@@ -276,12 +274,7 @@ async function applyCouponViaApi(page, code = COUPON, mode = 'toc') {
   await reloadIfThemeGenerationStale(page);
   await neutralizeStaleThemeStamp(page);
   return evaluateWithThemeReload(page, async ({ couponCode, cartMode }) => {
-    try {
-      if (window.Weline && window.Weline.config) {
-        window.Weline.config.themePublishedVersionId = '';
-        window.Weline.config.theme_published_version_id = '';
-      }
-    } catch (_) {}
+    /* theme stamp adopted by evaluateWithThemeReload/neutralize — do not clear */
     let api = window.Weline && window.Weline.Api;
     if (!api || api.__full !== true || typeof api.resource !== 'function') {
       const loaded = await window.Weline.load('api');
@@ -302,12 +295,7 @@ async function applyCouponViaApi(page, code = COUPON, mode = 'toc') {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         if (attempt > 0) {
-          try {
-            if (window.Weline && window.Weline.config) {
-              window.Weline.config.themePublishedVersionId = '';
-              window.Weline.config.theme_published_version_id = '';
-            }
-          } catch (_) {}
+          /* theme stamp adopted by evaluateWithThemeReload/neutralize — do not clear */
           if (typeof api.bootstrapScope === 'function') {
             try { await api.bootstrapScope(); } catch (_) {}
           }
@@ -522,12 +510,7 @@ async function submitCheckoutCaptureEvidence(page, meta = {}) {
         return !!(window.Weline && window.Weline.Api && metaEl && String(metaEl.getAttribute('content') || '').trim());
       }, null, { timeout: 60000 }).catch(() => {});
       await page.evaluate(async () => {
-        try {
-          if (window.Weline && window.Weline.config) {
-            window.Weline.config.themePublishedVersionId = '';
-            window.Weline.config.theme_published_version_id = '';
-          }
-        } catch (_) {}
+        /* theme stamp adopted by evaluateWithThemeReload/neutralize — do not clear */
         if (window.Weline && window.Weline.Api && typeof window.Weline.Api.bootstrapScope === 'function') {
           await window.Weline.Api.bootstrapScope();
         }
@@ -545,12 +528,7 @@ async function submitCheckoutCaptureEvidence(page, meta = {}) {
   await reloadIfThemeGenerationStale(page);
   const started = await evaluateWithThemeReload(page, async ({ cartMode, payMethod, shippingEmail }) => {
     try {
-      try {
-        if (window.Weline && window.Weline.config) {
-          window.Weline.config.themePublishedVersionId = '';
-          window.Weline.config.theme_published_version_id = '';
-        }
-      } catch (_) {}
+      /* theme stamp adopted by evaluateWithThemeReload/neutralize — do not clear */
       let api = window.Weline && window.Weline.Api;
       if (!api || typeof api.resource !== 'function') {
         api = await window.Weline.load('api');
@@ -625,12 +603,7 @@ async function submitCheckoutCaptureEvidence(page, meta = {}) {
         for (let freezeAttempt = 0; freezeAttempt < 2; freezeAttempt += 1) {
           try {
             if (freezeAttempt > 0 && typeof api.bootstrapScope === 'function') {
-              try {
-                if (window.Weline && window.Weline.config) {
-                  window.Weline.config.themePublishedVersionId = '';
-                  window.Weline.config.theme_published_version_id = '';
-                }
-              } catch (_) {}
+              /* theme stamp adopted by evaluateWithThemeReload/neutralize — do not clear */
               try { await api.bootstrapScope(); } catch (_) {}
             }
             frozen = await checkoutApi.freezeQuote({

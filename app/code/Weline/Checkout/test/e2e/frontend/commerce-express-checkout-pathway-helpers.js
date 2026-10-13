@@ -43,18 +43,27 @@ async function runExpressCheckoutCaptureEvidence(page, meta = {}) {
   // identity for some guest sessions and surfaces 购物车为空 on startExpressCheckout.
   const started = await evaluateWithThemeReload(page, async ({ payMethod, shipAddress }) => {
     try {
-      if (window.Weline && window.Weline.config) {
-        window.Weline.config.themePublishedVersionId = '';
-        window.Weline.config.theme_published_version_id = '';
-      }
+      const pinTheme = () => {
+        const id = String(window.__WELINE_E2E_THEME_ID || '').trim();
+        if (!id || !window.Weline || !window.Weline.config) return;
+        window.Weline.config.themePublishedVersionId = id;
+        window.Weline.config.theme_published_version_id = id;
+        if (window.Weline.config.api && typeof window.Weline.config.api === 'object') {
+          window.Weline.config.api.themePublishedVersionId = id;
+        }
+      };
+      pinTheme();
       let api = window.Weline && window.Weline.Api;
-      if (!api || typeof api.resource !== 'function') {
-        api = await window.Weline.load('api');
+      if (!api || api.__full !== true || typeof api.resource !== 'function') {
+        const loaded = await window.Weline.load('api');
+        if (loaded && loaded.__full === true) {
+          window.Weline.Api = loaded;
+          api = loaded;
+        } else {
+          api = loaded || api;
+        }
       }
-      if (window.Weline && window.Weline.config) {
-        window.Weline.config.themePublishedVersionId = '';
-        window.Weline.config.theme_published_version_id = '';
-      }
+      pinTheme();
       let guestToken = '';
       try { guestToken = String(sessionStorage.getItem('weline.cart.guest_token') || '').trim(); } catch (e) {}
       if (!guestToken) {

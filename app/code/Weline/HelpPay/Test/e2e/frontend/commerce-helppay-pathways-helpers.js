@@ -6,6 +6,17 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
+const {
+  ensureFpcBypassHeaders,
+  hardRefreshStorefront,
+  neutralizeStaleThemeStamp,
+  reloadIfThemeGenerationStale,
+  evaluateWithThemeReload,
+  waitForWelineApi,
+} = require(path.resolve(
+  ROOT_DIR,
+  'app/code/Weline/Checkout/test/e2e/frontend/release-paypal-account-lifecycle-helpers.js'
+));
 const CHECKOUT_FIXTURE = path.resolve(
   ROOT_DIR,
   'app/code/Weline/Checkout/test/e2e/frontend/commerce-multi-scope-checkout-pathways-fixture.php'
@@ -58,127 +69,6 @@ function prepareCustomer() {
     throw new Error(`helppay prepare failed: ${parsed.error || stdout}`);
   }
   return parsed;
-}
-
-async function waitForWelineApi(page, timeout = 90000) {
-  await page.waitForFunction(() => !!(window.Weline && (
-    (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
-    || typeof window.Weline.load === 'function'
-  )), null, { timeout });
-}
-
-function isThemeGenerationStaleMessage(msg) {
-  return /主题已发布新版本|reload the page to continue|deploy_reload_required|Theme published generation changed|Worker session theme generation mismatch|theme generation mismatch/i
-    .test(String(msg || ''));
-}
-
-function resultLooksThemeStale(result) {
-  if (!result || typeof result !== 'object') return false;
-  if (isThemeGenerationStaleMessage(result.error)
-    || isThemeGenerationStaleMessage(result.message)
-    || isThemeGenerationStaleMessage(result.__error)
-    || isThemeGenerationStaleMessage(result.code)) {
-    return true;
-  }
-  try {
-    return isThemeGenerationStaleMessage(JSON.stringify(result).slice(0, 800));
-  } catch (_) {
-    return false;
-  }
-}
-
-async function ensureFpcBypassHeaders(page) {
-  const context = page.context();
-  if (context.__welineE2eFpcBypass) return;
-  await context.setExtraHTTPHeaders({
-    'x-wls-fpc-bypass': '1',
-    'x-wls-internal-fpc-bypass': '1',
-  }).catch(() => {});
-  await context.addInitScript(() => {
-    try {
-      if (window.__WELINE_E2E_RELOAD_STUBBED) return;
-      window.__WELINE_E2E_RELOAD_STUBBED = true;
-      window.__WELINE_E2E_RELOAD_REQUESTED = false;
-      Location.prototype.reload = function e2eReloadStub() {
-        window.__WELINE_E2E_RELOAD_REQUESTED = true;
-      };
-    } catch (_) {}
-  }).catch(() => {});
-  context.__welineE2eFpcBypass = true;
-}
-
-async function hardRefreshStorefront(page) {
-  await ensureFpcBypassHeaders(page);
-  const current = String(page.url() || '').trim();
-  if (!current || current === 'about:blank') {
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
-  } else {
-    let next = current;
-    try {
-      const u = new URL(current);
-      // Path-only PDP: query bust 301s store-channel product URLs to /products/.
-      u.searchParams.delete('_e2e_theme_nc');
-      u.searchParams.delete('_wb_nc');
-      next = u.toString();
-    } catch (_) {
-      next = current;
-    }
-    await page.goto(next, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(async () => {
-      await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
-    });
-  }
-  await page.waitForLoadState('domcontentloaded').catch(() => {});
-  await neutralizeStaleThemeStamp(page);
-  await waitForWelineApi(page);
-}
-
-async function neutralizeStaleThemeStamp(page) {
-  await page.evaluate(() => {
-    try {
-      if (window.Weline && window.Weline.config) {
-        window.Weline.config.themePublishedVersionId = '';
-        window.Weline.config.theme_published_version_id = '';
-      }
-    } catch (_) {}
-  }).catch(() => {});
-}
-
-async function reloadIfThemeGenerationStale(page) {
-  const stale = await page.evaluate(() => {
-    const tip = String(document.body && document.body.innerText || '');
-    return /主题已发布新版本|reload the page to continue|deploy_reload_required/i.test(tip);
-  }).catch(() => false);
-  if (!stale) return false;
-  await hardRefreshStorefront(page);
-  return true;
-}
-
-async function evaluateWithThemeReload(page, fn, arg) {
-  await ensureFpcBypassHeaders(page);
-  let lastErr = null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    await page.evaluate(() => { window.__WELINE_E2E_RELOAD_REQUESTED = false; }).catch(() => {});
-    await neutralizeStaleThemeStamp(page);
-    try {
-      const result = await page.evaluate(fn, arg);
-      const reloadRequested = await page.evaluate(() => !!window.__WELINE_E2E_RELOAD_REQUESTED).catch(() => false);
-      if ((resultLooksThemeStale(result) || reloadRequested) && attempt < 1) {
-        await neutralizeStaleThemeStamp(page);
-        continue;
-      }
-      return result;
-    } catch (err) {
-      lastErr = err;
-      const msg = String(err && err.message || err);
-      const reloadRequested = await page.evaluate(() => !!window.__WELINE_E2E_RELOAD_REQUESTED).catch(() => false);
-      if ((!isThemeGenerationStaleMessage(msg) && !reloadRequested) || attempt >= 1) {
-        throw err;
-      }
-      await neutralizeStaleThemeStamp(page);
-    }
-  }
-  if (lastErr) throw lastErr;
-  return page.evaluate(fn, arg);
 }
 
 async function dismissNoise(page) {

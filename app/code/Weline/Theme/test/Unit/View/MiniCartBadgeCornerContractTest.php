@@ -133,17 +133,27 @@ final class MiniCartBadgeCornerContractTest extends TestCase
             '/\.wc-theme_widget_mini_cart_icon\s+\.cart-info\s*\{[^}]*width:\s*fit-content/s',
             $widget,
         );
-        // Density ≤1360 continuum: search own row through mobile (no jump-back at 768)
-        // + cart money off + signed-in avatar-only at mid band (avoids tools-wrap-under-search).
-        // Wider viewports keep search in the belt mid gap and full tool labels.
+        // Desktop: nowrap + search yield (flex 1 1 0) — tools never wrap under wide search.
+        // Phone ≤768: search own row. Soft density only ≤920 (not mid-desktop 1360).
         self::assertMatchesRegularExpression(
+            '/@media\s*\(min-width:\s*769px\)[\s\S]{0,400}?header-belt-row-1\s*\{[\s\S]{0,120}?flex-wrap:\s*nowrap/s',
+            $chrome,
+            'Desktop belt must nowrap so account/cart money shrink search instead of wrapping',
+        );
+        self::assertMatchesRegularExpression(
+            '/\.weline-header\s+\.header-search-wrapper\s*\{[\s\S]{0,200}?flex:\s*1\s+1\s+0/s',
+            $chrome,
+            'Search must be the yield lane (flex 1 1 0)',
+        );
+        self::assertDoesNotMatchRegularExpression(
             '/@media\s*\(max-width:\s*1360px\)[\s\S]{0,600}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
             $chrome,
+            'Must not drop search to own row at 1360 — mid desktop keeps one row via search shrink',
         );
         self::assertMatchesRegularExpression(
             '/@media\s*\(max-width:\s*768px\)[\s\S]{0,1600}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
             $chrome,
-            '≤768 must keep search on its own row (amazon flex:1 1 280px must not win)',
+            '≤768 must keep search on its own row (amazon flex:1 1 0 must not win)',
         );
         // Phone humanization: avatar-only + hide duplicate nav All (belt hamburger owns drawer).
         self::assertMatchesRegularExpression(
@@ -160,10 +170,10 @@ final class MiniCartBadgeCornerContractTest extends TestCase
             'phone must hide More chrome; scroll owns overflow',
         );
         self::assertMatchesRegularExpression(
-            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1360px\)[\s\S]{0,400}?cart-info[\s\S]{0,120}?display:\s*none/s',
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*920px\)[\s\S]{0,400}?cart-info[\s\S]{0,120}?display:\s*none/s',
             $chrome,
         );
-        // ≤768 must also hide cart-info (769–1360 alone left phone with text inside 5.5rem slot).
+        // ≤768 must also hide cart-info (769–920 alone left phone with text inside 5.5rem slot).
         self::assertMatchesRegularExpression(
             '/@media\s*\(max-width:\s*768px\)[\s\S]{0,2400}?\.header-cart \.cart-info[\s\S]{0,120}?display:\s*none\s*!important/s',
             $chrome,
@@ -174,7 +184,7 @@ final class MiniCartBadgeCornerContractTest extends TestCase
             $chrome,
         );
         self::assertMatchesRegularExpression(
-            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1360px\)[\s\S]{0,800}?data-auth-state="signed-in"[\s\S]{0,400}?\.register-text/s',
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*920px\)[\s\S]{0,800}?data-auth-state="signed-in"[\s\S]{0,400}?\.register-text/s',
             $chrome,
         );
         self::assertDoesNotMatchRegularExpression(

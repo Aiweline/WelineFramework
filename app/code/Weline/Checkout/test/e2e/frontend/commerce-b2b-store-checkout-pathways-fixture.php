@@ -170,7 +170,13 @@ function e2e_b2b_ensure_store_channel(): array
  */
 function e2e_b2b_ensure_product_stock(int $websiteId, int $storeId): array
 {
-    $productUuid = '8a3eda07-182e-57c2-991b-bfa66251637b'; // product_id 321 黑山茶
+    // Live pathway PDP (悦雅霓裳 / product_id 113) + legacy catalog fixture product.
+    $productUuids = [
+        'bc49a334-a39e-5bfd-b893-c98fcdfb014b', // yue-ya-ni-shang… (release-paypal PDP)
+        '8a3eda07-182e-57c2-991b-bfa66251637b', // product_id 321 黑山茶 (legacy)
+    ];
+    $productUuids = array_values(array_unique(array_filter($productUuids)));
+
     /** @var OfferIdentityRegistry $reg */
     $reg = ObjectManager::getInstance()->get(OfferIdentityRegistry::class);
     /** @var InventoryStock $stockModel */
@@ -178,13 +184,22 @@ function e2e_b2b_ensure_product_stock(int $websiteId, int $storeId): array
     /** @var InventoryService $inventory */
     $inventory = ObjectManager::getInstance()->get(InventoryService::class);
 
-    $regs = (clone $reg)->clear()
-        ->where(OfferIdentityRegistry::schema_fields_PRODUCT_UUID, $productUuid)
-        ->select()
-        ->fetchArray();
+    $regs = [];
+    $productUuid = $productUuids[0] ?? '';
+    foreach ($productUuids as $uuid) {
+        $batch = (clone $reg)->clear()
+            ->where(OfferIdentityRegistry::schema_fields_PRODUCT_UUID, $uuid)
+            ->select()
+            ->fetchArray();
+        foreach (($batch ?: []) as $r) {
+            if (is_array($r)) {
+                $regs[] = $r;
+            }
+        }
+    }
     $seeded = 0;
     $offerCount = 0;
-    foreach (($regs ?: []) as $row) {
+    foreach ($regs as $row) {
         if (!is_array($row)) {
             continue;
         }
