@@ -130,8 +130,8 @@ final class IndexRefreshScheduler
         }
         $deadline = (int) ($meta['deadline_epoch'] ?? 0);
         $started = (int) ($meta['started_at'] ?? 0);
-        $nice = (int) ($meta['nice'] ?? $config->get('index.refresh_worker_nice', 10));
-        $maxSeconds = max(60, (int) $config->get('index.refresh_worker_max_seconds', 900));
+        $nice = (int) ($meta['nice'] ?? $config->get('index.refresh_worker_nice', 19));
+        $maxSeconds = max(60, (int) $config->get('index.refresh_worker_max_seconds', 120));
         $alive = $pid > 1 && self::processAlive($pid);
         if ($alive && $started < 1) {
             $started = self::processStartEpoch($pid) ?? 0;
@@ -171,7 +171,7 @@ final class IndexRefreshScheduler
 
     public static function defaultDeadlineEpoch(Config $config): int
     {
-        $maxSeconds = max(60, (int) $config->get('index.refresh_worker_max_seconds', 900));
+        $maxSeconds = max(60, (int) $config->get('index.refresh_worker_max_seconds', 120));
 
         return time() + $maxSeconds;
     }
@@ -215,7 +215,7 @@ final class IndexRefreshScheduler
                 ];
             }
 
-            $nice = max(0, min(19, (int) $config->get('index.refresh_worker_nice', 10)));
+            $nice = max(0, min(19, (int) $config->get('index.refresh_worker_nice', 19)));
             $deadline = self::defaultDeadlineEpoch($config);
             $startedAt = time();
 

@@ -47,7 +47,12 @@ try {
     file_put_contents($temporary . '/config.json', json_encode([
         'data_dir' => $temporary . '/data',
         'analysis' => ['provider' => 'none'],
-        'index' => ['sidecar_enabled' => false, 'excluded_paths' => ['target/excluded/**']],
+        'index' => [
+            'sidecar_enabled' => false,
+            // Fixture layout is not app/code|bin — disable allowlist for directory-scope unit coverage.
+            'allowed_roots' => ['*'],
+            'excluded_paths' => ['target/excluded/**'],
+        ],
     ], JSON_THROW_ON_ERROR));
     $config = Config::load($temporary . '/config.json', $temporary . '/data');
     $index = new ProjectIndex($config, ProjectResolver::resolve($root));

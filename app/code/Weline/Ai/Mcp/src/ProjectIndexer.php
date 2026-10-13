@@ -11,7 +11,19 @@ use Throwable;
 final class ProjectIndexer
 {
     /**
+     * Default monitored roots for project intelligence indexing / post-tool refresh.
+     * Use config `index.allowed_roots: ["*"]` only in tests to disable the allowlist.
+     *
+     * @var list<string>
+     */
+    public const DEFAULT_ALLOWED_ROOTS = [
+        'app/code',
+        'bin',
+    ];
+
+    /**
      * Hard safety excludes that are always kept outside editable scope and indexing.
+     * Module `tpl`, `view/statics`, `view/fonts`, `i18n`, and `data/locale-packs` are never monitored.
      *
      * @var list<string>
      */
@@ -28,7 +40,8 @@ final class ProjectIndexer
         '~^\.vscode(?:/|$)~',
         '~(?:^|/)vendor(?:/|$)~',
         '~(?:^|/)node_modules(?:/|$)~',
-        '~^generated(?:/|$)~',
+        // Root generated/ AND misplaced trees such as app/code/generated (FPC/html etc.).
+        '~(?:^|/)generated(?:/|$)~',
         '~^var(?:/|$)~',
         '~^coverage(?:/|$)~',
         '~^\.cache(?:/|$)~',
@@ -53,7 +66,15 @@ final class ProjectIndexer
         '~^pub/(?:static|media|errors|readme|source|sitemaps|theme_previews)(?:/|$)~',
         '~^setup/(?:static|server_installer|step)(?:/|$)~',
         '~^dev/docs/assets(?:/|$)~',
-        '~(?:^|/)view/tpl(?:/|$)~',
+        // Any module/theme tpl compile/cache tree (not only view/tpl).
+        '~(?:^|/)tpl(?:/|$)~',
+        // Theme/admin vendor asset trees — JS/CSS/HTML noise, not project intelligence.
+        '~(?:^|/)view/statics(?:/|$)~',
+        '~(?:^|/)view/fonts(?:/|$)~',
+        // Module translation CSV dumps — not needed for code/impact retrieval.
+        '~(?:^|/)i18n(?:/|$)~',
+        // Locale seed dumps (e.g. Blog/data/locale-packs).
+        '~(?:^|/)data/locale-packs(?:/|$)~',
         '~(?:^|/)static/libs(?:/|$)~',
     ];
 
@@ -882,7 +903,8 @@ final class ProjectIndexer
         $paths = [];
         $root = $this->index->root();
         $explicit = $requestedPaths !== null;
-        $directories = $explicit ? [] : [''];
+        // Full scans start only under allowed roots (app/code + bin) — never walk the whole repo.
+        $directories = $explicit ? [] : $this->discoveryRootDirectories();
         if ($requestedPaths !== null) {
             foreach ($requestedPaths as $path) {
                 try {
@@ -960,12 +982,15 @@ final class ProjectIndexer
         if ($this->isSecretPath($lower, $basename)) {
             return false;
         }
+        if ($this->matchesHardcodedExcludedDirectory($path)) {
+            return false;
+        }
+        if (!$this->pathWithinAllowedRoots($path)) {
+            return false;
+        }
         if (!$includeTests
             && !(bool) $this->config->get('index.include_tests', false)
             && preg_match('~(?:^|/)(?:test|tests)(?:/|$)~i', $path) === 1) {
-            return false;
-        }
-        if ($this->matchesHardcodedExcludedDirectory($path)) {
             return false;
         }
         foreach ((array) $this->config->get('index.excluded_paths', []) as $glob) {
@@ -1061,6 +1086,7 @@ final class ProjectIndexer
 
     private function pathAllowed(string $path, bool $explicit = false): bool
     {
+        $path = ltrim(str_replace('\\', '/', $path), '/');
         $lower = strtolower($path);
         $basename = strtolower(basename($path));
         $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
@@ -1070,17 +1096,17 @@ final class ProjectIndexer
             || str_ends_with($lower, '.map')) {
             return false;
         }
-        if ($this->isRetainedKnowledgePath($path)) {
-            return $this->extensionAllowed($extension);
+        if ($this->matchesHardcodedExcludedDirectory($path)) {
+            return false;
+        }
+        if (!$this->pathWithinAllowedRoots($path)) {
+            return false;
         }
         $explicitTestPath = $explicit
             && preg_match('~(?:^|/)(?:test|tests)(?:/|$)~i', $path) === 1;
         if (!$explicitTestPath
             && !(bool) $this->config->get('index.include_tests', false)
             && preg_match('~(?:^|/)(?:test|tests)(?:/|$)~i', $path) === 1) {
-            return false;
-        }
-        if ($this->matchesHardcodedExcludedDirectory($path)) {
             return false;
         }
         foreach ((array) $this->config->get('index.excluded_paths', []) as $glob) {
@@ -1096,16 +1122,73 @@ final class ProjectIndexer
             }
         }
 
+        // CLI entrypoints under bin/ often have no extension (e.g. bin/w).
+        if ($extension === '' && preg_match('~^bin/(?:.*/)?[^./]+$~', $path) === 1) {
+            return true;
+        }
+
         return $this->extensionAllowed($extension);
     }
 
     private function matchesHardcodedExcludedDirectory(string $path): bool
     {
-        $path = strtolower(ltrim(str_replace('\\', '/', $path), '/'));
-        if ($this->isExtendsServerPath($path)) {
+        return self::pathMatchesHardcodedExclude($path);
+    }
+
+    /**
+     * Resolve monitored roots. `["*"]` disables the allowlist (tests only).
+     *
+     * @return list<string>
+     */
+    public static function resolveAllowedRoots(Config $config): array
+    {
+        $configured = $config->get('index.allowed_roots', null);
+        if (!is_array($configured) || $configured === []) {
+            return self::DEFAULT_ALLOWED_ROOTS;
+        }
+        $roots = [];
+        foreach ($configured as $root) {
+            if (!is_string($root)) {
+                continue;
+            }
+            $normalized = trim(str_replace('\\', '/', $root), '/');
+            if ($normalized === '*') {
+                return ['*'];
+            }
+            if ($normalized !== '') {
+                $roots[$normalized] = true;
+            }
+        }
+
+        return $roots === [] ? self::DEFAULT_ALLOWED_ROOTS : array_keys($roots);
+    }
+
+    public static function pathIsWithinAllowedRoots(Config $config, string $path): bool
+    {
+        $roots = self::resolveAllowedRoots($config);
+        if ($roots === ['*']) {
             return true;
         }
-        foreach ($this->hardcodedExcludedDirectoryPatterns() as $pattern) {
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+        if ($path === '') {
+            return false;
+        }
+        foreach ($roots as $root) {
+            if ($path === $root || str_starts_with($path, $root . '/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static function pathMatchesHardcodedExclude(string $path): bool
+    {
+        $path = strtolower(ltrim(str_replace('\\', '/', $path), '/'));
+        if (preg_match('~(?:^|/)extends/(?:.*/)?server(?:/|$)~', $path) === 1) {
+            return true;
+        }
+        foreach (self::HARDCODED_EXCLUDED_DIRECTORY_PATTERNS as $pattern) {
             if (preg_match($pattern, $path) === 1) {
                 return true;
             }
@@ -1114,22 +1197,53 @@ final class ProjectIndexer
         return false;
     }
 
-    private function isExtendsServerPath(string $path): bool
+    /**
+     * Filter Hook/post-tool refresh paths to monitored allowlist (and drop tpl/etc.).
+     *
+     * @param list<string> $paths
+     * @return list<string>
+     */
+    public static function filterMonitoredPaths(Config $config, array $paths): array
     {
-        return preg_match('~(?:^|/)extends/(?:.*/)?server(?:/|$)~', $path) === 1;
+        $kept = [];
+        foreach (Text::uniqueStrings($paths) as $path) {
+            $normalized = ltrim(str_replace('\\', '/', (string) $path), '/');
+            if ($normalized === '') {
+                continue;
+            }
+            if (self::pathMatchesHardcodedExclude($normalized)) {
+                continue;
+            }
+            if (!self::pathIsWithinAllowedRoots($config, $normalized)) {
+                continue;
+            }
+            $kept[] = $normalized;
+        }
+
+        return $kept;
+    }
+
+    private function pathWithinAllowedRoots(string $path): bool
+    {
+        return self::pathIsWithinAllowedRoots($this->config, $path);
     }
 
     /** @return list<string> */
-    private function hardcodedExcludedDirectoryPatterns(): array
+    private function discoveryRootDirectories(): array
     {
-        return self::HARDCODED_EXCLUDED_DIRECTORY_PATTERNS;
-    }
+        $roots = self::resolveAllowedRoots($this->config);
+        if ($roots === ['*']) {
+            return [''];
+        }
+        $directories = [];
+        $repoRoot = $this->index->root();
+        foreach ($roots as $root) {
+            if (is_dir($repoRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $root))) {
+                $directories[] = $root;
+            }
+        }
 
-    private function isRetainedKnowledgePath(string $path): bool
-    {
-        return $path === 'AGENTS.md'
-            || str_starts_with($path, 'dev/docs/weline/')
-            || preg_match('~^app/code/[^/]+/[^/]+/doc(?:/|$)~', $path) === 1;
+        return $directories;
     }
 
     private function isSecretPath(string $path, string $basename): bool
@@ -1941,6 +2055,7 @@ final class ProjectIndexer
     /** @param list<string>|null $requested */
     private function inScope(string $path, ?array $requested): bool
     {
+        // Full scans may delete previously indexed files that fell outside the allowlist.
         if ($requested === null) {
             return true;
         }

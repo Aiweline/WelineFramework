@@ -104,18 +104,26 @@ index:
   # Empty keeps CLI/tests unbound. Cursor ensure injects LEARNING_MCP_BOUND_REPOSITORY
   # to the framework checkout that owns this MCP package so only that project is indexed.
   bound_repository: ""
-  # Codex writes refresh immediately; this is only the fallback for changes made outside Hook/MCP.
-  refresh_interval: 60s
+  # Codex/Hook writes refresh immediately; this is only the fallback for changes made outside Hook/MCP.
+  refresh_interval: 30m
+  # Detached refresh budget — short + lowest nice so indexer cannot starve sibling MCP (aoci)/Cursor.
+  refresh_worker_max_seconds: 120
+  refresh_worker_nice: 19
   max_file_bytes: 524288
-  max_chunk_chars: 6000
-  context_token_budget: 6000
+  max_chunk_chars: 4000
+  context_token_budget: 4000
   vector_dimensions: 2048
-  # Keep only the highest-weight sparse terms per chunk; 24 bounds large-repo storage.
-  vector_max_terms: 24
-  # Warm read settings for the persistent SQLite index; mmap is virtual and demand-paged.
-  sqlite_mmap_bytes: 268435456
-  sqlite_cache_kib: 16384
+  # Keep only the highest-weight sparse terms per chunk.
+  vector_max_terms: 16
+  # Smaller SQLite warm cache so index RAM does not crowd AOCI/Cursor.
+  sqlite_mmap_bytes: 67108864
+  sqlite_cache_kib: 4096
   include_tests: false
+  # Only monitor these roots. Post-tool refresh outside them is skipped (not expanded to full scan).
+  # Use ["*"] only in tests to disable the allowlist.
+  allowed_roots:
+    - app/code
+    - bin
   gc:
     enabled: true
     retention: 14d
@@ -129,9 +137,10 @@ index:
     purge_unbound: true
     # After projects/<hash> migration, purge leftover ~/.learning-mcp/indexes generations.
     purge_shared_leftover: true
-    # Truncate the bound generation WAL when idle and above this size (32 MiB default).
+    # Truncate the bound generation WAL when idle and above this size.
     checkpoint_wal: true
-    checkpoint_wal_min_bytes: 33554432
+    checkpoint_wal_min_bytes: 536870912
+  # Code/docs/config only — no front-end asset or translation-dump indexing.
   allowed_extensions:
     - php
     - phtml
@@ -144,32 +153,10 @@ index:
     - xml
     - toml
     - ini
-    - csv
     - sql
-    - js
-    - jsx
-    - ts
-    - tsx
-    - vue
-    - css
-    - scss
-    - less
-    - html
-    - htm
     - sh
     - bash
     - zsh
-    - go
-    - py
-    - java
-    - kt
-    - rs
-    - c
-    - cc
-    - cpp
-    - h
-    - hpp
-    - proto
   excluded_paths:
     - .git/**
     - .gitnexus/**
@@ -179,11 +166,18 @@ index:
     - node_modules/**
     - **/node_modules/**
     - generated/**
+    - "**/generated/**"
+    - app/code/generated/**
     - var/**
     - app/var/**
     - pub/static/**
     - pub/media/**
+    - **/tpl/**
     - **/view/tpl/**
+    - **/view/statics/**
+    - **/view/fonts/**
+    - **/i18n/**
+    - **/data/locale-packs/**
     - **/static/libs/**
     - **/test/**
     - **/tests/**

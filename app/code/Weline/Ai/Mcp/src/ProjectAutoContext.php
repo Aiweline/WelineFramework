@@ -108,6 +108,17 @@ final class ProjectAutoContext
     {
         try {
             $config = Config::load($configPath, $dataDir);
+            $hadPaths = $paths !== [];
+            $paths = ProjectIndexer::filterMonitoredPaths($config, $paths);
+            if ($hadPaths && $paths === []) {
+                self::appendLog(
+                    $configPath,
+                    $dataDir,
+                    new \RuntimeException('Skipping out-of-allowlist / tpl path refresh for ' . $repository),
+                );
+
+                return 0;
+            }
             $sidecarPid = IndexSidecar::enqueue($config, $repository, $paths);
             if ($sidecarPid !== null) {
                 return $sidecarPid;
@@ -142,7 +153,11 @@ final class ProjectAutoContext
                     'repository' => $repository,
                     'mode' => 'incremental',
                 ];
-                $paths = Text::uniqueStrings($paths);
+                $hadPaths = $paths !== [];
+                $paths = ProjectIndexer::filterMonitoredPaths($config, $paths);
+                if ($hadPaths && $paths === []) {
+                    return -1;
+                }
                 if ($paths !== []) {
                     $input['paths'] = $paths;
                 }

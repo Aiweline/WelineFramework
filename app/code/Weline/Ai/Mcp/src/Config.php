@@ -265,18 +265,20 @@ final class Config
                 'sidecar_enabled' => true,
                 // Empty = unbound (tests/CLI). Cursor registration injects LEARNING_MCP_BOUND_REPOSITORY.
                 'bound_repository' => '',
-                'refresh_interval' => '10m',
+                // Background fallback only; Hook/post-tool already covers edits.
+                'refresh_interval' => '30m',
                 // Detached incremental worker wall-clock budget (seconds) + CPU nice.
-                // Prevents unbounded index_project from starving sibling MCP (aoci).
-                'refresh_worker_max_seconds' => 900,
-                'refresh_worker_nice' => 10,
-                'max_file_bytes' => 1_048_576,
-                'max_chunk_chars' => 6_000,
-                'context_token_budget' => 6_000,
+                // Keep short + low priority so indexer cannot starve sibling MCP (aoci) / Cursor.
+                'refresh_worker_max_seconds' => 120,
+                'refresh_worker_nice' => 19,
+                'max_file_bytes' => 524_288,
+                'max_chunk_chars' => 4_000,
+                'context_token_budget' => 4_000,
                 'vector_dimensions' => 2_048,
-                'vector_max_terms' => 24,
-                'sqlite_mmap_bytes' => 268_435_456,
-                'sqlite_cache_kib' => 16_384,
+                'vector_max_terms' => 16,
+                // Smaller SQLite warm cache — large mmap/cache compete with AOCI/Cursor for RAM.
+                'sqlite_mmap_bytes' => 67_108_864,
+                'sqlite_cache_kib' => 4_096,
                 'include_tests' => false,
                 'gc' => [
                     'enabled' => true,
@@ -291,17 +293,22 @@ final class Config
                     'purge_shared_leftover' => true,
                     // When the bound generation is idle, TRUNCATE its WAL (skip if locked).
                     'checkpoint_wal' => true,
-                    'checkpoint_wal_min_bytes' => 33_554_432,
+                    // Avoid interactive TRUNCATE storms on multi-GB WALs; GC still checkpoints when idle.
+                    'checkpoint_wal_min_bytes' => 536_870_912,
                 ],
+                // Monitored roots only. `["*"]` disables allowlist (tests). Empty → ProjectIndexer defaults.
+                'allowed_roots' => ['app/code', 'bin'],
+                // Code/docs/config only — no front-end asset or translation-dump indexing.
                 'allowed_extensions' => [
                     'php', 'phtml', 'md', 'markdown', 'txt', 'json', 'yaml', 'yml', 'xml', 'toml', 'ini',
-                    'csv', 'sql', 'js', 'jsx', 'ts', 'tsx', 'vue', 'css', 'scss', 'less', 'html', 'htm',
-                    'sh', 'bash', 'zsh', 'go', 'py', 'java', 'kt', 'rs', 'c', 'cc', 'cpp', 'h', 'hpp', 'proto',
+                    'sql', 'sh', 'bash', 'zsh',
                 ],
                 'excluded_paths' => [
                     '.git/**', '.gitnexus/**', '.codex/code-intelligence/**', 'vendor/**', '**/vendor/**',
-                    'node_modules/**', '**/node_modules/**', 'generated/**', 'var/**', 'app/var/**', 'pub/static/**',
-                    'pub/media/**', '**/view/tpl/**', '**/static/libs/**',
+                    'node_modules/**', '**/node_modules/**', 'generated/**', '**/generated/**',
+                    'app/code/generated/**', 'var/**', 'app/var/**', 'pub/static/**',
+                    'pub/media/**', '**/tpl/**', '**/view/tpl/**', '**/view/statics/**', '**/view/fonts/**',
+                    '**/i18n/**', '**/data/locale-packs/**', '**/static/libs/**',
                     '**/test/**', '**/tests/**', '**/Test/**', '**/*.min.*', '**/*.map',
                     '.cursor/**', '.claude/**', '.agents/**', '.github/**',
                     'build/**', 'tmp/**', '**/tmp/**', 'dev/tmp/**', 'test-results/**', 'evidence/**', 'private/**', '.superpowers/**',
@@ -436,6 +443,7 @@ final class Config
                     'checkpoint_wal' => true,
                     'checkpoint_wal_min_bytes' => true,
                 ],
+                'allowed_roots' => true,
                 'allowed_extensions' => true,
                 'excluded_paths' => true,
             ],
@@ -652,6 +660,15 @@ final class Config
                 if (!is_string($item) || trim($item) === '') {
                     throw new RuntimeException($listPath . ' must contain non-empty strings');
                 }
+            }
+        }
+        $allowedRoots = self::nested($values, 'index.allowed_roots');
+        if (!is_array($allowedRoots) || !array_is_list($allowedRoots)) {
+            throw new RuntimeException('index.allowed_roots must be a list');
+        }
+        foreach ($allowedRoots as $root) {
+            if (!is_string($root) || trim($root) === '') {
+                throw new RuntimeException('index.allowed_roots must contain non-empty strings');
             }
         }
         if (!in_array($values['knowledge']['generated_skill_status'], ['draft', 'validated'], true)) {

@@ -33,6 +33,14 @@ final class IndexSidecar
             || !in_array('unix', stream_get_transports(), true)) {
             return null;
         }
+        $hadPaths = $paths !== [];
+        $paths = ProjectIndexer::filterMonitoredPaths($config, $paths);
+        // Empty after filtering a targeted refresh must NOT become a full-repo scan.
+        if ($hadPaths && $paths === []) {
+            self::appendLog($config, 'Skipping out-of-allowlist / tpl path refresh for ' . $repository);
+
+            return 0;
+        }
         $request = self::request($repository, $paths);
         if ($request === null) {
             return null;

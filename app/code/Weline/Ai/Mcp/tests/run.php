@@ -69,6 +69,10 @@ try {
     file_put_contents($configPath, json_encode([
         'data_dir' => $temporary . '/data',
         'analysis' => ['provider' => 'none'],
+        // Fixture trees use src/extends/… — disable production allowlist for policy unit coverage.
+        'index' => [
+            'allowed_roots' => ['*'],
+        ],
         // 0.13 migrates all repository projection settings to the dynamic document index.
         'knowledge' => [
             'auto_generate_skills' => true,
@@ -1150,6 +1154,7 @@ SH);
         'project-guidance-reload-policy.php',
         'readiness-incremental-scope.php',
         'index-directory-scope.php',
+        'index-allowed-roots.php',
         'index-refresh-scheduler.php',
         'mcp-dev-maintenance.php',
         'collector-event-storage.php',
