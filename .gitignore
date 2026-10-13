@@ -159,6 +159,10 @@ weline-async.json
 !/var/
 !/var/.gitkeep
 
+# Accidental trees from mis-set BP in unit tests (must be repo-root var/ and generated/, not here)
+/app/code/var/
+/app/code/generated/
+
 # Playwright MCP ??????????
 .playwright-mcp/
 /tools/.skills-sh-publish/

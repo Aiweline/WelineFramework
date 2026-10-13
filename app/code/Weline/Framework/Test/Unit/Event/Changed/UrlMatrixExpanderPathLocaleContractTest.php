@@ -7,6 +7,7 @@ namespace Weline\Framework\Test\Unit\Event\Changed;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Event\Changed\UrlMatrixExpander;
 use Weline\Framework\Http\Fpc\FpcPayloadPathIndex;
+use Weline\Framework\Test\ProjectRoot;
 
 /**
  * Product/catalog purge matrix must emit path locale variants that match FPC / offline-bake keys.
@@ -15,9 +16,7 @@ final class UrlMatrixExpanderPathLocaleContractTest extends TestCase
 {
     protected function setUp(): void
     {
-        if (!\defined('BP')) {
-            \define('BP', \dirname(__DIR__, 5) . \DIRECTORY_SEPARATOR);
-        }
+        ProjectRoot::defineBp(__DIR__);
     }
 
     public function testExpandEmitsDefaultAndEnUsPathNotQueryWl(): void

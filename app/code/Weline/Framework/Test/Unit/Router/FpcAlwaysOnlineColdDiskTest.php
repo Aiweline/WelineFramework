@@ -9,14 +9,13 @@ use Weline\Framework\Http\ContentEncodingNegotiator;
 use Weline\Framework\Http\Fpc\FpcPayloadPathIndex;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
+use Weline\Framework\Test\ProjectRoot;
 
 final class FpcAlwaysOnlineColdDiskTest extends TestCase
 {
     public function testServeColdDiskWhenPathIndexHasHtmlBody(): void
     {
-        if (!\defined('BP')) {
-            \define('BP', \dirname(__DIR__, 5) . \DIRECTORY_SEPARATOR);
-        }
+        ProjectRoot::defineBp(__DIR__);
         $path = '/always-online-probe-' . \uniqid('', true);
         $fullUri = 'https://p05113ef3.test.weline.com' . $path;
         $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
@@ -56,9 +55,7 @@ final class FpcAlwaysOnlineColdDiskTest extends TestCase
 
     public function testLoggedInCookieDoesNotServeColdDisk(): void
     {
-        if (!\defined('BP')) {
-            \define('BP', \dirname(__DIR__, 5) . \DIRECTORY_SEPARATOR);
-        }
+        ProjectRoot::defineBp(__DIR__);
         $path = '/always-online-private-' . \uniqid('', true);
         $fullUri = 'https://p05113ef3.test.weline.com' . $path;
         $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'

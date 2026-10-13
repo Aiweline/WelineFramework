@@ -8,14 +8,13 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\Fpc\FpcPayloadPathIndex;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
+use Weline\Framework\Test\ProjectRoot;
 
 final class FpcPersistUntilPurgeColdDiskTest extends TestCase
 {
     public function testDurableHitFromColdDiskWhenSharedMissing(): void
     {
-        if (!\defined('BP')) {
-            \define('BP', \dirname(__DIR__, 5) . \DIRECTORY_SEPARATOR);
-        }
+        ProjectRoot::defineBp(__DIR__);
         $path = '/persist-until-purge-' . \uniqid('', true);
         $fullUri = 'https://p05113ef3.test.weline.com' . $path;
         $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'

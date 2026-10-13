@@ -6,14 +6,13 @@ namespace Weline\Framework\Test\Unit\Http\Fpc;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\Fpc\FpcPayloadPathIndex;
+use Weline\Framework\Test\ProjectRoot;
 
 final class FpcPayloadPathIndexTest extends TestCase
 {
     public function testRememberAndPurgeRemovesBodyFileAndRefs(): void
     {
-        if (!\defined('BP')) {
-            \define('BP', \dirname(__DIR__, 6) . \DIRECTORY_SEPARATOR);
-        }
+        ProjectRoot::defineBp(__DIR__);
         $url = 'https://shop-a.test/category/demo-path-index';
         $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'aa';
@@ -46,12 +45,16 @@ final class FpcPayloadPathIndexTest extends TestCase
             FpcPayloadPathIndex::normalizeIndexKey('https://A.TEST/')
         );
         self::assertSame(
-            'https://shop.test/guide?view=destinations',
+            'https://shop.test/guide',
             FpcPayloadPathIndex::normalizeIndexKey('https://shop.test/guide?view=destinations&utm_source=x')
         );
-        self::assertNotSame(
+        self::assertSame(
             FpcPayloadPathIndex::normalizeIndexKey('https://shop.test/guide?view=destinations'),
             FpcPayloadPathIndex::normalizeIndexKey('https://shop.test/guide?view=routes')
+        );
+        self::assertSame(
+            FpcPayloadPathIndex::normalizeIndexKey('https://shop.test/product/x'),
+            FpcPayloadPathIndex::normalizeIndexKey('https://shop.test/product/x?size=s&style_type=hong-se-jiu')
         );
         self::assertTrue(FpcPayloadPathIndex::isHostScopedIndexKey('https://shop.test/'));
         self::assertTrue(FpcPayloadPathIndex::isHostScopedIndexKey('https://shop.test/guide?view=routes'));
@@ -60,43 +63,34 @@ final class FpcPayloadPathIndexTest extends TestCase
         self::assertSame('/product/x', FpcPayloadPathIndex::normalizePath('https://shop.test/product/x'));
     }
 
-    public function testGuideViewQueryDoesNotCrossColdDiskBodies(): void
+    public function testAnyQuerySharesOnePathIndexBody(): void
     {
-        if (!\defined('BP')) {
-            \define('BP', \dirname(__DIR__, 6) . \DIRECTORY_SEPARATOR);
-        }
+        ProjectRoot::defineBp(__DIR__);
         $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'gq';
         if (!\is_dir($payloadDir)) {
             @\mkdir($payloadDir, 0775, true);
         }
-        $bodyDest = $payloadDir . \DIRECTORY_SEPARATOR . 'view-dest.html';
-        $bodyRoutes = $payloadDir . \DIRECTORY_SEPARATOR . 'view-routes.html';
-        \file_put_contents($bodyDest, '<html><body>DEST-LIST</body></html>');
-        \file_put_contents($bodyRoutes, '<html><body>ROUTES-LIST</body></html>');
+        $bodyPath = $payloadDir . \DIRECTORY_SEPARATOR . 'path-only.html';
+        \file_put_contents($bodyPath, '<html><body>PATH-ONLY</body></html>');
+        $urlClean = 'https://playinginchina.test.weline.com/guide';
         $urlDest = 'https://playinginchina.test.weline.com/guide?view=destinations';
         $urlRoutes = 'https://playinginchina.test.weline.com/guide?view=routes';
-        FpcPayloadPathIndex::remember($urlDest, 'k-dest', $bodyDest);
-        FpcPayloadPathIndex::remember($urlRoutes, 'k-routes', $bodyRoutes);
+        FpcPayloadPathIndex::remember($urlDest, 'k-path', $bodyPath);
 
         $refsDest = FpcPayloadPathIndex::lookup($urlDest);
         $refsRoutes = FpcPayloadPathIndex::lookup($urlRoutes);
-        self::assertSame($bodyDest, $refsDest[\count($refsDest) - 1]['body_file'] ?? null);
-        self::assertSame($bodyRoutes, $refsRoutes[\count($refsRoutes) - 1]['body_file'] ?? null);
-        // Bare /guide (no view) must not resolve to these view-specific bodies.
-        foreach (FpcPayloadPathIndex::lookup('https://playinginchina.test.weline.com/guide') as $ref) {
-            self::assertNotSame($bodyDest, $ref['body_file'] ?? null);
-            self::assertNotSame($bodyRoutes, $ref['body_file'] ?? null);
-        }
+        $refsClean = FpcPayloadPathIndex::lookup($urlClean);
+        self::assertSame($bodyPath, $refsDest[\count($refsDest) - 1]['body_file'] ?? null);
+        self::assertSame($bodyPath, $refsRoutes[\count($refsRoutes) - 1]['body_file'] ?? null);
+        self::assertSame($bodyPath, $refsClean[\count($refsClean) - 1]['body_file'] ?? null);
 
-        FpcPayloadPathIndex::purgePaths([$urlDest, $urlRoutes]);
+        FpcPayloadPathIndex::purgePaths([$urlClean, $urlDest, $urlRoutes]);
     }
 
     public function testLookupIsHostScopedAndDoesNotCrossSites(): void
     {
-        if (!\defined('BP')) {
-            \define('BP', \dirname(__DIR__, 6) . \DIRECTORY_SEPARATOR);
-        }
+        ProjectRoot::defineBp(__DIR__);
         $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'ab';
         if (!\is_dir($payloadDir)) {
@@ -130,9 +124,7 @@ final class FpcPayloadPathIndexTest extends TestCase
 
     public function testLookupReturnsRefsWithoutDeletingBody(): void
     {
-        if (!\defined('BP')) {
-            \define('BP', \dirname(__DIR__, 6) . \DIRECTORY_SEPARATOR);
-        }
+        ProjectRoot::defineBp(__DIR__);
         $url = 'https://shop.test/policy/privacy-lookup-' . \uniqid('', true);
         $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'ab';
