@@ -75,10 +75,14 @@ $salesTaxText = trim((string) ($this->getData('sales_tax_text') ?? $this->getDat
 $customsDutyText = trim((string) ($this->getData('duty_text') ?? ''));
 $importTaxText = trim((string) ($this->getData('import_tax_text') ?? ''));
 $payableText = trim((string) ($this->getData('payable_text') ?? ''));
+$incentiveText = trim((string) ($this->getData('incentive_text') ?? ''));
+$codFeeText = trim((string) ($this->getData('cod_fee_text') ?? ''));
 $shippingServiceLabel = trim((string) ($this->getData('shipping_service_label') ?? ''));
 $salesTaxMinorSsr = max(0, (int) ($this->getData('sales_tax_minor') ?? 0));
 $dutyMinorSsr = max(0, (int) ($this->getData('duty_minor') ?? 0));
 $importTaxMinorSsr = max(0, (int) ($this->getData('import_tax_minor') ?? 0));
+$incentiveMinorSsr = max(0, (int) ($this->getData('incentive_minor') ?? 0));
+$codFeeMinorSsr = max(0, (int) ($this->getData('cod_fee_minor') ?? 0));
 // Legacy SSR: combined tax_minor with no split → treat as sales tax only.
 $taxMinorSsr = max(0, (int) ($this->getData('tax_minor') ?? 0));
 if ($salesTaxMinorSsr === 0 && $dutyMinorSsr === 0 && $importTaxMinorSsr === 0 && $taxMinorSsr > 0) {
@@ -87,6 +91,15 @@ if ($salesTaxMinorSsr === 0 && $dutyMinorSsr === 0 && $importTaxMinorSsr === 0 &
 $showSalesTaxInitially = $salesTaxText !== '' || $salesTaxMinorSsr > 0;
 $showDutyInitially = $customsDutyText !== '' || $dutyMinorSsr > 0;
 $showImportTaxInitially = $importTaxText !== '' || $importTaxMinorSsr > 0;
+// 默认支付方式激励/COD：SSR 已扣进应付时首屏必须露出对应行（与税/关税 SSR 同形）。
+$showIncentiveInitially = !$discountsDisabled && ($incentiveText !== '' || $incentiveMinorSsr > 0);
+$showCodInitially = $codFeeText !== '' || $codFeeMinorSsr > 0;
+if ($showIncentiveInitially && $incentiveText === '' && $incentiveMinorSsr > 0) {
+    $incentiveText = '-' . number_format($incentiveMinorSsr / 100, 2, '.', ',');
+}
+if ($showCodInitially && $codFeeText === '' && $codFeeMinorSsr > 0) {
+    $codFeeText = number_format($codFeeMinorSsr / 100, 2, '.', ',');
+}
 if ($shippingServiceLabel !== '') {
     $labelShipping = $labelShipping . ' · ' . $shippingServiceLabel;
 }
@@ -206,18 +219,18 @@ if ($payableText === '') {
          role="listitem"
          data-money-summary-row="cod"
          data-checkout-cod-fee-row
-         hidden>
+         <?= $showCodInitially ? '' : 'hidden' ?>>
         <span><?= $escape($labelCod) ?></span>
-        <strong data-money-summary-cod data-cod-fee-amount="">0.00</strong>
+        <strong data-money-summary-cod data-cod-fee-amount=""><?= $escape($showCodInitially ? $codFeeText : '0.00') ?></strong>
     </div>
     <div class="w-storefront-money-summary__row w-storefront-money-summary__row--incentive"
          role="listitem"
          data-money-summary-row="incentive"
          data-checkout-payment-incentive-row
          data-testid="checkout-payment-incentive-row"
-         hidden>
+         <?= $showIncentiveInitially ? '' : 'hidden' ?>>
         <span><?= $escape($labelIncentive) ?></span>
-        <strong data-money-summary-incentive data-payment-incentive-amount="">0.00</strong>
+        <strong data-money-summary-incentive data-payment-incentive-amount=""><?= $escape($showIncentiveInitially ? $incentiveText : '0.00') ?></strong>
     </div>
     <div class="w-storefront-money-summary__row w-storefront-money-summary__row--order-total"
          role="listitem"

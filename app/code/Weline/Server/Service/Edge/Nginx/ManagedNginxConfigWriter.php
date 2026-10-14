@@ -286,15 +286,25 @@ NGINX;
         "11" 1;
     }
     # Diagnostic / editor query bypass only with a valid install pierce stamp.
+    # i18n_inline = storefront dictionary point-translate (I18nInlineEditFpcBypassProvider).
     map \$request_uri \$wls_fpc_html_diag_query {
         default 0;
-        "~*[?&](preview|visual_editor|editor_mode|workspace_preview|debug_hooks|no_cache|nocache|_wb_nc|wls_tpl_perf)=" 1;
+        "~*[?&](preview|visual_editor|editor_mode|workspace_preview|debug_hooks|no_cache|nocache|_wb_nc|wls_tpl_perf|i18n_inline)=" 1;
     }
     map "\$wls_fpc_pierce_ok\$wls_fpc_html_diag_query" \$wls_fpc_html_diag_bypass {
         default 0;
         "11" 1;
     }
-    map "\$wls_fpc_html_bypass_auth\$wls_fpc_html_bypass_upgrade\$wls_fpc_html_bypass_preview_path\$wls_fpc_html_webhook_bypass\$wls_fpc_html_diag_bypass" \$wls_fpc_html_disk_bypass {
+    # Cookie session after first jump (query may drop on in-site links).
+    map \$http_cookie \$wls_fpc_html_i18n_inline_cookie {
+        default 0;
+        "~*(?:^|;\\s*)w_i18n_inline_edit(?:_w\\d+)?=" 1;
+    }
+    map "\$wls_fpc_pierce_ok\$wls_fpc_html_i18n_inline_cookie" \$wls_fpc_html_i18n_inline_cookie_bypass {
+        default 0;
+        "11" 1;
+    }
+    map "\$wls_fpc_html_bypass_auth\$wls_fpc_html_bypass_upgrade\$wls_fpc_html_bypass_preview_path\$wls_fpc_html_webhook_bypass\$wls_fpc_html_diag_bypass\$wls_fpc_html_i18n_inline_cookie_bypass" \$wls_fpc_html_disk_bypass {
         default 0;
         "~1" 1;
     }
@@ -305,6 +315,14 @@ NGINX;
     map \$http_accept_encoding \$wls_fpc_accepts_br {
         default 0;
         "~*(^|[, ])br(\$|[;,\\s])" 1;
+    }
+    # Compressible static leaves eligible for precomputed \$uri.br disk HIT.
+    # MIME is NOT mapped here: nginx default_type does not expand variables
+    # (would emit literal "\$wls_static_br_mime"). Per-extension locations set
+    # literal default_type instead.
+    map \$uri \$wls_static_br_eligible {
+        default 0;
+        "~*\\.(?:css|js|mjs|map|svg|json|xml|txt)\$" 1;
     }
 NGINX;
 
@@ -398,6 +416,25 @@ NGINX;
         $quotedPubRoot = $this->nginxQuotedPath(
             $this->paths->projectRoot() . DIRECTORY_SEPARATOR . 'pub'
         );
+        // Literal default_type per extension — nginx does not expand vars in default_type.
+        $staticBrHitHeaders = <<<NGINX
+            access_log off;
+            expires 365d;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header X-Wls-Static-Disk "1" always;
+            error_page 418 = @wls_static_pub_plain;
+            if (\$wls_fpc_accepts_br = 0) {
+                return 418;
+            }
+            try_files \$uri.br =418;
+            charset utf-8;
+            gzip off;
+            gzip_vary off;
+            add_header Content-Encoding br always;
+            add_header Vary "Accept-Encoding" always;
+            add_header X-Weline-Static-Encoding br always;
+{$locationProtocolHeaders}
+NGINX;
         $mediaDiskLocationBlock = <<<NGINX
 
         location ^~ /pub/media/ {
@@ -409,8 +446,46 @@ NGINX;
             try_files \$uri =404;
         }
         # Published compile tree: /static/... → {BP}/pub/static/...
+        # Nested compressible locations prefer \$uri.br; else plain try_files.
         location ^~ /static/ {
 {$httpRedirectLocation}
+            root {$quotedPubRoot};
+            location ~* \\.css\$ {
+{$staticBrHitHeaders}
+                default_type text/css;
+            }
+            location ~* \\.(?:js|mjs)\$ {
+{$staticBrHitHeaders}
+                default_type application/javascript;
+            }
+            location ~* \\.map\$ {
+{$staticBrHitHeaders}
+                default_type application/json;
+            }
+            location ~* \\.svg\$ {
+{$staticBrHitHeaders}
+                default_type image/svg+xml;
+            }
+            location ~* \\.json\$ {
+{$staticBrHitHeaders}
+                default_type application/json;
+            }
+            location ~* \\.xml\$ {
+{$staticBrHitHeaders}
+                default_type application/xml;
+            }
+            location ~* \\.txt\$ {
+{$staticBrHitHeaders}
+                default_type text/plain;
+            }
+            access_log off;
+            expires 365d;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header X-Wls-Static-Disk "1" always;
+            try_files \$uri @wls_static_origin;
+{$locationProtocolHeaders}
+        }
+        location @wls_static_pub_plain {
             root {$quotedPubRoot};
             access_log off;
             expires 365d;
@@ -425,14 +500,62 @@ NGINX;
         // FPC static mirror: generated/static/live/{Host}{uri} (WLS fills on cold).
         // Do NOT proxy_cache @wls_static_origin: a cache HIT skips WLS and never
         // remirrors into the FPC disk tree (DEV module-prefix URLs would stick on origin).
-        $staticExt = 'avif|css|eot|gif|ico|jpe?g|js|map|mjs|m4a|aac|mp3|mp4|ogg|otf|png|svg|ttf|wasm|wav|webm|webp|woff2?';
+        $staticBinaryExt = 'avif|eot|gif|ico|jpe?g|m4a|aac|mp3|mp4|ogg|otf|png|ttf|wasm|wav|webm|webp|woff2?';
+        $fpcBrCommon = <<<NGINX
+{$httpRedirectLocation}
+            root {$quotedProjectRoot};
+            open_file_cache_errors off;
+            expires 365d;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header X-Wls-Static-Disk "1" always;
+            add_header X-Wls-Static-Fpc "1" always;
+            access_log off;
+            error_page 418 = @wls_static_fpc_plain;
+            if (\$wls_fpc_accepts_br = 0) {
+                return 418;
+            }
+            try_files /generated/static/live/\$wls_fpc_html_host\$uri.br =418;
+            charset utf-8;
+            gzip off;
+            gzip_vary off;
+            add_header Content-Encoding br always;
+            add_header Vary "Accept-Encoding" always;
+            add_header X-Weline-Static-Encoding br always;
+{$locationProtocolHeaders}
+NGINX;
         $staticCacheLocationBlock = <<<NGINX
 
         # Module / DEV statics: FPC disk by Host+path, then WLS (which mirrors).
-        # ^~ /pub/media and ^~ /static already won above for those prefixes.
-        # open_file_cache_errors off: a cold try_files miss must not be cached, or
-        # workers keep skipping the leaf WLS just mirrored (intermittent Static-Cache).
-        location ~* \.(?:{$staticExt})$ {
+        # Compressible: br then plain (literal default_type). Binary: plain only.
+        location ~* \\.css\$ {
+{$fpcBrCommon}
+            default_type text/css;
+        }
+        location ~* \\.(?:js|mjs)\$ {
+{$fpcBrCommon}
+            default_type application/javascript;
+        }
+        location ~* \\.map\$ {
+{$fpcBrCommon}
+            default_type application/json;
+        }
+        location ~* \\.svg\$ {
+{$fpcBrCommon}
+            default_type image/svg+xml;
+        }
+        location ~* \\.json\$ {
+{$fpcBrCommon}
+            default_type application/json;
+        }
+        location ~* \\.xml\$ {
+{$fpcBrCommon}
+            default_type application/xml;
+        }
+        location ~* \\.txt\$ {
+{$fpcBrCommon}
+            default_type text/plain;
+        }
+        location ~* \\.(?:{$staticBinaryExt})\$ {
 {$httpRedirectLocation}
             root {$quotedProjectRoot};
             open_file_cache_errors off;
@@ -442,6 +565,17 @@ NGINX;
             add_header X-Wls-Static-Disk "1" always;
             add_header X-Wls-Static-Fpc "1" always;
             access_log off;
+{$locationProtocolHeaders}
+        }
+        location @wls_static_fpc_plain {
+            root {$quotedProjectRoot};
+            open_file_cache_errors off;
+            expires 365d;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header X-Wls-Static-Disk "1" always;
+            add_header X-Wls-Static-Fpc "1" always;
+            access_log off;
+            try_files /generated/static/live/\$wls_fpc_html_host\$uri @wls_static_origin;
 {$locationProtocolHeaders}
         }
         location @wls_static_origin {

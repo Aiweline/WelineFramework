@@ -18,9 +18,10 @@ namespace Weline\Theme\Service\LayoutEntity;
  *   Uninstall (`user_deleted@{versionId}`) still omits a planned injection.
  * - Solidified shells: bake owns required; runtime Overlay is not the primary path.
  *
- * Runtime presence helpers (pageHasWidgetPresent / countWidgetPresent) detect
- * illegal dual-path stacking; source-of-truth fix remains delete layout copy XOR
- * JSON/Seeder — storefront must not soft-skip duplicates.
+ * Runtime presence: prefer {@see slotHasWidgetPresent} for required fill XOR
+ * (same widget_code may legally occupy multiple declared slots, e.g. mini-cart
+ * footer-extras + checkout-summary-discount). {@see pageHasWidgetPresent} /
+ * countWidgetPresent remain for dual-path / diagnostics — not for per-slot heal.
  */
 final class RequiredDefaultInjectionContract
 {
@@ -83,9 +84,8 @@ final class RequiredDefaultInjectionContract
     }
 
     /**
-     * Page-level presence (整页 once): same explicit markers as slotInnerHasWidgetCode,
-     * plus data-w-component="{code}" for templates that fetch the widget shell beside
-     * an empty declared slot. Prevents required overlay from stacking a second copy.
+     * Page-level presence (整页扫描): diagnostics / dual-path detection only.
+     * Do NOT use for required safety-net fill — that must be {@see slotHasWidgetPresent}.
      */
     public static function pageHasWidgetPresent(string $pageHtml, string $module, string $code): bool
     {
@@ -105,6 +105,89 @@ final class RequiredDefaultInjectionContract
                 '/\bdata-w-component=(["\'])([^"\']*\s)?' . preg_quote($code, '/') . '(\s[^"\']*)?\1/',
                 $norm,
             );
+    }
+
+    /**
+     * Slot-scoped presence: required injection XOR is per declared slot, not whole page.
+     * Mini-cart already having checkout-coupon must not suppress checkout-summary-discount.
+     */
+    public static function slotHasWidgetPresent(
+        string $pageHtml,
+        string $slotId,
+        string $module,
+        string $code,
+    ): bool {
+        $slotId = trim($slotId);
+        if ($slotId === '' || $pageHtml === '') {
+            return false;
+        }
+        $inner = self::extractSlotInnerHtml($pageHtml, $slotId);
+        if ($inner === null) {
+            return false;
+        }
+
+        return self::slotInnerHasWidgetCode($inner, $module, $code);
+    }
+
+    /**
+     * Inner HTML of the first matching slot host (data-slot-id / data-wslot / id).
+     */
+    public static function extractSlotInnerHtml(string $pageHtml, string $slotId): ?string
+    {
+        $slotId = trim($slotId);
+        if ($slotId === '' || $pageHtml === '') {
+            return null;
+        }
+        $quoted = preg_quote($slotId, '/');
+        $patterns = [
+            '/<div\b[^>]*\bdata-slot-id\s*=\s*(["\'])' . $quoted . '\1[^>]*>/i',
+            '/<div\b[^>]*\bdata-wslot\s*=\s*(["\'])' . $quoted . '\1[^>]*>/i',
+            '/<div\b[^>]*\bid\s*=\s*(["\'])' . $quoted . '\1[^>]*>/i',
+        ];
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $pageHtml, $m, PREG_OFFSET_CAPTURE) !== 1) {
+                continue;
+            }
+            $open = $m[0][0];
+            $start = (int)$m[0][1] + strlen($open);
+            $inner = self::sliceBalancedDivInner($pageHtml, $start);
+            if ($inner !== null) {
+                return $inner;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Walk HTML from just after an opening &lt;div&gt; until its matching close.
+     */
+    private static function sliceBalancedDivInner(string $html, int $start): ?string
+    {
+        $len = strlen($html);
+        if ($start < 0 || $start > $len) {
+            return null;
+        }
+        $depth = 1;
+        $offset = $start;
+        while ($offset < $len && $depth > 0) {
+            if (!preg_match('/<\/?div\b[^>]*>/i', $html, $tm, PREG_OFFSET_CAPTURE, $offset)) {
+                return null;
+            }
+            $tag = $tm[0][0];
+            $at = (int)$tm[0][1];
+            if ($tag[1] === '/') {
+                $depth--;
+                if ($depth === 0) {
+                    return substr($html, $start, $at - $start);
+                }
+            } else {
+                $depth++;
+            }
+            $offset = $at + strlen($tag);
+        }
+
+        return null;
     }
 
     /**
@@ -187,13 +270,13 @@ final class RequiredDefaultInjectionContract
     }
 
     /**
-     * Bake-time required merge (page-level identity once).
+     * Bake-time required merge (per declared slot).
      *
-     * Same module+code may appear at most once on the page. If the identity already
-     * exists under a wrong slot (e.g. parent `content` after slot_id drift), relocate
-     * it to the declared slot and drop extras — never new a second node_uid merely
-     * because the declared slot looks empty. Aligns with storefront
-     * {@see pageHasWidgetPresent} / overlay soft-dedup.
+     * Same module+code may occupy multiple *declared* required slots on one page
+     * (mini-cart footer-extras + checkout-summary-discount). Hits only in undeclared
+     * / drifted slots (e.g. parent `content`) still relocate into the target slot
+     * and are stripped from those undeclared hosts — never stack a second copy
+     * inside the same slot.
      *
      * @param array<string, list<array<string, mixed>>> $slots
      * @param list<array<string, mixed>> $declarations
@@ -207,25 +290,115 @@ final class RequiredDefaultInjectionContract
             return $slots;
         }
 
-        foreach (self::requiredForPage($declarations, $pageType) as $item) {
+        $required = self::requiredForPage($declarations, $pageType);
+        $declaredSlotsByIdentity = [];
+        foreach ($required as $planItem) {
+            $ik = strtolower(trim((string)($planItem['widget_module'] ?? '')))
+                . '|'
+                . strtolower(trim((string)($planItem['widget_code'] ?? '')));
+            $declaredSlotsByIdentity[$ik][trim((string)($planItem['slot_id'] ?? ''))] = true;
+        }
+
+        foreach ($required as $item) {
             $slotId = (string)$item['slot_id'];
             $module = (string)$item['widget_module'];
             $code = (string)$item['widget_code'];
             if (self::isOmitted($omissions, $slotId, $module, $code)) {
                 continue;
             }
-            $hits = self::findPageWidgetHits($slots, $module, $code);
-            if ($hits === []) {
-                $slots[$slotId][] = $item['node'];
-                self::sortSlotWidgets($slots[$slotId]);
+            $identityKey = strtolower(trim($module)) . '|' . strtolower(trim($code));
+            $declaredSlots = array_keys($declaredSlotsByIdentity[$identityKey] ?? [$slotId => true]);
+            $declaredSlots = array_values(array_filter(
+                $declaredSlots,
+                static fn(string $s): bool => $s !== '',
+            ));
+
+            if (self::slotListHasWidgetIdentity($slots[$slotId] ?? null, $module, $code)) {
+                // Already in target slot: still strip undeclared drift copies.
+                $slots = self::stripIdentityOutsideSlots($slots, $module, $code, $declaredSlots);
                 continue;
             }
-            $slots = self::collapseHitsToDeclaredSlot(
-                $slots,
-                $hits,
-                $slotId,
-                \is_array($item['node'] ?? null) ? $item['node'] : [],
-            );
+
+            $hits = self::findPageWidgetHits($slots, $module, $code);
+            $undeclaredHits = [];
+            foreach ($hits as $hit) {
+                $hitSlot = trim((string)($hit['slot'] ?? ''));
+                if ($hitSlot === '' || in_array($hitSlot, $declaredSlots, true)) {
+                    continue;
+                }
+                $undeclaredHits[] = $hit;
+            }
+
+            if ($undeclaredHits !== []) {
+                // Relocate drift → this declared slot; keep other declared slots intact.
+                $slots = self::collapseHitsToDeclaredSlot(
+                    $slots,
+                    $undeclaredHits,
+                    $slotId,
+                    \is_array($item['node'] ?? null) ? $item['node'] : [],
+                    $declaredSlots,
+                );
+                continue;
+            }
+
+            $slots[$slotId][] = $item['node'];
+            self::sortSlotWidgets($slots[$slotId]);
+        }
+
+        return $slots;
+    }
+
+    /**
+     * @param list<array<string, mixed>>|null $widgets
+     */
+    private static function slotListHasWidgetIdentity(?array $widgets, string $module, string $code): bool
+    {
+        if ($widgets === null) {
+            return false;
+        }
+        foreach ($widgets as $widget) {
+            if (\is_array($widget) && self::widgetIdentityMatches($widget, $module, $code)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, list<array<string, mixed>>> $slots
+     * @param list<string> $keepSlots
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private static function stripIdentityOutsideSlots(
+        array $slots,
+        string $module,
+        string $code,
+        array $keepSlots,
+    ): array {
+        $keep = [];
+        foreach ($keepSlots as $slot) {
+            $keep[trim((string)$slot)] = true;
+        }
+        foreach ($slots as $slotId => $widgets) {
+            if (!\is_array($widgets) || isset($keep[(string)$slotId])) {
+                continue;
+            }
+            $kept = [];
+            foreach ($widgets as $widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+                if (self::widgetIdentityMatches($widget, $module, $code)) {
+                    continue;
+                }
+                $kept[] = $widget;
+            }
+            if ($kept === []) {
+                unset($slots[$slotId]);
+            } else {
+                $slots[$slotId] = $kept;
+            }
         }
 
         return $slots;
@@ -265,9 +438,13 @@ final class RequiredDefaultInjectionContract
     }
 
     /**
+     * Relocate undeclared / drifted hits into $declaredSlot.
+     * Slots listed in $preserveDeclaredSlots keep their identity copies.
+     *
      * @param array<string, list<array<string, mixed>>> $slots
      * @param list<array{slot:string,widget:array<string,mixed>}> $hits
      * @param array<string, mixed> $templateNode
+     * @param list<string> $preserveDeclaredSlots
      * @return array<string, list<array<string, mixed>>>
      */
     private static function collapseHitsToDeclaredSlot(
@@ -275,6 +452,7 @@ final class RequiredDefaultInjectionContract
         array $hits,
         string $declaredSlot,
         array $templateNode,
+        array $preserveDeclaredSlots = [],
     ): array {
         $declaredSlot = trim($declaredSlot);
         if ($declaredSlot === '' || $hits === []) {
@@ -282,6 +460,14 @@ final class RequiredDefaultInjectionContract
         }
         $module = trim((string)($templateNode['widget_module'] ?? $hits[0]['widget']['widget_module'] ?? ''));
         $code = trim((string)($templateNode['widget_code'] ?? $hits[0]['widget']['widget_code'] ?? ''));
+
+        $preserve = [$declaredSlot => true];
+        foreach ($preserveDeclaredSlots as $keepSlot) {
+            $keepSlot = trim((string)$keepSlot);
+            if ($keepSlot !== '') {
+                $preserve[$keepSlot] = true;
+            }
+        }
 
         $canonical = null;
         foreach ($hits as $hit) {
@@ -296,6 +482,9 @@ final class RequiredDefaultInjectionContract
 
         foreach ($slots as $slotId => $widgets) {
             if (!\is_array($widgets)) {
+                continue;
+            }
+            if (isset($preserve[(string)$slotId]) && (string)$slotId !== $declaredSlot) {
                 continue;
             }
             $kept = [];
@@ -338,7 +527,10 @@ final class RequiredDefaultInjectionContract
         if (!isset($slots[$declaredSlot]) || !\is_array($slots[$declaredSlot])) {
             $slots[$declaredSlot] = [];
         }
-        $slots[$declaredSlot][] = $canonical;
+        // Avoid double-append if preserve left an existing copy in declaredSlot.
+        if (!self::slotListHasWidgetIdentity($slots[$declaredSlot], $module, $code)) {
+            $slots[$declaredSlot][] = $canonical;
+        }
         self::sortSlotWidgets($slots[$declaredSlot]);
 
         return $slots;

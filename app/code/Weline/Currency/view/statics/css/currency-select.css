@@ -39,10 +39,11 @@
         outline: 0;
     }
 
-    .w-currency-select__trigger:disabled {
+    .w-currency-select__trigger[aria-disabled="true"] {
         background: var(--weline-theme-surface-muted);
         color: var(--weline-theme-text-muted);
         cursor: default;
+        pointer-events: none;
     }
 
     .w-currency-select__trigger[aria-invalid="true"] {
@@ -90,6 +91,58 @@
         background: var(--weline-theme-surface-muted);
         color: var(--weline-theme-text);
         font-size: var(--weline-font-size-sm);
+    }
+
+    .w-currency-select__tag.is-sortable {
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .w-currency-select__tag.is-sortable:hover {
+        border-color: color-mix(in srgb, var(--weline-theme-primary) 45%, transparent);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--weline-theme-primary) 28%, transparent);
+    }
+
+    /* :active 禁止 pointer-events:none —— 按下瞬间就会取消 HTML5 dragstart（拖不动） */
+    .w-currency-select__tag.is-sortable:active {
+        opacity: 0.55;
+        cursor: grabbing;
+    }
+
+    .w-currency-select__tag.is-dragging {
+        opacity: 0.55;
+        cursor: grabbing;
+        pointer-events: none;
+    }
+
+    .w-currency-select__tag.is-drop-target {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--weline-theme-primary) 55%, transparent);
+    }
+
+    .w-currency-select__drag-handle {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        inline-size: 0.9rem;
+        block-size: 1rem;
+        margin-inline-end: 0.05rem;
+        opacity: 0.85;
+        color: var(--weline-theme-text-muted, currentColor);
+        font-size: 1rem;
+        line-height: 1;
+        letter-spacing: -0.06em;
+        pointer-events: none;
+        user-select: none;
+    }
+
+    .w-currency-select__drag-handle::before {
+        content: '⠿';
+    }
+
+    .w-currency-select__tag.is-sortable:hover .w-currency-select__drag-handle {
+        opacity: 1;
+        color: var(--weline-theme-primary, currentColor);
     }
 
     .w-currency-select__tag[data-readonly="true"] {

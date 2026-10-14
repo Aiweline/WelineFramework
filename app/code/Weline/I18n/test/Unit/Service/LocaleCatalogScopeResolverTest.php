@@ -101,7 +101,8 @@ final class LocaleCatalogScopeResolverTest extends TestCase
             'Frontend and backend chrome share one WebsiteLanguage boundary',
             $source,
         );
-        self::assertStringContainsString('fetchWebsiteLanguageCodes($resolvedWebsiteId)', $source);
+        self::assertStringContainsString('fetchWebsiteUnionLanguageCodes($resolvedWebsiteId)', $source);
+        self::assertStringContainsString('getResolvedLanguageCodes', $source);
         self::assertStringContainsString(
             'return $this->resolveBackendPlatformScope($currentHint, $stateLocale, $showRequestOverride);',
             $source,

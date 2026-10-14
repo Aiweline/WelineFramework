@@ -37,6 +37,8 @@ final class TranslationConcurrencyGateContractTest extends TestCase
         self::assertStringNotContainsString("\nsleep(", $gate);
         self::assertStringNotContainsString('\\sleep(', $gate);
         self::assertStringContainsString('TranslationConcurrencyGate', $service);
+        self::assertStringContainsString('acquireConcurrencyGateIfNeeded', $service);
+        self::assertStringContainsString('modelRequiresLocalConcurrencyGate', $service);
         self::assertStringContainsString('concurrencyGate->acquire', $service);
         self::assertStringContainsString('timeout_seconds', $service);
         self::assertStringContainsString('low_speed_time', $service);

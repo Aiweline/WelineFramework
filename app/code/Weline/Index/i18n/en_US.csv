@@ -12,6 +12,9 @@
 保存成功!,"Saved successfully!"
 参数错误,"Parameter error"
 设置不存在,"Setting Does Not Exist"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
 模块化开发,"Modular development"
 多语言多站点,"Multilingual multi-site"
 常驻运行时,"Persistent runtime"
@@ -22,9 +25,6 @@
 税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
 去结算,去结算
 查看购物车,查看购物车
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
 """Unsupported contact operation: %{1}""","Unsupported contact operation: %{1}"
 首页导航,"Home navigation"
 "WelineFramework 首页","WelineFramework home"

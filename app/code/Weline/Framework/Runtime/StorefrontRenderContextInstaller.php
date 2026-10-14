@@ -154,13 +154,23 @@ final class StorefrontRenderContextInstaller
         try {
             /** @var LocalizationProviderRegistry $registry */
             $registry = ObjectManager::getInstance(LocalizationProviderRegistry::class);
-            $codes = $registry->preferredLanguageCodes();
-            if (\is_array($codes)) {
-                $active = \array_values(\array_map('strval', $codes));
+            // active = resolved Website→Store→Channel order when Query available.
+            $resolved = $this->tryResolvedLanguageCodes();
+            if ($resolved !== []) {
+                $active = $resolved;
+            } else {
+                $codes = $registry->preferredLanguageCodes();
+                if (\is_array($codes)) {
+                    $active = \array_values(\array_map('strval', $codes));
+                }
             }
             $installedCodes = $registry->preferredInstalledLanguageCodes();
-            if (\is_array($installedCodes)) {
+            if (\is_array($installedCodes) && $installedCodes !== []) {
                 $installed = \array_values(\array_map('strval', $installedCodes));
+            } else {
+                // Website union for translation inventory when providers omit installed.
+                $union = $registry->preferredLanguageCodes();
+                $installed = \is_array($union) ? \array_values(\array_map('strval', $union)) : [];
             }
         } catch (\Throwable) {
             $active = [];
@@ -171,6 +181,31 @@ final class StorefrontRenderContextInstaller
         }
 
         return ['active' => $active, 'installed' => $installed];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tryResolvedLanguageCodes(): array
+    {
+        try {
+            if (!\function_exists('w_query') || !Context::hasCurrent()) {
+                return [];
+            }
+            $websiteId = RequestContext::getWelineWebsiteId();
+            $result = \w_query('websites', 'getResolvedLanguageCodes', [
+                'website_id' => $websiteId,
+                'store_id' => RequestContext::getWelineStoreId(),
+                'channel_id' => RequestContext::getWelineChannelId(),
+            ]);
+            if (!\is_array($result) || $result === []) {
+                return [];
+            }
+
+            return \array_values(\array_map('strval', $result));
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function incomplete(string $websiteCode, string $websiteUrl, string $failureCode): StorefrontRenderContext

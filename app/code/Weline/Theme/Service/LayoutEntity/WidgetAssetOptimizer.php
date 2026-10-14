@@ -70,6 +70,9 @@ final class WidgetAssetOptimizer
     }
 
     /**
+     * Source CSS/JS: first N widgets → one blocking pack; remainder → one deferred pack.
+     * N = {css|js}_merge_start_widget (default 6). Non-mergeable leaves keep file boundaries.
+     *
      * @param list<array<string,mixed>> $assets
      * @return list<array<string,mixed>>
      */
@@ -83,8 +86,10 @@ final class WidgetAssetOptimizer
                 return;
             }
             $type = $pending[0]['type'];
+            $earlyCount = max(1, (int)($options[$type . '_merge_start_widget'] ?? 6));
+            // Late pack only: source after the first N widgets (deferred CSS via media=print).
             $deferred = ($pending[0]['kind'] ?? '') === 'source'
-                && ($pending[0]['first_widget_index'] ?? 0) >= max(1, (int)($options[$type . '_merge_start_widget'] ?? 6));
+                && ($pending[0]['first_widget_index'] ?? 0) > $earlyCount;
             $published = $this->publishBatch($pending, $options, $deferred);
             if ($published !== null) {
                 $output[] = $published;
@@ -96,12 +101,14 @@ final class WidgetAssetOptimizer
         };
         foreach ($assets as $asset) {
             $type = $asset['type'];
-            $start = max(1, (int)($options[$type . '_merge_start_widget'] ?? 6));
+            $earlyCount = max(1, (int)($options[$type . '_merge_start_widget'] ?? 6));
+            $index = (int)($asset['first_widget_index'] ?? 0);
+            $phase = $index > $earlyCount ? 'late' : 'early';
             $eligible = ($asset['kind'] ?? '') === 'source'
                 && !empty($options[$type . '_merge'])
-                && ($asset['first_widget_index'] ?? 0) >= $start
                 && $this->publisher->canMerge($asset);
-            $key = $eligible ? $asset['position'] . '|' . $type : null;
+            // Early and late never share a batch — two packs max per position|type stream.
+            $key = $eligible ? $asset['position'] . '|' . $type . '|' . $phase : null;
             if (!$eligible || $key !== $pendingKey) {
                 $flush();
             }

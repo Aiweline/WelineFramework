@@ -24,11 +24,41 @@ final class TranslationRequestObserver implements ObserverInterface
     public function execute(Event &$event): void
     {
         try {
-            $words = $event->getData('words');
-            $targetLocale = (string)($event->getData('target_locale') ?? '');
+            $mode = (string)($event->getData('mode') ?? '');
             $sourceLocale = (string)($event->getData('source_locale') ?? 'auto');
             $strategy = (string)($event->getData('strategy') ?? 'light');
             $concurrencyLane = (string)($event->getData('concurrency_lane') ?? '');
+            $lane = $concurrencyLane !== ''
+                ? $concurrencyLane
+                : \Weline\Ai\Service\TranslationConcurrencyGate::LANE_DICTIONARY;
+
+            // One word → many locales (dictionary "translate other languages").
+            if ($mode === 'multi_locale') {
+                $word = trim((string)($event->getData('word') ?? ''));
+                $targetLocales = $event->getData('target_locales');
+                if ($word === '') {
+                    $this->setEventError($event, (string)__('参数错误：word 不能为空'));
+                    return;
+                }
+                if (!is_array($targetLocales) || $targetLocales === []) {
+                    $this->setEventError($event, (string)__('参数错误：target_locales 必须是非空数组'));
+                    return;
+                }
+                $translations = $this->translationService->translateWordToLocales(
+                    $word,
+                    array_values(array_map('strval', $targetLocales)),
+                    $sourceLocale,
+                    $strategy,
+                    $lane,
+                );
+                $event->setData('translations', $translations);
+                $event->setData('success', true);
+                $event->setData('errors', []);
+                return;
+            }
+
+            $words = $event->getData('words');
+            $targetLocale = (string)($event->getData('target_locale') ?? '');
 
             if (!is_array($words) || $words === []) {
                 $this->setEventError($event, (string)__('参数错误：words 必须是非空数组'));
@@ -44,7 +74,7 @@ final class TranslationRequestObserver implements ObserverInterface
                 $targetLocale,
                 $sourceLocale,
                 $strategy,
-                $concurrencyLane !== '' ? $concurrencyLane : \Weline\Ai\Service\TranslationConcurrencyGate::LANE_DICTIONARY,
+                $lane,
             );
             $event->setData('translations', $translations);
             $event->setData('success', true);

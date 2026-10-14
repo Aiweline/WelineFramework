@@ -980,7 +980,8 @@ final class FrontendQueryGateway
             'bool', 'boolean' => \is_bool($value),
             'list' => \is_array($value) && \array_is_list($value),
             'array' => \is_array($value),
-            'map', 'object' => \is_array($value) && !\array_is_list($value),
+            // JSON `{}` decodes to PHP `[]`; array_is_list([]) is true — still a valid empty map.
+            'map', 'object' => \is_array($value) && ($value === [] || !\array_is_list($value)),
             'mixed' => true,
             default => true,
         };

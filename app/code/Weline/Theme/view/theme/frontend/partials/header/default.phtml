@@ -245,16 +245,10 @@ $defaultNavItemsFactory = static function (): array {
 })();
 </script>
 <!-- theme-partial:header option=default -->
-<?php // 布局 partial 级 CSS（layout 允许 <link>）。header-container layout_source 仅在该部件实际渲染时 bake；槽未填/设计壳覆盖时须本链兜底。 ?>
-<link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)&v=20261013-belt-nowrap-yield">
-<link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)&v=20261013-belt-nowrap-yield">
-<link rel="stylesheet"
-      href="@static(Weline_Theme::css/partials/header-default.css)&v=20261013-belt-nowrap-yield"
-      data-no-extract="true">
+<?php // Chrome shell CSS → layout pack（SharedChromeService::emitPartialsHeaderShellLayoutCssHtml）。 ?>
+<?= \Weline\Theme\Service\SharedChromeService::emitPartialsHeaderShellLayoutCssHtml() ?>
 <!-- Skip to content link for accessibility -->
-<a href="#main-content" class="skip-to-content" aria-label="<lang>跳转到主要内容</lang>"><lang>跳转到主要内容</lang></a>
+<a href="#main-content" class="skip-to-content" aria-label="@lang(跳转到主要内容)"><lang>跳转到主要内容</lang></a>
 <?php // headerSearch：hidden 宿主须 idle — 默认 visible 对 display:none 永不 IO；immediate 未实现。 ?>
 <div hidden
      data-weline-load="headerSearch"
@@ -378,7 +372,7 @@ $defaultNavItemsFactory = static function (): array {
                             position="header"
                             class="header-logo">
                         <a href="@url{'/'}"
-                           title="<lang>首页</lang>"
+                           title="@lang(首页)"
                            aria-label="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>"
                            class="header-logo__link w-surface"
                            data-surface="default">
@@ -443,7 +437,7 @@ $defaultNavItemsFactory = static function (): array {
                 <div class="header-actions">
                 <button type="button"
                         class="header-search-toggle"
-                        aria-label="<lang>展开搜索</lang>"
+                        aria-label="@lang(展开搜索)"
                         aria-controls="header-search-panel"
                         aria-expanded="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -452,12 +446,12 @@ $defaultNavItemsFactory = static function (): array {
                     </svg>
                 </button>
                 <!-- 移动端"我的"下拉菜单（合并账户、订单等功能） -->
-                <div class="header-action-item header-my-menu mobile-only" role="button" tabindex="0" aria-expanded="false" aria-haspopup="true" aria-label="<lang>我的</lang>">
-                    <button type="button" class="action-link my-menu-link" title="<lang>我的</lang>" aria-label="<lang>我的</lang>">
+                <div class="header-action-item header-my-menu mobile-only" role="button" tabindex="0" aria-expanded="false" aria-haspopup="true" aria-label="@lang(我的)">
+                    <button type="button" class="action-link my-menu-link" title="@lang(我的)" aria-label="@lang(我的)">
                         <span class="action-line-2"><lang>我的</lang></span>
                         <i class="fas fa-chevron-down" aria-hidden="true" style="font-size: var(--spacing-0_7); margin-left: var(--spacing-0_2);"></i>
                     </button>
-                    <div class="my-menu-dropdown" role="menu" aria-label="<lang>我的菜单</lang>">
+                    <div class="my-menu-dropdown" role="menu" aria-label="@lang(我的菜单)">
                         <ul>
                             <?php if ($showUserMenu): ?>
                                 <w:hook>header-account-links<else/>
@@ -655,7 +649,7 @@ $defaultNavItemsFactory = static function (): array {
 
 <!-- 侧边栏菜单（全部分类，小屏对齐亚马逊左侧抽屉） -->
 <div class="categories-sidebar-overlay" id="categories-sidebar-overlay" aria-hidden="true">
-    <button class="categories-sidebar-close" id="categories-sidebar-close" aria-label="<lang>关闭菜单</lang>" type="button">
+    <button class="categories-sidebar-close" id="categories-sidebar-close" aria-label="@lang(关闭菜单)" type="button">
         <svg class="categories-sidebar-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
         </svg>

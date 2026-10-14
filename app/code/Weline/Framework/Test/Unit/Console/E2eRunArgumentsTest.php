@@ -111,4 +111,31 @@ final class E2eRunArgumentsTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $method->invoke($run, 'not-a-real-suite', $e2eDir);
     }
+
+    public function testResolveSuiteCommerceReleaseInjectsControllablePaymentEnv(): void
+    {
+        $run = (new ReflectionClass(Run::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(Run::class, 'resolveSuite');
+        $method->setAccessible(true);
+        $e2eDir = BP . 'tests' . DIRECTORY_SEPARATOR . 'e2e';
+        $resolved = $method->invoke($run, 'commerce-release', $e2eDir);
+
+        self::assertSame('controllable', $resolved['env']['WELINE_E2E_PAYMENT_DRIVER'] ?? null);
+        self::assertSame('fake_card', $resolved['env']['FORCE_PAYMENT_METHOD'] ?? null);
+        self::assertNotEmpty($resolved['files']);
+    }
+
+    public function testResolveSuitePaypalSandboxInjectsWalletFailFastEnv(): void
+    {
+        $run = (new ReflectionClass(Run::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(Run::class, 'resolveSuite');
+        $method->setAccessible(true);
+        $e2eDir = BP . 'tests' . DIRECTORY_SEPARATOR . 'e2e';
+        $resolved = $method->invoke($run, 'commerce-paypal-sandbox', $e2eDir);
+
+        self::assertSame('paypal_sandbox', $resolved['env']['WELINE_E2E_PAYMENT_DRIVER'] ?? null);
+        self::assertSame('paypal', $resolved['env']['FORCE_PAYMENT_METHOD'] ?? null);
+        self::assertSame('45000', $resolved['env']['WELINE_E2E_PAYPAL_WALLET_TIMEOUT_MS'] ?? null);
+        self::assertCount(1, $resolved['files']);
+    }
 }

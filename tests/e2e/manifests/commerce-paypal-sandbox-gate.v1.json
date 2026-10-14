@@ -1,0 +1,23 @@
+{
+  "schema": "commerce-paypal-sandbox-gate.v1",
+  "suite_id": "commerce-paypal-sandbox",
+  "title": "PayPal 真沙盒专项（可选，非全量购物门禁）",
+  "description": "True PayPal sandbox pathways. Wallet interstitial hang MUST fail-fast (≤45s). Third-party uncontrollable ≠ commerce-release gate. Missing sandbox credentials MUST FAIL (no skip).",
+  "runner": "php bin/w e2e:run --suite=commerce-paypal-sandbox --project=chromium",
+  "hard_rule": "full_release_requires_commerce_pathway_e2e",
+  "note": "Opt-in before PayPal-affecting publish; commerce-release stays on controllable driver.",
+  "env": {
+    "WELINE_E2E_PAYMENT_DRIVER": "paypal_sandbox",
+    "FORCE_PAYMENT_METHOD": "paypal",
+    "WELINE_E2E_PAYPAL_WALLET_TIMEOUT_MS": "45000"
+  },
+  "pathways": [
+    {
+      "id": "PPS-PAYPAL-ACCOUNT-LIFECYCLE",
+      "scope": "paypal_sandbox_account_lifecycle",
+      "module": "Weline_Checkout",
+      "spec": "app/code/Weline/Checkout/test/e2e/frontend/release-paypal-account-lifecycle-plan-suite.spec.js",
+      "rationale": "真 PayPal 沙盒结账 + 账户生命周期；钱包挂起 fail-fast"
+    }
+  ]
+}

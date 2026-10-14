@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Deploy\StaticPublishExclusion;
+use Weline\Framework\Http\Fpc\StaticAssetBrotliSidecar;
 use Weline\Framework\Http\Request;
 use Weline\Framework\View\PublicThemeNamespace;
 use Weline\Theme\Helper\ThemeData;
@@ -575,7 +576,12 @@ final class ThemeResourceGateway
             return false;
         }
 
-        return copy($sourceFile, $targetFile);
+        if (!copy($sourceFile, $targetFile)) {
+            return false;
+        }
+        StaticAssetBrotliSidecar::publish($targetFile);
+
+        return true;
     }
 
     private function resolvePublicThemePathForStaticRequest(?WelineTheme $theme = null): string

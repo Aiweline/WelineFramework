@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\I18n\Service;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\SystemConfig\Api\ConfigReader;
 
 /**
@@ -58,6 +60,7 @@ final class LocaleCatalogScopeResolver
                 allowRequest: false,
                 mode: LocaleCatalogScope::MODE_INJECTED,
                 websiteId: $websiteIdAttr ?? $websiteId,
+                preserveExplicitOrder: true,
             );
         }
 
@@ -84,7 +87,8 @@ final class LocaleCatalogScopeResolver
             );
         }
 
-        $websiteCodes = $this->normalizeCodeList($this->fetchWebsiteLanguageCodes($resolvedWebsiteId));
+        // Membership emptiness uses website union (not store/channel override).
+        $websiteCodes = $this->normalizeCodeList($this->fetchWebsiteUnionLanguageCodes($resolvedWebsiteId));
         if ($websiteCodes !== []) {
             return $this->resolveWebsiteScope(
                 $resolvedWebsiteId,
@@ -104,9 +108,14 @@ final class LocaleCatalogScopeResolver
         string $stateLocale,
         ?bool $showRequestOverride,
     ): LocaleCatalogScope {
-        $codes = $this->normalizeCodeList($this->fetchWebsiteLanguageCodes($websiteId));
+        $storeId = $this->resolveStoreId();
+        $channelId = $this->resolveChannelId();
+        $codes = $this->normalizeCodeList(
+            $this->fetchResolvedLanguageCodes($websiteId, $storeId, $channelId)
+        );
         $default = $this->normalizeCode($this->fetchWebsiteDefaultLanguage($websiteId));
         if ($default === '' || ($codes !== [] && !\in_array($default, $codes, true))) {
+            // Scope default: website default when still a member; else first resolved code.
             $default = $codes[0] ?? ($stateLocale !== '' ? $stateLocale : self::FALLBACK_CODE);
         }
         if ($codes === []) {
@@ -133,6 +142,9 @@ final class LocaleCatalogScopeResolver
             allowRequest: $allowRequest,
             mode: LocaleCatalogScope::MODE_WEBSITE,
             websiteId: $websiteId,
+            storeId: $storeId,
+            channelId: $channelId,
+            preserveExplicitOrder: true,
         );
     }
 
@@ -155,23 +167,35 @@ final class LocaleCatalogScopeResolver
         $default = \in_array($stateLocale, $codes, true) ? $stateLocale : $codes[0];
         $current = \in_array($currentHint, $codes, true) ? $currentHint : $default;
 
+        $ranked = $codes;
+        if (\class_exists(LocaleDisplayRankService::class)) {
+            try {
+                $ranked = LocaleDisplayRankService::sortLocaleCodes($codes);
+            } catch (\Throwable) {
+                $ranked = $codes;
+            }
+        }
+
         return new LocaleCatalogScope(
-            codes: $codes,
+            codes: $ranked,
             defaultCode: $default,
             currentCode: $current,
             displayLocale: $current,
             allowRequest: $showRequestOverride ?? false,
             mode: LocaleCatalogScope::MODE_BACKEND_PLATFORM,
             websiteId: 0,
+            preserveExplicitOrder: false,
         );
     }
 
     /**
+     * Storefront/admin switcher membership+order for current Website→Store→Channel.
+     *
      * @return list<string>
      */
-    private function fetchWebsiteLanguageCodes(int $websiteId): array
+    private function fetchResolvedLanguageCodes(int $websiteId, ?int $storeId, ?int $channelId): array
     {
-        // N4: prefer storefront.render_context.v1 locale_catalog (no parallel bag).
+        // Prefer render bag only when it already carries resolved active codes.
         try {
             if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
                 $ctx = \Weline\Framework\Runtime\StorefrontRenderContextReader::get();
@@ -187,11 +211,56 @@ final class LocaleCatalogScopeResolver
         } catch (\Throwable) {
         }
         try {
+            $result = \w_query('websites', 'getResolvedLanguageCodes', [
+                'website_id' => $websiteId,
+                'store_id' => $storeId,
+                'channel_id' => $channelId,
+            ]);
+            if (\is_array($result) && $result !== []) {
+                return $result;
+            }
+        } catch (\Throwable) {
+        }
+        return $this->fetchWebsiteUnionLanguageCodes($websiteId);
+    }
+
+    /**
+     * Website association union (translation/sync membership). Not store/channel override.
+     *
+     * @return list<string>
+     */
+    private function fetchWebsiteUnionLanguageCodes(int $websiteId): array
+    {
+        try {
             $result = \w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
             return \is_array($result) ? $result : [];
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    private function resolveStoreId(): ?int
+    {
+        try {
+            if (\class_exists(Context::class) && Context::hasCurrent()) {
+                return \max(0, RequestContext::getWelineStoreId());
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    private function resolveChannelId(): ?int
+    {
+        try {
+            if (\class_exists(Context::class) && Context::hasCurrent()) {
+                return \max(0, RequestContext::getWelineChannelId());
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
     }
 
     private function fetchWebsiteDefaultLanguage(int $websiteId): string

@@ -10,10 +10,12 @@ use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
 use Weline\I18n\Model\Dictionary as BaseDictionary;
+use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locale\Dictionary;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\I18n\Service\Catalog\DisplayNameCartesianSeeder;
 use Weline\I18n\Service\DictionaryAreaPolicy;
+use Weline\I18n\Service\LocaleDisplayRankSeedService;
 
 /**
  * I18n DDL 增量 + 已装激活语种展示名懒切片补洞。
@@ -25,9 +27,33 @@ final class Upgrade implements UpgradeInterface
     public function setup(Setup $setup, Context $context): void
     {
         $this->ensureNullSourceCoveringIndex();
+        $this->ensureLocaleDisplayRankColumn($context);
+        $this->seedLocaleDisplayRanks();
         $this->backfillDictionaryAreaFromIsBackend();
         $this->syncCatalogInventoryGaps();
         $this->backfillInstalledLocaleDisplayNames();
+    }
+
+    private function ensureLocaleDisplayRankColumn(Context $context): void
+    {
+        try {
+            /** @var Locale $locale */
+            $locale = ObjectManager::getInstance(Locale::class);
+            $runner = ObjectManager::make(ModelSetup::class);
+            $runner->putModel($locale);
+            $locale->setup($runner, $context);
+        } catch (\Throwable $e) {
+            w_log_warning('I18n: locale display_rank schema skipped: ' . $e->getMessage(), [], 'i18n');
+        }
+    }
+
+    private function seedLocaleDisplayRanks(): void
+    {
+        try {
+            ObjectManager::getInstance(LocaleDisplayRankSeedService::class)->seedMissingDisplayRanks();
+        } catch (\Throwable $e) {
+            w_log_warning('I18n: locale display_rank seed skipped: ' . $e->getMessage(), [], 'i18n');
+        }
     }
 
     /**

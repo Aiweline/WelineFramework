@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Data\DataInterface;
+use Weline\Framework\View\Template;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
@@ -79,7 +82,7 @@ final class SharedChromeService
     /**
      * Chrome host widgets that embed nested slot injections whose CSS must paint
      * on first drawer open — promote to host layout pack (blocking), not late
-     * source `media=print` defer (WidgetAssetOptimizer merge_start).
+     * source late pack `media=print` defer (WidgetAssetOptimizer: after first N).
      *
      * @var array<string, list<string>> host widget_code => Module::css paths
      */
@@ -88,6 +91,57 @@ final class SharedChromeService
             'Weline_Checkout::css/widgets/storefront-money-summary.css',
         ],
     ];
+
+    /**
+     * Partials / design header shell CSS (same trio as header-container layout_source,
+     * minus widget-instance-styles). Must be emitted with data-weline-widget-asset=layout
+     * so WidgetAssetHtmlPlacement merges them into the page layout pack — never bare
+     * &lt;link&gt; that bypasses css_merge.
+     *
+     * @var list<string>
+     */
+    public const PARTIALS_HEADER_SHELL_LAYOUT_CSS = [
+        'Weline_Theme::css/widgets/header-chrome-amazon.css',
+        'Weline_Theme::css/widgets/header-search-amazon.css',
+        'Weline_Theme::css/partials/header-default.css',
+    ];
+
+    /**
+     * Emit Partials / design shell header CSS as layout-pack markers.
+     *
+     * Must include data-weline-module-source so WidgetAssetArtifactPublisher::canMerge
+     * can resolve the file and fold it into the page layout pack (same contract as
+     * ThemeLayoutEntityAssetCollector::emitHtml). layout marker alone is not enough.
+     */
+    public static function emitPartialsHeaderShellLayoutCssHtml(): string
+    {
+        $chunks = [];
+        foreach (self::PARTIALS_HEADER_SHELL_LAYOUT_CSS as $modulePath) {
+            $modulePath = \trim((string)$modulePath);
+            if ($modulePath === '' || !\str_contains($modulePath, '::')) {
+                continue;
+            }
+            $url = '';
+            try {
+                /** @var Template $template */
+                $template = ObjectManager::getInstance(Template::class);
+                $url = \trim((string)$template->fetchTagSource(DataInterface::dir_type_STATICS, $modulePath));
+            } catch (\Throwable) {
+                $url = '';
+            }
+            if ($url === '') {
+                continue;
+            }
+            $safeUrl = \htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+            $safeSrc = \htmlspecialchars($modulePath, ENT_QUOTES, 'UTF-8');
+            $chunks[] = '<link rel="stylesheet" href="' . $safeUrl
+                . '" data-weline-widget-asset="layout"'
+                . ' data-weline-source-position="head"'
+                . ' data-weline-module-source="' . $safeSrc . '">';
+        }
+
+        return $chunks === [] ? '' : \implode("\n", $chunks) . "\n";
+    }
 
     public function __construct(
         private readonly ThemeScopedWorkspaceInterface $workspace,

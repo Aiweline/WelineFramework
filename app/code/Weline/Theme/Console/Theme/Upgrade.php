@@ -15,6 +15,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\ConsoleException;
 use Weline\Framework\Deploy\StaticPublishExclusion;
+use Weline\Framework\Http\Fpc\StaticAssetBrotliSidecar;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\File\Scan;
@@ -327,6 +328,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if (!copy($source, $destination)) {
             throw new ConsoleException(__('无法发布主题静态资源：') . $source);
         }
+        StaticAssetBrotliSidecar::publish($destination);
     }
 
     /**

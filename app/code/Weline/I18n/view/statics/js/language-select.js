@@ -32,13 +32,28 @@ export function register(UI) {
         const displayOnly = element.dataset.wDisplayOnly === 'true';
         const allowEmpty = element.dataset.wAllowEmpty === 'true';
         const showReference = element.dataset.wShowReference !== 'false';
+        const resolveReorderUrl = () => String(
+            element.dataset.wReorderUrl
+            || element.closest('[data-w-language-reorder-url]')?.getAttribute?.('data-w-language-reorder-url')
+            || ''
+        ).trim();
+        const resolveReorderWebsiteId = () => String(
+            element.dataset.wReorderWebsiteId
+            || element.closest('[data-w-language-reorder-url]')?.getAttribute?.('data-w-language-reorder-website-id')
+            || ''
+        ).trim();
         let readonlyValues = parseValues(element.dataset.wReadonlyValues);
         let selectedValues = [];
         let open = false;
         let pointerReference = null;
         let syncingField = false;
+        let dragCode = null;
+        let suppressTriggerClick = false;
+        let reorderTimer = null;
+        let reorderSeq = 0;
+        let reorderDirty = false;
 
-        if (!(trigger instanceof HTMLButtonElement)
+        if (!(trigger instanceof HTMLElement)
             || !(tags instanceof HTMLElement)
             || !(field instanceof HTMLSelectElement)) {
             return {};
@@ -63,7 +78,10 @@ export function register(UI) {
                 siteLanguage: option.dataset.wSiteLanguage === 'true',
             }));
         const recordByCode = new Map(records.map((record) => [record.code, record]));
-        const portal = floating.portal(popover, 'language-select');
+        const noopPortal = { mount() {}, restore() {}, destroy() {} };
+        const portal = (popover instanceof HTMLElement && floating && typeof floating.portal === 'function')
+            ? floating.portal(popover, 'language-select')
+            : noopPortal;
         const focusSearch = () => {
             if (!(search instanceof HTMLInputElement)) return;
             // Trigger click restores focus to the button after the handler returns.
@@ -99,7 +117,11 @@ export function register(UI) {
                 flag.textContent = glyph;
                 flag.setAttribute('aria-hidden', 'true');
             } else {
-                flag.append(UI.icon.create('language', { size: 'sm' }));
+                try {
+                    if (UI?.icon?.create) {
+                        flag.append(UI.icon.create('language', { size: 'sm' }));
+                    }
+                } catch (_error) {}
             }
             return flag;
         };
@@ -115,7 +137,11 @@ export function register(UI) {
             if (selectedValues.length === 0) {
                 const placeholder = document.createElement('span');
                 placeholder.className = 'w-language-select__placeholder';
-                placeholder.append(UI.icon.create('language', { size: 'sm' }));
+                try {
+                    if (UI?.icon?.create) {
+                        placeholder.append(UI.icon.create('language', { size: 'sm' }));
+                    }
+                } catch (_error) {}
                 const text = document.createElement('span');
                 text.textContent = element.dataset.wEmptyText || '';
                 placeholder.append(text);
@@ -128,6 +154,16 @@ export function register(UI) {
                 const tag = document.createElement('span');
                 tag.className = 'w-language-select__tag';
                 tag.dataset.readonly = String(locked);
+                tag.dataset.wLanguageCode = code;
+                if (multiple && !displayOnly) {
+                    tag.draggable = true;
+                    tag.classList.add('is-sortable');
+                    tag.title = element.dataset.wReorderHint || '拖动排序';
+                    const grip = document.createElement('span');
+                    grip.className = 'w-language-select__drag-handle';
+                    grip.setAttribute('aria-hidden', 'true');
+                    tag.append(grip);
+                }
                 tag.append(makeFlag(record));
 
                 const label = document.createElement('span');
@@ -146,12 +182,117 @@ export function register(UI) {
                     remove.className = 'w-language-select__remove';
                     remove.dataset.wRemoveCode = code;
                     remove.setAttribute('aria-label', `${code} ×`);
-                    remove.append(UI.icon.create('close', { size: 'xs' }));
+                    remove.draggable = false;
+                    try {
+                        if (UI?.icon?.create) {
+                            remove.append(UI.icon.create('close', { size: 'xs' }));
+                        } else {
+                            remove.textContent = '×';
+                        }
+                    } catch (_error) {
+                        remove.textContent = '×';
+                    }
                     tag.append(remove);
                 }
                 fragment.append(tag);
             }
             tags.replaceChildren(fragment);
+        };
+
+        const reorderStatusEl = () => {
+            const host = element.closest('[data-testid], .w-field, [style*="--w-span"]') || element.parentElement;
+            return host?.querySelector?.('[data-w-language-reorder-status]')
+                || element.querySelector('[data-w-language-reorder-status]')
+                || null;
+        };
+        const setReorderStatus = (text, tone) => {
+            const el = reorderStatusEl();
+            if (!(el instanceof HTMLElement)) return;
+            el.textContent = text || '';
+            if (tone) el.setAttribute('data-tone', tone);
+            else el.removeAttribute('data-tone');
+        };
+        const syncSelectOptionOrder = () => {
+            const selectedSet = new Set(selectedValues);
+            const byValue = new Map([...field.options].map((option) => [option.value, option]));
+            for (const code of selectedValues) {
+                const option = byValue.get(code);
+                if (option) field.appendChild(option);
+            }
+            for (const option of byValue.values()) {
+                if (!selectedSet.has(option.value)) field.appendChild(option);
+            }
+            for (const option of field.options) {
+                option.selected = selectedSet.has(option.value);
+            }
+        };
+        const saveReorder = () => {
+            const reorderUrl = resolveReorderUrl();
+            if (!reorderUrl || !multiple || displayOnly) return;
+            const seq = ++reorderSeq;
+            reorderDirty = false;
+            setReorderStatus('保存中…', 'muted');
+            const fd = new FormData();
+            const reorderWebsiteId = resolveReorderWebsiteId();
+            if (reorderWebsiteId !== '') fd.append('website_id', reorderWebsiteId);
+            selectedValues.forEach((code) => fd.append('language_codes[]', code));
+            const form = field.form instanceof HTMLFormElement ? field.form : element.closest('form');
+            if (form instanceof HTMLFormElement) {
+                const csrf = form.querySelector('input[name="csrf"], input[name="form_key"]');
+                if (csrf instanceof HTMLInputElement && csrf.value) {
+                    fd.append(csrf.name || 'csrf', csrf.value);
+                }
+            }
+            fetch(reorderUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    Accept: 'application/json',
+                },
+                body: fd,
+            })
+                .then((res) => res.json().catch(() => null).then((payload) => ({ ok: res.ok, payload })))
+                .then((result) => {
+                    if (seq !== reorderSeq) return;
+                    if (!result.ok || !result.payload || result.payload.success !== true) {
+                        setReorderStatus((result.payload && result.payload.message) || '排序保存失败', 'danger');
+                        emit('reorder-error', { ...detail(), payload: result.payload || null }, false);
+                        return;
+                    }
+                    setReorderStatus('已保存', 'success');
+                    emit('reorder-saved', { ...detail(), payload: result.payload }, false);
+                })
+                .catch(() => {
+                    if (seq !== reorderSeq) return;
+                    setReorderStatus('排序保存失败', 'danger');
+                    emit('reorder-error', detail(), false);
+                });
+        };
+        const scheduleReorderSave = () => {
+            if (!resolveReorderUrl() || !multiple || displayOnly) return;
+            reorderDirty = true;
+            if (reorderTimer) window.clearTimeout(reorderTimer);
+            reorderTimer = window.setTimeout(() => {
+                reorderTimer = null;
+                saveReorder();
+            }, 180);
+        };
+        const applyTagOrder = (nextOrder, notifyReorder = true) => {
+            const next = normalize(nextOrder);
+            if (!sameValues(selectedValues, next) && next.length === selectedValues.length) {
+                selectedValues = next;
+                syncSelectOptionOrder();
+                renderTags();
+                element.classList.toggle('has-value', selectedValues.length > 0);
+                element.dataset.hasValue = selectedValues.length > 0 ? 'true' : 'false';
+                if (notifyReorder) {
+                    emit('reorder', detail(), false);
+                    scheduleReorderSave();
+                }
+                return true;
+            }
+            return false;
         };
 
         const makeOption = (record, clear = false) => {
@@ -173,8 +314,13 @@ export function register(UI) {
             const statusIcon = (!clear && record.siteLanguage)
                 ? 'minus'
                 : (selected ? 'check' : 'circle');
-            button.append(UI.icon.create(statusIcon, { size: 'sm' }));
-            button.append(clear ? UI.icon.create('minus', { size: 'sm' }) : makeFlag(record));
+            try {
+                if (UI?.icon?.create) {
+                    button.append(UI.icon.create(statusIcon, { size: 'sm' }));
+                    if (clear) button.append(UI.icon.create('minus', { size: 'sm' }));
+                }
+            } catch (_error) {}
+            if (!clear) button.append(makeFlag(record));
 
             const copy = document.createElement('span');
             copy.className = 'w-language-select__option-copy';
@@ -310,6 +456,12 @@ export function register(UI) {
             pointerReference = floating.capture(trigger, event, trigger.dataset.wAnchorMode || 'element');
         });
         listen(trigger, 'click', (event) => {
+            if (suppressTriggerClick) {
+                suppressTriggerClick = false;
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
             if (open) {
                 close('trigger');
                 return;
@@ -348,6 +500,89 @@ export function register(UI) {
             event.stopPropagation();
             commit(selectedValues.filter((value) => value !== remove.dataset.wRemoveCode));
         });
+        if (multiple && !displayOnly) {
+            listen(tags, 'pointerdown', (event) => {
+                const tag = event.target instanceof Element ? event.target.closest('.w-language-select__tag.is-sortable') : null;
+                if (!(tag instanceof HTMLElement) || !tags.contains(tag)) return;
+                if (event.target instanceof Element && event.target.closest('[data-w-remove-code]')) return;
+                event.stopPropagation();
+            });
+            listen(tags, 'dragstart', (event) => {
+                const tag = event.target instanceof Element ? event.target.closest('.w-language-select__tag') : null;
+                if (!(tag instanceof HTMLElement) || !tags.contains(tag)) return;
+                if (event.target instanceof Element && event.target.closest('[data-w-remove-code]')) {
+                    event.preventDefault();
+                    return;
+                }
+                dragCode = tag.dataset.wLanguageCode || '';
+                suppressTriggerClick = true;
+                tag.classList.add('is-dragging');
+                try {
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', dragCode);
+                } catch (_error) {}
+                event.stopPropagation();
+            });
+            listen(tags, 'dragover', (event) => {
+                if (!dragCode) return;
+                event.preventDefault();
+                event.stopPropagation();
+                try {
+                    event.dataTransfer.dropEffect = 'move';
+                } catch (_error) {}
+                // 禁止 mid-drag renderTags：会毁掉拖拽源，浏览器直接取消 DnD（能拖不能放）。
+                // 拖拽胶囊须 pointer-events:none，事件会落到下方胶囊；优先 event.target（视口外 elementFromPoint 为 null）。
+                const hit = (event.target instanceof Element ? event.target : null)
+                    || document.elementFromPoint(event.clientX, event.clientY);
+                const over = hit instanceof Element ? hit.closest('.w-language-select__tag') : null;
+                if (!(over instanceof HTMLElement) || !tags.contains(over)) return;
+                const overCode = over.dataset.wLanguageCode || '';
+                if (!overCode || overCode === dragCode) return;
+                const dragging = tags.querySelector(`.w-language-select__tag[data-w-language-code="${CSS.escape(dragCode)}"]`);
+                if (!(dragging instanceof HTMLElement) || dragging === over) return;
+                const rect = over.getBoundingClientRect();
+                const before = event.clientX < rect.left + rect.width / 2;
+                const ref = before ? over : over.nextSibling;
+                if (ref === dragging.nextSibling && before) return;
+                if (!before && over.nextSibling === dragging) return;
+                tags.insertBefore(dragging, ref);
+                dragging.classList.add('is-dragging');
+                tags.querySelectorAll('.w-language-select__tag.is-drop-target').forEach((node) => {
+                    node.classList.remove('is-drop-target');
+                });
+                over.classList.add('is-drop-target');
+                const next = [...tags.querySelectorAll('.w-language-select__tag')]
+                    .map((node) => node.dataset.wLanguageCode || '')
+                    .filter(Boolean);
+                if (!sameValues(selectedValues, next)) {
+                    selectedValues = next;
+                    syncSelectOptionOrder();
+                    emit('reorder', detail(), false);
+                    scheduleReorderSave();
+                }
+            });
+            listen(tags, 'drop', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+            });
+            // 文档级补兜：renderTags 换掉拖拽源后原生 dragend 仍能清状态；脏序则立刻保存。
+            listen(document, 'dragend', () => {
+                if (!dragCode && !reorderDirty) return;
+                dragCode = null;
+                tags.querySelectorAll('.w-language-select__tag.is-dragging, .w-language-select__tag.is-drop-target').forEach((node) => {
+                    node.classList.remove('is-dragging', 'is-drop-target');
+                });
+                if (reorderDirty) {
+                    if (reorderTimer) window.clearTimeout(reorderTimer);
+                    reorderTimer = null;
+                    saveReorder();
+                }
+                suppressTriggerClick = true;
+                window.setTimeout(() => {
+                    suppressTriggerClick = false;
+                }, 0);
+            });
+        }
         if (search) {
             const applySearch = () => renderList(search.value);
             listen(search, 'input', applySearch);
@@ -418,6 +653,7 @@ export function register(UI) {
             getDetail: detail,
             setValue: (value) => commit(value ? [value] : []),
             setValues: (values) => commit(values),
+            reorderValues: (values) => applyTagOrder(values),
             addValue: (value) => commit([...selectedValues, value]),
             removeValue: (value) => commit(selectedValues.filter((current) => current !== String(value))),
             setReadonlyValues(values) {

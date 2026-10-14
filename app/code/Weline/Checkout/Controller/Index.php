@@ -68,6 +68,10 @@ class Index extends FrontendController
         $this->assign('checkout_ssr_goods_text', (string)($payload['goods_text'] ?? ''));
         $this->assign('checkout_ssr_shipping_text', (string)($payload['shipping_text'] ?? ''));
         $this->assign('checkout_ssr_payable_text', (string)($payload['payable_text'] ?? ''));
+        $this->assign('checkout_ssr_incentive_text', (string)($payload['incentive_text'] ?? ''));
+        $this->assign('checkout_ssr_incentive_minor', (int)($payload['incentive_minor'] ?? 0));
+        $this->assign('checkout_ssr_cod_fee_text', (string)($payload['cod_fee_text'] ?? ''));
+        $this->assign('checkout_ssr_cod_fee_minor', (int)($payload['cod_fee_minor'] ?? 0));
         $cart = \is_array($payload['cart'] ?? null) ? $payload['cart'] : [];
         $this->assign('checkout_ssr_cart', $cart);
         $this->assign(
@@ -85,6 +89,10 @@ class Index extends FrontendController
         $this->assign(
             'checkout_ssr_tax_estimate',
             \is_array($payload['tax_estimate'] ?? null) ? $payload['tax_estimate'] : null
+        );
+        $this->assign(
+            'checkout_ssr_money_summary',
+            \is_array($payload['money_summary'] ?? null) ? $payload['money_summary'] : []
         );
     }
 }

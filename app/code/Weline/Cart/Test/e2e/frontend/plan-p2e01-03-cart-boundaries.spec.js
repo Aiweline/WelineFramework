@@ -14,16 +14,34 @@ const { execFileSync } = require('child_process');
 const {
   test,
   expect,
-  gotoFrontend,
   moduleDescribe,
   moduleCase,
 } = require('../../../../../../../tests/e2e/framework');
+
+const {
+  storefrontOrigin,
+  ensureFpcBypassHeaders,
+  neutralizeStaleThemeStamp,
+  reloadIfThemeGenerationStale,
+  waitForWelineApi,
+  evaluateWithThemeReload,
+} = require('../../../../Checkout/test/e2e/frontend/release-paypal-account-lifecycle-helpers');
 
 const MODULE = 'Weline_Cart';
 const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
 const FIXTURE_SCRIPT = path.resolve(__dirname, 'plan-p2e02-guest-login-merge-fixture.php');
-const DIRECT = { useProxy: false };
+
+async function gotoCartStorefront(page, routePath = '/') {
+  await ensureFpcBypassHeaders(page);
+  const origin = storefrontOrigin();
+  const pathPart = routePath.startsWith('/') ? routePath : `/${routePath}`;
+  await page.goto(`${origin}${pathPart}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  await neutralizeStaleThemeStamp(page);
+  await waitForWelineApi(page);
+  await reloadIfThemeGenerationStale(page);
+  await neutralizeStaleThemeStamp(page);
+}
 
 function runFixture(action, payload = {}) {
   const stdout = execFileSync('php', [FIXTURE_SCRIPT], {
@@ -41,29 +59,34 @@ function runFixture(action, payload = {}) {
 }
 
 async function ensureApi(page) {
-  await page.waitForFunction(() => {
-    const w = window.Weline;
-    return !!(w && ((w.Api && typeof w.Api.resource === 'function') || typeof w.load === 'function'));
-  }, { timeout: 30000 });
-  await page.evaluate(async () => {
-    const w = window.Weline;
-    if (w && w.Api && typeof w.Api.resource === 'function') {
-      return;
-    }
-    if (w && typeof w.load === 'function') {
-      await w.load('api');
-    }
-  });
-  await page.waitForFunction(
-    () => !!(window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function'),
-    { timeout: 15000 },
-  );
+  await waitForWelineApi(page);
 }
 
 async function runCartApi(page, operation, params = {}) {
-  return page.evaluate(async ({ operation, params }) => {
+  return evaluateWithThemeReload(page, async ({ operation, params }) => {
+    const pinTheme = () => {
+      const id = String(window.__WELINE_E2E_THEME_ID || '').trim();
+      if (!id || !window.Weline || !window.Weline.config) return;
+      window.Weline.config.themePublishedVersionId = id;
+      window.Weline.config.theme_published_version_id = id;
+      if (window.Weline.config.api && typeof window.Weline.config.api === 'object') {
+        window.Weline.config.api.themePublishedVersionId = id;
+      }
+    };
+    pinTheme();
+    let api = window.Weline && window.Weline.Api;
+    if (!api || api.__full !== true || typeof api.resource !== 'function') {
+      const loaded = await window.Weline.load('api');
+      if (loaded && loaded.__full === true) {
+        window.Weline.Api = loaded;
+        api = loaded;
+      } else {
+        api = loaded || api;
+      }
+    }
+    pinTheme();
     try {
-      const resource = await window.Weline.Api.resource('cart');
+      const resource = await api.resource('cart');
       if (!resource || typeof resource[operation] !== 'function') {
         return { __no_operation: operation, keys: resource ? Object.keys(resource) : [] };
       }
@@ -117,7 +140,7 @@ moduleDescribe(test, MODULE, '计划 P2E-03 Cart selection 边界', () => {
       let guestToken = '';
 
       try {
-        await gotoFrontend(page, '/', { timeout: 60000, settleMs: 800, ...DIRECT });
+        await gotoCartStorefront(page, '/');
         await expect(page.locator('body')).toBeVisible();
         await expect(page.locator('body')).not.toContainText(FATAL_PATTERN);
         await ensureApi(page);

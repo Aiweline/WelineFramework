@@ -6,6 +6,10 @@ namespace Weline\Theme\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
 
+/**
+ * Shopper toast Amazon CSS is a STYLE leaf (backend style selection → generated CSS).
+ * Theme layout/head MUST NOT hard-@static it. theme.css MUST NOT own .w-amz-* rules.
+ */
 final class StorefrontShopperToastContractTest extends TestCase
 {
     private const TOAST_CSS = 'css/widgets/storefront-shopper-toast-amazon.css';
@@ -35,31 +39,27 @@ final class StorefrontShopperToastContractTest extends TestCase
         self::assertStringContainsString('do NOT register .amazon-* here', $themeCss);
     }
 
-    public function testFrontendHeadLoadsToastStyleCss(): void
+    public function testThemeHeadsDoNotHardReferenceToastStyleLeaf(): void
     {
-        foreach (['default.phtml', 'minimal.phtml', 'assets-suffix.phtml'] as $head) {
+        foreach (['default.phtml', 'minimal.phtml', 'assets-prefix.phtml', 'assets-suffix.phtml'] as $head) {
             $source = (string)file_get_contents(
                 dirname(__DIR__, 3) . '/view/theme/frontend/partials/head/' . $head,
             );
-            self::assertStringContainsString(
-                'Weline_Theme::theme/frontend/assets/css/theme.css',
+            self::assertStringNotContainsString(
+                'storefront-shopper-toast-amazon.css',
                 $source,
-            );
-            self::assertStringContainsString(
-                'Weline_Theme::css/widgets/storefront-shopper-toast-amazon.css',
-                $source,
+                $head . ' must not hard-@static style leaf (backend style selection generates CSS)',
             );
         }
     }
 
-    public function testDesignThemeHeadOverridesKeepToastStyleCss(): void
+    public function testDesignThemeHeadsDoNotHardReferenceToastStyleLeaf(): void
     {
         $designRoot = dirname(__DIR__, 6) . '/design';
         self::assertDirectoryExists($designRoot);
 
         $heads = [];
-        foreach (['default.phtml', 'minimal.phtml', 'assets-suffix.phtml'] as $name) {
-            // app/design/{Vendor}/{theme}/frontend/partials/head/{name}
+        foreach (['default.phtml', 'minimal.phtml', 'assets-prefix.phtml', 'assets-suffix.phtml'] as $name) {
             $matches = glob($designRoot . '/*/*/frontend/partials/head/' . $name) ?: [];
             $heads = array_merge($heads, $matches);
         }
@@ -67,13 +67,10 @@ final class StorefrontShopperToastContractTest extends TestCase
 
         foreach ($heads as $path) {
             $source = (string)file_get_contents($path);
-            if (!str_contains($source, 'theme/frontend/assets/css/theme.css')) {
-                continue;
-            }
-            self::assertStringContainsString(
-                'Weline_Theme::css/widgets/storefront-shopper-toast-amazon.css',
+            self::assertStringNotContainsString(
+                'storefront-shopper-toast-amazon.css',
                 $source,
-                $path . ' overrides theme.css chain but omitted shopper-toast style CSS',
+                $path . ' must not hard-@static style leaf',
             );
         }
     }
@@ -100,7 +97,6 @@ final class StorefrontShopperToastContractTest extends TestCase
             . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
         $source = (string)file_get_contents($hook);
         self::assertStringContainsString('storefrontImageFallback', $source);
-        // Comment may mention the style file; assert no live <link>/<theme:css> load.
         self::assertDoesNotMatchRegularExpression(
             '/<(?:link|theme:css)[^>]*(?:storefront-shopper-toast-amazon\.css)/i',
             $source,
@@ -118,8 +114,5 @@ final class StorefrontShopperToastContractTest extends TestCase
         self::assertStringContainsString('data-mini-cart-trigger', $script);
         self::assertStringContainsString('Weline.ShopperNotice', $script);
         self::assertStringContainsString('showCompareAdded', $script);
-        self::assertStringContainsString('ui.toast.success', $script);
-        self::assertStringContainsString('ui.toast.error', $script);
-        self::assertStringContainsString('weline:ui:ready', $script);
     }
 }

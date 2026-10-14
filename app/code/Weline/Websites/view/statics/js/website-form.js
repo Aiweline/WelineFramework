@@ -13,9 +13,17 @@ function safeRegisterComponent(mod, UI) {
 
 async function ensureFormSelectComponents(UI) {
     // Compiled into Theme ui/pages/; relative imports resolve next to that output.
+    // Inherit page ?v= so immutable static cache cannot pin an old component against new markup.
+    let versionQuery = '';
+    try {
+        const version = new URL(import.meta.url).searchParams.get('v');
+        versionQuery = version ? `?v=${encodeURIComponent(version)}` : `?v=${Date.now()}`;
+    } catch (_error) {
+        versionQuery = `?v=${Date.now()}`;
+    }
     const moduleUrls = [
-        new URL('../components/weline-currency-select.js', import.meta.url).href,
-        new URL('../components/weline-language-select.js', import.meta.url).href,
+        new URL(`../components/weline-currency-select.js${versionQuery}`, import.meta.url).href,
+        new URL(`../components/weline-language-select.js${versionQuery}`, import.meta.url).href,
     ];
     const modules = await Promise.all(moduleUrls.map((url) => import(url).catch(() => null)));
     for (const mod of modules) {

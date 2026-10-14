@@ -5,8 +5,17 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service\Edge\Nginx;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Test\ProjectRoot;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxConfigWriter;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
+
+\defined('DS') || \define('DS', \DIRECTORY_SEPARATOR);
+ProjectRoot::defineBp(__DIR__);
+\defined('APP_PATH') || \define('APP_PATH', BP . 'app' . DS);
+\defined('APP_CODE_PATH') || \define('APP_CODE_PATH', APP_PATH . 'code' . DS);
+\defined('APP_ETC_PATH') || \define('APP_ETC_PATH', APP_PATH . 'etc' . DS);
+\defined('PUB') || \define('PUB', BP . 'pub' . DS);
+\defined('VAR_DIR') || \define('VAR_DIR', BP . 'var' . DS);
 
 /**
  * Static layers: ^~ /pub/media, ^~ /static → pub, regex → FPC static disk,
@@ -59,15 +68,24 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         self::assertStringContainsString('X-Wls-Media-Disk "1"', $config);
         self::assertStringContainsString('try_files $uri =404;', $config);
         self::assertStringContainsString('location ^~ /static/', $config);
+        self::assertStringContainsString('map $uri $wls_static_br_eligible', $config);
+        self::assertStringNotContainsString('map $uri $wls_static_br_mime', $config);
+        self::assertStringContainsString('try_files $uri.br =418;', $config);
+        self::assertStringContainsString('default_type text/css;', $config);
+        self::assertStringContainsString('default_type application/javascript;', $config);
+        self::assertStringContainsString('Content-Encoding br always;', $config);
+        self::assertStringContainsString('location @wls_static_pub_plain', $config);
         self::assertStringContainsString('try_files $uri @wls_static_origin;', $config);
+        self::assertStringNotContainsString('try_files $uri.gz', $config);
+        self::assertStringNotContainsString('default_type $wls_static_br_mime;', $config);
 
-        $staticStart = \strpos($config, 'location ~* \.(?:');
+        $cssStart = \strpos($config, 'location ~* \.css$');
         self::assertIsInt(
-            $staticStart,
-            'Managed nginx must emit a regex location for public static extensions.',
+            $cssStart,
+            'Managed nginx must emit a regex location for FPC css (br then plain).',
         );
         self::assertLessThan(
-            $staticStart,
+            $cssStart,
             $mediaStart,
             'Disk /pub/media/ location must precede the extension regex proxy location.',
         );
@@ -75,16 +93,27 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         self::assertIsInt($genericStart);
         self::assertLessThan(
             $genericStart,
-            $staticStart,
+            $cssStart,
             'Static asset location must precede the catch-all location /.',
         );
 
-        $staticBlock = \substr($config, $staticStart, $genericStart - $staticStart);
+        $staticBlock = \substr($config, $cssStart, $genericStart - $cssStart);
+        self::assertStringContainsString(
+            'try_files /generated/static/live/$wls_fpc_html_host$uri.br =418;',
+            $staticBlock,
+            'Compressible FPC statics prefer precomputed .br when client accepts br.',
+        );
+        self::assertStringContainsString(
+            'location @wls_static_fpc_plain',
+            $staticBlock,
+        );
         self::assertStringContainsString(
             'try_files /generated/static/live/$wls_fpc_html_host$uri @wls_static_origin;',
             $staticBlock,
-            'Extension statics must try FPC static disk before WLS.',
+            'FPC plain miss / non-br clients fall through to plain leaf then WLS.',
         );
+        self::assertStringContainsString('default_type text/css;', $staticBlock);
+        self::assertStringContainsString('default_type application/javascript;', $staticBlock);
         self::assertStringContainsString(
             'open_file_cache_errors off;',
             $staticBlock,
@@ -168,6 +197,20 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         );
         self::assertStringContainsString(
             'map $request_uri $wls_fpc_html_diag_query',
+            $config,
+        );
+        self::assertStringContainsString(
+            'i18n_inline',
+            $config,
+            'Storefront point-translate query must edge-bypass with pierce (not FPC HIT).',
+        );
+        self::assertStringContainsString(
+            'w_i18n_inline_edit',
+            $config,
+            'Inline-edit session cookie must edge-bypass with pierce after query drops.',
+        );
+        self::assertStringContainsString(
+            '$wls_fpc_html_i18n_inline_cookie_bypass',
             $config,
         );
         self::assertStringContainsString(

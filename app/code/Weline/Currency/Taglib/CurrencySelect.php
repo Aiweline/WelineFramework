@@ -59,6 +59,8 @@ class CurrencySelect implements TaglibInterface
             'search-placeholder' => false,
             'data-w-width' => false,
             'auto-submit' => false,
+            'reorder-url' => false,
+            'reorder-website-id' => false,
         ];
     }
 
@@ -169,12 +171,21 @@ foreach (\preg_split('/\s+/', $__wcs_text($Taglib__class ?? '')) ?: [] as $__wcs
 $__wcs_width = $__wcs_text($Taglib__data_w_width ?? '');
 $__wcs_width = \in_array($__wcs_width, ['auto', 'full'], true) ? $__wcs_width : '';
 $__wcs_auto_submit = $__wcs_bool($Taglib__auto_submit ?? false);
+$__wcs_reorder_url = $__wcs_text($Taglib__reorder_url ?? '');
+$__wcs_reorder_website_id = $__wcs_text($Taglib__reorder_website_id ?? '');
 $__wcs_readonly_json = \json_encode($__wcs_readonly, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '[]';
+$__wcs_reorder_attrs = '';
+if ($__wcs_reorder_url !== '') {
+    $__wcs_reorder_attrs .= ' data-w-reorder-url="' . \htmlspecialchars($__wcs_reorder_url, ENT_QUOTES, 'UTF-8') . '"';
+}
+if ($__wcs_reorder_website_id !== '') {
+    $__wcs_reorder_attrs .= ' data-w-reorder-website-id="' . \htmlspecialchars($__wcs_reorder_website_id, ENT_QUOTES, 'UTF-8') . '"';
+}
 ?>
 PHP;
             $html[] = <<<'HTML'
 <div
-    class="w-currency-select<?= $__wcs_classes ? ' ' . htmlspecialchars(implode(' ', $__wcs_classes), ENT_QUOTES, 'UTF-8') : '' ?>"
+    class="w-currency-select<?= $__wcs_classes ? ' ' . htmlspecialchars(implode(' ', $__wcs_classes), ENT_QUOTES, 'UTF-8') : '' ?><?= $__wcs_selected !== [] ? ' has-value' : '' ?>"
     id="<?= htmlspecialchars($__wcs_component_id, ENT_QUOTES, 'UTF-8') ?>_wrapper"
     data-w-component="currency-select"
     data-w-component-id="<?= htmlspecialchars($__wcs_component_id, ENT_QUOTES, 'UTF-8') ?>"
@@ -185,24 +196,71 @@ PHP;
     data-w-empty-text="<?= htmlspecialchars($__wcs_empty, ENT_QUOTES, 'UTF-8') ?>"
     data-w-width="<?= htmlspecialchars($__wcs_width, ENT_QUOTES, 'UTF-8') ?>"
     data-w-auto-submit="<?= $__wcs_auto_submit ? 'true' : 'false' ?>"
+    data-has-value="<?= $__wcs_selected !== [] ? 'true' : 'false' ?>"
+    <?= $__wcs_reorder_attrs ?>
 >
-    <button
+    <div
         class="w-currency-select__trigger"
         id="<?= htmlspecialchars($__wcs_component_id, ENT_QUOTES, 'UTF-8') ?>_trigger"
-        type="button"
+        role="button"
+        tabindex="<?= $__wcs_display_only ? '-1' : '0' ?>"
         aria-haspopup="listbox"
         aria-expanded="false"
         aria-controls="<?= htmlspecialchars($__wcs_component_id, ENT_QUOTES, 'UTF-8') ?>_list"
         aria-label="<?= htmlspecialchars($__wcs_empty, ENT_QUOTES, 'UTF-8') ?>"
-        <?= $__wcs_display_only ? 'disabled aria-disabled="true"' : '' ?>
+        <?= $__wcs_display_only ? 'aria-disabled="true"' : '' ?>
     >
         <span class="w-currency-select__tags" data-w-currency-tags>
-            <span class="w-currency-select__placeholder"><?= htmlspecialchars($__wcs_empty, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php if ($__wcs_selected === []): ?>
+                <span class="w-currency-select__placeholder"><?= htmlspecialchars($__wcs_empty, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php else: ?>
+                <?php
+                $__wcs_by_code = [];
+                foreach ($__wcs_items as $__wcs_item) {
+                    $__wcs_item_code = \strtoupper(\trim((string)($__wcs_item['code'] ?? '')));
+                    if ($__wcs_item_code !== '') {
+                        $__wcs_by_code[$__wcs_item_code] = $__wcs_item;
+                    }
+                }
+                foreach ($__wcs_selected as $__wcs_sel_code):
+                    $__wcs_sel_code = \strtoupper(\trim((string)$__wcs_sel_code));
+                    if ($__wcs_sel_code === '') {
+                        continue;
+                    }
+                    $__wcs_sel_item = $__wcs_by_code[$__wcs_sel_code] ?? [];
+                    $__wcs_sel_tag = (string)($__wcs_sel_item['tag_label'] ?? $__wcs_sel_item['label'] ?? $__wcs_sel_code);
+                    $__wcs_sel_locked = $__wcs_display_only || \in_array($__wcs_sel_code, $__wcs_readonly, true);
+                    $__wcs_sel_sortable = $__wcs_multiple && !$__wcs_display_only;
+                    ?>
+                <span
+                    class="w-currency-select__tag<?= $__wcs_sel_sortable ? ' is-sortable' : '' ?>"
+                    data-w-currency-code="<?= htmlspecialchars($__wcs_sel_code, ENT_QUOTES, 'UTF-8') ?>"
+                    data-readonly="<?= $__wcs_sel_locked ? 'true' : 'false' ?>"
+                    <?php if ($__wcs_sel_sortable): ?>draggable="true" title="<?= htmlspecialchars((string)__('拖动排序'), ENT_QUOTES, 'UTF-8') ?>"<?php endif; ?>
+                >
+                    <?php if ($__wcs_sel_sortable): ?>
+                        <span class="w-currency-select__drag-handle" aria-hidden="true"></span>
+                    <?php endif; ?>
+                    <span class="w-currency-select__symbol" aria-hidden="true"></span>
+                    <span class="w-currency-select__tag-label"><?= htmlspecialchars($__wcs_sel_tag, ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="w-currency-select__code"><?= htmlspecialchars($__wcs_sel_code, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php if ($__wcs_multiple && !$__wcs_sel_locked): ?>
+                        <button
+                            type="button"
+                            class="w-currency-select__remove"
+                            data-w-remove-code="<?= htmlspecialchars($__wcs_sel_code, ENT_QUOTES, 'UTF-8') ?>"
+                            aria-label="<?= htmlspecialchars($__wcs_sel_code . ' ×', ENT_QUOTES, 'UTF-8') ?>"
+                            draggable="false"
+                        >×</button>
+                    <?php endif; ?>
+                </span>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </span>
         <?php if (!$__wcs_display_only): ?>
             <w-icon name="chevron-down" size="sm"></w-icon>
         <?php endif; ?>
-    </button>
+    </div>
 
     <select
         class="w-visually-hidden"

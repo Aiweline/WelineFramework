@@ -58,17 +58,10 @@ async function dismissStorefrontNoise(page) {
 
 /**
  * Prefer public HTTPS Host for multi-scope pathways.
- * PLAYWRIGHT_TARGET_ORIGIN often points at http://127.0.0.1:worker which
- * attack_guard / hang can break; release helpers already document this.
+ * Reads explicit Scope stack (B2B push/pop) via resolveStorefrontOrigin.
  */
 function multiScopeOrigin() {
-  const forced = String(process.env.WELINE_E2E_STOREFRONT_ORIGIN || process.env.WELINE_E2E_BASE_URL || '').trim();
-  if (forced) return forced.replace(/\/$/, '');
-  const fromHelper = storefrontOrigin();
-  if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(fromHelper)) {
-    return 'https://p05113ef3.test.weline.com';
-  }
-  return fromHelper || 'https://p05113ef3.test.weline.com';
+  return storefrontOrigin();
 }
 
 async function gotoMultiScope(page, routePath, gotoFrontend) {

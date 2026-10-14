@@ -58,19 +58,27 @@ final class UrlParserDefaultLanguageContractTest extends TestCase
         );
     }
 
-    public function test_website_language_codes_source_prefers_default_language(): void
+    public function test_website_data_language_codes_keep_association_order(): void
     {
         $source = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Websites/Model/WebsiteLanguage.php'
+            dirname(__DIR__, 4) . '/Websites/Data/WebsiteData.php'
         );
 
+        self::assertStringNotContainsString('preferDefaultLanguageFirst', $source);
+        self::assertStringContainsString('function defaultLanguageForWebsite', $source);
         self::assertStringContainsString(
-            'Keep website.default_language first',
+            'Bare-path / routing',
             $source
         );
-        self::assertStringContainsString(
-            'getDefaultLanguage()',
-            $source
+    }
+
+    public function test_url_parser_uses_default_language_field_not_codes_zero(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Http/Url.php'
         );
+
+        self::assertStringContainsString("\$site['default_language']", $source);
+        self::assertStringNotContainsString('language_codes[0]', $source);
     }
 }

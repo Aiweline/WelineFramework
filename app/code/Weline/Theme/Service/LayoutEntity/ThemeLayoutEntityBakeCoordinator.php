@@ -780,7 +780,7 @@ final class ThemeLayoutEntityBakeCoordinator
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string,force_pages?:bool} $options
      * @return list<array{identity:ThemeVersionIdentity,pending:list<array<string,mixed>>,changes:array}>
      */
     private function collectRebakeWorkItems(
@@ -794,6 +794,7 @@ final class ThemeLayoutEntityBakeCoordinator
         $allVersions = !empty($options['all_versions']);
         $layoutTypeFilter = trim((string)($options['layout_type'] ?? ''));
         $layoutOptionFilter = trim((string)($options['layout_option'] ?? ''));
+        $forcePages = !empty($options['force_pages']);
         $query = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery();
         if ($themeId !== null) {
             $query->where('theme_id', $themeId);
@@ -909,7 +910,11 @@ final class ThemeLayoutEntityBakeCoordinator
                     continue;
                 }
                 try {
-                    if ($this->generatedPageMatchesInputs($identity, $type, $option, $targetType, $targetId, $changes, $planDigest)) {
+                    // force_pages: origin-watch proved theme-tree widget/template deps drifted;
+                    // PageInputDigest only pins layout origin, so digest match must not skip.
+                    if (!$forcePages
+                        && $this->generatedPageMatchesInputs($identity, $type, $option, $targetType, $targetId, $changes, $planDigest)
+                    ) {
                         $this->lastRebakeReport['skipped_unchanged']++;
                         $this->lastRebakeReport['skipped']++;
                         continue;
@@ -1151,6 +1156,15 @@ final class ThemeLayoutEntityBakeCoordinator
             if ($this->chromePartialDiskStaleOrRaw($this->paths()->partialPhtml($identity, $type, $option))) {
                 $needs = true;
                 break;
+            }
+        }
+        // Design themes often bake into header/storefront-shell while header/default stays
+        // digest-fresh — rematerialize must also heal that dependency partial.
+        if (!$needs) {
+            $headerDefault = $this->paths()->partialPhtml($identity, 'header', 'default');
+            $shell = \dirname($headerDefault) . '/storefront-shell.phtml';
+            if ($this->chromePartialDiskStaleOrRaw($shell)) {
+                $needs = true;
             }
         }
         if (!$needs) {

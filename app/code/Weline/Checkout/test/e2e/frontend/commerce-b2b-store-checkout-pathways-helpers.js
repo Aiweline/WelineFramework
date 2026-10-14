@@ -1,9 +1,16 @@
 /**
  * B2B test-store commerce pathway helpers.
  * Origin is the dedicated store channel (not default /b2b).
+ * Scope truth: tests/e2e/framework/storefront-scope-context.js (push/pop) — not process.env.
  */
 const path = require('path');
 const { execFileSync } = require('child_process');
+const {
+  pushScope,
+  popScope,
+  clearScopes,
+  currentScope,
+} = require('../../../../../../../tests/e2e/framework/storefront-scope-context');
 
 const multi = require('./commerce-multi-scope-checkout-pathways-helpers');
 const expressHelpers = require('./commerce-express-checkout-pathway-helpers');
@@ -38,7 +45,36 @@ function runB2bFixture(action, payload = {}) {
 }
 
 /**
- * Ensure store/channel and bind WELINE_E2E_STOREFRONT_ORIGIN to channel base_url.
+ * Push B2B channel onto explicit Scope stack (no process.env write).
+ * Idempotent when already on the same B2B origin.
+ * MUST call restoreStorefrontOrigin() in afterAll.
+ */
+function bindB2bStorefrontOrigin(baseUrl) {
+  const origin = String(baseUrl || '').replace(/\/$/, '');
+  if (!origin) {
+    throw new Error('bindB2bStorefrontOrigin: baseUrl required');
+  }
+  const top = currentScope();
+  if (top && top.b2b && top.origin === origin) {
+    return;
+  }
+  pushScope({ origin, b2b: true });
+}
+
+/**
+ * Pop all B2B Scope frames (and clear leftover B2B pollution).
+ */
+function restoreStorefrontOrigin() {
+  while (currentScope() && currentScope().b2b) {
+    popScope();
+  }
+  if (currentScope() && /e2e-b2b-commerce/i.test(String(currentScope().origin || ''))) {
+    clearScopes();
+  }
+}
+
+/**
+ * Ensure store/channel and push Scope stack to channel base_url.
  * @returns {{scope: object, fixture?: object}}
  */
 function prepareB2bStoreScope(action = 'ensure_store') {
@@ -47,8 +83,7 @@ function prepareB2bStoreScope(action = 'ensure_store') {
   if (!baseUrl) {
     throw new Error('b2b-store base_url missing');
   }
-  process.env.WELINE_E2E_STOREFRONT_ORIGIN = baseUrl;
-  process.env.WELINE_E2E_BASE_URL = baseUrl;
+  bindB2bStorefrontOrigin(baseUrl);
   return prepared;
 }
 
@@ -70,6 +105,8 @@ module.exports = {
   prepareB2bStoreScope,
   prepareCustomerOnB2bStore,
   prepareWholesaleOnB2bStore,
+  bindB2bStorefrontOrigin,
+  restoreStorefrontOrigin,
   addToCartMode: multi.addToCartMode,
   openCheckout: multi.openCheckout,
   ensureCheckoutAddress: multi.ensureCheckoutAddress,

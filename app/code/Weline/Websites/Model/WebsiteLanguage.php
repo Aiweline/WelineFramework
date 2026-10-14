@@ -7,6 +7,7 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\Localization\LanguageCatalogInvalidationService;
 use Weline\Websites\Service\WebsiteCacheInvalidationService;
 #[Table(comment: '网站-语言关联表')]
 #[Index(name: 'idx_website_id', columns: ['website_id'], comment: '网站ID索引')]
@@ -27,6 +28,9 @@ class WebsiteLanguage extends Model
     public const schema_fields_WEBSITE_ID = 'website_id';
     #[Col('varchar', 20, nullable: false, comment: '语言代码')]
     public const schema_fields_LANGUAGE_CODE = 'language_code';
+    /** Lower = earlier in website-baseline switcher order. */
+    #[Col('int', 11, nullable: false, default: 0, comment: '网站展示序（越小越靠前）')]
+    public const schema_fields_SORT_ORDER = 'sort_order';
 
     public function setWebsiteLanguageId(int $id): self
     {
@@ -82,6 +86,8 @@ class WebsiteLanguage extends Model
     {
         $languages = $this->clearQuery()
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->order(self::schema_fields_SORT_ORDER, 'ASC')
+            ->order(self::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -91,8 +97,8 @@ class WebsiteLanguage extends Model
             $codes[] = $language->getLanguageCode();
         }
 
-        // Association rows only. WebsiteData prefers website.default_language first
-        // from the already-loaded website / snapshot (no parallel Website::find).
+        // Association rows only (sort_order ASC). Routing fallbacks use
+        // website.default_language as a separate field — do not reorder here.
         return $codes;
     }
 
@@ -111,16 +117,21 @@ class WebsiteLanguage extends Model
             ->delete()
             ->fetch();
         
-        // 插入新的关联
+        // 插入新的关联；数组下标 = sort_order（网站基线展示序）
         if (!empty($languageCodes)) {
             $data = [];
+            $sort = 0;
             foreach ($languageCodes as $code) {
-                if (!empty($code)) {
-                    $data[] = [
-                        self::schema_fields_WEBSITE_ID => $websiteId,
-                        self::schema_fields_LANGUAGE_CODE => $code,
-                    ];
+                $code = \trim((string)$code);
+                if ($code === '') {
+                    continue;
                 }
+                $data[] = [
+                    self::schema_fields_WEBSITE_ID => $websiteId,
+                    self::schema_fields_LANGUAGE_CODE => $code,
+                    self::schema_fields_SORT_ORDER => $sort,
+                ];
+                $sort++;
             }
             if (!empty($data)) {
                 $this->clearData(true);
@@ -131,6 +142,48 @@ class WebsiteLanguage extends Model
         $this->clearWebsiteLanguageCaches($websiteId);
         $this->syncI18nTranslationTargets($languageCodes);
         $this->syncThemeFontWarmup($languageCodes);
+
+        return $this;
+    }
+
+    /**
+     * Persist display order only (soft catalog invalidation).
+     *
+     * Does not emit website-level w_changed / legacy full cacheClear / FPC wipe.
+     * Membership writes must keep using setWebsiteLanguages().
+     *
+     * @param list<string>|array<int|string, mixed> $languageCodes
+     */
+    public function reorderWebsiteLanguages(int $websiteId, array $languageCodes): self
+    {
+        $this->clearQuery()
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->delete()
+            ->fetch();
+
+        if (!empty($languageCodes)) {
+            $data = [];
+            $sort = 0;
+            foreach ($languageCodes as $code) {
+                $code = \trim((string)$code);
+                if ($code === '') {
+                    continue;
+                }
+                $data[] = [
+                    self::schema_fields_WEBSITE_ID => $websiteId,
+                    self::schema_fields_LANGUAGE_CODE => $code,
+                    self::schema_fields_SORT_ORDER => $sort,
+                ];
+                $sort++;
+            }
+            if (!empty($data)) {
+                $this->clearData(true);
+                $this->insert($data)->fetch();
+            }
+        }
+
+        ObjectManager::getInstance(LanguageCatalogInvalidationService::class)
+            ->invalidateAfterReorder($websiteId);
 
         return $this;
     }

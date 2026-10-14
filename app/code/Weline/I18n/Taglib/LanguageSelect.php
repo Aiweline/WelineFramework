@@ -73,6 +73,8 @@ class LanguageSelect implements TaglibInterface
             'catalog' => false,
             'data-w-width' => false,
             'auto-submit' => false,
+            'reorder-url' => false,
+            'reorder-website-id' => false,
         ];
     }
 
@@ -127,6 +129,8 @@ class LanguageSelect implements TaglibInterface
                 . "'catalog' => (string)(\$Taglib__catalog ?? 'installed'),"
                 . "'data-w-width' => (string)(\$Taglib__data_w_width ?? ''),"
                 . "'auto-submit' => \$Taglib__auto_submit ?? false,"
+                . "'reorder-url' => (string)(\$Taglib__reorder_url ?? ''),"
+                . "'reorder-website-id' => (string)(\$Taglib__reorder_website_id ?? ''),"
                 . ']) ' . $phpClose;
         };
     }
@@ -270,6 +274,8 @@ class LanguageSelect implements TaglibInterface
         $__wls_width = $text($attributes['data-w-width'] ?? '');
         $__wls_width = \in_array($__wls_width, ['auto', 'full'], true) ? $__wls_width : '';
         $__wls_auto_submit = $bool($attributes['auto-submit'] ?? false);
+        $__wls_reorder_url = $text($attributes['reorder-url'] ?? '');
+        $__wls_reorder_website_id = $text($attributes['reorder-website-id'] ?? '');
         $__wls_readonly_json = \json_encode($__wls_readonly, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '[]';
 
         \Weline\Framework\Runtime\FiberOutputBuffer::beginCapture();
@@ -304,6 +310,7 @@ class LanguageSelect implements TaglibInterface
 <h3><code>&lt;w:i18n:language:select&gt;</code> 使用文档</h3>
 <p>Weline UI 2.0 原生语言选择组件。支持国家分组搜索、单选、多选、只读值和标准表单提交；通过 <code>Weline.UI.get(element, 'language-select')</code> 访问实例。</p>
 <p><code>exclude-site-languages="true"</code> 会把当前站点已关联语言标为禁用（灰色不可选），适合「申请支持其他语言」等场景。</p>
+<p>多选时胶囊支持拖拽排序，并派发 <code>reorder</code> / <code>reorder-saved</code> / <code>reorder-error</code>。可选 <code>reorder-url</code> + <code>reorder-website-id</code>：松手后异步 POST（FormData：<code>website_id</code>、<code>language_codes[]</code>、表单 csrf）。</p>
 DOC;
 
         return \htmlspecialchars($doc, ENT_NOQUOTES);

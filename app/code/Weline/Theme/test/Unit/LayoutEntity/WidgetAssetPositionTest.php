@@ -104,4 +104,33 @@ final class WidgetAssetPositionTest extends TestCase
         self::assertTrue(\Weline\Framework\View\Helper\HtmlCacheAdmission::storefrontProductCardCssOk($html));
         self::assertSame($html, \Weline\Framework\View\Helper\HtmlCacheAdmission::healStorefrontProductCardCss($html));
     }
+
+    public function testLayoutPackInsertsAfterThemeLinkNotInsideAfterCssScript(): void
+    {
+        $placer = new \Weline\Theme\Service\LayoutEntity\WidgetAssetHtmlPlacement();
+        $layout = '<link data-weline-layout-pack="1" data-weline-widget-asset="layout" rel="stylesheet" href="/layout.css">';
+        $head = '<style data-weline-layout-critical></style>'
+            . '<link rel="stylesheet" data-weline-theme-head-pack="storefront" href="/theme.css">'
+            . '<link rel="stylesheet" data-weline-theme-disk="1" href="/disk.css">'
+            . '<link rel="stylesheet" data-weline-theme-head-pack="overlay" data-weline-theme-overlay="1" href="/overlay.css">'
+            . '<script data-weline-theme-head-pack="early">/*early*/</script>'
+            . '<script src="/after-css.js" defer data-weline-theme-head-pack="after-css"></script>';
+        $html = $placer->inject('<html><head>' . $head . '</head><body>' . $layout . '</body></html>');
+        $overlayPos = strpos($html, 'data-weline-theme-overlay=');
+        $layoutPos = strpos($html, 'data-weline-layout-pack=');
+        $afterCssPos = strpos($html, 'data-weline-theme-head-pack="after-css"');
+        self::assertNotFalse($overlayPos);
+        self::assertNotFalse($layoutPos);
+        self::assertNotFalse($afterCssPos);
+        self::assertLessThan($layoutPos, $overlayPos); // layout after overlay marker
+        self::assertLessThan($afterCssPos, $layoutPos); // and before after-css script
+        // Must not sit inside any <script>…</script> (swallowed → never loads).
+        $scriptOpen = strrpos(substr($html, 0, $layoutPos), '<script');
+        if ($scriptOpen !== false) {
+            $scriptClose = strpos($html, '</script>', $scriptOpen);
+            self::assertNotFalse($scriptClose);
+            self::assertFalse($scriptOpen < $layoutPos && $layoutPos < $scriptClose);
+        }
+        self::assertSame(1, substr_count($html, 'href="/layout.css"'));
+    }
 }

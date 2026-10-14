@@ -14,8 +14,9 @@ use Weline\Widget\Service\DefaultInjectionPlanRepository;
  *
  * Authority: Theme/doc/布局固化与默认注入.md
  * — slot exists + no user_deleted@{versionId} ⇒ node must be in solidified template.
- * — Page-level identity once: wrong-slot drift is relocated; never dual-write into
- *   parent `content` plus the declared nested slot.
+ * — Same widget_code may occupy multiple *declared* slots on one page (per-slot plant);
+ *   wrong-slot / undeclared drift is relocated into the declared slot; never dual-write
+ *   the same identity into parent `content` plus a declared nested slot.
  */
 final class RequiredDefaultInjectionBakeMerger
 {

@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Theme;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\ThemeData;
+use Weline\Theme\Minify\StaticAssetMinifier;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeResourceConfig;
 
 /**
  * Inline layout-critical CSS for first-paint shell stability (FOUC gate companion).
+ *
+ * Prefers design-theme owned {area}/assets/css/layout-critical.css, then baseline.
+ * When resource_files/css_minify is on, minify before inline.
  */
 final class LayoutCriticalCssService
 {
@@ -22,9 +28,40 @@ final class LayoutCriticalCssService
             return '';
         }
 
+        if ($this->shouldMinify($area)) {
+            try {
+                /** @var StaticAssetMinifier $minifier */
+                $minifier = ObjectManager::getInstance(StaticAssetMinifier::class);
+                $css = $minifier->minifyFileContent($css, 'css');
+            } catch (\Throwable) {
+                // Keep original critical bytes when minify cannot prove safety.
+            }
+        }
+
         $css = str_replace('</style', '<\\/style', $css);
 
         return '<style data-weline-layout-critical>' . $css . '</style>';
+    }
+
+    private function shouldMinify(string $area): bool
+    {
+        try {
+            /** @var ThemeResourceConfig $config */
+            $config = ObjectManager::getInstance(ThemeResourceConfig::class);
+            $theme = null;
+            try {
+                $theme = ThemeData::getCurrentTheme();
+            } catch (\Throwable) {
+                $theme = null;
+            }
+
+            return !empty($config->resolve(
+                $theme instanceof WelineTheme ? $theme : null,
+                $area
+            )['css_minify']);
+        } catch (\Throwable) {
+            return defined('PROD') && PROD;
+        }
     }
 
     private function readCriticalCss(string $area): string

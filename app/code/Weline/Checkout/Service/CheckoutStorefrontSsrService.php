@@ -87,36 +87,40 @@ final class CheckoutStorefrontSsrService
             $preview = \is_array($cart['discount_preview'] ?? null) ? $cart['discount_preview'] : [];
             $subtotal = $this->majorAmount($preview, 'subtotal', 'subtotal_minor');
         }
-        $discount = $this->majorAmount(
-            \is_array($cart['discount_preview'] ?? null) ? $cart['discount_preview'] : [],
-            'amount',
-            'amount_minor'
-        );
-        // SSR HTML 默认勾选首项支付；跳过 getData 时 JS 仍须用同套扁字段扣激励/COD。
-        $paymentDelta = $this->defaultPaymentMoneyDelta($paymentMethods);
-        $grand = $this->majorAmount($cart, 'grand_total', 'grand_total_minor');
-        if ($grand <= 0.0) {
-            $grand = max(0.0, $subtotal + $shippingAmount - $discount);
+        // Cart baseline grand — no payment incentive. Payable only via MoneyTotalsBuilder.
+        $grandBaseline = $this->majorAmount($cart, 'grand_total', 'grand_total_minor');
+        if ($grandBaseline <= 0.0) {
+            $discount = $this->majorAmount(
+                \is_array($cart['discount_preview'] ?? null) ? $cart['discount_preview'] : [],
+                'amount',
+                'amount_minor'
+            );
+            $grandBaseline = max(0.0, $subtotal + $shippingAmount - $discount);
         }
-        if ($shippingAmount > 0 && $grand <= $subtotal + 0.0001 && $discount <= 0.0) {
-            $grand = $subtotal + $shippingAmount;
+        if ($shippingAmount > 0 && $grandBaseline <= $subtotal + 0.0001) {
+            $discount = $this->majorAmount(
+                \is_array($cart['discount_preview'] ?? null) ? $cart['discount_preview'] : [],
+                'amount',
+                'amount_minor'
+            );
+            if ($discount <= 0.0) {
+                $grandBaseline = $subtotal + $shippingAmount;
+            }
         }
-        $grand = max(0.0, $grand - $paymentDelta['incentive_major'] + $paymentDelta['cod_major']);
 
         $ready = $items !== []
             || $shippingHtml !== ''
             || $paymentHtml !== '';
 
-        return $this->applyMoneySummaryPolicy([
+        $payload = [
             'ready' => $ready,
             'items' => $items,
             'currency' => $currency,
             'cart_type' => $mode,
             'selling_mode' => $mode,
-            // array_merge：后写覆盖 — cart 自带 grand_total 不得盖掉已扣激励的应付。
             'cart' => array_merge($cart, [
                 'subtotal' => $subtotal,
-                'grand_total' => $grand,
+                'grand_total' => $grandBaseline,
                 'currency' => $currency,
                 'cart_type' => $mode,
                 'is_empty' => $items === [],
@@ -129,12 +133,11 @@ final class CheckoutStorefrontSsrService
             'shipping_methods_html' => $shippingHtml,
             'payment_methods_html' => $paymentHtml,
             'items_html' => $itemsHtml,
-            'goods_text' => $this->money($currency, $subtotal),
-            'shipping_text' => $this->money($currency, $shippingAmount),
-            'payable_text' => $this->money($currency, $grand),
             'quote_token' => trim((string)($data['quote_token'] ?? '')),
             'tax_estimate' => \is_array($data['tax_estimate'] ?? null) ? $data['tax_estimate'] : null,
-        ]);
+        ];
+
+        return $this->finalizeWithMoneyTotals($payload);
     }
 
     /**
@@ -196,8 +199,6 @@ final class CheckoutStorefrontSsrService
             $paymentHtml = '';
             $methods = [];
         }
-        $paymentDelta = $this->defaultPaymentMoneyDelta($methods);
-        $grand = max(0.0, $grand - $paymentDelta['incentive_major'] + $paymentDelta['cod_major']);
         $mode = $this->sellingMode();
         $requiresShipping = $this->cartItemsRequireShipping($items);
         $shippingMethods = [];
@@ -226,7 +227,7 @@ final class CheckoutStorefrontSsrService
             );
         }
 
-        return $this->applyMoneySummaryPolicy([
+        $payload = [
             'ready' => $items !== [] || $paymentHtml !== '',
             'items' => $items,
             'currency' => $currency,
@@ -243,16 +244,41 @@ final class CheckoutStorefrontSsrService
             'shipping_methods_html' => $shippingHtml,
             'payment_methods_html' => $paymentHtml,
             'items_html' => $itemsHtml,
-            'goods_text' => $this->money($currency, $subtotal),
-            'shipping_text' => $this->money($currency, 0),
-            'payable_text' => $this->money($currency, $grand),
             'quote_token' => '',
             'tax_estimate' => null,
-        ]);
+        ];
+
+        return $this->finalizeWithMoneyTotals($payload);
     }
 
     /**
-     * Optional commerce policy (B2B ToB etc.). Missing provider → retail payload unchanged.
+     * Same channel as getData: Builder → money_summary → optional Policy chrome strip.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function finalizeWithMoneyTotals(array $payload): array
+    {
+        $builder = new StorefrontMoneyTotalsBuilder();
+        $money = $builder->build([
+            'currency' => (string)($payload['currency'] ?? 'CNY'),
+            'cart' => \is_array($payload['cart'] ?? null) ? $payload['cart'] : [],
+            'shipping_methods' => \is_array($payload['shipping_methods'] ?? null) ? $payload['shipping_methods'] : [],
+            'payment_methods' => \is_array($payload['payment_methods'] ?? null) ? $payload['payment_methods'] : [],
+            'tax_estimate' => \is_array($payload['tax_estimate'] ?? null) ? $payload['tax_estimate'] : null,
+            'cart_type' => (string)($payload['cart_type'] ?? 'toc'),
+            'selling_mode' => (string)($payload['selling_mode'] ?? 'toc'),
+            // SSR default = first method (HtmlRenderer selected_index=0).
+            'selected_payment_method' => '',
+            'selected_shipping_method' => '',
+        ]);
+        $payload = $builder->mergeIntoPayload($payload, $money);
+
+        return $this->applyMoneySummaryPolicy($payload);
+    }
+
+    /**
+     * Optional commerce policy chrome (B2B strip badges). Totals already via Builder+adjustDto.
      *
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
@@ -298,33 +324,12 @@ final class CheckoutStorefrontSsrService
             'goods_text' => '',
             'shipping_text' => '',
             'payable_text' => '',
+            'incentive_text' => '',
+            'incentive_minor' => 0,
+            'cod_fee_text' => '',
+            'cod_fee_minor' => 0,
             'quote_token' => '',
             'tax_estimate' => null,
-        ];
-    }
-
-    /**
-     * 与 HtmlRenderer 默认 selected_index=0 对齐：首项激励/COD 进入 SSR 应付与 boot 扁字段。
-     *
-     * @param list<array<string,mixed>> $paymentMethods
-     * @return array{incentive_major:float,cod_major:float}
-     */
-    private function defaultPaymentMoneyDelta(array $paymentMethods): array
-    {
-        $empty = ['incentive_major' => 0.0, 'cod_major' => 0.0];
-        if ($paymentMethods === [] || !\is_array($paymentMethods[0] ?? null)) {
-            return $empty;
-        }
-        $method = $paymentMethods[0];
-        $incentive = 0.0;
-        if (!empty($method['incentive_available'])) {
-            $incentive = max(0, (int)($method['incentive_savings_minor'] ?? 0)) / 100.0;
-        }
-        $cod = max(0, (int)($method['cod_fee_amount_minor'] ?? 0)) / 100.0;
-
-        return [
-            'incentive_major' => $incentive,
-            'cod_major' => $cod,
         ];
     }
 

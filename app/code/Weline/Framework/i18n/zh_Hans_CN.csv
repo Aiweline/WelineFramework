@@ -543,41 +543,6 @@ env.php中的服务器信息:,env.php中的服务器信息:
 "端口: %{1}","端口: %{1}"
 "PID: %{1}","PID: %{1}"
 "状态: %{1}","状态: %{1}"
-"未找到 E2E 目录：%{1}","未找到 E2E 目录：%{1}"
-"模块 %{1} 未找到 E2E 用例，退出。","模块 %{1} 未找到 E2E 用例，退出。"
-"未找到可运行的 E2E 用例，退出。","未找到可运行的 E2E 用例，退出。"
-工作目录：%{1},工作目录：%{1}
-执行命令：%{1},执行命令：%{1}
-"E2E 测试执行成功。","E2E 测试执行成功。"
-"E2E 测试执行失败，退出码：%{1}","E2E 测试执行失败，退出码：%{1}"
-"运行 Playwright E2E（自动在 tests/e2e 目录执行）","运行 Playwright E2E（自动在 tests/e2e 目录执行）"
-"直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。","直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。"
-"可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js","可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js"
-"指定 Playwright project，如 chromium/firefox/webkit","指定 Playwright project，如 chromium/firefox/webkit"
-"只运行指定模块（基于 collected-tests.json 精准过滤）","只运行指定模块（基于 collected-tests.json 精准过滤）"
-"按测试标题关键词筛选（映射为 --grep）","按测试标题关键词筛选（映射为 --grep）"
-"按 `[case:ID]` 标签筛选，推荐新用例使用该风格","按 `[case:ID]` 标签筛选，推荐新用例使用该风格"
-列出可运行模块及文件数量,列出可运行模块及文件数量
-强制刷新测试收集映射,强制刷新测试收集映射
-有界面模式（调试用；默认无头，需显式传入）,有界面模式（调试用；默认无头，需显式传入）
-"无界面模式（默认；设置 PLAYWRIGHT_HEADLESS=1）","无界面模式（默认；设置 PLAYWRIGHT_HEADLESS=1）"
-"Playwright UI 模式",剧作家UI模式
-按测试名过滤,按测试名过滤
-"并发 worker 数","系数 工人数"
-"运行全部 E2E","运行全部 E2E"
-运行单个后端用例,运行单个后端用例
-按模块运行,按模块运行
-按用例标题运行,按用例标题运行
-"按用例 ID 运行","按用例 ID 运行"
-列模块,列模块
-"UI 调试","UI 调试"
-"检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。","检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。"
-"未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。","未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。"
-"无法创建 E2E node_modules 目录：%{1}","无法创建 E2E node_modules 目录：%{1}"
-"无法创建 @playwright/test shim 目录：%{1}","无法创建 @playwright/test shim 目录：%{1}"
-"无法创建 playwright shim 目录：%{1}","无法创建 playwright shim 目录：%{1}"
-测试清单写入失败，模块过滤可能不可用。,测试清单写入失败，模块过滤可能不可用。
-"可用 E2E 模块列表：","可用 E2E 模块列表："
 最终响应装饰器返回了无效响应,最终响应装饰器返回了无效响应
 当前请求的商城范围未完整冻结,当前请求的商城范围未完整冻结
 当前请求的商城路由上下文未完整冻结,当前请求的商城路由上下文未完整冻结
@@ -2217,7 +2182,7 @@ Duration,期间
 "%{1} 必须是 JSON list","%{1} 必须是 JSON list"
 "Observer 执行超时，Transport 已确认终止 Worker","Observer 执行超时，Transport 已确认终止 Worker"
 "ChangedType %{type} 不允许 action=%{action}","ChangedType %{type} 不允许 action=%{action}"
-"ChangedType %{type} Recipe 需要 urls，Enricher/impact 仍为空","ChangedType %{type} Recipe 需要 urls，Enricher/impact 仍为空"
+"ChangedType %{type} Recipe 需要 urls 或 slugs，Enricher/impact 仍为空","ChangedType %{type} Recipe 需要 urls 或 slugs，Enricher/impact 仍为空"
 "purge_fpc_all 仅允许平台模块：%{modules}","purge_fpc_all 仅允许平台模块：%{modules}"
 "无 Capability 可执行 Effect %{code}","无 Capability 可执行 Effect %{code}"
 错误的缓存处理参数！-c：清除缓存，-f：刷新缓存！,错误的缓存处理参数！-c：清除缓存，-f：刷新缓存！
@@ -2384,6 +2349,7 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 编译运行时索引,编译运行时索引
 "当前部署模式为prod(生产模式)，请谨慎操作！你确认要切换到 %{1} 模式么？","当前部署模式为prod(生产模式)，请谨慎操作！你确认要切换到 %{1} 模式么？"
 已为您取消操作！,已为您取消操作！
+"正在重载持久 Worker 以绑定新的部署常量（mode=%{mode}）…","正在重载持久 Worker 以绑定新的部署常量（mode=%{mode}）…"
 "部署 staging 已打开（stamp=%{stamp}，root=%{root}）","部署 staging 已打开（stamp=%{stamp}，root=%{root}）"
 部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）,部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）
 请指定设置类型:,请指定设置类型:
@@ -2547,6 +2513,42 @@ Operation：%{1}.%{2},操作：%{1}.%{2}
 路由路径,路由路径
 HTTP方法,HTTP方法
 控制器,控制器
+"ChangedType %{type} Recipe 需要 urls，Enricher/impact 仍为空","ChangedType %{type} Recipe 需要 urls，Enricher/impact 仍为空"
+"未找到 E2E 目录：%{1}","未找到 E2E 目录：%{1}"
+"模块 %{1} 未找到 E2E 用例，退出。","模块 %{1} 未找到 E2E 用例，退出。"
+"未找到可运行的 E2E 用例，退出。","未找到可运行的 E2E 用例，退出。"
+工作目录：%{1},工作目录：%{1}
+执行命令：%{1},执行命令：%{1}
+"E2E 测试执行成功。","E2E 测试执行成功。"
+"E2E 测试执行失败，退出码：%{1}","E2E 测试执行失败，退出码：%{1}"
+"运行 Playwright E2E（自动在 tests/e2e 目录执行）","运行 Playwright E2E（自动在 tests/e2e 目录执行）"
+"直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。","直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。"
+"可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js","可选，指定测试文件或目录，例如 app/code/Weline/Theme/test/e2e/backend/theme-editor-preview.spec.js"
+"指定 Playwright project，如 chromium/firefox/webkit","指定 Playwright project，如 chromium/firefox/webkit"
+"只运行指定模块（基于 collected-tests.json 精准过滤）","只运行指定模块（基于 collected-tests.json 精准过滤）"
+"按测试标题关键词筛选（映射为 --grep）","按测试标题关键词筛选（映射为 --grep）"
+"按 `[case:ID]` 标签筛选，推荐新用例使用该风格","按 `[case:ID]` 标签筛选，推荐新用例使用该风格"
+列出可运行模块及文件数量,列出可运行模块及文件数量
+强制刷新测试收集映射,强制刷新测试收集映射
+有界面模式（调试用；默认无头，需显式传入）,有界面模式（调试用；默认无头，需显式传入）
+"无界面模式（默认；设置 PLAYWRIGHT_HEADLESS=1）","无界面模式（默认；设置 PLAYWRIGHT_HEADLESS=1）"
+"Playwright UI 模式",剧作家UI模式
+按测试名过滤,按测试名过滤
+"并发 worker 数","系数 工人数"
+"运行全部 E2E","运行全部 E2E"
+运行单个后端用例,运行单个后端用例
+按模块运行,按模块运行
+按用例标题运行,按用例标题运行
+"按用例 ID 运行","按用例 ID 运行"
+列模块,列模块
+"UI 调试","UI 调试"
+"检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。","检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。"
+"未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。","未找到 Playwright 运行时。请在 tests/e2e 安装依赖，或设置 WELINE_E2E_PLAYWRIGHT_DIR 指向包含 cli.js 的 playwright 包目录。"
+"无法创建 E2E node_modules 目录：%{1}","无法创建 E2E node_modules 目录：%{1}"
+"无法创建 @playwright/test shim 目录：%{1}","无法创建 @playwright/test shim 目录：%{1}"
+"无法创建 playwright shim 目录：%{1}","无法创建 playwright shim 目录：%{1}"
+测试清单写入失败，模块过滤可能不可用。,测试清单写入失败，模块过滤可能不可用。
+"可用 E2E 模块列表：","可用 E2E 模块列表："
 未发现任何框架约束规则。,未发现任何框架约束规则。
 "正在验证框架约束规则（共 %{1} 条）...","正在验证框架约束规则（共 %{1} 条）..."
 所有框架约束规则验证通过！,所有框架约束规则验证通过！

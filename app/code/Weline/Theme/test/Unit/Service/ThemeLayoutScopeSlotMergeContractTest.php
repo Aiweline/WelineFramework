@@ -64,6 +64,7 @@ final class ThemeLayoutScopeSlotMergeContractTest extends TestCase
         self::assertStringContainsString('fpc_staging_warm_promote', $source);
         self::assertStringContainsString('rebuildFpcViaStagingWarmPromote', $source);
         self::assertStringContainsString('beginStagingGeneration', $source);
+        self::assertStringContainsString('assertPromotedHtmlDiskMatchesStorefrontGeneration', $source);
         self::assertStringContainsString('fpc_router_cache_pools', $source);
         self::assertStringContainsString('theme_namespace_generations_all', $source);
         self::assertStringContainsString('bumpAllThemeNamespaces(', $source);

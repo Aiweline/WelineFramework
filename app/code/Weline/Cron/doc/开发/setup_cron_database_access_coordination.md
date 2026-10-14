@@ -35,9 +35,7 @@
 
 SQLite 连接不允许父调度器在上一代受管子任务仍运行时继续认领或启动下一项；父进程必须在发布 `GO` 后按精确代次等待 `SUCCESS/FAIL + pid=0 + launch_id=''`，再处理下一任务。父进程还必须用 `waitpid(WNOHANG)` 回收自己已退出的 POSIX child；若数据库仍是本代 `RUNNING + PID`，按精确代次 CAS 为 FAIL 并释放本代 lease，避免 zombie 在 `kill(pid, 0)` 下持续表现为存活而卡死整轮调度。该单飞约束只适用于 SQLite。
 
-MySQL、MariaDB 和 PostgreSQL 保持独立任务并发，但受 **软并发上限**（`ManagedChildAdmission` / 配置键 `cron/max_concurrent_managed_children`，默认 3，范围 1–16）约束：父调度在 `claimTaskLaunch` **前**统计存活受管子进程（`RUNNING`/`BLOCK` + 可验证 PID，探测 `unknown` 时 fail-closed 计槽）以及 READY 窗口（`BLOCK + pid=0 + 合法 launch_id`）；达到 **有效上限** 则本轮 **defer**（不 claim）。claim 成功后立刻 **再计一次**；若因多父调度 TOCTOU 导致 live > effective max，则释放本 READY 窗口（恢复 `SUCCESS`、清空 `launch_id`/`pid`）且不 spawn。SQLite 路径不走该软上限。普通调度不转发子任务日志，后台手动 SSE 仍按原协议转发。
-
-**主机容量感知（默认开启）**：有效上限 `effectiveMax = min(配置值, hostCapacityMax)`。`hostCapacityMax = max(1, cpuCores - reserve)`，默认 `cron/host_cpu_reserve=1`（2 核机有效并发为 1，给店面/WLS 留核）。配置键 `cron/host_capacity_admission` 默认开启；设为 `0`/`off` 则逃逸回纯配置上限。开启时若 `loadavg_1 >= cpuCores` 则本轮视为无槽（defer），避免超订阅时继续 detach 重任务。探测落在 `HostCapacityProbe`（Cron 模块内，不耦合 Server）。
+MySQL、MariaDB 和 PostgreSQL 保持 **独立任务并发**：每个 due 任务各自 `claimTaskLaunch` + spawn，**不再**做全局软并发上限 / 主机容量 defer（旧 `ManagedChildAdmission` / `host_capacity_admission` 已撤）。原因：大量 `* * * * *` 任务 + 低上限（尤其 2 核机有效并发=1）会造成整轮 defer，任务系统性饿死。SQLite 仍单飞（见上）。普通调度不转发子任务日志，后台手动 SSE 仍按原协议转发。单任务仍靠 `BLOCK`/`RUNNING` 代次围栏互斥，禁止同任务双跑。
 
 **调度进度条**：`CronStatus::displayProgressBar` 仅在交互 TTY 输出 ANSI/`\r`；crontab 重定向到 `var/cron.log` 的非 TTY 路径必须静默，禁止把进度条灌进日志。
 

@@ -18,7 +18,11 @@ final class WebsiteDataAssociationMemoContractTest extends TestCase
         self::assertStringContainsString('function currencyCodesForWebsite', $source);
         self::assertStringContainsString('function defaultLanguageForWebsite', $source);
         self::assertStringContainsString('function defaultCurrencyForWebsite', $source);
-        self::assertStringContainsString('function preferDefaultLanguageFirst', $source);
+        self::assertStringNotContainsString(
+            'preferDefaultLanguageFirst',
+            $source,
+            'language_codes must keep association sort_order; routing uses default_language field.',
+        );
         self::assertStringContainsString('function domainsForWebsite', $source);
         self::assertStringContainsString('function loadAndPublishSnapshotById', $source);
         self::assertStringContainsString('fetchAssociationCodesFromDatabase', $source);

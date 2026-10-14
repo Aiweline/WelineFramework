@@ -619,7 +619,14 @@ class AiQueryProvider implements QueryProviderInterface
         $serviceType = $this->requireNonEmptyString($params, 'service_type');
         $modelCode = $this->requireNonEmptyString($params, 'model_code');
         $success = $this->defaultModelManager()->setDefaultModel($serviceType, $modelCode, (int)($params['priority'] ?? 100), (int)($params['is_active'] ?? 1));
-        return ['success' => $success, 'message' => $success ? (string)__('默认模型设置成功') : (string)__('默认模型设置失败')];
+
+        // JSON API must not emit [[W18N]] attribute markers into dialogs.
+        return \Weline\Framework\Phrase\Parser::withoutInlinePhraseMark(static function () use ($success): array {
+            return [
+                'success' => $success,
+                'message' => $success ? (string)__('默认模型设置成功') : (string)__('默认模型设置失败'),
+            ];
+        });
     }
 
     private function defaultBatchSet(array $params): array
@@ -635,7 +642,13 @@ class AiQueryProvider implements QueryProviderInterface
                 $saved++;
             }
         }
-        return ['success' => $saved > 0, 'saved' => $saved, 'message' => $saved > 0 ? (string)__('默认模型配置保存成功') : (string)__('没有可保存的默认模型配置')];
+        return \Weline\Framework\Phrase\Parser::withoutInlinePhraseMark(static function () use ($saved): array {
+            return [
+                'success' => $saved > 0,
+                'saved' => $saved,
+                'message' => $saved > 0 ? (string)__('默认模型配置保存成功') : (string)__('没有可保存的默认模型配置'),
+            ];
+        });
     }
 
     private function defaultClearCache(): array

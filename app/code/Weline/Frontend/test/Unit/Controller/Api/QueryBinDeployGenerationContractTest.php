@@ -24,6 +24,11 @@ final class QueryBinDeployGenerationContractTest extends TestCase
         self::assertStringContainsString('theme_published_version_id', $src);
         self::assertStringNotContainsString('assertClientDeployGenerationCurrent', $src);
         self::assertStringNotContainsString('currentServerDeployVersion', $src);
+        // Backend-attested handshake must not 409 on missing storefront theme stamp.
+        self::assertMatchesRegularExpression(
+            '/\$backendBootstrapId\s*===\s*\'\'\s*\)\s*\{\s*\$this->assertClientThemeGenerationCurrent/',
+            $src
+        );
     }
 
     public function testApiJsComparesHolePunchThemePublishedVersion(): void

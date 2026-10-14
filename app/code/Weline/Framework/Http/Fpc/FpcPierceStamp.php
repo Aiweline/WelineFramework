@@ -228,7 +228,11 @@ final class FpcPierceStamp
                 continue;
             }
             $name = \trim(\substr($part, 0, $eq));
-            if (\strcasecmp($name, self::COOKIE_NAME) !== 0) {
+            // CookieScope may wire as w_weline_fpc_pierce_w0 (website suffix).
+            $base = self::COOKIE_NAME;
+            if (\strcasecmp($name, $base) !== 0
+                && \preg_match('/^' . \preg_quote($base, '/') . '_w\d+$/i', $name) !== 1
+            ) {
                 continue;
             }
             $value = \trim(\substr($part, $eq + 1));

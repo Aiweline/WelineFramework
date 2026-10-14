@@ -49,4 +49,28 @@ final class TokenAnonymousStorefrontFpcContractTest extends TestCase
         WelineEnv::set('area', 'backend', 'unit test');
         self::assertTrue(Token::mayPersistInSession());
     }
+
+    public function testTokenSessionBindsSessionFactoryNotBareObjectManager(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Security/Token.php',
+        );
+
+        self::assertStringContainsString('SessionFactory', $source);
+        self::assertStringContainsString('createSession($area)', $source);
+        self::assertStringContainsString('$session->save()', $source);
+        // session() 主体禁止再绑裸 OM Session（回退分支除外）
+        self::assertMatchesRegularExpression(
+            '/public static function session\(\): Session\s*\{(?P<body>.*?)\n    \}/s',
+            $source,
+        );
+        \preg_match(
+            '/public static function session\(\): Session\s*\{(?P<body>.*?)\n    \}/s',
+            $source,
+            $m,
+        );
+        $body = (string)($m['body'] ?? '');
+        self::assertStringContainsString('createSession($area)', $body);
+        self::assertStringContainsString('SessionFactory', $body);
+    }
 }

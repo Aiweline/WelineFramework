@@ -93,4 +93,23 @@ XML;
         self::assertStringNotContainsString('StorefrontFpcWarmer', $source);
         self::assertStringNotContainsString('WlsRuntime', $source);
     }
+
+    public function testWarmupHttpClientAppendsPierceStamp(): void
+    {
+        $path = \dirname(__DIR__, 5) . '/Cache/Service/StorefrontWarmup/StorefrontWarmupHttpClient.php';
+        $src = (string)\file_get_contents($path);
+        self::assertStringContainsString('appendPierceQuery', $src);
+        self::assertStringContainsString('FpcPierceStamp::buildQuerySuffix', $src);
+        self::assertStringContainsString('Staging warm seeds hardlinks from live', $src);
+    }
+
+    public function testWarmupHttpClientNeedBodyForcesOriginAndRefusesHit(): void
+    {
+        $path = \dirname(__DIR__, 5) . '/Cache/Service/StorefrontWarmup/StorefrontWarmupHttpClient.php';
+        $src = (string)\file_get_contents($path);
+        self::assertStringContainsString('x-wls-fpc-bypass: 1', $src);
+        self::assertStringContainsString('fpc_hit_refuse_body', $src);
+        self::assertStringContainsString('isFpcHit', $src);
+        self::assertStringContainsString('if ($needBody)', $src);
+    }
 }

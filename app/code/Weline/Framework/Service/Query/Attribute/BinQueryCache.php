@@ -10,6 +10,7 @@ final class BinQueryCache
      * @param array<int, string> $keyParams
      * @param array<int, string> $vary
      * @param array<int, int> $status
+     * @param array<int, string> $tags Cache-Tag / Surrogate-Key tokens for local+CDN purge
      */
     public function __construct(
         public readonly string $ttl,
@@ -19,7 +20,8 @@ final class BinQueryCache
         public readonly array $vary = ['area', 'locale', 'currency'],
         public readonly array $status = [200],
         public readonly string $trigger = 'cron',
-        public readonly bool $cdn = true
+        public readonly bool $cdn = true,
+        public readonly array $tags = [],
     ) {
     }
 
@@ -28,7 +30,7 @@ final class BinQueryCache
      */
     public function toDescriptor(): array
     {
-        return [
+        $out = [
             'cdn' => $this->cdn,
             'ttl' => $this->ttl,
             'visibility' => $this->visibility,
@@ -38,5 +40,13 @@ final class BinQueryCache
             'trigger' => $this->trigger,
             'description' => $this->description,
         ];
+        if ($this->tags !== []) {
+            $out['tags'] = \array_values(\array_unique(\array_filter(\array_map(
+                static fn(mixed $t): string => \trim((string)$t),
+                $this->tags,
+            ))));
+        }
+
+        return $out;
     }
 }

@@ -75,11 +75,20 @@ final class BinQueryCachePolicy
             return $this->noStoreHeaders('not-cacheable');
         }
 
-        return [
+        $headers = [
             'Cache-Control' => 'public, max-age=' . $ttl . ', s-maxage=' . $ttl,
             'X-Weline-BinQuery-Cache' => 'cdn',
             'X-Weline-BinQuery-Cache-Marker' => $marker,
         ];
+        $tags = $this->normalizeStringList($cache['tags'] ?? []);
+        if ($tags !== []) {
+            $joined = \implode(',', $tags);
+            $headers['Cache-Tag'] = $joined;
+            // Fastly-style peers; Cloudflare reads Cache-Tag.
+            $headers['Surrogate-Key'] = \implode(' ', $tags);
+        }
+
+        return $headers;
     }
 
     /**

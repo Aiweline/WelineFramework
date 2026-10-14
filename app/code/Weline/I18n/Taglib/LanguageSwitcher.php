@@ -22,6 +22,7 @@ use Weline\I18n\Model\I18n;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\I18n\Service\LocaleCatalogScope;
 use Weline\I18n\Service\LocaleCatalogScopeResolver;
+use Weline\I18n\Service\LocaleDisplayRankService;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\SystemConfig\Api\ConfigReader;
 
@@ -53,6 +54,7 @@ class LanguageSwitcher implements TaglibInterface
         self::$htmlCache = [];
         self::$chromeDictionaryCache = [];
         InlineSvgIdUniquifier::resetSequence();
+        LocaleDisplayRankService::clearProcessCaches();
     }
 
     /** Shared HotCache policy for the stable switcher language directory. */
@@ -641,7 +643,16 @@ class LanguageSwitcher implements TaglibInterface
     private static function buildLanguagesFromScope(LocaleCatalogScope $scope, string $displayLocale): array
     {
         $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : $scope->displayLocale;
-        $logicalKey = $scope->mode . ':' . $scope->websiteId . '|' . $displayLocale . '|' . \implode(',', $scope->codes);
+        $storeKey = $scope->storeId === null ? 's-' : ('s' . $scope->storeId);
+        $channelKey = $scope->channelId === null ? 'c-' : ('c' . $scope->channelId);
+        // Explicit scope order is authoritative; platform rank version only for fallback re-rank.
+        $orderKey = $scope->preserveExplicitOrder
+            ? ('explicit:' . \implode(',', $scope->codes))
+            : ('rank:' . LocaleDisplayRankService::version());
+        $logicalKey = $scope->mode . ':' . $scope->websiteId
+            . '|' . $storeKey . '|' . $channelKey
+            . '|' . $displayLocale
+            . '|' . $orderKey;
         $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
         $languages = $hotCache->rememberForRequest(
             self::CATALOG_CACHE_RESOURCE,
@@ -650,7 +661,11 @@ class LanguageSwitcher implements TaglibInterface
                 $cached = $hotCache->rememberPolicy(
                     self::catalogCachePolicy(),
                     $logicalKey,
-                    static fn (): array => self::buildLanguagesFromCodes($scope->codes, $displayLocale),
+                    static fn (): array => self::buildLanguagesFromCodes(
+                        $scope->codes,
+                        $displayLocale,
+                        $scope->preserveExplicitOrder,
+                    ),
                 );
 
                 return \is_array($cached) ? $cached : [];
@@ -666,8 +681,11 @@ class LanguageSwitcher implements TaglibInterface
      * @param list<string> $codes
      * @return array<string, array<string, mixed>>
      */
-    public static function buildLanguagesFromCodes(array $codes, string $displayLocale): array
-    {
+    public static function buildLanguagesFromCodes(
+        array $codes,
+        string $displayLocale,
+        bool $preserveExplicitOrder = false,
+    ): array {
         $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'zh_Hans_CN';
         $wantedOrder = [];
         $wantedKeys = [];
@@ -687,7 +705,8 @@ class LanguageSwitcher implements TaglibInterface
             return [];
         }
 
-        // $wantedOrder is already website/inject DB order (LocaleCatalogScope.codes).
+        // $wantedOrder is the scope membership allowlist (LocaleCatalogScope.codes).
+        // When preserveExplicitOrder: keep DB/injected order. Otherwise platform rank.
         // resolveLanguageItems(installed, allowlist) loads ONLY those codes from Locals —
         // never full installed catalog / Symfony global Locales files.
         try {
@@ -696,7 +715,7 @@ class LanguageSwitcher implements TaglibInterface
             $items = [];
         }
 
-        $languages = [];
+        $byCode = [];
         foreach ($items as $item) {
             if (!\is_array($item)) {
                 continue;
@@ -707,7 +726,7 @@ class LanguageSwitcher implements TaglibInterface
             }
             $displayName = (string)($item['display_name'] ?? ($item['name'] ?? $code));
             $tagLabel = (string)($item['tag_label'] ?? $displayName);
-            $languages[$code] = [
+            $byCode[$code] = [
                 'code' => $code,
                 'name' => $displayName,
                 'display_name' => $displayName,
@@ -721,7 +740,24 @@ class LanguageSwitcher implements TaglibInterface
             ];
         }
 
-        return $languages;
+        if ($preserveExplicitOrder) {
+            $ordered = [];
+            foreach ($wantedOrder as $code) {
+                if (isset($byCode[$code])) {
+                    $ordered[$code] = $byCode[$code];
+                }
+            }
+            foreach ($byCode as $code => $row) {
+                if (!isset($ordered[$code])) {
+                    $ordered[$code] = $row;
+                }
+            }
+
+            return $ordered;
+        }
+
+        // Platform / curated heat only when no explicit website/store/channel order.
+        return LocaleDisplayRankService::sortLanguageMap($byCode);
     }
 
     private static function normalizeOptionalInt(mixed $raw): ?int
@@ -777,7 +813,7 @@ class LanguageSwitcher implements TaglibInterface
             return [];
         }
 
-        // Caller order is already website_language / LocaleCatalogScope / inject allowlist.
+        // Caller order is LocaleDisplayRankService order (membership still website/inject allowlist).
         // Items already carry country_* from buildLanguagesFromCodes (Locals + countries DB).
         // NEVER reload LanguageSelect::getLanguageItems() here — that materializes the full
         // installed (or worse, global Locales) catalog and re-loads Intl resource files.

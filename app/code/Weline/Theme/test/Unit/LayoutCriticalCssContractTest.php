@@ -56,11 +56,22 @@ final class LayoutCriticalCssContractTest extends TestCase
         self::assertStringContainsString('weline-theme-prepaint.js', $src);
     }
 
-    public function testStorefrontHeadAssetsSuffixMarksLayoutCssAndCssReady(): void
+    public function testMinimalHeadIncludesCriticalWithoutHardStyleLeaf(): void
+    {
+        $path = BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/minimal.phtml';
+        $src = (string) file_get_contents($path);
+        self::assertStringContainsString('css-fouc-bootstrap.phtml', $src);
+        self::assertStringContainsString('theme:layout-critical', $src);
+        // FOUC waits on critical inline; theme pack must not carry data-weline-layout-css.
+        self::assertStringNotContainsString('data-weline-layout-css', $src);
+        self::assertStringNotContainsString('storefront-shopper-toast-amazon.css', $src);
+    }
+
+    public function testStorefrontHeadAssetsSuffixMarksCssReady(): void
     {
         $path = BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/assets-suffix.phtml';
         $src = (string) file_get_contents($path);
-        self::assertStringContainsString('data-weline-layout-css', $src);
+        self::assertStringNotContainsString('data-weline-layout-css', $src);
         self::assertStringContainsString('weline-css-ready.js', $src);
     }
 

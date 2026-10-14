@@ -164,7 +164,11 @@ class DefaultModelManager
     }
 
     /**
-     * Set default model for service type
+     * Set default model for service type.
+     *
+     * Product rule: one default row per service_type. Reuse that row and rewrite
+     * model_code in place — never INSERT a second (service_type, priority) under
+     * uk_service_type_priority after only flipping is_default=0 on the old row.
      *
      * @param string $serviceType
      * @param string $modelCode
@@ -174,31 +178,78 @@ class DefaultModelManager
      */
     public function setDefaultModel(string $serviceType, string $modelCode, int $priority = 100, int $isActive = 1): bool
     {
+        $serviceType = trim($serviceType);
+        $modelCode = trim($modelCode);
+        if ($serviceType === '' || $modelCode === '') {
+            return false;
+        }
+
         try {
-            // 先清除该服务类型的所有现有默认配置（确保每个服务类型只有一个默认模型）
-            $this->clearDefaults($serviceType);
-            
-            // Find existing configuration with same model_code and service_type
-            $model = clone $this->defaultModel;
-            $existing = $model->where(AiDefaultModel::schema_fields_SERVICE_TYPE, $serviceType)
-                ->where(AiDefaultModel::schema_fields_MODEL_CODE, $modelCode)
+            $byType = clone $this->defaultModel;
+            $existingTypeRow = $byType
+                ->where(AiDefaultModel::schema_fields_SERVICE_TYPE, $serviceType)
+                ->order(AiDefaultModel::schema_fields_IS_DEFAULT, 'DESC')
+                ->order(AiDefaultModel::schema_fields_PRIORITY, 'DESC')
                 ->find()
                 ->fetch();
 
-            if ($existing && $existing->getId()) {
-                // Update existing
-                $existing->setData(AiDefaultModel::schema_fields_IS_DEFAULT, 1);
-                $existing->setData(AiDefaultModel::schema_fields_PRIORITY, $priority);
-                $existing->setData(AiDefaultModel::schema_fields_IS_ACTIVE, $isActive);
-                $existing->save();
-            } else {
-                // Create new
-                $this->setDefault($modelCode, $serviceType, $priority, $isActive);
+            if ($existingTypeRow && $existingTypeRow->getId()) {
+                $keepId = (int)$existingTypeRow->getId();
+                $this->deleteSiblingRowsForServiceType($serviceType, $keepId);
+
+                $existingTypeRow->setData(AiDefaultModel::schema_fields_MODEL_CODE, $modelCode);
+                $existingTypeRow->setData(AiDefaultModel::schema_fields_IS_DEFAULT, 1);
+                $existingTypeRow->setData(AiDefaultModel::schema_fields_PRIORITY, $priority);
+                $existingTypeRow->setData(AiDefaultModel::schema_fields_IS_ACTIVE, $isActive);
+                $existingTypeRow->save();
+
+                return true;
             }
 
+            $this->setDefault($modelCode, $serviceType, $priority, $isActive);
+
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            w_log_error(
+                (string)__('默认模型设置失败：%{1}', [$e->getMessage()]),
+                [
+                    'service_type' => $serviceType,
+                    'model_code' => $modelCode,
+                    'priority' => $priority,
+                ],
+                'ai',
+            );
+
             return false;
+        }
+    }
+
+    /**
+     * Remove leftover rows for the same service_type (legacy multi-row defaults).
+     */
+    private function deleteSiblingRowsForServiceType(string $serviceType, int $keepId): void
+    {
+        if ($keepId <= 0) {
+            return;
+        }
+
+        $siblings = clone $this->defaultModel;
+        $rows = $siblings
+            ->where(AiDefaultModel::schema_fields_SERVICE_TYPE, $serviceType)
+            ->where(AiDefaultModel::schema_fields_ID, $keepId, '!=')
+            ->select()
+            ->fetchArray();
+
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            $id = (int)($row[AiDefaultModel::schema_fields_ID] ?? $row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $del = clone $this->defaultModel;
+            $del->load($id);
+            if ($del->getId()) {
+                $del->delete();
+            }
         }
     }
 

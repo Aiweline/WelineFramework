@@ -46,7 +46,8 @@ class CertificateAutoRenew implements CronTaskInterface
      */
     public function execute_name(): string
     {
-        return __('SSL 证书自动续签');
+        // 进程/日志身份键：禁止 __()，避免语种切换导致 collect 撞唯一约束
+        return 'SSL 证书自动续签';
     }
     
     /**

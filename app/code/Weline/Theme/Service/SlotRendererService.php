@@ -3844,6 +3844,125 @@ HTML;
 HTML;
 
         if (stripos($html, '</head>') !== false) {
+            $html = (string)str_ireplace('</head>', $script . "\n</head>", $html);
+        } elseif (stripos($html, '</body>') !== false) {
+            $html = (string)str_ireplace('</body>', $script . "\n</body>", $html);
+        } else {
+            $html = $script . "\n" . $html;
+        }
+
+        return $this->appendSlotDuplicateDevMarkerBridge($html);
+    }
+
+    /**
+     * Storefront hard-cut skips processSlots — still attach DEV diagnostics on the way out.
+     */
+    public function appendDevStorefrontDiagnostics(string $html): string
+    {
+        return $this->appendSlotDuplicateDevMarkerBridge($html);
+    }
+
+    /**
+     * DEV / 预览：同槽内相同 widget_code（+module）多份时红框并提示来源，便于卸载其一。
+     * 跨槽同码合法（如迷你车 footer-extras + 结账 checkout-summary-discount），不标。
+     */
+    private function appendSlotDuplicateDevMarkerBridge(string $html): string
+    {
+        if ($html === '' || !$this->shouldInspectWidgetHtml()) {
+            return $html;
+        }
+        if (str_contains($html, 'data-w-slot-dup-dev-bridge')) {
+            return $html;
+        }
+
+        $title = \htmlspecialchars((string)__('同槽重复部件'), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $hint = \htmlspecialchars(
+            (string)__('请卸载其中一处（layout 内嵌与 default_injections 二选一，或在主题编辑器删一份）'),
+            \ENT_QUOTES | \ENT_SUBSTITUTE,
+            'UTF-8'
+        );
+        $sourceLabel = \htmlspecialchars((string)__('来源'), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $slotLabel = \htmlspecialchars((string)__('槽'), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $unknown = \htmlspecialchars((string)__('未知'), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+
+        $script = <<<HTML
+<script data-w-slot-dup-dev-bridge="1">
+(function () {
+    function isDevSurface() {
+        try {
+            if (window.DEV === true || window.WELINE_ENV === 'DEV') return true;
+            if (typeof DEV !== 'undefined' && DEV) return true;
+        } catch (e) {}
+        return false;
+    }
+    if (!isDevSurface()) return;
+    function ensureStyles() {
+        if (document.getElementById('w-slot-dup-dev-style')) return;
+        var style = document.createElement('style');
+        style.id = 'w-slot-dup-dev-style';
+        style.textContent = [
+            '.w-slot-dup-dev{outline:2px solid var(--weline-theme-danger,#b42318)!important;outline-offset:2px!important;position:relative!important;}',
+            '.w-slot-dup-dev-badge{display:block;box-sizing:border-box;margin:0 0 .35rem;padding:.35rem .5rem;font:600 12px/1.35 ui-sans-serif,system-ui,sans-serif;color:#fff;background:var(--weline-theme-danger,#b42318);border-radius:4px;z-index:calc(var(--weline-z-toast,1100)+5);pointer-events:none;word-break:break-word;}'
+        ].join('');
+        document.head.appendChild(style);
+    }
+    function slotKeyOf(wrapper) {
+        var own = (wrapper.getAttribute('data-slot-id') || '').trim();
+        if (own) return own;
+        var host = wrapper.closest('[data-slot-id]');
+        return host ? String(host.getAttribute('data-slot-id') || '').trim() : '';
+    }
+    function identityOf(wrapper) {
+        var module = String(wrapper.getAttribute('data-widget-module') || '').trim().toLowerCase();
+        var code = String(wrapper.getAttribute('data-widget-code') || '').trim().toLowerCase();
+        if (!code) return '';
+        return module + '|' + code;
+    }
+    function mark() {
+        ensureStyles();
+        var groups = {};
+        document.querySelectorAll('.widget-wrapper[data-widget-code]').forEach(function (node) {
+            var slot = slotKeyOf(node);
+            var id = identityOf(node);
+            if (!slot || !id) return;
+            var key = slot + '::' + id;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(node);
+        });
+        Object.keys(groups).forEach(function (key) {
+            var list = groups[key];
+            if (list.length < 2) return;
+            list.forEach(function (node, index) {
+                node.classList.add('w-slot-dup-dev');
+                node.setAttribute('data-w-slot-dup-dev', '1');
+                var first = node.firstElementChild;
+                if (first && first.classList && first.classList.contains('w-slot-dup-dev-badge')) return;
+                var slot = slotKeyOf(node);
+                var module = String(node.getAttribute('data-widget-module') || '').trim() || '{$unknown}';
+                var code = String(node.getAttribute('data-widget-code') || '').trim() || '{$unknown}';
+                var source = String(node.getAttribute('data-widget-source') || '').trim() || '{$unknown}';
+                var badge = document.createElement('div');
+                badge.className = 'w-slot-dup-dev-badge';
+                badge.setAttribute('role', 'status');
+                badge.textContent = '{$title} #' + (index + 1) + '/' + list.length
+                    + ' · ' + module + '/' + code
+                    + ' · {$slotLabel}=' + slot
+                    + ' · {$sourceLabel}=' + source
+                    + ' · {$hint}';
+                node.insertBefore(badge, node.firstChild);
+            });
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mark, { once: true });
+    } else {
+        mark();
+    }
+})();
+</script>
+HTML;
+
+        if (stripos($html, '</head>') !== false) {
             return (string)str_ireplace('</head>', $script . "\n</head>", $html);
         }
         if (stripos($html, '</body>') !== false) {
@@ -4046,6 +4165,7 @@ HTML;
             $nodeUid = '';
         }
         // Hex identity is node_uid only; keep data-layout-id for numeric legacy keys.
+        $source = \trim((string)($widget['source'] ?? $config['_source'] ?? $config['source'] ?? ''));
         $attrs = [
             'data-widget-code' => (string)($widget['widget_code'] ?? ''),
             'data-widget-module' => (string)($widget['widget_module'] ?? ''),
@@ -4055,6 +4175,7 @@ HTML;
             'data-layout-scope' => (string)($widget['scope'] ?? ''),
             'data-target-type' => (string)($widget['target_type'] ?? ''),
             'data-target-id' => (string)($widget['target_id'] ?? ''),
+            'data-widget-source' => $source,
         ];
         if ($nodeUid !== '') {
             $attrs['data-node-uid'] = $nodeUid;

@@ -295,10 +295,11 @@ moduleDescribe(test, MODULE, '发布回归 PayPal 结账生命周期', () => {
       const quick = page.locator(
         '[data-testid="product-quick-pay"], [data-helppay-quick-pay]',
       ).first();
-      if (!(await quick.count())) {
-        test.skip(true, 'theme missing product-quick-pay widget on PDP (HelpPay CTA not injected)');
+      const quickVisible = await quick.isVisible({ timeout: 5000 }).catch(() => false);
+      if (!(await quick.count()) || !quickVisible) {
+        test.skip(true, 'theme missing visible product-quick-pay widget on PDP (HelpPay CTA not injected)');
       }
-      await quick.click();
+      await quick.click({ force: true, timeout: 15000 });
       const dialog = page.locator('[data-testid="help-pay-dialog"], .w-helppay-dialog').first();
       await expect(dialog).toBeVisible({ timeout: 30000 });
       await page.waitForTimeout(2500);

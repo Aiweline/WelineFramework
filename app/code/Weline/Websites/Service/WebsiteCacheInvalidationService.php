@@ -109,6 +109,56 @@ final class WebsiteCacheInvalidationService
         $this->invalidatePaths($connection, $paths, $components);
     }
 
+    /**
+     * Language *order* only: bump website/{code}/language namespace without legacy
+     * full cacheClear / FPC wipe / DetectWebsite thrash.
+     */
+    public function bumpLanguageCatalogOnly(ConnectionFactory $connection, int $websiteId): void
+    {
+        if ($websiteId < Website::ID_DEFAULT) {
+            throw new \InvalidArgumentException(__('website_id 不能为负数'));
+        }
+        $this->namespaces->assertConnectionAffinity($connection);
+        $snapshot = $this->snapshots->capture($websiteId, $connection);
+        if ($snapshot === null) {
+            return;
+        }
+        $code = \trim((string)$snapshot[Website::schema_fields_CODE]);
+        if ($code === '') {
+            return;
+        }
+        $paths = $this->pathsForCodes([$code], [self::COMPONENT_LANGUAGE]);
+        if ($paths === []) {
+            return;
+        }
+        $this->namespaces->bumpMany($paths);
+    }
+
+    /**
+     * Currency *order* only: bump website/{code}/currency namespace without legacy
+     * full cacheClear / FPC wipe / DetectWebsite thrash.
+     */
+    public function bumpCurrencyCatalogOnly(ConnectionFactory $connection, int $websiteId): void
+    {
+        if ($websiteId < Website::ID_DEFAULT) {
+            throw new \InvalidArgumentException(__('website_id 不能为负数'));
+        }
+        $this->namespaces->assertConnectionAffinity($connection);
+        $snapshot = $this->snapshots->capture($websiteId, $connection);
+        if ($snapshot === null) {
+            return;
+        }
+        $code = \trim((string)$snapshot[Website::schema_fields_CODE]);
+        if ($code === '') {
+            return;
+        }
+        $paths = $this->pathsForCodes([$code], [self::COMPONENT_CURRENCY]);
+        if ($paths === []) {
+            return;
+        }
+        $this->namespaces->bumpMany($paths);
+    }
+
     /** @param list<string> $components */
     public function invalidateDeletedWebsite(
         ConnectionFactory $connection,

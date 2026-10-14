@@ -196,6 +196,13 @@ class LayoutSlotRenderer implements ObserverInterface
         // Design themes (hanfu/daocharms) may omit data-pdp-budget-phase; stamp for armed samples.
         $html = \Weline\Theme\Service\ThemePdpBudgetPhases::stampSectionAttributes($html);
 
+        // hard-cut skips processSlots health bridge — still mark same-slot duplicate widgets in DEV.
+        try {
+            $html = $this->slotRenderer->appendDevStorefrontDiagnostics($html);
+        } catch (\Throwable) {
+            // soft
+        }
+
         try {
             /** @var PreviewBootstrapAssetInjector $injector */
             $injector = ObjectManager::getInstance(PreviewBootstrapAssetInjector::class);

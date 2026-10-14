@@ -148,6 +148,7 @@ Weline.Api.resource('i18n_admin').action({
 - 语言检测
 - **标准切换标签**：`<w:i18n:switcher />`（实现类 `LanguageSwitcher`）；UI 2.0 不提供旧标签别名。
 - 目录边界由 `LocaleCatalogScopeResolver` 解析：`website`（WebsiteLanguage + default_language；空 codes 禁止回退全球目录）、`backend_platform`（仅当网站无语言行时回退到 ActiveLocaleCodeProvider）、`injected`（显式 locales/allowed-values）。
+- **成员 vs 展示序（双层）**：店面 switcher 优先吃 **Website→Store→Channel 显式序**（`website_language.sort_order` / scope override 行）；仅平台回退路径才用 `LocaleDisplayRankService` / `i18n_locale.display_rank`（`etc/locale_display_rank.php` 作 Upgrade 种子）。Query：`websites.getResolvedLanguageCodes`。当前访客语种所在国家组仍由 `prioritizeCurrentLanguageGroup` 置顶。
 - **前后台 `<w:i18n:switcher />` 共用同一网站语言边界**：后台顶栏不再单独吃「已安装+已激活」稀疏集，避免默认站前台十几种、后台只剩中文。网站无语言配置时才回退 `backend_platform`。
 - 列表与配置共用 `LanguageSelect::getLanguageItems()` / `buildDisplayName()`；顶栏触发按钮用 `tag_label`，废除 DisplaySelf 英中硬拼。
 - 前台 Hook `header-language-switcher` 仅委托 `LanguageSwitcher::render()`；申请支持其他语言入口只保留在 switcher 内（后台同站配置开启时同样显示）。

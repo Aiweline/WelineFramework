@@ -1085,13 +1085,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
         ]);
         $continuePayRequest = !empty($params['continue_pay'])
             || strtolower(trim((string)($params['payment_mode'] ?? ''))) === 'continue_pay';
-        // 硬隔离：传统 getData 忽略续付绑定的 payment/shipping，禁止 selected_code 偷选。
-        $selectedPayment = $continuePayRequest
-            ? strtolower(trim((string)($params['payment_method'] ?? '')))
-            : '';
-        $selectedShipping = $continuePayRequest
-            ? trim((string)($params['shipping_method'] ?? ''))
-            : '';
+        // Unified money channel: always honour client-selected payment/shipping for
+        // money_summary + HTML selected_code. Continue-pay still injects bound methods below.
+        $selectedPayment = strtolower(trim((string)($params['payment_method'] ?? '')));
+        $selectedShipping = trim((string)($params['shipping_method'] ?? ''));
         // Continue-pay / resume: empty cart may set checkout_blocked, but the bound
         // method must still render with name+icon (never bare code).
         // ONLY when explicitly continue_pay — never inject into traditional getData.
@@ -1254,7 +1251,23 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ),
             'checkout_blocked' => $checkoutBlocked,
             'blocking_message' => $blockingMessage,
+            'cart_type' => strtolower(trim((string)($cart['cart_type'] ?? 'toc'))) ?: 'toc',
+            'selling_mode' => strtolower(trim((string)($cart['cart_type'] ?? 'toc'))) ?: 'toc',
         ];
+        // Same channel as SSR: Builder owns payable / incentive / coupon discount rows.
+        $builder = new \Weline\Checkout\Service\StorefrontMoneyTotalsBuilder();
+        $money = $builder->build([
+            'currency' => $currency,
+            'cart' => \is_array($payload['cart'] ?? null) ? $payload['cart'] : [],
+            'shipping_methods' => $shippingMethods,
+            'payment_methods' => $paymentMethods,
+            'tax_estimate' => $taxEstimate,
+            'selected_payment_method' => $selectedPayment,
+            'selected_shipping_method' => $selectedShipping,
+            'cart_type' => (string)$payload['cart_type'],
+            'selling_mode' => (string)$payload['selling_mode'],
+        ]);
+        $payload = $builder->mergeIntoPayload($payload, $money);
         $payload = $this->applyMoneySummaryPolicy($payload);
 
         return $this->ok(
@@ -1264,7 +1277,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
     }
 
     /**
-     * Optional commerce policy (B2B ToB etc.). Missing provider → retail payload unchanged.
+     * Optional commerce policy chrome (B2B strip badges). Totals already via Builder.
      *
      * @param array<string, mixed> $payload
      * @return array<string, mixed>

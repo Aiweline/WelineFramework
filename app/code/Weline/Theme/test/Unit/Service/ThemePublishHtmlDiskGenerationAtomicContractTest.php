@@ -34,6 +34,23 @@ final class ThemePublishHtmlDiskGenerationAtomicContractTest extends TestCase
         self::assertGreaterThan($cdnPos, $warmPos, 'staging warm must be LAST after CDN purge');
     }
 
+    public function testStagingWarmRepublishesHomepageViaPierceIntoOpenStaging(): void
+    {
+        $src = $this->read('app/code/Weline/Theme/Service/ThemeRuntimeCacheCleaner.php');
+        self::assertStringContainsString('republishHomepageIntoOpenStaging', $src);
+        // Staging seed must refuse FPC HIT bodies (needBody warm uses bypass in HttpClient).
+        self::assertStringContainsString("str_contains(\$fpc, 'HIT')", $src);
+        self::assertStringContainsString('StorefrontWarmupHttpClient', $src);
+        $chunk = \substr(
+            $src,
+            (int)\strpos($src, 'function rebuildFpcViaStagingWarmPromote'),
+            1800,
+        );
+        self::assertStringContainsString('republishHomepageIntoOpenStaging()', $chunk);
+        self::assertStringContainsString('header-chrome-amazon', $src);
+        self::assertStringContainsString('data-weline-layout-pack', $src);
+    }
+
     public function testRebuildAssertsBakedIdMatchesGenerationIdentity(): void
     {
         $src = $this->read('app/code/Weline/Theme/Service/ThemeRuntimeCacheCleaner.php');
@@ -66,7 +83,8 @@ final class ThemePublishHtmlDiskGenerationAtomicContractTest extends TestCase
 
     private function read(string $relative): string
     {
-        $path = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relative);
+        $root = \dirname(__DIR__, 7); // …/Theme/test/Unit/Service → repository root
+        $path = $root . \DIRECTORY_SEPARATOR . \str_replace('/', \DIRECTORY_SEPARATOR, $relative);
         self::assertFileExists($path);
         $contents = \file_get_contents($path);
         self::assertIsString($contents);

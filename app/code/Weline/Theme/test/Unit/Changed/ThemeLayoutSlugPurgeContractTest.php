@@ -93,4 +93,15 @@ final class ThemeLayoutSlugPurgeContractTest extends TestCase
         self::assertStringContainsString('purge-current-storefront', $provider);
         self::assertStringContainsString('ThemeStorefrontSlugFpcPublisher', $editor);
     }
+
+    public function testPublisherExposesStorefrontPathPurgeWithoutPurgeAll(): void
+    {
+        $src = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/ThemeStorefrontSlugFpcPublisher.php'
+        );
+        self::assertStringContainsString('function purgeByStorefrontPath', $src);
+        self::assertStringContainsString('path_not_recognized', $src);
+        self::assertStringNotContainsString('purge_fpc_all', $src);
+        self::assertStringNotContainsString('CODE_PURGE_FPC_ALL', $src);
+    }
 }

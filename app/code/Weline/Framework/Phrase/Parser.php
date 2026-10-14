@@ -68,6 +68,8 @@ class Parser
     /** CLI / no-RequestContext fallback only; live HTTP uses RequestContext bag. */
     private static ?ParserRequestState $cliRequestState = null;
     private static int $translationResolutionDepth = 0;
+    /** When true, skip storefront inline-edit HTML/attr marking (attribute helpers). */
+    private static int $suppressInlinePhraseMarkDepth = 0;
 
     /**
      * setup:upgrade CLI 轻词典模式：额外跳过重型 locale 文件驻留等路径。
@@ -206,10 +208,10 @@ class Parser
                 $lang = State::getLangLocal();
                 $eventTranslation = self::translateFromEventDictionary($words, $lang);
                 if ($eventTranslation !== null) {
-                    return $eventTranslation;
+                    return self::maybeMarkInlinePhrase($words, $eventTranslation);
                 }
                 if (EventDictionary::isExclusive($lang)) {
-                    return $words;
+                    return self::maybeMarkInlinePhrase($words, $words);
                 }
 
                 $layers = RequestLifecycleTrace::measurePhase(
@@ -219,7 +221,7 @@ class Parser
                 $translationCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $words;
                 $requestWords = &DictionaryCacheNamespace::localCache($requestState->translatedWords, self::workerTranslatedWordCacheMax(), self::layerLocales($layers));
                 if (isset($requestWords[$translationCacheKey]) && \is_string($requestWords[$translationCacheKey])) {
-                    return $requestWords[$translationCacheKey];
+                    return self::maybeMarkInlinePhrase($words, $requestWords[$translationCacheKey]);
                 }
 
                 $resolved = RequestLifecycleTrace::measurePhase(
@@ -238,10 +240,10 @@ class Parser
                     && self::sourceContainsCjk($words)
                     && !self::isChineseLocaleCode((string)($layers['lang'] ?? ''))
                 ) {
-                    return $resolved;
+                    return self::maybeMarkInlinePhrase($words, $resolved);
                 }
 
-                return $requestWords[$translationCacheKey] = $resolved;
+                return $requestWords[$translationCacheKey] = self::maybeMarkInlinePhrase($words, $resolved);
             } finally {
                 self::leaveTranslationResolution();
             }
@@ -254,19 +256,55 @@ class Parser
         $lang = State::getLangLocal();
         $eventTranslation = self::translateFromEventDictionary($words, $lang);
         if ($eventTranslation !== null) {
-            return $eventTranslation;
+            return self::maybeMarkInlinePhrase($words, $eventTranslation);
         }
         if (EventDictionary::isExclusive($lang)) {
-            return $words;
+            return self::maybeMarkInlinePhrase($words, $words);
         }
 
         if (isset(self::$words[$words])) {
             $translated = self::$words[$words];
             if (\is_string($translated) && $translated !== '' && $translated !== $words) {
-                return $translated;
+                return self::maybeMarkInlinePhrase($words, $translated);
             }
         }
-        return $words;
+        return self::maybeMarkInlinePhrase($words, $words);
+    }
+
+    /**
+     * Run $fn with inline phrase marking suppressed (attribute [[W18N]] helpers).
+     *
+     * @template T
+     * @param callable():T $fn
+     * @return T
+     */
+    public static function withoutInlinePhraseMark(callable $fn): mixed
+    {
+        self::$suppressInlinePhraseMarkDepth++;
+        try {
+            return $fn();
+        } finally {
+            self::$suppressInlinePhraseMarkDepth = \max(0, self::$suppressInlinePhraseMarkDepth - 1);
+        }
+    }
+
+    private static function maybeMarkInlinePhrase(string $source, string $translated): string
+    {
+        if (self::$suppressInlinePhraseMarkDepth > 0 || self::translationResolutionDepth() > 1) {
+            return $translated;
+        }
+        if (!\class_exists(\Weline\I18n\Service\InlineEdit\InlinePhraseMarker::class)) {
+            return $translated;
+        }
+        try {
+            // __() may render inside HTML attributes (aria-label / title / alt).
+            // Use session-gated attribute() → [[W18N:…]] (never call wrapAttribute
+            // directly — that skips the session gate). Body <w-i18n-phrase> stays
+            // for Taglib @lang emit(false) / explicit InlinePhraseMarker::body().
+            return \Weline\I18n\Service\InlineEdit\InlinePhraseMarker::attribute($source, $translated);
+        } catch (\Throwable) {
+            return $translated;
+        }
     }
     
     /**
@@ -789,6 +827,7 @@ class Parser
         $lang = (string)($layers['lang'] ?? '');
         $modules = (array)($layers['modules'] ?? []);
         $moduleWords = (array)($layers['module_words'] ?? []);
+        $moduleIdentityHit = false;
         for ($i = \count($modules) - 1; $i >= 0; $i--) {
             $translation = $moduleWords[$modules[$i]][$word] ?? null;
             if (!\is_string($translation) || $translation === '') {
@@ -797,13 +836,14 @@ class Parser
             if ($translation !== $word) {
                 return $translation;
             }
-            // Module CSV identity hit: resolve as source and STOP.
-            // Falling through would let fallback-locale (en_US) public/locale packs
-            // paint Chinese UI with English for keys that only exist as zh identity.
-            if (self::isChineseLocaleCode($lang) || !self::sourceContainsCjk($word)) {
-                return $word;
-            }
-            // CJK identity on a non-zh locale is an untranslated placeholder — keep looking.
+            // Module CSV identity: defer — system area bags may hold operator override
+            // (店面点译 → publishLocale → generated/language/{locale}.frontend.php).
+            $moduleIdentityHit = true;
+        }
+        // System/locale area bag (shared∪area) beats module CSV identity.
+        $areaOverride = self::nonIdentityFromLocaleAreaBag($lang, $word);
+        if ($areaOverride !== null) {
+            return $areaOverride;
         }
         $translation = $layers['locale_words'][$word] ?? null;
         if (\is_string($translation) && $translation !== '' && $translation !== $word) {
@@ -830,6 +870,31 @@ class Parser
                 return $word;
             }
         }
+        if ($moduleIdentityHit && (self::isChineseLocaleCode($lang) || !self::sourceContainsCjk($word))) {
+            return $word;
+        }
+
+        return null;
+    }
+
+    /**
+     * Peek cached system area bags for a non-identity override (operator dictionary edit).
+     */
+    private static function nonIdentityFromLocaleAreaBag(string $lang, string $word): ?string
+    {
+        if ($lang === '' || $word === '') {
+            return null;
+        }
+        try {
+            $bag = self::loadLocaleWords($lang, []);
+        } catch (\Throwable) {
+            return null;
+        }
+        $translation = $bag[$word] ?? null;
+        if (\is_string($translation) && $translation !== '' && $translation !== $word) {
+            return $translation;
+        }
+
         return null;
     }
 

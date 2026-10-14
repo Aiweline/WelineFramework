@@ -624,6 +624,7 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
         aiOthersSaveSuccess: <?= json_encode((string)__('其他语言译文已保存'), $jsonForScriptFlags) ?>,
         aiOthersSaveFailed: <?= json_encode((string)__('保存其他语言译文失败'), $jsonForScriptFlags) ?>,
         aiOthersEmpty: <?= json_encode((string)__('没有可保存的其他语言译文'), $jsonForScriptFlags) ?>,
+        aiOthersAllSkipped: <?= json_encode((string)__('其他语言均已有译文，已跳过'), $jsonForScriptFlags) ?>,
         aiOthersEchoFailed: <?= json_encode((string)__('AI 未能译出有效译文（多语种仍返回原文），请检查翻译服务后重试'), $jsonForScriptFlags) ?>
     };
 
@@ -1047,6 +1048,8 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
 
         xhr.open('POST', resolveDictionarySameOriginUrl(url), true);
         xhr.withCredentials = true;
+        // Multi-locale batch can exceed default proxy patience; keep client waiting.
+        xhr.timeout = 600000;
         xhr.setRequestHeader('Accept', 'text/event-stream');
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
         xhr.onprogress = function () {
@@ -1064,6 +1067,10 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
                 sseBuffer = parseDictionarySseBuffer(sseBuffer + text.slice(seenBytes), handleEvent);
                 seenBytes = text.length;
             }
+            // Flush trailing SSE frame without final blank line.
+            if (sseBuffer && !settled) {
+                sseBuffer = parseDictionarySseBuffer(sseBuffer + '\n\n', handleEvent);
+            }
             if (settled) {
                 return;
             }
@@ -1074,11 +1081,21 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
                         handleEvent('failed', json);
                         return;
                     }
-                    if (json && (json.translation != null || json.translations != null || json.success === true)) {
+                    if (json && (json.translation != null || json.translations != null || json.drafts != null || json.success === true)) {
                         handleEvent('done', json);
                         return;
                     }
                 } catch (e) {}
+                // SSE body is not JSON; if stream ended without complete/failed, treat as failure.
+            }
+            finish(true);
+            if (typeof handlers.onFailed === 'function') {
+                handlers.onFailed({ message: dictionaryMessages.aiTranslateSseFailed });
+            }
+        };
+        xhr.ontimeout = function () {
+            if (settled) {
+                return;
             }
             finish(true);
             if (typeof handlers.onFailed === 'function') {
@@ -1303,10 +1320,16 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
                     }
                     var draftMap = (data.drafts || data.translations || data.items) || {};
                     var draftCodes = Object.keys(draftMap);
+                    var skippedList = Array.isArray(data.skipped) ? data.skipped : [];
                     if (!draftCodes.length) {
-                        var emptyMsg = data.message || dictionaryMessages.aiOthersEmpty;
-                        setDictionaryEditAiProgress(emptyMsg, null, 'danger');
-                        toastAction('error', emptyMsg);
+                        // success + empty drafts usually means every locale was skipped
+                        // (already translated) — never paint the success copy as a red error.
+                        var emptyMsg = skippedList.length
+                            ? (dictionaryMessages.aiOthersAllSkipped || data.message || dictionaryMessages.aiOthersEmpty)
+                            : (dictionaryMessages.aiOthersEmpty || data.message);
+                        var emptyTone = skippedList.length ? 'success' : 'warning';
+                        setDictionaryEditAiProgress(emptyMsg, null, emptyTone === 'success' ? 'success' : 'danger');
+                        toastAction(emptyTone === 'success' ? 'success' : 'warning', emptyMsg);
                         return;
                     }
                     // 跨语种仍全文等于原文 → 无意义，禁止弹确认保存
@@ -1318,7 +1341,8 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
                         }
                     });
                     if (sourceWord !== '' && echoCount === draftCodes.length) {
-                        var echoMsg = data.message || dictionaryMessages.aiOthersEchoFailed;
+                        // Never reuse the success「草稿已就绪」copy for echo failures.
+                        var echoMsg = dictionaryMessages.aiOthersEchoFailed;
                         setDictionaryEditAiProgress(echoMsg, null, 'danger');
                         toastAction('error', echoMsg);
                         return;

@@ -11,6 +11,7 @@ use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Model\Cache\NamespaceVersion;
+use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupHttpClient;
 use Weline\Framework\Http\Fpc\FpcHtmlDiskStore;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
@@ -812,6 +813,9 @@ final class ThemeRuntimeCacheCleaner
             if (\class_exists(StorefrontFpcWarmer::class)) {
                 ObjectManager::getInstance(StorefrontFpcWarmer::class)->warm();
             }
+            // Seed hardlinks + FPC-off can leave warm as edge HIT without PHP publish.
+            // Pierce homepage and write the fresh body into the staging write root.
+            $this->republishHomepageIntoOpenStaging();
             if (!FpcHtmlDiskStore::promoteStagingGeneration()) {
                 FpcHtmlDiskStore::abandonStagingGeneration();
                 throw new \RuntimeException('fpc_staging_promote_failed');
@@ -826,6 +830,65 @@ final class ThemeRuntimeCacheCleaner
         FpcHtmlDiskStore::purgeLegacyHashTrees();
         $this->assertPromotedHtmlDiskMatchesStorefrontGeneration();
         unset($result);
+    }
+
+    /**
+     * While a staging generation is open: pierce-fetch `/` and publish into staging.
+     * Fail-open (log) when origin is unreachable — promote still proceeds with seed.
+     */
+    private function republishHomepageIntoOpenStaging(): void
+    {
+        if (FpcHtmlDiskStore::stagingGenerationId() === null) {
+            return;
+        }
+        try {
+            /** @var StorefrontWarmupHttpClient $http */
+            $http = ObjectManager::getInstance(StorefrontWarmupHttpClient::class);
+            $probe = $http->get('/', true);
+            $html = (string)($probe['body'] ?? '');
+            $fpc = \strtoupper(\trim((string)($probe['fpc'] ?? '')));
+            if (!($probe['ok'] ?? false) || \strlen($html) < 1000 || \str_contains($fpc, 'HIT')) {
+                Env::log(
+                    'theme_cache_clear',
+                    'html-disk staging homepage pierce republish skipped: '
+                    . (string)($probe['reason'] ?? ($fpc !== '' ? 'fpc_' . $fpc : 'empty'))
+                );
+
+                return;
+            }
+            // Refuse to bake a shell that still emits header chrome as a leaf <link>.
+            if (\preg_match(
+                '/<link\b(?![^>]*data-weline-layout-pack)[^>]*header-chrome-amazon\.css/i',
+                $html
+            ) === 1) {
+                Env::log(
+                    'theme_cache_clear',
+                    'html-disk staging homepage pierce still has bare header-chrome leaf; skip publish'
+                );
+
+                return;
+            }
+            $uris = [];
+            foreach ($http->resolveTargets() as $target) {
+                $host = \trim((string)($target['host'] ?? ''));
+                $scheme = \strtolower((string)($target['scheme'] ?? 'http')) === 'https' ? 'https' : 'http';
+                if ($host === '') {
+                    continue;
+                }
+                $uris[] = $scheme . '://' . $host . '/';
+            }
+            $port = (int)Env::get('server.port', 9555);
+            if ($port <= 0) {
+                $port = 9555;
+            }
+            $uris[] = 'http://127.0.0.1:' . $port . '/';
+            $uris = \array_values(\array_unique($uris));
+            foreach ($uris as $uri) {
+                FpcHtmlDiskStore::publish($uri, $html);
+            }
+        } catch (\Throwable $e) {
+            Env::log('theme_cache_clear', 'html-disk staging homepage pierce republish failed: ' . $e->getMessage());
+        }
     }
 
     /**

@@ -117,7 +117,7 @@ final class TranslationConcurrencyGate
                 fclose($handle);
                 // RuntimeException: do not auto-write exception.log on construct.
                 throw new TranslationBusyException(
-                    self::BUSY_MARKER . ': ' . (string)__('AI翻译繁忙：本地模型正被其他任务占用，请稍后重试。')
+                    self::BUSY_MARKER . ': ' . (string)__('AI翻译繁忙：词典翻译通道正被其他任务占用，请稍后重试。')
                 );
             }
 

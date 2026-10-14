@@ -47,4 +47,23 @@ final class BackendBinQueryWorkerReuseContractTest extends TestCase
             $source
         );
     }
+
+    public function testBackendRuntimeAndQueryBinCarryThemePublishedVersionId(): void
+    {
+        $header = (string)\file_get_contents(
+            BP . 'app/code/Weline/Backend/view/blocks/header/base.phtml'
+        );
+        $source = (string)\file_get_contents(
+            BP . 'app/code/Weline/Backend/view/statics/js/weline-api.js'
+        );
+
+        self::assertStringContainsString('themePublishedVersionId', $header);
+        self::assertStringContainsString("'themePublishedVersionId' => \$themePublishedVersionId", $header);
+        self::assertStringContainsString("'api' => \$apiConfig", $header);
+        self::assertStringContainsString('themePublishedVersionId:', $source);
+        self::assertStringContainsString(
+            'themePublishedVersionId: config.themePublishedVersionId || \'\'',
+            $source
+        );
+    }
 }

@@ -294,6 +294,7 @@
 .weline-header .header-top-bar-locale .w-language-switcher__code,
 .weline-header .header-top-bar-locale .w-currency-switcher__code,
 .weline-header .header-top-bar-locale .w-currency-switcher__symbol,
+.weline-header .header-top-bar-locale .w-currency-switcher__current,
 .weline-header .header-top-bar-locale .w-header-account__line1,
 .weline-header .header-top-bar-locale .w-header-account__line2 {
     /* Belt uses chrome light-secondary; on cream notice must keep notice ink. */
@@ -1110,7 +1111,7 @@
     padding: var(--spacing-sm) var(--spacing-md);
     background: transparent;
     border: none;
-    color: var(--weline-chrome-text-light);
+    color: inherit;
     text-decoration: none;
     font-size: var(--font-size-sm);
     font-weight: 600;
@@ -1159,7 +1160,7 @@
     display: inline-flex;
     align-items: center;
     box-sizing: border-box;
-    color: var(--weline-chrome-text-light);
+    color: inherit;
     text-decoration: none;
     white-space: nowrap;
     font-size: var(--font-size-sm);
@@ -1268,10 +1269,14 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     width: 100%;
 }
 
-/* ========== Header actions: icons + Amazon dark chrome colors ========== */
+/*
+ * Header actions: follow the chrome surface `color` (dark Amazon belt or light paper belt).
+ * Do NOT hard-bind --weline-chrome-text-light here — light paper themes keep data-surface=inverse
+ * for raised drawers but remount belt `color` to ink; re-binding chrome-text-light bleaches Account/Cart.
+ */
 .weline-header .header-actions,
 .weline-header .header-user-area {
-    color: var(--weline-chrome-text-light);
+    color: inherit;
 }
 
 .weline-header .header-actions a:not(.mini-cart-drawer__btn),
@@ -1374,7 +1379,7 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     inline-size: var(--weline-chrome-action-icon-size);
     block-size: var(--weline-chrome-action-icon-size);
     flex-shrink: 0;
-    color: var(--weline-chrome-text-light);
+    color: inherit;
     stroke: currentColor;
 }
 
@@ -1413,7 +1418,7 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 .weline-header .w-header-account__trigger,
 .weline-header .w-language-switcher__trigger,
 .weline-header .w-currency-switcher__trigger {
-    color: var(--weline-chrome-text-light);
+    color: inherit;
     border-color: transparent;
     background: transparent;
     box-shadow: none;
@@ -1433,14 +1438,15 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     background: var(--color-on-dark-soft);
     box-shadow: none;
     transform: none;
-    color: var(--weline-chrome-text-light);
+    color: inherit;
 }
 
 .weline-header .w-header-account__line1,
 .weline-header .currency-switcher .action-line-1,
 .weline-header .w-currency-switcher__trigger .w-header-account__line1 {
     font-size: var(--font-size-xs);
-    color: var(--weline-chrome-text-light-secondary);
+    color: inherit;
+    opacity: 0.88;
     font-weight: 400;
 }
 
@@ -1450,13 +1456,15 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 .weline-header .w-currency-switcher__trigger .w-currency-switcher__current {
     font-size: var(--font-size-sm);
     font-weight: 700;
-    color: var(--weline-chrome-text-light);
+    color: inherit;
+    opacity: 1;
 }
 
 .weline-header .w-currency-switcher__code {
     font-size: var(--font-size-xs);
     font-weight: 400;
-    color: var(--weline-chrome-text-light-secondary);
+    color: inherit;
+    opacity: 0.88;
 }
 
 .weline-header .currency-switcher-icon,
@@ -1492,20 +1500,21 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     padding: var(--spacing-sm);
     border: var(--border-width-thin) solid transparent;
     border-radius: var(--border-radius-sm);
-    color: var(--weline-chrome-text-light);
+    color: inherit;
     background: transparent;
     text-decoration: none;
     transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .weline-header .header-cart .cart-link:hover {
-    border-color: var(--weline-chrome-text-light);
+    border-color: currentColor;
     background: var(--color-on-dark-soft);
 }
 
 .weline-header .header-cart .cart-label {
     font-size: var(--font-size-xs);
-    color: var(--weline-chrome-text-light-secondary);
+    color: inherit;
+    opacity: 0.88;
     line-height: 1.2;
     white-space: nowrap;
     flex: 0 0 auto;
@@ -1540,7 +1549,8 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     overflow: hidden;
     font-size: var(--font-size-xs);
     line-height: 1.2;
-    color: var(--weline-chrome-text-light-secondary);
+    color: inherit;
+    opacity: 0.88;
     white-space: nowrap;
     text-overflow: ellipsis;
 }
@@ -1562,7 +1572,8 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 .weline-header .header-cart .cart-info .cart-subtotal {
     font-size: inherit;
     font-weight: 700;
-    color: var(--weline-chrome-text-light) !important;
+    color: inherit !important;
+    opacity: 1;
     line-height: 1.2;
     white-space: nowrap;
 }

@@ -1116,8 +1116,7 @@ class I18n
             return DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey];
         }
         $all_locals_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-        $translate_mode = Env::get('translation.mode', 'default');
-        
+
         if ($cache) {
             if (!file_exists($all_locals_words_file)) {
                 touch($all_locals_words_file);
@@ -1130,12 +1129,8 @@ class I18n
             }
             $all_locals_words = (array)(include $all_locals_words_file);
             if (!empty($all_locals_words)) {
-                if ($translate_mode === 'online') {
-                    $locals_words = $all_locals_words;
-                } else {
-                    DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey] = $all_locals_words;
-                    return $all_locals_words;
-                }
+                DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey] = $all_locals_words;
+                return $all_locals_words;
             }
         }
         
@@ -1319,38 +1314,8 @@ class I18n
             }
         }
 
-        $translateMode = Env::get('translation.mode', 'default');
-        if ($translateMode !== 'online') {
-            return;
-        }
-
-        try {
-            $localeDictionary = ObjectManager::getInstance(LocaleDictionary::class);
-            foreach ($this->getLocaleNames() as $localCode => $localName) {
-                $localsWords[$localCode] ??= [];
-                $dbTranslations = $localeDictionary->reset()
-                    ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localCode)
-                    ->select()
-                    ->fetchArray();
-                foreach ($dbTranslations as $dbTrans) {
-                    $word = $dbTrans[LocaleDictionary::schema_fields_WORD] ?? '';
-                    $translate = $dbTrans[LocaleDictionary::schema_fields_TRANSLATE] ?? '';
-                    if ($word === '' || $translate === '') {
-                        continue;
-                    }
-                    $localsWords[$localCode][$word] = $translate;
-                    if (
-                        DictionaryWordValidator::isValidTranslationString((string)$word)
-                        && !$this->hasModuleTranslation($wordsByModule, (string)$localCode, (string)$word)
-                        && !isset($wordsByModule['all_words'][$word])
-                    ) {
-                        $wordsByModule['all_words'][(string)$word] = (string)$translate;
-                    }
-                }
-            }
-        } catch (\Exception $exception) {
-            w_log_error('在线翻译模式：从数据库读取翻译失败：' . $exception->getMessage(), [], 'i18n');
-        }
+        // Legacy translation.mode=online DB merge removed.
+        // Dictionary edits publish via AiTranslationPublisher::publishLocale.
     }
 
 

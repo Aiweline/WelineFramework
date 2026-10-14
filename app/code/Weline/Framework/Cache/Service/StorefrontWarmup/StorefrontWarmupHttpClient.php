@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Cache\Service\StorefrontWarmup;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Http\Fpc\FpcPierceStamp;
 
 /**
  * HTTP GET warmer for storefront / sitemap documents (no WLS Fiber dependency).
@@ -98,9 +99,18 @@ final class StorefrontWarmupHttpClient
                 $target['scheme'],
                 $needBody,
             );
-            if ($last['ok']) {
-                return $last;
+            if (!$last['ok']) {
+                continue;
             }
+            // needBody (staging republish): pierce alone can still HIT html-disk on
+            // public/loopback; refuse HIT and try the next target for a fresh origin body.
+            if ($needBody && self::isFpcHit((string)($last['fpc'] ?? ''))) {
+                $last['ok'] = false;
+                $last['reason'] = 'fpc_hit_refuse_body';
+                continue;
+            }
+
+            return $last;
         }
 
         return $last;
@@ -153,13 +163,26 @@ final class StorefrontWarmupHttpClient
                 $target['scheme'],
                 $needBody,
             );
-            if ($last['ok']) {
-                return $last;
+            if (!$last['ok']) {
+                continue;
             }
+            if ($needBody && self::isFpcHit((string)($last['fpc'] ?? ''))) {
+                $last['ok'] = false;
+                $last['reason'] = 'fpc_hit_refuse_body';
+                continue;
+            }
+
+            return $last;
         }
 
         // Fallback: direct absolute fetch (production / foreign host).
-        return $this->httpGet($host, $port, $requestHost, $path, $scheme, $needBody);
+        $last = $this->httpGet($host, $port, $requestHost, $path, $scheme, $needBody);
+        if ($needBody && ($last['ok'] ?? false) && self::isFpcHit((string)($last['fpc'] ?? ''))) {
+            $last['ok'] = false;
+            $last['reason'] = 'fpc_hit_refuse_body';
+        }
+
+        return $last;
     }
 
     /**
@@ -182,6 +205,10 @@ final class StorefrontWarmupHttpClient
         if (!(($scheme === 'https' && $port === 443) || ($scheme === 'http' && $port === 80))) {
             $authority .= ':' . $port;
         }
+        // Staging warm seeds hardlinks from live; without pierce, Nginx html-disk HIT
+        // never reaches PHP and promote keeps stale leaves. Pierce alone is not enough
+        // on some edges (still HIT); needBody also sends x-wls-fpc-bypass for origin HTML.
+        $path = self::appendPierceQuery($path);
         $url = $scheme . '://' . $authority . $path;
         if (!\function_exists('curl_init')) {
             return ['ok' => false, 'status' => 0, 'body' => '', 'fpc' => '', 'reason' => 'curl_missing', 'url' => $url];
@@ -189,6 +216,16 @@ final class StorefrontWarmupHttpClient
         $ch = \curl_init($url);
         if ($ch === false) {
             return ['ok' => false, 'status' => 0, 'body' => '', 'fpc' => '', 'reason' => 'curl_init', 'url' => $url];
+        }
+
+        $requestHeaders = [
+            'Host: ' . $requestHost,
+            'Accept: text/html,application/xml,text/xml,*/*',
+            'User-Agent: WelineStorefrontWarmup/1.0',
+        ];
+        if ($needBody) {
+            // Republish/staging seed must capture freshly rendered HTML, not disk HIT.
+            $requestHeaders[] = 'x-wls-fpc-bypass: 1';
         }
 
         $headers = [];
@@ -200,11 +237,7 @@ final class StorefrontWarmupHttpClient
             \CURLOPT_CONNECTTIMEOUT => 5,
             \CURLOPT_SSL_VERIFYPEER => false,
             \CURLOPT_SSL_VERIFYHOST => 0,
-            \CURLOPT_HTTPHEADER => [
-                'Host: ' . $requestHost,
-                'Accept: text/html,application/xml,text/xml,*/*',
-                'User-Agent: WelineStorefrontWarmup/1.0',
-            ],
+            \CURLOPT_HTTPHEADER => $requestHeaders,
             \CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$headers): int {
                 $trim = \trim($line);
                 if ($trim !== '' && \str_contains($trim, ':')) {
@@ -285,5 +318,40 @@ final class StorefrontWarmupHttpClient
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Attach install pierce stamp so edge html-disk try_files cannot short-circuit warm.
+     */
+    private static function appendPierceQuery(string $path): string
+    {
+        $path = \trim($path);
+        if ($path === '') {
+            $path = '/';
+        }
+        try {
+            $suffix = FpcPierceStamp::buildQuerySuffix();
+        } catch (\Throwable) {
+            return $path;
+        }
+        if ($suffix === '' || \str_contains($path, FpcPierceStamp::QUERY_NAME . '=')) {
+            return $path;
+        }
+        $join = \str_contains($path, '?') ? '&' : '?';
+
+        return $path . $join . $suffix;
+    }
+
+    /**
+     * True when X-Weline-Fpc (or alias) reports a disk/cache HIT usable as stale seed.
+     */
+    private static function isFpcHit(string $fpc): bool
+    {
+        $fpc = \strtoupper(\trim($fpc));
+        if ($fpc === '') {
+            return false;
+        }
+
+        return \str_contains($fpc, 'HIT');
     }
 }

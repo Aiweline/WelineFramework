@@ -51,7 +51,7 @@ class Reader extends ModuleFileReader
     {
         $cache_key    = 'cache_i18n_lang_packs';
         $all_lan_pack = $this->i18nCache->get($cache_key);
-        if ($all_lan_pack && ('online' !== Env::getInstance()->getConfig('translate_mode'))) {
+        if ($all_lan_pack) {
             return $all_lan_pack;
         }
         $all_lan_pack = [];

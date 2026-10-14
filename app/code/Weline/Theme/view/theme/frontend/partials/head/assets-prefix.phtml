@@ -1,14 +1,16 @@
 <?php
 /**
- * Route-invariant head prefix (critical CSS + layout CSS + prepaint + disk override prep).
- * wave9-9s: nested under storefrontHeadAssetsPolicy — shared across URLs.
+ * Route-invariant head prefix (critical → theme → disk → overlay → prepaint).
+ * Big widget layout pack is placed after theme/disk/overlay by WidgetAssetHtmlPlacement.
+ *
+ * Head CSS order (2026-10-14, industry fast+correct):
+ * 1) layout-critical (tiny skeleton)
+ * 2) theme pack (shell + vars + colors; no disk/overlay)
+ * 3) theme config disk override
+ * 4) design overlay pack
+ * 5) (later) big layout pack / other CSS via placement
  *
  * work_mode=default_theme — head emission only; pack service is theme_module_runtime.
- *
- * head 顺序（2026-10-11）：**布局 CSS 包前移到本前缀**，落在 critical CSS 之后、
- * 任何阻塞 JS 之前。原因：page 段（`Weline_Frontend::templates/public/head.phtml` →
- * `blocks/header/base.phtml`）里有 5 条**必须同步执行**的核心脚本（body 内 17/19 个内联
- * 脚本依赖 `window.Weline`），布局 CSS 若留在 suffix 就必须等这些脚本跑完才被发现。
  *
  * @meta.name {default="Storefront head assets prefix",name="店面 head 资源前缀"}
  * @meta.cache.mode {default="chrome",name="缓存模式"}
@@ -25,9 +27,9 @@ try {
 }
 $this->assign('__head_disk_override_html', $diskOverrideHtml);
 
-// 布局 CSS 包：与 assets-suffix 原逻辑同源，只是**前移到 critical CSS 之后**。
 $headPack = null;
 $storefrontPackHtml = null;
+$overlayPackHtml = null;
 try {
     $headPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
@@ -35,19 +37,25 @@ try {
     $storefrontPackHtml = $headPack->tryLinkHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT,
-        ['include_disk' => true, 'layout_css' => true]
+        ['include_disk' => false, 'include_theme_overlay' => false]
+    );
+    $overlayPackHtml = $headPack->tryLinkHtml(
+        'frontend',
+        \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_OVERLAY,
+        ['include_disk' => false, 'include_theme_overlay' => true]
     );
 } catch (\Throwable $e) {
     $headPack = null;
     $storefrontPackHtml = null;
+    $overlayPackHtml = null;
 }
-$diskAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
-    && $storefrontPackHtml !== null
-    && $headPack->diskIncludedInPack('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT);
+$diskAbsorbed = false;
+$overlayAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
+    && $overlayPackHtml !== null
+    && $headPack->themeOverlayAbsorbed('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_OVERLAY);
 
 $earlyJsHtml = null;
 try {
-    // prepaint 必须在首绘前同步执行 → 内联（不是外部阻塞请求）。
     $earlyJsHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeJsPack::class
     )->tryInlineScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_EARLY);
@@ -60,24 +68,25 @@ try {
 <?php if ($storefrontPackHtml !== null): ?>
 <?= $storefrontPackHtml ?>
 <?php else: ?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/variables/_auto-literals.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/variables/_typography.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_default.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
-<theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
-<theme:css>Weline_Theme::theme/frontend/variables/_auto-literals.css</theme:css>
-<theme:css>Weline_Theme::theme/frontend/variables/_typography.css</theme:css>
+<?php endif; ?>
 <?php if (!$diskAbsorbed) { echo $diskOverrideHtml; } ?>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)" data-weline-layout-css>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)" data-weline-layout-css>
-<theme:css data-weline-layout-css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<?php if ($overlayPackHtml !== null): ?>
+<?= $overlayPackHtml ?>
 <?php endif; ?>
 <?php if ($earlyJsHtml !== null): ?>
 <?= $earlyJsHtml ?>
 <?php else: ?>
 <script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)"></script>
 <?php endif; ?>
-<?php // head 顺序自检：前端访问时产出 window.__WELINE_HEAD_ORDER__（只读 DOM、不发请求）。
-// defer 使其在文档解析完成后执行，因此无论放在 head 哪一段都能量到完整 head 顺序。
-// 放在 assets-prefix（主题不覆盖的前缀）以保证所有主题的 composed head 都带上它。 ?>
+<?php // head 顺序自检：前端访问时产出 window.__WELINE_HEAD_ORDER__（只读 DOM、不发请求）。 ?>
 <theme:js defer>Weline_Theme::theme/frontend/assets/js/weline-head-order-check.js</theme:js>

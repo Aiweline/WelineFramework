@@ -74,6 +74,7 @@ class I18nQueryProvider implements QueryProviderInterface
         keyParams: ['display_locale_code', 'website_id', 'current'],
         vary: ['area', 'locale'],
         cdn: true,
+        tags: ['binquery-i18n-getLanguageSwitcherCatalog'],
     )]
     #[BinQueryParam(name: 'display_locale_code', type: 'string', required: false, maxLength: 32, cacheKey: true)]
     #[BinQueryParam(name: 'website_id', type: 'int', required: false, min: 0, cacheKey: true)]

@@ -64,13 +64,17 @@ $ssrPaymentMethods = \is_array($this->getData('checkout_ssr_payment_methods'))
     ? $this->getData('checkout_ssr_payment_methods')
     : [];
 $ssrRequiresShipping = (bool)($this->getData('checkout_ssr_requires_shipping') ?? true);
+$ssrMoneySummary = \is_array($this->getData('checkout_ssr_money_summary'))
+    ? $this->getData('checkout_ssr_money_summary')
+    : [];
 $ssrBootStateJson = json_encode(
     [
         'currency' => $ssrCurrency,
         'cart' => $ssrCart,
         'ready' => $ssrReady,
         'tax_estimate' => $ssrTaxEstimate,
-        // SSR 跳过 getData 时 renderTotals 仍须扣支付激励/COD/运费扁字段。
+        // Unified channel: SSR + async paint the same money_summary DTO.
+        'money_summary' => $ssrMoneySummary,
         'shipping_methods' => $ssrShippingMethods,
         'payment_methods' => $ssrPaymentMethods,
         'requires_shipping' => $ssrRequiresShipping,
@@ -266,6 +270,10 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                     'goods_text' => (string)($this->getData('checkout_ssr_goods_text') ?? ''),
                     'shipping_text' => (string)($this->getData('checkout_ssr_shipping_text') ?? ''),
                     'payable_text' => (string)($this->getData('checkout_ssr_payable_text') ?? ''),
+                    'incentive_text' => (string)($this->getData('checkout_ssr_incentive_text') ?? ''),
+                    'incentive_minor' => (int)($this->getData('checkout_ssr_incentive_minor') ?? 0),
+                    'cod_fee_text' => (string)($this->getData('checkout_ssr_cod_fee_text') ?? ''),
+                    'cod_fee_minor' => (int)($this->getData('checkout_ssr_cod_fee_minor') ?? 0),
                 ]) ?>
             </div>
             <button class="weline-checkout__submit" type="submit" data-submit>
@@ -1071,47 +1079,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     .weline-checkout__credit-slot {
         margin: 0;
     }
-    .weline-checkout__extras .mini-cart-drawer__extras-tablist {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 10px;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    .weline-checkout__extras .mini-cart-drawer__extras-tab {
-        flex: 0 0 auto;
-        min-height: 32px;
-        padding: 6px 12px;
-        border: 1px solid var(--checkout-border);
-        border-radius: 999px;
-        background: #fff;
-        color: var(--checkout-text-secondary);
-        font-size: 13px;
-        cursor: pointer;
-    }
-    .weline-checkout__extras .mini-cart-drawer__extras-tab.is-active {
-        border-color: var(--checkout-text);
-        color: var(--checkout-text);
-        font-weight: 600;
-    }
-    .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__label,
-    .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-order-notice__label,
-    .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-b2b-checkout-credit__label {
-        display: none;
-    }
-    .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__controls {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__input {
-        min-width: 0;
-        flex: 1 1 auto;
-    }
-    .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-order-notice__input {
-        min-height: 2.5rem;
-        max-height: 4.5rem;
-    }
+    /* Extras tabs chrome lives in Theme mini-cart-drawer.css (shared with mini-cart + cart). */
     .weline-checkout__totals > [role="listitem"] {
         display: flex;
         justify-content: space-between;
@@ -1429,6 +1397,8 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         shippingMethods: [],
         paymentMethods: [],
         taxEstimate: null,
+        // Server money_summary (SSR boot / getData) — single paint source.
+        moneySummary: null,
         // Align with Express: pure-digital carts do not gate Submit on shipping lanes.
         requiresShipping: true,
         identity: {
@@ -1515,6 +1485,9 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         }
         if (Array.isArray(boot.payment_methods)) {
             checkoutState.paymentMethods = boot.payment_methods;
+        }
+        if (boot.money_summary && typeof boot.money_summary === 'object') {
+            checkoutState.moneySummary = boot.money_summary;
         }
         if (typeof boot.requires_shipping === 'boolean') {
             checkoutState.requiresShipping = boot.requires_shipping;
@@ -3250,7 +3223,10 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
 
     function moneySummaryRoot() {
-        return root.querySelector('[data-money-summary]')
+        // Prefer the checkout aside summary — page chrome may ship another
+        // [data-money-summary] (drawer / hidden) that must not steal paint.
+        return root.querySelector('[data-testid="checkout-money-summary"] [data-money-summary]')
+            || root.querySelector('[data-money-summary]')
             || (moneySummaryApi() && typeof moneySummaryApi().find === 'function'
                 ? moneySummaryApi().find(root)
                 : null);
@@ -3258,12 +3234,80 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
 
     function paintCheckoutMoneySummary(dto) {
         const api = moneySummaryApi();
-        const host = moneySummaryRoot();
-        if (api && typeof api.paint === 'function' && host) {
-            api.paint(host, Object.assign({ mode: 'checkout' }, dto || {}));
+        if (!(api && typeof api.paint === 'function')) {
+            return false;
+        }
+        const payload = Object.assign({ mode: 'checkout' }, dto || {});
+        const hosts = [];
+        const preferred = root.querySelector('[data-testid="checkout-money-summary"] [data-money-summary]');
+        if (preferred) {
+            hosts.push(preferred);
+        }
+        root.querySelectorAll('[data-money-summary]').forEach(function (host) {
+            if (hosts.indexOf(host) === -1) {
+                hosts.push(host);
+            }
+        });
+        if (!hosts.length) {
+            const fallbackHost = moneySummaryRoot();
+            if (!fallbackHost) {
+                return false;
+            }
+            api.paint(fallbackHost, payload);
             return true;
         }
-        return false;
+        hosts.forEach(function (host) {
+            api.paint(host, payload);
+        });
+        return true;
+    }
+
+    /** paint 失败时仍须同步激励/COD 行（SSR 已扣应付、data-weline-load 异步未就绪）。 */
+    function paintPaymentMoneyRowsFallback(incentiveMajor, codFeeMajor) {
+        const incentive = Math.max(0, Number(incentiveMajor) || 0);
+        const codFee = Math.max(0, Number(codFeeMajor) || 0);
+        // Paint every checkout-scoped money summary — not only the first cached node.
+        root.querySelectorAll('[data-money-summary-row="incentive"]').forEach(function (row) {
+            const amount = row.querySelector('[data-money-summary-incentive], [data-payment-incentive-amount]');
+            if (!amount) {
+                return;
+            }
+            if (incentive > 0) {
+                row.hidden = false;
+                setText(amount, '-' + money(incentive));
+            } else {
+                row.hidden = true;
+                setText(amount, money(0));
+            }
+        });
+        root.querySelectorAll('[data-money-summary-row="cod"]').forEach(function (row) {
+            const amount = row.querySelector('[data-money-summary-cod]');
+            if (!amount) {
+                return;
+            }
+            if (codFee > 0) {
+                row.hidden = false;
+                setText(amount, money(codFee));
+            } else {
+                row.hidden = true;
+                setText(amount, money(0));
+            }
+        });
+    }
+
+    /** Race with async data-weline-load=storefrontMoneySummary：首屏 paint 后再补刷一次。 */
+    function renderTotalsWhenMoneySummaryReady() {
+        renderTotals();
+        if (moneySummaryApi()) {
+            return;
+        }
+        try {
+            if (window.Weline && typeof window.Weline.load === 'function') {
+                window.Weline.load('storefrontMoneySummary').then(function () {
+                    renderTotals();
+                }).catch(function () {});
+            }
+        } catch (eMoneyLoad) {}
     }
 
     function applyContinuePayFrozenTotals(frozen) {
@@ -3312,86 +3356,68 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             applyContinuePayFrozenTotals(frozen);
             return;
         }
-        // Coupon / soft events may fire before getData; keep major fields coherent.
-        // Retail baseline always; optional B2B adjustMoneySummaryDto owns ToB policy (no tob ? 0 here).
-        checkoutState.cart = normalizeCartMoney(checkoutState.cart);
-        const subtotal = Number(checkoutState.cart.subtotal || 0);
-        const shipping = selectedShippingAmount();
-        const discount = discountAmountMajor(checkoutState.cart);
-        const cartType = checkoutCartType();
-        const salesTaxMajor = cartSalesTaxAmount();
-        const customsDutyMajor = selectedCustomsDutyAmount();
-        const importTaxMajor = selectedImportTaxAmount();
-        const tax = Math.max(0, salesTaxMajor + customsDutyMajor + importTaxMajor);
-        const codFee = selectedCodFeeAmount();
-        const incentive = selectedIncentiveSavingsMajor();
-        const payableRetail = Math.max(0, subtotal + shipping - discount + tax + codFee - incentive);
-        const previewCode = text(
-            (checkoutState.cart && checkoutState.cart.discount_preview && checkoutState.cart.discount_preview.coupon_code)
-            || pendingCouponCode
-            || ''
-        ).trim().toUpperCase();
-        const discountLabel = (discount > 0 && previewCode)
-            ? (discountLabelDefault + ' · ' + previewCode)
-            : '';
-        // Split rows: 销售税 / 进口关税 / 进口税费 — never muddle into one label.
-        const taxNote = moneySummaryTaxNote(salesTaxMajor, customsDutyMajor, importTaxMajor);
-        let moneyDto = {
+        // Unified channel: paint server money_summary when present (SSR boot / getData).
+        // Do not reassemble payable = subtotal+shipping-… on the client as the authority.
+        const serverSummary = checkoutState.moneySummary && typeof checkoutState.moneySummary === 'object'
+            ? checkoutState.moneySummary
+            : null;
+        if (serverSummary && serverSummary.payable_minor != null) {
+            let moneyDto = Object.assign({
+                mode: 'checkout',
+                currency: checkoutState.currency || serverSummary.currency || 'CNY',
+                payable_label: grandTotalLabelDefault || grandTotalLabelDeposit,
+            }, serverSummary);
+            const tobApi = window.WelineB2BCheckoutTob;
+            const cartType = checkoutCartType();
+            // ToB deposit/credit may still need live shell adjust; incentive/tax already zeroed server-side.
+            if (tobApi && typeof tobApi.adjustMoneySummaryDto === 'function') {
+                try {
+                    const shellType = String(root.getAttribute('data-cart-type') || cartType || 'toc').toLowerCase() || 'toc';
+                    const adjusted = tobApi.adjustMoneySummaryDto(moneyDto, {
+                        shell_cart_type: shellType,
+                        cart_type: cartType,
+                        subtotal: Number(checkoutState.cart && checkoutState.cart.subtotal || 0),
+                        currency: checkoutState.currency || 'CNY',
+                        payable_label_deposit: grandTotalLabelDeposit,
+                        payable_label_retail: grandTotalLabelDefault || '应付合计',
+                    });
+                    if (adjusted && typeof adjusted === 'object') {
+                        moneyDto = adjusted;
+                    }
+                } catch (eAdj) {}
+            }
+            if (tobApi && typeof tobApi.syncPaymentIncentiveAvailability === 'function') {
+                try {
+                    tobApi.syncPaymentIncentiveAvailability(root, cartType);
+                } catch (eSyncInc) {}
+            }
+            const payable = Math.max(0, Number(moneyDto.payable_minor || 0) / 100);
+            const painted = paintCheckoutMoneySummary(moneyDto);
+            if (!painted) {
+                setText(subtotalNode, money(Number(moneyDto.goods_subtotal_minor || 0) / 100));
+                setText(shippingAmountNode, money(Number(moneyDto.shipping_minor || 0) / 100));
+                setText(grandTotalNode, money(payable));
+                paintPaymentMoneyRowsFallback(
+                    Number(moneyDto.payment_incentive_minor || 0) / 100,
+                    Number(moneyDto.cod_fee_minor || 0) / 100
+                );
+            }
+            syncLifecycleDomFields({ amount: payable.toFixed(2) });
+            return;
+        }
+        // Fail-closed until soft getData supplies money_summary (no local payable formula).
+        paintCheckoutMoneySummary({
+            mode: 'checkout',
             currency: checkoutState.currency || 'CNY',
-            cart_type: cartType,
-            commerce_deposit_allowed: false,
-            goods_subtotal_minor: Math.round(subtotal * 100),
-            shipping_minor: Math.round(shipping * 100),
-            discount_minor: Math.round(discount * 100),
-            discount_label: discountLabel,
-            deposit_minor: 0,
-            credit_minor: 0,
-            sales_tax_minor: Math.round(salesTaxMajor * 100),
-            duty_minor: Math.round(customsDutyMajor * 100),
-            customs_duty_minor: Math.round(customsDutyMajor * 100),
-            import_tax_minor: Math.round(importTaxMajor * 100),
-            tax_minor: Math.round(tax * 100),
-            sales_tax_label: '<?= addslashes((string)__('销售税')) ?>',
-            customs_duty_label: '<?= addslashes((string)__('进口关税')) ?>',
-            import_tax_label: '<?= addslashes((string)__('进口税费')) ?>',
-            note: taxNote,
-            cod_fee_minor: Math.round(codFee * 100),
-            payment_incentive_minor: Math.round(incentive * 100),
-            payable_minor: Math.round(payableRetail * 100),
-            payable_label: grandTotalLabelDefault || grandTotalLabelDeposit,
-        };
-        const tobApi = window.WelineB2BCheckoutTob;
-        if (tobApi && typeof tobApi.adjustMoneySummaryDto === 'function') {
-            try {
-                // Shell data-cart-type wins; retail label belt when toc (no sticky 定金).
-                const shellType = String(root.getAttribute('data-cart-type') || cartType || 'toc').toLowerCase() || 'toc';
-                const adjusted = tobApi.adjustMoneySummaryDto(moneyDto, {
-                    shell_cart_type: shellType,
-                    cart_type: cartType,
-                    subtotal: subtotal,
-                    currency: checkoutState.currency || 'CNY',
-                    payable_label_deposit: grandTotalLabelDeposit,
-                    payable_label_retail: grandTotalLabelDefault || '应付合计',
-                });
-                if (adjusted && typeof adjusted === 'object') {
-                    moneyDto = adjusted;
-                }
-            } catch (eAdj) {}
-        }
-        // Optional B2B: after getData re-injects payment HTML, keep「减 $x」hidden on ToB.
-        if (tobApi && typeof tobApi.syncPaymentIncentiveAvailability === 'function') {
-            try {
-                tobApi.syncPaymentIncentiveAvailability(root, cartType);
-            } catch (eSyncInc) {}
-        }
-        const payable = Math.max(0, Number(moneyDto.payable_minor || 0) / 100);
-        const painted = paintCheckoutMoneySummary(moneyDto);
-        if (!painted) {
-            setText(subtotalNode, money(subtotal));
-            setText(shippingAmountNode, money(shipping));
-            setText(grandTotalNode, money(payable));
-        }
-        syncLifecycleDomFields({ amount: payable.toFixed(2) });
+            goods_subtotal_minor: 0,
+            shipping_minor: 0,
+            discount_minor: 0,
+            payable_minor: 0,
+            payment_incentive_minor: 0,
+            cod_fee_minor: 0,
+            payable_label: grandTotalLabelDefault || '应付合计',
+        });
+        syncLifecycleDomFields({ amount: '0.00' });
     }
 
     function render(data, options) {
@@ -3428,6 +3454,9 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             : (data.tax_estimate && typeof data.tax_estimate === 'object'
                 ? data.tax_estimate
                 : null);
+        if (data.money_summary && typeof data.money_summary === 'object') {
+            checkoutState.moneySummary = data.money_summary;
+        }
         checkoutState.identity = data.identity || checkoutState.identity || {
             checkout_mode: 'guest',
             is_guest_checkout: true,
@@ -3675,10 +3704,14 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 getDataParams.shipping_method = boundShipping;
             }
         } else {
-            // 普通结账：把当前选中方式传给 getData，便于激励列表/摘要与壳侧核对。
+            // 普通结账：选中支付/配送进 getData → 同通道 money_summary（禁止闪回首项）。
             const selectedPm = selectedValue('payment_method');
             if (selectedPm) {
                 getDataParams.payment_method = selectedPm;
+            }
+            const selectedSm = selectedValue('shipping_method');
+            if (selectedSm) {
+                getDataParams.shipping_method = selectedSm;
             }
         }
         if (pendingCouponCode) {
@@ -4300,19 +4333,21 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     });
 
     if (shippingBox) {
-        shippingBox.addEventListener('change', renderTotals);
+        shippingBox.addEventListener('change', function () {
+            // Same channel as SSR: soft getData rebuilds money_summary for selected shipping.
+            scheduleReload({ soft: true, panels: { items: false, address: false, shipping: true, payment: false } });
+        });
     }
     if (paymentBox) {
         paymentBox.addEventListener('change', function () {
-            // 只本地重算摘要（COD/激励已在 payment_methods 扁字段）；禁止再 getData 重绘整页。
-            renderTotals();
+            // Same channel: soft getData with payment_method → money_summary; HTML keeps selected_code.
+            scheduleReload({ soft: true, panels: { items: false, address: false, shipping: false, payment: true } });
         });
     }
 
     let paymentIncentiveReconcileTimer = 0;
     /**
-     * 历史：选支付后曾 getData「核对优惠」，但 getData 硬隔离忽略 payment_method，
-     * 只会整页重绘并把选项闪回首项。激励已由列表扁字段 + renderTotals 覆盖，此处仅本地重算。
+     * Debounced soft getData so payment/coupon chrome stays on the unified money channel.
      */
     function schedulePaymentIncentiveReconcile() {
         if (isContinuePayMode()) {
@@ -4320,7 +4355,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         }
         window.clearTimeout(paymentIncentiveReconcileTimer);
         paymentIncentiveReconcileTimer = window.setTimeout(function () {
-            renderTotals();
+            scheduleReload({ soft: true, panels: { items: false, address: false, shipping: false, payment: true } });
         }, 0);
     }
 
@@ -4602,14 +4637,15 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             // 跳过 soft hydrate：仍须用 SSR cart 灌 checkoutState，否则券事件只刷优惠、小计/应付变 0。
             hydrateCheckoutStateFromSsr();
             syncExpressHostVisibility({ cartIsEmpty: false });
-            renderTotals();
+            // 默认支付激励：SSR 已扣应付；部件异步就绪前后都须露出优惠行。
+            renderTotalsWhenMoneySummaryReady();
             maybeAutoStartExpressPay();
             releasePromise.catch(function () {});
             return;
         }
         // 非 SSR：先灌服务端 cart，再 soft getData，避免首屏券竞态。
         hydrateCheckoutStateFromSsr();
-        renderTotals();
+        renderTotalsWhenMoneySummaryReady();
         loadCheckoutWithRetry({
             soft: true,
             panels: { items: true, shipping: true, payment: true, address: false },

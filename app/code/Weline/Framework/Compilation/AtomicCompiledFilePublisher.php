@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Compilation;
 
+use Weline\Framework\Http\Fpc\StaticAssetBrotliSidecar;
+
 /**
  * Publishes immutable control-plane artifacts without exposing partial files.
  *
@@ -72,6 +74,8 @@ final class AtomicCompiledFilePublisher
             @\opcache_invalidate($target, true);
         }
         \clearstatcache(true, $target);
+        // Compressible pub/static (and other) leaves: br sidecar for nginx disk HIT.
+        StaticAssetBrotliSidecar::publish($target);
     }
 
     /**

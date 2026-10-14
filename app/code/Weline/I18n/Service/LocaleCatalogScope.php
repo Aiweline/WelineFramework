@@ -14,7 +14,9 @@ final class LocaleCatalogScope
     public const MODE_INJECTED = 'injected';
 
     /**
-     * @param list<string> $codes
+     * @param list<string> $codes Ordered membership for the resolved scope
+     * @param bool $preserveExplicitOrder When true, switcher must keep $codes order
+     *        (website/store/channel DB order or injected). Platform fallback may re-rank.
      */
     public function __construct(
         public readonly array $codes,
@@ -24,6 +26,9 @@ final class LocaleCatalogScope
         public readonly bool $allowRequest,
         public readonly string $mode,
         public readonly int $websiteId = 0,
+        public readonly ?int $storeId = null,
+        public readonly ?int $channelId = null,
+        public readonly bool $preserveExplicitOrder = true,
     ) {
     }
 }

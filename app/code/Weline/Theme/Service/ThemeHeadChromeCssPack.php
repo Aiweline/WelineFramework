@@ -25,14 +25,12 @@ use Weline\Theme\Service\LayoutEntity\WidgetAssetArtifactPublisher;
  * Prefer PACK_STOREFRONT / PACK_BACKEND (one link each). Legacy fragment packs remain
  * for collectSources composition and merge=off fallbacks in templates.
  * Gated by resource_files/theme_css_merge (auto/on = always on). Source leaves stay editable;
- * runtime join may include theme.css + toast + **current theme overlay** bytes — never write
- * back into source theme.css. Artifacts publish under the **active theme** static namespace
- * and are keyed by **application scope** (scope_key/store_mode/…) so themes and scopes
- * never cross-pollute (design shell must not land in base Theme; website A must not reuse B).
- *
- * Overlay list (theme-owned): `theme/{area}/partials/head/theme-head-css-overlay.php`
- * returning list&lt;string&gt; of theme-relative CSS leaves. Design themes (hanfu/daocharms/…)
- * declare their own list; default Theme has none.
+ * runtime join may include theme.css bytes — never write back into source theme.css.
+ * Head CSS order (2026-10-14): layout-critical → theme pack (no disk/overlay) → disk →
+ * overlay pack → widget layout pack → other. Overlay list stays theme-owned but is emitted
+ * as a **separate** pack after disk (not folded into STOREFRONT).
+ * Artifacts publish under the **active theme** static namespace and are keyed by
+ * **application scope** so themes and scopes never cross-pollute.
  *
  * work_mode=theme_module_runtime
  */
@@ -45,6 +43,8 @@ final class ThemeHeadChromeCssPack
     public const PACK_TOKENS_MINIMAL = 'tokens-minimal';
     public const PACK_TOKENS_BACKEND = 'tokens-backend';
     public const PACK_UI = 'ui';
+    /** Design overlay leaves only — emitted after theme + disk (not inside STOREFRONT). */
+    public const PACK_OVERLAY = 'overlay';
 
     /** Design/theme-owned overlay list relative to theme view root. */
     public const OVERLAY_LIST_RELATIVE = 'partials/head/theme-head-css-overlay.php';
@@ -83,7 +83,8 @@ final class ThemeHeadChromeCssPack
         }
         $pack = $area === 'backend' ? self::PACK_BACKEND : self::PACK_STOREFRONT;
         try {
-            $this->publishPack($area, $pack, ['include_disk' => true, 'layout_css' => true]);
+            $this->publishPack($area, $pack, ['include_disk' => false, 'include_theme_overlay' => false]);
+            $this->publishPack($area, self::PACK_OVERLAY, ['include_disk' => false, 'include_theme_overlay' => true]);
         } catch (\Throwable $e) {
             if (function_exists('w_log_warning')) {
                 w_log_warning('Theme head chrome CSS warm failed: ' . $e->getMessage());
@@ -115,10 +116,9 @@ final class ThemeHeadChromeCssPack
         $safe = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $attrs = ' rel="stylesheet" type="text/css" data-weline-theme-head-pack="'
             . htmlspecialchars($pack, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
-        if (!empty($options['layout_css']) || in_array($pack, [self::PACK_STOREFRONT, self::PACK_BACKEND, self::PACK_UI], true)) {
-            $attrs .= ' data-weline-layout-css';
-        }
-        if ($pack === self::PACK_STOREFRONT && $this->themeOverlayAbsorbed($area, $pack)) {
+        // FOUC gate waits only on layout-critical (inline). Theme/disk/overlay must NOT
+        // carry data-weline-layout-css (big layout pack uses data-weline-layout-pack).
+        if ($pack === self::PACK_OVERLAY) {
             $attrs .= ' data-weline-theme-overlay="1"';
         }
 
@@ -127,34 +127,29 @@ final class ThemeHeadChromeCssPack
 
     /**
      * Whether the pack already absorbed the disk override (skip separate link).
+     * STOREFRONT/BACKEND no longer fold disk — always emit ThemeDiskHeadService after theme.
      */
     public function diskIncludedInPack(string $area, string $pack): bool
     {
-        return $this->isEnabled($area)
-            && in_array($pack, [
-                self::PACK_STOREFRONT,
-                self::PACK_BACKEND,
-                self::PACK_TOKENS_POST,
-                self::PACK_TOKENS_MINIMAL,
-                self::PACK_TOKENS_BACKEND,
-            ], true);
+        return false;
     }
 
     /**
-     * Whether STOREFRONT pack absorbed this theme's design overlay CSS (skip skin CSS tags).
-     * Ownership follows the active theme; no overlay file ⇒ false (base Theme / no-theme).
+     * Whether overlay CSS was emitted as PACK_OVERLAY (skip skin fallback duplicate links).
      */
     public function themeOverlayAbsorbed(string $area, string $pack): bool
     {
         $area = $this->themeContext->normalizeArea($area);
-        if (!$this->isEnabled($area) || $pack !== self::PACK_STOREFRONT) {
+        if (!$this->isEnabled($area)) {
+            return false;
+        }
+        if ($pack !== self::PACK_STOREFRONT && $pack !== self::PACK_OVERLAY) {
             return false;
         }
         $theme = $this->resolveTheme($area);
         if (!$theme instanceof WelineTheme || (int)$theme->getId() < 1) {
             return false;
         }
-
         return $this->collectThemeOverlaySources($area, $theme) !== [];
     }
 
@@ -198,7 +193,7 @@ final class ThemeHeadChromeCssPack
         }
         $scopeFp = $this->resolvePackScopeFingerprint($area);
         $key = hash('sha256', json_encode([
-            'theme-head-chrome-v6',
+            'theme-head-chrome-v7',
             $area,
             $pack,
             $minify,
@@ -326,30 +321,31 @@ final class ThemeHeadChromeCssPack
     private function collectSources(string $area, string $pack, ?WelineTheme $theme, array $options): array
     {
         $leaves = match ($pack) {
+            // Industry order inside theme pack: layout/shell CSS → size vars → colors.
             self::PACK_STOREFRONT => [
+                'statics:ui/weline-foundation.css',
+                'statics:ui/weline-frontend.css',
+                'theme/' . $area . '/assets/css/theme.css',
+                'theme/' . $area . '/variables/_spacing.css',
+                'theme/' . $area . '/variables/_auto-literals.css',
+                'theme/' . $area . '/variables/_typography.css',
                 'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
                 'theme/' . $area . '/colors/_ink.css',
                 'theme/' . $area . '/colors/_dark.css',
-                'theme/' . $area . '/variables/_spacing.css',
-                // Size/misc leaves for widget token consumption (REQ-THEME-0007); must ship with pack.
-                'theme/' . $area . '/variables/_auto-literals.css',
-                'theme/' . $area . '/variables/_typography.css',
-                'statics:ui/weline-foundation.css',
-                'statics:ui/weline-frontend.css',
-                'theme/' . $area . '/assets/css/theme.css',
                 // Style leaves (e.g. *-amazon.css) stay OUT: backend style selection generates CSS;
                 // theme head must never hard-@static them into layout pack.
             ],
             self::PACK_BACKEND => [
-                'theme/' . $area . '/colors/_light.css',
-                'theme/' . $area . '/colors/_default.css',
-                'theme/' . $area . '/colors/_dark.css',
-                'theme/' . $area . '/variables/_auto-literals.css',
                 'statics:ui/weline-foundation.css',
                 'statics:ui/weline-backend.css',
                 'theme/' . $area . '/assets/css/theme.css',
+                'theme/' . $area . '/variables/_auto-literals.css',
+                'theme/' . $area . '/colors/_light.css',
+                'theme/' . $area . '/colors/_default.css',
+                'theme/' . $area . '/colors/_dark.css',
             ],
+            self::PACK_OVERLAY => [],
             self::PACK_TOKENS_PRE => [
                 'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
@@ -389,10 +385,9 @@ final class ThemeHeadChromeCssPack
                 $sources[] = $resolved;
             }
         }
-        $includeDisk = ($options['include_disk'] ?? true)
+        // Disk is a separate head link after theme (include_disk default false for STOREFRONT/BACKEND).
+        $includeDisk = ($options['include_disk'] ?? false)
             && in_array($pack, [
-                self::PACK_STOREFRONT,
-                self::PACK_BACKEND,
                 self::PACK_TOKENS_POST,
                 self::PACK_TOKENS_MINIMAL,
                 self::PACK_TOKENS_BACKEND,
@@ -400,13 +395,13 @@ final class ThemeHeadChromeCssPack
         if ($includeDisk) {
             $disk = $this->resolveDiskOverrideSource($area, $theme);
             if ($disk !== null) {
-                // Insert disk after token/variable leaves, before foundation/UI for storefront/backend shells.
-                $insertAt = $this->diskInsertIndex($pack, $sources);
-                array_splice($sources, $insertAt, 0, [$disk]);
+                $sources[] = $disk;
             }
         }
-        // Theme-owned brand/shell CSS after core stack; artifact path already under this theme namespace.
-        if ($pack === self::PACK_STOREFRONT && ($options['include_theme_overlay'] ?? true)) {
+        // Overlay is its own pack (or explicit opt-in); never folded into STOREFRONT by default.
+        $includeOverlay = $pack === self::PACK_OVERLAY
+            || (($options['include_theme_overlay'] ?? false) && $pack === self::PACK_STOREFRONT);
+        if ($includeOverlay) {
             foreach ($this->collectThemeOverlaySources($area, $theme) as $overlay) {
                 $sources[] = $overlay;
             }

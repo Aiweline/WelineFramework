@@ -54,6 +54,20 @@ if (!is_array($backendThemeConfig)) {
 $deployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
 $deployVersion = is_array($deployMeta) ? (string)($deployMeta['deploy_version'] ?? 'dev') : 'dev';
 $workerBuildId = is_array($deployMeta) ? (string)($deployMeta['worker_build_id'] ?? 'dev') : 'dev';
+$themePublishedVersionId = '';
+$themePublishedVersion = '';
+try {
+    if (class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+        /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $themeVersionResolver */
+        $themeVersionResolver = ObjectManager::getInstance(
+            \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+        );
+        $themeVersions = $themeVersionResolver->resolve();
+        $themePublishedVersionId = (string)($themeVersions['themePublishedVersionId'] ?? '');
+        $themePublishedVersion = (string)($themeVersions['themePublishedVersion'] ?? '');
+    }
+} catch (\Throwable) {
+}
 $queryBinUrl = Env::getFrontendQueryBinPath();
 $queryWorkerUrl = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-api-worker.js');
 $queryWorkerUrl .= (str_contains($queryWorkerUrl, '?') ? '&' : '?') . 'v=' . rawurlencode($deployVersion . '-' . $workerBuildId);
@@ -64,6 +78,10 @@ $apiConfig = [
     'queryBinUrl' => $queryBinUrl,
     'deployVersion' => $deployVersion,
     'workerBuildId' => $workerBuildId,
+    // Mirror Frontend: api subtree must carry theme stamp so QueryBin handshake
+    // does not 409 deploy_reload_required with an empty client id.
+    'themePublishedVersionId' => $themePublishedVersionId,
+    'themePublishedVersion' => $themePublishedVersion,
     'requestTimeoutMs' => 60000,
 ];
 $runtime = [
@@ -79,6 +97,8 @@ $runtime = [
     'assetVersion' => $deployVersion,
     'deployVersion' => $deployVersion,
     'workerBuildId' => $workerBuildId,
+    'themePublishedVersionId' => $themePublishedVersionId,
+    'themePublishedVersion' => $themePublishedVersion,
     'debug' => !$useProdPublicUrls,
     'api' => $apiConfig,
     'url' => [

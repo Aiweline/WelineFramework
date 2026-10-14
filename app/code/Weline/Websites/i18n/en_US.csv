@@ -90,6 +90,7 @@ follow_registrar|provider_account|none,follow_registrar|provider_account|none
 "站点 ID；省略则返回全部活跃绑定","Site ID; omitting returns all active bindings"
 "域名状态，默认 active","Domain name status, default active"
 获取站点关联的语言代码列表,"Fetch list of site-associated language codes"
+"按 Website→Store→Channel 解析语种成员与展示序（覆盖继承）","按 Website→Store→Channel 解析语种成员与展示序（覆盖继承）"
 "静态错误页发布目标（网站×语种 + host_map）","静态错误页发布目标（网站×语种 + host_map）"
 获取站点关联的货币代码列表,获取站点关联的货币代码列表
 "获取域名池列表（用于 SSL/建站选择）","Get domain pool list (for SSL/website selection)"
@@ -339,9 +340,9 @@ id属性不能为空,"The id attribute cannot be empty"
 请选择,"Please select"
 不设置则从关联语言中选择第一个,"If not set, the first one will be selected from the associated languages."
 关联货币,"Associated Currency"
-点击选择关联货币，默认货币不可取消,"Click to select associated currencies; default currency cannot be removed"
+拖拽胶囊调整关联货币顺序，松手后自动保存；默认货币不可取消,"Drag pills to reorder currencies; auto-saves on drop. Default currency cannot be removed."
 关联语言,"Associated Language"
-按住Ctrl或Cmd键可多选,"Hold Ctrl or Cmd to select multiple"
+拖拽胶囊调整店面语种顺序，松手后自动保存,"Drag pills to reorder storefront languages; auto-saves on drop"
 取消,Cancel
 域名管理标签页导航,"Domain Management Tab Navigation"
 "在域名管理页面的标签页导航区域动态追加标签页按钮。其他模块（如 Server 模块的证书管理）可通过此 Hook 注入新的 Tab 按钮。","Dynamically append tab buttons in the domain management page navigation area. Other modules (e.g., Server module certificate management) can inject new tabs via this Hook."
@@ -929,6 +930,8 @@ plus,plus
 清理DNS服务商域名,"Clean up DNS service provider domain name"
 trash,trash
 清理误同步的DNS服务商域名,"Clean up mis-synchronized DNS service provider domain names"
+网站货币排序已保存,"Currency order saved"
+网站语种排序已保存,网站语种排序已保存
 编辑商店,"Edit store"
 编辑渠道,"Edit channel"
 新建商店,"New store"
@@ -3355,6 +3358,34 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+语种成员与排序已保存,语种成员与排序已保存
+网站层无「恢复继承」；请直接编辑关联语种,网站层无「恢复继承」；请直接编辑关联语种
+已恢复继承上级语种,已恢复继承上级语种
+语种,语种
+店铺,Store
+继承自店铺,继承自店铺
+继承自网站,继承自网站
+语种成员与排序,语种成员与排序
+拖拽后点保存生效,"Drag to reorder, then click Save"
+本层覆盖,本层覆盖
+返回网站,返回网站
+"代码 / 名称 / 国家","代码 / 名称 / 国家"
+国家分类,国家分类
+全部国家,全部国家
+拖拽,拖拽
+旗标,旗标
+国家,国家
+序号,序号
+拖拽排序,拖拽排序
+新增语种代码,新增语种代码
+添加,添加
+确定恢复继承上级语种吗？本层覆盖将被清除。,确定恢复继承上级语种吗？本层覆盖将被清除。
+恢复继承上级,恢复继承上级
+保存成员与排序,保存成员与排序
+点击选择关联货币，默认货币不可取消,"Click to select associated currencies; default currency cannot be removed"
+按住Ctrl或Cmd键可多选,"Hold Ctrl or Cmd to select multiple"
+管理语种排序,管理语种排序
+"拖拽排序 / 搜索分类，保存后店面按此序展示","拖拽排序 / 搜索分类，保存后店面按此序展示"
 从域名池选择已就绪的域名（可多选）；选择后网站代码将自动填充，子路径由上方统一控制。,"Select ready domains from the domain pool (multi-select allowed); after selection, the site code will be auto-filled, and the sub-path is controlled uniformly from above."
 范围,Scope
 "Cloudflare API Token 不能为空","Cloudflare API Token cannot be empty"
@@ -3554,7 +3585,7 @@ download,download
 切换范围,"Switch scope"
 店铺与渠道,"Stores & channels"
 当前网站下的店铺与渠道,"Stores and channels on this website"
-店铺,Store
 当前,Current
 选择要进入的店铺或渠道,"Choose a store or channel"
 切换渠道,"Switch channel"
+拖动排序,"Drag to reorder"

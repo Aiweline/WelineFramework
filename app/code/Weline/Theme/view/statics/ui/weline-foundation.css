@@ -1,5 +1,4 @@
 /* Weline UI source: css/foundation.css */
-/* Weline UI source: css/foundation.css */
 @layer reset, tokens, base, layout, components, utilities, page;
 
 @layer tokens {
@@ -1316,6 +1315,37 @@
     .w-pagination__link[aria-current="page"] { background: var(--weline-theme-primary); border-color: var(--weline-theme-primary); color: var(--weline-theme-on-primary); }
     .w-pagination__item[data-state="active"] > .w-pagination__link { background: var(--weline-theme-primary); border-color: var(--weline-theme-primary); color: var(--weline-theme-on-primary); }
     .w-pagination__link[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+    /* Jump form: keep page input + submit on the same row as pager links.
+       Default .w-input { inline-size:100% } would wrap the button under flex-wrap. */
+    .w-pagination__jump,
+    .w-pagination__item > .w-cluster {
+        display: inline-flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: var(--w-gap, var(--weline-space-2));
+        margin: 0;
+        min-inline-size: 0;
+    }
+    .w-pagination__jump > .w-input,
+    .w-pagination__item > .w-cluster > .w-input {
+        width: auto;
+        inline-size: auto;
+        flex: 0 1 auto;
+        max-inline-size: 9rem;
+        min-block-size: var(--weline-control-height-sm);
+    }
+    .w-pagination__jump > .w-button,
+    .w-pagination__item > .w-cluster > .w-button {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        min-block-size: var(--weline-control-height-sm);
+        min-height: var(--weline-control-height-sm);
+        padding-block: 0;
+        padding-inline: var(--weline-space-2);
+        font-size: var(--weline-font-size-sm);
+        border-radius: var(--weline-radius-sm);
+        line-height: 1.2;
+    }
     .w-breadcrumb { flex-wrap: wrap; color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-sm); }
     .w-breadcrumb > li + li::before { content: "/"; margin-inline-end: var(--weline-space-1); color: var(--weline-theme-text-subtle); }
     .w-list-group { flex-direction: column; align-items: stretch; gap: 0; border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md); overflow: clip; }
@@ -2148,6 +2178,12 @@
         .w-toast-region { inset-inline: var(--weline-space-3); width: auto; }
         .w-button[data-size="sm"], .w-menu__item, .w-combobox__option { min-block-size: 2.75rem; }
         .w-button[data-icon-only="true"][data-size="sm"] { min-inline-size: 2.75rem; inline-size: 2.75rem; }
+        /* Keep pager jump CTA aligned with sm pagination links (do not inherit touch 2.75rem). */
+        .w-pagination__jump > .w-button,
+        .w-pagination__item > .w-cluster > .w-button {
+            min-block-size: var(--weline-control-height-sm);
+            min-height: var(--weline-control-height-sm);
+        }
     }
 }
 

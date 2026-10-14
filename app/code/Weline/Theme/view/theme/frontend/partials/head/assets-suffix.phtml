@@ -1,13 +1,7 @@
 <?php
 /**
- * Route-invariant head suffix (theme UI JS / module declarations + layout-CSS fallback).
- * wave9-9s: nested under storefrontHeadAssetsPolicy — shared across URLs.
- *
- * work_mode=default_theme — head emission only; pack service is theme_module_runtime.
- *
- * head 顺序（2026-10-11）：**布局 CSS 包由 assets-prefix 输出**（落在 critical CSS 之后、
- * 阻塞 JS 之前）。本文件只保留「包不可用时」的兜底链，以及 JS 侧：after-css 解锁包、
- * UI module、模块声明。
+ * Route-invariant head suffix (theme UI JS / module declarations + theme-CSS fallback).
+ * Big layout pack is injected by WidgetAssetHtmlPlacement after theme/disk/overlay.
  *
  * @meta.name {default="Storefront head assets suffix",name="店面 head 资源后缀"}
  * @meta.cache.mode {default="chrome",name="缓存模式"}
@@ -26,6 +20,7 @@ if ($diskOverrideHtml === '') {
 }
 $headPack = null;
 $storefrontPackHtml = null;
+$overlayPackHtml = null;
 try {
     $headPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
@@ -33,18 +28,21 @@ try {
     $storefrontPackHtml = $headPack->tryLinkHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT,
-        ['include_disk' => true, 'layout_css' => true]
+        ['include_disk' => false, 'include_theme_overlay' => false]
+    );
+    $overlayPackHtml = $headPack->tryLinkHtml(
+        'frontend',
+        \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_OVERLAY,
+        ['include_disk' => false, 'include_theme_overlay' => true]
     );
 } catch (\Throwable $e) {
     $headPack = null;
     $storefrontPackHtml = null;
+    $overlayPackHtml = null;
 }
-$diskAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
-    && $storefrontPackHtml !== null
-    && $headPack->diskIncludedInPack('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT);
+$diskAbsorbed = false;
 $afterCssJsHtml = null;
 try {
-    // defer：FOUC 解锁器内部会先查 link.sheet，已加载则立即解锁，延迟执行同样安全。
     $afterCssJsHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeJsPack::class
     )->tryScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_AFTER_CSS, true);
@@ -53,17 +51,20 @@ try {
 }
 ?>
 <?php if ($storefrontPackHtml === null): ?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/variables/_auto-literals.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/variables/_typography.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_default.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
-<theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
-<theme:css>Weline_Theme::theme/frontend/variables/_auto-literals.css</theme:css>
-<theme:css>Weline_Theme::theme/frontend/variables/_typography.css</theme:css>
 <?php if (!$diskAbsorbed) { echo $diskOverrideHtml; } ?>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)" data-weline-layout-css>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)" data-weline-layout-css>
-<theme:css data-weline-layout-css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<?php if ($overlayPackHtml !== null): ?>
+<?= $overlayPackHtml ?>
+<?php endif; ?>
 <?php endif; ?>
 <w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>
 <?php if ($afterCssJsHtml !== null): ?>

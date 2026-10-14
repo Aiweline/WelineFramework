@@ -35,14 +35,23 @@ final class TobStorefrontMoneySummaryPolicyTest extends TestCase
         self::assertSame($payload, $out);
     }
 
-    public function testAdjustSsrPayloadRestoresIncentiveAndStripsBadgesForTob(): void
+    public function testAdjustSsrPayloadClearsIncentiveWithoutRewritingCartGrandForTob(): void
     {
         $policy = new TobStorefrontMoneySummaryPolicy();
         $payload = [
             'cart_type' => 'tob',
             'currency' => 'USD',
-            'cart' => ['grand_total' => 104.45, 'cart_type' => 'tob'],
-            'payable_text' => '$104.45',
+            'cart' => ['grand_total' => 109.45, 'cart_type' => 'tob'],
+            'payable_text' => '$109.45',
+            'incentive_text' => '-$5.00',
+            'incentive_minor' => 500,
+            'money_summary' => [
+                'payment_incentive_minor' => 500,
+                'incentive_minor' => 500,
+                'incentive_text' => '-$5.00',
+                'payable_text' => '$104.45',
+                'payable_minor' => 10445,
+            ],
             'payment_methods' => [[
                 'code' => 'fake_card',
                 'incentive_available' => true,
@@ -54,9 +63,13 @@ final class TobStorefrontMoneySummaryPolicyTest extends TestCase
                 . ' data-incentive-savings-minor="500">减 $5.00</span></label>',
         ];
         $out = $policy->adjustSsrPayload($payload);
+        // Cart baseline unchanged — Builder owns payable; no add-back into grand_total.
         self::assertSame(109.45, (float)$out['cart']['grand_total']);
         self::assertFalse((bool)$out['payment_methods'][0]['incentive_available']);
         self::assertSame(0, (int)$out['payment_methods'][0]['incentive_savings_minor']);
+        self::assertSame('', (string)$out['incentive_text']);
+        self::assertSame(0, (int)$out['incentive_minor']);
+        self::assertSame(0, (int)$out['money_summary']['payment_incentive_minor']);
         self::assertStringNotContainsString('data-payment-incentive', (string)$out['payment_methods_html']);
         self::assertStringNotContainsString('has-incentive', (string)$out['payment_methods_html']);
         self::assertStringContainsString('到港由买家另付', (string)$out['money_summary_note']);

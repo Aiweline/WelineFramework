@@ -78,6 +78,15 @@ final class ThemeLayoutEntityLocaleComPrewarmContractTest extends TestCase
         self::assertStringContainsString('warmPublishedResourcePacks', $service);
         self::assertStringContainsString('ThemeHeadChromeCssPack', $service);
         self::assertStringContainsString('warmAreaPacks', $service);
+        self::assertStringContainsString('ThemeRuntimeCacheCleaner', $service);
+        self::assertStringContainsString('clearCachesAfterCompileWarm', $service);
+        self::assertStringContainsString('clearAllThemeRelatedCaches', $service);
+        self::assertStringContainsString('theme_layout_formal_compile_warm', $service);
+        $warmPos = strpos($service, 'warmPublishedResourcePacks($identity->area, $theme, $themeLabel, $identity->canonicalScope);');
+        $clearPos = strpos($service, 'clearCachesAfterCompileWarm($theme);');
+        self::assertNotFalse($warmPos);
+        self::assertNotFalse($clearPos);
+        self::assertGreaterThan($warmPos, $clearPos, 'post-warm cache clear must run after theme-head warm');
         self::assertMatchesRegularExpression(
             '/runPinnedToIdentityWebsite\s*\(\s*\$identity\s*,/',
             $service

@@ -243,6 +243,80 @@ class TranslationService
     }
 
     /**
+     * One source word → many target locales in a single model call (JSON object).
+     *
+     * @param list<string> $targetLocales
+     * @return array<string, string> locale_code => translation
+     * @throws Exception
+     */
+    public function translateWordToLocales(
+        string $word,
+        array $targetLocales,
+        string $sourceLocale = 'auto',
+        string $strategy = self::STRATEGY_LIGHT,
+        string $concurrencyLane = TranslationConcurrencyGate::LANE_DICTIONARY,
+    ): array {
+        $word = trim($word);
+        $locales = [];
+        foreach ($targetLocales as $locale) {
+            $locale = trim((string)$locale);
+            if ($locale !== '' && !isset($locales[$locale])) {
+                $locales[$locale] = $locale;
+            }
+        }
+        $targetLocales = array_values($locales);
+        if ($word === '' || $targetLocales === []) {
+            return [];
+        }
+
+        $defaultModel = $this->defaultModelManager->getDefaultModel('translation')
+            ?: $this->defaultModelManager->getDefaultModel('default');
+        if (!$defaultModel) {
+            throw new Exception(__('未配置翻译或通用默认模型'));
+        }
+        $modelCode = (string)$defaultModel->getData(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE);
+        $sourceLanguage = $sourceLocale === 'auto'
+            ? 'auto-detected language'
+            : $this->getLanguageName($sourceLocale);
+        $adapterStrategy = $strategy === self::STRATEGY_HIGH_FIDELITY ? 'professional' : 'standard';
+
+        $localeMeta = [];
+        foreach ($targetLocales as $locale) {
+            $localeMeta[$locale] = $this->getLanguageName($locale) ?: $locale;
+        }
+
+        $prompt = $this->buildMultiLocaleTranslationPrompt(
+            $word,
+            $sourceLanguage,
+            $localeMeta,
+            $adapterStrategy,
+        );
+        $maxTokens = min(4096, 256 + (count($targetLocales) * 48));
+        $gateHeld = $this->acquireConcurrencyGateIfNeeded($modelCode, $concurrencyLane);
+        try {
+            $response = $this->aiService->generate(
+                $prompt,
+                $modelCode,
+                null,
+                null,
+                [
+                    'timeout_seconds' => self::REQUEST_TIMEOUT_SECONDS,
+                    'low_speed_time' => self::REQUEST_LOW_SPEED_SECONDS,
+                    'connect_timeout' => self::REQUEST_CONNECT_TIMEOUT_SECONDS,
+                    'max_tokens' => $maxTokens,
+                    'temperature' => 0.2,
+                ]
+            );
+        } finally {
+            if ($gateHeld) {
+                $this->concurrencyGate->release($concurrencyLane);
+            }
+        }
+
+        return self::parseMultiLocaleTranslationResponse((string)$response, $targetLocales);
+    }
+
+    /**
      * 批量翻译
      * 
      * 一次性将所有文本发送给AI进行批量翻译，而不是循环单个翻译
@@ -523,7 +597,7 @@ class TranslationService
         );
         $maxTokens = $this->estimateBatchMaxTokens($texts);
 
-        $this->concurrencyGate->acquire(TranslationConcurrencyGate::DEFAULT_WAIT_SECONDS, $concurrencyLane);
+        $gateHeld = $this->acquireConcurrencyGateIfNeeded($modelCode, $concurrencyLane);
         try {
             $response = $this->aiService->generate(
                 $batchPrompt,
@@ -542,7 +616,9 @@ class TranslationService
                 ]
             );
         } finally {
-            $this->concurrencyGate->release($concurrencyLane);
+            if ($gateHeld) {
+                $this->concurrencyGate->release($concurrencyLane);
+            }
         }
 
         $expected = count($texts);
@@ -716,6 +792,99 @@ class TranslationService
      * @param string $strategy
      * @return string
      */
+    /**
+     * @param array<string, string> $localeMeta locale_code => language display name
+     */
+    private function buildMultiLocaleTranslationPrompt(
+        string $word,
+        string $sourceLanguage,
+        array $localeMeta,
+        string $strategy,
+    ): string {
+        $targets = [];
+        foreach ($localeMeta as $locale => $language) {
+            $targets[] = [
+                'locale' => (string)$locale,
+                'language' => (string)$language,
+            ];
+        }
+        $payload = json_encode(
+            [
+                'source_language' => $sourceLanguage,
+                'text' => $word,
+                'targets' => $targets,
+            ],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+        $quality = $strategy === 'professional'
+            ? 'Use polished, publication-ready ecommerce / admin UI wording.'
+            : 'Prefer concise, natural UI labels suitable for menus, buttons, settings, and help text.';
+
+        return "You are a professional translator for a multi-website ecommerce admin and storefront (Weline).\n"
+            . "Translate ONE source string into EVERY listed target locale.\n"
+            . "Return ONLY a valid JSON object mapping each locale code to its translation string.\n"
+            . "Do not wrap the object in markdown fences, and do not add explanations.\n"
+            . "Include every locale key exactly once; no extra keys.\n"
+            . "Rules:\n"
+            . "- {$quality}\n"
+            . "- Keep established product terms natural in the target language "
+            . "(SKU, OAuth, webhook, cron, API, CSV may stay as conventional loanwords when that is normal UI copy).\n"
+            . "- Brand-like Latin tokens (Store, SKU, PayPal) may stay unchanged when that is natural for that locale.\n"
+            . "- Preserve placeholders such as %{1}, %{name}, HTML tags, and template tokens exactly.\n"
+            . "- Do not transliterate Chinese into pinyin; produce real target-language copy.\n"
+            . "Strategy: {$strategy}.\n"
+            . "Input JSON:\n{$payload}";
+    }
+
+    /**
+     * @param list<string> $expectedLocales
+     * @return array<string, string>
+     */
+    public static function parseMultiLocaleTranslationResponse(string $response, array $expectedLocales): array
+    {
+        $expectedLocales = array_values(array_filter(array_map('strval', $expectedLocales)));
+        if ($expectedLocales === []) {
+            return [];
+        }
+
+        $json = trim($response);
+        if ($json === '') {
+            return [];
+        }
+        if (str_starts_with($json, '```')) {
+            $json = preg_replace('/^```(?:json)?\s*/i', '', $json) ?? $json;
+            $json = preg_replace('/\s*```$/', '', $json) ?? $json;
+            $json = trim($json);
+        }
+
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            $start = strpos($json, '{');
+            $end = strrpos($json, '}');
+            if ($start !== false && $end !== false && $end > $start) {
+                $decoded = json_decode(substr($json, $start, $end - $start + 1), true);
+            }
+        }
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($expectedLocales as $locale) {
+            $value = $decoded[$locale] ?? null;
+            if (!is_string($value)) {
+                continue;
+            }
+            $value = trim($value);
+            if ($value === '' || self::isJunkTranslation($value)) {
+                continue;
+            }
+            $out[$locale] = $value;
+        }
+
+        return $out;
+    }
+
     private function buildBatchTranslationPrompt(
         array $texts,
         string $targetLanguage,
@@ -895,7 +1064,7 @@ class TranslationService
         
         // 调用AI服务，传递适配器所需的参数
         // TranslationAdapter 会自动处理提示词构建和响应处理
-        $this->concurrencyGate->acquire(TranslationConcurrencyGate::DEFAULT_WAIT_SECONDS, $concurrencyLane);
+        $gateHeld = $this->acquireConcurrencyGateIfNeeded((string)$modelCode, $concurrencyLane);
         try {
             $response = $this->aiService->generate(
                 $text,  // 原始文本，让适配器处理
@@ -912,11 +1081,59 @@ class TranslationService
                 ]
             );
         } finally {
-            $this->concurrencyGate->release($concurrencyLane);
+            if ($gateHeld) {
+                $this->concurrencyGate->release($concurrencyLane);
+            }
         }
         
         // 响应已经被 TranslationAdapter 处理过了，直接返回
         return trim($response);
+    }
+
+    /**
+     * Local Ollama-class runners need single-flight; cloud APIs must not wait behind them.
+     */
+    private function acquireConcurrencyGateIfNeeded(?string $modelCode, string $concurrencyLane): bool
+    {
+        if (!$this->modelRequiresLocalConcurrencyGate((string)$modelCode)) {
+            return false;
+        }
+        $this->concurrencyGate->acquire(TranslationConcurrencyGate::DEFAULT_WAIT_SECONDS, $concurrencyLane);
+
+        return true;
+    }
+
+    private function modelRequiresLocalConcurrencyGate(string $modelCode): bool
+    {
+        $modelCode = trim($modelCode);
+        if ($modelCode === '') {
+            return true;
+        }
+        $normalizedCode = strtolower($modelCode);
+        if (str_contains($normalizedCode, 'translategemma') || str_contains($normalizedCode, 'ollama')) {
+            return true;
+        }
+
+        try {
+            $model = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Ai\Model\AiModel::class)
+                ->reset()
+                ->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $modelCode)
+                ->find()
+                ->fetch();
+            if (!$model || !$model->getId()) {
+                return false;
+            }
+            $supplier = strtolower(trim((string)(
+                method_exists($model, 'getSupplier') ? $model->getSupplier() : $model->getData('supplier')
+            )));
+            $vendor = strtolower(trim((string)(
+                method_exists($model, 'getVendor') ? $model->getVendor() : $model->getData('vendor')
+            )));
+
+            return str_contains($supplier, 'ollama') || str_contains($vendor, 'ollama');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

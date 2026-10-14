@@ -52,7 +52,8 @@ class AttackSignalMonitor implements CronTaskInterface
      */
     public function execute_name(): string
     {
-        return __('攻击信号监控');
+        // 进程/日志身份键：禁止 __()，避免语种切换导致 collect 撞唯一约束
+        return '攻击信号监控';
     }
     
     /**

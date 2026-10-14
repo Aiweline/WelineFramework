@@ -22,6 +22,9 @@ final class DictionaryEntryAiTranslateContractTest extends TestCase
         self::assertStringContainsString('function streamOtherLocales', $source);
         self::assertStringContainsString('function saveOtherLocales', $source);
         self::assertStringContainsString('function resolveOtherLocales', $source);
+        self::assertStringContainsString('chunkLocalesForMultiTranslate', $source);
+        self::assertStringContainsString('translateWordToLocales', $source);
+        self::assertStringContainsString('正在批量翻译', $source);
         self::assertStringContainsString('I18nAiTranslationAdapter', $source);
         self::assertStringContainsString('getDictionaryPublishLocaleCodes', $source);
         self::assertStringContainsString('AiTranslationPublisher', $source);
@@ -103,8 +106,18 @@ final class DictionaryEntryAiTranslateContractTest extends TestCase
         );
         // 其他语种：空草稿 / 全文回声原文不得弹确认保存
         self::assertStringContainsString('aiOthersEchoFailed', $source);
+        self::assertStringContainsString('aiOthersAllSkipped', $source);
         self::assertStringContainsString('echoCount === draftCodes.length', $source);
         self::assertStringContainsString('!draftCodes.length', $source);
+        // 回声失败禁止复用成功文案「草稿已就绪」
+        self::assertMatchesRegularExpression(
+            '/echoCount === draftCodes\.length[\s\S]{0,280}aiOthersEchoFailed/',
+            $source,
+        );
+        self::assertStringContainsString('其他语言均已有译文，已跳过', $service = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/DictionaryEntryAiTranslateService.php',
+        ));
+        unset($service);
     }
 
     public function testDictionaryPhtmlAiSseUrlsAreSameOriginPath(): void

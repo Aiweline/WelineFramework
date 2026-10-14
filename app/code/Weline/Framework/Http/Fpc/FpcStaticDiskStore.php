@@ -83,8 +83,12 @@ final class FpcStaticDiskStore
         if (!self::ensureDirectory($dir)) {
             return false;
         }
+        if (!self::copyAtomic($sourceAbsolutePath, $target)) {
+            return false;
+        }
+        StaticAssetBrotliSidecar::publish($target);
 
-        return self::copyAtomic($sourceAbsolutePath, $target);
+        return true;
     }
 
     public static function publishBytes(string $host, string $uriPath, string $bytes): bool
@@ -100,8 +104,12 @@ final class FpcStaticDiskStore
         if (!self::ensureDirectory($dir)) {
             return false;
         }
+        if (!self::writeAtomic($target, $bytes)) {
+            return false;
+        }
+        StaticAssetBrotliSidecar::publish($target);
 
-        return self::writeAtomic($target, $bytes);
+        return true;
     }
 
     public static function shouldMirrorResolvedFile(string $absolutePath): bool
@@ -133,12 +141,153 @@ final class FpcStaticDiskStore
     {
         foreach ($uriPaths as $uriPath) {
             $target = self::absolutePath($host, (string)$uriPath);
-            if ($target === null || !\is_file($target)) {
+            if ($target === null) {
                 continue;
             }
-            @\unlink($target);
+            if (\is_file($target)) {
+                @\unlink($target);
+            }
+            StaticAssetBrotliSidecar::unlinkSidecar($target);
             self::removeEmptyParents(\dirname($target), self::liveRoot());
         }
+    }
+
+    /**
+     * Host directories already under generated/static/live/ (Nginx try_files front).
+     *
+     * @return list<string>
+     */
+    public static function listLiveHosts(): array
+    {
+        $live = self::liveRoot();
+        if (!\is_dir($live)) {
+            return [];
+        }
+        $hosts = [];
+        $entries = @\scandir($live);
+        if (!\is_array($entries)) {
+            return [];
+        }
+        foreach ($entries as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            $host = \strtolower(\trim((string)$name));
+            if ($host === '' || \str_contains($host, '..') || \str_contains($host, '/') || \str_contains($host, '\\')) {
+                continue;
+            }
+            if (\preg_match('/^[a-z0-9._:-]+$/D', $host) !== 1) {
+                continue;
+            }
+            if (!\is_dir($live . \DIRECTORY_SEPARATOR . $name)) {
+                continue;
+            }
+            $hosts[] = $host;
+        }
+        \sort($hosts);
+
+        return $hosts;
+    }
+
+    /**
+     * Map `BP/app/code/{Vendor}/{Module}/view/statics/...` → `/Vendor/Module/view/statics/...`.
+     * Empty when outside app/code or unsafe.
+     */
+    public static function uriFromAppCodeAbsolute(string $absolutePath): string
+    {
+        $path = \str_replace('\\', '/', $absolutePath);
+        if ($path === '' || !\is_file($absolutePath)) {
+            return '';
+        }
+        $base = \defined('BP') ? \rtrim(\str_replace('\\', '/', (string)\constant('BP')), '/') : '';
+        if ($base === '') {
+            return '';
+        }
+        $prefix = $base . '/app/code/';
+        if (!\str_starts_with($path, $prefix)) {
+            return '';
+        }
+        $rel = \substr($path, \strlen($prefix));
+        if ($rel === '' || \str_contains($rel, '..')) {
+            return '';
+        }
+        $segments = \explode('/', $rel);
+        $safe = [];
+        foreach ($segments as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+                return '';
+            }
+            if (\preg_match('/^[A-Za-z0-9._~%-]+$/D', $segment) !== 1) {
+                return '';
+            }
+            $safe[] = $segment;
+        }
+        if ($safe === [] || \count($safe) < 4) {
+            // Vendor/Module/view/statics/... minimum
+            return '';
+        }
+
+        return '/' . \implode('/', $safe);
+    }
+
+    /**
+     * Refresh (or create) the live FPC mirror for one URI on every known host.
+     * Used when module static sources change in DEV while Nginx still serves stale live leaves.
+     * Content-hash compared: identical → count as ok; diverge → unlink then publishFromFile.
+     */
+    public static function republishFromFileOnAllHosts(string $uriPath, string $sourceAbsolutePath): int
+    {
+        if (!self::shouldMirrorResolvedFile($sourceAbsolutePath)) {
+            return 0;
+        }
+        $hosts = self::listLiveHosts();
+        if ($hosts === []) {
+            return 0;
+        }
+        $srcHash = \hash_file('sha256', $sourceAbsolutePath) ?: '';
+        $ok = 0;
+        foreach ($hosts as $host) {
+            $target = self::absolutePath($host, $uriPath);
+            if ($target !== null && \is_file($target) && $srcHash !== '') {
+                $dstHash = \hash_file('sha256', $target) ?: '';
+                if ($dstHash === $srcHash) {
+                    ++$ok;
+                    continue;
+                }
+                @\unlink($target);
+                StaticAssetBrotliSidecar::unlinkSidecar($target);
+            }
+            if (self::publishFromFile($host, $uriPath, $sourceAbsolutePath)) {
+                ++$ok;
+            }
+        }
+
+        return $ok;
+    }
+
+    /**
+     * Drop stale live leaves for URIs across all hosts (next hit cold-mirrors from WLS).
+     *
+     * @param list<string> $uriPaths
+     */
+    public static function purgeUriOnAllHosts(array $uriPaths): int
+    {
+        $hosts = self::listLiveHosts();
+        if ($hosts === [] || $uriPaths === []) {
+            return 0;
+        }
+        $before = 0;
+        foreach ($hosts as $host) {
+            foreach ($uriPaths as $uriPath) {
+                $target = self::absolutePath($host, (string)$uriPath);
+                if ($target !== null && \is_file($target)) {
+                    ++$before;
+                }
+            }
+            self::purgePaths($host, $uriPaths);
+        }
+
+        return $before;
     }
 
     /**

@@ -516,6 +516,7 @@ pending,等待中
 "Git restore commit cannot be empty.","Git 恢复提交不能为空。"
 "Git working directory does not exist: %{1}","Git 工作目录不存在：%{1}"
 "Git process could not be opened.","无法启动 Git 进程。"
+发布繁忙：已有进行中的发布，本任务将排队重试。,发布繁忙：已有进行中的发布，本任务将排队重试。
 开始发布：%{1},开始发布：%{1}
 备份中...,备份中...
 "Git 更新中...","Git 更新中..."
@@ -545,6 +546,7 @@ pending,等待中
 "git ls-files 失败（exit %{1}）保护路径 %{2}：%{3}","git ls-files 失败（exit %{1}）保护路径 %{2}：%{3}"
 "部署后命令失败（exit %{1}）：%{2}","部署后命令失败（exit %{1}）：%{2}"
 "Deploy：Webhook 已入队%{1}","Deploy：Webhook 已入队%{1}"
+Deploy：已排队等待进行中发布%{1},Deploy：已排队等待进行中发布%{1}
 Deploy：开始消费队列%{1},Deploy：开始消费队列%{1}
 Deploy：开始发布%{1},Deploy：开始发布%{1}
 Deploy：备份中,Deploy：备份中
@@ -864,6 +866,7 @@ tag：%{1},标签：%{1}
 映射文件：%{1},映射文件：%{1}
 未找到映射文件，已跳过。,未找到映射文件，已跳过。
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","完整发布：Git 更新 + 后置命令 + 写版本戳 + reload"
+"发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。","发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。"
 生成不执行发布的机器可读部署计划,生成不执行发布的机器可读部署计划
 "Deploy：远程 tag 超时未见 Webhook%{1}","Deploy：远程 tag 超时未见 Webhook%{1}"
 "消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）","消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）"

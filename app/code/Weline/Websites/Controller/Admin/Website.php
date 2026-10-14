@@ -79,7 +79,8 @@ class Website extends BackendController
         $this->assignTreeShell($selection, $tree, $search, $focus);
         $this->prepareTreeEditor($selection);
 
-        return $this->fetch();
+        // 显式模块路径：模板在 templates/Admin/…，禁止隐式拼成 templates/backend/Admin/…
+        return $this->fetch('Weline_Websites::templates/Admin/Website/index.phtml');
     }
 
     private function wantsTreeEditorPanel(): bool
@@ -681,7 +682,8 @@ class Website extends BackendController
         $timezones = \DateTimeZone::listIdentifiers();
         sort($timezones);
         $this->assign('timezones', $timezones);
-        return $this->fetch('form');
+        // 显式模块路径：模板在 templates/Admin/…，禁止隐式拼成 templates/backend/Admin/…
+        return $this->fetch('Weline_Websites::templates/Admin/Website/form.phtml');
     }
 
     #[Acl('Weline_Websites::website_edit', '编辑网站', 'edit', '网站管理')]
@@ -852,7 +854,8 @@ class Website extends BackendController
         }
 
         $this->assignWebsiteEditorFormData($websiteId);
-        return $this->fetch('form');
+        // 显式模块路径：模板在 templates/Admin/…，禁止隐式拼成 templates/backend/Admin/…
+        return $this->fetch('Weline_Websites::templates/Admin/Website/form.phtml');
     }
 
     /**

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<title>pagination jump fixture</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/static/Weline/Theme/ui/weline-foundation.css?_wb_nc=1791973792">
+<style>body{margin:2rem;background:#f6f6f6}.wrap{background:#fff;padding:1.5rem;border-radius:8px}</style>
+</head>
+<body>
+<div class="wrap" data-testid="pagination-jump-fixture">
+<nav aria-label="Page navigation">
+<ul class="w-pagination" data-justify="center">
+<li class="w-pagination__item"><a class="w-pagination__link" href="#">首页</a></li>
+<li class="w-pagination__item"><a class="w-pagination__link" href="#">上一页</a></li>
+<li class="w-pagination__item" data-state="active"><a class="w-pagination__link" href="#" aria-current="page">1</a></li>
+<li class="w-pagination__item"><a class="w-pagination__link" href="#">2</a></li>
+<li class="w-pagination__item"><a class="w-pagination__link" href="#">3</a></li>
+<li class="w-pagination__item"><a class="w-pagination__link" href="#">4</a></li>
+<li class="w-pagination__item"><span class="w-pagination__link" aria-hidden="true">...</span></li>
+<li class="w-pagination__item"><a class="w-pagination__link" href="#">下一页</a></li>
+<li class="w-pagination__item"><a class="w-pagination__link" href="#">最后一页</a></li>
+<li class="w-pagination__item"><span class="w-pagination__link" aria-disabled="true">一共 2094 页</span></li>
+<li class="w-pagination__item">
+<form class="w-cluster w-pagination__jump" data-align="center" data-wrap="false" style="--w-gap:var(--weline-space-2);" action="#" method="get" data-testid="pagination-jump-form">
+<input type="text" class="w-input" data-size="sm" data-w-width="auto" name="page" placeholder="请输入页码" value="12" inputmode="numeric" autocomplete="off" aria-label="请输入页码">
+<button type="submit" class="w-button" data-tone="primary" data-size="sm">跳转页</button>
+</form>
+</li>
+</ul>
+</nav>
+</div>
+</body>
+</html>

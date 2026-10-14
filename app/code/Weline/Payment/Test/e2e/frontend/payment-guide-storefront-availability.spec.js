@@ -24,7 +24,13 @@ const { test, expect, moduleDescribe, moduleCase } = require('../../../../../../
 
 const MODULE = 'Weline_Payment';
 const ROOT = path.resolve(__dirname, '../../../../../../..');
-const BASE = process.env.WELINE_E2E_BASE_URL || 'https://p05113ef3.test.weline.com:9555';
+function paymentGuideOrigin() {
+  const {
+    resolveStorefrontOrigin,
+  } = require('../../../../../../../tests/e2e/framework/storefront-scope-context');
+  return resolveStorefrontOrigin();
+}
+const BASE = paymentGuideOrigin();
 const HUB = '/guide/payment';
 const DISABLED = (process.env.WELINE_E2E_GUIDE_DISABLED_METHOD || 'stripe').trim();
 
@@ -99,7 +105,8 @@ moduleDescribe(test, MODULE, 'payment guide storefront availability gate', () =>
 
       // 「非 404」按页面自身标识判定：整页文本正则不可靠——字体/资源哈希里会偶然出现 404。
       await expect(page.locator('aside.amazon-payment-guide-layout__sidebar')).toBeVisible({ timeout: 30000 });
-      await expect(page).toHaveTitle(/guide/i);
+      // Locale title may be "…支付指南…" (zh) rather than English "guide".
+      await expect(page).toHaveTitle(/guide|指南/i);
 
       const codes = await readSidebarMethodCodes(page);
       expect(Array.isArray(codes)).toBe(true);

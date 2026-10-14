@@ -60,7 +60,8 @@ moduleDescribe(test, MODULE, 'Checkout currency address quote', () => {
       expect(resolver).toContain('class CheckoutShippingAddressResolver');
       expect(provider).toContain('shippingAddressResolver->resolve');
       expect(express).toContain('CheckoutShippingAddressResolver');
-      expect(delivery).toContain("listAddresses('')");
+      // listAddresses(''…) — picker may pass '' for all-countries or purpose-scoped scans.
+      expect(delivery).toMatch(/listAddresses\(\s*(?:\$listAll\s*\?\s*''\s*:\s*\$countryCode|'')/);
       expect(checkoutTpl).toContain('resolveQuoteAddress');
       expect(checkoutTpl).toContain('text(shipping.country_code).trim().toUpperCase()');
       expect(widgetJs).toContain('syncFormFromSelectedCard');

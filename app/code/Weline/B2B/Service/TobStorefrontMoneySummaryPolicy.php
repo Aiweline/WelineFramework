@@ -18,21 +18,21 @@ final class TobStorefrontMoneySummaryPolicy implements StorefrontMoneySummaryPol
             return $payload;
         }
 
-        $incentiveMajor = $this->firstPaymentIncentiveMajor(
-            \is_array($payload['payment_methods'] ?? null) ? $payload['payment_methods'] : []
-        );
-        $cart = \is_array($payload['cart'] ?? null) ? $payload['cart'] : [];
-        $grand = (float)($cart['grand_total'] ?? 0);
-        // SSR retail path subtracted incentive; ToB must not — restore before paint.
-        $grand = max(0.0, $grand + $incentiveMajor);
-        $cart['grand_total'] = $grand;
-        $payload['cart'] = $cart;
-
-        $currency = strtoupper(trim((string)($payload['currency'] ?? $cart['currency'] ?? 'CNY')));
-        if (!preg_match('/^[A-Z]{3}$/', $currency)) {
-            $currency = 'CNY';
+        // Unified channel: cart.grand_total is baseline (no payment incentive).
+        // Payable lives on money_summary from StorefrontMoneyTotalsBuilder::adjustDto —
+        // do NOT "add back" incentive into cart (legacy SSR deducted-then-restored path).
+        $payload['incentive_text'] = '';
+        $payload['incentive_minor'] = 0;
+        $moneySummary = \is_array($payload['money_summary'] ?? null) ? $payload['money_summary'] : [];
+        if ($moneySummary !== []) {
+            $moneySummary['payment_incentive_minor'] = 0;
+            $moneySummary['incentive_minor'] = 0;
+            $moneySummary['incentive_text'] = '';
+            $payload['money_summary'] = $moneySummary;
+            if (isset($moneySummary['payable_text'])) {
+                $payload['payable_text'] = (string)$moneySummary['payable_text'];
+            }
         }
-        $payload['payable_text'] = $this->formatMoney($currency, $grand);
         $payload['payment_methods'] = $this->stripIncentiveFromMethods(
             \is_array($payload['payment_methods'] ?? null) ? $payload['payment_methods'] : []
         );
@@ -134,22 +134,6 @@ final class TobStorefrontMoneySummaryPolicy implements StorefrontMoneySummaryPol
 
     /**
      * @param list<array<string, mixed>> $methods
-     */
-    private function firstPaymentIncentiveMajor(array $methods): float
-    {
-        if ($methods === [] || !\is_array($methods[0] ?? null)) {
-            return 0.0;
-        }
-        $method = $methods[0];
-        if (empty($method['incentive_available'])) {
-            return 0.0;
-        }
-
-        return max(0, (int)($method['incentive_savings_minor'] ?? 0)) / 100.0;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $methods
      * @return list<array<string, mixed>>
      */
     private function stripIncentiveFromMethods(array $methods): array
@@ -195,19 +179,6 @@ final class TobStorefrontMoneySummaryPolicy implements StorefrontMoneySummaryPol
         );
 
         return $html;
-    }
-
-    private function formatMoney(string $currency, float $major): string
-    {
-        if (\class_exists(\Weline\Currency\Helper\CurrencySymbol::class)) {
-            return \Weline\Currency\Helper\CurrencySymbol::formatAmount($major, $currency);
-        }
-        $code = strtoupper(trim($currency)) ?: 'CNY';
-        $glyphs = ['CNY' => '¥', 'RMB' => '¥', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
-        $symbol = $glyphs[$code] ?? $code;
-        $formatted = number_format($major, 2, '.', ',');
-
-        return $symbol === $code ? ($code . ' ' . $formatted) : ($symbol . $formatted);
     }
 
     private function phrase(string $source): string

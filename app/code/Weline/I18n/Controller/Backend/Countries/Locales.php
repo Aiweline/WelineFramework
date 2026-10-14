@@ -187,6 +187,48 @@ class Locales extends BaseController
         $this->redirect('*/backend/countries/locales', $this->request->getParams());
     }
 
+    public function postDisplayRank()
+    {
+        $code = \trim((string)$this->request->getPost('code', ''));
+        $rank = (int)$this->request->getPost('display_rank', 0);
+        $isJsonRequest = $this->isJsonRequest();
+        if ($code === '') {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('请选择要保存权重的区域！'));
+            }
+            $this->getMessageManager()->addWarning(__('请选择要保存权重的区域！'));
+
+            return $this->redirect('*/backend/countries/locales', $this->request->getParams());
+        }
+        if (!$this->i18n->localeExists($code)) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, (string)__('地区已经不存在！'));
+            }
+            $this->getMessageManager()->addWarning(__('地区已经不存在！'));
+
+            return $this->redirect('*/backend/countries/locales', $this->request->getParams());
+        }
+        try {
+            $this->locale->clearData(true)->load($code);
+            $this->locale->setData(Locale::schema_fields_DISPLAY_RANK, $rank)->save();
+            $message = (string)__('展示权重已保存：%{1} = %{2}', [$code, $rank]);
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(true, $message, [
+                    'code' => $code,
+                    'display_rank' => $rank,
+                ]);
+            }
+            $this->getMessageManager()->addSuccess($message);
+        } catch (\Throwable $exception) {
+            if ($isJsonRequest) {
+                return $this->jsonActionResponse(false, $exception->getMessage());
+            }
+            $this->getMessageManager()->addException($exception);
+        }
+
+        return $this->redirect('*/backend/countries/locales', $this->request->getParams());
+    }
+
     public function postDisable()
     {
         $code = (string)$this->request->getPost('code', '');

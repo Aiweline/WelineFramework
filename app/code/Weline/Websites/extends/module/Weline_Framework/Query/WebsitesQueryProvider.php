@@ -112,6 +112,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getActiveWebsiteDomains' => $this->getActiveWebsiteDomains($params),
             'getWebsiteDomains' => $this->getWebsiteDomains($params),
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
+            'getResolvedLanguageCodes' => $this->getResolvedLanguageCodes($params),
             'getStaticErrorPublishTargets' => $this->getStaticErrorPublishTargets($params),
             'getWebsiteCurrencyCodes' => $this->getWebsiteCurrencyCodes($params),
             'getDomainPoolList'      => $this->getDomainPoolList($params),
@@ -449,6 +450,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'params'      => [
                         ['name' => 'website_id', 'type' => 'int', 'required' => true],
                         ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'getResolvedLanguageCodes',
+                    'description' => __('按 Website→Store→Channel 解析语种成员与展示序（覆盖继承）'),
+                    'params'      => [
+                        ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'store_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'channel_id', 'type' => 'int', 'required' => false],
                     ],
                 ],
                 [
@@ -1565,6 +1575,36 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $forceReload = (bool)($params['force_reload'] ?? false);
 
         return WebsiteData::languageCodesForWebsite($websiteId, $forceReload);
+    }
+
+    /**
+     * Ordered locale codes for current scope (channel → store → website).
+     *
+     * @return list<string>
+     */
+    private function getResolvedLanguageCodes(array $params): array
+    {
+        $websiteId = (int)($params['website_id'] ?? 0);
+        if ($websiteId < self::DEFAULT_WEBSITE_ID) {
+            return [];
+        }
+        $storeId = \array_key_exists('store_id', $params) && $params['store_id'] !== null && $params['store_id'] !== ''
+            ? (int)$params['store_id']
+            : null;
+        $channelId = \array_key_exists('channel_id', $params) && $params['channel_id'] !== null && $params['channel_id'] !== ''
+            ? (int)$params['channel_id']
+            : null;
+
+        try {
+            /** @var \Weline\Websites\Api\Localization\ResolvedLanguageCatalogInterface $catalog */
+            $catalog = ObjectManager::getInstance(
+                \Weline\Websites\Api\Localization\ResolvedLanguageCatalogInterface::class
+            );
+
+            return $catalog->getResolvedLanguageCodes($websiteId, $storeId, $channelId);
+        } catch (\Throwable) {
+            return $this->getWebsiteLanguageCodes(['website_id' => $websiteId]);
+        }
     }
 
     /**

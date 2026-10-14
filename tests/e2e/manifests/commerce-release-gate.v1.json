@@ -2,9 +2,13 @@
   "schema": "commerce-release-gate.v1",
   "suite_id": "commerce-release",
   "title": "全量发布前购物通路门禁",
-  "description": "Curated multi-scope shopping pathways that MUST PASS via php bin/w e2e:run --suite=commerce-release before full release. Not every Theme/Admin smoke. Missing sandbox credentials MUST FAIL (no skip).",
+  "description": "Curated multi-scope shopping pathways that MUST PASS via php bin/w e2e:run --suite=commerce-release before full release. Not every Theme/Admin smoke. Uses controllable payment driver (fake_card) for account lifecycle—true PayPal sandbox is suite commerce-paypal-sandbox. Missing required gate credentials MUST FAIL (no skip).",
   "runner": "php bin/w e2e:run --suite=commerce-release --project=chromium",
   "hard_rule": "full_release_requires_commerce_pathway_e2e",
+  "env": {
+    "WELINE_E2E_PAYMENT_DRIVER": "controllable",
+    "FORCE_PAYMENT_METHOD": "fake_card"
+  },
   "pathways": [
     {
       "id": "CR-CONTINUE-PAY-REAL",
@@ -22,10 +26,10 @@
     },
     {
       "id": "CR-PAYPAL-ACCOUNT-LIFECYCLE",
-      "scope": "paypal_account_lifecycle",
+      "scope": "account_lifecycle_controllable_payment",
       "module": "Weline_Checkout",
       "spec": "app/code/Weline/Checkout/test/e2e/frontend/release-paypal-account-lifecycle-plan-suite.spec.js",
-      "rationale": "PayPal 账户生命周期发布组套件"
+      "rationale": "账户生命周期/订单可见性（可控支付驱动 fake_card，不依赖 PayPal DOM）"
     },
     {
       "id": "CR-EXPRESS-REVIEW",

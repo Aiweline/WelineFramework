@@ -487,14 +487,34 @@ $treeReturnUrl = trim((string)($tree_return_url ?? $this->getData('tree_return_u
 
                                 <div style="--w-span:6;--w-mb:var(--weline-space-4);">
                                     <label for="currency_codes" class="w-field__label"><lang>关联货币</lang></label>
-                                    <w:currency:select id="website_related_currencies_selector" name="currency_codes[]" input-id="currency_codes" value="selected_currencies" readonly-values="websiteReadonlyCurrencies" currencies="currencies" multiple="true" data-w-width="full" />
-                                    <div class="w-field__hint"><lang>点击选择关联货币，默认货币不可取消</lang></div>
+                                    <div
+                                        <?php if ($hasWebsite): ?>
+                                        data-w-currency-reorder-url="@backend-url('*/admin/scope-currency/reorder-website')"
+                                        data-w-currency-reorder-website-id="<?= (int)$websiteEntityId ?>"
+                                        <?php endif; ?>
+                                    >
+                                        <w:currency:select id="website_related_currencies_selector" name="currency_codes[]" input-id="currency_codes" value="selected_currencies" readonly-values="websiteReadonlyCurrencies" currencies="currencies" multiple="true" data-w-width="full" />
+                                    </div>
+                                    <div class="w-field__hint">
+                                        <lang>拖拽胶囊调整关联货币顺序，松手后自动保存；默认货币不可取消</lang>
+                                        <span data-w-currency-reorder-status data-testid="website-currency-reorder-status"></span>
+                                    </div>
                                 </div>
 
                                 <div style="--w-span:6;--w-mb:var(--weline-space-4);">
                                     <label for="language_codes" class="w-field__label"><lang>关联语言</lang></label>
-                                    <w:i18n:language:select id="website_related_languages_selector" name="language_codes[]" input-id="language_codes" value="selected_languages" multiple="true" readonly-values="websiteReadonlyLanguages" data-w-width="full" />
-                                    <div class="w-field__hint"><lang>按住Ctrl或Cmd键可多选</lang></div>
+                                    <div
+                                        <?php if ($hasWebsite): ?>
+                                        data-w-language-reorder-url="@backend-url('*/admin/scope-language/reorder-website')"
+                                        data-w-language-reorder-website-id="<?= (int)$websiteEntityId ?>"
+                                        <?php endif; ?>
+                                    >
+                                        <w:i18n:language:select id="website_related_languages_selector" name="language_codes[]" input-id="language_codes" value="selected_languages" multiple="true" readonly-values="websiteReadonlyLanguages" data-w-width="full" />
+                                    </div>
+                                    <div class="w-field__hint">
+                                        <lang>拖拽胶囊调整店面语种顺序，松手后自动保存</lang>
+                                        <span data-w-language-reorder-status data-testid="website-language-reorder-status"></span>
+                                    </div>
                                 </div>
 
                             </div>

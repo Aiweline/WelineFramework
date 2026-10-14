@@ -1,14 +1,21 @@
 /**
  * Shared helpers for release PayPal ↔ account lifecycle E2E.
+ * Payment driver: controllable (commerce-release) vs paypal_sandbox (opt-in suite).
  */
 const path = require('path');
 const { execFileSync } = require('child_process');
+const {
+  isControllable,
+  paymentMethodCode,
+  assertWalletNotHung,
+  WALLET_FAIL_MS,
+} = require('./payment-pathway-driver');
 
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
 const FIXTURE = path.resolve(__dirname, 'release-paypal-account-lifecycle-fixture.php');
 const BUYER_EMAIL = process.env.PAYPAL_SANDBOX_BUYER_EMAIL || 'sb-4sxrp30216572@personal.example.com';
 const BUYER_PASS = process.env.PAYPAL_SANDBOX_BUYER_PASSWORD || 'weline18';
-const PAYMENT_METHOD = String(process.env.FORCE_PAYMENT_METHOD || 'paypal').toLowerCase();
+const PAYMENT_METHOD = paymentMethodCode();
 
 const ADDRESS = {
   name: 'Release PayPal Buyer',
@@ -64,34 +71,60 @@ async function paypalLoginAndApprove(paypal) {
       await paypal.waitForTimeout(800);
     }
   }
-  const email = paypal.locator('#email, input[name="login_email"], input[type="email"]').first();
+  // Sandbox 2026 UI: placeholder "Email or mobile number", Next button (not always #btnNext).
+  const email = paypal.locator(
+    '#email, input[name="login_email"], input[type="email"], input[placeholder*="Email" i], input[placeholder*="mobile" i]'
+  ).first();
+  await email.waitFor({ state: 'visible', timeout: 45000 }).catch(() => {});
   if (await email.count()) {
+    await email.click({ force: true }).catch(() => {});
+    await email.fill('').catch(() => {});
     await email.fill(BUYER_EMAIL, { timeout: 20000 }).catch(async () => {
-      await email.click({ force: true });
-      await paypal.keyboard.type(BUYER_EMAIL, { delay: 20 });
+      await paypal.keyboard.type(BUYER_EMAIL, { delay: 25 });
     });
   }
-  const next = paypal.locator('#btnNext').first();
+  const next = paypal.locator(
+    '#btnNext, button:has-text("Next"), button[type="submit"]:has-text("Next"), button:has-text("下一步")'
+  ).first();
   if (await next.count() && await next.isVisible().catch(() => false)) {
-    await next.click().catch(() => {});
-    await paypal.waitForTimeout(1200);
+    await next.click({ force: true }).catch(() => {});
+    await paypal.waitForTimeout(1500);
   }
   const pass = paypal.locator('#password, input[name="login_password"], input[type="password"]').first();
   if (await pass.count()) {
-    await pass.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
+    await pass.waitFor({ state: 'visible', timeout: 45000 }).catch(() => {});
     await pass.fill(BUYER_PASS).catch(() => {});
-    await paypal.locator('#btnLogin, button:has-text("Log In"), button:has-text("Log in")').first().click().catch(() => {});
+    await paypal.locator(
+      '#btnLogin, button:has-text("Log In"), button:has-text("Log in"), button:has-text("登录")'
+    ).first().click({ force: true }).catch(() => {});
     await paypal.waitForTimeout(2500);
   }
-  for (let i = 0; i < 16; i += 1) {
+  // Wallet interstitial: fail-fast (≤ WALLET_FAIL_MS) — never spin 9 minutes.
+  await assertWalletNotHung(paypal, WALLET_FAIL_MS);
+  for (let i = 0; i < 40; i += 1) {
     if (/test\.weline\.com|127\.0\.0\.1|checkout\/success|payment\/frontend\/callback|express-review/.test(paypal.url())) {
       return;
     }
+    const walletBusy = await paypal.locator('text=/Getting your wallet/i').isVisible().catch(() => false);
+    if (walletBusy) {
+      await assertWalletNotHung(paypal, WALLET_FAIL_MS);
+      continue;
+    }
+    // Still on email step — retry fill (PayPal sometimes remounts the form).
+    if (await email.isVisible().catch(() => false)) {
+      const cur = await email.inputValue().catch(() => '');
+      if (!String(cur || '').trim()) {
+        await email.fill(BUYER_EMAIL).catch(() => {});
+      }
+      if (await next.isVisible().catch(() => false)) {
+        await next.click({ force: true }).catch(() => {});
+      }
+    }
     const cont = paypal.locator(
-      '#payment-submit-btn, #consentButton, button[data-id="payment-submit-btn"], [data-testid="consentButton"], button:has-text("Complete Purchase"), button:has-text("Agree and Continue")'
+      '#payment-submit-btn, #consentButton, button[data-id="payment-submit-btn"], [data-testid="consentButton"], button:has-text("Complete Purchase"), button:has-text("Agree and Continue"), button:has-text("Pay Now"), button:has-text("Continue"), button:has-text("Confirm"), [data-testid="submit-button"]'
     ).first();
     if (await cont.count() && await cont.isVisible().catch(() => false)) {
-      await cont.click({ timeout: 5000 }).catch(() => {});
+      await cont.click({ timeout: 5000, force: true }).catch(() => {});
     }
     await paypal.waitForTimeout(2000);
   }
@@ -176,19 +209,11 @@ async function waitForCheckoutSuccessEvent(page, timeoutMs = 45000) {
 }
 
 function storefrontOrigin() {
-  // Prefer public HTTPS Host — PLAYWRIGHT_TARGET_ORIGIN is often http://127.0.0.1:worker
-  // which triggers CSP mixed-content + theme-generation / Scope mismatches under nginx.
-  const forced = String(
-    process.env.WELINE_E2E_STOREFRONT_ORIGIN
-      || process.env.WELINE_E2E_BASE_URL
-      || '',
-  ).trim().replace(/\/$/, '');
-  if (forced) return forced;
-  const target = String(process.env.PLAYWRIGHT_TARGET_ORIGIN || '').trim().replace(/\/$/, '');
-  if (target && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(target)) {
-    return target;
-  }
-  return 'https://p05113ef3.test.weline.com';
+  // Explicit Scope stack (tests/e2e/framework/storefront-scope-context) — not process.env writes.
+  const {
+    resolveStorefrontOrigin,
+  } = require('../../../../../../../tests/e2e/framework/storefront-scope-context');
+  return resolveStorefrontOrigin();
 }
 
 /**
@@ -573,20 +598,46 @@ async function addToCartFromPdp(page, gotoFrontend, pdpPath) {
 
 async function ensureCheckoutAddress(page, email) {
   const address = { ...ADDRESS, email: email || ADDRESS.email };
+  await dismissStorefrontNoise(page);
   await page.waitForSelector('[data-shipping-checkout-address], .weline-checkout', { timeout: 60000 });
-  const fillIfEmpty = async (selector, value) => {
+  const fillAlways = async (selector, value) => {
     const loc = page.locator(selector).first();
-    if (await loc.isVisible().catch(() => false)) {
-      const cur = await loc.inputValue().catch(() => '');
-      if (!String(cur || '').trim()) await loc.fill(value).catch(() => {});
+    if (!(await loc.count().catch(() => 0))) return;
+    const visible = await loc.isVisible().catch(() => false);
+    if (!visible) {
+      await loc.evaluate((el, v) => {
+        el.hidden = false;
+        el.removeAttribute('hidden');
+        if (el.style) el.style.display = '';
+        el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }, value).catch(() => {});
+      return;
     }
+    await loc.fill(value).catch(async () => {
+      await loc.evaluate((el, v) => {
+        el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }, value);
+    });
   };
   const scope = '[data-shipping-checkout-address] ';
-  await fillIfEmpty(`${scope}input[name="name"]`, address.name);
-  await fillIfEmpty(`${scope}input[name="phone"]`, address.phone);
-  await fillIfEmpty(`${scope}input[name="email"]`, address.email);
-  await fillIfEmpty(`${scope}input[name="address1"], ${scope}input[name="street"]`, address.address1);
-  await fillIfEmpty(`${scope}input[name="postal_code"]`, address.postal_code);
+  const [firstName, ...rest] = String(address.name || '').split(/\s+/);
+  const lastName = rest.join(' ') || 'Buyer';
+  await fillAlways(`${scope}input[name="name"]`, address.name);
+  await fillAlways(`${scope}input[name="firstname"], ${scope}input[name="first_name"]`, firstName || 'Release');
+  await fillAlways(`${scope}input[name="lastname"], ${scope}input[name="last_name"]`, lastName);
+  await fillAlways(`${scope}input[name="phone"]`, address.phone);
+  await fillAlways(`${scope}input[name="email"]`, address.email);
+  // Live US form uses address1 / street / line1 — screenshot showed 详细地址 empty under HTML5 required.
+  await fillAlways(
+    `${scope}input[name="address1"], ${scope}input[name="street"], ${scope}input[name="line1"], ${scope}input[name="address"], ${scope}textarea[name="address1"], ${scope}textarea[name="street"]`,
+    address.address1,
+  );
+  await fillAlways(`${scope}input[name="city"]`, address.city);
+  await fillAlways(`${scope}input[name="postal_code"]`, address.postal_code);
   await page.evaluate(async (addr) => {
     if (window.WelineThemeAddress && typeof window.WelineThemeAddress.applyValues === 'function') {
       await window.WelineThemeAddress.applyValues('checkout-shipping-address', {
@@ -596,38 +647,70 @@ async function ensureCheckoutAddress(page, email) {
         city: addr.city,
         district: '',
         street: addr.street,
+        address1: addr.address1,
+        line1: addr.address1,
       });
     }
-    const root = document.querySelector('[data-shipping-checkout-address]');
-    const setHidden = (n, v) => {
-      const el = root && root.querySelector(`[name="${n}"]`);
+    const root = document.querySelector('[data-shipping-checkout-address]') || document;
+    const setVal = (n, v) => {
+      const el = root.querySelector(`[name="${n}"]`);
       if (el) {
         el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
     };
-    setHidden('country_code', addr.country_code);
-    setHidden('country', addr.country_name);
-    setHidden('province', addr.province_name);
-    setHidden('city', addr.city);
-    setHidden('street', addr.street);
-    setHidden('email', addr.email);
+    setVal('country_code', addr.country_code);
+    setVal('country', addr.country_name);
+    setVal('province', addr.province_name);
+    setVal('city', addr.city);
+    setVal('street', addr.street);
+    setVal('address1', addr.address1);
+    setVal('line1', addr.address1);
+    setVal('address', addr.address1);
+    setVal('email', addr.email);
+    setVal('phone', addr.phone);
   }, address);
+  // Persist address card when checkout requires explicit save before PayPal redirect.
+  const saveBtn = page.locator(
+    '[data-shipping-checkout-address] button:has-text("保存地址"), [data-shipping-checkout-address] button:has-text("Save"), [data-testid="checkout-address-save"]'
+  ).first();
+  if (await saveBtn.isVisible().catch(() => false)) {
+    await saveBtn.click({ force: true, timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(800);
+  }
+  await dismissStorefrontNoise(page);
   return address;
 }
 
 async function dismissStorefrontNoise(page) {
   for (const sel of [
+    '[data-newsletter-popup] [data-close]',
+    '[data-newsletter-popup] .w-dialog__close',
+    '[data-newsletter-popup] button[aria-label="Close"]',
+    '.newsletter-popup [aria-label="Close"]',
+    '[data-newsletter-popup] button:has-text("×")',
     'button:has-text("同意")',
     'button:has-text("Agree")',
     '[data-cookie-accept]',
     '[data-consent-accept]',
+    '[data-cookie-consent] button',
+    '[data-cookie-banner] button',
   ]) {
     const btn = page.locator(sel).first();
-    if (await btn.isVisible({ timeout: 800 }).catch(() => false)) {
-      await btn.click({ timeout: 2000 }).catch(() => {});
+    if (await btn.isVisible({ timeout: 600 }).catch(() => false)) {
+      await btn.click({ force: true, timeout: 2000 }).catch(() => {});
     }
   }
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.evaluate(() => {
+    document.querySelectorAll('[data-newsletter-popup], .newsletter-popup').forEach((el) => {
+      el.setAttribute('hidden', '');
+      el.style && (el.style.display = 'none');
+      el.remove();
+    });
+    document.body && document.body.removeAttribute('data-newsletter-scroll-lock');
+  }).catch(() => {});
 }
 
 async function submitPaypalCheckout(page, email) {
@@ -642,6 +725,11 @@ async function submitPaypalCheckout(page, email) {
   }, null, { timeout: 90000 }).catch(() => {});
   const address = await ensureCheckoutAddress(page, email);
   await page.waitForTimeout(1500);
+  // Controllable path needs shipping radios before submit — empty codes[] API fallback is not OK.
+  await page.waitForFunction(() => {
+    return document.querySelectorAll('input[name="shipping_method"]').length > 0
+      || !!document.querySelector('[data-shipping-methods] [data-service-code]');
+  }, null, { timeout: 60000 }).catch(() => {});
 
   // Prefer real UI submit (release pathway). Capture PayPal redirect via navigation or API.
   const wanted = PAYMENT_METHOD;
@@ -659,35 +747,69 @@ async function submitPaypalCheckout(page, email) {
   const shipping = page.locator('input[name="shipping_method"]').first();
   if (await shipping.count()) {
     await shipping.check({ force: true }).catch(() => {});
+  } else {
+    await page.evaluate(() => {
+      const opt = document.querySelector('[data-shipping-methods] [data-service-code], [data-shipping-option]');
+      if (opt) opt.click();
+    }).catch(() => {});
   }
 
   const submit = page.locator('[data-submit], button[type="submit"]:has-text("提交"), button:has-text("下单")').first();
   await expectVisibleOrThrow(page, submit, 'checkout.submit_btn');
 
-  const racePromise = Promise.race([
-    page.waitForURL(/paypal\.com|sandbox\.paypal/, { timeout: 180000 })
-      .then(() => ({ via: 'nav', redirect_url: page.url(), paypalPage: page }))
-      .catch(() => null),
-    page.context().waitForEvent('page', { timeout: 180000 })
-      .then(async (popup) => {
-        await popup.waitForLoadState('domcontentloaded').catch(() => {});
-        if (/paypal\.com|sandbox\.paypal/i.test(popup.url())) {
-          return { via: 'popup', redirect_url: popup.url(), paypalPage: popup };
-        }
-        return null;
-      })
-      .catch(() => null),
-  ]);
+  const controllable = isControllable() || /^(fake_card|offline|free|cod)$/.test(wanted);
+  const raceTimeout = controllable ? 90000 : 180000;
+  const racePromise = controllable
+    ? Promise.race([
+      page.waitForURL(/checkout\/success/, { timeout: raceTimeout })
+        .then(() => ({ via: 'success_nav', redirect_url: page.url(), paypalPage: page, order_uuid: '' }))
+        .catch(() => null),
+      page.waitForSelector('[data-testid="checkout-success"]', { timeout: raceTimeout })
+        .then(async () => {
+          const uuid = await page.locator('[data-testid="checkout-success"]').getAttribute('data-order-uuid').catch(() => '');
+          return {
+            via: 'success_dom',
+            redirect_url: page.url(),
+            paypalPage: page,
+            order_uuid: String(uuid || ''),
+          };
+        })
+        .catch(() => null),
+    ])
+    : Promise.race([
+      page.waitForURL(/paypal\.com|sandbox\.paypal/, { timeout: raceTimeout })
+        .then(() => ({ via: 'nav', redirect_url: page.url(), paypalPage: page }))
+        .catch(() => null),
+      page.context().waitForEvent('page', { timeout: raceTimeout })
+        .then(async (popup) => {
+          await popup.waitForLoadState('domcontentloaded').catch(() => {});
+          if (/paypal\.com|sandbox\.paypal/i.test(popup.url())) {
+            return { via: 'popup', redirect_url: popup.url(), paypalPage: popup };
+          }
+          return null;
+        })
+        .catch(() => null),
+    ]);
 
   await submit.click({ timeout: 15000 });
   const raced = await racePromise;
-  if (raced && raced.redirect_url) {
+  if (raced && (raced.redirect_url || raced.order_uuid)) {
     return {
       success: true,
       stage: `ui_${raced.via}`,
-      redirect_url: raced.redirect_url,
-      order_uuid: '',
+      redirect_url: raced.redirect_url || '',
+      order_uuid: raced.order_uuid || '',
       paypalPage: raced.paypalPage,
+    };
+  }
+  if (controllable && /checkout\/success/.test(page.url())) {
+    const uuid = await page.locator('[data-testid="checkout-success"]').getAttribute('data-order-uuid').catch(() => '');
+    return {
+      success: true,
+      stage: 'ui_success_url',
+      redirect_url: page.url(),
+      order_uuid: String(uuid || ''),
+      paypalPage: page,
     };
   }
 
@@ -809,6 +931,20 @@ async function expectVisibleOrThrow(page, locator, stepId) {
 }
 
 async function approvePaypalAndLand(context, redirectUrl, existingPage = null) {
+  // Controllable driver: offline methods land on success without PayPal DOM.
+  if (isControllable() || !redirectUrl || !/paypal\.com|sandbox\.paypal/i.test(String(redirectUrl || ''))) {
+    const page = existingPage
+      || (context.pages ? context.pages().find((p) => /checkout\/success/.test(p.url())) : null)
+      || (context.pages ? context.pages()[0] : null);
+    if (page) {
+      if (!/checkout\/success/.test(page.url()) && redirectUrl && /checkout\/success/.test(redirectUrl)) {
+        await page.goto(redirectUrl, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
+      }
+      await page.waitForSelector('[data-testid="checkout-success"]', { timeout: 120000 }).catch(() => {});
+      return page;
+    }
+  }
+
   let paypal = existingPage;
   if (paypal && /paypal\.com|sandbox\.paypal/i.test(paypal.url())) {
     // already navigated in-place
@@ -817,13 +953,23 @@ async function approvePaypalAndLand(context, redirectUrl, existingPage = null) {
     await paypal.goto(redirectUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
   }
   await paypalLoginAndApprove(paypal);
-  for (let i = 0; i < 45; i += 1) {
+  const landDeadline = Date.now() + Math.max(WALLET_FAIL_MS + 60000, 120000);
+  while (Date.now() < landDeadline) {
     if (/test\.weline\.com|127\.0\.0\.1/.test(paypal.url()) && /checkout\/success|express-review|payment\/frontend\/callback/.test(paypal.url())) {
       break;
     }
+    if (/paypal\.com|sandbox\.paypal/i.test(paypal.url())) {
+      await assertWalletNotHung(paypal, WALLET_FAIL_MS);
+      const cont = paypal.locator(
+        '#payment-submit-btn, #consentButton, button[data-id="payment-submit-btn"], button:has-text("Complete Purchase"), button:has-text("Pay Now"), button:has-text("Continue")'
+      ).first();
+      if (await cont.isVisible().catch(() => false)) {
+        await cont.click({ force: true, timeout: 3000 }).catch(() => {});
+      }
+    }
     await paypal.waitForTimeout(1000);
   }
-  await paypal.waitForURL(/checkout\/success|express-review|payment\/frontend\/callback/, { timeout: 120000 }).catch(() => {});
+  await paypal.waitForURL(/checkout\/success|express-review|payment\/frontend\/callback/, { timeout: 90000 }).catch(() => {});
   if (/express-review/.test(paypal.url())) {
     const confirm = paypal.locator('[data-testid="express-confirm-pay"]').first();
     if (await confirm.count()) {
@@ -1040,6 +1186,7 @@ module.exports = {
   ensureCheckoutAddress,
   submitPaypalCheckout,
   approvePaypalAndLand,
+  mintCustomerSessionCookie,
   loginAsCustomerApi,
   openAccountOrders,
   assertAccountSeesOrder,

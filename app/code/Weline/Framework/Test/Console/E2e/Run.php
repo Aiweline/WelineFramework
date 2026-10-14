@@ -15,6 +15,7 @@ class Run extends CommandAbstract
     private const COLLECTED_TESTS_FILE = 'collected-tests.json';
     private const SUITE_MANIFESTS = [
         'commerce-release' => 'manifests' . DIRECTORY_SEPARATOR . 'commerce-release-gate.v1.json',
+        'commerce-paypal-sandbox' => 'manifests' . DIRECTORY_SEPARATOR . 'commerce-paypal-sandbox-gate.v1.json',
     ];
 
     public function execute(array $args = [], array $data = []): int
@@ -39,7 +40,11 @@ class Run extends CommandAbstract
             $filesToRun = [];
             if ($control['suite'] !== '') {
                 try {
-                    $filesToRun = $this->resolveSuiteFiles($control['suite'], $e2eDir);
+                    $suiteResolved = $this->resolveSuite($control['suite'], $e2eDir);
+                    $filesToRun = $suiteResolved['files'];
+                    foreach ($suiteResolved['env'] as $envKey => $envValue) {
+                        $extraEnv[(string)$envKey] = (string)$envValue;
+                    }
                 } catch (\InvalidArgumentException $exception) {
                     $this->printer->error($exception->getMessage());
                     return 1;
@@ -663,11 +668,12 @@ class Run extends CommandAbstract
     }
 
     /**
-     * Resolve frozen suite pathways to absolute Playwright file paths.
+    /**
+     * Resolve frozen suite pathways + optional manifest env.
      *
-     * @return list<string>
+     * @return array{files: list<string>, env: array<string, string>}
      */
-    private function resolveSuiteFiles(string $suite, string $e2eDir): array
+    private function resolveSuite(string $suite, string $e2eDir): array
     {
         $suiteKey = trim($suite);
         if ($suiteKey === '' || !isset(self::SUITE_MANIFESTS[$suiteKey])) {
@@ -729,7 +735,28 @@ class Run extends CommandAbstract
             throw new \InvalidArgumentException((string)__('套件 %{1} 未解析到任何 spec', [$suiteKey]));
         }
 
-        return array_values(array_unique($files));
+        $env = [];
+        if (isset($decoded['env']) && is_array($decoded['env'])) {
+            foreach ($decoded['env'] as $key => $value) {
+                if (!is_string($key) || $key === '' || !is_scalar($value)) {
+                    continue;
+                }
+                $env[$key] = (string)$value;
+            }
+        }
+
+        return [
+            'files' => array_values(array_unique($files)),
+            'env' => $env,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveSuiteFiles(string $suite, string $e2eDir): array
+    {
+        return $this->resolveSuite($suite, $e2eDir)['files'];
     }
 
     private function printSuites(string $e2eDir): int

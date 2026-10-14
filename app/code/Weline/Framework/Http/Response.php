@@ -510,6 +510,9 @@ class Response implements ResponseInterface, RequestLocalInterface
         // responses skip publishResponse and would otherwise ship cards without
         // data-weline-product-card-css (UA buttons + primary-link titles).
         $this->healStorefrontProductCardCssIfNeeded();
+        // Storefront generation Cookie + Vary (Cookie header name only). Shared
+        // FPC suppress still no-ops setCookie on shareable HIT shells.
+        $this->applyStorefrontGenerationOutboundIfNeeded();
 
         if ($this->telemetryPrepared) {
             return;
@@ -558,6 +561,15 @@ class Response implements ResponseInterface, RequestLocalInterface
             }
         } catch (\Throwable) {
             // Decoration must never block emission.
+        }
+    }
+
+    private function applyStorefrontGenerationOutboundIfNeeded(): void
+    {
+        try {
+            StorefrontGenerationOutbound::applyToResponse($this);
+        } catch (\Throwable) {
+            // Outbound decoration must never block emission.
         }
     }
 

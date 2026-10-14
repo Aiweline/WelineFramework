@@ -156,6 +156,11 @@ final class CookieScope
             return true;
         }
 
+        // Storefront generation identity: Path=/ exact wire name (CDN / JS readable).
+        if ($name === StorefrontGenerationOutbound::COOKIE_NAME) {
+            return true;
+        }
+
         return \str_starts_with($name, 'Weline-Worker-Backend-Bootstrap-')
             || \str_starts_with($name, 'Weline-Worker-Scope-Bootstrap-');
     }

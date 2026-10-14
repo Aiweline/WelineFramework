@@ -94,13 +94,8 @@ AI翻译异常,"AI translation exception"
 "事件处理异常: %{1}","Event handling exception: %{1}"
 "语言申请就绪同步只接受 resource_change.v1 契约","Language application ready sync only accepts resource_change.v1 contract"
 "I18n ResourceChange Observer 只接受 v1 契约","I18n ResourceChange Observer only accepts v1 contracts"
-没有开启实时翻译，不能访问！,"Real-time translation is not enabled"
-请设置local标签model属性！,"Please set the model attribute of the local tag!"
-请传输local标签值！,"Please pass the local tag value!"
-请设置local标签id属性！,"Please set the id attribute of the local tag!"
-翻译完成!,"Translation completed!"
-没有需要收集的翻译词,"No translation words need to be collected"
-"收集成功！一共收集更新词条：%{1} 个","Collection successful! Total collected and updated entries: %{1}"
+店面前台本地编辑入口已关闭,店面前台本地编辑入口已关闭
+在线页收集已移除，请使用定时任务收集词汇,在线页收集已移除，请使用定时任务收集词汇
 请指定要导出的语言代码,"Please specify the language code to export"
 没有找到可导出的翻译数据,"No exportable translation data found"
 "导出翻译包失败: %{1}","Export translation package failed: %{1}"
@@ -132,18 +127,21 @@ CSV文件为空或格式不正确,"CSV file is empty or format is incorrect"
 "保存失败: %{1}","Save failed: %{1}"
 "获取数据失败: %{1}","Failed to get data: %{1}"
 收集失败,"Collect failed"
+保存失败,"Save failed"
 "CSRF 验证失败","CSRF validation failed"
 自动词汇注册已启用,"Auto vocabulary registration enabled"
 自动词汇注册已禁用,"Auto vocabulary registration disabled"
-无效的翻译模式,"Invalid translation mode"
-翻译模式设置成功,"Translation mode set successfully"
-配置文件不存在,"Configuration file does not exist"
-写入配置文件失败,"Failed to write configuration file"
+在线/缓存模式切换已移除，请使用店面点译,在线/缓存模式切换已移除，请使用店面点译
+词典管理,"Dictionary Management"
 缺少目标语言或模块,"Missing target language or module"
 "模块 %{1} 本批翻译 %{2} 条，剩余 %{3} 条","Module %{1} translated %{2} in this batch; %{3} remaining"
 缺少目标语言,"Missing target language"
 批量翻译任务已提交,"Batch translation task submitted"
+请设置local标签model属性！,"Please set the model attribute of the local tag!"
+请传输local标签值！,"Please pass the local tag value!"
+请设置local标签id属性！,"Please set the id attribute of the local tag!"
 请填写翻译内容,"Please enter translation content"
+翻译完成!,"Translation completed!"
 后台默认语言,"Admin default language"
 请选择一个有效的后台默认语言,"Please select a valid admin default language"
 后台默认语言保存失败,"Failed to save admin default language"
@@ -239,6 +237,8 @@ language,language
 地区已经不存在！,"Region no longer exists!"
 "正在激活区域 %{1}…","正在激活区域 %{1}…"
 区域已激活！区域代码：%{1},"Zone is activated! Area code: %{1}"
+请选择要保存权重的区域！,请选择要保存权重的区域！
+"展示权重已保存：%{1} = %{2}","展示权重已保存：%{1} = %{2}"
 请选择要停用的区域！,"Please select a region to deactivate!"
 区域已停用！区域代码：%{1},"Zone is deactivated! Area code: %{1}"
 "正在安装区域 %{1}…","正在安装区域 %{1}…"
@@ -290,8 +290,115 @@ language,language
 翻译词不能包含换行,翻译词不能包含换行
 翻译词不能包含连续引号失控串,翻译词不能包含连续引号失控串
 语言目录写入与资源变更必须使用同一逻辑数据库连接,"Language catalog writes and resource changes must use the same logical DB connection"
-成功推送收集词汇！推送消息：%{msg},"Successfully pushed vocabulary collection! Push message: %{msg}"
-推送收集词汇失败！推送消息：%{1},"Failed to push vocabulary collection! Push message: %{1}"
+点击选择目标语言,"Click to select target language"
+搜索语言、国家或代码...,"Search for language, country or code..."
+目标语言,"Target Language"
+当前目标语言：,"Current Target Language:"
+国际化支持：管理从源语言到目标语言的翻译词典,"Internationalization Support: Manage translation dictionaries from source language to target language"
+添加翻译,"Add Translation"
+收集词典,"Collect Dictionary"
+导出翻译包,"Export Translation Package"
+导出CSV,"Export CSV"
+导入CSV,"Import CSV"
+清理语言,"Clean up the language"
+清理全部,"clear all"
+总计:,Total:
+已翻译:,Translated:
+未翻译:,Untranslated:
+当前翻译模式：,"Current Translation Mode:"
+未知,Unknown
+智能搜索与筛选,"Smart Search and Filter"
+优先处理未翻译词条，先选目标语言，再结合关键词缩小范围。双击或点击编辑都可以快速进入翻译。,"Prioritize untranslated entries first. Choose the target language, narrow the scope with keywords, and then double-click or tap Edit to translate quickly."
+词典管理视图,"Dictionary management view"
+词典,Dictionary
+模块,Module
+所属模块,Module
+全部模块,"All modules"
+搜索,Search
+请输入关键词,"Please enter keywords"
+重置,Reset
+自动词汇注册,"Auto Vocabulary Registration"
+店面点译,店面点译
+更新时间,"Update time"
+操作,Operation
+双击编辑此词条,"Double-click to edit this entry"
+暂无翻译数据,"No translation data"
+编辑,Edit
+翻译已删除，当前位置已保留。,"The translation has been removed and the current position has been retained."
+"确定删除 %{1} 的译文吗？","Delete the translation for %{1}?"
+删除,Delete
+"请点击""收集词典""按钮从框架中收集词汇，或手动添加翻译","Please click the Collect Dictionary"" button to collect vocabulary from the framework"
+模块国际化,"Module i18n"
+"按模块查看词条进度，一键 AI 翻译未译词条；开发环境下可将词典译文写回模块 i18n CSV。","View phrase progress by module, one-click AI-translate missing phrases; in development, write dictionary translations back to module i18n CSV."
+搜索模块,"Search modules"
+输入模块名过滤,"Filter by module name"
+"当前非开发环境，「写回 CSV」已禁用；AI 翻译结果仍会写入词典库。","Not a development environment; “Write back CSV” is disabled. AI translations still write to the dictionary DB."
+总计,Total
+已翻译,Translated
+未翻译,Untranslated
+进度,Progress
+待写回,"Pending write-back"
+"AI 翻译","AI Translation"
+"写回 CSV","Write back CSV"
+正在加载模块进度…,正在加载模块进度…
+"切换到模块 Tab 后按需拉取，避免拖垮词典页","切换到模块 Tab 后按需拉取，避免拖垮词典页"
+暂无模块语言包,"No module language packs yet"
+"未找到带 i18n 目录的活跃模块，或搜索条件无匹配","No active modules with an i18n directory found, or search matched nothing"
+请输入原文,"Please enter the original text"
+请输入译文,"Please enter translation"
+提交,Submit
+"AI 一键翻译","AI one-click translate"
+一键翻译其他语言,"Translate other languages"
+确认操作,"Confirm action"
+确定,OK
+将从源码与模块语言包扫描词条，写入词典并刷新统计。继续吗？,"Scan terms from source code and module language packs, write them to the dictionary, and refresh statistics. Continue?"
+开始收集,"Start collection"
+"模块 AI 翻译","Module AI translation"
+"将为模块 %{1} 翻译一批未译词条（已存在的译文不会重复翻译）。继续吗？","Translate a batch of untranslated phrases for module %{1} (existing translations are not re-translated). Continue?"
+"写回模块 CSV","Write back module CSV"
+"将把词典中该模块的 AI 译文增量写回 i18n/{locale}.csv（开发环境）。继续吗？","Incrementally write this module’s AI translations from the dictionary back to i18n/{locale}.csv (development). Continue?"
+确认组件不可用，请刷新页面后重试。,"Confirm dialog unavailable; refresh and try again."
+"正在 AI 翻译…","AI translation in progress…"
+正在翻译其他语言…,"Translating other languages…"
+"AI 翻译失败","AI translation failed"
+"SSE 连接失败，请重试","SSE connection failed, please retry"
+请先填写原文,"Please provide the source text first"
+保存其他语言译文,"Save other-language translations"
+确认保存,"Confirm save"
+其他语言译文已保存,"Other-language translations saved"
+保存其他语言译文失败,"Failed to save other-language translations"
+没有可保存的其他语言译文,"No other-language translations to save"
+其他语言均已有译文，已跳过,其他语言均已有译文，已跳过
+"AI 未能译出有效译文（多语种仍返回原文），请检查翻译服务后重试","AI 未能译出有效译文（多语种仍返回原文），请检查翻译服务后重试"
+模块进度加载失败,模块进度加载失败
+…,…
+激活,Activate
+停用,Disable
+"Weline.Api bin-query 不可用","Weline.Api bin-query unavailable"
+加载失败,"Failed to load"
+将保存以下,将保存以下
+种语言的译文草稿，请逐行核对：,种语言的译文草稿，请逐行核对：
+语种,语种
+译文预览,译文预览
+已跳过,已跳过
+失败,Failed
+收集完成,"Collection completed"
+新增词条,"New phrases"
+本批成功,"Batch succeeded"
+剩余,Remaining
+"模块 AI 翻译完成","Module AI translation completed"
+"模块 AI 翻译失败","Module AI translation failed"
+已写回,"Written back"
+条,rows
+写回失败,"Write-back failed"
+清理完成,"Cleanup completed"
+清理失败,"Cleanup failed"
+"确定清理当前目标语言 %{1} 的所有译文吗？基础词条会保留。","Are you sure you want to clear all translations for the current target language %{1}? The basic entries will be retained."
+确定清理全部词典和所有语言译文吗？此操作不可撤销。,"Are you sure you want to clear all dictionaries and all language translations? This action cannot be undone."
+无法打开店面点译,无法打开店面点译
+正在跳转店面,正在跳转店面
+导入失败!,"Import failed!"
+导入完成!,"Import complete!"
 用户申请语言,"User application language"
 保存网站后即可查看用户申请并加入语言。,"After saving the website, you can view user applications and add languages."
 仅显示已安装、已启用且语言包可运行的申请语言。,"Only application languages ​​that are installed, enabled, and have language packs running are displayed."
@@ -299,7 +406,6 @@ language,language
 展开后加载当前网站的就绪语言。,"Loads the current site's ready languages ​​when expanded."
 国家/地区,Country/Region
 申请数,"Number of applications"
-操作,Operation
 一键加入,"Join with one click"
 暂无可加入的申请语言,"There is currently no application language to add."
 正在加载语言申请…,"Loading language application..."
@@ -308,11 +414,10 @@ language,language
 正在加入站点语言…,"Adding site language..."
 站点语言已加入,"Site language has been added"
 已支持,"Already supported"
+拖动排序,拖动排序
 清空选择,"Clear selection"
 请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,"Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!"
 填写正确！,"Filled correctly!"
-提交,Submit
-请输入关键词,"Please enter keywords"
 I18n翻译,"I18n Translation"
 没有找到需要的语言？可一次申请多种语言，我们会在语言资源准备完成后通知网站管理员。,"Can't find the language you need? You can request multiple languages at once; we'll notify the site admin when language packs are ready."
 名字,"First name"
@@ -332,9 +437,7 @@ i18n国际化,"i18n Internationalization"
 展示语言：,"Display Language:"
 语言代码,"Language Code"
 国际化支持：翻译管理多种语言词典,"Internationalization Support: Translation management for multiple language dictionaries"
-词典,Dictionary
 地区,Region
-总计:,Total:
 已安装,Installed
 已激活,Activated
 未安装,"Not installed"
@@ -345,9 +448,7 @@ i18n国际化,"i18n Internationalization"
 语言名,"Language Name"
 是否禁用,"Is Disabled"
 是否安装,"Is Installed"
-停用,Disable
 查看已安装,"View Installed"
-暂无翻译数据,"No translation data"
 "AI 翻译只用于补齐缺失翻译。","AI translation is only used to fill missing translations."
 「翻译进度」与「配置与操作」用顶部页签分开；队列状态已简化，不再堆砌原文日志。,"“Translation progress” and “Settings & actions” are split into top tabs; queue status is simplified without dumping raw logs."
 配置与操作,"Settings & actions"
@@ -360,7 +461,6 @@ i18n国际化,"i18n Internationalization"
 "待写回 CSV","Pending CSV write-back"
 LocalModel,LocalModel
 空闲,Idle
-剩余,Remaining
 "模块 CSV","Module CSV"
 词典队列,"Dictionary queue"
 源语言,"Source Language"
@@ -381,8 +481,6 @@ LocalModel,LocalModel
 按模块翻译并写回,"Translate by module and write back"
 "列表来自系统活跃模块（含 i18n 目录）。一键写回：先收集并回写源语言（中文）CSV，再按所选语言对照源语言翻译并写回各自 CSV（开发环境）。进度弹窗可跟播；不勾选语言时自动处理有待办语言。","Active modules with i18n dirs. One-click writeback: collect/write source (Chinese) CSV first, then translate from source into each locale CSV (dev). Progress dialog follows SSE; empty selection auto-picks locales with work."
 "搜索模块，例如 Weline_Product","Search module, e.g. Weline_Product"
-搜索,Search
-模块,Module
 "AI 待写回","AI pending write-back"
 "待处理 %{1}/%{2} 种语言 · %{3} 词","%{1}/%{2} locales pending · %{3} words"
 "源语言 %{1} 词 · 各语言已对齐","Source %{1} words · all locales aligned"
@@ -400,7 +498,6 @@ LocalModel,LocalModel
 已译,Translated
 未译,Untranslated
 差额,Gap
-待写回,"Pending write-back"
 无待办,"No work"
 语言进度,"Language progress"
 "展开后将先采集并回写源语言 CSV，再对照统计各语言差额。","On expand: collect and write source CSV first, then compute gaps vs source."
@@ -415,7 +512,6 @@ LocalModel,LocalModel
 源语言固定为基础词库语言，不需要重复选择。,"The source language is fixed to the base dictionary language and does not need to be selected again."
 语言配置与操作,"Language settings & actions"
 进度见「翻译进度」页签；此处只开关语言并触发翻译/导出。,"See progress on the “Translation progress” tab; here you only toggle languages and trigger translate/export."
-"AI 翻译","AI Translation"
 源语言跳过,"Source Language Skipped"
 网站语言并集，强制翻译,"Website language union; force translate"
 已不在网站并集，跳过翻译,"No longer in website union; skip translate"
@@ -455,84 +551,9 @@ LocalModel,LocalModel
 暂无申请,"No application yet"
 请选择语言申请,"Please select language to apply"
 扫描进度,"Scan progress"
-点击选择目标语言,"Click to select target language"
-搜索语言、国家或代码...,"Search for language, country or code..."
-目标语言,"Target Language"
-当前目标语言：,"Current Target Language:"
-国际化支持：管理从源语言到目标语言的翻译词典,"Internationalization Support: Manage translation dictionaries from source language to target language"
-添加翻译,"Add Translation"
-收集词典,"Collect Dictionary"
-导出翻译包,"Export Translation Package"
-导出CSV,"Export CSV"
-导入CSV,"Import CSV"
-清理语言,"Clean up the language"
-清理全部,"clear all"
-已翻译:,Translated:
-未翻译:,Untranslated:
-当前翻译模式：,"Current Translation Mode:"
-未知,Unknown
-智能搜索与筛选,"Smart Search and Filter"
-优先处理未翻译词条，先选目标语言，再结合关键词缩小范围。双击或点击编辑都可以快速进入翻译。,"Prioritize untranslated entries first. Choose the target language, narrow the scope with keywords, and then double-click or tap Edit to translate quickly."
-词典管理视图,"Dictionary management view"
-所属模块,Module
-全部模块,"All modules"
-重置,Reset
-翻译模式,"Translation Mode"
-自动词汇注册,"Auto Vocabulary Registration"
-在线翻译模式,"Online Translation Mode"
-缓存模式,"Cache Mode"
-更新时间,"Update time"
-编辑,Edit
-翻译已删除，当前位置已保留。,"The translation has been removed and the current position has been retained."
-"确定删除 %{1} 的译文吗？","Delete the translation for %{1}?"
-删除,Delete
-"请点击""收集词典""按钮从框架中收集词汇，或手动添加翻译","Please click the Collect Dictionary"" button to collect vocabulary from the framework"
-模块国际化,"Module i18n"
-"按模块查看词条进度，一键 AI 翻译未译词条；开发环境下可将词典译文写回模块 i18n CSV。","View phrase progress by module, one-click AI-translate missing phrases; in development, write dictionary translations back to module i18n CSV."
-搜索模块,"Search modules"
-输入模块名过滤,"Filter by module name"
-"当前非开发环境，「写回 CSV」已禁用；AI 翻译结果仍会写入词典库。","Not a development environment; “Write back CSV” is disabled. AI translations still write to the dictionary DB."
-总计,Total
-已翻译,Translated
-未翻译,Untranslated
-进度,Progress
-"写回 CSV","Write back CSV"
-暂无模块语言包,"No module language packs yet"
-"未找到带 i18n 目录的活跃模块，或搜索条件无匹配","No active modules with an i18n directory found, or search matched nothing"
-请输入原文,"Please enter the original text"
-请输入译文,"Please enter translation"
-确认操作,"Confirm action"
-确定,OK
-将从源码与模块语言包扫描词条，写入词典并刷新统计。继续吗？,"Scan terms from source code and module language packs, write them to the dictionary, and refresh statistics. Continue?"
-开始收集,"Start collection"
-"模块 AI 翻译","Module AI translation"
-"将为模块 %{1} 翻译一批未译词条（已存在的译文不会重复翻译）。继续吗？","Translate a batch of untranslated phrases for module %{1} (existing translations are not re-translated). Continue?"
-"写回模块 CSV","Write back module CSV"
-"将把词典中该模块的 AI 译文增量写回 i18n/{locale}.csv（开发环境）。继续吗？","Incrementally write this module’s AI translations from the dictionary back to i18n/{locale}.csv (development). Continue?"
-确认组件不可用，请刷新页面后重试。,"Confirm dialog unavailable; refresh and try again."
-激活,Activate
-"Weline.Api bin-query 不可用","Weline.Api bin-query unavailable"
-加载失败,"Failed to load"
-收集完成,"Collection completed"
-新增词条,"New phrases"
-"SSE 连接失败，请重试","SSE connection failed, please retry"
-本批成功,"Batch succeeded"
-"模块 AI 翻译完成","Module AI translation completed"
-"模块 AI 翻译失败","Module AI translation failed"
-已写回,"Written back"
-条,rows
-写回失败,"Write-back failed"
-清理完成,"Cleanup completed"
-清理失败,"Cleanup failed"
-"确定清理当前目标语言 %{1} 的所有译文吗？基础词条会保留。","Are you sure you want to clear all translations for the current target language %{1}? The basic entries will be retained."
-确定清理全部词典和所有语言译文吗？此操作不可撤销。,"Are you sure you want to clear all dictionaries and all language translations? This action cannot be undone."
-保存失败,"Save failed"
-导入失败!,"Import failed!"
-导入完成!,"Import complete!"
 国家名称,"Country Name"
 地区代码或名称,"Locale code or name"
 未激活,"Not activated"
-词典管理,"Dictionary Management"
 区域已安装并激活，已刷新到列表顶部。,"The zone is installed and activated, flushed to the top of the list."
 "确定安装 %{1} 吗？安装后将默认激活。","Are you sure you want to install %{1}? It will be activated by default after installation."
 安装中…,Installing…
@@ -552,6 +573,7 @@ LocalModel,LocalModel
 代码,Code
 简码,"Short Code"
 名称,Name
+展示权重,展示权重
 激活状态,"Activation Status"
 已安装未激活,"Installed but not activated"
 全部,All
@@ -710,10 +732,35 @@ clock,clock
 "名或姓长度不能超过 60 个字符","First or last name cannot exceed 60 characters"
 "姓名长度必须在 2 到 120 个字符之间","Full name must be between 2 and 120 characters"
 提交过于频繁，请稍后再试,"Submit too frequently, please try again later"
+原文不能为空,原文不能为空
+目标语言不能为空,目标语言不能为空
+目标语与源语相同，直接回填原文,目标语与源语相同，直接回填原文
+"AI 仍返回原文，未真正译成目标语（%{1}）","AI 仍返回原文，未真正译成目标语（%{1}）"
+"AI 未返回可用译文","AI 未返回可用译文"
+翻译完成（未保存）,翻译完成（未保存）
+"开始 AI 翻译当前语言…","开始 AI 翻译当前语言…"
+正在翻译…,正在翻译…
+开始翻译其他语言（草稿，确认后才保存）…,开始翻译其他语言（草稿，确认后才保存）…
+没有需要翻译的其他语言,没有需要翻译的其他语言
+已有译文，跳过：%{1},已有译文，跳过：%{1}
+"正在批量翻译 %{1} 个语种（第 %{2}/%{3} 批）…","正在批量翻译 %{1} 个语种（第 %{2}/%{3} 批）…"
+"语种 %{1} 仍返回原文，疑似 AI 未真正翻译","语种 %{1} 仍返回原文，疑似 AI 未真正翻译"
+"语种 %{1} 未返回可用译文","语种 %{1} 未返回可用译文"
+已译：%{1},已译：%{1}
+其他语言翻译失败,其他语言翻译失败
+其他语言草稿已就绪，确认后保存,其他语言草稿已就绪，确认后保存
+没有可保存的译文草稿,没有可保存的译文草稿
+语种不在可翻译集合内：%{1},语种不在可翻译集合内：%{1}
+跳过未真正翻译的原文回声：%{1},跳过未真正翻译的原文回声：%{1}
+跳过无效译文：%{1},跳过无效译文：%{1}
+保存失败：%{1},保存失败：%{1}
+"保存失败 %{1}：%{2}","保存失败 %{1}：%{2}"
+已写入词典，但发布语言包失败：%{1},已写入词典，但发布语言包失败：%{1}
+"发布失败 %{1}：%{2}","发布失败 %{1}：%{2}"
+"已保存并发布 %{1} 个语种","已保存并发布 %{1} 个语种"
 模型忙碌,"Model busy"
 "词典待补约 %{1}","Dictionary pending fill ~%{1}"
 等待本地模型空闲,"Waiting for local model to become idle"
-失败,Failed
 待续跑,"Pending continue"
 "剩余 %{1}","%{1} remaining"
 本轮完成,"Round completed"
@@ -881,6 +928,20 @@ CSV文件路径（导入单个文件时必填）,"CSV file path (required when i
 无法创建文件：%{1},"Unable to create file: %{1}"
 清理超长/换行/BOM/引号失控/非法地区码的词典脏行,清理超长/换行/BOM/引号失控/非法地区码的词典脏行
 查看本地语言码,"View local language code"
+正在翻译：%{1},正在翻译：%{1}
+已翻译语种,"Translated locales"
+没有开启实时翻译，不能访问！,"Real-time translation is not enabled"
+没有需要收集的翻译词,"No translation words need to be collected"
+"收集成功！一共收集更新词条：%{1} 个","Collection successful! Total collected and updated entries: %{1}"
+无效的翻译模式,"Invalid translation mode"
+翻译模式设置成功,"Translation mode set successfully"
+配置文件不存在,"Configuration file does not exist"
+写入配置文件失败,"Failed to write configuration file"
+成功推送收集词汇！推送消息：%{msg},"Successfully pushed vocabulary collection! Push message: %{msg}"
+推送收集词汇失败！推送消息：%{1},"Failed to push vocabulary collection! Push message: %{1}"
+翻译模式,"Translation Mode"
+在线翻译模式,"Online Translation Mode"
+缓存模式,"Cache Mode"
 "开始扫描模块 CSV 语言包…","Scanning module CSV language packs…"
 "扫描源码 __()/lang 词条…","Scanning source __()/lang phrases…"
 词典收集与分区已同步…,词典收集与分区已同步…
@@ -1077,7 +1138,6 @@ entries,entries
 "已填写 %{filled} / %{total} 种语言","Filled %{filled} / %{total} languages"
 翻译窗口,"Translation Window"
 "没有找到任何本地化数据！<a target=""_blank"" href=""%{url}"">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href=""%{refresh}"">刷新</a>","No localization data found! <a target=""_blank"" href=""%{url}"">Go to I18n to install and enable</a> Search local language: %{search} or manually refresh the page: <a href=""%{refresh}"">Refresh</a>"
-"AI 翻译失败","AI translation failed"
 "I18n AI翻译完成：语言=%{locale}，本批=%{translated}，失败=%{failed}，剩余=%{remaining}","I18n AI translation completed: language = %{locale}, current batch = %{translated}, failed = %{failed}, remaining = %{remaining}"
 目标语言为空或等于源语言，已跳过。,"Target language is empty or same as source language, skipped."
 没有启用的语言需要翻译,"No enabled languages need translation"

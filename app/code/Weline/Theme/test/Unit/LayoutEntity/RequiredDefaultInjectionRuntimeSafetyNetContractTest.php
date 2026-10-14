@@ -83,6 +83,24 @@ final class RequiredDefaultInjectionRuntimeSafetyNetContractTest extends TestCas
         self::assertNotFalse($setPos);
     }
 
+    public function testSafetyNetUsesSlotScopedPresenceNotPageOnce(): void
+    {
+        $net = dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionRuntimeSafetyNet.php';
+        $src = (string)file_get_contents($net);
+        self::assertStringContainsString('slotHasWidgetPresent', $src);
+        self::assertStringNotContainsString(
+            'pageHasWidgetPresent($html, $module, $code)',
+            $src,
+            'page-level presence must not suppress other declared slots',
+        );
+
+        $bake = dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionBakeMerger.php';
+        $bakeSrc = (string)file_get_contents($bake);
+        self::assertStringNotContainsString('pageHasWidgetPresent', $bakeSrc);
+        self::assertStringContainsString('multiple *declared* slots', $bakeSrc);
+        self::assertStringNotContainsString('Page-level identity once', $bakeSrc);
+    }
+
     public function testWireUpUsesRuntimeSafetyNetAfterStrip(): void
     {
         $obs = dirname(__DIR__, 3) . '/Observer/LayoutSlotRenderer.php';

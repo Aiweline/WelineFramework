@@ -12,7 +12,7 @@
 6. [`../view/theme/README.md`](../view/theme/README.md)
 7. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
-   - **布局固化与应用部件默认注入（权威 · 纯 PHTML）**：[`布局固化与默认注入.md`](./布局固化与默认注入.md) — **两步勿混**：①关系固化（槽位/部件→派生 PHTML）；②Taglib 编译（源/派生→按语种 `com_*`）。结构、参数、语言配置变更均重固；有派生文件优先选它，否则用原模板；固化目录不保留侧车；仅人工卸载可省略必装。**改 `app/design` 后**见同文 §3.5（`theme:upgrade` / 排水；**局部开发硬默认** `-t -l [-o]` 主题→布局→选项级联；**仅 deploy=dev** Cron `theme_layout_origin_watch` 自动重固；**禁止手抄** `generated/theme-layout-entities/`；`theme:layout-solidify-status` / `WELINE_THEME_SOLIDIFY_DEBUG`）。Composer path 须 symlink：Framework [`Composer-path-symlink合同.md`](../../Framework/doc/3-开发/Composer-path-symlink合同.md)。
+   - **布局固化与应用部件默认注入（权威 · 纯 PHTML）**：[`布局固化与默认注入.md`](./布局固化与默认注入.md) — **两步勿混**：①关系固化（槽位/部件→派生 PHTML）；②Taglib 编译（源/派生→按语种 `com_*`）。结构、参数、语言配置变更均重固；有派生文件优先选它，否则用原模板；固化目录不保留侧车；仅人工卸载可省略必装。**改 `app/design` 后**见同文 §3.5（`theme:upgrade` / 排水；**局部开发硬默认** `-t -l [-o]` 主题→布局→选项级联；**禁止手抄** `generated/theme-layout-entities/`；`theme:layout-solidify-status` / `WELINE_THEME_SOLIDIFY_DEBUG`）。Composer path 须 symlink：Framework [`Composer-path-symlink合同.md`](../../Framework/doc/3-开发/Composer-path-symlink合同.md)。
    - **Theme 机制边界（严重）**：[`开发/spec/theme-mechanism-not-foreign-content.md`](./开发/spec/theme-mechanism-not-foreign-content.md) — Theme 只负责机制；禁止外模块主内容空挂 Theme required 注入。
    - **主题固化物版本模型与历史实施记录**：[`开发/spec/layout-entity-per-version-isolation.md`](./开发/spec/layout-entity-per-version-isolation.md) — 版本独占、持久修订、单页发布与 Scope 继承；当前产物及读取合同以纯 PHTML 权威文为准，历史测试不代表本次改造已验收。
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
@@ -269,9 +269,9 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 | `theme:css` | 主题样式 URL | `{Module}/view/theme/`，默认模块 `Weline_Theme` | 生产 minify：`Theme/Minify` |
 | `theme:js` | 主题脚本 URL | 同上 | 生产 minify：`Theme/Minify` |
 | `theme:font` | 语言子集 `@font-face` | `{Module}/view/fonts/`，默认模块 `Weline_Theme` | `Theme/Font` |
-| `theme:layout-critical` | 内联 layout-critical CSS（防 FOUC） | 基线 `view/ui/css/layout-critical-{area}.css`；活动主题可覆盖 `theme/{area}/assets/css/layout-critical.css` | `LayoutCriticalCssService` |
+| `theme:layout-critical` | 内联 layout-critical CSS（防 FOUC） | 基线 `view/ui/css/layout-critical-{area}.css`；**design 主题**由 Formal/`theme:upgrade` 物化为 `{area}/assets/css/layout-critical.css`（防串站）；基座只读基线 | `LayoutCriticalCssService` + `LayoutCriticalCssMaterializer` |
 
-前后台 head 默认顺序：`css-fouc-bootstrap`（`data-weline-css=pending`）→ `theme:layout-critical` → `weline-theme-prepaint.js` → 色盘 / 外链布局 CSS（`data-weline-layout-css`）→ `weline-css-ready.js`（就绪后 `data-weline-css=ready`，1.8s fail-open）。
+前后台 head 默认顺序：`css-fouc-bootstrap`（`data-weline-css=pending`）→ `theme:layout-critical`（`css_minify` 开时可压缩内联）→ `weline-theme-prepaint.js` → 色盘 / 外链**布局** CSS（`data-weline-layout-css` / theme-head 合包）→ `weline-css-ready.js`。风格叶（如 `*-amazon.css`）**不进** theme-head 布局合包；店面 chrome 仍走部件 bake / 页面链路。
 
 三者路径同形：省略模块 → 默认 `Weline_Theme`；写 `Vendor_Module::相对路径` → 指定模块。模块 `view/statics` 继续用 `@static(...)`（或内置 `<css>` / `<js>`），不要改写成 theme 标签。
 

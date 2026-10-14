@@ -305,8 +305,6 @@ class QueryBin extends FrontendRestController
             && \preg_match(self::RUNTIME_IDENTIFIER_PATTERN, $themePublishedVersionId) !== 1) {
             throw new FrontendQueryException('protocol_error', 'Handshake theme published version id is invalid.', 400);
         }
-        // Storefront generation = Scope-published theme version (not system deploy stamp).
-        $this->assertClientThemeGenerationCurrent($themePublishedVersionId);
 
         // Legacy opaque storefront bridge field is ignored (retired). Clients must not
         // send it; presence alone does not mint a session.
@@ -331,6 +329,13 @@ class QueryBin extends FrontendRestController
             );
         }
         $backendBootstrapId = \trim($backendBootstrapId);
+
+        // Storefront generation = Scope-published theme version (not system deploy stamp).
+        // Backend-attested handshakes use deploy/build attestation — do not 409 on missing
+        // themePublishedVersionId (admin shells historically omitted the storefront stamp).
+        if ($backendBootstrapId === '') {
+            $this->assertClientThemeGenerationCurrent($themePublishedVersionId);
+        }
 
         if ($backendBootstrapId === '') {
             $provider = $this->resolveScopeProvider(false);

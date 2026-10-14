@@ -1792,7 +1792,8 @@ table.table tbody tr:hover {
 }
 
 [data-surface="inverse"] a:not([class*="w-button"]):not(.btn):not(.mini-cart-drawer__btn):not(.header-logo__link),
-[data-surface="inverse"] button:not(.w-button):not(.btn):not(.search-submit-btn):not(.search-category-facade):not(.search-type-facade):not(.search-type-trigger),
+/* Paper-drawer tabs/type switchers own primary/muted ink — do not inherit inverse cream. */
+[data-surface="inverse"] button:not(.w-button):not(.btn):not(.search-submit-btn):not(.search-category-facade):not(.search-type-facade):not(.search-type-trigger):not(.mini-cart-drawer__extras-tab):not(.b2b-mini-cart-type-option),
 [data-surface="inverse"] .w-icon,
 [data-surface="inverse"] svg {
     color: inherit;
@@ -2944,12 +2945,18 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
     color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
 }
 
-/* Light search chip / raised menus: inverse span rule must not paint labels on-dark. */
+/* Light search chip / raised menus / chrome actions: inverse span rule must not paint labels on-dark.
+ * Light paper belts may keep data-surface=inverse for raised drawers but remount belt `color` to ink;
+ * Account/Cart/currency labels live in spans and must inherit that surface color (not _inverse-muted). */
 [data-surface="inverse"] .header-search-form :is(p, li, small, span),
 [data-surface="inverse"] .w-search-form :is(p, li, small, span),
 [data-surface="inverse"] .search-suggestions :is(p, li, small, span),
 [data-surface="inverse"] .w-search-suggestions :is(p, li, small, span),
+[data-surface="inverse"] .header-actions :is(p, li, small, span),
+[data-surface="inverse"] .header-user-area :is(p, li, small, span),
+[data-surface="inverse"] .header-top-bar-locale :is(p, li, small, span),
 [data-surface="inverse"] .w-language-switcher__menu :is(p, li, small, span),
+[data-surface="inverse"] .w-currency-switcher__menu :is(p, li, small, span),
 [data-surface="inverse"] .w-scope-switcher__menu :is(p, li, small, span, a, div),
 [data-surface="inverse"] .w-scope-switcher__panel :is(p, li, small, span, a, div),
 [data-surface="inverse"] .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
@@ -2959,7 +2966,11 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse .w-search-form :is(p, li, small, span),
 .w-surface-inverse .search-suggestions :is(p, li, small, span),
 .w-surface-inverse .w-search-suggestions :is(p, li, small, span),
+.w-surface-inverse .header-actions :is(p, li, small, span),
+.w-surface-inverse .header-user-area :is(p, li, small, span),
+.w-surface-inverse .header-top-bar-locale :is(p, li, small, span),
 .w-surface-inverse .w-language-switcher__menu :is(p, li, small, span),
+.w-surface-inverse .w-currency-switcher__menu :is(p, li, small, span),
 .w-surface-inverse .w-scope-switcher__menu :is(p, li, small, span, a, div),
 .w-surface-inverse .w-scope-switcher__panel :is(p, li, small, span, a, div),
 .w-surface-inverse .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),

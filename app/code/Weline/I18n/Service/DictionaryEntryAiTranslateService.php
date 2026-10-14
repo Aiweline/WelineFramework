@@ -253,6 +253,7 @@ final class DictionaryEntryAiTranslateService
         $drafts = [];
         $skipped = [];
         $errors = [];
+        $pending = [];
         $total = count($targets);
         $index = 0;
 
@@ -282,58 +283,80 @@ final class DictionaryEntryAiTranslateService
                     continue;
                 }
             }
+            $pending[] = $localeCode;
+        }
 
+        // Pack pending locales into model calls by config batch_size + ~2000 input chars
+        // (one word → many locales JSON). Never one-locale-per-request.
+        $chunks = $this->chunkLocalesForMultiTranslate($word, $pending);
+        $doneCount = count($skipped);
+        $chunkIndex = 0;
+        foreach ($chunks as $chunkLocales) {
+            if (!$sse->isAlive()) {
+                return;
+            }
+            $chunkIndex++;
+            $doneCount += count($chunkLocales);
+            $percent = (int)round(($doneCount / max(1, $total)) * 100);
             $sse->sendEvent('progress', [
-                'locale' => $localeCode,
-                'index' => $index,
+                'locales' => $chunkLocales,
+                'index' => $doneCount,
                 'total' => $total,
                 'percent' => $percent,
                 'status' => 'translating',
-                'message' => (string)__('正在翻译：%{1}', [$localeCode]),
+                'message' => (string)__(
+                    '正在批量翻译 %{1} 个语种（第 %{2}/%{3} 批）…',
+                    [count($chunkLocales), $chunkIndex, count($chunks)]
+                ),
             ]);
 
-            $result = $this->adapter->translateBatch(
-                [$word],
+            $strategy = $this->config->getStrategy((string)($chunkLocales[0] ?? 'en_US'));
+            $result = $this->adapter->translateWordToLocales(
+                $word,
+                $chunkLocales,
                 $sourceLocale,
-                $localeCode,
-                $this->config->getStrategy($localeCode),
+                $strategy,
             );
-            $translation = trim((string)($result['translations'][$word] ?? ''));
+            $batchMap = is_array($result['translations'] ?? null) ? $result['translations'] : [];
             $batchErrors = array_values(array_map('strval', (array)($result['errors'] ?? [])));
+            $chunkFailed = $batchErrors !== [] && $batchMap === [];
 
-            $isEcho = I18nCsvCodec::isUntranslatedEcho($word, $translation, $sourceLocale, $localeCode);
-            if ($translation === ''
-                || I18nCsvCodec::isJunkTranslation($translation)
-                || I18nCsvCodec::isGarbledText($translation)
-                || $isEcho
-            ) {
-                $msg = $batchErrors !== []
-                    ? implode('; ', $batchErrors)
-                    : ($isEcho
-                        ? (string)__('语种 %{1} 仍返回原文，疑似 AI 未真正翻译', [$localeCode])
-                        : (string)__('语种 %{1} 未返回可用译文', [$localeCode]));
-                $errors[] = $msg;
+            foreach ($chunkLocales as $localeCode) {
+                $translation = trim((string)($batchMap[$localeCode] ?? ''));
+                $isEcho = $this->shouldRejectOtherLocaleEcho($word, $translation, $sourceLocale, $localeCode);
+                if ($translation === ''
+                    || I18nCsvCodec::isJunkTranslation($translation)
+                    || I18nCsvCodec::isGarbledText($translation)
+                    || $isEcho
+                ) {
+                    $msg = $chunkFailed && $batchErrors !== []
+                        ? implode('; ', $batchErrors)
+                        : ($isEcho
+                            ? (string)__('语种 %{1} 仍返回原文，疑似 AI 未真正翻译', [$localeCode])
+                            : (string)__('语种 %{1} 未返回可用译文', [$localeCode]));
+                    $errors[] = $msg;
+                    $sse->sendEvent('progress', [
+                        'locale' => $localeCode,
+                        'index' => $doneCount,
+                        'total' => $total,
+                        'percent' => $percent,
+                        'status' => 'error',
+                        'message' => $msg,
+                    ]);
+                    continue;
+                }
+
+                $drafts[$localeCode] = $translation;
                 $sse->sendEvent('progress', [
                     'locale' => $localeCode,
-                    'index' => $index,
+                    'index' => $doneCount,
                     'total' => $total,
                     'percent' => $percent,
-                    'status' => 'error',
-                    'message' => $msg,
+                    'status' => 'ok',
+                    'translation' => $translation,
+                    'message' => (string)__('已译：%{1}', [$localeCode]),
                 ]);
-                continue;
             }
-
-            $drafts[$localeCode] = $translation;
-            $sse->sendEvent('progress', [
-                'locale' => $localeCode,
-                'index' => $index,
-                'total' => $total,
-                'percent' => $percent,
-                'status' => 'ok',
-                'translation' => $translation,
-                'message' => (string)__('已译：%{1}', [$localeCode]),
-            ]);
         }
 
         $success = $drafts !== [] || ($errors === [] && $skipped !== []);
@@ -352,11 +375,12 @@ final class DictionaryEntryAiTranslateService
                 ? $firstError
                 : (string)__('AI 未能译出有效译文（多语种仍返回原文），请检查翻译服务后重试');
         }
+        $successMessage = ($drafts === [] && $skipped !== [])
+            ? (string)__('其他语言均已有译文，已跳过')
+            : (string)__('其他语言草稿已就绪，确认后保存');
         $payload = [
             'success' => $success,
-            'message' => $success
-                ? (string)__('其他语言草稿已就绪，确认后保存')
-                : $failureMessage,
+            'message' => $success ? $successMessage : $failureMessage,
             'drafts' => $drafts,
             'translations' => $drafts,
             'locales' => array_keys($drafts),
@@ -447,7 +471,7 @@ final class DictionaryEntryAiTranslateService
                 $errors[] = (string)__('语种不在可翻译集合内：%{1}', [$localeCode]);
                 continue;
             }
-            $isEchoSave = I18nCsvCodec::isUntranslatedEcho($word, $translation, $sourceLocale, $localeCode);
+            $isEchoSave = $this->shouldRejectOtherLocaleEcho($word, $translation, $sourceLocale, $localeCode);
             if ($translation === ''
                 || I18nCsvCodec::isJunkTranslation($translation)
                 || I18nCsvCodec::isGarbledText($translation)
@@ -532,6 +556,86 @@ final class DictionaryEntryAiTranslateService
         }
 
         return trim((string)$entry->translation);
+    }
+
+    /**
+     * Pack locales for one-word multi-locale model calls.
+     * Cap by AiTranslationConfig batch_size and ~2000 input characters (prompt + word + locale list).
+     *
+     * @param list<string> $locales
+     * @return list<list<string>>
+     */
+    private function chunkLocalesForMultiTranslate(string $word, array $locales): array
+    {
+        if ($locales === []) {
+            return [];
+        }
+
+        $batchCap = max(1, min(200, $this->config->getBatchSize()));
+        // Keep room for prompt scaffold; user budget ≈ 2000 chars of packed payload.
+        $charBudget = 2000;
+        $promptOverhead = 480;
+        $base = $promptOverhead + $this->unicodeLen($word);
+        $chunks = [];
+        $current = [];
+        $size = $base;
+
+        foreach ($locales as $locale) {
+            $locale = trim((string)$locale);
+            if ($locale === '') {
+                continue;
+            }
+            $add = $this->unicodeLen($locale) + 24;
+            $wouldExceed = $current !== [] && (
+                count($current) >= $batchCap || ($size + $add) > $charBudget
+            );
+            if ($wouldExceed) {
+                $chunks[] = $current;
+                $current = [];
+                $size = $base;
+            }
+            $current[] = $locale;
+            $size += $add;
+        }
+        if ($current !== []) {
+            $chunks[] = $current;
+        }
+
+        return $chunks;
+    }
+
+    /**
+     * Cross-locale identity is usually echo; Latin brand/loanword kept identical is acceptable.
+     */
+    private function shouldRejectOtherLocaleEcho(
+        string $word,
+        string $translation,
+        string $sourceLocale,
+        string $targetLocale,
+    ): bool {
+        if (!I18nCsvCodec::isUntranslatedEcho($word, $translation, $sourceLocale, $targetLocale)) {
+            return false;
+        }
+        $word = trim($word);
+        $translation = trim($translation);
+        if ($word === '' || $word !== $translation) {
+            return true;
+        }
+        // ASCII/Latin-only tokens (Store, SKU, PayPal) may stay unchanged across locales.
+        if (preg_match('/^[\x20-\x7E]+$/u', $word) === 1) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function unicodeLen(string $value): int
+    {
+        if (function_exists('mb_strlen')) {
+            return (int)mb_strlen($value, 'UTF-8');
+        }
+
+        return strlen($value);
     }
 
     private function normalizeLocale(string $localeCode): string

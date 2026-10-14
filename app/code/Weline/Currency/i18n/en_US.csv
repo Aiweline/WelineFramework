@@ -16,6 +16,7 @@ id属性不能为空,"The id attribute cannot be empty"
 点击选择货币（可多选）,"Click to select currencies (multiple selection allowed)"
 点击选择货币,"Click to select a currency"
 搜索货币代码、名称或符号,"Search currency code, name or symbol"
+拖动排序,拖动排序
 清空选择,"Clear selection"
 "Currency ResourceChange Observer 只接受 v1 契约","Currency ResourceChange Observer only accepts v1 contracts"
 自动汇率,"Automatic rates"

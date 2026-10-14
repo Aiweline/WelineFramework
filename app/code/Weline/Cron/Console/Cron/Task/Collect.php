@@ -90,14 +90,11 @@ class Collect implements CommandInterface
                 }
                 // 先标记为已收集，避免 save() 异常或后续逻辑导致本类未入列表，removeStaleTaskRecords 误删本条
                 $collectedClasses[] = $taskObject::class;
-                $existing = $this->cronTask->clearQuery()
-                    ->where(CronTask::schema_fields_EXECUTE_NAME, $taskObject->execute_name())
-                    ->find()
-                    ->fetch();
-                $existingId = $existing->getId();
+                // 稳定身份：name（UNIQUE_TASK_NAME）→ class（物理文件）；禁止仅按可翻译 execute_name 查重
+                $existingId = $this->findExistingTaskId($taskObject->name(), $taskObject::class);
                 $model = $this->cronTask->clearData()
-                    ->setData(CronTask::schema_fields_NAME, $taskObject->name())
-                    ->setData(CronTask::schema_fields_EXECUTE_NAME, $taskObject->execute_name(), true)
+                    ->setData(CronTask::schema_fields_NAME, $taskObject->name(), true)
+                    ->setData(CronTask::schema_fields_EXECUTE_NAME, $taskObject->execute_name())
                     ->setData(CronTask::schema_fields_CLASS, $taskObject::class)
                     ->setData(CronTask::schema_fields_TIP, $taskObject->tip())
                     ->setData(CronTask::schema_fields_CRON_TIME, $taskObject->cron_time())
@@ -121,6 +118,32 @@ class Collect implements CommandInterface
             $this->printing->warning((string) __('已移除 %{1} 条已无物理文件的任务记录', [$deleted]));
         }
         $this->printing->success(__('调度任务收集完成！'));
+    }
+
+    /**
+     * 按稳定身份查找已有任务行：name → class。
+     * execute_name 可走 i18n，不能作唯一查重键。
+     */
+    private function findExistingTaskId(string $name, string $class): int|string|null
+    {
+        $byName = $this->cronTask->clearQuery()
+            ->where(CronTask::schema_fields_NAME, $name)
+            ->find()
+            ->fetch();
+        $id = $byName->getId();
+        if ($id) {
+            return $id;
+        }
+        $class = self::normalizeClass($class);
+        if ($class === '') {
+            return null;
+        }
+        $byClass = $this->cronTask->clearQuery()
+            ->where(CronTask::schema_fields_CLASS, $class)
+            ->find()
+            ->fetch();
+        $id = $byClass->getId();
+        return $id ?: null;
     }
 
     /**

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.8.112',
+    "version" => '1.8.123',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
@@ -36,6 +36,7 @@ return [
             => \Weline\Websites\Service\ThemeBrandBasicsIdentityProvider::class,
         \Weline\Websites\Api\Localization\WebsiteCurrencyCatalogInterface::class => \Weline\Websites\Service\CurrentWebsiteCurrencyCatalog::class,
         \Weline\Websites\Api\Localization\WebsiteLanguageAssignmentInterface::class => \Weline\Websites\Service\Localization\WebsiteLanguageAssignment::class,
+        \Weline\Websites\Api\Localization\ResolvedLanguageCatalogInterface::class => \Weline\Websites\Service\Localization\ResolvedLanguageCatalog::class,
         \Weline\Framework\Runtime\StorefrontWebsiteCodeResolverInterface::class => \Weline\Websites\Observer\DetectWebsite::class,
         \Weline\Framework\Runtime\StorefrontWebsiteContextResolverInterface::class => \Weline\Websites\Observer\DetectWebsite::class,
         \Weline\Framework\Runtime\StorefrontScopeInstallerInterface::class => \Weline\Websites\Observer\DetectWebsite::class,

@@ -154,6 +154,8 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,"This product is temporarily unavailable; remove it from the cart or try again later"
 "channel_code 必须与 store_code 同时提供","channel_code must be provided together with store_code"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","Cart Scope does not match the trusted Website/Store/Channel request"
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
 加入购物车,"Add to Cart"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 跨币种购物车不可合并,"Cross-currency carts cannot be merged"

@@ -7,7 +7,7 @@ use Weline\Theme\Service\LayoutEntity\WidgetAssetOptimizer;
 use Weline\Theme\Service\LayoutEntity\WidgetAssetArtifactPublisher;
 final class WidgetAssetOptimizationTest extends TestCase
 {
-    public function testNestedAndEmptyWidgetsCountAndEarlySharedAssetStaysIndependent(): void
+    public function testEarlySourceMergesBlockingAndLateSourceMergesDeferredBoundary(): void
     {
         $publisher = new class extends WidgetAssetArtifactPublisher {
             public array $batches = [];
@@ -21,18 +21,18 @@ final class WidgetAssetOptimizationTest extends TestCase
         $tag = static fn(string $name): string => '<script defer src="/' . $name . '.js" data-weline-widget-asset="source"></script>';
         $begin = '<!--weline-widget:start-->';
         $end = '<!--weline-widget:end-->';
+        // Widgets 1..6 early (shared@1 + w6@6); widget 7 late (w7).
         $html = '<html><head></head><body>' . $begin . $tag('shared') . $begin . $end . $end;
         for ($i = 3; $i <= 7; $i++) { $html .= $begin . ($i >= 6 ? $tag('shared') . $tag('w' . $i) : '') . $end; }
         $html .= '</body></html>';
         $result = (new WidgetAssetHtmlPlacement($optimizer))->inject($html, '', ['js_merge' => true, 'js_merge_start_widget' => 6]);
-        // Under PROD, singleton early shared is published alone; late widgets still merge.
-        self::assertSame([['/shared.js'], ['/w6.js', '/w7.js']], $publisher->batches);
+        self::assertSame([['/shared.js', '/w6.js'], ['/w7.js']], $publisher->batches);
         self::assertStringContainsString('/static/bundle-1.js', $result);
         self::assertStringContainsString('/static/bundle-2.js', $result);
         self::assertStringNotContainsString('weline-widget:start', $result);
         self::assertLessThan(\strpos($result, 'bundle-2.js'), \strpos($result, 'bundle-1.js') !== false ? \strpos($result, 'bundle-1.js') : \PHP_INT_MAX);
-        // Early shared must not join the late merge batch.
         self::assertNotContains('/shared.js', $publisher->batches[1]);
+        self::assertNotContains('/w6.js', $publisher->batches[1]);
     }
     public function testMixedCssJsStreamsKeepJsOrderAndLayoutIndependent(): void
     {
@@ -110,17 +110,49 @@ final class WidgetAssetOptimizationTest extends TestCase
                 return '/static/late-source.css';
             }
         };
+        // N=25 → index 25 is still early; index 26 is late deferred.
         $result = (new WidgetAssetOptimizer($publisher))->transform([[
             'url' => '/late.css',
             'tag' => '<link rel="stylesheet" href="/late.css">',
             'position' => 'head',
             'kind' => 'source',
-            'first_widget_index' => 25,
+            'first_widget_index' => 26,
         ]], ['css_merge' => true, 'css_merge_start_widget' => 25]);
         self::assertCount(1, $result);
         self::assertStringContainsString('media="print"', $result[0]['tag']);
         self::assertStringContainsString("onload=\"this.media='all'\"", $result[0]['tag']);
         self::assertStringContainsString('<noscript>', $result[0]['tag']);
+    }
+
+    public function testEarlySourceCssMergesBlockingWithoutPrintDefer(): void
+    {
+        $publisher = new class extends WidgetAssetArtifactPublisher {
+            public array $batches = [];
+            public function canMerge(array $asset): bool { return true; }
+            public function publish(array $assets, bool $minify, $theme = null): ?string {
+                $this->batches[] = array_column($assets, 'url');
+                return '/static/early-source.css';
+            }
+        };
+        $make = static fn(string $url, int $index): array => [
+            'url' => $url,
+            'tag' => '<link rel="stylesheet" href="' . $url . '" data-weline-widget-asset="source">',
+            'position' => 'head',
+            'kind' => 'source',
+            'first_widget_index' => $index,
+        ];
+        $result = (new WidgetAssetOptimizer($publisher))->transform([
+            $make('/a.css', 1),
+            $make('/b.css', 3),
+            $make('/c.css', 6),
+            $make('/d.css', 7),
+            $make('/e.css', 9),
+        ], ['css_merge' => true, 'css_merge_start_widget' => 6]);
+        self::assertSame([['/a.css', '/b.css', '/c.css'], ['/d.css', '/e.css']], $publisher->batches);
+        self::assertCount(2, $result);
+        self::assertStringNotContainsString('media="print"', $result[0]['tag']);
+        self::assertStringContainsString('media="print"', $result[1]['tag']);
+        self::assertStringContainsString('<noscript>', $result[1]['tag']);
     }
 
     public function testUnwrappedTopLevelDeclarationsKeepTheirFileBoundary(): void

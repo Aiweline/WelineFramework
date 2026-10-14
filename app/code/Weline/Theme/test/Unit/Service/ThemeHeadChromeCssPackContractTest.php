@@ -47,10 +47,28 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         );
         self::assertStringContainsString('theme_css_merge', $src);
         self::assertStringContainsString('warmAreaPacks', $src);
-        self::assertStringContainsString('theme-head-chrome-v6', $src);
+        self::assertStringContainsString('theme-head-chrome-v7', $src);
+        self::assertStringContainsString('PACK_OVERLAY', $src);
         self::assertStringContainsString('themeOverlayAbsorbed', $src);
         self::assertStringContainsString('OVERLAY_LIST_RELATIVE', $src);
         self::assertStringContainsString('collectThemeOverlaySources', $src);
+        // Theme pack leaf order: foundation/theme before variables before colors.
+        $sf = strpos($src, "self::PACK_STOREFRONT => [");
+        self::assertNotFalse($sf);
+        $sfBlock = substr($src, $sf, 900);
+        $foundation = strpos($sfBlock, 'weline-foundation.css');
+        $spacing = strpos($sfBlock, 'variables/_spacing.css');
+        $light = strpos($sfBlock, 'colors/_light.css');
+        self::assertNotFalse($foundation);
+        self::assertNotFalse($spacing);
+        self::assertNotFalse($light);
+        self::assertLessThan($spacing, $foundation, 'layout/shell CSS before variables');
+        self::assertLessThan($light, $spacing, 'variables before colors');
+        self::assertDoesNotMatchRegularExpression(
+            '/\$attrs\s*\.=\\s*[\'"] data-weline-layout-css/',
+            $this->extractTryLinkAttrsSnippet($src),
+            'theme pack link must not set data-weline-layout-css'
+        );
         self::assertStringContainsString('resolvePackScopeFingerprint', $src);
         self::assertStringContainsString('artifactPathBelongsToTheme', $src);
         self::assertStringContainsString('ThemeApplicationContext', $src);
@@ -74,22 +92,26 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
 
     public function testStorefrontPackEmitsBeforeStylesAfterHook(): void
     {
-        // 2026-10-11：布局 CSS 包从 assets-suffix 前移到 assets-prefix —— 必须在
-        // critical CSS 之后、**任何阻塞 JS 之前**被发现，否则浏览器要先跑完 page 段的
-        // 核心脚本才会开始下载布局样式。段序 prefix → page → suffix 由
-        // Partials::renderStorefrontHeadComposedOrMonolithic 固定，故 prefix 内产出
-        // 必然早于 suffix 内的 styles-after hook。
+        // 2026-10-14：critical → theme pack → disk → overlay → early JS.
+        // Big widget layout pack is placed after theme chrome by WidgetAssetHtmlPlacement.
         $prefix = $this->read('view/theme/frontend/partials/head/assets-prefix.phtml');
         $emitPack = strpos($prefix, '<?= $storefrontPackHtml');
         $critical = strpos($prefix, 'theme:layout-critical');
+        $diskEcho = strpos($prefix, 'echo $diskOverrideHtml');
+        $overlayEmit = strpos($prefix, '<?= $overlayPackHtml');
         $earlyJs = strpos($prefix, '<?= $earlyJsHtml');
         self::assertNotFalse($emitPack);
         self::assertNotFalse($critical);
         self::assertNotFalse($earlyJs);
-        self::assertLessThan($emitPack, $critical, 'layout CSS pack must come after critical CSS');
-        self::assertLessThan($earlyJs, $emitPack, 'layout CSS pack must come before any head JS');
+        self::assertNotFalse($diskEcho);
+        self::assertLessThan($emitPack, $critical, 'theme pack must come after critical CSS');
+        self::assertLessThan($diskEcho, $emitPack, 'disk override after theme pack');
+        self::assertNotFalse($overlayEmit);
+        self::assertLessThan($overlayEmit, $diskEcho, 'overlay after disk');
+        self::assertLessThan($earlyJs, $overlayEmit, 'early JS after overlay');
         self::assertStringContainsString('PACK_STOREFRONT', $prefix);
-        // Style leaves (amazon toast etc.) are backend-selected → generated CSS; theme head must not hard-@static them.
+        self::assertStringContainsString('PACK_OVERLAY', $prefix);
+        self::assertStringContainsString("'include_disk' => false", $prefix);
         self::assertStringNotContainsString('storefront-shopper-toast-amazon.css', $prefix);
 
         $suffix = $this->read('view/theme/frontend/partials/head/assets-suffix.phtml');
@@ -97,10 +119,18 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertStringNotContainsString(
             '<?= $storefrontPackHtml',
             $suffix,
-            'layout CSS pack must not be emitted twice (suffix)',
+            'theme pack must not be emitted twice from suffix when pack path succeeded',
         );
         self::assertStringContainsString('if ($storefrontPackHtml === null)', $suffix);
         self::assertStringNotContainsString('storefront-shopper-toast-amazon.css', $suffix);
+    }
+
+    private function extractTryLinkAttrsSnippet(string $src): string
+    {
+        $fn = strpos($src, 'function tryLinkHtml');
+        self::assertNotFalse($fn);
+
+        return substr($src, $fn, 1200);
     }
 
     public function testPackClassConstantsMatchHeadWiring(): void
@@ -110,6 +140,7 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertSame('tokens-pre', ThemeHeadChromeCssPack::PACK_TOKENS_PRE);
         self::assertSame('tokens-post', ThemeHeadChromeCssPack::PACK_TOKENS_POST);
         self::assertSame('ui', ThemeHeadChromeCssPack::PACK_UI);
+        self::assertSame('overlay', ThemeHeadChromeCssPack::PACK_OVERLAY);
         self::assertSame('partials/head/theme-head-css-overlay.php', ThemeHeadChromeCssPack::OVERLAY_LIST_RELATIVE);
         self::assertTrue(method_exists(ThemeResourceGateway::class, 'buildHeadChromeArtifact'));
         self::assertTrue(method_exists(ThemeHeadChromeCssPack::class, 'warmAreaPacks'));

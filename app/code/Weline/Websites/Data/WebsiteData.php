@@ -91,11 +91,10 @@ class WebsiteData
             $state['currency_codes'] = $websiteId >= Website::ID_DEFAULT
                 ? self::loadCurrencyCodesOnce($websiteId)
                 : [];
+            // Association sort_order is the display authority. Bare-path / routing
+            // fallbacks must use default_language (separate field), not language_codes[0].
             $state['language_codes'] = $websiteId >= Website::ID_DEFAULT
-                ? self::preferDefaultLanguageFirst(
-                    self::loadLanguageCodesOnce($websiteId),
-                    (string)($website->getDefaultLanguage() ?? ''),
-                )
+                ? self::loadLanguageCodesOnce($websiteId)
                 : [];
             $state['currencies'] = self::buildCurrenciesFromCodes($state['currency_codes']);
         }
@@ -1128,36 +1127,6 @@ class WebsiteData
     }
 
     /**
-     * Bare-path / empty-default fallbacks use language_codes[0]. Keep
-     * website.default_language first so those paths do not stick on en_US.
-     *
-     * @param list<string>|array<int, string> $codes
-     * @return list<string>
-     */
-    private static function preferDefaultLanguageFirst(array $codes, string $default): array
-    {
-        $default = \trim($default);
-        $normalized = [];
-        foreach ($codes as $code) {
-            $code = \trim((string)$code);
-            if ($code !== '') {
-                $normalized[] = $code;
-            }
-        }
-        if ($default === '') {
-            return \array_values($normalized);
-        }
-        $rest = [];
-        foreach ($normalized as $code) {
-            if (\strcasecmp($code, $default) !== 0) {
-                $rest[] = $code;
-            }
-        }
-
-        return \array_values(\array_merge([$default], $rest));
-    }
-
-    /**
      * @param callable():(?string) $fromCurrentRequest
      */
     private static function scalarDefaultForWebsite(
@@ -1212,10 +1181,6 @@ class WebsiteData
                 ->find()
                 ->fetch();
             if ($website->hasData(Website::schema_fields_ID)) {
-                $languageCodes = self::preferDefaultLanguageFirst(
-                    $languageCodes,
-                    (string)($website->getDefaultLanguage() ?? ''),
-                );
                 $state = [
                     'website' => clone $website,
                     'data' => null,

@@ -18,7 +18,6 @@ use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Helper\Process;
 use Weline\Cron\Model\CronTask;
-use Weline\Cron\Service\ManagedChildAdmission;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
@@ -232,7 +231,6 @@ class Run implements CommandInterface
 
         # 进程信息管理
         $upgradeIntentSkipNoted = false;
-        $admissionDeferNoted = false;
         /**@var CronTask $taskModel */
         foreach ($tasks as $key => $taskModel) {
                 $forceTask = (bool)$force;
@@ -416,26 +414,9 @@ class Run implements CommandInterface
                             }
                             continue;
                         }
-                        // Soft concurrent admission (MySQL/MariaDB/PostgreSQL only).
-                        // Must run before claimTaskLaunch to avoid orphan BLOCK rows.
-                        if (!$serializeManagedChildren) {
-                            /** @var ManagedChildAdmission $admission */
-                            $admission = ObjectManager::getInstance(ManagedChildAdmission::class);
-                            if (!$admission->hasAvailableSlot($cronTask)) {
-                                if (!$admissionDeferNoted) {
-                                    $admissionDeferNoted = true;
-                                    $this->printing->note(\str_replace(
-                                        '%{1}',
-                                        (string)$admission->effectiveMax(),
-                                        DatabaseFreeTranslator::translate(
-                                            '受管计划任务并发已达上限（%{1}），本轮延后派发。',
-                                            'Weline_Cron',
-                                        ),
-                                    ));
-                                }
-                                continue;
-                            }
-                        }
+                        // PG/MySQL/MariaDB: due tasks claim+spawn independently (no soft
+                        // global concurrency gate — that starved * * * * * fleets).
+                        // SQLite still serializes via $serializeManagedChildren below.
                         $runStart = sprintf('%.6F', microtime(true));
                         $handoffToken = SetupDatabaseAccessLock::newSharedHandoffToken();
                         if (!$this->claimTaskLaunch(
@@ -445,32 +426,6 @@ class Run implements CommandInterface
                             $handoffToken,
                         )) {
                             continue;
-                        }
-                        // Post-claim recheck closes multi-parent TOCTOU: this READY
-                        // window is counted; if over max, release without spawning.
-                        if (!$serializeManagedChildren) {
-                            /** @var ManagedChildAdmission $admission */
-                            $admission = ObjectManager::getInstance(ManagedChildAdmission::class);
-                            if ($admission->countLiveManagedChildren() > $admission->effectiveMax()) {
-                                $this->releaseClaimedLaunchForAdmission(
-                                    (int)$taskModel->getId(),
-                                    $runStart,
-                                    $handoffToken,
-                                    $admission->effectiveMax(),
-                                );
-                                if (!$admissionDeferNoted) {
-                                    $admissionDeferNoted = true;
-                                    $this->printing->note(\str_replace(
-                                        '%{1}',
-                                        (string)$admission->effectiveMax(),
-                                        DatabaseFreeTranslator::translate(
-                                            '受管计划任务并发已达上限（%{1}），本轮延后派发。',
-                                            'Weline_Cron',
-                                        ),
-                                    ));
-                                }
-                                continue;
-                            }
                         }
 
                         $pid = 0;
@@ -1029,41 +984,6 @@ class Run implements CommandInterface
             CronTask::schema_fields_STATUS => $task->getData(CronTask::schema_fields_STATUS),
             CronTask::schema_fields_PID => $task->getData(CronTask::schema_fields_PID),
         ];
-    }
-
-    /**
-     * Release a just-claimed READY window (BLOCK+pid=0) when soft admission is over max.
-     * Restores SUCCESS so the task stays due next minute without a FAIL alarm.
-     */
-    private function releaseClaimedLaunchForAdmission(
-        int $taskId,
-        string $runStart,
-        string $launchId,
-        int $maxConcurrent,
-    ): bool {
-        $message = \str_replace(
-            '%{1}',
-            (string)$maxConcurrent,
-            DatabaseFreeTranslator::translate(
-                '受管计划任务并发已达上限（%{1}），已释放 READY 窗口并延后派发。',
-                'Weline_Cron',
-            ),
-        );
-
-        return $this->updateTaskIf([
-            CronTask::schema_fields_ID => $taskId,
-            CronTask::schema_fields_RUN_TIME => $runStart,
-            CronTask::schema_fields_LAUNCH_ID => $launchId,
-            CronTask::schema_fields_STATUS => CronStatus::BLOCK->value,
-            CronTask::schema_fields_PID => 0,
-        ], [
-            CronTask::schema_fields_STATUS => CronStatus::SUCCESS->value,
-            CronTask::schema_fields_PID => 0,
-            CronTask::schema_fields_LAUNCH_ID => '',
-            CronTask::schema_fields_RUN_TIME => '0',
-            CronTask::schema_fields_BLOCK_TIME => 0,
-            CronTask::schema_fields_RUNTIME_ERROR => $message,
-        ]);
     }
 
     private function markLaunchFailure(

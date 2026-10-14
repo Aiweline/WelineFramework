@@ -46,6 +46,10 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertStringContainsString("\$goodsText = trim((string) (\$this->getData('goods_text') ?? ''))", $template);
         self::assertStringContainsString("\$shippingText = trim((string) (\$this->getData('shipping_text') ?? ''))", $template);
         self::assertStringContainsString("\$payableText = trim((string) (\$this->getData('payable_text') ?? ''))", $template);
+        self::assertStringContainsString("\$incentiveText = trim((string) (\$this->getData('incentive_text') ?? ''))", $template);
+        self::assertStringContainsString("\$codFeeText = trim((string) (\$this->getData('cod_fee_text') ?? ''))", $template);
+        self::assertStringContainsString('$showIncentiveInitially', $template);
+        self::assertStringContainsString('$showCodInitially', $template);
         self::assertStringContainsString('<?= $escape($goodsText) ?>', $template);
         self::assertStringContainsString('<?= $escape($shippingText) ?>', $template);
         self::assertStringContainsString('<?= $escape($payableText) ?>', $template);

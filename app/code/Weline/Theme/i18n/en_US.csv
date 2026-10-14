@@ -892,25 +892,14 @@ DEMO,DEMO
 热销,Hot
 包邮,"Free shipping"
 NEW,NEW
-指南,Guide
-分类,Classification
-Pagination,Pagination
-Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
-Next,Next
-个人中心,"Personal center"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
 加入收藏,"Add to Favorites"
 加入对比,"Add to Compare"
 快速查看,"Quick View"
-面包屑,"bread crumbs"
+分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 视频,Video
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-件商品,"items of goods"
 查看更多,"View more"
 距离结束,"Ends in"
 时,Hour
@@ -952,12 +941,14 @@ Next,Next
 展开明细,"Expand details"
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
-关闭通知,"Close notification"
 上一张,"Previous picture"
 下一张,Next
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
+加载中,loading
+"WelineFramework Admin","WelineFramework Admin"
+面包屑,"bread crumbs"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1004,6 +995,7 @@ Next,Next
 上一页,"Previous page"
 下一页,"Next page"
 末页,"Last page"
+指南,Guide
 抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
 您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
 请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
@@ -1025,12 +1017,12 @@ ERROR,ERROR
 网络错误,"Network error"
 无法连接到服务器，请检查网络连接。,"Unable to connect to the server, please check your network connection."
 分页导航,"Pagination navigation"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 缺货,"Out of Stock"
 联系询价,联系询价
 跳转到主要内容,"Skip to main content"
-展开搜索,"Expand search"
 我的,mine
-我的菜单,"my menu"
 账户及心愿单,"Accounts and Wishlists"
 账户,Account
 我的订单,"My orders"
@@ -1038,7 +1030,7 @@ ERROR,ERROR
 退出登录,"Log out"
 语言,language
 货币,currency
-关闭菜单,"Close menu"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
@@ -1122,6 +1114,7 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1173,6 +1166,7 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
+关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -1187,7 +1181,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1213,7 +1206,6 @@ Logo,Logo
 确认操作,"Confirm action"
 确定,Sure
 输入,Input
-"WelineFramework Admin","WelineFramework Admin"
 "Weline Admin","Weline Admin"
 管理后台,"Admin Panel"
 后台Logo,"Background Logo"
@@ -1383,6 +1375,8 @@ JSON格式数组,"JSON format array"
 作用范围,Scope
 基础信息,"Brand basics"
 只发布本页,"Publish this page only"
+更新当前,"Update current"
+更新当前页缓存（不发版）,"Update current page cache (no new version)"
 展开顶栏,"Expand toolbar"
 返回主题列表,"Back to theme list"
 编辑区域,"Edit area"
@@ -1611,6 +1605,9 @@ AI目录加载失败,"AI directory loading failed"
 已发布版本,"Published version"
 当前生效,"Currently active"
 范围,Scope
+打开主题编辑器,打开主题编辑器
+在主题编辑器中打开当前店面主题,在主题编辑器中打开当前店面主题
+请先选择前台主题后再打开编辑器,请先选择前台主题后再打开编辑器
 选购,Shop
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
@@ -1713,6 +1710,11 @@ AI目录加载失败,"AI directory loading failed"
 "部件 ""%{1}"" 已不可用（定义/模板缺失）","Widget ""%{1}"" is unavailable (missing definition/template)"
 部件已不可用（定义/模板缺失）,"Widget unavailable (missing definition/template)"
 从当前版本移除,"Remove from current version"
+同槽重复部件,"Same-slot duplicate widget"
+"请卸载其中一处（layout 内嵌与 default_injections 二选一，或在主题编辑器删一份）","Remove one copy (layout vs default_injections XOR"
+来源,Source
+槽,Slot
+未知,未知
 "类型化布局值解析缺少冻结的 locale_code。","Typed layout value resolution requires a frozen locale_code."
 "类型化布局值解析缺少冻结的 ScopeIdentity。","Typed layout value resolution requires a frozen ScopeIdentity."
 "Theme 布局渲染缺少冻结的 ScopeIdentity。","Theme layout rendering requires a frozen ScopeIdentity."
@@ -1862,6 +1864,7 @@ AI目录加载失败,"AI directory loading failed"
 编译失败,"compile failed"
 资源合包已预热,"resource packs warmed"
 资源合包预热失败,"resource pack warm failed"
+编译后缓存已清理,编译后缓存已清理
 "Theme 范围版本参数无效。","Theme scope version parameters are invalid."
 "Theme 范围发布版本无效。","Theme scope published version is invalid."
 "Theme 范围版本未持久化。","Theme scope version is not persisted."
@@ -2249,6 +2252,8 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 版本范围：全部历史版本（--all）,"Version set: all historical versions (--all)"
 "版本范围：当前正式版 + 当前草稿","Version set: current published + current draft"
 范围过滤：,"Scope filter:"
+布局过滤：,布局过滤：
+（该布局下全部选项）,（该布局下全部选项）
 "布局模板切流：purge %{purged}，legacy %{legacy}，固化 %{count}","布局模板切流：purge %{purged}，legacy %{legacy}，固化 %{count}"
 主题不存在：,主题不存在：
 无法解析主题静态资源命名空间。,"Unable to resolve theme static resource namespace."
@@ -2265,10 +2270,13 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "设计 area→Theme 模块路径（跳过图片）：","设计 area→Theme 模块路径（跳过图片）："
 "设置了 -t 参数，但却没有-t参数值！","The -t parameter was set, but no -t parameter value was provided!"
 "设置了 -s/--scope 参数，但却没有范围值！","-s/--scope was set but no scope value was provided!"
+"设置了 -l/--layout 参数，但却没有布局类型值！","设置了 -l/--layout 参数，但却没有布局类型值！"
+"设置了 -o/--option 参数，但却没有布局选项值！","设置了 -o/--option 参数，但却没有布局选项值！"
+指定了布局选项（-o/--option）时必须同时指定布局类型（-l/--layout）。,指定了布局选项（-o/--option）时必须同时指定布局类型（-l/--layout）。
 无法创建主题静态资源目录：,"Unable to create theme static resource directory:"
 无法发布主题静态资源：,"Unable to publish theme static resources:"
 "更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿）","Upgrade theme statics (design overlay + module view/theme; omit -t for scope-bound themes only; default published+draft)"
-主题文件不在允许的主题目录内：,"The theme file is not in the allowed theme directory:"
+跳过主题外文件（不在允许目录内）：,跳过主题外文件（不在允许目录内）：
 "=== 批量生成主题预览图 ===","=== Generate theme previews in batches ==="
 "并发数量: %{1}","Concurrency Count: %{1}"
 系统中没有已安装的主题,"There are no installed themes in the system"
@@ -2315,6 +2323,15 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+展开搜索,"Expand search"
+我的菜单,"my menu"
+关闭菜单,"Close menu"
+主题文件不在允许的主题目录内：,"The theme file is not in the allowed theme directory:"
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
+个人中心,"Personal center"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 "开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径...","开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径..."
@@ -4850,8 +4867,10 @@ Chiffon,Chiffon
 发布主题失败,"Theme publish failed"
 "查看物件 →","View object →"
 跨境履约,"Cross-border fulfillment"
-更新当前,"Update current"
-更新当前页缓存（不发版）,"Update current page cache (no new version)"
+"cookie 政策","Cookie Policy"
+cookie政策,"Cookie Policy"
+政策正文,"Policy body"
+政策目录,"Policy contents"
 已更新当前页缓存,"Current page cache updated"
 正在更新当前页缓存…,"Updating current page cache…"
 当前布局没有可清理的店面路径,"Current layout has no storefront path to purge"

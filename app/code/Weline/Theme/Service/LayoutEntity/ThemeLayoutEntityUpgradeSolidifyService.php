@@ -194,8 +194,8 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
-     * @return array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string}
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string,force_pages?:bool} $options
+     * @return array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string,force_pages?:bool}
      */
     private function bakeOptions(array $options): array
     {
@@ -214,6 +214,11 @@ final class ThemeLayoutEntityUpgradeSolidifyService
         $layoutOption = trim((string)($options['layout_option'] ?? ''));
         if ($layoutOption !== '') {
             $out['layout_option'] = $layoutOption;
+        }
+        // Origin-watch widget/template cascade: PageInputDigest only pins layout origin,
+        // so theme-tree widget deps must force pages past skip_unchanged.
+        if (!empty($options['force_pages'])) {
+            $out['force_pages'] = true;
         }
 
         return $out;

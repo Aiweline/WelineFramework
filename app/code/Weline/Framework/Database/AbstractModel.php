@@ -1639,8 +1639,8 @@ abstract class AbstractModel extends DataObject
         $this->pagination['uri'] = $request->getUri();
 
         # 页码缓存（区分样式与是否强制后台 URL，避免 WLS 下区域判断偶发偏差时命中错误缓存）
-        # markup_version=w-pagination.v1：后台已不再加载 Bootstrap pagination CSS
-        $cache_key = md5(json_encode($this->pagination) . '|' . $pagination_style . '|' . ($use_backend_url ? '1' : '0') . '|w-pagination.v1');
+        # markup_version=w-pagination.v2：跳转表单同行横排（data-w-width=auto + w-pagination__jump）
+        $cache_key = md5(json_encode($this->pagination) . '|' . $pagination_style . '|' . ($use_backend_url ? '1' : '0') . '|w-pagination.v2');
         if ($data = $this->_cache->get($cache_key)) {
             $this->pagination = $data;
             return $data;
@@ -1721,11 +1721,16 @@ PAGELISTHTML;
         $params['pageSize'] = $this->pagination['pageSize'];
         $query = http_build_query($params);
         $form_url = $queryUrl . $query_flag . $query;
+        // Jump controls stay on one row with pagination links: .w-input defaults to
+        // inline-size:100% and would wrap the submit button under a flex-wrap cluster.
         $paginationJumpFormOpen = FormRenderer::open([
             'action' => $form_url,
             'method' => 'get',
-            'class' => 'w-cluster',
+            'class' => 'w-cluster w-pagination__jump',
             'intent' => 'pagination.jump',
+            'data-align' => 'center',
+            'data-wrap' => 'false',
+            'style' => '--w-gap:var(--weline-space-2);',
         ]);
         $paginationJumpFormClose = FormRenderer::close();
 
@@ -1754,8 +1759,8 @@ PAGELISTHTML;
                                 </li>
                                 <li class='w-pagination__item'>
                                       {$paginationJumpFormOpen}
-                                        <input type="text" class="w-input" name="page" placeholder="{$please_input_page_number}" inputmode="numeric" autocomplete="off">
-                                        <button type="submit" class="w-button" data-tone="primary">{$turn_to_page}</button>
+                                        <input type="text" class="w-input" data-size="sm" data-w-width="auto" name="page" placeholder="{$please_input_page_number}" inputmode="numeric" autocomplete="off" aria-label="{$please_input_page_number}">
+                                        <button type="submit" class="w-button" data-tone="primary" data-size="sm">{$turn_to_page}</button>
                                       {$paginationJumpFormClose}
                                 </li>
                             </ul>

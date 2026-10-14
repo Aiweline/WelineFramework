@@ -6,7 +6,7 @@
  */
 ?>
 <div
-    class="w-language-select<?= $__wls_classes ? ' ' . htmlspecialchars(implode(' ', $__wls_classes), ENT_QUOTES, 'UTF-8') : '' ?>"
+    class="w-language-select<?= $__wls_classes ? ' ' . htmlspecialchars(implode(' ', $__wls_classes), ENT_QUOTES, 'UTF-8') : '' ?><?= $__wls_selected !== [] ? ' has-value' : '' ?>"
     id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_wrapper"
     data-w-component="language-select"
     data-w-component-id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>"
@@ -20,24 +20,75 @@
     data-w-empty-text="<?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?>"
     data-w-width="<?= htmlspecialchars($__wls_width, ENT_QUOTES, 'UTF-8') ?>"
     data-w-auto-submit="<?= $__wls_auto_submit ? 'true' : 'false' ?>"
+    data-has-value="<?= $__wls_selected !== [] ? 'true' : 'false' ?>"
+    <?php if ($__wls_reorder_url !== ''): ?>
+    data-w-reorder-url="<?= htmlspecialchars($__wls_reorder_url, ENT_QUOTES, 'UTF-8') ?>"
+    <?php endif; ?>
+    <?php if ($__wls_reorder_website_id !== ''): ?>
+    data-w-reorder-website-id="<?= htmlspecialchars($__wls_reorder_website_id, ENT_QUOTES, 'UTF-8') ?>"
+    <?php endif; ?>
 >
-    <button
+    <div
         class="w-language-select__trigger"
         id="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_trigger"
-        type="button"
+        role="button"
+        tabindex="<?= $__wls_display_only ? '-1' : '0' ?>"
         aria-haspopup="listbox"
         aria-expanded="false"
         aria-controls="<?= htmlspecialchars($__wls_component_id, ENT_QUOTES, 'UTF-8') ?>_list"
         aria-label="<?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?>"
-        <?= $__wls_display_only ? 'disabled aria-disabled="true"' : '' ?>
+        <?= $__wls_display_only ? 'aria-disabled="true"' : '' ?>
     >
         <span class="w-language-select__tags" data-w-language-tags>
-            <span class="w-language-select__placeholder"><?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php if ($__wls_selected === []): ?>
+                <span class="w-language-select__placeholder"><?= htmlspecialchars($__wls_empty, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php else: ?>
+                <?php
+                $__wls_by_code = [];
+                foreach ($__wls_items as $__wls_item) {
+                    $__wls_item_code = \trim((string)($__wls_item['code'] ?? ''));
+                    if ($__wls_item_code !== '') {
+                        $__wls_by_code[$__wls_item_code] = $__wls_item;
+                    }
+                }
+                foreach ($__wls_selected as $__wls_sel_code):
+                    $__wls_sel_code = \trim((string)$__wls_sel_code);
+                    if ($__wls_sel_code === '') {
+                        continue;
+                    }
+                    $__wls_sel_item = $__wls_by_code[$__wls_sel_code] ?? [];
+                    $__wls_sel_tag = (string)($__wls_sel_item['tag_label'] ?? $__wls_sel_item['display_name'] ?? $__wls_sel_item['name'] ?? $__wls_sel_code);
+                    $__wls_sel_locked = $__wls_display_only || \in_array($__wls_sel_code, $__wls_readonly, true);
+                    $__wls_sel_sortable = $__wls_multiple && !$__wls_display_only;
+                    ?>
+                <span
+                    class="w-language-select__tag<?= $__wls_sel_sortable ? ' is-sortable' : '' ?>"
+                    data-w-language-code="<?= htmlspecialchars($__wls_sel_code, ENT_QUOTES, 'UTF-8') ?>"
+                    data-readonly="<?= $__wls_sel_locked ? 'true' : 'false' ?>"
+                    <?php if ($__wls_sel_sortable): ?>draggable="true" title="<?= htmlspecialchars((string)__('拖动排序'), ENT_QUOTES, 'UTF-8') ?>"<?php endif; ?>
+                >
+                    <?php if ($__wls_sel_sortable): ?>
+                        <span class="w-language-select__drag-handle" aria-hidden="true"></span>
+                    <?php endif; ?>
+                    <span class="w-language-select__tag-label"><?= htmlspecialchars($__wls_sel_tag, ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="w-language-select__code"><?= htmlspecialchars($__wls_sel_code, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php if ($__wls_multiple && !$__wls_sel_locked): ?>
+                        <button
+                            type="button"
+                            class="w-language-select__remove"
+                            data-w-remove-code="<?= htmlspecialchars($__wls_sel_code, ENT_QUOTES, 'UTF-8') ?>"
+                            aria-label="<?= htmlspecialchars($__wls_sel_code . ' ×', ENT_QUOTES, 'UTF-8') ?>"
+                            draggable="false"
+                        >×</button>
+                    <?php endif; ?>
+                </span>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </span>
         <?php if (!$__wls_display_only): ?>
             <w-icon name="chevron-down" size="sm"></w-icon>
         <?php endif; ?>
-    </button>
+    </div>
 
     <select
         class="w-visually-hidden"

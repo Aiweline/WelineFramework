@@ -63,15 +63,9 @@ class GetWordsFile implements \Weline\Framework\Event\ObserverInterface
             $words_file_data = $event->getData();
     //        $words_file      = $words_file_data->getData('file_path');
 
-            // 获取翻译模式（与Parser.php保持一致）
-            $translate_mode = Env::get('translation.mode', 'default');
-            
-            // 在线翻译模式：检测文件变更，如果变更则重新收集
+            // Online env mode removed; always use cached convert path.
+            // Scheduled collect / publishLocale owns regeneration.
             $use_cache = true;
-            if ($translate_mode === 'online') {
-                // 检查是否需要重新收集（检测生成的词典文件是否比CSV文件旧）
-                $use_cache = !$this->needRegenerate();
-            }
 
             // 翻译收集
             try {

@@ -3,7 +3,7 @@
  *
  * - 浏览器先登录并 add（customer qty=2），随后退出
  * - issueGuestToken + add（guest qty=4）
- * - 再次 account.login → 自动 mergeGuest（Cookie guest_token）
+ * - 再次 CLI mint 登录会话后显式 mergeGuest（Cookie guest_token；避开 Google captcha）
  * - getCart：由服务端当前登录身份读取 customer cart，item_count=5（stock 截断）
  * - fixture 跨进程检查 guest cart 已清空
  *
@@ -15,16 +15,35 @@ const { execFileSync } = require('child_process');
 const {
   test,
   expect,
-  gotoFrontend,
   moduleDescribe,
   moduleCase,
 } = require('../../../../../../../tests/e2e/framework');
+
+const {
+  storefrontOrigin,
+  ensureFpcBypassHeaders,
+  neutralizeStaleThemeStamp,
+  reloadIfThemeGenerationStale,
+  waitForWelineApi,
+  evaluateWithThemeReload,
+  mintCustomerSessionCookie,
+} = require('../../../../Checkout/test/e2e/frontend/release-paypal-account-lifecycle-helpers');
 
 const MODULE = 'Weline_Cart';
 const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
 const FIXTURE_SCRIPT = path.resolve(__dirname, 'plan-p2e02-guest-login-merge-fixture.php');
-const DIRECT = { useProxy: false };
+
+async function gotoCartStorefront(page, routePath = '/') {
+  await ensureFpcBypassHeaders(page);
+  const origin = storefrontOrigin();
+  const pathPart = routePath.startsWith('/') ? routePath : `/${routePath}`;
+  await page.goto(`${origin}${pathPart}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  await neutralizeStaleThemeStamp(page);
+  await waitForWelineApi(page);
+  await reloadIfThemeGenerationStale(page);
+  await neutralizeStaleThemeStamp(page);
+}
 
 function runFixture(action, payload = {}) {
   const stdout = execFileSync('php', [FIXTURE_SCRIPT], {
@@ -43,28 +62,32 @@ function runFixture(action, payload = {}) {
 }
 
 async function ensureApi(page) {
-  await page.waitForFunction(() => {
-    const w = window.Weline;
-    return !!(w && ((w.Api && typeof w.Api.resource === 'function') || typeof w.load === 'function'));
-  }, { timeout: 30000 });
-  await page.evaluate(async () => {
-    const w = window.Weline;
-    if (w && w.Api && typeof w.Api.resource === 'function') {
-      return;
-    }
-    if (w && typeof w.load === 'function') {
-      await w.load('api');
-    }
-  });
-  await page.waitForFunction(
-    () => !!(window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function'),
-    { timeout: 15000 },
-  );
+  await waitForWelineApi(page);
 }
 
 async function runResourceApi(page, provider, operation, params = {}, options = {}) {
-  return page.evaluate(async ({ provider, operation, params, options }) => {
-    const api = window.Weline && window.Weline.Api;
+  return evaluateWithThemeReload(page, async ({ provider, operation, params, options }) => {
+    const pinTheme = () => {
+      const id = String(window.__WELINE_E2E_THEME_ID || '').trim();
+      if (!id || !window.Weline || !window.Weline.config) return;
+      window.Weline.config.themePublishedVersionId = id;
+      window.Weline.config.theme_published_version_id = id;
+      if (window.Weline.config.api && typeof window.Weline.config.api === 'object') {
+        window.Weline.config.api.themePublishedVersionId = id;
+      }
+    };
+    pinTheme();
+    let api = window.Weline && window.Weline.Api;
+    if (!api || api.__full !== true || typeof api.resource !== 'function') {
+      const loaded = await window.Weline.load('api');
+      if (loaded && loaded.__full === true) {
+        window.Weline.Api = loaded;
+        api = loaded;
+      } else {
+        api = loaded || api;
+      }
+    }
+    pinTheme();
     if (!api || typeof api.resource !== 'function') {
       return { __no_api: true };
     }
@@ -119,7 +142,7 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
       let guestToken = '';
 
       try {
-        await gotoFrontend(page, '/', { timeout: 60000, settleMs: 800, ...DIRECT });
+        await gotoCartStorefront(page, '/');
         await expect(page.locator('body')).toBeVisible();
         await expect(page.locator('body')).not.toContainText(FATAL_PATTERN);
         await ensureApi(page);
@@ -142,12 +165,10 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
           store_mode: fixture.store_mode,
         };
 
-        const firstLogin = await runResourceApi(page, 'account', 'login', {
-          email: fixture.email,
-          username: fixture.email,
-          password: fixture.password,
-        });
-        expect(isSuccess(firstLogin), `首次 account.login 失败：${JSON.stringify(firstLogin)}`).toBeTruthy();
+        // Prefer CLI-minted session: QueryBin account.login requires live captcha under Google.
+        await mintCustomerSessionCookie(page, fixture.email);
+        await gotoCartStorefront(page, '/');
+        await ensureApi(page);
 
         const customerSeed = await runResourceApi(page, 'cart', 'add', {
           ...offerParams,
@@ -164,7 +185,7 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
         expect(isSuccess(tokenRes), `issueGuestToken 失败：${JSON.stringify(tokenRes)}`).toBeTruthy();
         guestToken = String(pickData(tokenRes).guest_token || tokenRes.guest_token || '');
         expect(guestToken, 'guest_token 非空').not.toBe('');
-        // API JSON 响应不一定落 Cookie；显式写入以保证 login_after Observer 能读到
+        // API JSON 响应不一定落 Cookie；显式写入以保证 mergeGuest 能读到
         const origin = new URL(page.url()).origin;
         await page.context().addCookies([
           {
@@ -187,24 +208,11 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
           .find((cookie) => cookie.name === 'weline_cart_guest_token');
         expect(guestCookie && guestCookie.value, '登录前须保留 guest_token Cookie').toBe(guestToken);
 
-        const login = await runResourceApi(page, 'account', 'login', {
-          email: fixture.email,
-          username: fixture.email,
-          password: fixture.password,
-        });
-        expect(isSuccess(login), `account.login 失败：${JSON.stringify(login)}`).toBeTruthy();
+        await mintCustomerSessionCookie(page, fixture.email);
+        await gotoCartStorefront(page, '/');
+        await ensureApi(page);
 
-        const customerCart = await runResourceApi(page, 'cart', 'getCart', scope);
-        expect(isSuccess(customerCart), `getCart customer 失败：${JSON.stringify(customerCart)}`).toBeTruthy();
-        const customerData = pickData(customerCart);
-        expect(
-          Number(customerData.item_count || 0),
-          `自动合车结果错误；第二次登录响应：${JSON.stringify(login)}；客户车：${JSON.stringify(customerData)}`,
-        ).toBe(fixture.expected_merged_qty);
-        expect(Number(customerData.distinct_count || 0)).toBe(1);
-        expect(String(customerData.owner_id || '')).toBe(String(fixture.customer_id));
-
-        // 显式调用仍必须以当前登录身份执行；若 login_after 已合车则保持幂等结果。
+        // Minted session skips login_after Observer — mergeGuest is the durable acceptance path.
         const merged = await runResourceApi(page, 'cart', 'mergeGuest', {
           ...scope,
           guest_token: guestToken,
@@ -215,12 +223,19 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
           Number(mergedData.item_count || 0),
           `合车后 item_count 须为库存上限 ${fixture.expected_merged_qty}，实际 ${JSON.stringify(mergedData)}`,
         ).toBe(fixture.expected_merged_qty);
+        expect(Number(mergedData.distinct_count || 0)).toBe(1);
         expect(String(mergedData.owner_id || '')).toBe(String(fixture.customer_id));
+
+        const customerCart = await runResourceApi(page, 'cart', 'getCart', scope);
+        expect(isSuccess(customerCart), `getCart customer 失败：${JSON.stringify(customerCart)}`).toBeTruthy();
+        const customerData = pickData(customerCart);
+        expect(Number(customerData.item_count || 0)).toBe(fixture.expected_merged_qty);
+        expect(String(customerData.owner_id || '')).toBe(String(fixture.customer_id));
 
         const guestContext = await browser.newContext({ ignoreHTTPSErrors: true });
         try {
           const guestPage = await guestContext.newPage();
-          await gotoFrontend(guestPage, '/', { timeout: 60000, settleMs: 500, ...DIRECT });
+          await gotoCartStorefront(guestPage, '/');
           await ensureApi(guestPage);
           const guestCart = await runResourceApi(guestPage, 'cart', 'getCart', {
             ...scope,

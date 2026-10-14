@@ -81,7 +81,8 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
             if (RequiredDefaultInjectionContract::isUninstalled($omissions, $slotId, $module, $code)) {
                 continue;
             }
-            if (RequiredDefaultInjectionContract::pageHasWidgetPresent($html, $module, $code)) {
+            // Per declared slot — mini-cart coupon must not suppress checkout/cart summary slots.
+            if (RequiredDefaultInjectionContract::slotHasWidgetPresent($html, $slotId, $module, $code)) {
                 continue;
             }
             if (!$this->htmlMentionsSlot($html, $slotId)

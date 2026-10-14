@@ -660,6 +660,13 @@
             workerUrl: withDevCacheBust(sameOriginUrl(apiConfig.queryWorkerUrl || apiConfig.workerUrl || defaultQueryWorkerUrl())),
             deployVersion: String(apiConfig.deployVersion || apiConfig.deploy_version || runtimeConfig.deployVersion || runtimeConfig.deploy_version || 'dev'),
             workerBuildId: String(apiConfig.workerBuildId || apiConfig.worker_build_id || runtimeConfig.workerBuildId || runtimeConfig.worker_build_id || 'dev'),
+            themePublishedVersionId: String(
+                apiConfig.themePublishedVersionId
+                || apiConfig.theme_published_version_id
+                || runtimeConfig.themePublishedVersionId
+                || runtimeConfig.theme_published_version_id
+                || ''
+            ),
             locale: normalizeLocale(resolveCurrentLanguage(
                 apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || ''
             )),
@@ -1711,6 +1718,7 @@
                         endpoint: config.endpoint,
                         deployVersion: config.deployVersion,
                         workerBuildId: config.workerBuildId,
+                        themePublishedVersionId: config.themePublishedVersionId || '',
                         locale: config.locale,
                         pathname: config.pathname || (window.location && window.location.pathname) || '/',
                         currency: config.currency,

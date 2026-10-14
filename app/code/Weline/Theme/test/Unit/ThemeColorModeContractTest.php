@@ -276,8 +276,8 @@ final class ThemeColorModeContractTest extends TestCase
             self::assertDoesNotMatchRegularExpression('/<script(?:\s[^>]*)?>\s*\(function/s', $frontend);
             self::assertStringNotContainsString('assets/js/theme.js', $frontend);
             self::assertStringContainsString('Weline_Theme::theme/frontend/assets/css/theme.css', $frontend);
-            // Runtime STOREFRONT pack may join theme.css + toast; source files stay independent.
-            self::assertStringContainsString('storefront-shopper-toast-amazon.css', $frontend);
+            // Style leaves are not hard-wired in theme head; layout pack still wired.
+            self::assertStringNotContainsString('storefront-shopper-toast-amazon.css', $frontend);
             self::assertStringContainsString('PACK_STOREFRONT', $frontend);
             $themeCssPos = strpos($frontend, 'assets/css/theme.css');
             self::assertNotFalse($themeCssPos);

@@ -34,6 +34,31 @@ final class BinQueryCachePolicyContractTest extends TestCase
         self::assertSame('public, max-age=604800, s-maxage=604800', $headers['Cache-Control']);
         self::assertSame('cdn', $headers['X-Weline-BinQuery-Cache']);
         self::assertSame($marker, $headers['X-Weline-BinQuery-Cache-Marker']);
+        self::assertArrayNotHasKey('Cache-Tag', $headers);
+    }
+
+    public function testCacheTagsEmitCacheTagAndSurrogateKeyHeaders(): void
+    {
+        $policy = new BinQueryCachePolicy();
+        $operation = [
+            'name' => 'getLanguageSwitcherCatalog',
+            'external' => true,
+            'mode' => 'read',
+            'cache' => [
+                'cdn' => true,
+                'ttl' => '1h',
+                'visibility' => 'public',
+                'key_params' => ['website_id'],
+                'vary' => ['area', 'locale'],
+                'tags' => ['binquery-i18n-getLanguageSwitcherCatalog'],
+            ],
+        ];
+        $marker = $policy->buildMarker('frontend', 'i18n', 'getLanguageSwitcherCatalog', [
+            'website_id' => 1,
+        ], $operation);
+        $headers = $policy->cacheHeaders($operation, $marker);
+        self::assertSame('binquery-i18n-getLanguageSwitcherCatalog', $headers['Cache-Tag'] ?? null);
+        self::assertSame('binquery-i18n-getLanguageSwitcherCatalog', $headers['Surrogate-Key'] ?? null);
     }
 
     public function testMissingExternalOrCdnFalseIsNotCacheable(): void

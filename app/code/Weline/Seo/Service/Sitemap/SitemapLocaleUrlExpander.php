@@ -212,7 +212,7 @@ final class SitemapLocaleUrlExpander
             $resolved[$normalized] = $normalized;
         }
 
-        // getWebsiteLanguageCodes() already puts website.default_language first.
+        // Association order (sort_order). Default locale is website.default_language.
         $ordered = [];
         foreach ($codes as $code) {
             $normalized = $this->filterToActiveLocale((string)$code, $activeMap);

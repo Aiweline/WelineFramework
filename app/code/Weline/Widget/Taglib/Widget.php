@@ -570,6 +570,7 @@ class Widget implements TaglibInterface
             . ' data-widget-code="%s"'
             . ' data-widget-name="%s"'
             . ' data-widget-module="%s"'
+            . ' data-widget-source="template_inline"'
             . ' data-config=\'%s\''
             . ' data-widget-params=\'%s\'>%s</div>',
             htmlspecialchars($templateRef, ENT_QUOTES, 'UTF-8'),

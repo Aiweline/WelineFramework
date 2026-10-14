@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\I18n\Test\Unit\Taglib;
 
 use PHPUnit\Framework\TestCase;
+use Weline\I18n\Service\LocaleDisplayRankService;
 use Weline\I18n\Taglib\LanguageSelect;
 use Weline\I18n\Taglib\LanguageSwitcher;
 
@@ -63,6 +64,31 @@ final class LanguageInjectLocalesContractTest extends TestCase
             ['bn_IN', 'as_IN', 'zh_Hans_CN', 'ru_RU'],
             $order,
             'current Indian country group must sort before China/Russia; got: ' . \implode(',', $order)
+        );
+    }
+
+    public function testLanguageSwitcherGroupsFollowDisplayRankThenPinCurrent(): void
+    {
+        // Simulate HotCache bag already ranked; current zh keeps CN first, rest follow market heat.
+        $ranked = LocaleDisplayRankService::sortLanguageMap([
+            'bg_BG' => ['code' => 'bg_BG', 'country_code' => 'BG', 'country_name' => 'Bulgaria'],
+            'ar_SA' => ['code' => 'ar_SA', 'country_code' => 'SA', 'country_name' => 'Saudi Arabia'],
+            'en_US' => ['code' => 'en_US', 'country_code' => 'US', 'country_name' => 'United States'],
+            'zh_Hans_CN' => ['code' => 'zh_Hans_CN', 'country_code' => 'CN', 'country_name' => 'China'],
+        ]);
+        $method = new \ReflectionMethod(LanguageSwitcher::class, 'groupLanguagesByCountry');
+        $method->setAccessible(true);
+        /** @var list<array{country_code:string,country_name:string,languages:array<string,array<string,mixed>>}> $groups */
+        $groups = $method->invoke(null, $ranked, 'zh_Hans_CN', 'zh_Hans_CN');
+
+        $countryOrder = [];
+        foreach ($groups as $group) {
+            $countryOrder[] = (string)($group['country_code'] ?? '');
+        }
+        self::assertSame(
+            ['CN', 'US', 'SA', 'BG'],
+            $countryOrder,
+            'current CN pinned, then US/SA before BG; got: ' . \implode(',', $countryOrder)
         );
     }
 

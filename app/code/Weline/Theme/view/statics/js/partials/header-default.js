@@ -78,9 +78,9 @@
                 setSearchOpen(!header.classList.contains('is-search-open'), true);
             });
 
+            /* Floating icon search (desktop SoT / DaoCharms): close on outside click at any width. */
             document.addEventListener('click', function(event) {
-                if (window.innerWidth <= 1280
-                    && header.classList.contains('is-search-open')
+                if (header.classList.contains('is-search-open')
                     && !searchPanel.contains(event.target)
                     && !searchToggle.contains(event.target)
                 ) {
@@ -95,8 +95,9 @@
                 }
             });
 
+            /* Only collapse when the toggle itself is hidden (breakpoint), not merely wide viewports. */
             window.addEventListener('resize', function() {
-                if (window.innerWidth > 1280) {
+                if (!searchToggleVisible()) {
                     setSearchOpen(false, false);
                 }
             });

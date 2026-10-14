@@ -2688,7 +2688,7 @@
             return;
         }
         drawerCssReady = true;
-        var cssStamp = '20261010-minicart-paper-ink-v24';
+        var cssStamp = '20261014-extras-tabs-unify-v4';
         var assetVersion = '';
         try {
             var cfgNode = document.getElementById('weline-frontend-runtime-config');

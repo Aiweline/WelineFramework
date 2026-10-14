@@ -62,6 +62,11 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
         'dictionary-module-catalog-stats' => 'Weline_I18n::i18n_dictionaries',
         'dictionary-module-translate' => 'Weline_I18n::i18n_dictionaries',
         'dictionary-module-export-csv' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-inline-edit-start' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-inline-edit-stop' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-entry-ai-translate-stream' => 'Weline_I18n::i18n_ai_translation',
+        'dictionary-entry-ai-translate-others-stream' => 'Weline_I18n::i18n_ai_translation',
+        'dictionary-entry-ai-save-others' => 'Weline_I18n::i18n_ai_translation',
         'ai-save' => 'Weline_I18n::i18n_ai_translation',
         'ai-enqueue' => 'Weline_I18n::i18n_ai_translation',
         'ai-enqueue-all' => 'Weline_I18n::i18n_ai_translation',
@@ -248,6 +253,7 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             'dictionary-add',
             'dictionary-edit',
             'dictionary-quick-save',
+            'dictionary-entry-ai-save-others',
         ], true);
     }
 
@@ -368,11 +374,25 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             'dictionary-module-catalog-stats' => ['getModuleCatalogStats', 'GET', null],
             'dictionary-module-translate' => ['postModuleTranslate', 'POST', null],
             'dictionary-module-export-csv' => ['postModuleExportCsv', 'POST', null],
+            'dictionary-entry-ai-translate-stream' => ['postEntryAiTranslateStream', 'POST', null],
+            'dictionary-entry-ai-translate-others-stream' => ['postEntryAiTranslateOthersStream', 'POST', null],
+            'dictionary-entry-ai-save-others' => ['postEntryAiSaveOthers', 'POST', null],
         ];
         if (isset($dictionaryActions[$action])) {
             return [
                 \Weline\I18n\Controller\Backend\Dictionary::class,
                 ...$dictionaryActions[$action],
+            ];
+        }
+
+        $inlineEditActions = [
+            'dictionary-inline-edit-start' => ['postStart', 'POST', null],
+            'dictionary-inline-edit-stop' => ['postStop', 'POST', null],
+        ];
+        if (isset($inlineEditActions[$action])) {
+            return [
+                \Weline\I18n\Controller\Backend\InlineEdit::class,
+                ...$inlineEditActions[$action],
             ];
         }
 

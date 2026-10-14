@@ -119,6 +119,7 @@ final class ThemeLayoutEntityWidgetRenderer
             'share' => $share,
         ];
         $html = ResolvedLayoutSlots::with($slots, fn(): string => $this->componentRenderer->renderResolved($definition, $config, $theme, $context));
+        $source = \trim((string)($entry['source'] ?? $config['_source'] ?? $config['source'] ?? ''));
         $attributes = [
             'data-node-uid' => $uid,
             'data-widget-code' => $code,
@@ -130,6 +131,7 @@ final class ThemeLayoutEntityWidgetRenderer
             'data-layout-scope' => (string)($entry['scope'] ?? $identity?->canonicalScope ?? ''),
             'data-target-type' => (string)($entry['target_type'] ?? 'global'),
             'data-target-id' => (string)($entry['target_id'] ?? ''),
+            'data-widget-source' => $source,
         ];
         $attrs = '';
         foreach ($attributes as $name => $value) {

@@ -23,6 +23,7 @@ const {
   NOTE_TEXT,
   prepareCustomerOnB2bStore,
   prepareWholesaleOnB2bStore,
+  restoreStorefrontOrigin,
   addToCartMode,
   openCheckout,
   ensureCheckoutAddress,
@@ -71,6 +72,11 @@ function defaultPdp(prepared) {
 
 moduleDescribe(test, MODULE, 'B2B测试店购物结账通路', () => {
   test.setTimeout(420000);
+
+  // B2B pushes Scope stack; pop so later suite files stay on default storefront.
+  test.afterAll(() => {
+    restoreStorefrontOrigin();
+  });
 
   moduleCase(
     test,

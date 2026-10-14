@@ -86,6 +86,16 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
         self::assertStringContainsString('boot.payment_methods', $template);
         self::assertStringContainsString('boot.shipping_methods', $template);
         self::assertStringContainsString('data-incentive-savings-minor', $template);
+        // 默认支付激励：SSR 灌 incentive_text；部件异步时 fallback / 再 paint。
+        self::assertStringContainsString('checkout_ssr_incentive_text', $template);
+        self::assertStringContainsString("'incentive_text'", $template);
+        self::assertStringContainsString('paintPaymentMoneyRowsFallback', $template);
+        self::assertStringContainsString('renderTotalsWhenMoneySummaryReady', $template);
+        // Prefer checkout aside money summary — do not paint chrome/drawer host first.
+        self::assertStringContainsString(
+            '[data-testid="checkout-money-summary"] [data-money-summary]',
+            $template
+        );
     }
 
     public function testStorefrontSsrPayloadIncludesPaymentMethodsForSkipHydrate(): void
@@ -95,11 +105,13 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
         );
         self::assertStringContainsString("'payment_methods' => \$paymentMethods", $src);
         self::assertStringContainsString("'shipping_methods' => \$shippingMethods", $src);
-        self::assertStringContainsString('function defaultPaymentMoneyDelta', $src);
-        self::assertStringContainsString('incentive_savings_minor', $src);
-        self::assertStringContainsString('array_merge($cart', $src);
+        self::assertStringContainsString('StorefrontMoneyTotalsBuilder', $src);
+        self::assertStringContainsString('finalizeWithMoneyTotals', $src);
+        self::assertStringContainsString('mergeIntoPayload', $src);
         self::assertStringContainsString('applyMoneySummaryPolicy', $src);
         self::assertStringContainsString('StorefrontMoneySummaryPolicyInterface', $src);
+        self::assertStringNotContainsString('function defaultPaymentMoneyDelta', $src);
+        self::assertStringNotContainsString('function defaultPaymentMoneyTexts', $src);
         self::assertStringContainsString("'cart_type' => \$mode", $src);
         self::assertStringNotContainsString("'cart' => \$cart + [", $src);
 
@@ -107,6 +119,8 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
             $controller = (string)file_get_contents(dirname(__DIR__, 3) . '/Controller' . $rel);
             self::assertStringContainsString('checkout_ssr_payment_methods', $controller, $rel);
             self::assertStringContainsString('checkout_ssr_shipping_methods', $controller, $rel);
+            self::assertStringContainsString('checkout_ssr_incentive_text', $controller, $rel);
+            self::assertStringContainsString('checkout_ssr_cod_fee_text', $controller, $rel);
         }
     }
 

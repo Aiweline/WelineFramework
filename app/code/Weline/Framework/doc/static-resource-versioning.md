@@ -173,7 +173,7 @@
 | FPC fingerprint ns | `global/storefront/deploy` | 进 `StorefrontCacheKeyContextResolver`；与 `theme_static_version`、mtime `assetVersion` 职责分离 |
 | 失效 helper | `DeployFpcInvalidation` | Mode\Set prod：bump + purge_fpc_all；**正式 Release：零碰 FPC**（仅可观测 stamp）；日常 Upgrade：优先 bump，空跑勿 thrash 全清 |
 | 主题静态戳 | `theme_static_versions` map | 键=`versionOwnerScope\|themeId\|themeVersionId`；运营发布只 bump 该版；旧全局 `theme_static_version` 仅无上下文回退 |
-| 浏览器 HTML | FPC HIT `Cache-Control` | 短 `max-age` + **`must-revalidate`**；系统戳响应头 `X-Weline-Deploy-Version` 仅观测/静态破缓；**店面世代权威** = Scope 已发布 `themePublishedVersionId`（ScopeBootstrap / QueryBin）；旧页主题发布身份不一致 → Frontend `deploy_reload_required` 自动 reload |
+| 浏览器 HTML | FPC HIT `Cache-Control` | 短 `max-age` + **`must-revalidate`**；系统戳响应头 `X-Weline-Deploy-Version` 仅观测/静态破缓；**店面世代权威** = Scope 已发布 `themePublishedVersionId`；框架 `StorefrontGenerationOutbound` 种可读 Cookie `weline_storefront_gen` + `Vary: Cookie`（共享 FPC suppress 仍禁 HIT Set-Cookie）；CDN Cache-Key 须含该 Cookie 名；旧页不一致 → `weline.js` **提示刷新**（非默默硬刷） |
 | 事件场 `prod_after.deploy_version` | Deploy 模块 `register.php` 版本 | **≠** stamp；供 Visitor 等旁路，不作店面呈现权威 |
 
 **开发者维护店面世代 / 前端工作流（必读）**：[`../../Frontend/doc/架构/店面世代与前端工作流.md`](../../Frontend/doc/架构/店面世代与前端工作流.md)（含总图、维护场景表、回归最小集）。系统发版与主题发布必须分轴，禁止把 `deploy_version` 再接回店面 reload。

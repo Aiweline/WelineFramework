@@ -27,6 +27,7 @@
 - 注入收集后：`rebakeAfterInjectionCollect` 刷新涉及布局（全主题）。
 - 请求期：选择派生或原始模板，再经 **Taglib 编译** 得到 `com_*`；正常命中不从数据库重播种部件位置，禁止 Overlay 替代固化。指纹/必装过期时走 `ThemeLayoutEntityRequestSolidifyGate`：**异步队列重固** + 期间回落原模板（同 serial_key 串行；异 layout Fiber 并发）。
 - XOR：拥有模块自选 `placement=injection` + 空槽，或 `placement=layout` 内嵌；Theme 不得代持外模块主内容 required 注入。
+- **同页多位置（硬 · 2026-10-14）**：同一 `widget_code` **允许**注入同页多个**已声明**槽（例：迷你车 `footer-extras` + 结账 `checkout-summary-discount`）。Required fill / heal 用 `slotHasWidgetPresent`（按槽），**禁止**用 `pageHasWidgetPresent` 整页 once 跳过第二槽。同槽内仍禁止双份。锚点：`RequiredDefaultInjectionContract::merge` / `slotHasWidgetPresent` · `RequiredDefaultInjectionRuntimeSafetyNet`。
 
 ## UC
 

@@ -173,9 +173,9 @@ final class ConstantFoldingPass implements CompilePassInterface
      */
     private function tryFoldConstants(TagNode $node, array $children): ?Node
     {
-        // 处理 lang/trans 标签的静态翻译
+        // lang/trans：禁止常量折叠为烤死译文（点译会话 + 多语种须运行期 __() / InlinePhraseMarker）
         if ($node->name === 'lang' || $node->name === 'trans') {
-            return $this->tryFoldLangTag($node, $children);
+            return null;
         }
 
         return null;

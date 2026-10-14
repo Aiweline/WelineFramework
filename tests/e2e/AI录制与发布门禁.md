@@ -27,7 +27,9 @@ php bin/w e2e:run --suite=commerce-release --project=chromium
 
 清单：[`manifests/commerce-release-gate.v1.json`](manifests/commerce-release-gate.v1.json)。  
 增删通路：改该 JSON，并保持磁盘上有对应 `.spec.js`（缺文件 fail-closed）。  
-Sandbox 密钥缺失 → 该条 FAIL，不得 skip 冒充绿。
+`commerce-release` 用可控支付驱动（`FORCE_PAYMENT_METHOD=fake_card`）验收账户生命周期——**不**依赖 PayPal「Getting your wallet」。  
+真沙盒专项（可选）：`php bin/w e2e:run --suite=commerce-paypal-sandbox`（清单 [`manifests/commerce-paypal-sandbox-gate.v1.json`](manifests/commerce-paypal-sandbox-gate.v1.json)；钱包挂起 ≤45s fail-fast）。第三方不可控 ≠ 全量购物门禁。  
+必填密钥缺失 → 该条 FAIL，不得 skip 冒充绿。
 
 已录制多范围示例（Checkout）：`app/code/Weline/Checkout/test/e2e/frontend/commerce-multi-scope-checkout-pathways.spec.js`  
 覆盖匿名 / 登录 / 批发（tob）结账 + DEMO10 优惠券 + 订单留言 + 提交下单；清单 id `CR-MULTI-SCOPE-CHECKOUT`。  

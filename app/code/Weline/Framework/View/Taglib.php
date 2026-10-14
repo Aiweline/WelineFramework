@@ -411,7 +411,19 @@ class Taglib
                 continue;
             }
 
-            // @lang/@trans/@url 族编译期烘焙：PHP 语境必须用 var_export，避免撇号等打断单引号字面量（ParseError → 500）
+            $normalizedInline = \strtolower(\ltrim((string)$name, 'w:'));
+            if (($normalizedInline === 'lang' || $normalizedInline === 'trans')
+                && !$this->isOffsetInsidePhp($content, $pos)
+            ) {
+                [$pos, $raw, $replacement] = $this->adjustLangInlineAttributeContext(
+                    $content,
+                    $pos,
+                    (string)$raw,
+                    (string)$replacement
+                );
+            }
+
+            // @lang/@trans/@url 族：PHP 语境须 var_export 安全
             [$pos, $raw, $replacement] = $this->adjustBakedStaticInlineReplacement(
                 $content,
                 $pos,
@@ -431,12 +443,53 @@ class Taglib
     }
 
     /**
+     * title="@lang(词)" → attribute emit(true), consuming surrounding quotes.
+     * Consume surrounding HTML attribute quotes and force attribute marker mode.
+     *
+     * @return array{0:int,1:string,2:string}
+     */
+    private function adjustLangInlineAttributeContext(
+        string $content,
+        int $pos,
+        string $raw,
+        string $replacement
+    ): array {
+        $rawLen = \strlen($raw);
+        $before = $pos > 0 ? $content[$pos - 1] : '';
+        $afterPos = $pos + $rawLen;
+        $after = $afterPos < \strlen($content) ? $content[$afterPos] : '';
+        if (!(($before === '"' && $after === '"') || ($before === "'" && $after === "'"))) {
+            return [$pos, $raw, $replacement];
+        }
+        // Switch emit(..., false) → emit(..., true) when present.
+        $replacement = \preg_replace(
+            '/InlinePhraseMarker::emit\((.+),\s*false\)/',
+            'InlinePhraseMarker::emit($1, true)',
+            $replacement,
+            1
+        ) ?? $replacement;
+        // Bare short-echo __() → attribute emit when I18n marker unavailable.
+        $open = self::PHP_OPEN_TAG;
+        $close = self::PHP_CLOSE_TAG;
+        if (!\str_contains($replacement, 'InlinePhraseMarker::emit')
+            && \preg_match('/^' . \preg_quote($open, '/') . '=__\((.+)\)' . \preg_quote($close, '/') . '$/s', \trim($replacement), $m)
+        ) {
+            $replacement = $open
+                . '=\\Weline\\I18n\\Service\\InlineEdit\\InlinePhraseMarker::emit('
+                . $m[1] . ', true)'
+                . $close;
+        }
+
+        return [$pos - 1, $before . $raw . $after, $replacement];
+    }
+
+    /**
      * Keep compile-time baked lang/trans/url-family text PHP-parse-safe.
      *
      * HTML context keeps the raw bake (apostrophes are fine in markup).
-     * Inside <?php / <?= ... ?>, emit var_export(); if the token is wrapped as
+     * Inside PHP echo context, emit var_export(); if the token is wrapped as
      * '@lang(...)' / "@url{...}", consume the surrounding quotes so we do not
-     * produce ''...'...''.
+     * produce nested quote collisions.
      *
      * @return array{0:int,1:string,2:string} [replacePos, replaceRaw, replacement]
      */
@@ -2601,11 +2654,25 @@ class Taglib
                         return "<link{$filteredAttrs} href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($path))}' rel=\"stylesheet\" type=\"text/css\"/>";
                     }
             ],
-            // 编译期标签：静态内容直接返回译文等最终文本，不返回 PHP 代码（见 code-generation-standards 技能）
+            // lang/trans：一律运行期输出（点译会话可包标记；禁止编译期烤死单语译文）
             'lang' => [
                 'tag' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
+                        $emit = static function (string $word, bool $forAttribute = false): string {
+                            $word = \trim($word);
+                            $exported = \var_export($word, true);
+                            $flag = $forAttribute ? 'true' : 'false';
+                            if (\class_exists(\Weline\I18n\Service\InlineEdit\InlinePhraseMarker::class)) {
+                                return self::PHP_OPEN_TAG
+                                    . '=\\Weline\\I18n\\Service\\InlineEdit\\InlinePhraseMarker::emit('
+                                    . $exported . ', ' . $flag . ')'
+                                    . self::PHP_CLOSE_TAG;
+                            }
+
+                            return self::PHP_OPEN_TAG . '=__(' . $exported . ')' . self::PHP_CLOSE_TAG;
+                        };
+
                         if ($tag_key === '@tag()' || $tag_key === '@tag{}') {
                             $content = trim($tag_data[1] ?? '');
                             $word = $content;
@@ -2613,16 +2680,13 @@ class Taglib
                             if (preg_match('/^([^,]+?)\s*,\s*(.+)$/', $content, $matches)) {
                                 $word = trim($matches[1]);
                                 $word = trim($word, '\'"');
-                                // 有逗号：运行期带参数翻译，返回 PHP
                                 return self::PHP_OPEN_TAG . '=__(\'' . addslashes($word) . '\', ' . trim($matches[2]) . ')' . self::PHP_CLOSE_TAG;
                             }
 
                             $word = trim($content);
-                            // 引号包裹的字符串：编译期翻译，直接返回译文（不输出 PHP）
                             if (preg_match('/^([\'"])(.*)\1$/', $word, $matches)) {
-                                return (string) __($matches[2]);
+                                return $emit($matches[2], false);
                             }
-                            // PHP 变量或表达式：运行期执行，返回 PHP
                             $isPhpExpression = preg_match('/^\$/', $word)
                                 || strpos($word, '->') !== false
                                 || strpos($word, '::') !== false
@@ -2630,8 +2694,7 @@ class Taglib
                             if ($isPhpExpression) {
                                 return self::PHP_OPEN_TAG . '=__(' . $content . ')' . self::PHP_CLOSE_TAG;
                             }
-                            // 普通文本：编译期翻译，直接返回译文（不输出 PHP）
-                            return (string) __($word);
+                            return $emit($word, false);
                         }
 
                         $word = match ($tag_key) {
@@ -2642,8 +2705,7 @@ class Taglib
                         if (isset($attributes['args']) && !empty($attributes['args'])) {
                             return self::PHP_OPEN_TAG . '=__(\'' . addslashes($word) . '\', ' . $attributes['args'] . ')' . self::PHP_CLOSE_TAG;
                         }
-                        // 无 args：编译期翻译，直接返回译文（不输出 PHP）
-                        return (string) __($word);
+                        return $emit($word, false);
                     }
             ],
             'url' => [

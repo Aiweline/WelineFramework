@@ -180,9 +180,70 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         ));
     }
 
+    public function testSlotHasWidgetPresentIgnoresSiblingSlots(): void
+    {
+        $html = <<<'HTML'
+<div data-slot-id="footer-extras">
+  <div class="w-marketing-checkout-coupon" data-testid="checkout-coupon" data-widget-code="checkout-coupon"></div>
+</div>
+<div data-slot-id="checkout-summary-discount" class="theme-published-slot"> </div>
+HTML;
+        self::assertTrue(RequiredDefaultInjectionContract::slotHasWidgetPresent(
+            $html,
+            'footer-extras',
+            'Weline_Marketing',
+            'checkout-coupon',
+        ));
+        self::assertFalse(RequiredDefaultInjectionContract::slotHasWidgetPresent(
+            $html,
+            'checkout-summary-discount',
+            'Weline_Marketing',
+            'checkout-coupon',
+        ));
+        self::assertTrue(RequiredDefaultInjectionContract::pageHasWidgetPresent(
+            $html,
+            'Weline_Marketing',
+            'checkout-coupon',
+        ));
+    }
 
+    public function testMergeKeepsSameIdentityOnMultipleDeclaredSlots(): void
+    {
+        $declaration = [
+            'module' => 'Weline_Marketing',
+            'type' => 'content',
+            'code' => 'checkout-coupon',
+            'default_injections' => [
+                [
+                    'layout_type' => 'checkout',
+                    'slot' => 'footer-extras',
+                    'required' => true,
+                    'sort_order' => 10,
+                ],
+                [
+                    'layout_type' => 'checkout',
+                    'slot' => 'checkout-summary-discount',
+                    'required' => true,
+                    'sort_order' => 20,
+                ],
+            ],
+        ];
+        $slots = [
+            'footer-extras' => [[
+                'node_uid' => 'mini-cart-coupon',
+                'widget_module' => 'Weline_Marketing',
+                'widget_code' => 'checkout-coupon',
+                'slot_id' => 'footer-extras',
+            ]],
+        ];
 
+        $merged = RequiredDefaultInjectionContract::merge($slots, 'checkout', [$declaration], []);
 
+        self::assertCount(1, $merged['footer-extras'] ?? []);
+        self::assertSame('mini-cart-coupon', $merged['footer-extras'][0]['node_uid'] ?? '');
+        self::assertCount(1, $merged['checkout-summary-discount'] ?? []);
+        self::assertSame('checkout-coupon', $merged['checkout-summary-discount'][0]['widget_code'] ?? '');
+    }
 
     /**
      * 同部件 XOR：卸载仍走版本化 user_deleted；未填店面软跳过（见 Overlay soft-skip）。

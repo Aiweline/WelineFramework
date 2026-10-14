@@ -21,7 +21,8 @@ class WlsErrorScanner implements CronTaskInterface
 
     public function execute_name(): string
     {
-        return __('WLS错误扫描');
+        // 进程/日志身份键：禁止 __()，否则语种切换会导致 collect 撞 UNIQUE_TASK_NAME
+        return 'WLS错误扫描';
     }
 
     public function tip(): string

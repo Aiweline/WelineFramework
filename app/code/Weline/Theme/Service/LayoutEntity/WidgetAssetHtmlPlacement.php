@@ -71,12 +71,18 @@ final class WidgetAssetHtmlPlacement
             $ordered = $optimizer->transform($ordered, $options);
         }
         $assets = $ordered;
+        $layoutHead = [];
         $groups = ['head' => [], 'footer' => [], 'body' => []];
-        // Stable partition puts layout resources ahead of normal head resources.
-        foreach (['layout', 'source'] as $kind) {
-            foreach ($assets as $asset) {
-                if ($asset['kind'] === $kind) { $groups[$asset['position']][] = $asset['tag']; }
+        // Layout CSS → after theme/disk/overlay; source → near </head> (other CSS last).
+        foreach ($assets as $asset) {
+            if (($asset['kind'] ?? '') === 'layout' && ($asset['position'] ?? '') === 'head') {
+                $layoutHead[] = $asset['tag'];
+                continue;
             }
+            $groups[$asset['position']][] = $asset['tag'];
+        }
+        if ($layoutHead !== []) {
+            $html = $this->insertAfterThemeChrome($html, implode("\n", $layoutHead) . "\n");
         }
         if (stripos($html, '</footer>') === false) {
             $groups['body'] = array_merge($groups['footer'], $groups['body']);
@@ -91,5 +97,60 @@ final class WidgetAssetHtmlPlacement
             }
         }
         return $html;
+    }
+
+    /**
+     * Insert big layout pack after theme-head / disk / overlay <link> tags (industry order).
+     *
+     * Only <link> chrome markers count — <script data-weline-theme-head-pack="early|after-css">
+     * must not win the anchor or layout CSS is injected inside the script and never loads.
+     */
+    private function insertAfterThemeChrome(string $html, string $chunk): string
+    {
+        $markers = [
+            'data-weline-theme-overlay=',
+            'data-weline-theme-disk=',
+            'data-weline-theme-head-pack=',
+        ];
+        $bestEnd = null;
+        foreach ($markers as $marker) {
+            $pos = 0;
+            while (($found = stripos($html, $marker, $pos)) !== false) {
+                $tagStart = strrpos(substr($html, 0, $found), '<');
+                if ($tagStart === false) {
+                    break;
+                }
+                // Skip JS packs (early / after-css) that reuse data-weline-theme-head-pack.
+                if (stripos(substr($html, $tagStart, 6), '<link') !== 0) {
+                    $pos = $found + strlen($marker);
+                    continue;
+                }
+                $tagEnd = strpos($html, '>', $found);
+                if ($tagEnd === false) {
+                    break;
+                }
+                $end = $tagEnd + 1;
+                if ($bestEnd === null || $end > $bestEnd) {
+                    $bestEnd = $end;
+                }
+                $pos = $end;
+            }
+        }
+        if ($bestEnd !== null) {
+            return substr_replace($html, "\n" . $chunk, $bestEnd, 0);
+        }
+        $critical = stripos($html, 'data-weline-layout-critical');
+        if ($critical !== false) {
+            $tagEnd = strpos($html, '</style>', $critical);
+            if ($tagEnd !== false) {
+                return substr_replace($html, "\n" . $chunk, $tagEnd + strlen('</style>'), 0);
+            }
+        }
+        $headEnd = stripos($html, '</head>');
+        if ($headEnd !== false) {
+            return substr_replace($html, $chunk, $headEnd, 0);
+        }
+
+        return $html . $chunk;
     }
 }

@@ -5,6 +5,7 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\Localization\CurrencyCatalogInvalidationService;
 use Weline\Websites\Service\WebsiteCacheInvalidationService;
 #[Table(comment: '网站-货币关联表')]
 #[Index(name: 'idx_website_id', columns: ['website_id'], comment: '网站ID索引')]
@@ -24,10 +25,14 @@ class WebsiteCurrency extends Model
     public const schema_fields_WEBSITE_ID = 'website_id';
     #[Col(type: 'varchar', length: 10, nullable: false, comment: '货币代码')]
     public const schema_fields_CURRENCY_CODE = 'currency_code';
+    /** Lower = earlier in website-baseline currency order. */
+    #[Col(type: 'int', nullable: false, default: 0, comment: '网站展示序（越小越靠前）')]
+    public const schema_fields_SORT_ORDER = 'sort_order';
 
     public const fields_ID = 'website_currency_id';
     public const fields_WEBSITE_ID = 'website_id';
     public const fields_CURRENCY_CODE = 'currency_code';
+    public const fields_SORT_ORDER = 'sort_order';
 
     public function setWebsiteCurrencyId(int $id): self
     {
@@ -76,6 +81,8 @@ class WebsiteCurrency extends Model
     {
         $currencies = $this->clearQuery()
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->order(self::schema_fields_SORT_ORDER, 'ASC')
+            ->order(self::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -102,15 +109,18 @@ class WebsiteCurrency extends Model
             ->delete()
             ->fetch();
         
-        // 插入新的关联
+        // 插入新的关联；数组下标 = sort_order
         if (!empty($currencyCodes)) {
             $data = [];
+            $sort = 0;
             foreach ($currencyCodes as $code) {
                 if (!empty($code)) {
                     $data[] = [
                         self::schema_fields_WEBSITE_ID => $websiteId,
                         self::schema_fields_CURRENCY_CODE => $code,
+                        self::schema_fields_SORT_ORDER => $sort,
                     ];
+                    $sort++;
                 }
             }
             if (!empty($data)) {
@@ -120,6 +130,47 @@ class WebsiteCurrency extends Model
         }
 
         $this->invalidateWebsiteCurrency($websiteId);
+
+        return $this;
+    }
+
+    /**
+     * Persist display order only (soft catalog invalidation).
+     *
+     * Membership writes must keep using setWebsiteCurrencies().
+     *
+     * @param list<string>|array<int|string, mixed> $currencyCodes
+     */
+    public function reorderWebsiteCurrencies(int $websiteId, array $currencyCodes): self
+    {
+        $this->clearQuery()
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->delete()
+            ->fetch();
+
+        if (!empty($currencyCodes)) {
+            $data = [];
+            $sort = 0;
+            foreach ($currencyCodes as $code) {
+                $code = \strtoupper(\trim((string)$code));
+                if ($code === '') {
+                    continue;
+                }
+                $data[] = [
+                    self::schema_fields_WEBSITE_ID => $websiteId,
+                    self::schema_fields_CURRENCY_CODE => $code,
+                    self::schema_fields_SORT_ORDER => $sort,
+                ];
+                $sort++;
+            }
+            if (!empty($data)) {
+                $this->clearData(true);
+                $this->insert($data)->fetch();
+            }
+        }
+
+        ObjectManager::getInstance(CurrencyCatalogInvalidationService::class)
+            ->invalidateAfterReorder($websiteId);
 
         return $this;
     }

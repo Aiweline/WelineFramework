@@ -10,7 +10,12 @@ use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Model\ScopeLanguage;
+use Weline\Websites\Model\ScopeLanguageOverride;
+use Weline\Websites\Model\WebsiteCurrency;
+use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Model\Website\LocalDescription as WebsiteLocalDescription;
+use Weline\Websites\Service\Localization\WebsiteLanguageSortSeedService;
 use Weline\Websites\Service\DomainPoolLifecycleService;
 use Weline\Websites\Service\DefaultWebsiteService;
 use Weline\Websites\Service\LegacyThemeApplicationMigration;
@@ -30,11 +35,23 @@ class Upgrade implements UpgradeInterface
     {
         foreach ([
             WebsiteLocalDescription::class,
+            WebsiteLanguage::class,
+            WebsiteCurrency::class,
+            ScopeLanguageOverride::class,
+            ScopeLanguage::class,
         ] as $modelClass) {
             $model = ObjectManager::getInstance($modelClass);
             $runner = ObjectManager::make(ModelSetup::class);
             $runner->putModel($model);
             $model->setup($runner, $context);
+        }
+
+        try {
+            ObjectManager::getInstance(WebsiteLanguageSortSeedService::class)->seedMissingSortOrders();
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[Websites Upgrade] language sort seed skipped: ' . $e->getMessage(), [], 'websites_upgrade');
+            }
         }
 
         /** @var DefaultWebsiteService $defaultWebsiteService */

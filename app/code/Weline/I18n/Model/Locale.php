@@ -43,6 +43,9 @@ class Locale extends Model
     public const schema_fields_IS_INSTALL = 'is_install';
     #[Col('mediumtext', comment: '国旗 SVG')]
     public const schema_fields_FLAG = 'flag';
+    /** Higher = earlier in platform-default switcher order. */
+    #[Col('int', 11, nullable: false, default: 0, comment: '平台默认展示权重（越大越靠前）')]
+    public const schema_fields_DISPLAY_RANK = 'display_rank';
 /**
      * 从locale代码中提取简码、ISO2和ISO3
      * 

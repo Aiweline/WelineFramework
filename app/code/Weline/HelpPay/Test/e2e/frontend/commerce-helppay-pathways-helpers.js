@@ -42,9 +42,10 @@ function assertStep(condition, stepId, detail) {
 }
 
 function storefrontOrigin() {
-  const forced = String(process.env.WELINE_E2E_STOREFRONT_ORIGIN || process.env.WELINE_E2E_BASE_URL || '').trim();
-  if (forced) return forced.replace(/\/$/, '');
-  return 'https://p05113ef3.test.weline.com';
+  const {
+    resolveStorefrontOrigin,
+  } = require('../../../../../../../tests/e2e/framework/storefront-scope-context');
+  return resolveStorefrontOrigin();
 }
 
 function prepareCustomer() {

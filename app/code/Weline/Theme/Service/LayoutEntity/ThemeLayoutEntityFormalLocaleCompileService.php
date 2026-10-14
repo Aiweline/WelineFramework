@@ -16,8 +16,10 @@ use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\Theme\LayoutCriticalCssMaterializer;
 use Weline\Theme\Service\ThemeHeadChromeCssPack;
 use Weline\Theme\Service\ThemeHeadChromeJsPack;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteLanguage;
@@ -31,15 +33,26 @@ use Weline\Widget\Api\WidgetRegistryInterface;
  *
  * Before compile, pins Website/RequestContext from the identity storage scope so
  * literal @url / <url> bake carries the publish-site mount (not default-site).
+ *
+ * After Taglib + theme-head warm, always invalidates storefront chrome/FPC via
+ * {@see ThemeRuntimeCacheCleaner} so CLI / editor / pipeline workers share one path.
  */
 final class ThemeLayoutEntityFormalLocaleCompileService
 {
+    /** @var array<int, true> Process-local debounce for post-warm clearAll. */
+    private static array $postWarmClearedThemeIds = [];
+
+    /** Cross-process coalesce window so pipeline workers do not N× FPC promote. */
+    private const POST_WARM_CLEAR_COALESCE_SECONDS = 20;
+
     public function __construct(
         private readonly ThemeLayoutEntityPaths $paths,
         private readonly TemplateCompileService $compiler,
         private readonly Printing $printing,
         private readonly ThemeHeadChromeCssPack $headCssPack,
         private readonly ThemeHeadChromeJsPack $headJsPack,
+        private readonly LayoutCriticalCssMaterializer $layoutCriticalMaterializer,
+        private readonly ThemeRuntimeCacheCleaner $cacheCleaner,
     ) {
     }
 
@@ -240,6 +253,8 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             }
             // Post-com warm: bake theme-head packs so first request consumes artifacts (not hot-path merge).
             $this->warmPublishedResourcePacks($identity->area, $theme, $themeLabel, $identity->canonicalScope);
+            // Same class owns invalidation: any caller of compileAfterPromote* clears chrome/FPC.
+            $this->clearCachesAfterCompileWarm($theme);
         });
         } finally {
             ThemeData::setCurrentTheme($previousTheme);
@@ -310,6 +325,7 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             ));
         }
         try {
+            $this->layoutCriticalMaterializer->materializeForTheme($theme, $area);
             $this->headCssPack->warmAreaPacks($area);
             $this->headJsPack->warmAreaPacks($area);
             $this->printing->success(sprintf(
@@ -326,6 +342,87 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                 (string)__('资源合包预热失败'),
                 $error->getMessage(),
             ));
+        }
+    }
+
+    /**
+     * Invalidate storefront chrome / templates / FPC after Formal compile+warm.
+     * Entry for every compile caller (theme:upgrade cutover, editor publish, pipeline).
+     * Soft-fails CDN like UpgradeSolidify cutover; never rolls back promoted com_*.
+     */
+    private function clearCachesAfterCompileWarm(WelineTheme $theme): void
+    {
+        $themeId = (int)$theme->getId();
+        if ($themeId < 1) {
+            return;
+        }
+        if (isset(self::$postWarmClearedThemeIds[$themeId])) {
+            return;
+        }
+        if (!$this->acquirePostWarmClearGate($themeId)) {
+            return;
+        }
+        self::$postWarmClearedThemeIds[$themeId] = true;
+        try {
+            $result = $this->cacheCleaner->clearAllThemeRelatedCaches(
+                $themeId,
+                'theme_layout_formal_compile_warm',
+            );
+            foreach ((array)($result['failures'] ?? []) as $step => $message) {
+                $stepKey = (string)$step;
+                $msg = (string)$message;
+                if (str_starts_with($stepKey, 'cdn_') || str_contains($msg, 'cdn_')) {
+                    continue;
+                }
+                $this->printing->warning(
+                    'theme_layout_formal_compile_cache_clear_partial:' . $stepKey . '=' . $msg
+                );
+            }
+            $this->printing->note(sprintf(
+                '%s · 主题=#%d · %s',
+                (string)__('主题布局发布'),
+                $themeId,
+                (string)__('编译后缓存已清理'),
+            ));
+        } catch (\Throwable $error) {
+            $this->printing->warning(
+                'theme_layout_formal_compile_cache_clear_failed:' . $error->getMessage()
+            );
+        }
+    }
+
+    /**
+     * Cross-process coalesce: pipeline compile workers share one clearAll window per theme.
+     */
+    private function acquirePostWarmClearGate(int $themeId): bool
+    {
+        $dir = rtrim((string)BP, '/\\') . '/var/locks/theme-formal-compile-cache-clear';
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return true;
+        }
+        $stampPath = $dir . '/theme-' . $themeId . '.stamp';
+        $lockPath = $dir . '/theme-' . $themeId . '.lock';
+        $handle = @fopen($lockPath, 'c+');
+        if ($handle === false) {
+            return true;
+        }
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                return true;
+            }
+            clearstatcache(true, $stampPath);
+            if (is_file($stampPath)) {
+                $mtime = (int)@filemtime($stampPath);
+                if ($mtime > 0 && (time() - $mtime) < self::POST_WARM_CLEAR_COALESCE_SECONDS) {
+                    return false;
+                }
+            }
+            @file_put_contents($stampPath, (string)time());
+
+            return true;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
         }
     }
 
