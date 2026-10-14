@@ -115,6 +115,70 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
     }
 
     /**
+     * Acceptable storefront generation ids after FPC promote (multi-host / multi-Scope).
+     *
+     * CLI `currentVersionId()` alone is RequestContext-sensitive and can resolve to a
+     * Global owner stamp while live html-disk hosts bake Website/Store stamps — that
+     * false-fails setup:upgrade. Promote assert must accept any sealed published id
+     * reachable from Env theme + frontend-bound themes across storefront scope probes.
+     *
+     * @return array<string, true> map of themePublishedVersionId => true
+     */
+    public function collectAcceptableStorefrontGenerationIds(): array
+    {
+        $ids = [];
+        $current = \trim((string)($this->resolveGenerationIdentity()['themePublishedVersionId'] ?? ''));
+        if ($current !== '') {
+            $ids[$current] = true;
+        }
+
+        $themeIds = [];
+        try {
+            $envTheme = Env::getInstance()->getTheme();
+            $envId = (int)($envTheme['id'] ?? $envTheme['theme_id'] ?? 0);
+            if ($envId > 0) {
+                $themeIds[$envId] = true;
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            if (\class_exists(ThemeApplicationUsageService::class)) {
+                /** @var ThemeApplicationUsageService $usage */
+                $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
+                foreach ($usage->frontendBoundThemeIds() as $boundId) {
+                    if ($boundId > 0) {
+                        $themeIds[$boundId] = true;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        /** @var ThemeScopeVersionService $versions */
+        $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
+        foreach (\array_keys($themeIds) as $themeId) {
+            foreach ($this->themeIdChain((int)$themeId) as $candidateThemeId) {
+                foreach ($this->storefrontScopeProbeList((int)$candidateThemeId) as $scope) {
+                    try {
+                        $published = $versions->getPublished($candidateThemeId, $scope);
+                    } catch (\Throwable) {
+                        continue;
+                    }
+                    if (!$published instanceof ThemeScopeVersion || $published->getVersionId() <= 0) {
+                        continue;
+                    }
+                    if ($published->getLifecycle() !== ThemeScopeVersion::LIFECYCLE_SEALED) {
+                        continue;
+                    }
+                    $ids[(string)$published->getVersionId()] = true;
+                }
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * @return list<string>
      */
     private function scopeCandidates(): array
@@ -144,10 +208,77 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
             // CLI / early bootstrap.
         }
 
-        $push('default.__store__.default');
-        $push('default.__website__.default');
-        $push('default.default.default');
+        foreach ($this->defaultStorefrontScopes() as $scope) {
+            $push($scope);
+        }
 
         return $list;
+    }
+
+    /**
+     * RequestContext-independent scopes to probe for promote stamp acceptance.
+     *
+     * @return list<string>
+     */
+    private function storefrontScopeProbeList(int $themeId): array
+    {
+        $list = [];
+        $seen = [];
+        $push = static function (string $scope) use (&$list, &$seen): void {
+            $scope = \trim($scope);
+            if ($scope === '' || isset($seen[$scope])) {
+                return;
+            }
+            $seen[$scope] = true;
+            $list[] = $scope;
+        };
+
+        foreach ($this->defaultStorefrontScopes() as $scope) {
+            $push($scope);
+        }
+
+        try {
+            if (!\class_exists(ThemeApplicationUsageService::class)) {
+                return $list;
+            }
+            /** @var ThemeApplicationUsageService $usage */
+            $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
+            $bindings = $usage->frontendWebsiteBindingsByThemeId()[$themeId] ?? [];
+            if ($bindings === []) {
+                return $list;
+            }
+            /** @var ScopeHierarchyInterface $scopes */
+            $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+            foreach ($bindings as $binding) {
+                $websiteId = (int)($binding['website_id'] ?? -1);
+                $websiteCode = \strtolower(\trim((string)($binding['website_code'] ?? '')));
+                if ($websiteId < 0 || $websiteCode === '') {
+                    continue;
+                }
+                try {
+                    $push($scopes->toStorageScope(ScopeIdentity::website($websiteId, $websiteCode)));
+                    $push($scopes->toStorageScope(
+                        ScopeIdentity::store($websiteId, $websiteCode, 'default', ScopeIdentity::MODE_NORMAL),
+                    ));
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return $list;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function defaultStorefrontScopes(): array
+    {
+        return [
+            'default.__store__.default',
+            'default.__website__.default',
+            'default.default.default',
+        ];
     }
 }

@@ -160,7 +160,10 @@ final class ThemeScopeVersionService
      * Resolve published chrome version for scope, walking ancestors by trimming
      * the last dotted segment (a.b.c → a.b → a) until found or exhausted.
      *
-     * 每个祖先按「selection 权威优先、legacy 标志回落」解析，保持原有逐级回落语义。
+     * 每个祖先按「selection 权威优先、legacy 标志回落」解析。
+     * sealed selection 在无 is_published 旗标时仍可信（v3 selection-only）；
+     * 若 selection 指向 sealed+未旗标、同 owner 另有 is_published=1 旗标行，则弃旧 selection。
+     * draft 被写成 published 指针时忽略，回落旗标。
      */
     public function getPublished(
         int $themeId,
@@ -176,22 +179,38 @@ final class ThemeScopeVersionService
         foreach ($this->scopeAncestorChain($scope) as $candidate) {
             $selection = $this->loadSelection($themeId, $candidate, $storeMode, $area);
             $publishedId = (int)($selection['published_version_id'] ?? 0);
-            if ($publishedId > 0) {
-                $version = $this->loadVersionById($publishedId, $themeId, $candidate, $storeMode, $area);
-                if ($version instanceof ThemeScopeVersion && $version->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED) {
-                    return $version;
-                }
-            }
-
-            $version = $this->loadFlagged(
+            $flagged = $this->loadFlagged(
                 $themeId,
                 $candidate,
                 ThemeScopeVersion::schema_fields_IS_PUBLISHED,
                 $storeMode,
                 $area,
             );
-            if ($version instanceof ThemeScopeVersion && $version->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED) {
-                return $version;
+            if ($publishedId > 0) {
+                $version = $this->loadVersionById($publishedId, $themeId, $candidate, $storeMode, $area);
+                // Selection is v3 authority for sealed targets (is_published flag may lag).
+                // Draft-as-published pointer is never authoritative — fall through.
+                // When selection points at sealed+unflagged but a flagged sibling exists,
+                // prefer the flagged row (selection drifted after unpublish/republish).
+                if ($version instanceof ThemeScopeVersion
+                    && $version->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED
+                ) {
+                    if ($version->isPublished()) {
+                        return $version;
+                    }
+                    if (!$flagged instanceof ThemeScopeVersion
+                        || $flagged->getLifecycle() !== ThemeScopeVersion::LIFECYCLE_SEALED
+                        || (int)$flagged->getVersionId() === (int)$version->getVersionId()
+                    ) {
+                        // v3 selection-only publish: trust sealed selection when no flagged peer.
+                        return $version;
+                    }
+                    // else: superseded — ignore stale selection, use flagged below
+                }
+            }
+
+            if ($flagged instanceof ThemeScopeVersion && $flagged->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED) {
+                return $flagged;
             }
         }
 

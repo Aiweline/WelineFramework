@@ -92,7 +92,9 @@ final class ThemeRuntimeCacheCleaner
      */
     public function clearAllThemeRelatedCaches(?int $themeId = null, string $reason = 'theme_changed'): array
     {
-        $result = $this->clearNonGlobalCaches($themeId, $reason);
+        // Skip nested staging warm — Shared/process purge below would wipe it.
+        // Atomic closure: purge pointers first, then one final staging→warm→promote.
+        $result = $this->clearNonGlobalCaches($themeId, $reason, false);
         $result['reason'] = $reason;
 
         $this->runStep($result, 'theme_namespace_generations_all', function (): void {
@@ -119,6 +121,10 @@ final class ThemeRuntimeCacheCleaner
         });
         $this->runStep($result, 'cdn_full_page_purge', function (): void {
             $this->purgeCdnFullPageCaches();
+        });
+        // LAST: html-disk staging seed → warm (new themePublishedVersionId) → promote.
+        $this->runStep($result, 'fpc_staging_warm_promote', function () use (&$result): void {
+            $this->rebuildFpcViaStagingWarmPromote($result);
         });
 
         return $result;
@@ -358,10 +364,15 @@ final class ThemeRuntimeCacheCleaner
     }
 
     /**
+     * @param bool $runStagingWarmPromote When false, caller must run rebuildFpcViaStagingWarmPromote
+     *        after Shared/process purge (see clearAllThemeRelatedCaches atomic closure).
      * @return array{reason:string,theme_id:int|null,steps:array<string,bool>,failures:array<string,string>}
      */
-    public function clearNonGlobalCaches(?int $themeId = null, string $reason = 'theme_activation'): array
-    {
+    public function clearNonGlobalCaches(
+        ?int $themeId = null,
+        string $reason = 'theme_activation',
+        bool $runStagingWarmPromote = true,
+    ): array {
         $result = [
             'reason' => $reason,
             'theme_id' => $themeId,
@@ -483,9 +494,11 @@ final class ThemeRuntimeCacheCleaner
             }
         });
 
-        $this->runStep($result, 'fpc_staging_warm_promote', function () use (&$result): void {
-            $this->rebuildFpcViaStagingWarmPromote($result);
-        });
+        if ($runStagingWarmPromote) {
+            $this->runStep($result, 'fpc_staging_warm_promote', function () use (&$result): void {
+                $this->rebuildFpcViaStagingWarmPromote($result);
+            });
+        }
 
         return $result;
     }
@@ -787,6 +800,8 @@ final class ThemeRuntimeCacheCleaner
     /**
      * Theme rebuild: keep live serving old HTML while staging is seeded + warmed,
      * then atomically promote. Warm failure abandons staging (live unchanged).
+     * After promote, sampled html-disk pages must carry current StorefrontGenerationIdentity
+     * (themePublishedVersionId)—not an empty or prior Scope stamp.
      *
      * @param array{steps:array<string,bool>,failures:array<string,string>} $result
      */
@@ -809,7 +824,123 @@ final class ThemeRuntimeCacheCleaner
             throw $e;
         }
         FpcHtmlDiskStore::purgeLegacyHashTrees();
+        $this->assertPromotedHtmlDiskMatchesStorefrontGeneration();
         unset($result);
+    }
+
+    /**
+     * Sample live html-disk index.html themePublishedVersionId ∈ acceptable storefront
+     * published ids (bound themes × storefront scopes + current RequestContext identity).
+     * Soft-fail (log) when no samples / empty acceptable set; hard-fail on unknown stamp.
+     * Do not compare every host sample to CLI `currentVersionId()` alone — Global vs Store
+     * false-positives abort setup:upgrade after a successful promote.
+     */
+    private function assertPromotedHtmlDiskMatchesStorefrontGeneration(): void
+    {
+        if (!\class_exists(\Weline\Frontend\Helper\StorefrontGenerationIdentity::class)) {
+            return;
+        }
+        $acceptable = [];
+        try {
+            if (\class_exists(ThemePublishedVersionRuntimeResolver::class)) {
+                /** @var ThemePublishedVersionRuntimeResolver $resolver */
+                $resolver = ObjectManager::getInstance(ThemePublishedVersionRuntimeResolver::class);
+                $acceptable = $resolver->collectAcceptableStorefrontGenerationIds();
+            }
+        } catch (\Throwable) {
+            $acceptable = [];
+        }
+        if ($acceptable === []) {
+            $fallback = \trim((string)\Weline\Frontend\Helper\StorefrontGenerationIdentity::currentVersionId());
+            if ($fallback !== '') {
+                $acceptable[$fallback] = true;
+            }
+        }
+        if ($acceptable === []) {
+            Env::log('theme_cache_clear', 'html-disk promote: no acceptable storefront generation ids to assert');
+            return;
+        }
+        $liveRoot = BP . 'generated' . \DIRECTORY_SEPARATOR . 'html' . \DIRECTORY_SEPARATOR . 'live';
+        if (!\is_dir($liveRoot)) {
+            return;
+        }
+        $samples = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($liveRoot, \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+                continue;
+            }
+            $name = $file->getFilename();
+            if ($name !== 'index.html' && $name !== 'index.html.br') {
+                continue;
+            }
+            $samples[] = $file->getPathname();
+            if (\count($samples) >= 6) {
+                break;
+            }
+        }
+        if ($samples === []) {
+            Env::log('theme_cache_clear', 'html-disk promote: no index.html samples to assert generation stamp');
+            return;
+        }
+        $acceptableList = \implode(',', \array_keys($acceptable));
+        foreach ($samples as $path) {
+            $html = $this->readHtmlDiskSampleBody($path);
+            if ($html === '') {
+                continue;
+            }
+            if (!\preg_match('/"themePublishedVersionId"\s*:\s*"([^"]*)"/', $html, $m)
+                && !\preg_match('/themePublishedVersionId["\']?\s*[:=]\s*["\']([^"\']+)["\']/', $html, $m)
+            ) {
+                continue;
+            }
+            $baked = \trim((string)($m[1] ?? ''));
+            if ($baked === '') {
+                throw new \RuntimeException(
+                    'html-disk promote left empty themePublishedVersionId in ' . $path
+                    . '; acceptable StorefrontGenerationIds=' . $acceptableList,
+                );
+            }
+            if (!isset($acceptable[$baked])) {
+                // Case-insensitive membership (ids are numeric strings).
+                $hit = false;
+                foreach ($acceptable as $id => $_) {
+                    if (\strcasecmp((string)$id, $baked) === 0) {
+                        $hit = true;
+                        break;
+                    }
+                }
+                if (!$hit) {
+                    throw new \RuntimeException(
+                        'html-disk promote stamp mismatch in ' . $path
+                        . '; baked=' . $baked . ' acceptable=' . $acceptableList,
+                    );
+                }
+            }
+        }
+    }
+
+    private function readHtmlDiskSampleBody(string $path): string
+    {
+        if (\str_ends_with($path, '.br')) {
+            if (\function_exists('brotli_uncompress')) {
+                $raw = (string)@\file_get_contents($path);
+                if ($raw === '') {
+                    return '';
+                }
+                $decoded = @\brotli_uncompress($raw);
+
+                return \is_string($decoded) ? $decoded : '';
+            }
+            $cmd = 'brotli -dc ' . \escapeshellarg($path) . ' 2>/dev/null';
+            $out = (string)@\shell_exec($cmd);
+
+            return $out;
+        }
+
+        return (string)@\file_get_contents($path);
     }
 
     /**

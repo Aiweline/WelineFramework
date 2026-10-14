@@ -22,5 +22,8 @@ final class ThemePublishedVersionRuntimeResolverContractTest extends TestCase
         self::assertMatchesRegularExpression('/Authority is ThemeScopeVersion/', $src);
         self::assertStringContainsString('resolveGenerationIdentity', $src);
         self::assertStringContainsString('not system deploy_version', $src);
+        self::assertStringContainsString('collectAcceptableStorefrontGenerationIds', $src);
+        self::assertStringContainsString('storefrontScopeProbeList', $src);
+        self::assertStringContainsString('ThemeApplicationUsageService', $src);
     }
 }
