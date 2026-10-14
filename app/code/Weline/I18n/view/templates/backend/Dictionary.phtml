@@ -566,6 +566,15 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
 <style>
 #dictionary-entries-body tr.dictionary-entry-row { cursor: pointer; }
 .i18n-dictionary-edit-ai-progress[hidden] { display: none !important; }
+#dictionary-edit-ai-progress-message[data-tone="danger"] {
+    color: var(--backend-color-danger, var(--weline-theme-danger, #b12704));
+    font-weight: 600;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+#dictionary-edit-ai-progress-message[data-tone="success"] {
+    color: var(--backend-color-success, var(--weline-theme-success, #067d62));
+}
 .i18n-dictionary-collect-modal { position: fixed; inset: 0; z-index: 10050; display: none; align-items: center; justify-content: center; }
 .i18n-dictionary-collect-modal.is-open { display: flex; }
 .i18n-dictionary-collect-modal-backdrop { position: absolute; inset: 0; background: var(--backend-color-bg-overlay, rgba(0, 0, 0, 0.5)); }
@@ -900,6 +909,33 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
         if (aiProgressBar && percent != null && !isNaN(Number(percent))) {
             aiProgressBar.style.width = Math.max(0, Math.min(100, Number(percent))) + '%';
         }
+    }
+
+    /** Prefer provider/API diagnostics over generic echo copy; never touch 原文 textarea. */
+    function pickDictionaryAiFailureMessage(data, fallback) {
+        data = data || {};
+        var parts = [];
+        if (data.message) parts.push(String(data.message));
+        if (Array.isArray(data.errors)) {
+            data.errors.forEach(function (err) {
+                if (err) parts.push(String(err));
+            });
+        }
+        var joined = parts.join('\n');
+        var lower = joined.toLowerCase();
+        if (lower.indexOf('insufficient balance') >= 0 || joined.indexOf('余额不足') >= 0) {
+            return '翻译 API 余额不足（Insufficient Balance），请充值 DeepSeek/当前供应商后重试';
+        }
+        if (lower.indexOf('missing api key') >= 0 || (joined.indexOf('缺少') >= 0 && lower.indexOf('api') >= 0)) {
+            return '翻译模型缺少 API 密钥，请到 AI 供应商账户配置后重试';
+        }
+        if (data.message) {
+            return String(data.message);
+        }
+        if (parts.length) {
+            return parts[0];
+        }
+        return fallback || dictionaryMessages.aiTranslateFailed;
     }
 
     function setAiButtonsBusy(busy) {
@@ -1314,8 +1350,9 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
                 onDone: function (data) {
                     data = data || {};
                     if (data.success === false) {
-                        setDictionaryEditAiProgress(data.message || dictionaryMessages.aiTranslateFailed, null, 'danger');
-                        toastAction('error', data.message || dictionaryMessages.aiTranslateFailed);
+                        var failMsg = pickDictionaryAiFailureMessage(data, dictionaryMessages.aiTranslateFailed);
+                        setDictionaryEditAiProgress(failMsg, null, 'danger');
+                        toastAction('error', failMsg);
                         return;
                     }
                     var draftMap = (data.drafts || data.translations || data.items) || {};
@@ -1341,8 +1378,8 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
                         }
                     });
                     if (sourceWord !== '' && echoCount === draftCodes.length) {
-                        // Never reuse the success「草稿已就绪」copy for echo failures.
-                        var echoMsg = dictionaryMessages.aiOthersEchoFailed;
+                        // Prefer provider errors from SSE payload over the generic echo copy.
+                        var echoMsg = pickDictionaryAiFailureMessage(data, dictionaryMessages.aiOthersEchoFailed);
                         setDictionaryEditAiProgress(echoMsg, null, 'danger');
                         toastAction('error', echoMsg);
                         return;
@@ -1396,8 +1433,10 @@ $dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600)
                     });
                 },
                 onFailed: function (data) {
-                    setDictionaryEditAiProgress((data && data.message) || dictionaryMessages.aiTranslateFailed, null, 'danger');
-                    toastAction('error', (data && data.message) || dictionaryMessages.aiTranslateFailed);
+                    var failMsg = pickDictionaryAiFailureMessage(data, dictionaryMessages.aiTranslateFailed);
+                    // Never write failure copy into 原文/译文 — progress + toast only.
+                    setDictionaryEditAiProgress(failMsg, null, 'danger');
+                    toastAction('error', failMsg);
                 }
             });
         });

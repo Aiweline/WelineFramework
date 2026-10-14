@@ -69,7 +69,11 @@ final class DeployReleaseNotifierContractTest extends TestCase
         self::assertStringContainsString('markFailed($releaseId, $error, $outputTail)', $orch);
 
         self::assertStringContainsString('PHASE_QUEUED', $async);
+        self::assertStringContainsString('PHASE_ABANDONED', $async);
         self::assertStringContainsString('PHASE_DRAIN_START', $drain);
         self::assertStringContainsString('PHASE_DRAIN_SKIPPED', $drain);
+
+        $notifier = (string)file_get_contents($base . '/Service/DeployReleaseNotifier.php');
+        self::assertStringContainsString("PHASE_ABANDONED = 'abandoned'", $notifier);
     }
 }

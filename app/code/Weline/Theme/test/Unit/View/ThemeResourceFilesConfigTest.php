@@ -43,7 +43,13 @@ final class ThemeResourceFilesConfigTest extends TestCase
             self::assertSame('int', $field['value-type']);
             self::assertSame('6', $field['default']);
             self::assertSame('min:1', $field['validation']);
+            self::assertStringContainsString('前段合包部件数', (string)$field['label']);
+            self::assertStringContainsString('前 N 个', (string)$field['description']);
+            self::assertStringContainsString('第 N+1', (string)$field['description']);
+            self::assertStringNotContainsString('前 5 个保持独立', (string)$field['description']);
         }
+        self::assertStringContainsString('阻塞合包', (string)$fields['resource_files/css_merge']['description']);
+        self::assertStringContainsString('延迟合包', (string)$fields['resource_files/css_merge']['description']);
     }
 
     public function testDrawerUsesUnifiedScopedEmbedAndExplainsEnvironmentAndAutosave(): void

@@ -7,9 +7,27 @@ namespace Weline\Deploy\Service;
 /**
  * Durable webhook release jobs — survive WLS HTTP worker teardown without sudo/systemd-run.
  * Drain via Cron or `php bin/w deploy:webhook:drain` (CLI process tree, not the request cgroup).
+ *
+ * Incomplete jobs (pending / running / dispatched_external) are superseded when a newer webhook
+ * arrives, and are abandoned after {@see self::STALE_INCOMPLETE_SECONDS} even without a successor.
  */
 class DeployWebhookJobQueue
 {
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_RUNNING = 'running';
+    public const STATUS_DISPATCHED_EXTERNAL = 'dispatched_external';
+    public const STATUS_ABANDONED = 'abandoned';
+
+    /** Incomplete jobs older than this (wall clock from created/started) are abandoned. */
+    public const STALE_INCOMPLETE_SECONDS = 1800;
+
+    /** @var list<string> */
+    public const INCOMPLETE_STATUSES = [
+        self::STATUS_PENDING,
+        self::STATUS_RUNNING,
+        self::STATUS_DISPATCHED_EXTERNAL,
+    ];
+
     public function queueDir(): string
     {
         $dir = rtrim(BP, "/\\") . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'webhook-queue';
@@ -42,7 +60,7 @@ class DeployWebhookJobQueue
             'ref' => $ref,
             'force' => $force,
             'no_backup' => $noBackup,
-            'status' => 'pending',
+            'status' => self::STATUS_PENDING,
             'log_path' => $logPath,
             'created_at' => time(),
             'updated_at' => time(),
@@ -53,6 +71,118 @@ class DeployWebhookJobQueue
         }
 
         return ['ok' => true, 'job_id' => $jobId, 'path' => $path, 'error' => ''];
+    }
+
+    /**
+     * Mark incomplete jobs abandoned. When $onlyOlderThanSeconds is null, every incomplete job
+     * is abandoned (supersede-before-new). When set, only jobs whose age anchor exceeds the TTL.
+     *
+     * @return list<array{job_id:string,ref:string,previous_status:string,pid:int,log_path:string}>
+     */
+    public function abandonIncomplete(string $reason, ?int $onlyOlderThanSeconds = null, ?string $exceptJobId = null): array
+    {
+        $reason = trim($reason) !== '' ? trim($reason) : 'abandoned';
+        $exceptJobId = $exceptJobId !== null ? trim($exceptJobId) : '';
+        $now = time();
+        $abandoned = [];
+        $dir = $this->queueDir();
+        $files = glob($dir . DIRECTORY_SEPARATOR . '*.json') ?: [];
+        sort($files);
+        foreach ($files as $file) {
+            $job = $this->readJob($file);
+            if ($job === null) {
+                continue;
+            }
+            $jobId = trim((string)($job['id'] ?? ''));
+            if ($jobId === '' || ($exceptJobId !== '' && $jobId === $exceptJobId)) {
+                continue;
+            }
+            $status = (string)($job['status'] ?? '');
+            if (!\in_array($status, self::INCOMPLETE_STATUSES, true)) {
+                continue;
+            }
+            if ($onlyOlderThanSeconds !== null) {
+                $age = $now - $this->incompleteAgeAnchor($job);
+                if ($age < $onlyOlderThanSeconds) {
+                    continue;
+                }
+            }
+            $pid = (int)($job['pid'] ?? 0);
+            if ($pid > 0 && $this->isProcessAlive($pid)) {
+                $this->terminateProcess($pid);
+            }
+            $ok = $this->updateJob($jobId, [
+                'status' => self::STATUS_ABANDONED,
+                'message' => $reason,
+                'abandoned_reason' => $reason,
+                'abandoned_at' => $now,
+                'finished_at' => $now,
+            ]);
+            if (!$ok) {
+                continue;
+            }
+            $abandoned[] = [
+                'job_id' => $jobId,
+                'ref' => (string)($job['ref'] ?? ''),
+                'previous_status' => $status,
+                'pid' => $pid,
+                'log_path' => (string)($job['log_path'] ?? ''),
+            ];
+        }
+
+        return $abandoned;
+    }
+
+    /**
+     * Abandon incomplete jobs that have been open longer than {@see self::STALE_INCOMPLETE_SECONDS}.
+     *
+     * @return list<array{job_id:string,ref:string,previous_status:string,pid:int,log_path:string}>
+     */
+    public function abandonStaleIncomplete(?int $staleSeconds = null): array
+    {
+        $ttl = $staleSeconds !== null && $staleSeconds > 0
+            ? $staleSeconds
+            : self::STALE_INCOMPLETE_SECONDS;
+
+        return $this->abandonIncomplete('stale_incomplete_' . $ttl . 's', $ttl);
+    }
+
+    /**
+     * @param array<string,mixed> $job
+     */
+    private function incompleteAgeAnchor(array $job): int
+    {
+        $started = (int)($job['started_at'] ?? 0);
+        if ($started > 0) {
+            return $started;
+        }
+        $created = (int)($job['created_at'] ?? 0);
+
+        return $created > 0 ? $created : time();
+    }
+
+    private function terminateProcess(int $pid): void
+    {
+        if ($pid <= 0) {
+            return;
+        }
+        if (\function_exists('posix_kill')) {
+            @\posix_kill($pid, 15);
+            \usleep(200000);
+            if ($this->isProcessAlive($pid)) {
+                @\posix_kill($pid, 9);
+            }
+
+            return;
+        }
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            return;
+        }
+        @exec('kill -15 ' . $pid . ' 2>/dev/null');
+        \usleep(200000);
+        if ($this->isProcessAlive($pid)) {
+            @exec('kill -9 ' . $pid . ' 2>/dev/null');
+        }
     }
 
     /**

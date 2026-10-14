@@ -40,6 +40,20 @@ class DeployWebhookJobDrainService
         $failed += (int)($external['failed'] ?? 0);
         $skipped += (int)($external['skipped'] ?? 0);
 
+        $staleAbandoned = $this->queue->abandonStaleIncomplete();
+        foreach ($staleAbandoned as $row) {
+            $abandonedId = (string)($row['job_id'] ?? '');
+            $messages[] = 'abandoned_stale:' . $abandonedId;
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_ABANDONED, [
+                'job_id' => $abandonedId,
+                'ref' => (string)($row['ref'] ?? ''),
+                'trigger' => 'webhook',
+                'log_path' => (string)($row['log_path'] ?? ''),
+                'reason' => 'stale_incomplete_' . DeployWebhookJobQueue::STALE_INCOMPLETE_SECONDS . 's',
+            ]);
+            $skipped++;
+        }
+
         // Serialize: never start a pending release while another is in-flight.
         $effectiveLimit = 1;
         foreach ($this->queue->listPending(max(1, $limit)) as $job) {

@@ -946,9 +946,6 @@ NEW,NEW
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
-加载中,loading
-"WelineFramework Admin","WelineFramework Admin"
-面包屑,"bread crumbs"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1021,6 +1018,7 @@ ERROR,ERROR
 展开悬浮,"Expand float"
 缺货,"Out of Stock"
 联系询价,联系询价
+面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 我的,mine
 账户及心愿单,"Accounts and Wishlists"
@@ -1181,6 +1179,7 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
+加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1206,6 +1205,7 @@ Logo,Logo
 确认操作,"Confirm action"
 确定,Sure
 输入,Input
+"WelineFramework Admin","WelineFramework Admin"
 "Weline Admin","Weline Admin"
 管理后台,"Admin Panel"
 后台Logo,"Background Logo"
@@ -4566,7 +4566,7 @@ Chiffon,Chiffon
 注册地址,"Registered address"
 公司联系邮箱,"Business contact email"
 注册地址不作为退货地址；退货前请联系客服确认寄回地址。,"The registered address is not a return address. Contact us to confirm the return address before sending any items back."
-"配置当前作用范围的 CSS 与 JS 压缩、合并方式及合并起始部件序号。","Configure CSS and JS minification, merging, and the first widget to merge for the current scope."
+"配置当前作用范围的 CSS 与 JS 压缩、合并方式及前段合包部件数。","Configure CSS and JS minification, merging, and how many leading widgets form the early blocking pack for the current scope."
 "CSS 压缩","CSS minification"
 "JS 压缩","JS minification"
 "CSS 合并","CSS merging"
@@ -4575,20 +4575,18 @@ Chiffon,Chiffon
 "部件 JS 合并","Widget JS merging"
 "主题碎片 CSS 合并","Theme fragment CSS merging"
 "主题碎片 JS 合并","Theme fragment JS merging"
-"CSS 合并起始部件序号","First widget for CSS merging"
-"JS 合并起始部件序号","First widget for JS merging"
-"合并布局 bake 的部件 source CSS（/widget-assets/）。自动：开发关、生产开。从下方部件序号起合并。","Merge layout-baked widget source CSS (/widget-assets/). Auto: off in development, on in production. Starts at the widget index below."
-"合并布局 bake 的部件 source JS（/widget-assets/）。自动：开发关、生产开。从下方部件序号起合并。","Merge layout-baked widget source JS (/widget-assets/). Auto: off in development, on in production. Starts at the widget index below."
+"CSS 前段合包部件数","CSS early-pack widget count"
+"JS 前段合包部件数","JS early-pack widget count"
 "合并 head Token/UI 碎片（colors/variables/foundation 等→theme-head）。不含 theme.css 与风格层 toast。自动：开发关、生产开。","Merge head token/UI fragments (colors/variables/foundation → theme-head). Excludes theme.css and style-layer toast. Auto: off in development, on in production."
 "合并 head 经典脚本槽（如 prepaint、css-ready→theme-head）。type=module 的 weline-ui.js 永不合并。自动：开发关、生产开。","Merge classic head script slots (prepaint, css-ready → theme-head). Never merges type=module weline-ui.js. Auto: off in development, on in production."
 自动：开发环境关闭，生产环境开启。开启或关闭可覆盖环境默认行为。部件合包与主题碎片合包共用。,"Auto: off in development, on in production. Explicit on/off overrides the environment default. Shared by widget packs and theme fragment packs."
-"按页面实际渲染顺序计数，包含嵌套部件。默认从第 6 个开始，前 5 个保持独立；仅部件 CSS 合并开启时生效。","Count widgets in document order, including nested ones. Default starts at 6 (first five stay separate). Applies only when widget CSS merging is on."
-"按页面实际渲染顺序计数，包含嵌套部件。默认从第 6 个开始，前 5 个保持独立；仅部件 JS 合并开启时生效。","Count widgets in document order, including nested ones. Default starts at 6 (first five stay separate). Applies only when widget JS merging is on."
+"按页面实际渲染顺序计数，包含嵌套部件。前 N 个 source 合成一个阻塞合包，第 N+1 个起合成一个延迟合包（默认 N=6）。layout 单包不受此限。仅部件 CSS 合并开启时生效。","Count widgets in document order, including nested ones. The first N source assets form one blocking pack; from N+1 they form one deferred pack (default N=6). Layout page pack ignores this. Applies only when widget CSS merging is on."
+"按页面实际渲染顺序计数，包含嵌套部件。前 N 个 source 合成一个阻塞合包，第 N+1 个起再合一个包（默认 N=6）。仅部件 JS 合并开启时生效。","Count widgets in document order, including nested ones. The first N source assets form one blocking pack; from N+1 they form another pack (default N=6). Applies only when widget JS merging is on."
 自动,Automatic
 开启,On
 自动：开发环境关闭，生产环境开启。开启或关闭可覆盖环境默认行为。,"Automatic: off in development and on in production. Select On or Off to override the environment default."
 自动：开发环境关闭，生产环境开启。合并从下方指定的部件序号开始。,"Automatic: off in development and on in production. Merging starts at the widget number specified below."
-"按页面实际渲染顺序计数，包含嵌套部件。默认从第 6 个开始，前 5 个保持独立；仅合并开启时生效。","Count widgets in their actual rendering order, including nested widgets. By default, merging starts at widget 6 and the first 5 remain separate. Applies only when merging is enabled."
+"按页面实际渲染顺序计数，包含嵌套部件。前 N 个 source 合成一个阻塞合包，第 N+1 个起再合包（默认 N=6）。仅合并开启时生效。","Count widgets in document order, including nested ones. The first N source assets form one blocking pack; from N+1 they form another pack (default N=6). Applies only when merging is on."
 运费,"Shipping charges"
 跨境配送,"International delivery"
 运费以结算页为准,"Shipping calculated at checkout"
@@ -4875,3 +4873,5 @@ cookie政策,"Cookie Policy"
 正在更新当前页缓存…,"Updating current page cache…"
 当前布局没有可清理的店面路径,"Current layout has no storefront path to purge"
 更新当前页缓存失败,"Failed to update current page cache"
+"合并布局 bake 的部件 CSS（layout 整页单包 + source 前 N 个阻塞合包、其后延迟合包→/widget-assets/）。自动与开启均始终合包；关闭可显式关掉。","Merge layout-baked widget CSS (one layout page pack + source: first N blocking pack, then deferred pack → /widget-assets/). Auto and On always pack; Off disables."
+"合并布局 bake 的部件 source JS（前 N 个阻塞合包、其后再合包→/widget-assets/）。自动与开启均始终合包；关闭可显式关掉。","Merge layout-baked widget source JS (first N blocking pack, then another pack → /widget-assets/). Auto and On always pack; Off disables."

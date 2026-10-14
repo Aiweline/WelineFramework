@@ -16,6 +16,7 @@ class DeployReleaseNotifier
 
     public const PHASE_QUEUED = 'queued';
     public const PHASE_DEFERRED = 'deferred';
+    public const PHASE_ABANDONED = 'abandoned';
     public const PHASE_DRAIN_START = 'drain_start';
     public const PHASE_STARTED = 'started';
     public const PHASE_BACKUP = 'backup';
@@ -40,6 +41,7 @@ class DeployReleaseNotifier
         self::PHASE_ROLLBACK_SUCCESS,
         self::PHASE_ROLLBACK_FAILED,
         self::PHASE_WEBHOOK_MISS,
+        self::PHASE_ABANDONED,
         // workdir_blocked is NOT terminal — catch still emits failed/rollback_failed.
     ];
 
@@ -47,6 +49,7 @@ class DeployReleaseNotifier
     private const PHASE_TYPES = [
         self::PHASE_QUEUED => 'info',
         self::PHASE_DEFERRED => 'info',
+        self::PHASE_ABANDONED => 'warning',
         self::PHASE_DRAIN_START => 'info',
         self::PHASE_STARTED => 'info',
         self::PHASE_BACKUP => 'info',
@@ -131,6 +134,7 @@ class DeployReleaseNotifier
         return match ($phase) {
             self::PHASE_QUEUED => (string)__('Deploy：Webhook 已入队%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_DEFERRED => (string)__('Deploy：已排队等待进行中发布%{1}', [$hint !== '' ? ' · ' . $hint : '']),
+            self::PHASE_ABANDONED => (string)__('Deploy：旧发布任务已作废%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_DRAIN_START => (string)__('Deploy：开始消费队列%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_STARTED => (string)__('Deploy：开始发布%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_BACKUP => (string)__('Deploy：备份中'),

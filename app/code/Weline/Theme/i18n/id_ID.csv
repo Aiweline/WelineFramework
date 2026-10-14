@@ -946,9 +946,6 @@ NEW,NEW
 第%d张,第%d张
 剩余,剩余
 天,天
-加载中,加载中
-"WelineFramework Admin","WelineFramework Admin"
-面包屑,面包屑
 数据卡片,数据卡片
 "近 7 日访问量 +18%","近 7 日访问量 +18%"
 卡片内容,卡片内容
@@ -1021,6 +1018,7 @@ ERROR,ERROR
 展开悬浮,展开悬浮
 缺货,缺货
 联系询价,联系询价
+面包屑,面包屑
 跳转到主要内容,跳转到主要内容
 我的,我的
 账户及心愿单,账户及心愿单
@@ -1181,6 +1179,7 @@ Logo,Logo
 促销活动,促销活动
 暂停轮播,暂停轮播
 播放轮播,播放轮播
+加载中,加载中
 打印,打印
 仪表盘部件区域,仪表盘部件区域
 指标区,指标区
@@ -1206,6 +1205,7 @@ Logo,Logo
 确认操作,确认操作
 确定,确定
 输入,输入
+"WelineFramework Admin","WelineFramework Admin"
 "Weline Admin","Weline Admin"
 管理后台,管理后台
 后台Logo,后台Logo

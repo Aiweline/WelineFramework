@@ -64,7 +64,8 @@ final class InlineEditSession
     }
 
     /**
-     * Backend / rest_backend never run the storefront inline shell.
+     * Backend / rest_backend never run the storefront inline shell
+     * (no shell JS → raw [[W18N:…]] / books must never appear in admin UI).
      */
     private function isBackendArea(?Request $request): bool
     {
@@ -82,8 +83,44 @@ final class InlineEditSession
         } catch (\Throwable) {
             $area = '';
         }
+        if ($area === 'backend' || $area === 'rest_backend') {
+            return true;
+        }
+        // Path fail-closed: custom admin frontName /api backend prefixes.
+        $uri = '';
+        try {
+            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        } catch (\Throwable) {
+            $uri = '';
+        }
+        if ($uri === '') {
+            return false;
+        }
+        $path = (string)(\parse_url($uri, \PHP_URL_PATH) ?: $uri);
+        // Typical admin / backend entry segments (legacy names).
+        if (\preg_match('#/(admin|backend)(/|$)#i', $path) === 1) {
+            return true;
+        }
+        // Project frontName is a hashed area_routes prefix (not "admin").
+        try {
+            $routes = \Weline\Framework\App\Env::getInstance()->getConfig('router.area_routes', []);
+            if (!\is_array($routes)) {
+                $routes = [];
+            }
+            foreach (['backend', 'rest_backend'] as $areaKey) {
+                $prefix = \trim((string)($routes[$areaKey]['prefix'] ?? ''), '/');
+                if ($prefix === '') {
+                    continue;
+                }
+                if (\preg_match('#^/' . \preg_quote($prefix, '#') . '(/|$)#i', $path) === 1) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            // Fail open only on path when Env unavailable; area flags above still apply.
+        }
 
-        return $area === 'backend' || $area === 'rest_backend';
+        return false;
     }
 
     /**

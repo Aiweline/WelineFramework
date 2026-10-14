@@ -65,7 +65,7 @@
 方案冻结：
 
 - 基础信息抽屉顶部采用已有主题 Tab 控件，默认“基础配置”；网站身份、图标、Logo 等原字段及保存行为保持在基础配置。“资源文件配置”页承载统一 SystemConfig 配置；作用范围提示共用，品牌保存按钮不作用于资源页。
-- SystemConfig group=`theme_resource_files`，键为 `resource_files/css_minify`、`js_minify`、`css_merge`、`js_merge`、`css_merge_start`、`js_merge_start`。前四项 auto/on/off 默认 auto：开发关闭，生产开启；显式开关覆盖环境。起始序号为正整数，默认 6。压缩与合并独立，不引入懒加载。
+- SystemConfig group=`theme_resource_files`，键为 `resource_files/css_minify`、`js_minify`、`css_merge`、`js_merge`、`css_merge_start`、`js_merge_start`。前四项 auto/on/off 默认 auto：开发关闭，生产开启；显式开关覆盖环境。`*_merge_start` 为正整数（默认 6），表示前 N 个 source 阻塞合包、其后延迟/再合包。压缩与合并独立。
 - 配置服务 `ThemeResourceConfig::resolve(?WelineTheme $theme=null,string $area='frontend')` 返回四个实际布尔值和 `css_merge_start_widget`、`js_merge_start_widget`。沿现有范围身份继承，不另造保存接口或私有配置表。
 - 每个真实部件开头保留稳定实例标记，最终完整 HTML 按文档前序计数，包含无资源、layout 与嵌套部件；缓存不能固化请求计数。独立预览从 1 重新计数。共享资源按最早使用者分段，前段资源不可因合包后移。
 - layout-source 独立提前加载，可压缩但不进入后段合包。普通 source 达阈值后，按 CSS/JS、输出位置和执行语义分别稳定合并。不能改变 JS 依赖顺序；不安全的模块脚本、文件语义边界保留独立。CSS 相对 URL 按原文件基址改写。

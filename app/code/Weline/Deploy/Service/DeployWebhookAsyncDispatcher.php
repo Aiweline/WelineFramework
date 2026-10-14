@@ -80,6 +80,33 @@ class DeployWebhookAsyncDispatcher
         $header = '# webhook-async spawn ' . date('c') . "\n# php=" . $phpBin . "\n";
         @file_put_contents($logPath, $header);
 
+        // Newest webhook wins: abandon incomplete predecessors (and TTL-stale) before enqueue.
+        $superseded = $this->jobQueue->abandonIncomplete('superseded_by_newer_webhook');
+        $stale = $this->jobQueue->abandonStaleIncomplete();
+        foreach (array_merge($superseded, $stale) as $row) {
+            $abandonedId = (string)($row['job_id'] ?? '');
+            if ($abandonedId === '') {
+                continue;
+            }
+            $prev = (string)($row['previous_status'] ?? '');
+            @file_put_contents(
+                $logPath,
+                '# abandoned_prior job_id=' . $abandonedId . ' previous_status=' . $prev . "\n",
+                FILE_APPEND
+            );
+            $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_ABANDONED, [
+                'job_id' => $abandonedId,
+                'ref' => (string)($row['ref'] ?? ''),
+                'trigger' => 'webhook',
+                'log_path' => (string)($row['log_path'] ?? ''),
+                'reason' => $prev !== '' ? ('superseded_or_stale:' . $prev) : 'superseded_or_stale',
+            ]);
+        }
+        // Brief yield so killed release processes can drop the flock.
+        if ($superseded !== [] || $stale !== []) {
+            \usleep(300000);
+        }
+
         // Always enqueue first — Cron drain does not need sudo and is the durable guarantee.
         $queued = $this->jobQueue->enqueue($ref, $force, $noBackup, $logPath);
         if (empty($queued['ok'])) {
@@ -120,7 +147,8 @@ class DeployWebhookAsyncDispatcher
             ];
         }
 
-        // Single-flight: if another release is in-flight (or lock held), stay pending for drain.
+        // Narrow race only: another release still holds the lock after supersede/kill.
+        // Do not defer merely because older queue rows exist — those were abandoned above.
         if ($this->jobQueue->hasInFlight() || $this->flightGate->isLocked($deployRoot)) {
             @file_put_contents($logPath, "# transport=queue (deferred: release_busy)\n", FILE_APPEND);
             $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_DEFERRED, [

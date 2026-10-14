@@ -361,19 +361,11 @@ final class DictionaryEntryAiTranslateService
 
         $success = $drafts !== [] || ($errors === [] && $skipped !== []);
         $echoOnlyFailure = $drafts === [] && $errors !== [];
-        // Prefer concrete provider errors (unreachable model, missing API key, etc.) over the
-        // generic「仍返回原文」copy — empty drafts often mean the provider never answered.
+        // Prefer concrete provider errors (balance / API key / unreachable) over the
+        // generic「仍返回原文」copy — empty drafts usually mean the provider never answered.
         $failureMessage = (string)__('其他语言翻译失败');
         if ($echoOnlyFailure) {
-            $firstError = trim((string)($errors[0] ?? ''));
-            $isEchoShaped = $firstError !== '' && (
-                str_contains($firstError, '仍返回原文')
-                || str_contains($firstError, '未真正翻译')
-                || str_contains($firstError, '未返回可用译文')
-            );
-            $failureMessage = ($firstError !== '' && !$isEchoShaped)
-                ? $firstError
-                : (string)__('AI 未能译出有效译文（多语种仍返回原文），请检查翻译服务后重试');
+            $failureMessage = $this->resolveOtherLocalesFailureMessage($errors);
         }
         $successMessage = ($drafts === [] && $skipped !== [])
             ? (string)__('其他语言均已有译文，已跳过')
@@ -602,6 +594,69 @@ final class DictionaryEntryAiTranslateService
         }
 
         return $chunks;
+    }
+
+    /**
+     * Pick a user-facing failure for empty drafts.
+     * Provider/API errors always win; only true echo-shaped rows use the「仍返回原文」copy.
+     *
+     * @param list<string> $errors
+     */
+    private function resolveOtherLocalesFailureMessage(array $errors): string
+    {
+        $joined = implode("\n", array_map('strval', $errors));
+        foreach ($errors as $raw) {
+            $human = $this->humanizeProviderTranslateError((string)$raw);
+            if ($human !== '') {
+                return $human;
+            }
+        }
+        $hasTrueEcho = str_contains($joined, '仍返回原文') || str_contains($joined, '未真正翻译');
+        if ($hasTrueEcho) {
+            return (string)__('AI 未能译出有效译文（多语种仍返回原文），请检查翻译服务后重试');
+        }
+        if (str_contains($joined, '未返回可用译文') || str_contains($joined, '未返回任何语种')) {
+            return (string)__('AI 未返回可用译文，请检查翻译模型、API 余额或密钥后重试');
+        }
+        $first = trim((string)($errors[0] ?? ''));
+
+        return $first !== '' ? $first : (string)__('其他语言翻译失败');
+    }
+
+    private function humanizeProviderTranslateError(string $raw): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return '';
+        }
+        $lower = strtolower($raw);
+        if (str_contains($lower, 'insufficient balance')
+            || str_contains($raw, '余额不足')
+            || str_contains($lower, 'insufficient_quota')
+        ) {
+            return (string)__('翻译 API 余额不足（Insufficient Balance），请充值 DeepSeek/当前供应商后重试');
+        }
+        if (str_contains($lower, 'missing api key')
+            || str_contains($raw, '缺少') && str_contains($lower, 'api key')
+            || str_contains($raw, '未配置') && str_contains($lower, 'api')
+        ) {
+            return (string)__('翻译模型缺少 API 密钥，请到 AI 供应商账户配置后重试');
+        }
+        if (str_contains($lower, 'could not connect')
+            || str_contains($lower, 'connection refused')
+            || str_contains($raw, '无法连接')
+        ) {
+            return (string)__('无法连接翻译服务，请检查网络或本地模型是否在运行');
+        }
+        // Keep long provider diagnostics when they look like real generation failures.
+        if (str_contains($raw, 'AI generation failed')
+            || str_contains($raw, 'API返回错误')
+            || str_contains($raw, 'API调用失败')
+        ) {
+            return $raw;
+        }
+
+        return '';
     }
 
     /**

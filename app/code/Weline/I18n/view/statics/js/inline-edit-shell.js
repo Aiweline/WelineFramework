@@ -676,11 +676,15 @@
         });
     }
 
+    /**
+     * Attributes (aria-label/title/alt…): unwrap [[W18N:]] only — never attach books.
+     * Icon-only chrome books were floating off-host and looked like "point-translate on".
+     * Visible body text / <w-i18n-phrase> still get books via decorateTextMarkers / decorateBodyPhrases.
+     */
     function decorateAttributeMarkers(root) {
         var list = (root || document.body).querySelectorAll('*');
         Array.prototype.forEach.call(list, function (node) {
             if (isSkippedDecorateHost(node) || !node.attributes) return;
-            // Snapshot names first — setAttribute during live NamedNodeMap iteration is unsafe.
             var names = [];
             Array.prototype.forEach.call(node.attributes, function (attr) {
                 names.push(attr.name);
@@ -690,36 +694,69 @@
                 var value = node.getAttribute(name);
                 if (!value || value.indexOf('[[W18N:') === -1) return;
                 ATTR_RE.lastIndex = 0;
-                var m = ATTR_RE.exec(value);
-                if (!m) return;
-                // Only decorate when the whole value is one marker (quoted title="@lang"/<lang>).
-                if (m.index !== 0 || m[0].length !== value.length) {
-                    // Still unwrap markers inside the string without adding books.
-                    ATTR_RE.lastIndex = 0;
-                    node.setAttribute(name, value.replace(ATTR_RE, function (_, s, t) {
-                        return b64urlDecode(t) || b64urlDecode(s) || '';
-                    }));
-                    return;
+                node.setAttribute(name, value.replace(ATTR_RE, function (_, s, t) {
+                    return b64urlDecode(t) || b64urlDecode(s) || '';
+                }));
+            });
+        });
+    }
+
+    /** Fail-closed: any leftover visible [[W18N:]] text → plain translation (book if new span). */
+    function unwrapResidualW18nText(root) {
+        var walker = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT, null);
+        var nodes = [];
+        var n;
+        while ((n = walker.nextNode())) {
+            if (!n.nodeValue || n.nodeValue.indexOf('[[W18N:') === -1) continue;
+            if (isSkippedDecorateHost(n.parentElement)) continue;
+            // Already handled by decorateTextMarkers into .w-i18n-text
+            if (n.parentElement && n.parentElement.classList
+                && n.parentElement.classList.contains('w-i18n-text')) {
+                continue;
+            }
+            nodes.push(n);
+        }
+        nodes.forEach(function (textNode) {
+            var raw = textNode.nodeValue || '';
+            ATTR_RE.lastIndex = 0;
+            if (!ATTR_RE.test(raw)) return;
+            ATTR_RE.lastIndex = 0;
+            var frag = document.createDocumentFragment();
+            var last = 0;
+            var m;
+            var addedBook = false;
+            while ((m = ATTR_RE.exec(raw))) {
+                if (m.index > last) {
+                    frag.appendChild(document.createTextNode(raw.slice(last, m.index)));
                 }
                 var src = b64urlDecode(m[1]);
                 var tr = b64urlDecode(m[2]);
-                node.setAttribute(name, tr);
-                // data-* only (dataset camelCase rejects names like aria-label).
-                var flag = 'data-i18n-attr-' + String(name).toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
-                if (node.getAttribute(flag) === '1') return;
-                node.setAttribute(flag, '1');
-                var btn = makeBookButton('点译属性 ' + name, function (book) {
-                    openPopover(book, {
-                        source: src,
-                        translate: tr,
-                        locale: '',
-                        targetEl: node,
-                        attrName: name,
+                var span = document.createElement('span');
+                span.className = 'w-i18n-text';
+                span.textContent = tr || src;
+                if (!addedBook && (tr || src)) {
+                    var textBook = makeBookButton('点译', function (btn) {
+                        openPopover(btn, { source: src, translate: tr || src, locale: '', targetEl: span });
                     });
-                });
-                attachFloatingBook(node, btn);
-            });
+                    attachFloatingBook(span, textBook);
+                    addedBook = true;
+                }
+                frag.appendChild(span);
+                last = m.index + m[0].length;
+            }
+            if (last < raw.length) {
+                frag.appendChild(document.createTextNode(raw.slice(last)));
+            }
+            textNode.parentNode && textNode.parentNode.replaceChild(frag, textNode);
         });
+    }
+
+    function decorateAllMarkers(root) {
+        decorateBodyPhrases(root || document);
+        decorateTextMarkers(root ? (root.body || root) : document.body);
+        decorateAttributeMarkers(root ? (root.body || root) : document.body);
+        unwrapResidualW18nText(root ? (root.body || root) : document.body);
+        scheduleBookReposition();
     }
 
     function bindPopoverActions() {
@@ -1170,16 +1207,10 @@
         stampAllAnchors(document);
         ensureOperatorFab();
         bindPopoverActions();
-        decorateBodyPhrases(document);
-        decorateTextMarkers(document.body);
-        decorateAttributeMarkers(document.body);
-        scheduleBookReposition();
+        decorateAllMarkers(document);
         var mo = new MutationObserver(function (mutations) {
             stampAllAnchors(document);
-            decorateBodyPhrases(document);
-            decorateTextMarkers(document.body);
-            decorateAttributeMarkers(document.body);
-            scheduleBookReposition();
+            decorateAllMarkers(document);
             // Re-stamp newly inserted anchors quickly.
             mutations.forEach(function (m) {
                 m.addedNodes && m.addedNodes.forEach(function (node) {

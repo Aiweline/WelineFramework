@@ -51,6 +51,18 @@ final class TranslationRequestObserver implements ObserverInterface
                     $strategy,
                     $lane,
                 );
+                if (!is_array($translations)) {
+                    $translations = [];
+                }
+                // Empty map is a hard failure (model returned nothing / unparseable) —
+                // never advertise success:true or the dictionary UI collapses into「仍返回原文」.
+                if ($translations === []) {
+                    $this->setEventError(
+                        $event,
+                        (string)__('AI 未返回任何语种译文，请检查翻译模型、API 余额或密钥后重试'),
+                    );
+                    return;
+                }
                 $event->setData('translations', $translations);
                 $event->setData('success', true);
                 $event->setData('errors', []);

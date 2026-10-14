@@ -169,6 +169,21 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
                     $theme . ' skin fallback must keep ' . $basename . ' when merge off',
                 );
             }
+            // Absorb gate must wrap every overlay leaf — no force-emit after endif (duplicate pack).
+            self::assertMatchesRegularExpression(
+                '/if\s*\(\s*!?\s*\$absorbOverlayCss\s*\)\s*:\s*\?>[\s\S]*endif/i',
+                $skinSrc,
+                $theme . ' skin must gate overlay CSS behind absorbOverlayCss',
+            );
+            $afterAbsorb = preg_split('/endif\s*;?\s*\?>/i', $skinSrc, 2)[1] ?? '';
+            foreach ($leaves as $leaf) {
+                $basename = basename((string)$leaf);
+                self::assertStringNotContainsString(
+                    $basename,
+                    $afterAbsorb,
+                    $theme . ' must not re-link ' . $basename . ' after overlay absorb (duplicate)',
+                );
+            }
         }
     }
 

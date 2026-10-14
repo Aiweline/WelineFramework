@@ -35,6 +35,9 @@ final class DictionaryEntryAiTranslateContractTest extends TestCase
         self::assertStringContainsString('确认后', $source);
         self::assertStringContainsString('isUntranslatedEcho', $source);
         self::assertStringContainsString('未能译出有效译文', $source);
+        self::assertStringContainsString('resolveOtherLocalesFailureMessage', $source);
+        self::assertStringContainsString('humanizeProviderTranslateError', $source);
+        self::assertStringContainsString('Insufficient Balance', $source);
         self::assertStringNotContainsString('Weline\\Ai\\', $source);
         self::assertStringNotContainsString('LocalModelTranslationService', $source);
         self::assertStringNotContainsString('ollama', strtolower($source));

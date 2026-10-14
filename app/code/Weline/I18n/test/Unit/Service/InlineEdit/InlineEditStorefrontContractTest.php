@@ -111,7 +111,10 @@ final class InlineEditStorefrontContractTest extends TestCase
         self::assertStringContainsString('__welineI18nInlineShellBooted', $shellSrc);
         self::assertStringContainsString('isSkippedDecorateHost', $shellSrc);
         self::assertStringContainsString('isEditablePhraseAttr', $shellSrc);
-        self::assertStringContainsString('data-i18n-attr-', $shellSrc);
+        self::assertStringContainsString('unwrapResidualW18nText', $shellSrc);
+        self::assertStringContainsString('decorateAllMarkers', $shellSrc);
+        self::assertStringContainsString('Attributes (aria-label/title/alt', $shellSrc);
+        self::assertStringNotContainsString("makeBookButton('点译属性 '", $shellSrc);
         self::assertStringContainsString('postUpdatePageSse', $shellSrc);
         self::assertStringContainsString('text/event-stream', $shellSrc);
         self::assertStringContainsString('attachFloatingBook', $shellSrc);
@@ -151,6 +154,13 @@ final class InlineEditStorefrontContractTest extends TestCase
         );
         self::assertStringContainsString('function reinforceBrowserCookies', $sessionPhp);
         self::assertStringContainsString('reinforceBrowserCookies()', $footer);
+        self::assertStringContainsString('isBackendArea', $sessionPhp);
+        self::assertStringContainsString('/(admin|backend)(/|$)', $sessionPhp);
+        self::assertStringContainsString('area_routes', $sessionPhp);
+        self::assertStringContainsString('rest_backend', $sessionPhp);
+        // Session-off footer must strip stale markers without injecting books.
+        self::assertStringContainsString('Session off', $footer);
+        self::assertStringContainsString('[[W18N:', $footer);
     }
 
     public function testLangRuntimeEmitAndNoConstantFold(): void
