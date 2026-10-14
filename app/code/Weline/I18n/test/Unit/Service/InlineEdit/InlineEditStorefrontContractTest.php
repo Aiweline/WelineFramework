@@ -40,6 +40,12 @@ final class InlineEditStorefrontContractTest extends TestCase
             '提交',
             InlinePhraseMarker::decodeB64Url(\explode(':', \substr($wrapped, 7, -2))[0])
         );
+        // Nested/polluted translate must unwrap before re-wrap (no double [[W18N:]]).
+        $nestedTr = InlinePhraseMarker::wrapAttribute('购物车', '购物车');
+        $flat = InlinePhraseMarker::wrapAttribute('购物车', $nestedTr);
+        $parts = \explode(':', \substr($flat, 7, -2));
+        self::assertSame('购物车', InlinePhraseMarker::decodeB64Url($parts[1]));
+        self::assertSame('购物车', InlinePhraseMarker::unwrapPlain($nestedTr));
     }
 
     public function testBodyWrapUsesCustomElement(): void
@@ -113,7 +119,12 @@ final class InlineEditStorefrontContractTest extends TestCase
         self::assertStringContainsString('isEditablePhraseAttr', $shellSrc);
         self::assertStringContainsString('unwrapResidualW18nText', $shellSrc);
         self::assertStringContainsString('decorateAllMarkers', $shellSrc);
-        self::assertStringContainsString('Attributes (aria-label/title/alt', $shellSrc);
+        self::assertStringContainsString('unwrapW18nValue', $shellSrc);
+        self::assertStringContainsString('sanitizeGlobalLabelTables', $shellSrc);
+        self::assertStringContainsString('decorateScriptMarkers', $shellSrc);
+        self::assertStringContainsString('WelineI18nInlineEdit', $shellSrc);
+        self::assertStringContainsString('data-i18n-*', $shellSrc);
+        self::assertStringContainsString('inline-edit-shell-20261014d.js', $footer);
         self::assertStringNotContainsString("makeBookButton('点译属性 '", $shellSrc);
         self::assertStringContainsString('postUpdatePageSse', $shellSrc);
         self::assertStringContainsString('text/event-stream', $shellSrc);

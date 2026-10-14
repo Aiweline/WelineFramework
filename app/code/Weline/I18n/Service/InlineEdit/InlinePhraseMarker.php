@@ -74,8 +74,41 @@ final class InlinePhraseMarker
             . '</w-i18n-phrase>';
     }
 
+    /**
+     * Peel nested/polluted [[W18N:…]] until plain text (dictionary may have stored markers).
+     */
+    public static function unwrapPlain(string $text): string
+    {
+        $out = (string)$text;
+        for ($guard = 0; $guard < 8; $guard++) {
+            if (!\str_contains($out, self::ATTR_PREFIX)) {
+                break;
+            }
+            $next = \preg_replace_callback(
+                '/\[\[W18N:([A-Za-z0-9_-]+):([A-Za-z0-9_-]+)\]\]/',
+                static function (array $m): string {
+                    $tr = self::decodeB64Url($m[2]);
+                    $src = self::decodeB64Url($m[1]);
+
+                    return $tr !== '' ? $tr : $src;
+                },
+                $out
+            );
+            if (!\is_string($next) || $next === $out) {
+                break;
+            }
+            $out = $next;
+        }
+
+        return $out;
+    }
+
     public static function wrapAttribute(string $source, string $translated): string
     {
+        // Never nest: source/translate must be plain before encoding.
+        $source = self::unwrapPlain($source);
+        $translated = self::unwrapPlain($translated);
+
         return self::ATTR_PREFIX
             . self::encodeB64Url($source)
             . ':'
@@ -89,6 +122,7 @@ final class InlinePhraseMarker
      */
     public static function body(string $source, string $translated): string
     {
+        $translated = self::unwrapPlain($translated);
         if (!self::isSessionActive()) {
             return $translated;
         }
@@ -102,12 +136,13 @@ final class InlinePhraseMarker
      */
     public static function attribute(string $source, string $translated = ''): string
     {
-        $source = (string)$source;
+        $source = self::unwrapPlain((string)$source);
         if ($translated === '') {
             $translated = (string)\Weline\Framework\Phrase\Parser::withoutInlinePhraseMark(
                 static fn(): string => (string)__($source)
             );
         }
+        $translated = self::unwrapPlain($translated);
         if (!self::isSessionActive()) {
             return $translated;
         }

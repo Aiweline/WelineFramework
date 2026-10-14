@@ -113,7 +113,7 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('closePurchasePanel(dialog)', $script);
         self::assertStringContainsString('Weline.UI.dialog', $script);
         self::assertStringContainsString(
-            'product-purchase-actions.js?v=20261010-qv-mount1',
+            'product-purchase-actions-w18n-v3.js',
             $modules,
         );
     }
@@ -155,12 +155,16 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringNotContainsString('fetch(url.toString()', $script);
         self::assertStringNotContainsString('data-purchase-panel-url', $template);
         self::assertStringContainsString(
-            'product-purchase-actions.js?v=20261010-qv-mount1',
+            'product-purchase-actions-w18n-v3.js',
             $modules,
         );
         self::assertStringContainsString('function mountPurchasePanelInto(body, options)', $script);
         self::assertStringContainsString('mountPurchasePanelInto: mountPurchasePanelInto', $script);
         self::assertStringContainsString('return mountPurchasePanelInto(body, {', $script);
+        // Inline-edit session marks panel HTML; peel scripts + re-decorate after mount.
+        self::assertStringContainsString('function peelInlineEditMarkers', $script);
+        self::assertStringContainsString('notifyInlineEditDecorate(body)', $script);
+        self::assertStringContainsString('WelineI18nInlineEdit', $script);
     }
 
     public function testPurchasePanelEnsuresProductInfoAssetsOnListingHosts(): void

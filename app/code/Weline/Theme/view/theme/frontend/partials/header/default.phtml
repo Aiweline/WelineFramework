@@ -778,12 +778,27 @@ $defaultNavItemsFactory = static function (): array {
     </div>
 </div>
 
+<?php
+// JS string table must stay plain — [[W18N:]] in <script> is never decorated and re-leaks into DOM.
+$headerLabelPlain = static function ($value) use ($headerLabel): string {
+    $label = (string)$headerLabel($value);
+    try {
+        if (\class_exists(\Weline\I18n\Service\InlineEdit\InlinePhraseMarker::class)) {
+            $label = \Weline\I18n\Service\InlineEdit\InlinePhraseMarker::unwrapPlain($label);
+        }
+    } catch (\Throwable) {
+    }
+
+    return $label;
+};
+$__hdrJsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
+?>
 <script>
 window.__welineHeaderLabels = {
-    moreCategories: <?= json_encode($headerLabel('更多分类'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
-    more: <?= json_encode($headerLabel('更多'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
-    viewAll: <?= json_encode($headerLabel('查看全部'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
-    browse: <?= json_encode($headerLabel('浏览 %{1} 相关商品与配件'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>
+    moreCategories: <?= json_encode($headerLabelPlain('更多分类'), $__hdrJsonFlags) ?>,
+    more: <?= json_encode($headerLabelPlain('更多'), $__hdrJsonFlags) ?>,
+    viewAll: <?= json_encode($headerLabelPlain('查看全部'), $__hdrJsonFlags) ?>,
+    browse: <?= json_encode($headerLabelPlain('浏览 %{1} 相关商品与配件'), $__hdrJsonFlags) ?>
 };
 </script>
 <script src="@static(Weline_Theme::js/partials/header-default.js)"></script>

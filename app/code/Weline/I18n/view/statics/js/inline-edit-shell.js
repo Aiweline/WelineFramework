@@ -26,6 +26,21 @@
         }
     }
 
+    /** Peel nested/polluted [[W18N:…]] (dictionary may store markers as "translation"). */
+    function unwrapW18nValue(raw) {
+        var s = String(raw || '');
+        var guard = 0;
+        while (guard++ < 8 && s.indexOf('[[W18N:') !== -1) {
+            ATTR_RE.lastIndex = 0;
+            var next = s.replace(ATTR_RE, function (_, a, b) {
+                return b64urlDecode(b) || b64urlDecode(a) || '';
+            });
+            if (next === s) break;
+            s = next;
+        }
+        return s;
+    }
+
     function closestShell() {
         return document.querySelector('[data-w-component="i18n-inline-edit-shell"]');
     }
@@ -657,8 +672,8 @@
                 if (m.index > last) {
                     frag.appendChild(document.createTextNode(raw.slice(last, m.index)));
                 }
-                var src = b64urlDecode(m[1]);
-                var tr = b64urlDecode(m[2]);
+                var src = unwrapW18nValue(b64urlDecode(m[1]));
+                var tr = unwrapW18nValue(b64urlDecode(m[2]) || src);
                 var span = document.createElement('span');
                 span.className = 'w-i18n-text';
                 span.textContent = tr;
@@ -677,9 +692,8 @@
     }
 
     /**
-     * Attributes (aria-label/title/alt…): unwrap [[W18N:]] only — never attach books.
-     * Icon-only chrome books were floating off-host and looked like "point-translate on".
-     * Visible body text / <w-i18n-phrase> still get books via decorateTextMarkers / decorateBodyPhrases.
+     * ANY attribute with [[W18N:]] (aria + data-i18n-* …): unwrap only — never books.
+     * Mini-cart reads data-i18n-* into textContent; leaving markers there re-leaks after boot.
      */
     function decorateAttributeMarkers(root) {
         var list = (root || document.body).querySelectorAll('*');
@@ -690,13 +704,9 @@
                 names.push(attr.name);
             });
             names.forEach(function (name) {
-                if (!isEditablePhraseAttr(name)) return;
                 var value = node.getAttribute(name);
                 if (!value || value.indexOf('[[W18N:') === -1) return;
-                ATTR_RE.lastIndex = 0;
-                node.setAttribute(name, value.replace(ATTR_RE, function (_, s, t) {
-                    return b64urlDecode(t) || b64urlDecode(s) || '';
-                }));
+                node.setAttribute(name, unwrapW18nValue(value));
             });
         });
     }
@@ -729,8 +739,8 @@
                 if (m.index > last) {
                     frag.appendChild(document.createTextNode(raw.slice(last, m.index)));
                 }
-                var src = b64urlDecode(m[1]);
-                var tr = b64urlDecode(m[2]);
+                var src = unwrapW18nValue(b64urlDecode(m[1]));
+                var tr = unwrapW18nValue(b64urlDecode(m[2]) || src);
                 var span = document.createElement('span');
                 span.className = 'w-i18n-text';
                 span.textContent = tr || src;
@@ -751,13 +761,53 @@
         });
     }
 
+    /** JS string tables baked with marked __() (e.g. window.__welineHeaderLabels). */
+    function sanitizeGlobalLabelTables() {
+        var tables = [window.__welineHeaderLabels];
+        tables.forEach(function (tbl) {
+            if (!tbl || typeof tbl !== 'object') return;
+            Object.keys(tbl).forEach(function (k) {
+                if (typeof tbl[k] === 'string' && tbl[k].indexOf('[[W18N:') !== -1) {
+                    tbl[k] = unwrapW18nValue(tbl[k]);
+                }
+            });
+        });
+    }
+
+    /**
+     * Peel [[W18N:]] inside <script> JSON/catalogs before widget JS copies them into DOM.
+     * Skips our own regex-source scripts (no concrete base64 payloads).
+     */
+    function decorateScriptMarkers(root) {
+        var scope = root && root.querySelectorAll ? root : document;
+        var list = scope.querySelectorAll ? scope.querySelectorAll('script') : [];
+        var concrete = /\[\[W18N:[A-Za-z0-9_-]{4,}:[A-Za-z0-9_-]{4,}\]\]/;
+        Array.prototype.forEach.call(list, function (s) {
+            var t = s.textContent || '';
+            if (t.indexOf('[[W18N:') === -1 || !concrete.test(t)) return;
+            s.textContent = unwrapW18nValue(t);
+        });
+    }
+
     function decorateAllMarkers(root) {
-        decorateBodyPhrases(root || document);
-        decorateTextMarkers(root ? (root.body || root) : document.body);
-        decorateAttributeMarkers(root ? (root.body || root) : document.body);
-        unwrapResidualW18nText(root ? (root.body || root) : document.body);
+        var scope = root || document;
+        var host = scope.body || scope;
+        sanitizeGlobalLabelTables();
+        decorateScriptMarkers(scope);
+        decorateBodyPhrases(scope);
+        decorateTextMarkers(host);
+        decorateAttributeMarkers(host);
+        unwrapResidualW18nText(host);
         scheduleBookReposition();
     }
+
+    /** Public API for dynamic panels (quick-add) that inject marked HTML after boot. */
+    window.WelineI18nInlineEdit = {
+        unwrap: unwrapW18nValue,
+        decorate: function (root) {
+            decorateAllMarkers(root || document);
+        },
+    };
 
     function bindPopoverActions() {
         var pop = ensurePopover();
@@ -1208,10 +1258,15 @@
         ensureOperatorFab();
         bindPopoverActions();
         decorateAllMarkers(document);
+        var moTimer = 0;
         var mo = new MutationObserver(function (mutations) {
-            stampAllAnchors(document);
-            decorateAllMarkers(document);
-            // Re-stamp newly inserted anchors quickly.
+            // Debounce: quick-add inject + script rebind storms many mutations.
+            if (moTimer) clearTimeout(moTimer);
+            moTimer = setTimeout(function () {
+                moTimer = 0;
+                stampAllAnchors(document);
+                decorateAllMarkers(document);
+            }, 48);
             mutations.forEach(function (m) {
                 m.addedNodes && m.addedNodes.forEach(function (node) {
                     if (node && node.nodeType === 1) {
@@ -1221,7 +1276,13 @@
                 });
             });
         });
-        mo.observe(document.documentElement, { childList: true, subtree: true });
+        mo.observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['data-i18n-empty', 'data-i18n-toc-cart', 'data-i18n-tob-cart', 'aria-label', 'title', 'alt', 'placeholder'],
+        });
     }
 
     if (document.readyState === 'loading') {

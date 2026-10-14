@@ -20,8 +20,9 @@ final class InlineEditPhraseService
      */
     public function save(string $word, string $translate, string $localeCode): array
     {
-        $word = \trim($word);
-        $translate = (string)$translate;
+        $word = InlinePhraseMarker::unwrapPlain(\trim($word));
+        // Never persist operator markers into the dictionary (causes nested [[W18N:]] leaks).
+        $translate = InlinePhraseMarker::unwrapPlain((string)$translate);
         $localeCode = \trim(\str_replace('-', '_', $localeCode));
         if ($word === '' || $localeCode === '') {
             return ['ok' => false, 'message' => InlinePhraseMarker::plain('参数不完整')];

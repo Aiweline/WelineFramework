@@ -64,6 +64,7 @@
     }
 
     function markCardButtonAdded(button, successText) {
+        successText = unwrapW18nDisplay(successText || '');
         const scope = widgetRoot(button);
         if (!scope || !scope.classList.contains('weline-cart-product-card-add-to-cart')) {
             return;
@@ -517,13 +518,82 @@
         return code + ' ' + value.toFixed(2);
     }
 
+    const W18N_ATTR_RE = /\[\[W18N:([A-Za-z0-9_-]+):([A-Za-z0-9_-]+)\]\]/g;
+
+    function b64urlDecodeW18n(encoded) {
+        try {
+            let s = String(encoded || '').replace(/-/g, '+').replace(/_/g, '/');
+            while (s.length % 4) {
+                s += '=';
+            }
+            return decodeURIComponent(escape(atob(s)));
+        } catch (e) {
+            return '';
+        }
+    }
+
+    /** Peel [[W18N:…]] markers before assigning textContent on shopper flyout. */
+    function unwrapW18nDisplay(raw) {
+        if (global.Weline
+            && global.Weline.ShopperNotice
+            && typeof global.Weline.ShopperNotice.unwrapW18nDisplay === 'function') {
+            return global.Weline.ShopperNotice.unwrapW18nDisplay(raw);
+        }
+        let s = String(raw == null ? '' : raw);
+        let guard = 0;
+        while (guard++ < 8 && s.indexOf('[[W18N:') !== -1) {
+            W18N_ATTR_RE.lastIndex = 0;
+            const next = s.replace(W18N_ATTR_RE, function (_, srcB64, trB64) {
+                return b64urlDecodeW18n(trB64) || b64urlDecodeW18n(srcB64) || '';
+            });
+            if (next === s) {
+                break;
+            }
+            s = next;
+        }
+        return s;
+    }
+
+    function ensureShopperToastStyles() {
+        if (global.Weline
+            && global.Weline.ShopperNotice
+            && typeof global.Weline.ShopperNotice.ensureStylesheet === 'function') {
+            global.Weline.ShopperNotice.ensureStylesheet();
+            return;
+        }
+        // Cart-only path (data-weline-load="cart" without storefrontShopperToast): still pin opaque panel CSS.
+        const ATTR = 'data-weline-shopper-toast-live';
+        const STAMP = '20261015-shopper-toast-arch-v1';
+        if (document.querySelector('link[' + ATTR + '="1"], link[rel="stylesheet"][href*="storefront-shopper-toast"]')) {
+            return;
+        }
+        let href = '/Weline/Theme/view/statics/css/widgets/storefront-shopper-toast.css?v=' + STAMP;
+        try {
+            const cfgNode = document.getElementById('weline-frontend-runtime-config');
+            if (cfgNode && cfgNode.textContent) {
+                const cfg = JSON.parse(cfgNode.textContent);
+                if (cfg && cfg.env && cfg.env.useProductionPublicUrls) {
+                    href = '/static/Weline/Theme/css/widgets/storefront-shopper-toast.css?v=' + STAMP;
+                }
+                if (cfg && cfg.assetVersion) {
+                    href += '&_weline_dev=' + encodeURIComponent(String(cfg.assetVersion));
+                }
+            }
+        } catch (e) { /* keep default href */ }
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        link.setAttribute(ATTR, '1');
+        document.head.appendChild(link);
+    }
+
     function readCartNoticeLabels() {
         const miniCart = document.querySelector('[data-w-mini-cart="1"]');
         const readAttr = function (name, fallback) {
             if (!miniCart) {
                 return fallback;
             }
-            const value = String(miniCart.getAttribute(name) || '').trim();
+            const value = unwrapW18nDisplay(String(miniCart.getAttribute(name) || '').trim());
             return value || fallback;
         };
         const lang = String(
@@ -592,24 +662,28 @@
     }
 
     function ensureCartNoticeHost() {
+        ensureShopperToastStyles();
         if (global.Weline
             && global.Weline.ShopperNotice
             && typeof global.Weline.ShopperNotice.ensureRegion === 'function') {
             return global.Weline.ShopperNotice.ensureRegion();
         }
-        let host = document.querySelector('.w-amz-shopper-notice-region, .w-amz-cart-added-region');
+        let host = document.querySelector(
+            '.w-shopper-notice-region, .w-shopper-cart-added-region, .w-amz-shopper-notice-region, .w-amz-cart-added-region',
+        );
         if (host) {
+            host.classList.add('w-shopper-notice-region', 'w-shopper-cart-added-region');
             return host;
         }
         host = document.createElement('div');
-        host.className = 'w-amz-shopper-notice-region w-amz-cart-added-region';
+        host.className = 'w-shopper-notice-region w-shopper-cart-added-region';
         host.setAttribute('aria-live', 'polite');
         host.setAttribute('aria-atomic', 'false');
         document.body.appendChild(host);
         return host;
     }
 
-    function dismissAmazonCartAddedNotice(panel) {
+    function dismissCartAddedNotice(panel) {
         if (!panel || !panel.isConnected) {
             return;
         }
@@ -621,8 +695,9 @@
         }, 220);
     }
 
-    function showAmazonCartAddedNotice(successText, summary, cartMeta) {
-        const text = String(successText || '').trim();
+    function showCartAddedNoticePanel(successText, summary, cartMeta) {
+        ensureShopperToastStyles();
+        const text = unwrapW18nDisplay(String(successText || '')).trim();
         const subtotal = resolveCartSubtotal(summary);
         if (text === '' || !subtotal) {
             return;
@@ -636,62 +711,62 @@
         const checkoutUrl = '/checkout';
         const host = ensureCartNoticeHost();
 
-        host.querySelectorAll('.w-amz-cart-added').forEach(function (existing) {
-            dismissAmazonCartAddedNotice(existing);
+        host.querySelectorAll('.w-shopper-cart-added, .w-amz-cart-added').forEach(function (existing) {
+            dismissCartAddedNotice(existing);
         });
 
         const panel = document.createElement('aside');
-        panel.className = 'w-amz-cart-added';
+        panel.className = 'w-shopper-cart-added';
         panel.setAttribute('role', 'status');
 
         const header = document.createElement('div');
-        header.className = 'w-amz-cart-added__header';
+        header.className = 'w-shopper-cart-added__header';
 
         const titleWrap = document.createElement('div');
-        titleWrap.className = 'w-amz-cart-added__title-wrap';
+        titleWrap.className = 'w-shopper-cart-added__title-wrap';
 
         const check = document.createElement('span');
-        check.className = 'w-amz-cart-added__check';
+        check.className = 'w-shopper-cart-added__check';
         check.setAttribute('aria-hidden', 'true');
         check.textContent = '✓';
 
         const title = document.createElement('strong');
-        title.className = 'w-amz-cart-added__title';
+        title.className = 'w-shopper-cart-added__title';
         title.textContent = text;
 
         titleWrap.append(check, title);
 
         const close = document.createElement('button');
         close.type = 'button';
-        close.className = 'w-amz-cart-added__close';
+        close.className = 'w-shopper-cart-added__close';
         close.setAttribute('aria-label', labels.close);
         close.textContent = '×';
 
         header.append(titleWrap, close);
 
         const subtotalRow = document.createElement('div');
-        subtotalRow.className = 'w-amz-cart-added__subtotal';
+        subtotalRow.className = 'w-shopper-cart-added__subtotal';
 
         const subtotalLabel = document.createElement('span');
-        subtotalLabel.className = 'w-amz-cart-added__subtotal-label';
+        subtotalLabel.className = 'w-shopper-cart-added__subtotal-label';
         subtotalLabel.textContent = formatCartItemCountLabel(count, labels.subtotal) + ':';
 
         const subtotalAmount = document.createElement('strong');
-        subtotalAmount.className = 'w-amz-cart-added__subtotal-amount';
+        subtotalAmount.className = 'w-shopper-cart-added__subtotal-amount';
         subtotalAmount.textContent = formatStorefrontMoney(subtotal.amount, subtotal.currency);
 
         subtotalRow.append(subtotalLabel, subtotalAmount);
 
         const actions = document.createElement('div');
-        actions.className = 'w-amz-cart-added__actions';
+        actions.className = 'w-shopper-cart-added__actions';
 
         const checkout = document.createElement('a');
-        checkout.className = 'w-amz-cart-added__btn w-amz-cart-added__btn--checkout';
+        checkout.className = 'w-shopper-cart-added__btn w-shopper-cart-added__btn--checkout';
         checkout.href = checkoutUrl;
         checkout.textContent = labels.checkout;
 
         const viewCart = document.createElement('a');
-        viewCart.className = 'w-amz-cart-added__btn w-amz-cart-added__btn--cart';
+        viewCart.className = 'w-shopper-cart-added__btn w-shopper-cart-added__btn--cart';
         viewCart.href = cartUrl;
         viewCart.textContent = labels.viewCart;
 
@@ -701,7 +776,7 @@
         positionCartNoticeHost(host);
 
         const dismiss = function () {
-            dismissAmazonCartAddedNotice(panel);
+            dismissCartAddedNotice(panel);
         };
         close.addEventListener('click', dismiss);
         global.setTimeout(dismiss, 6200);
@@ -711,13 +786,18 @@
         });
     }
 
+    /** @deprecated Use showCartAddedNoticePanel; kept for buy-box / frequently-bought-together callers. */
+    function showAmazonCartAddedNotice(successText, summary, cartMeta) {
+        return showCartAddedNoticePanel(successText, summary, cartMeta);
+    }
+
     function showFloatingToast(message, tone, summary, cartMeta) {
-        const text = String(message || '').trim();
+        const text = unwrapW18nDisplay(String(message || '')).trim();
         if (text === '') {
             return;
         }
         if (tone === 'success' && summary) {
-            showAmazonCartAddedNotice(text, summary, cartMeta);
+            showCartAddedNoticePanel(text, summary, cartMeta);
             return;
         }
         const toast = global.Weline && global.Weline.UI && global.Weline.UI.toast
@@ -778,13 +858,14 @@
         if (!message) {
             return;
         }
+        const plainSuccess = unwrapW18nDisplay(successText || '');
         message.classList.remove('is-error', 'is-loading');
         message.classList.add('is-success');
         message.replaceChildren();
-        message.appendChild(document.createTextNode(successText || ''));
+        message.appendChild(document.createTextNode(plainSuccess));
 
         const url = cartMeta && cartMeta.url ? cartMeta.url : '';
-        const linkText = cartMeta && cartMeta.text ? cartMeta.text : '';
+        const linkText = unwrapW18nDisplay(cartMeta && cartMeta.text ? cartMeta.text : '');
         if (url === '' || linkText === '') {
             return;
         }
@@ -1067,6 +1148,44 @@
         return raw;
     }
 
+    /** Peel storefront inline-edit markers (session may mark PurchasePanel HTML/scripts). */
+    function peelInlineEditMarkers(raw) {
+        const api = global.WelineI18nInlineEdit;
+        if (api && typeof api.unwrap === 'function') {
+            try {
+                return String(api.unwrap(raw) || '');
+            } catch (e) {}
+        }
+        let s = String(raw || '');
+        const re = /\[\[W18N:([A-Za-z0-9_-]+):([A-Za-z0-9_-]+)\]\]/g;
+        const b64 = function (encoded) {
+            try {
+                let t = String(encoded || '').replace(/-/g, '+').replace(/_/g, '/');
+                while (t.length % 4) t += '=';
+                return decodeURIComponent(escape(atob(t)));
+            } catch (e) {
+                return '';
+            }
+        };
+        let i = 0;
+        let next;
+        while (i++ < 8 && s.indexOf('[[W18N:') !== -1) {
+            next = s.replace(re, function (_, a, b) { return b64(b) || b64(a) || ''; });
+            if (next === s) break;
+            s = next;
+        }
+        return s;
+    }
+
+    function notifyInlineEditDecorate(root) {
+        try {
+            const api = global.WelineI18nInlineEdit;
+            if (api && typeof api.decorate === 'function') {
+                api.decorate(root || document);
+            }
+        } catch (e) {}
+    }
+
     function showPurchasePanelError(body, message, onClose) {
         if (!body) {
             return;
@@ -1240,7 +1359,8 @@
                 if (oldScript.src) {
                     next.src = oldScript.src;
                 } else {
-                    next.textContent = oldScript.textContent || '';
+                    // Peel [[W18N:]] from catalogs before re-exec so widgets don't paint raw markers.
+                    next.textContent = peelInlineEditMarkers(oldScript.textContent || '');
                 }
                 oldScript.parentNode.replaceChild(next, oldScript);
                 if (!isExecutable) {
@@ -1248,6 +1368,8 @@
                     return;
                 }
             });
+            // Text/attrs: books + unwrap (before B2B rewrites).
+            notifyInlineEditDecorate(body);
             bindPurchaseButtons(body);
             await loadInjectedAttributeModules(body);
             try {
@@ -1277,6 +1399,8 @@
                     },
                 }));
             } catch (e) {}
+            // After B2B/attr modules may rewrite labels — decorate again.
+            notifyInlineEditDecorate(body);
         }
         return payload;
     }
@@ -1522,7 +1646,7 @@
         addOfferFromButton: addOfferFromButton,
         bindPurchaseButtons: bindPurchaseButtons,
         mountPurchasePanelInto: mountPurchasePanelInto,
-        showCartAddedNotice: showAmazonCartAddedNotice,
+        showCartAddedNotice: showCartAddedNoticePanel,
         boot: boot,
     };
 
