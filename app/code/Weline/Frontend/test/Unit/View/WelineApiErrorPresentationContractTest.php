@@ -150,6 +150,13 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         self::assertStringContainsString('notifyScopeBootstrapWaiting', $script);
         self::assertStringContainsString('renderScopeWaitTip', $script);
         self::assertStringContainsString("i18nText('请稍等片刻...')", $script);
+        // Soft tip: Toast success ⇒ stop; fallback only when shown is false (no Theme DOM probe).
+        self::assertStringContainsString('if (!shown) {', $script);
+        self::assertStringContainsString('this.renderScopeWaitTip(message);', $script);
+        self::assertStringNotContainsString(
+            "[data-theme-notice-region] .weline-notice-toast",
+            $script,
+        );
         self::assertStringContainsString('SCOPE_HOLE_PUNCH_TIMEOUT_MS', $script);
         self::assertStringContainsString("timedOut.code = 'scope_bootstrap_timeout'", $script);
         self::assertStringContainsString('scope_bootstrap_timeout:', $script);

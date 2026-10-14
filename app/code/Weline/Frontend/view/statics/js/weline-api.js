@@ -2761,8 +2761,9 @@
                 } catch (_toastError) {
                     /* tip is best-effort */
                 }
-                // Theme notice may be unavailable early in boot — still surface a soft tip.
-                if (!shown || !document.querySelector('[data-theme-notice-region] .weline-notice-toast, #weline-api-wait-tip')) {
+                // Only fallback when no Toast API succeeded — do not re-probe Theme Notice
+                // DOM (Weline.UI.toast uses .w-toast; dual probe caused duplicate tips).
+                if (!shown) {
                     this.renderScopeWaitTip(message);
                 }
             }, SCOPE_WAIT_TIP_DELAY_MS);
