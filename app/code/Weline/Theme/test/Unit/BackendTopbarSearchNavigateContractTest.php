@@ -29,13 +29,23 @@ final class BackendTopbarSearchNavigateContractTest extends TestCase
         self::assertStringContainsString('paintSelection', $js);
         self::assertStringContainsString('inThisMenu', $js);
         self::assertStringContainsString("closest('[data-search-type-option]')", $js);
-        // Has-children: label text selects; chevron/padding expands.
+        // Has-children: any click expands flyout (never select-and-close on branch rows).
         self::assertStringContainsString('clickedOptionLabel', $js);
         self::assertStringContainsString(".search-type-option-label", $js);
-        self::assertStringContainsString('hasChildren && !clickedOptionLabel', $js);
+        self::assertStringContainsString('if (hasChildren)', $js);
+        self::assertStringContainsString('never select-and-close', $js);
         $header = (string)\file_get_contents($root . '/app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml');
         self::assertStringContainsString('data-weline-load-when="idle"', $header);
         self::assertStringContainsString('data-w-header-search-loader', $header);
+        $headerBar = (string)\file_get_contents($root . '/app/code/Weline/Theme/view/theme/frontend/partials/search/header-bar.phtml');
+        self::assertStringContainsString('data-weline-load="headerSearch"', $headerBar);
+        self::assertStringContainsString('data-weline-load-when="idle"', $headerBar);
+        $headerDefaultJs = (string)\file_get_contents($root . '/app/code/Weline/Theme/view/statics/js/partials/header-default.js');
+        self::assertStringContainsString('isSearchTypeMenuTarget', $headerDefaultJs);
+        self::assertStringContainsString('ensureHeaderSearchModule', $headerDefaultJs);
+        $welineJs = (string)\file_get_contents($root . '/app/code/Weline/Frontend/view/statics/js/weline.js');
+        self::assertStringContainsString('data-w-header-search-loader', $welineJs);
+        self::assertStringContainsString('Hidden hosts never intersect', $welineJs);
 
         foreach ([$srcCss, $pubCss] as $css) {
             self::assertStringContainsString('.w-backend-topbar__center', $css);

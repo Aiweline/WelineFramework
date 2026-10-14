@@ -1700,7 +1700,16 @@
                 if (modules.length === 0) {
                     return;
                 }
-                const when = String(el.getAttribute('data-weline-load-when') || 'visible').toLowerCase();
+                let when = String(el.getAttribute('data-weline-load-when') || 'visible').toLowerCase();
+                // Hidden hosts never intersect → visible IO never fires (headerSearch loader).
+                // Force idle when host is hidden / explicit search loader, even if when-attr was stripped.
+                if (when !== 'idle'
+                    && (el.hasAttribute('hidden')
+                        || el.getAttribute('aria-hidden') === 'true'
+                        || el.hasAttribute('data-w-header-search-loader'))
+                ) {
+                    when = 'idle';
+                }
                 const requested = [];
                 const deferredForEl = [];
                 modules.forEach((name) => {

@@ -328,7 +328,9 @@
                 event.stopPropagation();
                 var optionNode = option.closest('[data-search-type-node]');
                 var hasChildren = !!(optionNode && optionNode.classList.contains('has-children'));
-                if (hasChildren && !clickedOptionLabel(event)) {
+                // Has-children (商品/博客): any click expands flyout — never select-and-close.
+                // Leaf options still select + close. (Avoids "点一下就关" on branch rows.)
+                if (hasChildren) {
                     var willOpen = optionNode.getAttribute('data-state') !== 'open';
                     closeSiblingNodes(optionNode);
                     setNodeOpen(optionNode, willOpen);
@@ -353,24 +355,22 @@
                 return;
             }
 
-            // Type-level branch (Products / Blog): label → select; else expand.
+            // Type-level branch (Products / Blog): keep panel open and toggle flyout.
             event.preventDefault();
             event.stopPropagation();
             var node = branch.closest('[data-search-type-node]');
-            if (clickedOptionLabel(event)) {
-                paintSelection(
-                    branch,
-                    branch.getAttribute('data-value') || '',
-                    branch.getAttribute('data-label') || (branch.textContent || '').trim(),
-                    ''
-                );
-                closeDropdownPanel();
-                return;
-            }
             if (node) {
                 var openBranch = node.getAttribute('data-state') !== 'open';
                 closeSiblingNodes(node);
                 setNodeOpen(node, openBranch);
+                if (clickedOptionLabel(event) || openBranch) {
+                    paintSelection(
+                        branch,
+                        branch.getAttribute('data-value') || '',
+                        branch.getAttribute('data-label') || (branch.textContent || '').trim(),
+                        ''
+                    );
+                }
             }
         }
 

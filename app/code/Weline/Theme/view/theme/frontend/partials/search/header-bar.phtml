@@ -111,7 +111,13 @@ if ($showTypeSelect && $searchType === 'all' && $searchCategoryId > 0) {
     }
 }
 ?>
-<div id="<?= $esc($panelId) ?>" class="header-search-panel w-search-root" data-w-search data-autocomplete="true">
+<?php // headerSearch：岛内可见根再声明一次 — 隐藏 loader 若丢 idle 仍可由本根 / 开搜时 Weline.load 挂载 ?>
+<div id="<?= $esc($panelId) ?>"
+     class="header-search-panel w-search-root"
+     data-w-search
+     data-autocomplete="true"
+     data-weline-load="headerSearch"
+     data-weline-load-when="idle">
     <w:form action="@url{'search'}" method="get" class="header-search-form w-search-form">
         <?php if (!$showTypeSelect): ?>
             <input type="hidden" name="type" value="<?= $esc($searchType) ?>">

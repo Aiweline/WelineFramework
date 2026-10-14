@@ -57,6 +57,33 @@
             const searchToggleVisible = function() {
                 return window.getComputedStyle(searchToggle).display !== 'none';
             };
+            const ensureHeaderSearchModule = function() {
+                try {
+                    if (window.Weline && typeof window.Weline.load === 'function') {
+                        window.Weline.load('headerSearch');
+                    }
+                } catch (e) {
+                    /* module map may still be warming */
+                }
+            };
+
+            /* Type menu portals to <body> — clicks land outside #header-search-panel. */
+            const isSearchTypeMenuTarget = function(target) {
+                if (!target || !target.closest) {
+                    return false;
+                }
+                if (target.closest('.search-type-dropdown')
+                    || target.closest('[data-search-type-node]')
+                    || target.closest('[data-search-type-option]')
+                    || target.closest('[data-search-type-branch]')
+                    || target.closest('[data-search-type-submenu]')
+                ) {
+                    return true;
+                }
+                var panel = target.closest('[data-w-menu-panel]');
+                return !!(panel && panel.querySelector('[data-search-type-node], [data-search-type-option]'));
+            };
+
             const setSearchOpen = function(open, focusInput) {
                 if (!searchToggleVisible()) {
                     header.classList.remove('is-search-open');
@@ -64,6 +91,10 @@
                 }
                 header.classList.toggle('is-search-open', open);
                 searchToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+
+                if (open) {
+                    ensureHeaderSearchModule();
+                }
 
                 if (open && focusInput && searchInput) {
                     requestAnimationFrame(function() {
@@ -78,11 +109,13 @@
                 setSearchOpen(!header.classList.contains('is-search-open'), true);
             });
 
-            /* Floating icon search (desktop SoT / DaoCharms): close on outside click at any width. */
+            /* Floating icon search (desktop SoT / DaoCharms): close on outside click at any width.
+             * Do NOT treat portaled search-type menu clicks as outside — that was "点一下就关". */
             document.addEventListener('click', function(event) {
                 if (header.classList.contains('is-search-open')
                     && !searchPanel.contains(event.target)
                     && !searchToggle.contains(event.target)
+                    && !isSearchTypeMenuTarget(event.target)
                 ) {
                     setSearchOpen(false, false);
                 }
