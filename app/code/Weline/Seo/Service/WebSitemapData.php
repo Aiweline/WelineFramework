@@ -14,6 +14,7 @@ namespace Weline\Seo\Service;
 use Weline\Seo\Model\SitemapUrl;
 use Weline\Seo\Interface\SitemapPlatformAdapterInterface;
 use Weline\Seo\Service\Sitemap\AtomicSitemapPublisher;
+use Weline\Seo\Service\Sitemap\SitemapEdgeMapCoordinator;
 
 /**
  * Sitemap 数据服务
@@ -50,6 +51,7 @@ class WebSitemapData
     private SeoWebsiteDirectory $websiteDirectory;
     private SeoWebsiteAccountBindingService $bindingService;
     private AtomicSitemapPublisher $publisher;
+    private SitemapEdgeMapCoordinator $edgeMapCoordinator;
 
     public function __construct(
         SitemapUrl $sitemapUrlModel,
@@ -57,12 +59,14 @@ class WebSitemapData
         SeoWebsiteDirectory $websiteDirectory,
         SeoWebsiteAccountBindingService $bindingService,
         AtomicSitemapPublisher $publisher,
+        SitemapEdgeMapCoordinator $edgeMapCoordinator,
     ) {
         $this->sitemapUrlModel = $sitemapUrlModel;
         $this->adapterRegistry = $adapterRegistry;
         $this->websiteDirectory = $websiteDirectory;
         $this->bindingService = $bindingService;
         $this->publisher = $publisher;
+        $this->edgeMapCoordinator = $edgeMapCoordinator;
     }
 
     /**
@@ -147,6 +151,26 @@ class WebSitemapData
             ];
         }
 
+        $edge = [];
+        try {
+            $edge = $this->edgeMapCoordinator->afterCanonicalPublished(
+                $websiteId,
+                $websiteCode,
+                $canonical,
+            );
+        } catch (\Throwable $e) {
+            w_log_warning('Sitemap edge map / CDN purge after publish failed: ' . $e->getMessage(), [
+                'website_id' => $websiteId,
+                'website_code' => $websiteCode,
+            ], 'seo');
+            $edge = [
+                'map' => ['ok' => false, 'message' => $e->getMessage()],
+                'reload' => ['ok' => false],
+                'cdn' => ['success' => false, 'message' => $e->getMessage()],
+                'purge_urls' => [],
+            ];
+        }
+
         $adapters = $this->getWebsiteAdapters($websiteId);
         $platformResults = [];
         $totalUrls = (int)($canonical['total_urls'] ?? 0);
@@ -186,6 +210,7 @@ class WebSitemapData
             'website_code' => $websiteCode,
             'platform_count' => count($adapters),
             'submission_ready' => $adapters !== [],
+            'edge' => $edge,
             'message' => $adapters === []
                 ? __('Canonical Sitemap 已生成；该站点尚未绑定可提交的 SEO 账户')
                 : __('Canonical Sitemap 与平台副本已生成'),

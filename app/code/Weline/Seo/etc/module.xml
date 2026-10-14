@@ -5,6 +5,7 @@
         <sequence>
             <module name="Weline_Ai"/>
             <module name="Weline_Backend"/>
+            <module name="Weline_Server"/>
             <module name="WeShop_Store"/>
         </sequence>
     </module>

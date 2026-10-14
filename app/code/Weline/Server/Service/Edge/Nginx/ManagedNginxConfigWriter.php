@@ -240,12 +240,29 @@ NGINX;
         } catch (\Throwable) {
             // Conf write continues; nginx -t will fail closed if pierce map missing.
         }
+        try {
+            $sitemapEdgeWriter = new SitemapEdgeNginxMapWriter($this->paths);
+            if (!\is_file($sitemapEdgeWriter->mapFilePath())
+                || !\is_file($sitemapEdgeWriter->locationsFilePath())
+            ) {
+                $sitemapEdgeWriter->publishDefaults();
+            }
+        } catch (\Throwable) {
+            // Conf write continues; nginx -t will fail closed if sitemap edge map missing.
+        }
         $quotedFpcPierceMap = $this->nginxQuotedPath(
             $this->paths->confDir() . DIRECTORY_SEPARATOR . FpcPierceNginxMapWriter::MAP_BASENAME
+        );
+        $quotedSitemapEdgeMap = $this->nginxQuotedPath(
+            $this->paths->confDir() . DIRECTORY_SEPARATOR . SitemapEdgeNginxMapWriter::MAP_BASENAME
+        );
+        $quotedSitemapEdgeLocations = $this->nginxQuotedPath(
+            $this->paths->confDir() . DIRECTORY_SEPARATOR . SitemapEdgeNginxMapWriter::LOCATIONS_BASENAME
         );
         $fpcHtmlDiskMapBlock = <<<NGINX
 
     include {$quotedFpcPierceMap};
+    include {$quotedSitemapEdgeMap};
     map \$http_authorization \$wls_fpc_html_bypass_auth {
         default 0;
         "~." 1;
@@ -551,6 +568,7 @@ http {
         }
 
 {$nonHtmlOriginLocationBlock}
+        include {$quotedSitemapEdgeLocations};
 {$mediaDiskLocationBlock}
 {$staticCacheLocationBlock}
         # FPC URL tree: generated/html/live/{Host}/…/index.html.br. Miss / bypass / no-br → @wls_html_origin.

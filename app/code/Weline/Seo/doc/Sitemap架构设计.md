@@ -243,13 +243,13 @@ Sitemap 首页是纯读取页，打开时不生成 XML。同步、生成、提�
   并避免 `<loc>` 与 hreflang `href` 主机分裂。
 - 全站 sync 会 disable 当前注册表中不存在 Provider 的 `(module, scope)` 活跃行；无 Provider 的
   module 行不得进入 canonical。
-- 生成物落在 `pub/sitemaps/**`，但 WLS 不得把 `/sitemaps/**`（以及根路径
-  `sitemap.xml` / `robots.txt`）当静态文件直出：`StaticRequestBypassDecider` 必须把它们
-  交给框架，走 `ProtocolRouteRewrite` → `SitemapProtocolRenderer`，否则磁盘里的
-  localhost `<loc>` 会原样暴露给爬虫与验收请求。
-- 若曾被静态直出并带上 `Cache-Control: public, max-age=604800`，托管 Nginx 边缘微缓存
-  可能继续 HIT 旧 localhost 正文；修复旁路后需清空
-  `var/server/nginx-*-runtime-*/cache`（或带 Cookie/`proxy_cache_bypass`）再验收。
+- 生成物权威仍在 `pub/sitemaps/**`。托管 Nginx **按站映射直出**（`SitemapEdgeNginxMapWriter`
+  → `sitemap-edge.map.conf` / `sitemap-edge.locations.conf`）：HIT 时边缘读盘，不进 WLS。
+  映射在 canonical 发布成功后由 `SitemapEdgeMapCoordinator` 重写并 `reload`；同时按公开
+  Sitemap URL 调 CDN `purge(urls)`，避免边缘/CDN 长缓存旧 XML。
+- 无托管 Nginx / 映射缺失时：WLS 仍经 `StaticRequestBypassDecider` → `ProtocolRouteRewrite`
+  → `SitemapProtocolRenderer` 读盘（可做 origin 改写）。`robots.txt` 仍走协议层，不进映射。
+- 落盘 `<loc>` 须为公开 origin；边缘 HIT **不做**协议改写。挂载入口依赖改写时回源 WLS。
 - 后台语言桶读模型以 `weline_sitemap_url` 活跃行为准；旧 canonical manifest 中已无活跃
   URL 的 module/scope（例如被 FrontendHomeOwner 认领后的 `Weline_Index`）不再展示。
 - 核心实现先落在框架仓，再逐文件合并到 QiPai；QiPai 自有 SEO 优化扩展和其它在途 WIP 保持不变。

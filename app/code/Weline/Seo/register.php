@@ -15,12 +15,13 @@ Register::register(
     Register::MODULE,
     'Weline_Seo',
     __DIR__,
-    '1.1.2',
+    '1.2.118',
     'SEO 集成与智能优化模块',
     [
         'Weline_Ai',
         'Weline_Backend',
         'Weline_Websites',
+        'Weline_Server',
         'WeShop_Store',
     ]
 );
