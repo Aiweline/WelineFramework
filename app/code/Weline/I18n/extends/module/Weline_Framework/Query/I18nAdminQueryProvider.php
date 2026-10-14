@@ -58,6 +58,10 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
         'dictionary-current-translation-mode' => 'Weline_I18n::i18n_dictionaries',
         'dictionary-quick-data' => 'Weline_I18n::i18n_dictionaries',
         'dictionary-batch-translate' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-module-catalog' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-module-catalog-stats' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-module-translate' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-module-export-csv' => 'Weline_I18n::i18n_dictionaries',
         'ai-save' => 'Weline_I18n::i18n_ai_translation',
         'ai-enqueue' => 'Weline_I18n::i18n_ai_translation',
         'ai-enqueue-all' => 'Weline_I18n::i18n_ai_translation',
@@ -361,6 +365,7 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             'dictionary-quick-data' => ['getQuickTranslationData', 'GET', null],
             'dictionary-batch-translate' => ['postBatchTranslate', 'POST', null],
             'dictionary-module-catalog' => ['getModuleCatalog', 'GET', null],
+            'dictionary-module-catalog-stats' => ['getModuleCatalogStats', 'GET', null],
             'dictionary-module-translate' => ['postModuleTranslate', 'POST', null],
             'dictionary-module-export-csv' => ['postModuleExportCsv', 'POST', null],
         ];

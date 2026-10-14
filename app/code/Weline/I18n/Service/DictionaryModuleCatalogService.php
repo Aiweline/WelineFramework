@@ -43,8 +43,124 @@ class DictionaryModuleCatalogService
     public function listModules(string $targetLocale, string $search = ''): array
     {
         $targetLocale = $this->normalizeLocale($targetLocale);
-        $sourceLocale = $this->aiConfig->getSourceLocale();
+        if ($targetLocale === '') {
+            return [];
+        }
+
+        $sourceLocale = $this->normalizeLocale($this->aiConfig->getSourceLocale());
         $search = trim($search);
+        $pendingByModule = $this->countAiPendingExportTotalsByModule([$targetLocale]);
+
+        /** @var list<array{module: string, total: int, csv_translated: int, db_candidates: list<string>, target_csv_exists: bool, source_csv_exists: bool}> */
+        $drafts = [];
+        $allDbCandidates = [];
+
+        foreach (Env::getInstance()->getActiveModules() as $moduleMeta) {
+            if (!is_array($moduleMeta)) {
+                continue;
+            }
+
+            $moduleName = trim((string)($moduleMeta['name'] ?? ''));
+            $basePath = rtrim((string)($moduleMeta['base_path'] ?? ''), "\\/");
+            if ($moduleName === '' || $basePath === '') {
+                continue;
+            }
+
+            if ($search !== '' && stripos($moduleName, $search) === false) {
+                continue;
+            }
+
+            $i18nDir = $basePath . DS . 'i18n';
+            if (!is_dir($i18nDir)) {
+                continue;
+            }
+
+            $sourceCsv = $i18nDir . DS . $sourceLocale . '.csv';
+            $targetCsv = $i18nDir . DS . $targetLocale . '.csv';
+            $sourceWords = $this->readCsvWords(is_file($sourceCsv) ? $sourceCsv : '');
+            $targetWords = $this->readCsvWords(is_file($targetCsv) ? $targetCsv : '');
+
+            if ($sourceWords === [] && $targetWords === []) {
+                continue;
+            }
+
+            $wordKeys = array_values(array_unique(array_merge(array_keys($sourceWords), array_keys($targetWords))));
+            $csvTranslated = 0;
+            $dbCandidates = [];
+            foreach ($wordKeys as $word) {
+                $word = trim((string)$word);
+                if ($word === '') {
+                    continue;
+                }
+                $csvTranslation = trim((string)($targetWords[$word] ?? ''));
+                if ($csvTranslation !== '' && $csvTranslation !== $word) {
+                    $csvTranslated++;
+                    continue;
+                }
+                $dbCandidates[] = $word;
+                $allDbCandidates[] = $word;
+            }
+
+            $drafts[] = [
+                'module' => $moduleName,
+                'total' => count($wordKeys),
+                'csv_translated' => $csvTranslated,
+                'db_candidates' => $dbCandidates,
+                'target_csv_exists' => is_file($targetCsv),
+                'source_csv_exists' => is_file($sourceCsv),
+            ];
+        }
+
+        $translatedInDb = $this->loadTranslatedWordSet($targetLocale, $allDbCandidates);
+        $rows = [];
+        foreach ($drafts as $draft) {
+            $dbHit = 0;
+            foreach ($draft['db_candidates'] as $word) {
+                if (isset($translatedInDb[$word])) {
+                    $dbHit++;
+                }
+            }
+            $total = (int)$draft['total'];
+            $translated = (int)$draft['csv_translated'] + $dbHit;
+            $untranslated = max(0, $total - $translated);
+            $progressPercent = $total > 0 ? round(($translated / $total) * 100, 1) : 0.0;
+            $moduleName = (string)$draft['module'];
+
+            $rows[] = [
+                'module' => $moduleName,
+                'has_i18n' => true,
+                'total' => $total,
+                'translated' => $translated,
+                'untranslated' => $untranslated,
+                'progress_percent' => $progressPercent,
+                'ai_pending_export' => (int)($pendingByModule[$moduleName] ?? 0),
+                'target_csv_exists' => (bool)$draft['target_csv_exists'],
+                'source_csv_exists' => (bool)$draft['source_csv_exists'],
+                'stats_ready' => true,
+            ];
+        }
+
+        usort($rows, static fn(array $a, array $b): int => strcmp($a['module'], $b['module']));
+
+        return $rows;
+    }
+
+    /**
+     * Fast module shell for admin catalog SSR/AJAX: module names + pending export only.
+     * Does not read CSV bodies or per-word DB lookups (those belong to describeModule).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listModulesShell(string $targetLocale, string $search = ''): array
+    {
+        $targetLocale = $this->normalizeLocale($targetLocale);
+        if ($targetLocale === '') {
+            return [];
+        }
+
+        $sourceLocale = $this->normalizeLocale($this->aiConfig->getSourceLocale());
+        $search = trim($search);
+        $pendingByModule = $this->countAiPendingExportTotalsByModule([$targetLocale]);
         $rows = [];
 
         foreach (Env::getInstance()->getActiveModules() as $moduleMeta) {
@@ -63,49 +179,104 @@ class DictionaryModuleCatalogService
             }
 
             $i18nDir = $basePath . DS . 'i18n';
-            $hasI18n = is_dir($i18nDir);
-            if (!$hasI18n) {
+            if (!is_dir($i18nDir)) {
                 continue;
             }
 
             $sourceCsv = $i18nDir . DS . $sourceLocale . '.csv';
             $targetCsv = $i18nDir . DS . $targetLocale . '.csv';
-            $sourceWords = $this->readCsvWords(is_file($sourceCsv) ? $sourceCsv : '');
-            $targetWords = $this->readCsvWords(is_file($targetCsv) ? $targetCsv : '');
-
-            if ($sourceWords === [] && $targetWords === []) {
+            $sourceExists = is_file($sourceCsv);
+            $targetExists = is_file($targetCsv);
+            if (!$sourceExists && !$targetExists) {
                 continue;
             }
-
-            $wordKeys = array_values(array_unique(array_merge(array_keys($sourceWords), array_keys($targetWords))));
-            $total = count($wordKeys);
-            $translated = 0;
-
-            foreach ($wordKeys as $word) {
-                if ($this->isWordTranslated($word, $targetLocale, $targetWords, $moduleName)) {
-                    $translated++;
-                }
-            }
-
-            $untranslated = max(0, $total - $translated);
-            $progressPercent = $total > 0 ? round(($translated / $total) * 100, 1) : 0.0;
 
             $rows[] = [
                 'module' => $moduleName,
                 'has_i18n' => true,
-                'total' => $total,
-                'translated' => $translated,
-                'untranslated' => $untranslated,
-                'progress_percent' => $progressPercent,
-                'ai_pending_export' => $this->countAiPendingExport($moduleName, $targetLocale),
-                'target_csv_exists' => is_file($targetCsv),
-                'source_csv_exists' => is_file($sourceCsv),
+                'total' => 0,
+                'translated' => 0,
+                'untranslated' => 0,
+                'progress_percent' => 0.0,
+                'ai_pending_export' => (int)($pendingByModule[$moduleName] ?? 0),
+                'target_csv_exists' => $targetExists,
+                'source_csv_exists' => $sourceExists,
+                'stats_ready' => false,
             ];
         }
 
         usort($rows, static fn(array $a, array $b): int => strcmp($a['module'], $b['module']));
 
         return $rows;
+    }
+
+    /**
+     * Single-module catalog row (avoid full listModules scan after translate/export).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function describeModule(string $moduleName, string $targetLocale): ?array
+    {
+        $moduleName = trim($moduleName);
+        $targetLocale = $this->normalizeLocale($targetLocale);
+        if ($moduleName === '' || $targetLocale === '') {
+            return null;
+        }
+
+        $basePath = $this->resolveModuleBasePath($moduleName);
+        if ($basePath === '' || !is_dir($basePath . DS . 'i18n')) {
+            return null;
+        }
+
+        $sourceLocale = $this->normalizeLocale($this->aiConfig->getSourceLocale());
+        $sourceCsv = $basePath . DS . 'i18n' . DS . $sourceLocale . '.csv';
+        $targetCsv = $basePath . DS . 'i18n' . DS . $targetLocale . '.csv';
+        $sourceWords = $this->readCsvWords(is_file($sourceCsv) ? $sourceCsv : '');
+        $targetWords = $this->readCsvWords(is_file($targetCsv) ? $targetCsv : '');
+        if ($sourceWords === [] && $targetWords === []) {
+            return null;
+        }
+
+        $wordKeys = array_values(array_unique(array_merge(array_keys($sourceWords), array_keys($targetWords))));
+        $csvTranslated = 0;
+        $dbCandidates = [];
+        foreach ($wordKeys as $word) {
+            $word = trim((string)$word);
+            if ($word === '') {
+                continue;
+            }
+            $csvTranslation = trim((string)($targetWords[$word] ?? ''));
+            if ($csvTranslation !== '' && $csvTranslation !== $word) {
+                $csvTranslated++;
+                continue;
+            }
+            $dbCandidates[] = $word;
+        }
+
+        $translatedInDb = $this->loadTranslatedWordSet($targetLocale, $dbCandidates);
+        $dbHit = 0;
+        foreach ($dbCandidates as $word) {
+            if (isset($translatedInDb[$word])) {
+                $dbHit++;
+            }
+        }
+
+        $total = count($wordKeys);
+        $translated = $csvTranslated + $dbHit;
+        $untranslated = max(0, $total - $translated);
+
+        return [
+            'module' => $moduleName,
+            'has_i18n' => true,
+            'total' => $total,
+            'translated' => $translated,
+            'untranslated' => $untranslated,
+            'progress_percent' => $total > 0 ? round(($translated / $total) * 100, 1) : 0.0,
+            'ai_pending_export' => $this->countAiPendingExport($moduleName, $targetLocale),
+            'target_csv_exists' => is_file($targetCsv),
+            'source_csv_exists' => is_file($sourceCsv),
+            'stats_ready' => true,
+        ];
     }
 
     /**
