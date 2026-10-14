@@ -801,8 +801,8 @@ final class ThemeRuntimeCacheCleaner
     /**
      * Theme rebuild: keep live serving old HTML while staging is seeded + warmed,
      * then atomically promote. Warm failure abandons staging (live unchanged).
-     * After promote, sampled html-disk pages must carry current StorefrontGenerationIdentity
-     * (themePublishedVersionId)—not an empty or prior Scope stamp.
+     * After promote, real HTTP access per warm Host must show non-empty
+     * themePublishedVersionId, and live stamp must match origin bake for that Host.
      *
      * @param array{steps:array<string,bool>,failures:array<string,string>} $result
      */
@@ -892,118 +892,91 @@ final class ThemeRuntimeCacheCleaner
     }
 
     /**
-     * Sample live html-disk index.html themePublishedVersionId ∈ acceptable storefront
-     * published ids (bound themes × storefront scopes + current RequestContext identity).
-     * Soft-fail (log) when no samples / empty acceptable set; hard-fail on unknown stamp.
-     * Do not compare every host sample to CLI `currentVersionId()` alone — Global vs Store
-     * false-positives abort setup:upgrade after a successful promote.
+     * Post-promote generation assert via real HTTP access (not CLI scope probes).
+     *
+     * For each warm Host target:
+     * 1) Visitor-path GET (no pierce / no FPC bypass) — what live html-disk serves.
+     * 2) Origin-path GET (pierce + bypass) — what this Host would bake under current publish.
+     * Fail-closed when live stamp is empty, or live ≠ origin for the same Host.
+     * Soft-fail (log) when no target is reachable — do not invent CLI acceptable-id sets.
      */
     private function assertPromotedHtmlDiskMatchesStorefrontGeneration(): void
     {
         if (!\class_exists(\Weline\Frontend\Helper\StorefrontGenerationIdentity::class)) {
             return;
         }
-        $acceptable = [];
-        try {
-            if (\class_exists(ThemePublishedVersionRuntimeResolver::class)) {
-                /** @var ThemePublishedVersionRuntimeResolver $resolver */
-                $resolver = ObjectManager::getInstance(ThemePublishedVersionRuntimeResolver::class);
-                $acceptable = $resolver->collectAcceptableStorefrontGenerationIds();
-            }
-        } catch (\Throwable) {
-            $acceptable = [];
-        }
-        if ($acceptable === []) {
-            $fallback = \trim((string)\Weline\Frontend\Helper\StorefrontGenerationIdentity::currentVersionId());
-            if ($fallback !== '') {
-                $acceptable[$fallback] = true;
-            }
-        }
-        if ($acceptable === []) {
-            Env::log('theme_cache_clear', 'html-disk promote: no acceptable storefront generation ids to assert');
-            return;
-        }
-        $liveRoot = BP . 'generated' . \DIRECTORY_SEPARATOR . 'html' . \DIRECTORY_SEPARATOR . 'live';
-        if (!\is_dir($liveRoot)) {
-            return;
-        }
-        $samples = [];
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($liveRoot, \FilesystemIterator::SKIP_DOTS),
-        );
-        foreach ($iterator as $file) {
-            if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+        /** @var StorefrontWarmupHttpClient $http */
+        $http = ObjectManager::getInstance(StorefrontWarmupHttpClient::class);
+        $probed = 0;
+        foreach ($http->resolveTargets() as $target) {
+            $host = \trim((string)($target['host'] ?? ''));
+            if ($host === '') {
                 continue;
             }
-            $name = $file->getFilename();
-            if ($name !== 'index.html' && $name !== 'index.html.br') {
+            $live = $http->requestTarget($target, '/', [
+                'pierce' => false,
+                'bypass' => false,
+                'return_body' => true,
+            ]);
+            if (!($live['ok'] ?? false) || \strlen((string)($live['body'] ?? '')) < 1000) {
+                Env::log(
+                    'theme_cache_clear',
+                    'html-disk promote access assert skip live host=' . $host
+                    . ' reason=' . (string)($live['reason'] ?? 'short_body'),
+                );
                 continue;
             }
-            $samples[] = $file->getPathname();
-            if (\count($samples) >= 6) {
-                break;
-            }
-        }
-        if ($samples === []) {
-            Env::log('theme_cache_clear', 'html-disk promote: no index.html samples to assert generation stamp');
-            return;
-        }
-        $acceptableList = \implode(',', \array_keys($acceptable));
-        foreach ($samples as $path) {
-            $html = $this->readHtmlDiskSampleBody($path);
-            if ($html === '') {
-                continue;
-            }
-            if (!\preg_match('/"themePublishedVersionId"\s*:\s*"([^"]*)"/', $html, $m)
-                && !\preg_match('/themePublishedVersionId["\']?\s*[:=]\s*["\']([^"\']+)["\']/', $html, $m)
-            ) {
-                continue;
-            }
-            $baked = \trim((string)($m[1] ?? ''));
-            if ($baked === '') {
+            $liveStamp = $this->extractThemePublishedVersionIdFromHtml((string)$live['body']);
+            if ($liveStamp === '') {
                 throw new \RuntimeException(
-                    'html-disk promote left empty themePublishedVersionId in ' . $path
-                    . '; acceptable StorefrontGenerationIds=' . $acceptableList,
+                    'html-disk promote access left empty themePublishedVersionId for host=' . $host
+                    . ' url=' . (string)($live['url'] ?? ''),
                 );
             }
-            if (!isset($acceptable[$baked])) {
-                // Case-insensitive membership (ids are numeric strings).
-                $hit = false;
-                foreach ($acceptable as $id => $_) {
-                    if (\strcasecmp((string)$id, $baked) === 0) {
-                        $hit = true;
-                        break;
-                    }
-                }
-                if (!$hit) {
+            $cookie = \trim((string)($live['storefront_gen_cookie'] ?? ''));
+            if ($cookie !== '' && \strcasecmp($cookie, $liveStamp) !== 0) {
+                throw new \RuntimeException(
+                    'html-disk promote access cookie≠page for host=' . $host
+                    . '; cookie=' . $cookie . ' page=' . $liveStamp,
+                );
+            }
+
+            $origin = $http->requestTarget($target, '/', [
+                'pierce' => true,
+                'bypass' => true,
+                'return_body' => true,
+            ]);
+            if (($origin['ok'] ?? false)
+                && \strlen((string)($origin['body'] ?? '')) >= 1000
+                && !\str_contains(\strtoupper((string)($origin['fpc'] ?? '')), 'HIT')
+            ) {
+                $originStamp = $this->extractThemePublishedVersionIdFromHtml((string)$origin['body']);
+                if ($originStamp !== '' && \strcasecmp($originStamp, $liveStamp) !== 0) {
                     throw new \RuntimeException(
-                        'html-disk promote stamp mismatch in ' . $path
-                        . '; baked=' . $baked . ' acceptable=' . $acceptableList,
+                        'html-disk promote access stamp mismatch for host=' . $host
+                        . '; live=' . $liveStamp . ' origin=' . $originStamp,
                     );
                 }
             }
+            ++$probed;
+        }
+        if ($probed === 0) {
+            Env::log('theme_cache_clear', 'html-disk promote: no HTTP access probes succeeded to assert generation');
         }
     }
 
-    private function readHtmlDiskSampleBody(string $path): string
+    private function extractThemePublishedVersionIdFromHtml(string $html): string
     {
-        if (\str_ends_with($path, '.br')) {
-            if (\function_exists('brotli_uncompress')) {
-                $raw = (string)@\file_get_contents($path);
-                if ($raw === '') {
-                    return '';
-                }
-                $decoded = @\brotli_uncompress($raw);
-
-                return \is_string($decoded) ? $decoded : '';
-            }
-            $cmd = 'brotli -dc ' . \escapeshellarg($path) . ' 2>/dev/null';
-            $out = (string)@\shell_exec($cmd);
-
-            return $out;
+        if ($html === '') {
+            return '';
+        }
+        if (!\preg_match('/"themePublishedVersionId"\s*:\s*"([^"]*)"/', $html, $m)
+            && !\preg_match('/themePublishedVersionId["\']?\s*[:=]\s*["\']([^"\']+)["\']/', $html, $m)
+        ) {
+            return '';
         }
 
-        return (string)@\file_get_contents($path);
+        return \trim((string)($m[1] ?? ''));
     }
 
     /**

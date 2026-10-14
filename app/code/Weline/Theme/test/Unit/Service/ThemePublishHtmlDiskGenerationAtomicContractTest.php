@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * Contract: Theme publish/promote → html-disk purge+rebake is atomic with
  * StorefrontGenerationIdentity (themePublishedVersionId), not deploy_version.
+ * Post-promote assert must use real HTTP access — not CLI collectAcceptable probes.
  */
 final class ThemePublishHtmlDiskGenerationAtomicContractTest extends TestCase
 {
@@ -18,8 +19,7 @@ final class ThemePublishHtmlDiskGenerationAtomicContractTest extends TestCase
 
         self::assertStringContainsString('clearNonGlobalCaches($themeId, $reason, false)', $src);
         self::assertStringContainsString('assertPromotedHtmlDiskMatchesStorefrontGeneration', $src);
-        self::assertStringContainsString('collectAcceptableStorefrontGenerationIds', $src);
-        self::assertStringContainsString('StorefrontGenerationIdentity::currentVersionId', $src);
+        self::assertStringContainsString('StorefrontWarmupHttpClient', $src);
 
         $allPos = \strpos($src, 'function clearAllThemeRelatedCaches(');
         self::assertNotFalse($allPos);
@@ -51,19 +51,23 @@ final class ThemePublishHtmlDiskGenerationAtomicContractTest extends TestCase
         self::assertStringContainsString('data-weline-layout-pack', $src);
     }
 
-    public function testRebuildAssertsBakedIdMatchesGenerationIdentity(): void
+    public function testRebuildAssertsViaHttpAccessNotCliAcceptableSet(): void
     {
         $src = $this->read('app/code/Weline/Theme/Service/ThemeRuntimeCacheCleaner.php');
-        self::assertStringContainsString('html-disk promote stamp mismatch', $src);
-        self::assertStringContainsString('themePublishedVersionId', $src);
-        self::assertStringContainsString('acceptable=', $src);
-        self::assertStringContainsString('collectAcceptableStorefrontGenerationIds', $src);
-        $assertChunk = \substr(
-            $src,
-            (int)\strpos($src, 'assertPromotedHtmlDiskMatchesStorefrontGeneration'),
-            2200,
-        );
+        $assertPos = \strpos($src, 'function assertPromotedHtmlDiskMatchesStorefrontGeneration');
+        self::assertNotFalse($assertPos);
+        $assertChunk = \substr($src, $assertPos, 3200);
+        self::assertStringContainsString('themePublishedVersionId', $assertChunk);
+        self::assertStringContainsString('requestTarget', $assertChunk);
+        self::assertStringContainsString("'pierce' => false", $assertChunk);
+        self::assertStringContainsString("'bypass' => false", $assertChunk);
+        self::assertStringContainsString('live=', $assertChunk);
+        self::assertStringContainsString('origin=', $assertChunk);
         self::assertStringNotContainsString('deploy_version', $assertChunk);
+        // Must not CLI-probe acceptable published ids for promote assert.
+        self::assertStringNotContainsString('collectAcceptableStorefrontGenerationIds', $assertChunk);
+        self::assertStringNotContainsString('currentVersionId()', $assertChunk);
+        self::assertStringNotContainsString('RecursiveDirectoryIterator', $assertChunk);
         // Must not require baked === CLI currentVersionId alone (Global vs Store false positive).
         self::assertStringNotContainsString('strcasecmp($baked, $expected)', $assertChunk);
     }

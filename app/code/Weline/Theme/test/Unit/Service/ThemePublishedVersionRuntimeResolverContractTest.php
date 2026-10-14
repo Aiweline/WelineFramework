@@ -19,6 +19,8 @@ final class ThemePublishedVersionRuntimeResolverContractTest extends TestCase
         self::assertStringNotContainsString('ThemeLayoutVersionService', $src);
         self::assertStringNotContainsString('ThemeRuntimeLayoutResolver', $src);
         self::assertStringContainsString('default.__website__.default', $src);
+        // Promote stamp acceptance is HTTP access validation — not channel-probe widening here.
+        self::assertStringNotContainsString('default.__store__.__channel__', $src);
         self::assertMatchesRegularExpression('/Authority is ThemeScopeVersion/', $src);
         self::assertStringContainsString('resolveGenerationIdentity', $src);
         self::assertStringContainsString('not system deploy_version', $src);

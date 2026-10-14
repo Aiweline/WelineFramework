@@ -186,7 +186,39 @@ final class StorefrontWarmupHttpClient
     }
 
     /**
-     * @return array{ok:bool,status:int,body:string,fpc:string,reason:string,url:string}
+     * Single-target HTTP GET with explicit visitor vs origin bake semantics.
+     *
+     * - Visitor/live assert: pierce=false, bypass=false, return_body=true (HIT accepted).
+     * - Staging origin bake: pierce=true, bypass=true (refuse HIT at caller).
+     *
+     * @param array{scheme:string,connect:string,port:int,host:string} $target
+     * @param array{pierce?:bool,bypass?:bool,return_body?:bool} $opts
+     * @return array{ok:bool,status:int,body:string,fpc:string,reason:string,url:string,storefront_gen_cookie:string}
+     */
+    public function requestTarget(array $target, string $path, array $opts = []): array
+    {
+        $path = \trim($path);
+        if ($path === '' || $path[0] !== '/') {
+            $path = '/' . \ltrim($path, '/');
+        }
+        $pierce = (bool)($opts['pierce'] ?? true);
+        $bypass = (bool)($opts['bypass'] ?? false);
+        $returnBody = (bool)($opts['return_body'] ?? $bypass);
+
+        return $this->httpGet(
+            (string)($target['connect'] ?? ''),
+            (int)($target['port'] ?? 0),
+            (string)($target['host'] ?? ''),
+            $path,
+            (string)($target['scheme'] ?? 'http'),
+            $returnBody,
+            $pierce,
+            $bypass,
+        );
+    }
+
+    /**
+     * @return array{ok:bool,status:int,body:string,fpc:string,reason:string,url:string,storefront_gen_cookie:string}
      */
     private function httpGet(
         string $connectHost,
@@ -195,6 +227,8 @@ final class StorefrontWarmupHttpClient
         string $path,
         string $scheme,
         bool $needBody,
+        bool $pierce = true,
+        bool $bypass = false,
     ): array {
         $scheme = \strtolower($scheme) === 'http' ? 'http' : 'https';
         $connectHost = \trim($connectHost);
@@ -208,14 +242,26 @@ final class StorefrontWarmupHttpClient
         // Staging warm seeds hardlinks from live; without pierce, Nginx html-disk HIT
         // never reaches PHP and promote keeps stale leaves. Pierce alone is not enough
         // on some edges (still HIT); needBody also sends x-wls-fpc-bypass for origin HTML.
-        $path = self::appendPierceQuery($path);
+        // Post-promote visitor assert must NOT pierce/bypass — that is real access path.
+        if ($pierce) {
+            $path = self::appendPierceQuery($path);
+        }
         $url = $scheme . '://' . $authority . $path;
+        $empty = static fn (string $reason) => [
+            'ok' => false,
+            'status' => 0,
+            'body' => '',
+            'fpc' => '',
+            'reason' => $reason,
+            'url' => $url,
+            'storefront_gen_cookie' => '',
+        ];
         if (!\function_exists('curl_init')) {
-            return ['ok' => false, 'status' => 0, 'body' => '', 'fpc' => '', 'reason' => 'curl_missing', 'url' => $url];
+            return $empty('curl_missing');
         }
         $ch = \curl_init($url);
         if ($ch === false) {
-            return ['ok' => false, 'status' => 0, 'body' => '', 'fpc' => '', 'reason' => 'curl_init', 'url' => $url];
+            return $empty('curl_init');
         }
 
         $requestHeaders = [
@@ -223,12 +269,15 @@ final class StorefrontWarmupHttpClient
             'Accept: text/html,application/xml,text/xml,*/*',
             'User-Agent: WelineStorefrontWarmup/1.0',
         ];
-        if ($needBody) {
+        // Legacy: needBody warm/republish implies origin bypass when caller did not
+        // pass explicit bypass=false via requestTarget.
+        if ($bypass || ($needBody && $pierce)) {
             // Republish/staging seed must capture freshly rendered HTML, not disk HIT.
             $requestHeaders[] = 'x-wls-fpc-bypass: 1';
         }
 
         $headers = [];
+        $setCookies = [];
         \curl_setopt_array($ch, [
             \CURLOPT_RETURNTRANSFER => true,
             \CURLOPT_FOLLOWLOCATION => true,
@@ -238,11 +287,16 @@ final class StorefrontWarmupHttpClient
             \CURLOPT_SSL_VERIFYPEER => false,
             \CURLOPT_SSL_VERIFYHOST => 0,
             \CURLOPT_HTTPHEADER => $requestHeaders,
-            \CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$headers): int {
+            \CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$headers, &$setCookies): int {
                 $trim = \trim($line);
                 if ($trim !== '' && \str_contains($trim, ':')) {
                     [$name, $value] = \array_map('trim', \explode(':', $trim, 2));
-                    $headers[\strtolower($name)] = $value;
+                    $lower = \strtolower($name);
+                    if ($lower === 'set-cookie') {
+                        $setCookies[] = $value;
+                    } else {
+                        $headers[$lower] = $value;
+                    }
                 }
 
                 return \strlen($line);
@@ -256,20 +310,63 @@ final class StorefrontWarmupHttpClient
         \curl_close($ch);
 
         if ($errno !== 0) {
-            return ['ok' => false, 'status' => $status, 'body' => '', 'fpc' => '', 'reason' => 'curl:' . $error, 'url' => $url];
+            return [
+                'ok' => false,
+                'status' => $status,
+                'body' => '',
+                'fpc' => '',
+                'reason' => 'curl:' . $error,
+                'url' => $url,
+                'storefront_gen_cookie' => '',
+            ];
         }
         if ($status < 200 || $status >= 400) {
-            return ['ok' => false, 'status' => $status, 'body' => '', 'fpc' => '', 'reason' => 'http_' . $status, 'url' => $url];
+            return [
+                'ok' => false,
+                'status' => $status,
+                'body' => '',
+                'fpc' => '',
+                'reason' => 'http_' . $status,
+                'url' => $url,
+                'storefront_gen_cookie' => '',
+            ];
         }
         if (!\is_string($body)) {
-            return ['ok' => false, 'status' => $status, 'body' => '', 'fpc' => '', 'reason' => 'empty_body', 'url' => $url];
+            return [
+                'ok' => false,
+                'status' => $status,
+                'body' => '',
+                'fpc' => '',
+                'reason' => 'empty_body',
+                'url' => $url,
+                'storefront_gen_cookie' => '',
+            ];
         }
         // Sitemap/XML may be short; HTML FPC paths still need substance.
         if (!$needBody && \strlen($body) < 80) {
-            return ['ok' => false, 'status' => $status, 'body' => '', 'fpc' => '', 'reason' => 'empty_body', 'url' => $url];
+            return [
+                'ok' => false,
+                'status' => $status,
+                'body' => '',
+                'fpc' => '',
+                'reason' => 'empty_body',
+                'url' => $url,
+                'storefront_gen_cookie' => '',
+            ];
         }
 
         $fpc = (string)($headers['x-weline-fpc'] ?? $headers['x-wls-fpc-status'] ?? '');
+        $genCookie = '';
+        foreach ($setCookies as $cookieLine) {
+            if (\preg_match('/(?:^|;\s*)weline_storefront_gen=([^;\\s]+)/i', $cookieLine, $m) === 1
+                || \preg_match('/^weline_storefront_gen=([^;\\s]+)/i', $cookieLine, $m) === 1
+            ) {
+                $genCookie = \trim((string)($m[1] ?? ''));
+                if ($genCookie !== '') {
+                    break;
+                }
+            }
+        }
 
         return [
             'ok' => true,
@@ -278,6 +375,7 @@ final class StorefrontWarmupHttpClient
             'fpc' => $fpc,
             'reason' => '',
             'url' => $url,
+            'storefront_gen_cookie' => $genCookie,
         ];
     }
 

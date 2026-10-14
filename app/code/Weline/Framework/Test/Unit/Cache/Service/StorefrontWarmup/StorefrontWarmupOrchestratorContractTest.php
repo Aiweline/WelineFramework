@@ -110,6 +110,10 @@ XML;
         self::assertStringContainsString('x-wls-fpc-bypass: 1', $src);
         self::assertStringContainsString('fpc_hit_refuse_body', $src);
         self::assertStringContainsString('isFpcHit', $src);
-        self::assertStringContainsString('if ($needBody)', $src);
+        self::assertStringContainsString('requestTarget', $src);
+        // Visitor/live assert path must allow no-pierce / no-bypass body fetch.
+        self::assertStringContainsString('Post-promote visitor assert', $src);
+        self::assertStringContainsString('bool $pierce = true', $src);
+        self::assertStringContainsString('bool $bypass = false', $src);
     }
 }
