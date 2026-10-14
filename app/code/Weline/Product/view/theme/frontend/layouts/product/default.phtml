@@ -129,7 +129,7 @@ $this->assign('meta', $meta);
                                 class="product-detail-layout__main-content">
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-before</w:hook>
                             <?php /* placement=layout：内嵌 product-info；无可用固化 bake 时靠模板渲染主信息 */ ?>
-                            <w:widget type="product" name="product-info" params='{"show_brand":true,"show_supplier":true}' />
+                            <w:widget type="product" name="product-info" params='{"show_brand":true,"show_supplier":true,"show_breadcrumb":false}' />
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-after</w:hook>
                         </w:slot>
 

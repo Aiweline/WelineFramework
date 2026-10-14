@@ -20,10 +20,11 @@ use Weline\Theme\Helper\WidgetI18n;
  * @widget.source {Weline_Product::css/widgets/product-native-detail.css,Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Product::js/widgets/widget-product-info-0.js,Weline_Product::js/widgets/widget-product-info-1.js,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param show_brand {default=true,type="bool",label="显示品牌"}
  * @param show_supplier {default=true,type="bool",label="显示供应商"}
+ * @param show_breadcrumb {default=true,type="bool",label="显示部件内面包屑",description="为 false 时不渲染部件内面包屑；product 布局已用 Theme partial 壳面包屑时应关闭，避免双条"}
  *
  * @widget.slot {product-main}
  *
- * @widget.default_injections {[{"placement":"injection","layout_type":"product","layout_option":"default","slot":"design-product-main","area":"content","sort_order":0,"required":true,"config":{"show_brand":true,"show_supplier":true}}]}
+ * @widget.default_injections {[{"placement":"injection","layout_type":"product","layout_option":"default","slot":"design-product-main","area":"content","sort_order":0,"required":true,"config":{"show_brand":true,"show_supplier":true,"show_breadcrumb":false}}]}
  * @widget.placement {layout}
  */
 
@@ -53,6 +54,8 @@ try {
 }
 $showBrand = filter_var($this->getData('show_brand') ?? true, FILTER_VALIDATE_BOOLEAN);
 $showSupplier = filter_var($this->getData('show_supplier') ?? true, FILTER_VALIDATE_BOOLEAN);
+// Layout shell Theme partial owns the PDP trail when product layout showBreadcrumb=true.
+$showBreadcrumb = filter_var($this->getData('show_breadcrumb') ?? true, FILTER_VALIDATE_BOOLEAN);
 $quickAdd = filter_var($this->getData('quick_add') ?? false, FILTER_VALIDATE_BOOLEAN);
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
     || (bool)($this->getData('editor_mode') ?? false)
@@ -540,7 +543,7 @@ if ($productBreadcrumbs === []) {
           data-testid="pixel-view-item-marker"
           hidden
           aria-hidden="true"></span>
-    <?php if (!$quickAdd && $productBreadcrumbs !== []): ?>
+    <?php if ($showBreadcrumb && !$quickAdd && $productBreadcrumbs !== []): ?>
     <nav class="product-native-detail__crumb" aria-label="<?= $escape(__('面包屑')) ?>" data-testid="product-breadcrumb">
         <?php foreach ($productBreadcrumbs as $i => $crumb): ?>
             <?php
@@ -563,7 +566,7 @@ if ($productBreadcrumbs === []) {
             <?php endif; ?>
         <?php endforeach; ?>
     </nav>
-    <?php elseif (!$quickAdd): ?>
+    <?php elseif ($showBreadcrumb && !$quickAdd): ?>
     <a class="product-native-detail__back" href="@url{'products'}">
         <span aria-hidden="true">←</span> <?= __('返回商品目录') ?>
     </a>
