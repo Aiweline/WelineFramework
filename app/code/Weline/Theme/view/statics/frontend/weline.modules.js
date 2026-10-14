@@ -23,7 +23,7 @@ Object.assign(window.WelineModulesConfig.modules, {
 
     miniCartExtras: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20261010-extras-rebuild1"
+            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20261014-extras-tab-preserve1"
         ],
         globalVar: "WelineMiniCartExtras",
         // Must be eager: storefrontMoneySummary is eager; if extras defer, drawer shows

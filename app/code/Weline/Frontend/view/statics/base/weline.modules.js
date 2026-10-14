@@ -33,8 +33,8 @@
             description: "首页/店面视频轮播切换与关联商品 dialog"
         },
         miniCartExtras: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20261010-extras-rebuild1"],
-            paths: ["Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20261010-extras-rebuild1"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20261014-extras-tab-preserve1"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20261014-extras-tab-preserve1"],
             globalVar: "WelineMiniCartExtras",
             load: "eager",
             description: "迷你购物车 extras 页签交互"
@@ -319,8 +319,8 @@
             description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"
         },
         b2bSellingMode: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-shell-toc-wins1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261013-single-cookie1"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-shell-toc-wins1", "Weline_B2B::js/selling-mode.js?v=20261013-single-cookie1"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-shell-toc-wins1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261014-extras-boot-preserve1"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-shell-toc-wins1", "Weline_B2B::js/selling-mode.js?v=20261014-extras-boot-preserve1"],
             globalVar: "WelineB2BSellingMode",
             description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
         },

@@ -1319,26 +1319,17 @@
             }
             extras.classList.remove('is-tob-extras-stack');
         });
-        // boot() skips already-init extras; tob unhide of credit needs rebuild
-        // so「优惠券|订单留言|批发信用」stay one tab chrome (审图 2026-10-10).
-        root.querySelectorAll(
-            '[data-w-mini-cart="1"] .mini-cart-drawer__extras,'
-            + ' [data-w-mini-cart="1"] [data-wslot="footer-extras"],'
-            + ' [data-cart-summary-extras="1"],'
-            + ' .weline-cart-shell__summary-extras,'
-            + ' .weline-checkout__extras,'
-            + ' [data-weline-checkout] .mini-cart-drawer__extras'
-        ).forEach(function (extras) {
-            try {
-                if (global.WelineMiniCartExtras && typeof global.WelineMiniCartExtras.rebuild === 'function') {
-                    global.WelineMiniCartExtras.rebuild(extras);
-                } else if (global.WelineMiniCartExtras && typeof global.WelineMiniCartExtras.boot === 'function') {
-                    global.WelineMiniCartExtras.boot();
-                }
-            } catch (e) {
-                // ignore
+        // Prefer boot(): already-init shells no-op unless orphan candidates need rebuild.
+        // Blind rebuild tore down tabs and reset to coupon — first click「订单留言」
+        // flashed when orderNotice lazy-load mutated DOM → enhanceMiniCarts → rebuild.
+        // Tob credit unhide still rebuilds via boot()'s orphan path (审图 2026-10-10).
+        try {
+            if (global.WelineMiniCartExtras && typeof global.WelineMiniCartExtras.boot === 'function') {
+                global.WelineMiniCartExtras.boot();
             }
-        });
+        } catch (e) {
+            // ignore
+        }
         // boot 之后再选页签：批发仅首次默认切到留言；之后尊重用户点击（优惠券页签可再点开看禁用态）。
         root.querySelectorAll(
             '[data-w-mini-cart="1"] .mini-cart-drawer__extras,'

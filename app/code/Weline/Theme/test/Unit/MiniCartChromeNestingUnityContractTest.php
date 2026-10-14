@@ -85,10 +85,11 @@ final class MiniCartChromeNestingUnityContractTest extends TestCase
 
         $b2b = dirname(__DIR__, 3) . '/B2B/view/statics/js/selling-mode.js';
         self::assertFileExists($b2b);
-        self::assertStringContainsString(
-            'WelineMiniCartExtras.rebuild',
-            (string)file_get_contents($b2b)
-        );
+        $b2bJs = (string)file_get_contents($b2b);
+        // Chrome sync calls boot(); orphan unhide rebuilds inside extras-tabs (preserves active tab).
+        self::assertStringContainsString('WelineMiniCartExtras.boot', $b2bJs);
+        self::assertStringContainsString('Blind rebuild tore down tabs', $b2bJs);
+        self::assertStringContainsString('preferredIdentity', $extras);
     }
 
     public function testThemeArtifactAxisExplicitThemeAndHashSkip(): void

@@ -49,6 +49,35 @@
     }
 
     /**
+     * Stable panel identity so rebuild can restore the user's tab after DOM churn
+     * (e.g. first reveal of 订单留言 lazy-loads orderNotice → MutationObserver → rebuild).
+     */
+    function widgetIdentity(node) {
+        if (!node || node.nodeType !== 1) {
+            return '';
+        }
+        var couponSel = '[data-marketing-checkout-coupon], [data-testid="checkout-coupon"],'
+            + ' [data-testid="marketing-checkout-coupon"], .w-marketing-checkout-coupon';
+        var noteSel = '[data-order-notice-surface], [data-testid="order-notice-widget"], .w-order-notice';
+        var creditSel = '[data-b2b-checkout-credit]';
+        var helpSel = '[data-helppay-placement], [data-testid="checkout-summary-help-pay"],'
+            + ' [data-testid="cart-summary-help-pay"]';
+        if (node.matches(couponSel) || node.querySelector(couponSel)) {
+            return 'coupon';
+        }
+        if (node.matches(noteSel) || node.querySelector(noteSel)) {
+            return 'note';
+        }
+        if (node.matches(creditSel) || node.querySelector(creditSel)) {
+            return 'credit';
+        }
+        if (node.matches(helpSel) || node.querySelector(helpSel)) {
+            return 'helppay';
+        }
+        return tabLabel(node);
+    }
+
+    /**
      * 空槽（如未注入的帮我付）或整棵部件已 hidden 时不得生成无文案胶囊页签。
      */
     function isExtrasTabCandidate(node) {
@@ -84,7 +113,8 @@
         return tabLabel(node) !== '';
     }
 
-    function activateTab(shell, index) {
+    function activateTab(shell, index, opts) {
+        opts = opts || {};
         var tabs = shell.querySelectorAll('[data-mini-cart-extras-tab]');
         var panels = shell.querySelectorAll('[data-mini-cart-extras-panel]');
         if (!tabs.length || !panels.length) {
@@ -104,7 +134,8 @@
         });
         shell.setAttribute('data-active-tab', String(next));
         var activeTab = tabs[next];
-        if (activeTab && typeof activeTab.scrollIntoView === 'function') {
+        // Rebuild/init must not scrollIntoView — that fights drawer layout; user click may.
+        if (opts.scroll !== false && activeTab && typeof activeTab.scrollIntoView === 'function') {
             activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         }
     }
@@ -137,10 +168,27 @@
         }, { passive: true });
     }
 
-    function initExtras(extras) {
+    function resolveStartIndex(widgets, opts) {
+        opts = opts || {};
+        var startIndex = 0;
+        if (opts.preferredIdentity) {
+            for (var i = 0; i < widgets.length; i += 1) {
+                if (widgetIdentity(widgets[i]) === opts.preferredIdentity) {
+                    return i;
+                }
+            }
+        }
+        if (typeof opts.preferredIndex === 'number' && !isNaN(opts.preferredIndex)) {
+            startIndex = Math.max(0, Math.min(opts.preferredIndex, widgets.length - 1));
+        }
+        return startIndex;
+    }
+
+    function initExtras(extras, opts) {
         if (!extras || extras.getAttribute('data-extras-tabs-init') === '1') {
             return;
         }
+        opts = opts || {};
 
         var widgets = Array.prototype.filter.call(extras.children, isExtrasTabCandidate);
         if (!widgets.length) {
@@ -153,9 +201,14 @@
             return;
         }
 
+        var startIndex = resolveStartIndex(widgets, opts);
+
         var shell = document.createElement('div');
         shell.className = 'mini-cart-drawer__extras-tabs';
         shell.setAttribute('data-mini-cart-extras-tabs', '1');
+        if (opts.tobDefaulted) {
+            shell.setAttribute('data-b2b-tob-default-tab', '1');
+        }
 
         var tablist = document.createElement('div');
         tablist.className = 'mini-cart-drawer__extras-tablist';
@@ -171,13 +224,13 @@
             var id = shellUid + '-tab-' + String(index);
             var button = document.createElement('button');
             button.type = 'button';
-            button.className = 'mini-cart-drawer__extras-tab' + (index === 0 ? ' is-active' : '');
+            button.className = 'mini-cart-drawer__extras-tab' + (index === startIndex ? ' is-active' : '');
             button.setAttribute('role', 'tab');
             button.setAttribute('id', id);
             button.setAttribute('data-mini-cart-extras-tab', '1');
             button.setAttribute('aria-controls', id + '-panel');
-            button.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
-            button.tabIndex = index === 0 ? 0 : -1;
+            button.setAttribute('aria-selected', index === startIndex ? 'true' : 'false');
+            button.tabIndex = index === startIndex ? 0 : -1;
             button.textContent = tabLabel(widget);
             button.addEventListener('click', function () {
                 activateTab(shell, index);
@@ -185,12 +238,12 @@
             tablist.appendChild(button);
 
             var panel = document.createElement('div');
-            panel.className = 'mini-cart-drawer__extras-panel' + (index === 0 ? ' is-active' : '');
+            panel.className = 'mini-cart-drawer__extras-panel' + (index === startIndex ? ' is-active' : '');
             panel.setAttribute('role', 'tabpanel');
             panel.setAttribute('id', id + '-panel');
             panel.setAttribute('aria-labelledby', id);
             panel.setAttribute('data-mini-cart-extras-panel', '1');
-            panel.hidden = index !== 0;
+            panel.hidden = index !== startIndex;
             panel.appendChild(widget);
             panels.appendChild(panel);
         });
@@ -198,9 +251,11 @@
         shell.appendChild(tablist);
         shell.appendChild(panels);
         extras.appendChild(shell);
-        shell.setAttribute('data-active-tab', '0');
+        shell.setAttribute('data-active-tab', String(startIndex));
         bindSwipe(shell);
         extras.setAttribute('data-extras-tabs-init', '1');
+        // Ensure class/hidden/aria stay consistent even if startIndex !== 0.
+        activateTab(shell, startIndex, { scroll: false });
         window.dispatchEvent(new CustomEvent('weshop:mini-cart:extras-ready'));
     }
 
@@ -208,9 +263,17 @@
         if (!extras) {
             return;
         }
+        var preferredIdentity = '';
+        var preferredIndex = 0;
+        var tobDefaulted = false;
         var shell = extras.querySelector('[data-mini-cart-extras-tabs]');
         if (shell) {
+            preferredIndex = Number(shell.getAttribute('data-active-tab') || '0') || 0;
+            tobDefaulted = shell.getAttribute('data-b2b-tob-default-tab') === '1';
             var panels = shell.querySelectorAll('[data-mini-cart-extras-panel]');
+            if (panels[preferredIndex]) {
+                preferredIdentity = widgetIdentity(panels[preferredIndex]);
+            }
             panels.forEach(function (panel) {
                 while (panel.firstChild) {
                     extras.insertBefore(panel.firstChild, shell);
@@ -220,7 +283,11 @@
         }
         extras.removeAttribute('data-extras-tabs-init');
         extras.classList.remove('mini-cart-drawer__extras--compact');
-        initExtras(extras);
+        initExtras(extras, {
+            preferredIdentity: preferredIdentity,
+            preferredIndex: preferredIndex,
+            tobDefaulted: tobDefaulted
+        });
     }
 
     function boot() {
@@ -254,6 +321,8 @@
     window.WelineMiniCartExtras = {
         boot: boot,
         initExtras: initExtras,
-        rebuild: rebuildExtras
+        rebuild: rebuildExtras,
+        activateTab: activateTab,
+        widgetIdentity: widgetIdentity
     };
 })();

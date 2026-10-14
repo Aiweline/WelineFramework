@@ -8,7 +8,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     b2bSellingMode: {
         paths: [
             'Weline_B2B::js/checkout-tob.js?v=20261010-shell-toc-wins1',
-            'Weline_B2B::js/selling-mode.js?v=20261013-single-cookie1'
+            'Weline_B2B::js/selling-mode.js?v=20261014-extras-boot-preserve1'
         ],
         globalVar: 'WelineB2BSellingMode',
         description: 'B2B ToC/ToB selling mode + mini-cart/cart dual-type injection'

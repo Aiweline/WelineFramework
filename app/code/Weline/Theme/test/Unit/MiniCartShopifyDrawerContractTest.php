@@ -188,6 +188,11 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         // Tob credit unhide after retail init → orphan candidates force rebuild.
         self::assertStringContainsString('orphans.length', $source);
         self::assertStringContainsString('rebuildExtras(extras)', $source);
+        // Rebuild must restore user tab (first click「订单留言」must not flash back to coupon).
+        self::assertStringContainsString('function widgetIdentity', $source);
+        self::assertStringContainsString('preferredIdentity', $source);
+        self::assertStringContainsString("return 'note'", $source);
+        self::assertStringContainsString('tobDefaulted', $source);
     }
 
     /**
