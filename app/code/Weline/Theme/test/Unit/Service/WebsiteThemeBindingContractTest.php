@@ -79,6 +79,14 @@ final class WebsiteThemeBindingContractTest extends TestCase
         self::assertStringNotContainsString('<select class="w-select"', $partial);
         self::assertStringContainsString('店面主题', $partial);
         self::assertStringContainsString('data-testid="scope-theme-binding"', $partial);
+        self::assertStringContainsString('data-testid="scope-theme-binding-edit"', $partial);
+        self::assertStringContainsString("@backend-url{'theme/backend/theme-editor'|\$editParams}", $partial);
+        self::assertStringContainsString('打开主题编辑器', $partial);
+        self::assertStringContainsString("'scope_kind'", $partial);
+        self::assertStringContainsString("'website_code'", $partial);
+        self::assertStringContainsString("'scope_kind' => \$scopeKind", $service);
+        self::assertStringContainsString("'store_code' => \$storeCode", $service);
+        self::assertStringContainsString("'channel_code' => \$channelCode", $service);
 
         $list = $this->read('view/templates/backend/index.phtml');
         self::assertStringContainsString('网站 / 店铺 / 渠道信息 → 店面主题', $list);

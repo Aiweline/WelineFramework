@@ -47,6 +47,11 @@ final class WebsiteThemeBindingService
      *   ok:bool,
      *   website_id:int,
      *   website_code:string,
+     *   scope_kind:string,
+     *   store_code:string,
+     *   channel_code:string,
+     *   store_mode:string,
+     *   context_version:string,
      *   storage_scope:string,
      *   theme_id:int,
      *   theme_name:string,
@@ -72,7 +77,7 @@ final class WebsiteThemeBindingService
                 $this->catalog->authoritativeIdentity(ScopeIdentity::website($websiteId, $websiteCode)),
             );
         } catch (\Throwable) {
-            return $this->emptySummary($websiteId, $websiteCode);
+            return $this->emptySummary($websiteId, $websiteCode, ScopeIdentity::KIND_WEBSITE);
         }
     }
 
@@ -82,6 +87,11 @@ final class WebsiteThemeBindingService
      *   ok:bool,
      *   website_id:int,
      *   website_code:string,
+     *   scope_kind:string,
+     *   store_code:string,
+     *   channel_code:string,
+     *   store_mode:string,
+     *   context_version:string,
      *   storage_scope:string,
      *   theme_id:int,
      *   theme_name:string,
@@ -101,8 +111,14 @@ final class WebsiteThemeBindingService
         } catch (\Throwable) {
             $websiteId = $this->normalizeNonNegativeId($store['website_id'] ?? null);
             $websiteCode = $this->websiteCodeById($websiteId >= 0 ? $websiteId : -1);
+            $storeCode = strtolower(trim((string)($store['code'] ?? '')));
 
-            return $this->emptySummary($websiteId, $websiteCode);
+            return $this->emptySummary(
+                $websiteId,
+                $websiteCode,
+                ScopeIdentity::KIND_STORE,
+                $storeCode,
+            );
         }
     }
 
@@ -112,6 +128,11 @@ final class WebsiteThemeBindingService
      *   ok:bool,
      *   website_id:int,
      *   website_code:string,
+     *   scope_kind:string,
+     *   store_code:string,
+     *   channel_code:string,
+     *   store_mode:string,
+     *   context_version:string,
      *   storage_scope:string,
      *   theme_id:int,
      *   theme_name:string,
@@ -131,8 +152,15 @@ final class WebsiteThemeBindingService
         } catch (\Throwable) {
             $websiteId = $this->normalizeNonNegativeId($channel['website_id'] ?? null);
             $websiteCode = $this->websiteCodeById($websiteId >= 0 ? $websiteId : -1);
+            $channelCode = strtolower(trim((string)($channel['code'] ?? '')));
 
-            return $this->emptySummary($websiteId, $websiteCode);
+            return $this->emptySummary(
+                $websiteId,
+                $websiteCode,
+                ScopeIdentity::KIND_CHANNEL,
+                '',
+                $channelCode,
+            );
         }
     }
 
@@ -141,6 +169,11 @@ final class WebsiteThemeBindingService
      *   ok:bool,
      *   website_id:int,
      *   website_code:string,
+     *   scope_kind:string,
+     *   store_code:string,
+     *   channel_code:string,
+     *   store_mode:string,
+     *   context_version:string,
      *   storage_scope:string,
      *   theme_id:int,
      *   theme_name:string,
@@ -161,8 +194,22 @@ final class WebsiteThemeBindingService
 
         $websiteId = (int)($identity->websiteId ?? -1);
         $websiteCode = strtolower(trim((string)($identity->websiteCode ?? '')));
-        $empty = $this->emptySummary($websiteId, $websiteCode);
+        $scopeKind = (string)$identity->scopeKind;
+        $storeCode = strtolower(trim((string)($identity->storeCode ?? '')));
+        $channelCode = strtolower(trim((string)($identity->channelCode ?? '')));
         $storeMode = $this->applicationStoreMode($identity);
+        $contextVersion = trim((string)$identity->contextVersion) !== ''
+            ? (string)$identity->contextVersion
+            : ScopeIdentity::CONTEXT_VERSION;
+        $empty = $this->emptySummary(
+            $websiteId,
+            $websiteCode,
+            $scopeKind,
+            $storeCode,
+            $channelCode,
+            $storeMode,
+            $contextVersion,
+        );
 
         try {
             $storageScope = $this->scopes->toStorageScope($identity);
@@ -208,6 +255,11 @@ final class WebsiteThemeBindingService
                 'ok' => true,
                 'website_id' => $websiteId,
                 'website_code' => $websiteCode,
+                'scope_kind' => $scopeKind,
+                'store_code' => $storeCode,
+                'channel_code' => $channelCode,
+                'store_mode' => $storeMode,
+                'context_version' => $contextVersion,
                 'storage_scope' => $storageScope,
                 'theme_id' => $themeId,
                 'theme_name' => $themeName,
@@ -631,6 +683,11 @@ final class WebsiteThemeBindingService
      *   ok:bool,
      *   website_id:int,
      *   website_code:string,
+     *   scope_kind:string,
+     *   store_code:string,
+     *   channel_code:string,
+     *   store_mode:string,
+     *   context_version:string,
      *   storage_scope:string,
      *   theme_id:int,
      *   theme_name:string,
@@ -643,12 +700,34 @@ final class WebsiteThemeBindingService
      *   versions:list<array{id:int,number:int,name:string,lifecycle:string}>
      * }
      */
-    private function emptySummary(int $websiteId, string $websiteCode): array
-    {
+    private function emptySummary(
+        int $websiteId,
+        string $websiteCode,
+        string $scopeKind = ScopeIdentity::KIND_WEBSITE,
+        string $storeCode = '',
+        string $channelCode = '',
+        string $storeMode = ScopeIdentity::MODE_NORMAL,
+        string $contextVersion = ScopeIdentity::CONTEXT_VERSION,
+    ): array {
+        $scopeKind = strtolower(trim($scopeKind));
+        if (!in_array($scopeKind, ScopeIdentity::KINDS, true) || $scopeKind === ScopeIdentity::KIND_GLOBAL) {
+            $scopeKind = ScopeIdentity::KIND_WEBSITE;
+        }
+        $storeMode = strtolower(trim($storeMode));
+        if (!in_array($storeMode, [ScopeIdentity::MODE_NORMAL, ScopeIdentity::MODE_DEV, ScopeIdentity::MODE_TEST], true)) {
+            $storeMode = ScopeIdentity::MODE_NORMAL;
+        }
+        $contextVersion = trim($contextVersion) !== '' ? $contextVersion : ScopeIdentity::CONTEXT_VERSION;
+
         return [
             'ok' => false,
             'website_id' => $websiteId,
             'website_code' => $websiteCode,
+            'scope_kind' => $scopeKind,
+            'store_code' => strtolower(trim($storeCode)),
+            'channel_code' => strtolower(trim($channelCode)),
+            'store_mode' => $storeMode,
+            'context_version' => $contextVersion,
             'storage_scope' => '',
             'theme_id' => 0,
             'theme_name' => '',

@@ -35,8 +35,50 @@ if ((int)($summary['version_number'] ?? 0) > 0) {
         $versionLabel .= ' · ' . $name;
     }
 }
+
+$scopeKind = strtolower(trim((string)($summary['scope_kind'] ?? $ownBindingSource)));
+if ($scopeKind === '') {
+    $scopeKind = 'website';
+}
+$editWebsiteId = max(0, (int)($summary['website_id'] ?? 0));
+$editWebsiteCode = strtolower(trim((string)($summary['website_code'] ?? '')));
+$editStoreCode = strtolower(trim((string)($summary['store_code'] ?? '')));
+$editChannelCode = strtolower(trim((string)($summary['channel_code'] ?? '')));
+$editStoreMode = strtolower(trim((string)($summary['store_mode'] ?? 'normal')));
+if ($editStoreMode === '') {
+    $editStoreMode = 'normal';
+}
+$editContextVersion = trim((string)($summary['context_version'] ?? 'v1'));
+if ($editContextVersion === '') {
+    $editContextVersion = 'v1';
+}
+$canDeepLinkEdit = $hasIdentity && $themeId > 0 && $editWebsiteCode !== '';
+$editParams = [
+    'theme_id' => $themeId,
+    'editor_area' => 'frontend',
+    'preview_area' => 'frontend',
+    'scope_kind' => $scopeKind,
+    'website_id' => $editWebsiteId,
+    'website_code' => $editWebsiteCode,
+    'context_version' => $editContextVersion,
+];
+if ($editStoreCode !== '') {
+    $editParams['store_code'] = $editStoreCode;
+    $editParams['store_mode'] = $editStoreMode;
+}
+if ($editChannelCode !== '') {
+    $editParams['channel_code'] = $editChannelCode;
+}
 ?>
-<div class="w-disclosure" data-w-component="disclosure" data-testid="scope-theme-binding">
+<div class="w-disclosure" data-w-component="disclosure" data-testid="scope-theme-binding"
+     data-scope-theme-edit-ready="<?= $canDeepLinkEdit ? '1' : '0' ?>"
+     data-scope-theme-edit-website-id="<?= $h((string)$editWebsiteId) ?>"
+     data-scope-theme-edit-website-code="<?= $h($editWebsiteCode) ?>"
+     data-scope-theme-edit-scope-kind="<?= $h($scopeKind) ?>"
+     data-scope-theme-edit-store-code="<?= $h($editStoreCode) ?>"
+     data-scope-theme-edit-channel-code="<?= $h($editChannelCode) ?>"
+     data-scope-theme-edit-store-mode="<?= $h($editStoreMode) ?>"
+     data-scope-theme-edit-context-version="<?= $h($editContextVersion) ?>">
     <div id="<?= $h($sectionId . '_heading') ?>">
         <button class="w-disclosure__trigger" type="button" aria-expanded="false" aria-controls="<?= $h($sectionId . '_body') ?>" data-w-target="#<?= $h($sectionId . '_body') ?>" data-w-action="disclosure.toggle" data-w-disclosure-trigger>
             <w:icon name="palette" size="sm"></w:icon>
@@ -52,9 +94,36 @@ if ((int)($summary['version_number'] ?? 0) > 0) {
             <?php if (!$hasIdentity): ?>
                 <p class="w-text" data-tone="muted" data-size="sm"><?= $h((string)$pendingHint) ?></p>
             <?php else: ?>
-                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
-                    <?= $h((string)$introHint) ?>
-                </p>
+                <div class="w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-3);">
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
+                        <?= $h((string)$introHint) ?>
+                    </p>
+                    <?php if ($canDeepLinkEdit): ?>
+                        <a href="@backend-url{'theme/backend/theme-editor'|$editParams}"
+                           class="w-button"
+                           data-tone="info"
+                           data-variant="outline"
+                           data-size="sm"
+                           data-testid="scope-theme-binding-edit"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           title="<?= $h(__('在主题编辑器中打开当前店面主题')) ?>">
+                            <w:icon name="external-link" size="sm"></w:icon>
+                            <lang>打开主题编辑器</lang>
+                        </a>
+                    <?php else: ?>
+                        <span class="w-button"
+                              data-tone="neutral"
+                              data-variant="outline"
+                              data-size="sm"
+                              data-testid="scope-theme-binding-edit-disabled"
+                              aria-disabled="true"
+                              title="<?= $h(__('请先选择前台主题后再打开编辑器')) ?>">
+                            <w:icon name="external-link" size="sm"></w:icon>
+                            <lang>打开主题编辑器</lang>
+                        </span>
+                    <?php endif; ?>
+                </div>
                 <div class="w-grid">
                     <div style="--w-span:6;--w-mb:var(--weline-space-4);">
                         <label for="<?= $h($themeFieldId) ?>_input" class="w-field__label"><lang>前台主题</lang></label>
@@ -92,3 +161,67 @@ if ((int)($summary['version_number'] ?? 0) > 0) {
         </div>
     </div>
 </div>
+<script>
+(function () {
+    var root = document.currentScript && document.currentScript.previousElementSibling;
+    if (!(root instanceof HTMLElement) || root.getAttribute('data-testid') !== 'scope-theme-binding') {
+        root = document.querySelector('[data-testid="scope-theme-binding"]');
+    }
+    if (!(root instanceof HTMLElement)) {
+        return;
+    }
+    var link = root.querySelector('[data-testid="scope-theme-binding-edit"]');
+    var themeInput = root.querySelector('[data-testid="scope-theme-binding-theme-id"]');
+    if (!(link instanceof HTMLAnchorElement) || !(themeInput instanceof HTMLElement)) {
+        return;
+    }
+    function patchThemeId(url, themeId) {
+        try {
+            var absolute = new URL(String(url || ''), window.location.origin);
+            absolute.searchParams.set('theme_id', String(themeId));
+            absolute.searchParams.set('editor_area', 'frontend');
+            absolute.searchParams.set('preview_area', 'frontend');
+            absolute.searchParams.set('scope_kind', String(root.getAttribute('data-scope-theme-edit-scope-kind') || 'website'));
+            absolute.searchParams.set('website_id', String(root.getAttribute('data-scope-theme-edit-website-id') || '0'));
+            absolute.searchParams.set('website_code', String(root.getAttribute('data-scope-theme-edit-website-code') || ''));
+            absolute.searchParams.set('context_version', String(root.getAttribute('data-scope-theme-edit-context-version') || 'v1'));
+            var storeCode = String(root.getAttribute('data-scope-theme-edit-store-code') || '');
+            var channelCode = String(root.getAttribute('data-scope-theme-edit-channel-code') || '');
+            var storeMode = String(root.getAttribute('data-scope-theme-edit-store-mode') || 'normal');
+            if (storeCode) {
+                absolute.searchParams.set('store_code', storeCode);
+                absolute.searchParams.set('store_mode', storeMode);
+            }
+            if (channelCode) {
+                absolute.searchParams.set('channel_code', channelCode);
+            }
+            var original = String(url || '');
+            if (/^https?:\/\//i.test(original)) {
+                return absolute.href;
+            }
+            return absolute.pathname + absolute.search + absolute.hash;
+        } catch (e) {
+            return String(url || '');
+        }
+    }
+    function syncEditLink() {
+        var raw = '';
+        if (themeInput instanceof HTMLInputElement || themeInput instanceof HTMLSelectElement) {
+            raw = String(themeInput.value || '');
+        } else {
+            raw = String(themeInput.getAttribute('value') || themeInput.getAttribute('data-value') || '');
+        }
+        var themeId = Math.max(0, parseInt(raw, 10) || 0);
+        if (themeId <= 0) {
+            link.setAttribute('aria-disabled', 'true');
+            link.classList.add('is-disabled');
+            return;
+        }
+        link.removeAttribute('aria-disabled');
+        link.classList.remove('is-disabled');
+        link.href = patchThemeId(link.getAttribute('href') || link.href, themeId);
+    }
+    themeInput.addEventListener('change', syncEditLink);
+    themeInput.addEventListener('input', syncEditLink);
+})();
+</script>
