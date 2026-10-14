@@ -67,6 +67,18 @@ team_path: dev/team/{feature-slug}/ # 监工可写 N/A
 |------|------|----------|----------|
 | | | | |
 
+## 可实施核对（计划细节镜像 · PM 汇审辅助）
+
+> 权威：`plan_implementability_checklist`。缺项 → 不得自审通过/不得进入施工；**不**否决 align-freeze（对齐冻结仍只管 UC+contracts）。
+
+- [ ] `feasibility`（或 simple：`implementability_simple_skip`≥24）
+- [ ] `nfr_or_na` / 理由
+- [ ] `lld_or_na` / 理由
+- [ ] `env_ci`（本机 Host + 测试命令）
+- [ ] `milestones_or_na`（复杂）
+- [ ] `release_rollback_or_na`（触生产时）
+- [ ] 路径 / `dev_tasks` / `acceptance` / 真机 UC（行为变更时）
+
 ## PM DoD 检查清单（每次收交付勾选）
 
 - [ ] 契约交付物路径存在
@@ -76,3 +88,4 @@ team_path: dev/team/{feature-slug}/ # 监工可写 N/A
 - [ ] 测试未到 → 不得将该 plan_id 标 `closed`
 - [ ] 有 `issuer_seat` 时：已写进度汇报并 resume 发起席；`issuer_acceptance=pass` 才可关项（`requirement_issuer_owns_acceptance`）
 - [ ] 本检查 ≠ 替代架构/专席合规/代码级复审（那些仍由对应席）
+- [ ] 计划自审前已核「可实施核对」；缺项未开工（`plan_implementability_checklist`）

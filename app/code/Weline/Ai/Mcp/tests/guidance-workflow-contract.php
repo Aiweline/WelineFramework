@@ -945,6 +945,17 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'topic drift')),
         false,
     ),
+    'hard_constraints include plan_implementability_checklist' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'plan_implementability_checklist'
+            && str_contains((string) ($rule['summary'] ?? ''), 'feasibility')
+            && str_contains((string) ($rule['summary'] ?? ''), 'nfr')
+            && str_contains((string) ($rule['summary'] ?? ''), 'THREE shells')
+            && str_contains((string) ($rule['summary'] ?? ''), 'align-freeze')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan-implementability-checklist.mdc')),
+        false,
+    ),
     'hard_constraints include plan_review_requires_code_evidence' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -1909,6 +1920,10 @@ $checks = [
         && str_contains(ToolService::instructions(), 'knowledge.codex.enabled'),
     'mcp instructions mention plan_content_focus_only' => str_contains(ToolService::instructions(), 'plan_content_focus_only')
         && str_contains(ToolService::instructions(), '背景+方案+细节'),
+    'mcp instructions mention plan_implementability_checklist' => str_contains(
+        ToolService::instructions(),
+        'plan_implementability_checklist'
+    ),
     'surfaces include requirement_clarify_use_case' => ($clarifySurface['id'] ?? '')
         === GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE,
     'pinned includes clarify use-case command doc' => in_array(
@@ -2466,6 +2481,14 @@ $checks = [
             && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_complete_self_review_then_implement')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan-complete-self-review-then-implement.mdc')),
+        false,
+    ),
+    'global_rules_dual_write mentions plan_implementability_checklist mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan_implementability_checklist')
+            && str_contains((string) ($rule['summary'] ?? ''), 'plan-implementability-checklist.mdc')),
         false,
     ),
     'global_rules_dual_write mentions requirement_engineering_grade_gate mirror' => array_reduce(

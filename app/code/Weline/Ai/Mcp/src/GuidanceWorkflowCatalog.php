@@ -400,6 +400,7 @@ final class GuidanceWorkflowCatalog
                     'On 不通过 or conditions needing a user product decision: stop and report; user 先别开发 may still wait. Codex opt-in keeps Plan Mode as approval container.',
                     'If host has no Plan Mode: plan read-only in chat; record host_plan_mode=unavailable + rationale≥24; then still self-review→implement when eligible (unless simple skip already coding).',
                     'Plan body (plan_content_focus_only): ONLY 背景 + 方案 + 细节; forbid unrelated narrative that drifts the topic.',
+                    'Plan implementability (plan_implementability_checklist): under 细节 require feasibility/nfr_or_na/lld_or_na/env_ci/milestones_or_na/release_rollback_or_na (+ paths/dev_tasks/acceptance); simple may implementability_simple_skip≥24; self-review fails if missing—forbid construction start; forbid tying fail to align-freeze; chat stays user_facing_brief_plain_report.',
                 ]],
                 ['id' => 'engineering_team', 'label' => '工程团队编制与停工门禁', 'tools' => ['get_skill'], 'docs' => [
                     'dev/ai-command/ai/工程团队.md',
