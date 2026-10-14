@@ -327,7 +327,7 @@ moduleDescribe(test, MODULE, '进店音乐', () => {
       await openPetPanel(page);
       const closeBtn = page.locator('[data-testid="store-music-close"]');
       await expect(closeBtn).toBeVisible();
-      // Start if needed, then stop via pause control.
+      // Start if needed, then stop via ❚❚ (permanent autoplay close until ▶).
       const play = page.locator('[data-testid="store-music-play"]:not([hidden])');
       if (await play.count()) {
         await play.click();
@@ -336,48 +336,47 @@ moduleDescribe(test, MODULE, '进店音乐', () => {
       const pause = page.locator('[data-testid="store-music-pause"]:not([hidden])');
       if (await pause.count()) {
         await pause.click();
-      }
-      // Authoritative stop intent (UI pause may be blocked by autoplay policy in CI).
-      await page.evaluate(() => {
-        Object.keys(localStorage).forEach((k) => {
-          if (!k.includes('storeMusic')) {
-            return;
-          }
-          if (k.endsWith('.want_play')) {
-            localStorage.setItem(k, '0');
-          }
-          if (k.endsWith('.user_stopped')) {
-            localStorage.setItem(k, '1');
+      } else {
+        // Autoplay policy may hide pause — call live stopPlayback (not raw localStorage forge).
+        await page.evaluate(() => {
+          const live = window.__WelineStoreMusicLive;
+          if (live && typeof live.stopPlayback === 'function') {
+            live._docAlive = true;
+            live._tearingDown = false;
+            live.stopPlayback();
           }
         });
+      }
+      const stopPrefs = await page.evaluate(() => {
         const root = document.querySelector('[data-store-music]');
-        if (root) {
-          const website = root.getAttribute('data-website-id') || '0';
-          const store = root.getAttribute('data-store-id') || '0';
-          localStorage.setItem(`weline.storeMusic.${website}.${store}.want_play`, '0');
-          localStorage.setItem(`weline.storeMusic.${website}.${store}.user_stopped`, '1');
-        }
-        try {
-          const shared = window.__WelineStoreMusicSharedAudio;
-          if (shared) {
-            shared.pause();
-          }
-        } catch (_e) {
-          // ignore
-        }
+        const website = (root && root.getAttribute('data-website-id')) || '0';
+        const store = (root && root.getAttribute('data-store-id')) || '0';
+        const base = `weline.storeMusic.${website}.${store}.`;
+        return {
+          want: localStorage.getItem(base + 'want_play'),
+          stopped: localStorage.getItem(base + 'user_stopped'),
+          progress: localStorage.getItem(base + 'progress'),
+          latch: sessionStorage.getItem(base + 'nav_resume'),
+        };
       });
+      expect(stopPrefs.stopped, '❚❚ must set user_stopped').toBe('1');
+      expect(stopPrefs.want, '❚❚ must clear want_play').toBe('0');
+      expect(stopPrefs.latch == null || stopPrefs.latch === '', '❚❚ must clear nav_resume latch').toBeTruthy();
+      // Progress snap may remain — must NOT alone revive autoplay after reload.
       await closeBtn.click();
       await expect(page.locator('[data-testid="store-music-panel"]')).toBeHidden();
-      const wantPlay = await page.evaluate(() => {
-        const keys = Object.keys(localStorage).filter((k) => k.includes('storeMusic') && k.endsWith('.want_play'));
-        return keys.length > 0 && keys.every((k) => localStorage.getItem(k) === '0');
-      });
-      expect(wantPlay).toBe(true);
       expect(await page.locator('.w-store-music.is-playing').count()).toBe(0);
       await gotoWithWidget(page, `/?store_music_e2e=${TOKEN}-stop-reload`, true);
       await page.waitForTimeout(2500);
       const playing = await page.locator('.w-store-music.is-playing').count();
       expect(playing, 'stopped session must not auto-play').toBe(0);
+      const afterReload = await page.evaluate(() => {
+        const root = document.querySelector('[data-store-music]');
+        const website = (root && root.getAttribute('data-website-id')) || '0';
+        const store = (root && root.getAttribute('data-store-id')) || '0';
+        return localStorage.getItem(`weline.storeMusic.${website}.${store}.user_stopped`);
+      });
+      expect(afterReload, 'user_stopped must survive refresh').toBe('1');
     },
   );
 

@@ -387,8 +387,8 @@
             description: "顶栏收藏角标水合（SSR 游客空角标）"
         },
         storeMusic: {
-            origin_paths: ["app/code/Weline/StoreMusic/view/statics/js/store-music.js?v=20261010-devtools-idempotent"],
-            paths: ["Weline_StoreMusic::js/store-music.js?v=20261010-devtools-idempotent"],
+            origin_paths: ["app/code/Weline/StoreMusic/view/statics/js/store-music.js?v=20261014-pause-closes-autoplay"],
+            paths: ["Weline_StoreMusic::js/store-music.js?v=20261014-pause-closes-autoplay"],
             globalVar: "WelineStoreMusic",
             load: "defer",
             description: "进店音乐"

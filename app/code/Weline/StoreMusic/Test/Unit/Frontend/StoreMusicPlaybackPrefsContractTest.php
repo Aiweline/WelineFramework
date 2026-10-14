@@ -37,8 +37,9 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('never re-clamp on every boot', $js);
         self::assertStringContainsString('Clears to unset', $js);
         self::assertStringContainsString('Legacy want_play=0', $js);
-        self::assertStringContainsString('cached resume', $js);
-        self::assertStringContainsString('cachedResume', $js);
+        self::assertStringContainsString('clearNavResumeLatch', $js);
+        self::assertStringContainsString('Progress snap alone must NEVER autoplay', $js);
+        self::assertStringContainsString('permanently close autoplay until explicit', $js);
         self::assertStringContainsString("'want_play'", $js);
         self::assertStringContainsString('playIntent', $js);
         self::assertStringContainsString('tryPlay({ force: false })', $js);
@@ -137,7 +138,7 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('preferCache (F5 sticky resume)', $js);
         self::assertStringContainsString('flash「点击开启音乐」', $js);
         self::assertStringContainsString('navType === \'reload\'', $js);
-        self::assertStringContainsString('20261010-devtools-idempotent', $js);
+        self::assertStringContainsString('20261014-pause-closes-autoplay', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
         self::assertStringContainsString('armStickyPlayRetry', $js);
         self::assertStringContainsString('AbortError', $js);
@@ -273,7 +274,7 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('SPECTRUM_BAR_COUNT', $js);
         self::assertStringContainsString('ensureSpectrumBars', $js);
         self::assertStringContainsString('document.body.appendChild(this.waveCanvas)', $js);
-        self::assertStringContainsString('20261010-devtools-idempotent', $js);
+        self::assertStringContainsString('20261014-pause-closes-autoplay', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
 
         $css = (string)\file_get_contents($this->moduleFile('view/statics/css/store-music.css'));

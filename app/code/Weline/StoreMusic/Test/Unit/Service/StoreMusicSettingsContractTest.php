@@ -111,7 +111,7 @@ final class StoreMusicSettingsContractTest extends TestCase
         );
 
         self::assertStringContainsString('storeMusic', $modulesJs);
-        self::assertStringContainsString('20261010-devtools-idempotent', $modulesJs);
+        self::assertStringContainsString('20261014-pause-closes-autoplay', $modulesJs);
         self::assertStringNotContainsString('20261008-72waterdense', $modulesJs);
         self::assertStringNotContainsString('20260924-no-unload1', $modulesJs);
         self::assertStringNotContainsString('20260917-storemusic-speccenter2', $modulesJs);

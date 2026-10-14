@@ -1452,14 +1452,15 @@
                     setStatus(self.root, '');
                     return;
                 }
-                if (self.playIntent() !== 'play' && !self.hasResumeSnap()) {
+                // ❚❚ / dismiss must not revive from bfcache just because progress snap remains.
+                if (self.isUserStopped() || self.isDismissed() || self.playIntent() !== 'play') {
                     return;
                 }
                 if (document.visibilityState === 'hidden') {
                     return;
                 }
                 global.setTimeout(function () {
-                    if (!self._docAlive) {
+                    if (!self._docAlive || self.isUserStopped() || self.isDismissed()) {
                         return;
                     }
                     if (self.audio && !self.audio.paused) {
@@ -2119,6 +2120,22 @@
         }
     };
 
+    /** Drop F5 sticky latch — ❚❚ / dismiss must permanently close autoplay until ▶. */
+    StoreMusic.prototype.clearNavResumeLatch = function () {
+        try {
+            if (global.sessionStorage) {
+                global.sessionStorage.removeItem(this.navResumeKey());
+            }
+        } catch (eClearLatch) {
+            // ignore
+        }
+        this.clearNavResumeBypass();
+        this._stickyRetryLeft = 0;
+        this._stickyRetryArmed = false;
+        this._peerRetryArmed = false;
+        this._autoplayPending = false;
+    };
+
     /** Same-tab refresh / bfcache restore: skip the delay, never bypass a live peer lock. */
     StoreMusic.prototype.beginNavResumeBypass = function () {
         this._navResumeActive = true;
@@ -2467,7 +2484,8 @@
                 self._stickyRetryLeft = 0;
                 return;
             }
-            if (self.playIntent() !== 'play' && !self.hasResumeSnap()) {
+            // Progress snap alone must not keep sticky retry alive after ❚❚.
+            if (self.playIntent() !== 'play' && !self._navResumeActive) {
                 self.setNeedGesture(true);
                 return;
             }
@@ -4102,23 +4120,34 @@
             return;
         }
         // Explicit ❚❚ / dismiss — every new page must stay quiet until ▶.
-        if (this.isUserStopped()) {
-            this.setNeedGesture(true);
+        // Also drop any stale F5 latch so pause permanently closes autoplay.
+        if (this.isUserStopped() || this.isDismissed()) {
+            this.clearNavResumeLatch();
+            this.setNeedGesture(!this.isDismissed());
             this.syncHintVisibility();
+            if (this.isDismissed()) {
+                setStatus(this.root, textOf(this.root, '[data-store-music-i18n-dismissed]', '已关闭自动播放，点击播放可重新开启'));
+            }
             return;
         }
         // 1.1.28 natural-end misused user_stopped and blocked 进店 autoplay.
         this.migrateNaturalEndStopPoison();
         // If migration cleared a false stop, re-check real ❚❚ (should be rare).
-        if (this.isUserStopped()) {
-            this.setNeedGesture(true);
+        if (this.isUserStopped() || this.isDismissed()) {
+            this.clearNavResumeLatch();
+            this.setNeedGesture(!this.isDismissed());
             this.syncHintVisibility();
             return;
         }
         // Repair sessions poisoned by old leave/domain_empty want_play=0 writes.
         this.clearLegacyStopPoison();
-        // F5 while playing: session latch forces sticky resume (progress/want already cached).
+        // F5 while playing: session latch forces sticky resume (want_play already cached).
+        // Never honor latch after ❚❚ / dismiss — autoplay must detect user closed first.
         var navResume = this.consumeNavResumeLatch();
+        if (navResume && (this.isUserStopped() || this.isDismissed())) {
+            navResume = false;
+            this.clearNavResumeLatch();
+        }
         if (navResume) {
             this.setWantPlay(true);
             this.setUserStopped(false);
@@ -4133,6 +4162,7 @@
             intent = 'play';
         }
         if (this.isDismissed() && intent !== 'play') {
+            this.clearNavResumeLatch();
             this.setNeedGesture(false);
             this.syncHintVisibility();
             setStatus(this.root, textOf(this.root, '[data-store-music-i18n-dismissed]', '已关闭自动播放，点击播放可重新开启'));
@@ -4143,14 +4173,13 @@
             this.clearLegacyStopPoison();
             intent = this.playIntent();
         }
-        // A valid local track snapshot is a previous playback session, not a cold visit.
-        // It may exist without want_play=1 after an unload/legacy cleanup; once the
-        // explicit stop/dismiss guards above have passed, resume it immediately.
-        var restoredProgress = this.restoreProgressIndex();
-        var cachedResume = !!(restoredProgress && this.hasResumeSnap());
+        // Restore track index for UI only. Progress snap alone must NEVER autoplay:
+        // ❚❚ leaves progress; clearLegacyStopPoison can turn want_play=0 into unset;
+        // F5-while-playing is covered by nav_resume latch + want_play=1.
+        this.restoreProgressIndex();
         var delaySec = Math.max(1, Math.min(15, Number(this.cfg.delay_seconds) || 3));
-        // Refresh/cross-page/cached resume → ASAP. Only a cold visit waits delay_seconds.
-        var stickyResume = intent === 'play' || navResume || cachedResume;
+        // Sticky = explicit want_play or live nav latch only. Cold visit waits delay_seconds.
+        var stickyResume = intent === 'play' || navResume;
         var waitMs = (stickyResume || skipDelay) ? 0 : delaySec * 1000;
         if (force && this._awaitingConsent) {
             waitMs = 0;
@@ -4211,14 +4240,16 @@
             if (latest === 'stop') {
                 latest = 'unset';
             }
-            // Snap from a previous session is an autoplay trigger after the explicit
-            // stop/dismiss guards above — it is the cached-resume fast path.
+            // Track snap restores position only — never an autoplay trigger by itself.
             self.restoreProgressIndex();
-            // 1) sticky want_play / nav latch / cached progress → immediate resume
-            // 2) cold visit → try_autoplay after delay (already waited, or skipDelay peer-retry)
-            var stickyNow = latest === 'play' || navResume || cachedResume;
+            // 1) sticky want_play / nav latch → immediate resume (F5 while still playing)
+            // 2) cold visit → try_autoplay after delay only when user has NOT ❚❚ / dismiss
+            // Autoplay must detect user closed first (isUserStopped / isDismissed above).
+            var stickyNow = latest === 'play' || navResume;
             var coldAutoplay = !stickyNow
                 && latest === 'unset'
+                && !self.isUserStopped()
+                && !self.isDismissed()
                 && self.cfg.try_autoplay !== false
                 && self.cfg.try_autoplay !== 0
                 && self.cfg.try_autoplay !== '0';
@@ -4891,8 +4922,9 @@
                 self.releaseLeadership();
                 self.silenceForOtherTab(false, true);
                 // Sticky F5: AbortError / policy races — retry quietly, do not flash tip yet.
-                var sticky = navResume || self.playIntent() === 'play' || self.hasResumeSnap();
-                if (sticky && !self.isUserStopped() && !self._naturalEnded) {
+                // Never treat leftover progress snap as sticky after ❚❚ closed autoplay.
+                var sticky = navResume || self.playIntent() === 'play';
+                if (sticky && !self.isUserStopped() && !self.isDismissed() && !self._naturalEnded) {
                     self.armStickyPlayRetry();
                     return;
                 }
@@ -5001,6 +5033,8 @@
             return;
         }
         this.markUserOperating();
+        // ❚❚ = permanently close autoplay until explicit ▶ (survive refresh).
+        this.clearNavResumeLatch();
         this.setUserStopped(true);
         this.setWantPlay(false);
         this.pause();
@@ -5010,7 +5044,7 @@
         this.broadcastLeaderState('stop');
         this.releaseLeadership();
         this.setNeedGesture(true);
-        setStatus(this.root, '');
+        setStatus(this.root, textOf(this.root, '[data-store-music-i18n-dismissed]', '已关闭自动播放，点击播放可重新开启'));
     };
 
     StoreMusic.prototype.pause = function () {
@@ -5022,6 +5056,7 @@
     };
 
     StoreMusic.prototype.dismiss = function () {
+        this.clearNavResumeLatch();
         this.setUserStopped(true);
         this.setWantPlay(false);
         this.setDismissed(true);
@@ -5396,7 +5431,7 @@
         }
     };
 
-    var SCRIPT_GEN = '20261010-devtools-idempotent';
+    var SCRIPT_GEN = '20261014-pause-closes-autoplay';
 
     function boot(root) {
         if (!root) {
