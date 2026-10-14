@@ -2516,6 +2516,29 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'browser-operator-non-preemptive.mdc')),
         false,
     ),
+    'mcp_operational include framework_demos_live_in_weline_demo' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'framework_demos_live_in_weline_demo'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Weline_Demo')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBID')
+            && str_contains((string) ($rule['summary'] ?? ''), '*Demo')
+            && str_contains((string) ($rule['summary'] ?? ''), 'gitignored')
+            && str_contains((string) ($rule['summary'] ?? ''), 'framework-demos-live-in-weline-demo.mdc')),
+        false,
+    ),
+    'global_rules_dual_write mentions framework_demos_live_in_weline_demo mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'framework_demos_live_in_weline_demo')
+            && str_contains((string) ($rule['summary'] ?? ''), 'framework-demos-live-in-weline-demo.mdc')),
+        false,
+    ),
+    'mcp instructions mention framework_demos_live_in_weline_demo' => str_contains(
+        ToolService::instructions(),
+        'framework_demos_live_in_weline_demo'
+    ),
     'MCP hard constraints require skills fetch from MCP' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)

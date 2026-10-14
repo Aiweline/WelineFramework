@@ -37,6 +37,8 @@ $checks['coldstart mdc carries machine_shared_side_effects_require_workspace_sco
     && str_contains($mdc, '整机共享态')
     && str_contains($mdc, 'LEARNING_MCP_BOUND_REPOSITORY')
     && str_contains($mdc, 'rootCA.pem');
+$checks['coldstart mdc carries framework_demos_live_in_weline_demo'] = str_contains($mdc, 'framework_demos_live_in_weline_demo')
+    && str_contains($mdc, 'Weline_Demo');
 $checks['coldstart mdc forbids hand-writing rules to remember guidance'] = str_contains($mdc, '禁止为「记住引导」而手写')
     && str_contains($mdc, '.cursor/rules');
 $checks['coldstart mdc points host_codex_delegation'] = str_contains($mdc, 'host_codex_delegation')

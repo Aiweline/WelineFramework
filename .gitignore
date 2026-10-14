@@ -219,6 +219,9 @@ tests/e2e/.smoke-publish-last.log
 /tests/unit/WeShop/
 composer.json_DEV
 
+# 本机可视化演示模块（framework_demos_live_in_weline_demo）— 禁止入库
+/app/code/Weline/Demo/
+
 # 模块测试证据 / 静态 evidence 倾倒（非产品文档）
 **/test/evidence/
 **/view/statics/evidence/
