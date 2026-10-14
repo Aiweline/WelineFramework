@@ -1196,6 +1196,18 @@
         // Drop optimistic stamp memory before reload — otherwise skip-POST + missing Cookie
         // loops on "Page binding is missing or expired" forever.
         forgetScopeStampKey();
+        // Prefer framework toast+auto-reload helper when present (never native confirm).
+        try {
+            const prompt = window.Weline && typeof window.Weline.promptStorefrontGenerationRefresh === 'function'
+                ? window.Weline.promptStorefrontGenerationRefresh
+                : null;
+            if (prompt) {
+                const tip = presentation.message || presentation.tip || '';
+                return !!prompt(tip);
+            }
+        } catch (_promptError) {
+            // Fall through to guarded location.reload.
+        }
         try {
             const now = Date.now();
             const last = Number(sessionStorage.getItem(SCOPE_RELOAD_GUARD_KEY) || 0) || 0;

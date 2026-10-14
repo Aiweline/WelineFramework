@@ -1289,6 +1289,101 @@
         return Number.isFinite(n) && n >= 0 ? n : 2000;
     }
 
+    /**
+     * Storefront generation identity (themePublishedVersionId) via Cookie.
+     * Cookie is server Set-Cookie (not HttpOnly); JS only compares and prompts.
+     */
+    const STOREFRONT_GEN_COOKIE = 'weline_storefront_gen';
+    const STOREFRONT_GEN_PROMPT_GUARD_KEY = 'weline.storefront_gen_prompt_at';
+
+    function readStorefrontGenerationCookie() {
+        try {
+            const raw = String(document.cookie || '');
+            if (!raw) {
+                return '';
+            }
+            const parts = raw.split(';');
+            const prefix = STOREFRONT_GEN_COOKIE + '=';
+            for (let i = 0; i < parts.length; i += 1) {
+                const part = String(parts[i] || '').trim();
+                if (part.indexOf(prefix) === 0) {
+                    return decodeURIComponent(part.slice(prefix.length).trim());
+                }
+            }
+        } catch (_e) {
+            // Cookie access may be blocked.
+        }
+        return '';
+    }
+
+    function readPageStorefrontGenerationId() {
+        try {
+            const cfg = (window.Weline && window.Weline.config) || runtimeConfig || {};
+            return String(
+                cfg.themePublishedVersionId
+                || cfg.theme_published_version_id
+                || (cfg.api && (cfg.api.themePublishedVersionId || cfg.api.theme_published_version_id))
+                || ''
+            ).trim();
+        } catch (_e) {
+            return '';
+        }
+    }
+
+    /**
+     * Theme/UI tip + auto-reload when cookie identity ≠ page bake stamp.
+     * Never uses native window.confirm/alert (no_native_js_dialogs).
+     * @param {string} [message]
+     * @returns {boolean} true when reload started (or tip shown with reload attempted)
+     */
+    function promptStorefrontGenerationRefresh(message) {
+        try {
+            const now = Date.now();
+            const last = Number(sessionStorage.getItem(STOREFRONT_GEN_PROMPT_GUARD_KEY) || 0) || 0;
+            if (last > 0 && (now - last) < 8000) {
+                return false;
+            }
+            sessionStorage.setItem(STOREFRONT_GEN_PROMPT_GUARD_KEY, String(now));
+        } catch (_storageError) {
+            // sessionStorage may be blocked; still attempt one reload.
+        }
+
+        const tip = String(message || '').trim()
+            || (typeof __ === 'function'
+                ? __('主题已发布新版本。请重新加载页面以继续。')
+                : '主题已发布新版本。请重新加载页面以继续。');
+
+        try {
+            const toast = window.Weline && window.Weline.UI && window.Weline.UI.toast;
+            if (toast && typeof toast.warning === 'function') {
+                toast.warning(tip);
+            } else if (toast && typeof toast.show === 'function') {
+                toast.show(tip, { tone: 'warning' });
+            }
+        } catch (_toastError) {
+            // Toast is optional; reload still proceeds.
+        }
+
+        try {
+            window.location.reload();
+            return true;
+        } catch (_reloadError) {
+            return false;
+        }
+    }
+
+    /**
+     * @returns {boolean} true when cookie and page stamp both non-empty and differ
+     */
+    function checkStorefrontGenerationIdentity() {
+        const cookieId = readStorefrontGenerationCookie();
+        const pageId = readPageStorefrontGenerationId();
+        if (cookieId === '' || pageId === '' || cookieId === pageId) {
+            return false;
+        }
+        return promptStorefrontGenerationRefresh();
+    }
+
     // 挂载到全局
     // 承接启动桩（head 最早执行的 inline 桩）的待办队列：桩把 declare/load/preLoad/
     // mount/dom.observe 的早期调用排进 __bootQueue，此处统一回放，使这些脚本可以 defer。
@@ -1304,6 +1399,9 @@
     Weline.whenHtmlDocumentLoaded = whenHtmlDocumentLoaded;
     Weline.shouldDeferAttributeModule = shouldDeferAttributeModule;
     Weline.observeMutationsCoalesced = observeMutationsCoalesced;
+    Weline.readStorefrontGenerationCookie = readStorefrontGenerationCookie;
+    Weline.promptStorefrontGenerationRefresh = promptStorefrontGenerationRefresh;
+    Weline.checkStorefrontGenerationIdentity = checkStorefrontGenerationIdentity;
     Weline.dom = Object.assign({}, Weline.dom || {}, {
         /**
          * 架构入口：document/body/html 级 Mutation 观察必须走此 API（共享总线）。
@@ -1744,5 +1842,14 @@
 
         whenDomReady(preload);
     })();
+
+    // Cookie ↔ page bake stamp: prompt refresh when identity diverges.
+    whenDomReady(() => {
+        try {
+            checkStorefrontGenerationIdentity();
+        } catch (_identityError) {
+            // Identity check must never break ModuleLoader boot.
+        }
+    });
 
 })(window, document);

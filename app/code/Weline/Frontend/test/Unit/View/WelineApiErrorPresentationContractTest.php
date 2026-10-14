@@ -72,6 +72,13 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         self::assertStringContainsString("i18nText('商城范围未就绪')", $script);
         self::assertStringContainsString('autoReload: true', $script);
         self::assertStringContainsString('maybeAutoReloadForScopeConflict', $script);
+        self::assertStringContainsString('promptStorefrontGenerationRefresh', $script);
+        self::assertStringNotContainsString('window.confirm(', $script);
+        $welineJs = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/statics/js/weline.js',
+        );
+        self::assertStringContainsString('promptStorefrontGenerationRefresh', $welineJs);
+        self::assertStringNotContainsString('window.confirm(', $welineJs);
         self::assertStringContainsString('weline.api.scope_reload_at', $script);
         self::assertStringContainsString('weline.api.scope_tips_by_locale', $script);
         self::assertStringContainsString('rememberScopeTipsFromPayload', $script);
