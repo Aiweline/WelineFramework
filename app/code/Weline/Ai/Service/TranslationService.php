@@ -137,10 +137,14 @@ class TranslationService
         // 生成缓存键
         $cacheKey = $this->generateCacheKey($text, $targetLocale, $sourceLocale, $strategy);
         
-        // 尝试从缓存获取
+        // 尝试从缓存获取（已缓存的跨语种回声视为污染，忽略并重译）
         $cachedTranslation = $this->cache->get($cacheKey);
-        if ($cachedTranslation) {
-            return $cachedTranslation;
+        if (is_string($cachedTranslation) && $cachedTranslation !== '') {
+            if (!self::isUntranslatedEcho($text, $cachedTranslation, $sourceLocale, $originalTargetLocale)
+                && !self::isJunkTranslation($cachedTranslation)
+            ) {
+                return $cachedTranslation;
+            }
         }
 
         // 执行翻译
@@ -148,6 +152,24 @@ class TranslationService
         if (self::isJunkTranslation($translation)) {
             // Incomplete model replies (e.g. lone "[") must never be cached or returned as copy.
             return '';
+        }
+        if (self::isUntranslatedEcho($text, $translation, $sourceLocale, $originalTargetLocale)) {
+            // One stronger retry before fail-closed (root fix: never treat echo as success).
+            $translation = $this->performTranslation(
+                $text,
+                $targetLocale,
+                $sourceLocale,
+                self::STRATEGY_HIGH_FIDELITY,
+                $concurrencyLane,
+            );
+            if (self::isJunkTranslation($translation)
+                || self::isUntranslatedEcho($text, $translation, $sourceLocale, $originalTargetLocale)
+            ) {
+                throw new Exception(__(
+                    'AI 翻译回声：跨语种结果与原文相同（目标 %{1}）',
+                    [$originalTargetLocale],
+                ));
+            }
         }
 
         // 缓存翻译结果
@@ -172,6 +194,52 @@ class TranslationService
         }
 
         return false;
+    }
+
+    /**
+     * Primary language tag of a locale (zh_Hans_CN → zh). Keep in sync with I18nCsvCodec::localeLanguageTag.
+     */
+    public static function localeLanguageTag(string $locale): string
+    {
+        $locale = str_replace('-', '_', trim($locale));
+        if ($locale === '') {
+            return '';
+        }
+        $parts = explode('_', $locale);
+
+        return strtolower((string)($parts[0] ?? ''));
+    }
+
+    /**
+     * Cross-language identity echo: translation equals source while language tags differ.
+     * Keep in sync with I18nCsvCodec::isUntranslatedEcho (I18n keeps a UI safety gate).
+     */
+    public static function isUntranslatedEcho(
+        string $word,
+        string $translation,
+        string $sourceLocale,
+        string $targetLocale,
+    ): bool {
+        $word = trim($word);
+        $translation = trim($translation);
+        if ($word === '' || $translation === '') {
+            return false;
+        }
+
+        $same = function_exists('mb_strtolower')
+            ? (mb_strtolower($word, 'UTF-8') === mb_strtolower($translation, 'UTF-8'))
+            : (strtolower($word) === strtolower($translation));
+        if (!$same) {
+            return false;
+        }
+
+        $sourceLang = self::localeLanguageTag($sourceLocale);
+        $targetLang = self::localeLanguageTag($targetLocale);
+        if ($sourceLang === '' || $targetLang === '') {
+            return false;
+        }
+
+        return $sourceLang !== $targetLang;
     }
 
     /**
@@ -328,16 +396,8 @@ class TranslationService
                     $e,
                 );
             }
-            // 单条失败时回退到循环翻译
-            try {
-                return [$this->translate($texts[0], $originalTargetLocale, $sourceLocale, $strategy, $concurrencyLane)];
-            } catch (\Exception $ex) {
-                if ($this->concurrencyGate->isBusy($ex)) {
-                    throw $ex;
-                }
-
-                return [$texts[0]];
-            }
+            // 单条失败时回退到单条翻译；禁止把原文冒充译文（旧行为是回声根因之一）
+            return [$this->translate($texts[0], $originalTargetLocale, $sourceLocale, $strategy, $concurrencyLane)];
         }
     }
 
@@ -356,7 +416,111 @@ class TranslationService
         string $sourceLocale,
         string $strategy,
     ): array {
-        $batchPrompt = $this->buildBatchTranslationPrompt($texts, $targetLanguage, $sourceLanguage, $adapterStrategy);
+        $expected = count($texts);
+        $first = $this->callModelBatchOnce(
+            $texts,
+            $modelCode,
+            $targetLanguage,
+            $sourceLanguage,
+            $adapterStrategy,
+            $concurrencyLane,
+            false,
+        );
+
+        if (count($first) === $expected
+            && !$this->batchHasIdentityEcho($texts, $first, $sourceLocale, $originalTargetLocale)
+        ) {
+            return $first;
+        }
+
+        // Truncated JSON: keep leading non-echo items, translate the remainder.
+        if ($first !== [] && count($first) < $expected
+            && !$this->batchHasIdentityEcho(
+                array_slice($texts, 0, count($first)),
+                $first,
+                $sourceLocale,
+                $originalTargetLocale,
+            )
+        ) {
+            $remainder = array_slice($texts, count($first));
+            $rest = $this->batchTranslateOrderedList(
+                $remainder,
+                $modelCode,
+                $targetLanguage,
+                $sourceLanguage,
+                $adapterStrategy,
+                $concurrencyLane,
+                $originalTargetLocale,
+                $sourceLocale,
+                $strategy,
+            );
+
+            return array_merge($first, $rest);
+        }
+
+        $hadEcho = $this->batchHasIdentityEcho($texts, $first, $sourceLocale, $originalTargetLocale);
+        if ($hadEcho || count($first) === $expected) {
+            $retried = $this->callModelBatchOnce(
+                $texts,
+                $modelCode,
+                $targetLanguage,
+                $sourceLanguage,
+                $adapterStrategy,
+                $concurrencyLane,
+                true,
+            );
+            if (count($retried) === $expected
+                && !$this->batchHasIdentityEcho($texts, $retried, $sourceLocale, $originalTargetLocale)
+            ) {
+                return $retried;
+            }
+            if ($this->batchHasIdentityEcho($texts, $retried, $sourceLocale, $originalTargetLocale)
+                || $hadEcho
+            ) {
+                throw new Exception(__(
+                    'AI 翻译回声：批量结果含跨语种原文未译（目标 %{1}）',
+                    [$originalTargetLocale],
+                ));
+            }
+
+            throw new Exception(__(
+                '批量翻译结果解析失败：期望 %{expected} 条，实际 %{actual} 条',
+                [
+                    'expected' => (string)$expected,
+                    'actual' => (string)count($retried),
+                ],
+            ));
+        }
+
+        throw new Exception(__(
+            '批量翻译结果解析失败：期望 %{expected} 条，实际 %{actual} 条',
+            [
+                'expected' => (string)$expected,
+                'actual' => (string)count($first),
+            ],
+        ));
+    }
+
+    /**
+     * @param list<string> $texts
+     * @return list<string>
+     */
+    private function callModelBatchOnce(
+        array $texts,
+        string $modelCode,
+        string $targetLanguage,
+        string $sourceLanguage,
+        string $adapterStrategy,
+        string $concurrencyLane,
+        bool $antiEchoRetry,
+    ): array {
+        $batchPrompt = $this->buildBatchTranslationPrompt(
+            $texts,
+            $targetLanguage,
+            $sourceLanguage,
+            $adapterStrategy,
+            $antiEchoRetry,
+        );
         $maxTokens = $this->estimateBatchMaxTokens($texts);
 
         $this->concurrencyGate->acquire(TranslationConcurrencyGate::DEFAULT_WAIT_SECONDS, $concurrencyLane);
@@ -374,7 +538,7 @@ class TranslationService
                     'low_speed_time' => self::REQUEST_LOW_SPEED_SECONDS,
                     'connect_timeout' => self::REQUEST_CONNECT_TIMEOUT_SECONDS,
                     'max_tokens' => $maxTokens,
-                    'temperature' => 0.2,
+                    'temperature' => $antiEchoRetry ? 0.1 : 0.2,
                 ]
             );
         } finally {
@@ -387,35 +551,35 @@ class TranslationService
             return $translations;
         }
 
-        // Truncated JSON: keep complete leading items, retry only the remainder.
         $salvaged = self::salvageCompleteJsonArrayItems((string)$response);
         if (count($salvaged) === $expected) {
             return $salvaged;
         }
-        if ($salvaged !== [] && count($salvaged) < $expected) {
-            $remainder = array_slice($texts, count($salvaged));
-            $rest = $this->batchTranslateOrderedList(
-                $remainder,
-                $modelCode,
-                $targetLanguage,
-                $sourceLanguage,
-                $adapterStrategy,
-                $concurrencyLane,
-                $originalTargetLocale,
-                $sourceLocale,
-                $strategy,
-            );
 
-            return array_merge($salvaged, $rest);
+        return $salvaged;
+    }
+
+    /**
+     * @param list<string> $sources
+     * @param list<string> $translations
+     */
+    private function batchHasIdentityEcho(
+        array $sources,
+        array $translations,
+        string $sourceLocale,
+        string $targetLocale,
+    ): bool {
+        if ($translations === [] || count($translations) > count($sources)) {
+            return false;
+        }
+        foreach ($translations as $i => $translation) {
+            $source = (string)($sources[$i] ?? '');
+            if (self::isUntranslatedEcho($source, (string)$translation, $sourceLocale, $targetLocale)) {
+                return true;
+            }
         }
 
-        throw new Exception(__(
-            '批量翻译结果解析失败：期望 %{expected} 条，实际 %{actual} 条',
-            [
-                'expected' => (string)$expected,
-                'actual' => (string)count($translations),
-            ],
-        ));
+        return false;
     }
 
     /**
@@ -556,15 +720,23 @@ class TranslationService
         array $texts,
         string $targetLanguage,
         string $sourceLanguage,
-        string $strategy
+        string $strategy,
+        bool $antiEchoRetry = false,
     ): string {
         $payload = json_encode(array_values($texts), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $quality = $strategy === 'professional'
             ? 'Use polished, publication-ready ecommerce / admin UI wording.'
             : 'Prefer concise, natural UI labels suitable for menus, buttons, settings, and help text.';
 
+        $antiEcho = $antiEchoRetry
+            ? "CRITICAL RETRY: A previous reply echoed the source verbatim. "
+                . "You MUST output real {$targetLanguage} for every item. "
+                . "Copying the source string is a hard failure.\n"
+            : '';
+
         return "You are a professional translator for a multi-website ecommerce admin and storefront (Weline).\n"
             . "Translate each string from {$sourceLanguage} to {$targetLanguage}.\n"
+            . $antiEcho
             . "Return ONLY a valid JSON array of translated strings in the same order and with the same item count.\n"
             . "Do not wrap the array in markdown fences, and do not add explanations.\n"
             . "Rules:\n"
@@ -575,7 +747,8 @@ class TranslationService
             . "- Prefer \"identity\" for 身份 when it means a system identity, not a human ID card.\n"
             . "- Preserve placeholders such as %{1}, %{name}, HTML tags, and template tokens exactly.\n"
             . "- Do not transliterate Chinese into pinyin; produce real {$targetLanguage}.\n"
-            . "- Never return the source text unchanged when the languages differ.\n"
+            . "- Never return the source text unchanged when the languages differ; "
+            . "identity echo is invalid output.\n"
             . "Strategy: {$strategy}.\n"
             . "Input JSON:\n{$payload}";
     }
@@ -813,9 +986,12 @@ class TranslationService
         $normalized = str_replace('_', '-', $localeCode);
         
         $languageNames = [
-            'zh-CN' => 'Chinese',
-            'zh-Hans-CN' => 'Chinese',
+            'zh-CN' => 'Chinese (Simplified)',
+            'zh-Hans-CN' => 'Chinese (Simplified)',
+            'zh-Hant-TW' => 'Chinese (Traditional)',
+            'zh-TW' => 'Chinese (Traditional)',
             'en-US' => 'English',
+            'en-GB' => 'English',
             'bn-IN' => 'Bengali',
             'bn-BD' => 'Bengali',
             'ja-JP' => 'Japanese',
@@ -823,12 +999,26 @@ class TranslationService
             'fr-FR' => 'French',
             'de-DE' => 'German',
             'es-ES' => 'Spanish',
-            'ru-RU' => 'Russian'
+            'es-MX' => 'Spanish',
+            'ru-RU' => 'Russian',
+            'ar-SA' => 'Arabic',
+            'pt-BR' => 'Portuguese (Brazil)',
+            'pt-PT' => 'Portuguese',
+            'it-IT' => 'Italian',
+            'th-TH' => 'Thai',
+            'vi-VN' => 'Vietnamese',
+            'id-ID' => 'Indonesian',
+            'ms-MY' => 'Malay',
+            'tr-TR' => 'Turkish',
+            'pl-PL' => 'Polish',
+            'nl-NL' => 'Dutch',
+            'sv-SE' => 'Swedish',
+            'hi-IN' => 'Hindi',
         ];
         
         // 先尝试完整匹配
         if (isset($languageNames[$normalized])) {
-            return $languageNames[$normalized];
+            return $languageNames[$normalized] . " [{$normalized}]";
         }
         
         // 尝试匹配语言部分（如 zh-CN 匹配 zh）
@@ -845,10 +1035,25 @@ class TranslationService
             'fr' => 'French',
             'de' => 'German',
             'es' => 'Spanish',
-            'ru' => 'Russian'
+            'ru' => 'Russian',
+            'ar' => 'Arabic',
+            'pt' => 'Portuguese',
+            'it' => 'Italian',
+            'th' => 'Thai',
+            'vi' => 'Vietnamese',
+            'id' => 'Indonesian',
+            'ms' => 'Malay',
+            'tr' => 'Turkish',
+            'pl' => 'Polish',
+            'nl' => 'Dutch',
+            'sv' => 'Swedish',
         ];
-        
-        return $langMap[$langCode] ?? $localeCode;
+
+        if (isset($langMap[$langCode])) {
+            return $langMap[$langCode] . " [{$normalized}]";
+        }
+
+        return $localeCode;
     }
 
     /**

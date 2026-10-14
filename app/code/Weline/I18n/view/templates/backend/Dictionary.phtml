@@ -12,6 +12,7 @@ $availableModules = (array)($this->getData('available_modules') ?? []);
 $activeTab = (string)($this->getData('active_tab') ?? 'dictionary');
 $moduleSearch = (string)($this->getData('module_search') ?? '');
 $moduleCatalog = (array)($this->getData('module_catalog') ?? []);
+$moduleCatalogLoaded = (bool)($this->getData('module_catalog_loaded') ?? ($moduleCatalog !== []));
 $moduleExportDev = (bool)($this->getData('module_export_dev') ?? false);
 $targetLocale = (array)($this->getData('target_locale') ?? []);
 
@@ -201,12 +202,11 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 
                 <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-gap:var(--weline-space-4);--w-mt:var(--weline-space-6);">
                     <div class="i18n-admin-meta">
-                        <span class="i18n-admin-chip"><strong><?= __('翻译模式') ?></strong> <span id="dictionary-mode-chip"><?= __('未知') ?></span></span>
+                        <span class="i18n-admin-chip"><strong><?= __('词典') ?></strong> <span id="dictionary-mode-chip"><?= __('词典管理') ?></span></span>
                         <span class="i18n-admin-chip"><strong><?= __('自动词汇注册') ?></strong> <span id="dictionary-auto-register-label"><?= __('未知') ?></span></span>
                     </div>
                     <div class="i18n-admin-actions">
-                        <button type="button" class="w-button" data-mode-switch="online" data-tone="success" data-variant="outline"><?= __('在线翻译模式') ?></button>
-                        <button type="button" class="w-button" data-mode-switch="cache" data-tone="info" data-variant="outline"><?= __('缓存模式') ?></button>
+                        <button type="button" class="w-button" id="dictionary-inline-edit-start" data-tone="success" data-variant="outline"><?= __('店面点译') ?></button>
                         <button type="button" class="w-button" id="dictionary-auto-register-toggle" data-tone="warning" data-variant="outline"><?= __('自动词汇注册') ?></button>
                     </div>
                 </div>
@@ -227,7 +227,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                             <th style="width: 180px;" class="w-text" data-align="center"><?= __('操作') ?></th>
                         </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="dictionary-entries-body">
                         <?php if (!empty($translations)): ?>
                             <?php foreach ($translations as $translation): ?>
                                 <?php
@@ -239,7 +239,15 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                                 $formattedUpdateTime = (string)$readValue($translation, 'formatted_update_time', __('未知'));
                                 $isTranslated = $translate !== '' && $translate !== $word;
                                 ?>
-                                <tr>
+                                <tr
+                                    class="dictionary-entry-row"
+                                    data-testid="dictionary-entry-row"
+                                    data-md5="<?= htmlspecialchars($md5, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-word="<?= htmlspecialchars($word, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-translate="<?= htmlspecialchars($translate, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-locale-code="<?= htmlspecialchars($itemLocaleCode, ENT_QUOTES, 'UTF-8') ?>"
+                                    title="<?= htmlspecialchars((string)__('双击编辑此词条'), ENT_QUOTES, 'UTF-8') ?>"
+                                >
                                     <td>
                                         <div class="w-text" data-weight="strong"><?= htmlspecialchars($word, ENT_QUOTES, 'UTF-8') ?></div>
                                         <div class="w-text" data-tone="muted" data-size="sm"><?= $isTranslated ? __('已翻译:') : __('未翻译:') ?></div>
@@ -350,7 +358,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                                 <th style="width: 240px;" class="w-text" data-align="center"><?= __('操作') ?></th>
                             </tr>
                             </thead>
-                            <tbody id="i18n-module-catalog-body">
+                            <tbody id="i18n-module-catalog-body" data-catalog-loaded="<?= $moduleCatalogLoaded ? '1' : '0' ?>">
                             <?php if ($moduleCatalog !== []): ?>
                                 <?php foreach ($moduleCatalog as $moduleRow): ?>
                                     <?php
@@ -388,6 +396,13 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
+                            <?php elseif (!$moduleCatalogLoaded): ?>
+                                <tr data-module-catalog-placeholder="1">
+                                    <td colspan="7" class="i18n-admin-empty">
+                                        <div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-2);"><?= __('正在加载模块进度…') ?></div>
+                                        <div><?= __('切换到模块 Tab 后按需拉取，避免拖垮词典页') ?></div>
+                                    </td>
+                                </tr>
                             <?php else: ?>
                                 <tr>
                                     <td colspan="7" class="i18n-admin-empty">
@@ -450,15 +465,21 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
     </div>
 </div>
 
+<?php
+use Weline\Framework\Security\Token;
+$dictionarySseCsrf = Token::create('csrf', 9, 3600);
+?>
 <div class="w-dialog" id="dictionary-edit-modal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
     <div class="w-dialog__frame" data-size="lg">
         <div class="w-dialog__surface">
-            <w:form method="post" action="@backend-url('*/backend/dictionary/edit')" class="i18n-admin-form" data-async-action="dictionary-edit">
+            <w:form method="post" action="@backend-url('*/backend/dictionary/edit')" class="i18n-admin-form" data-async-action="dictionary-edit" csrf="off">
                 <div class="w-dialog__header">
                     <h5 class="w-dialog__title"><?= __('编辑') ?></h5>
                     <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
                 </div>
                 <div class="w-dialog__body">
+                    <?php /* 同源 Token::create；csrf="off" 避免 w:form 再注入第二枚 */ ?>
+                    <input type="hidden" id="dictionary-edit-sse-csrf" name="csrf" value="<?= htmlspecialchars((string) $dictionarySseCsrf, ENT_QUOTES, 'UTF-8') ?>" />
                     <input type="hidden" name="md5" id="dictionary-edit-md5">
                     <div class="w-grid" style="--w-gap:var(--weline-space-4);">
                         <div style="--w-span:12;">
@@ -475,6 +496,22 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                                 empty-text="dictionaryLocaleEmptyText"
                                 search-placeholder="dictionaryLocaleSearchPlaceholder"
                             />
+                        </div>
+                        <div style="--w-span:12;">
+                            <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                                <button type="button" id="dictionary-edit-ai-translate-btn" class="w-button" data-tone="success" data-variant="outline" data-size="sm" data-testid="dictionary-edit-ai-translate">
+                                    <?= __('AI 一键翻译') ?>
+                                </button>
+                                <button type="button" id="dictionary-edit-ai-translate-others-btn" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" data-testid="dictionary-edit-ai-translate-others">
+                                    <?= __('一键翻译其他语言') ?>
+                                </button>
+                            </div>
+                            <div id="dictionary-edit-ai-progress" class="i18n-dictionary-edit-ai-progress" hidden data-testid="dictionary-edit-ai-progress" style="--w-mt:var(--weline-space-3);">
+                                <div class="w-text" data-size="sm" id="dictionary-edit-ai-progress-message" data-testid="dictionary-edit-ai-progress-message"></div>
+                                <div class="i18n-admin-progress" style="--w-mt:var(--weline-space-2);">
+                                    <span id="dictionary-edit-ai-progress-bar" data-testid="dictionary-edit-ai-progress-bar" style="width:0%;"></span>
+                                </div>
+                            </div>
                         </div>
                         <div style="--w-span:12;">
                             <label class="w-field__label"><?= __('原文') ?></label>
@@ -524,10 +561,11 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 </div>
 
 <?php
-use Weline\Framework\Security\Token;
-$dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
+$dictionaryCollectSseCsrf = $dictionarySseCsrf ?? Token::create('csrf', 9, 3600);
 ?>
 <style>
+#dictionary-entries-body tr.dictionary-entry-row { cursor: pointer; }
+.i18n-dictionary-edit-ai-progress[hidden] { display: none !important; }
 .i18n-dictionary-collect-modal { position: fixed; inset: 0; z-index: 10050; display: none; align-items: center; justify-content: center; }
 .i18n-dictionary-collect-modal.is-open { display: flex; }
 .i18n-dictionary-collect-modal-backdrop { position: absolute; inset: 0; background: var(--backend-color-bg-overlay, rgba(0, 0, 0, 0.5)); }
@@ -574,7 +612,19 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
         moduleTranslateMessage: <?= json_encode((string)__('将为模块 %{1} 翻译一批未译词条（已存在的译文不会重复翻译）。继续吗？'), $jsonForScriptFlags) ?>,
         moduleExportTitle: <?= json_encode((string)__('写回模块 CSV'), $jsonForScriptFlags) ?>,
         moduleExportMessage: <?= json_encode((string)__('将把词典中该模块的 AI 译文增量写回 i18n/{locale}.csv（开发环境）。继续吗？'), $jsonForScriptFlags) ?>,
-        confirmUnavailable: <?= json_encode((string)__('确认组件不可用，请刷新页面后重试。'), $jsonForScriptFlags) ?>
+        confirmUnavailable: <?= json_encode((string)__('确认组件不可用，请刷新页面后重试。'), $jsonForScriptFlags) ?>,
+        aiTranslateBusy: <?= json_encode((string)__('正在 AI 翻译…'), $jsonForScriptFlags) ?>,
+        aiTranslateOthersBusy: <?= json_encode((string)__('正在翻译其他语言…'), $jsonForScriptFlags) ?>,
+        aiTranslateDone: <?= json_encode((string)__('AI 翻译完成'), $jsonForScriptFlags) ?>,
+        aiTranslateFailed: <?= json_encode((string)__('AI 翻译失败'), $jsonForScriptFlags) ?>,
+        aiTranslateSseFailed: <?= json_encode((string)__('SSE 连接失败，请重试'), $jsonForScriptFlags) ?>,
+        aiTranslateNeedWord: <?= json_encode((string)__('请先填写原文'), $jsonForScriptFlags) ?>,
+        aiOthersSaveTitle: <?= json_encode((string)__('保存其他语言译文'), $jsonForScriptFlags) ?>,
+        aiOthersSaveConfirmLabel: <?= json_encode((string)__('确认保存'), $jsonForScriptFlags) ?>,
+        aiOthersSaveSuccess: <?= json_encode((string)__('其他语言译文已保存'), $jsonForScriptFlags) ?>,
+        aiOthersSaveFailed: <?= json_encode((string)__('保存其他语言译文失败'), $jsonForScriptFlags) ?>,
+        aiOthersEmpty: <?= json_encode((string)__('没有可保存的其他语言译文'), $jsonForScriptFlags) ?>,
+        aiOthersEchoFailed: <?= json_encode((string)__('AI 未能译出有效译文（多语种仍返回原文），请检查翻译服务后重试'), $jsonForScriptFlags) ?>
     };
 
     function confirmAction(message, type, options) {
@@ -587,11 +637,18 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
 
         if (window.Weline && window.Weline.UI && window.Weline.UI.dialog
             && typeof window.Weline.UI.dialog.confirm === 'function') {
-            return window.Weline.UI.dialog.confirm(String(message || ''), options);
+            // Node 可直接作 message（requestDialog 支持）；勿 String() 毁掉列表结构。
+            var confirmMessage = (message && typeof message === 'object' && message.nodeType)
+                ? message
+                : String(message || '');
+            return window.Weline.UI.dialog.confirm(confirmMessage, options);
         }
 
         if (window.I18nAdminUI && typeof window.I18nAdminUI.confirm === 'function') {
-            return window.I18nAdminUI.confirm(String(message || ''), options.tone, options);
+            var plain = (message && typeof message === 'object' && message.nodeType)
+                ? String(message.textContent || '')
+                : String(message || '');
+            return window.I18nAdminUI.confirm(plain, options.tone, options);
         }
 
         toastAction('error', dictionaryMessages.confirmUnavailable);
@@ -615,20 +672,35 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
 
     var localeCode = <?= json_encode($localeCode, $jsonForScriptFlags) ?>;
     var moduleFilter = <?= json_encode($moduleFilter, $jsonForScriptFlags) ?>;
+    var moduleSearch = <?= json_encode($moduleSearch, $jsonForScriptFlags) ?>;
     var activeTab = <?= json_encode($activeTab, $jsonForScriptFlags) ?>;
     var moduleExportDev = <?= $moduleExportDev ? 'true' : 'false' ?>;
+    var moduleCatalogLoaded = <?= $moduleCatalogLoaded ? 'true' : 'false' ?>;
+    var moduleCatalogLoading = false;
+    var moduleCatalogHydrating = false;
     var endpoints = {
         collectWords: 'dictionary-collect',
         moduleTranslate: 'dictionary-module-translate',
         moduleExportCsv: 'dictionary-module-export-csv',
         moduleCatalog: 'dictionary-module-catalog',
+        moduleCatalogStats: 'dictionary-module-catalog-stats',
         clearLocale: 'dictionary-clear-locale',
         clearAll: 'dictionary-clear-all',
         currentTranslationMode: 'dictionary-current-translation-mode',
         checkAutoRegister: 'dictionary-check-auto-register',
         enableAutoRegister: 'dictionary-auto-register-enable',
         disableAutoRegister: 'dictionary-auto-register-disable',
-        setTranslationMode: 'dictionary-translation-mode'
+        setTranslationMode: 'dictionary-translation-mode',
+        inlineEditStart: 'dictionary-inline-edit-start'
+    };
+    var moduleCatalogMessages = {
+        loading: <?= json_encode((string)__('正在加载模块进度…'), $jsonForScriptFlags) ?>,
+        emptyTitle: <?= json_encode((string)__('暂无模块语言包'), $jsonForScriptFlags) ?>,
+        emptyHint: <?= json_encode((string)__('未找到带 i18n 目录的活跃模块，或搜索条件无匹配'), $jsonForScriptFlags) ?>,
+        loadFailed: <?= json_encode((string)__('模块进度加载失败'), $jsonForScriptFlags) ?>,
+        translateLabel: <?= json_encode((string)__('AI 翻译'), $jsonForScriptFlags) ?>,
+        exportLabel: <?= json_encode((string)__('写回 CSV'), $jsonForScriptFlags) ?>,
+        pendingStats: <?= json_encode((string)__('…'), $jsonForScriptFlags) ?>
     };
 
     function updateProgress(progress) {
@@ -684,27 +756,628 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
         });
     }
 
-    document.querySelectorAll('.dictionary-edit-trigger').forEach(function (button) {
-        button.addEventListener('click', function () {
-            document.getElementById('dictionary-edit-md5').value = button.dataset.md5 || '';
-            document.getElementById('dictionary-edit-word').value = button.dataset.word || '';
-            document.getElementById('dictionary-edit-translate').value = button.dataset.translate === button.dataset.word ? '' : (button.dataset.translate || '');
-            var editLocaleCode = button.dataset.localeCode || localeCode || '';
-            var editLanguageRoot = document.getElementById('dictionary_edit_locale_selector_wrapper');
-            var editLanguageSelector = editLanguageRoot
-                ? Weline.UI.get(editLanguageRoot, 'language-select')
-                : null;
-            if (editLanguageSelector && typeof editLanguageSelector.setValue === 'function') {
-                editLanguageSelector.setValue(editLocaleCode);
-                return;
-            }
-
+    function fillDictionaryEditForm(data) {
+        data = data || {};
+        var md5 = data.md5 || '';
+        var word = data.word || '';
+        var translate = data.translate || '';
+        document.getElementById('dictionary-edit-md5').value = md5;
+        document.getElementById('dictionary-edit-word').value = word;
+        document.getElementById('dictionary-edit-translate').value = translate === word ? '' : translate;
+        var editLocaleCode = data.localeCode || localeCode || '';
+        var editLanguageRoot = document.getElementById('dictionary_edit_locale_selector_wrapper');
+        var editLanguageSelector = editLanguageRoot
+            ? (window.Weline && window.Weline.UI && typeof window.Weline.UI.get === 'function'
+                ? window.Weline.UI.get(editLanguageRoot, 'language-select')
+                : null)
+            : null;
+        if (editLanguageSelector && typeof editLanguageSelector.setValue === 'function') {
+            editLanguageSelector.setValue(editLocaleCode);
+        } else {
             var editLocaleInput = document.getElementById('dictionary-edit-locale-code');
             if (editLocaleInput) {
                 editLocaleInput.value = editLocaleCode;
             }
+        }
+        resetDictionaryEditAiProgress();
+    }
+
+    function openDictionaryEditModal(data) {
+        fillDictionaryEditForm(data);
+        var modal = document.getElementById('dictionary-edit-modal');
+        if (!modal) {
+            return;
+        }
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog
+            && typeof window.Weline.UI.dialog.open === 'function') {
+            window.Weline.UI.dialog.open(modal);
+            return;
+        }
+        modal.hidden = false;
+        modal.setAttribute('data-state', 'open');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    document.querySelectorAll('.dictionary-edit-trigger').forEach(function (button) {
+        button.addEventListener('click', function () {
+            fillDictionaryEditForm({
+                md5: button.dataset.md5 || '',
+                word: button.dataset.word || '',
+                translate: button.dataset.translate || '',
+                localeCode: button.dataset.localeCode || ''
+            });
         });
     });
+
+    var dictionaryEntriesBody = document.getElementById('dictionary-entries-body');
+    if (dictionaryEntriesBody) {
+        dictionaryEntriesBody.addEventListener('dblclick', function (event) {
+            var target = event.target;
+            if (!target || !target.closest) {
+                return;
+            }
+            if (target.closest('a, button, .w-button, input, textarea, select, label')) {
+                return;
+            }
+            var row = target.closest('tr.dictionary-entry-row');
+            if (!row) {
+                return;
+            }
+            event.preventDefault();
+            openDictionaryEditModal({
+                md5: row.getAttribute('data-md5') || '',
+                word: row.getAttribute('data-word') || '',
+                translate: row.getAttribute('data-translate') || '',
+                localeCode: row.getAttribute('data-locale-code') || ''
+            });
+        });
+    }
+
+    // AI SSE/save 必须走同源相对路径。@backend-url→getBaseHost 可能剥 Worker :9555
+    // 并改写为 https 无端口，XHR 跨源不带会话 Cookie → Token::get('csrf')=null → CSRF 失败。
+    // 对齐 Seo/SystemConfig：getBackendUrlPath + 运行时再钉 pathname（相对当前页 origin）。
+    var entryAiTranslateStreamUrl = <?= json_encode(
+        (string)$this->getBackendUrlPath('*/backend/dictionary/entry-ai-translate-stream'),
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+    ) ?>;
+    var entryAiTranslateOthersStreamUrl = <?= json_encode(
+        (string)$this->getBackendUrlPath('*/backend/dictionary/entry-ai-translate-others-stream'),
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+    ) ?>;
+    var entryAiSaveOthersUrl = <?= json_encode(
+        (string)$this->getBackendUrlPath('*/backend/dictionary/entry-ai-save-others'),
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+    ) ?>;
+    var aiTranslateBtn = document.getElementById('dictionary-edit-ai-translate-btn');
+    var aiTranslateOthersBtn = document.getElementById('dictionary-edit-ai-translate-others-btn');
+    var aiProgressRoot = document.getElementById('dictionary-edit-ai-progress');
+    var aiProgressMessage = document.getElementById('dictionary-edit-ai-progress-message');
+    var aiProgressBar = document.getElementById('dictionary-edit-ai-progress-bar');
+    var aiStreamBusy = false;
+    var aiStreamXhr = null;
+    var lastOthersPayload = null;
+
+    function resolveDictionarySameOriginUrl(url) {
+        var raw = String(url || '');
+        if (!raw) {
+            return raw;
+        }
+        try {
+            var resolved = new URL(raw, window.location.href);
+            return resolved.pathname + resolved.search + resolved.hash;
+        } catch (e) {
+            return raw;
+        }
+    }
+
+    function resetDictionaryEditAiProgress() {
+        lastOthersPayload = null;
+        if (aiProgressRoot) {
+            aiProgressRoot.hidden = true;
+        }
+        if (aiProgressMessage) {
+            aiProgressMessage.textContent = '';
+            aiProgressMessage.removeAttribute('data-tone');
+        }
+        if (aiProgressBar) {
+            aiProgressBar.style.width = '0%';
+        }
+    }
+
+    function setDictionaryEditAiProgress(message, percent, tone) {
+        if (aiProgressRoot) {
+            aiProgressRoot.hidden = false;
+        }
+        if (aiProgressMessage) {
+            aiProgressMessage.textContent = String(message || '');
+            if (tone) {
+                aiProgressMessage.setAttribute('data-tone', tone);
+            } else {
+                aiProgressMessage.removeAttribute('data-tone');
+            }
+        }
+        if (aiProgressBar && percent != null && !isNaN(Number(percent))) {
+            aiProgressBar.style.width = Math.max(0, Math.min(100, Number(percent))) + '%';
+        }
+    }
+
+    function setAiButtonsBusy(busy) {
+        aiStreamBusy = !!busy;
+        if (aiTranslateBtn) {
+            aiTranslateBtn.disabled = aiStreamBusy;
+        }
+        if (aiTranslateOthersBtn) {
+            aiTranslateOthersBtn.disabled = aiStreamBusy;
+        }
+    }
+
+    function getDictionaryEditAiCsrf() {
+        // 优先编辑表单内 csrf（w:form / 弹窗 hidden），再回退收集弹窗同源 token
+        var formCsrf = document.querySelector('#dictionary-edit-modal input[name="csrf"]');
+        if (formCsrf && String(formCsrf.value || '') !== '') {
+            return String(formCsrf.value);
+        }
+        var editEl = document.getElementById('dictionary-edit-sse-csrf');
+        if (editEl && String(editEl.value || '') !== '') {
+            return String(editEl.value);
+        }
+        var el = document.getElementById('dictionary-collect-sse-csrf');
+        return el ? String(el.value || '') : '';
+    }
+
+    function getDictionaryEditContext() {
+        var md5El = document.getElementById('dictionary-edit-md5');
+        var wordEl = document.getElementById('dictionary-edit-word');
+        var localeEl = document.getElementById('dictionary-edit-locale-code');
+        return {
+            md5: md5El ? String(md5El.value || '') : '',
+            word: wordEl ? String(wordEl.value || '') : '',
+            localeCode: localeEl ? String(localeEl.value || '') : String(localeCode || '')
+        };
+    }
+
+    function parseDictionarySseBuffer(buffer, onEvent) {
+        var parts = String(buffer || '').split('\n\n');
+        var rest = parts.pop() || '';
+        parts.forEach(function (block) {
+            if (!block || block.charAt(0) === ':') {
+                return;
+            }
+            var eventName = 'message';
+            var dataLines = [];
+            String(block).split('\n').forEach(function (line) {
+                if (line.indexOf('event:') === 0) {
+                    eventName = line.slice(6).trim() || 'message';
+                } else if (line.indexOf('data:') === 0) {
+                    dataLines.push(line.slice(5).replace(/^ /, ''));
+                }
+            });
+            if (!dataLines.length) {
+                return;
+            }
+            var raw = dataLines.join('\n');
+            var data = null;
+            try {
+                data = JSON.parse(raw);
+            } catch (e) {
+                data = { message: raw };
+            }
+            onEvent(eventName, data || {});
+        });
+        return rest;
+    }
+
+    function startDictionaryAiSse(url, fields, handlers) {
+        handlers = handlers || {};
+        if (aiStreamBusy) {
+            return;
+        }
+        if (aiStreamXhr) {
+            try { aiStreamXhr.abort(); } catch (e) {}
+            aiStreamXhr = null;
+        }
+
+        setAiButtonsBusy(true);
+        setDictionaryEditAiProgress(handlers.busyMessage || dictionaryMessages.aiTranslateBusy, 0, 'muted');
+
+        var xhr = new XMLHttpRequest();
+        aiStreamXhr = xhr;
+        var seenBytes = 0;
+        var sseBuffer = '';
+        var settled = false;
+        var failed = false;
+
+        function finish(asFailed) {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            if (asFailed) {
+                failed = true;
+            }
+            if (aiStreamXhr === xhr) {
+                aiStreamXhr = null;
+            }
+            setAiButtonsBusy(false);
+        }
+
+        function handleEvent(eventName, data) {
+            data = data || {};
+            if (eventName === 'start' || eventName === 'progress' || eventName === 'message') {
+                if (settled) {
+                    return;
+                }
+                var progressMsg = data.message || data.msg || handlers.busyMessage || dictionaryMessages.aiTranslateBusy;
+                var percent = data.percent != null ? data.percent : (data.progress != null ? data.progress : null);
+                setDictionaryEditAiProgress(progressMsg, percent, 'muted');
+                if (typeof handlers.onProgress === 'function') {
+                    handlers.onProgress(data, eventName);
+                }
+                return;
+            }
+            if (eventName === 'failed' || eventName === 'error') {
+                if (settled) {
+                    return;
+                }
+                finish(true);
+                if (typeof handlers.onFailed === 'function') {
+                    handlers.onFailed(data);
+                }
+                return;
+            }
+            if (eventName === 'done' || eventName === 'complete') {
+                // 已失败/已收口后忽略后续 done，避免 CSRF error 后再 complete 假绿
+                if (settled || failed) {
+                    return;
+                }
+                if (data.success === false) {
+                    finish(true);
+                    if (typeof handlers.onFailed === 'function') {
+                        handlers.onFailed(data);
+                    }
+                    return;
+                }
+                finish(false);
+                if (typeof handlers.onDone === 'function') {
+                    handlers.onDone(data);
+                }
+                return;
+            }
+        }
+
+        xhr.open('POST', resolveDictionarySameOriginUrl(url), true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Accept', 'text/event-stream');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.onprogress = function () {
+            var text = xhr.responseText || '';
+            if (text.length <= seenBytes) {
+                return;
+            }
+            var chunk = text.slice(seenBytes);
+            seenBytes = text.length;
+            sseBuffer = parseDictionarySseBuffer(sseBuffer + chunk, handleEvent);
+        };
+        xhr.onload = function () {
+            var text = xhr.responseText || '';
+            if (text.length > seenBytes) {
+                sseBuffer = parseDictionarySseBuffer(sseBuffer + text.slice(seenBytes), handleEvent);
+                seenBytes = text.length;
+            }
+            if (settled) {
+                return;
+            }
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    var json = JSON.parse(text || '{}');
+                    if (json && json.success === false) {
+                        handleEvent('failed', json);
+                        return;
+                    }
+                    if (json && (json.translation != null || json.translations != null || json.success === true)) {
+                        handleEvent('done', json);
+                        return;
+                    }
+                } catch (e) {}
+            }
+            finish(true);
+            if (typeof handlers.onFailed === 'function') {
+                handlers.onFailed({ message: dictionaryMessages.aiTranslateSseFailed });
+            }
+        };
+        xhr.onerror = function () {
+            if (settled) {
+                return;
+            }
+            finish(true);
+            if (typeof handlers.onFailed === 'function') {
+                handlers.onFailed({ message: dictionaryMessages.aiTranslateSseFailed });
+            }
+        };
+        xhr.onabort = function () {
+            finish(false);
+        };
+
+        var fd = new FormData();
+        Object.keys(fields || {}).forEach(function (key) {
+            fd.append(key, fields[key] == null ? '' : String(fields[key]));
+        });
+        if (!fd.has('sse')) {
+            fd.append('sse', '1');
+        }
+        xhr.send(fd);
+    }
+
+    function truncateDictionaryPreview(text, maxLen) {
+        var value = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+        var limit = maxLen || 96;
+        if (value.length <= limit) {
+            return value;
+        }
+        return value.slice(0, Math.max(0, limit - 1)) + '…';
+    }
+
+    /**
+     * 其他语种确认摘要：可滚动「语种 | 译文」列表（Node）。
+     * 禁止再 join('\\n') 塞进 textContent——默认 white-space 会把换行折成一团。
+     */
+    function buildOthersSummary(payload) {
+        payload = payload || {};
+        var translations = payload.drafts || payload.translations || payload.items || {};
+        var codes = Object.keys(translations || {});
+        var skipped = Array.isArray(payload.skipped) ? payload.skipped : [];
+        var errors = Array.isArray(payload.errors) ? payload.errors : [];
+
+        if (!codes.length && !skipped.length && !errors.length) {
+            return dictionaryMessages.aiOthersEmpty;
+        }
+
+        var root = document.createElement('div');
+        root.className = 'i18n-dictionary-others-summary w-stack';
+        root.setAttribute('data-testid', 'dictionary-others-save-summary');
+        root.style.setProperty('--w-gap', 'var(--weline-space-3)');
+
+        var lead = document.createElement('p');
+        lead.className = 'w-text';
+        lead.setAttribute('data-size', 'sm');
+        if (codes.length) {
+            lead.textContent = '<?= addslashes(__('将保存以下')) ?> '
+                + String(codes.length)
+                + ' <?= addslashes(__('种语言的译文草稿，请逐行核对：')) ?>';
+        } else {
+            lead.textContent = String(payload.message || dictionaryMessages.aiOthersEmpty);
+        }
+        root.appendChild(lead);
+
+        if (codes.length) {
+            // 不在内部再套一层固定高度滚动：交给 .w-dialog__body（max-height:60vh; overflow:auto），
+            // 避免内嵌 scroller 把 footer 叠在表格上。
+            var panel = document.createElement('div');
+            panel.className = 'i18n-dictionary-others-summary__panel';
+            panel.setAttribute('data-testid', 'dictionary-others-save-summary-list');
+            panel.style.padding = 'var(--weline-space-2)';
+            panel.style.border = '1px solid var(--weline-theme-border)';
+            panel.style.borderRadius = 'var(--weline-radius-md)';
+            panel.style.background = 'var(--weline-theme-surface-muted)';
+
+            var table = document.createElement('table');
+            table.className = 'w-table i18n-dictionary-others-summary__table';
+            table.style.width = '100%';
+            table.style.borderCollapse = 'collapse';
+            table.style.fontSize = 'var(--weline-font-size-sm)';
+
+            var thead = document.createElement('thead');
+            var headRow = document.createElement('tr');
+            ['<?= addslashes(__('语种')) ?>', '<?= addslashes(__('译文预览')) ?>'].forEach(function (label, idx) {
+                var th = document.createElement('th');
+                th.textContent = label;
+                th.style.textAlign = 'start';
+                th.style.padding = 'var(--weline-space-1) var(--weline-space-2)';
+                th.style.borderBottom = '1px solid var(--weline-theme-border)';
+                th.style.position = 'sticky';
+                th.style.top = '0';
+                th.style.background = 'var(--weline-theme-surface-muted)';
+                th.style.whiteSpace = 'nowrap';
+                th.style.zIndex = '1';
+                if (idx === 0) {
+                    th.style.width = '7.5rem';
+                }
+                headRow.appendChild(th);
+            });
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+
+            var tbody = document.createElement('tbody');
+            codes.sort().forEach(function (code) {
+                var tr = document.createElement('tr');
+                var tdLocale = document.createElement('td');
+                tdLocale.textContent = code;
+                tdLocale.style.padding = 'var(--weline-space-1) var(--weline-space-2)';
+                tdLocale.style.verticalAlign = 'top';
+                tdLocale.style.whiteSpace = 'nowrap';
+                tdLocale.style.fontWeight = '650';
+                tdLocale.style.borderBottom = '1px solid var(--weline-theme-border)';
+
+                var tdText = document.createElement('td');
+                var raw = String(translations[code] == null ? '' : translations[code]);
+                tdText.textContent = truncateDictionaryPreview(raw, 120);
+                tdText.title = raw;
+                tdText.style.padding = 'var(--weline-space-1) var(--weline-space-2)';
+                tdText.style.verticalAlign = 'top';
+                tdText.style.borderBottom = '1px solid var(--weline-theme-border)';
+                tdText.style.wordBreak = 'break-word';
+
+                tr.appendChild(tdLocale);
+                tr.appendChild(tdText);
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            panel.appendChild(table);
+            root.appendChild(panel);
+        }
+
+        if (skipped.length || errors.length) {
+            var meta = document.createElement('p');
+            meta.className = 'w-text';
+            meta.setAttribute('data-size', 'sm');
+            meta.setAttribute('data-tone', 'muted');
+            var bits = [];
+            if (skipped.length) {
+                bits.push('<?= addslashes(__('已跳过')) ?>: ' + String(skipped.length));
+            }
+            if (errors.length) {
+                bits.push('<?= addslashes(__('失败')) ?>: ' + String(errors.length));
+            }
+            meta.textContent = bits.join(' · ');
+            root.appendChild(meta);
+        }
+
+        return root;
+    }
+
+    if (aiTranslateBtn) {
+        aiTranslateBtn.addEventListener('click', function () {
+            var ctx = getDictionaryEditContext();
+            if (!ctx.word) {
+                toastAction('warning', dictionaryMessages.aiTranslateNeedWord);
+                return;
+            }
+            startDictionaryAiSse(entryAiTranslateStreamUrl, {
+                csrf: getDictionaryEditAiCsrf(),
+                md5: ctx.md5,
+                word: ctx.word,
+                locale_code: ctx.localeCode
+            }, {
+                busyMessage: dictionaryMessages.aiTranslateBusy,
+                onProgress: function (data) {
+                    if (data.translation != null && data.translation !== '') {
+                        document.getElementById('dictionary-edit-translate').value = String(data.translation);
+                    }
+                },
+                onDone: function (data) {
+                    data = data || {};
+                    if (data.success === false) {
+                        setDictionaryEditAiProgress(data.message || dictionaryMessages.aiTranslateFailed, null, 'danger');
+                        toastAction('error', data.message || dictionaryMessages.aiTranslateFailed);
+                        return;
+                    }
+                    var translation = data.translation != null ? String(data.translation) : '';
+                    if (translation === '') {
+                        setDictionaryEditAiProgress(dictionaryMessages.aiTranslateFailed, null, 'danger');
+                        toastAction('error', dictionaryMessages.aiTranslateFailed);
+                        return;
+                    }
+                    document.getElementById('dictionary-edit-translate').value = translation;
+                    setDictionaryEditAiProgress(data.message || dictionaryMessages.aiTranslateDone, 100, 'success');
+                    toastAction('success', data.message || dictionaryMessages.aiTranslateDone);
+                },
+                onFailed: function (data) {
+                    setDictionaryEditAiProgress((data && data.message) || dictionaryMessages.aiTranslateFailed, null, 'danger');
+                    toastAction('error', (data && data.message) || dictionaryMessages.aiTranslateFailed);
+                }
+            });
+        });
+    }
+
+    if (aiTranslateOthersBtn) {
+        aiTranslateOthersBtn.addEventListener('click', function () {
+            var ctx = getDictionaryEditContext();
+            if (!ctx.word) {
+                toastAction('warning', dictionaryMessages.aiTranslateNeedWord);
+                return;
+            }
+            lastOthersPayload = null;
+            startDictionaryAiSse(entryAiTranslateOthersStreamUrl, {
+                csrf: getDictionaryEditAiCsrf(),
+                md5: ctx.md5,
+                word: ctx.word,
+                locale_code: ctx.localeCode
+            }, {
+                busyMessage: dictionaryMessages.aiTranslateOthersBusy,
+                onDone: function (data) {
+                    data = data || {};
+                    if (data.success === false) {
+                        setDictionaryEditAiProgress(data.message || dictionaryMessages.aiTranslateFailed, null, 'danger');
+                        toastAction('error', data.message || dictionaryMessages.aiTranslateFailed);
+                        return;
+                    }
+                    var draftMap = (data.drafts || data.translations || data.items) || {};
+                    var draftCodes = Object.keys(draftMap);
+                    if (!draftCodes.length) {
+                        var emptyMsg = data.message || dictionaryMessages.aiOthersEmpty;
+                        setDictionaryEditAiProgress(emptyMsg, null, 'danger');
+                        toastAction('error', emptyMsg);
+                        return;
+                    }
+                    // 跨语种仍全文等于原文 → 无意义，禁止弹确认保存
+                    var sourceWord = String(ctx.word || '').trim();
+                    var echoCount = 0;
+                    draftCodes.forEach(function (code) {
+                        if (String(draftMap[code] == null ? '' : draftMap[code]).trim() === sourceWord) {
+                            echoCount += 1;
+                        }
+                    });
+                    if (sourceWord !== '' && echoCount === draftCodes.length) {
+                        var echoMsg = data.message || dictionaryMessages.aiOthersEchoFailed;
+                        setDictionaryEditAiProgress(echoMsg, null, 'danger');
+                        toastAction('error', echoMsg);
+                        return;
+                    }
+                    lastOthersPayload = data;
+                    setDictionaryEditAiProgress(data.message || dictionaryMessages.aiTranslateDone, 100, 'success');
+                    var summary = buildOthersSummary(data);
+                    confirmAction(summary, 'info', {
+                        title: dictionaryMessages.aiOthersSaveTitle,
+                        tone: 'info',
+                        size: 'lg',
+                        confirmLabel: dictionaryMessages.aiOthersSaveConfirmLabel,
+                    }).then(function (confirmed) {
+                        if (!confirmed) {
+                            return;
+                        }
+                        var translations = (lastOthersPayload && (lastOthersPayload.drafts || lastOthersPayload.translations || lastOthersPayload.items)) || {};
+                        if (!translations || !Object.keys(translations).length) {
+                            toastAction('warning', dictionaryMessages.aiOthersEmpty);
+                            return;
+                        }
+                        var fd = new FormData();
+                        fd.append('csrf', getDictionaryEditAiCsrf());
+                        fd.append('md5', ctx.md5);
+                        fd.append('word', ctx.word);
+                        fd.append('locale_code', ctx.localeCode);
+                        fd.append('translations', JSON.stringify(translations));
+                        fetch(resolveDictionarySameOriginUrl(entryAiSaveOthersUrl), {
+                            method: 'POST',
+                            body: fd,
+                            credentials: 'same-origin',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        }).then(function (response) {
+                            return response.json().catch(function () {
+                                return { success: false, message: dictionaryMessages.aiOthersSaveFailed };
+                            }).then(function (json) {
+                                return { ok: response.ok, json: json || {} };
+                            });
+                        }).then(function (result) {
+                            if (result.ok && result.json.success !== false) {
+                                toastAction('success', result.json.message || dictionaryMessages.aiOthersSaveSuccess);
+                                return;
+                            }
+                            toastAction('error', (result.json && result.json.message) || dictionaryMessages.aiOthersSaveFailed);
+                        }).catch(function (error) {
+                            toastAction('error', dictionaryMessages.aiOthersSaveFailed + (error && error.message ? (': ' + error.message) : ''));
+                        });
+                    });
+                },
+                onFailed: function (data) {
+                    setDictionaryEditAiProgress((data && data.message) || dictionaryMessages.aiTranslateFailed, null, 'danger');
+                    toastAction('error', (data && data.message) || dictionaryMessages.aiTranslateFailed);
+                }
+            });
+        });
+    }
 
     var collectButton = document.getElementById('dictionary-collect-btn');
     var collectModal = document.getElementById('dictionary-collect-modal');
@@ -818,6 +1491,174 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
         });
     }
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function formatModulePercent(percent) {
+        var raw = String(Number(percent || 0));
+        return raw.replace(/\.0$/, '').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '') + '%';
+    }
+
+    function renderModuleCatalogRows(items) {
+        var body = document.getElementById('i18n-module-catalog-body');
+        if (!body) {
+            return;
+        }
+        items = Array.isArray(items) ? items : [];
+        if (items.length === 0) {
+            body.innerHTML = '<tr><td colspan="7" class="i18n-admin-empty">'
+                + '<div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-2);">' + escapeHtml(moduleCatalogMessages.emptyTitle) + '</div>'
+                + '<div>' + escapeHtml(moduleCatalogMessages.emptyHint) + '</div>'
+                + '</td></tr>';
+            body.setAttribute('data-catalog-loaded', '1');
+            moduleCatalogLoaded = true;
+            return;
+        }
+
+        var html = items.map(function (rowData) {
+            var moduleName = String(rowData.module || '');
+            var statsReady = rowData.stats_ready !== false;
+            var total = Number(rowData.total || 0);
+            var translated = Number(rowData.translated || 0);
+            var untranslated = Number(rowData.untranslated || 0);
+            var percent = Number(rowData.progress_percent || 0);
+            var pending = Number(rowData.ai_pending_export || 0);
+            var pendingLabel = moduleCatalogMessages.pendingStats;
+            var translateDisabled = (!statsReady || untranslated <= 0) ? ' disabled' : '';
+            var exportDisabled = (!statsReady || !moduleExportDev || pending <= 0) ? ' disabled' : '';
+            return '<tr data-module-row="' + escapeHtml(moduleName) + '" data-stats-ready="' + (statsReady ? '1' : '0') + '">'
+                + '<td><div class="w-text" data-weight="strong">' + escapeHtml(moduleName) + '</div>'
+                + '<div class="w-text" data-tone="muted" data-size="sm">i18n/</div></td>'
+                + '<td><span data-module-total>' + (statsReady ? total : escapeHtml(pendingLabel)) + '</span></td>'
+                + '<td><span class="w-text" data-tone="success" data-module-translated>' + (statsReady ? translated : escapeHtml(pendingLabel)) + '</span></td>'
+                + '<td><span class="w-text" data-tone="warning" data-module-untranslated>' + (statsReady ? untranslated : escapeHtml(pendingLabel)) + '</span></td>'
+                + '<td><div class="w-text" data-size="sm" data-module-percent>' + (statsReady ? escapeHtml(formatModulePercent(percent)) : escapeHtml(pendingLabel)) + '</div>'
+                + '<div class="i18n-admin-progress i18n-module-progress"><span style="width: ' + (statsReady ? Math.max(0, Math.min(100, percent)) : 0) + '%;"></span></div></td>'
+                + '<td><span data-module-pending-export>' + pending + '</span></td>'
+                + '<td class="w-text" data-align="center"><div class="w-cluster" data-wrap="true" data-justify="center" style="--w-gap:var(--weline-space-2);">'
+                + '<button type="button" class="w-button i18n-module-translate-btn" data-module="' + escapeHtml(moduleName) + '" data-tone="success" data-variant="outline" data-size="sm"' + translateDisabled + '>'
+                + escapeHtml(moduleCatalogMessages.translateLabel) + '</button>'
+                + '<button type="button" class="w-button i18n-module-export-btn" data-module="' + escapeHtml(moduleName) + '" data-tone="primary" data-variant="outline" data-size="sm"' + exportDisabled + '>'
+                + escapeHtml(moduleCatalogMessages.exportLabel) + '</button>'
+                + '</div></td></tr>';
+        }).join('');
+        body.innerHTML = html;
+        body.setAttribute('data-catalog-loaded', '1');
+        moduleCatalogLoaded = true;
+        bindModuleCatalogActions(body);
+        hydrateModuleCatalogStats(items);
+    }
+
+    function hydrateModuleCatalogStats(items) {
+        var pendingModules = (Array.isArray(items) ? items : [])
+            .filter(function (rowData) {
+                return rowData && rowData.module && rowData.stats_ready === false;
+            })
+            .map(function (rowData) {
+                return String(rowData.module);
+            });
+        if (pendingModules.length === 0 || moduleCatalogHydrating) {
+            return;
+        }
+        moduleCatalogHydrating = true;
+        var batchSize = 6;
+        var cursor = 0;
+        var hydrateErrorShown = false;
+
+        function runNextBatch() {
+            if (cursor >= pendingModules.length) {
+                moduleCatalogHydrating = false;
+                return;
+            }
+            var chunk = pendingModules.slice(cursor, cursor + batchSize);
+            cursor += batchSize;
+            postJson(endpoints.moduleCatalogStats, {
+                locale_code: localeCode,
+                modules: chunk
+            }).then(function (result) {
+                if (result && result.success === false) {
+                    if (!hydrateErrorShown) {
+                        hydrateErrorShown = true;
+                        toastAction('error', (result && result.message) || moduleCatalogMessages.loadFailed);
+                    }
+                    moduleCatalogHydrating = false;
+                    return;
+                }
+                if (result && Array.isArray(result.items)) {
+                    result.items.forEach(function (rowData) {
+                        if (!rowData) {
+                            return;
+                        }
+                        rowData.stats_ready = true;
+                        updateModuleRow(rowData);
+                    });
+                }
+                runNextBatch();
+            }).catch(function (error) {
+                if (!hydrateErrorShown) {
+                    hydrateErrorShown = true;
+                    toastAction('error', moduleCatalogMessages.loadFailed + (error && error.message ? (': ' + error.message) : ''));
+                }
+                moduleCatalogHydrating = false;
+            });
+        }
+
+        runNextBatch();
+    }
+
+    function ensureModuleCatalogLoaded(forceReload) {
+        var body = document.getElementById('i18n-module-catalog-body');
+        if (!body) {
+            return;
+        }
+        if (!forceReload && (moduleCatalogLoaded || body.getAttribute('data-catalog-loaded') === '1')) {
+            return;
+        }
+        if (moduleCatalogLoading) {
+            return;
+        }
+        moduleCatalogLoading = true;
+        moduleCatalogHydrating = false;
+        body.innerHTML = '<tr data-module-catalog-placeholder="1"><td colspan="7" class="i18n-admin-empty">'
+            + '<div class="w-text" data-weight="strong">' + escapeHtml(moduleCatalogMessages.loading) + '</div>'
+            + '</td></tr>';
+
+        var searchInput = document.querySelector('#i18n-tab-panel-modules input[name="module_search"]');
+        var searchValue = searchInput ? String(searchInput.value || '') : String(moduleSearch || '');
+        postJson(endpoints.moduleCatalog, {
+            locale_code: localeCode,
+            module_search: searchValue
+        }).then(function (result) {
+            moduleCatalogLoading = false;
+            if (result && result.dev_environment !== undefined) {
+                moduleExportDev = !!result.dev_environment;
+            }
+            if (!result || result.success === false) {
+                body.innerHTML = '<tr><td colspan="7" class="i18n-admin-empty">'
+                    + '<div class="w-text" data-weight="strong">' + escapeHtml((result && result.message) || moduleCatalogMessages.loadFailed) + '</div>'
+                    + '</td></tr>';
+                body.setAttribute('data-catalog-loaded', '0');
+                moduleCatalogLoaded = false;
+                return;
+            }
+            renderModuleCatalogRows(result.items || []);
+        }).catch(function (error) {
+            moduleCatalogLoading = false;
+            body.innerHTML = '<tr><td colspan="7" class="i18n-admin-empty">'
+                + '<div class="w-text" data-weight="strong">' + escapeHtml(moduleCatalogMessages.loadFailed) + '</div>'
+                + '<div>' + escapeHtml(error && error.message ? error.message : '') + '</div>'
+                + '</td></tr>';
+            body.setAttribute('data-catalog-loaded', '0');
+            moduleCatalogLoaded = false;
+        });
+    }
+
     function switchTab(tabName) {
         activeTab = tabName === 'modules' ? 'modules' : 'dictionary';
         document.querySelectorAll('.i18n-dictionary-tab').forEach(function (btn) {
@@ -838,6 +1679,9 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
             url.searchParams.set('tab', activeTab);
             window.history.replaceState({}, '', url.toString());
         } catch (ignore) {}
+        if (activeTab === 'modules') {
+            ensureModuleCatalogLoaded(false);
+        }
     }
 
     document.querySelectorAll('.i18n-dictionary-tab').forEach(function (btn) {
@@ -854,6 +1698,8 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
         if (!row) {
             return;
         }
+        var statsReady = rowData.stats_ready !== false;
+        row.setAttribute('data-stats-ready', statsReady ? '1' : '0');
         var totalEl = row.querySelector('[data-module-total]');
         var translatedEl = row.querySelector('[data-module-translated]');
         var untranslatedEl = row.querySelector('[data-module-untranslated]');
@@ -863,60 +1709,75 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
         var translateBtn = row.querySelector('.i18n-module-translate-btn');
         var exportBtn = row.querySelector('.i18n-module-export-btn');
 
-        if (totalEl) totalEl.textContent = String(rowData.total || 0);
-        if (translatedEl) translatedEl.textContent = String(rowData.translated || 0);
-        if (untranslatedEl) untranslatedEl.textContent = String(rowData.untranslated || 0);
+        if (totalEl) totalEl.textContent = statsReady ? String(rowData.total || 0) : moduleCatalogMessages.pendingStats;
+        if (translatedEl) translatedEl.textContent = statsReady ? String(rowData.translated || 0) : moduleCatalogMessages.pendingStats;
+        if (untranslatedEl) untranslatedEl.textContent = statsReady ? String(rowData.untranslated || 0) : moduleCatalogMessages.pendingStats;
         var percent = Number(rowData.progress_percent || 0);
-        if (percentEl) percentEl.textContent = String(percent).replace(/\.0$/, '') + '%';
-        if (progressBar) progressBar.style.width = Math.max(0, Math.min(100, percent)) + '%';
+        if (percentEl) percentEl.textContent = statsReady ? formatModulePercent(percent) : moduleCatalogMessages.pendingStats;
+        if (progressBar) progressBar.style.width = (statsReady ? Math.max(0, Math.min(100, percent)) : 0) + '%';
         if (pendingEl) pendingEl.textContent = String(rowData.ai_pending_export || 0);
-        if (translateBtn) translateBtn.disabled = Number(rowData.untranslated || 0) <= 0;
-        if (exportBtn) exportBtn.disabled = !moduleExportDev || Number(rowData.ai_pending_export || 0) <= 0;
+        if (translateBtn) translateBtn.disabled = !statsReady || Number(rowData.untranslated || 0) <= 0;
+        if (exportBtn) exportBtn.disabled = !statsReady || !moduleExportDev || Number(rowData.ai_pending_export || 0) <= 0;
     }
 
-    document.querySelectorAll('.i18n-module-translate-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var moduleName = btn.getAttribute('data-module') || '';
-            if (!moduleName) {
+    function bindModuleCatalogActions(root) {
+        var scope = root || document;
+        if (scope.getAttribute && scope.getAttribute('data-module-actions-bound') === '1') {
+            return;
+        }
+        if (scope.setAttribute) {
+            scope.setAttribute('data-module-actions-bound', '1');
+        }
+        scope.addEventListener('click', function (event) {
+            var target = event.target;
+            if (!target || !target.closest) {
                 return;
             }
-            var message = dictionaryMessages.moduleTranslateMessage.replace('%{1}', moduleName);
-            confirmAction(message, 'info', {
-                title: dictionaryMessages.moduleTranslateTitle,
-                tone: 'info',
-            }).then(function (confirmed) {
-                if (!confirmed) {
+            var translateBtn = target.closest('.i18n-module-translate-btn');
+            if (translateBtn) {
+                var translateModule = translateBtn.getAttribute('data-module') || '';
+                if (!translateModule) {
                     return;
                 }
-                btn.disabled = true;
-                postJson(endpoints.moduleTranslate, {
-                    locale_code: localeCode,
-                    module: moduleName,
-                }).then(function (result) {
-                    if (result.success) {
-                        var detail = result.translated !== undefined
-                            ? ('<?= addslashes(__('本批成功')) ?>: ' + result.translated + '，<?= addslashes(__('剩余')) ?>: ' + (result.remaining || 0))
-                            : (result.message || '');
-                        toastAction('success', detail || '<?= addslashes(__('模块 AI 翻译完成')) ?>');
-                        if (result.module_row) {
-                            updateModuleRow(result.module_row);
-                        }
+                var translateMessage = dictionaryMessages.moduleTranslateMessage.replace('%{1}', translateModule);
+                confirmAction(translateMessage, 'info', {
+                    title: dictionaryMessages.moduleTranslateTitle,
+                    tone: 'info',
+                }).then(function (confirmed) {
+                    if (!confirmed) {
                         return;
                     }
-                    toastAction('error', result.message || '<?= addslashes(__('模块 AI 翻译失败')) ?>');
-                    btn.disabled = false;
-                }).catch(function (error) {
-                    toastAction('error', '<?= addslashes(__('请求错误！')) ?>' + ': ' + error.message);
-                    btn.disabled = false;
+                    translateBtn.disabled = true;
+                    postJson(endpoints.moduleTranslate, {
+                        locale_code: localeCode,
+                        module: translateModule,
+                    }).then(function (result) {
+                        if (result.success) {
+                            var detail = result.translated !== undefined
+                                ? ('<?= addslashes(__('本批成功')) ?>: ' + result.translated + '，<?= addslashes(__('剩余')) ?>: ' + (result.remaining || 0))
+                                : (result.message || '');
+                            toastAction('success', detail || '<?= addslashes(__('模块 AI 翻译完成')) ?>');
+                            if (result.module_row) {
+                                updateModuleRow(result.module_row);
+                            }
+                            return;
+                        }
+                        toastAction('error', result.message || '<?= addslashes(__('模块 AI 翻译失败')) ?>');
+                        translateBtn.disabled = false;
+                    }).catch(function (error) {
+                        toastAction('error', '<?= addslashes(__('请求错误！')) ?>' + ': ' + error.message);
+                        translateBtn.disabled = false;
+                    });
                 });
-            });
-        });
-    });
+                return;
+            }
 
-    document.querySelectorAll('.i18n-module-export-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var moduleName = btn.getAttribute('data-module') || '';
-            if (!moduleName) {
+            var exportBtn = target.closest('.i18n-module-export-btn');
+            if (!exportBtn) {
+                return;
+            }
+            var exportModule = exportBtn.getAttribute('data-module') || '';
+            if (!exportModule) {
                 return;
             }
             confirmAction(dictionaryMessages.moduleExportMessage, 'info', {
@@ -926,10 +1787,10 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
                 if (!confirmed) {
                     return;
                 }
-                btn.disabled = true;
+                exportBtn.disabled = true;
                 postJson(endpoints.moduleExportCsv, {
                     locale_code: localeCode,
-                    module: moduleName,
+                    module: exportModule,
                 }).then(function (result) {
                     if (result.success) {
                         toastAction('success', result.message || ('<?= addslashes(__('已写回')) ?> ' + (result.exported || 0) + ' <?= addslashes(__('条')) ?>'));
@@ -939,14 +1800,16 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
                         return;
                     }
                     toastAction('error', result.message || '<?= addslashes(__('写回失败')) ?>');
-                    btn.disabled = false;
+                    exportBtn.disabled = false;
                 }).catch(function (error) {
                     toastAction('error', '<?= addslashes(__('请求错误！')) ?>' + ': ' + error.message);
-                    btn.disabled = false;
+                    exportBtn.disabled = false;
                 });
             });
         });
-    });
+    }
+
+    bindModuleCatalogActions(document.getElementById('i18n-module-catalog-body') || document);
 
     function bindClearButton(buttonId, endpoint, message, payload) {
         var button = document.getElementById(buttonId);
@@ -991,28 +1854,26 @@ $dictionaryCollectSseCsrf = Token::create('csrf', 9, 3600);
         {}
     );
 
-    document.querySelectorAll('[data-mode-switch]').forEach(function (button) {
-        button.addEventListener('click', function () {
-            var mode = button.getAttribute('data-mode-switch');
-            confirmAction('<?= addslashes(__('翻译模式')) ?>: ' + mode, 'info').then(function (confirmed) {
+    var inlineEditStartBtn = document.getElementById('dictionary-inline-edit-start');
+    if (inlineEditStartBtn) {
+        inlineEditStartBtn.addEventListener('click', function () {
+            confirmAction('<?= addslashes(__('店面点译')) ?>', 'info').then(function (confirmed) {
                 if (!confirmed) {
                     return;
                 }
-
-                postJson(endpoints.setTranslationMode, {mode: mode}).then(function (result) {
-                    if (!result.success) {
-                        toastAction('error', result.message || '<?= addslashes(__('保存失败')) ?>');
+                postJson(endpoints.inlineEditStart, {}).then(function (result) {
+                    if (!result.success || !result.jump_url) {
+                        toastAction('error', result.message || '<?= addslashes(__('无法打开店面点译')) ?>');
                         return;
                     }
-
-                    toastAction('success', result.message || '<?= addslashes(__('保存成功')) ?>');
-                    loadModeState();
+                    toastAction('success', result.message || '<?= addslashes(__('正在跳转店面')) ?>');
+                    window.open(result.jump_url, '_blank', 'noopener');
                 }).catch(function (error) {
                     toastAction('error', '<?= addslashes(__('请求错误！')) ?>' + ': ' + error.message);
                 });
             });
         });
-    });
+    }
 
     var autoRegisterButton = document.getElementById('dictionary-auto-register-toggle');
     if (autoRegisterButton) {

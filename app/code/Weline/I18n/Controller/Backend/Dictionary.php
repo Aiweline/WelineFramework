@@ -28,6 +28,7 @@ use Weline\I18n\Model\Dictionary as WordDictionary;
 use Weline\I18n\Parser as I18nParser;
 use Weline\I18n\Service\AiTranslationQueueService;
 use Weline\I18n\Service\DictionaryCollectService;
+use Weline\I18n\Service\DictionaryEntryAiTranslateService;
 use Weline\I18n\Service\DictionaryModuleCatalogService;
 use Weline\I18n\Service\RuntimeCacheBroadcaster;
 use Weline\Framework\Http\Sse\SseWriter;
@@ -40,6 +41,7 @@ class Dictionary extends BaseController
     private AiTranslationQueueService $aiTranslationQueueService;
     private DictionaryCollectService $dictionaryCollectService;
     private DictionaryModuleCatalogService $moduleCatalogService;
+    private DictionaryEntryAiTranslateService $entryAiTranslateService;
 
     function __construct(
         Locale $locale,
@@ -49,6 +51,7 @@ class Dictionary extends BaseController
         AiTranslationQueueService $aiTranslationQueueService,
         DictionaryCollectService $dictionaryCollectService,
         DictionaryModuleCatalogService $moduleCatalogService,
+        DictionaryEntryAiTranslateService $entryAiTranslateService,
     )
     {
         parent::__construct($locale, $i18n);
@@ -57,6 +60,7 @@ class Dictionary extends BaseController
         $this->aiTranslationQueueService = $aiTranslationQueueService;
         $this->dictionaryCollectService = $dictionaryCollectService;
         $this->moduleCatalogService = $moduleCatalogService;
+        $this->entryAiTranslateService = $entryAiTranslateService;
     }
 
     function get()
@@ -157,9 +161,12 @@ class Dictionary extends BaseController
         $this->assign('available_modules', $availableModules);
         $this->assign('available_locales', $availableLocales);
         $this->assign('progress_stats', $progressStats);
-        $this->assign('active_tab', $activeTab === 'modules' ? 'modules' : 'dictionary');
+        $resolvedTab = $activeTab === 'modules' ? 'modules' : 'dictionary';
+        $this->assign('active_tab', $resolvedTab);
         $this->assign('module_search', $moduleSearch);
-        $this->assign('module_catalog', $this->moduleCatalogService->listModules($localeCode, $moduleSearch));
+        // 任意 Tab 禁止 SSR 全量扫 CSV/进度（会拖垮 nginx → 502）；模块 Tab 由前端壳层+分批 stats 拉取。
+        $this->assign('module_catalog', []);
+        $this->assign('module_catalog_loaded', false);
         $this->assign('module_export_dev', $this->moduleCatalogService->isDevEnvironment());
         
         // 显示提示信息
@@ -1456,6 +1463,191 @@ class Dictionary extends BaseController
         $this->streamCollectWords();
     }
 
+    /**
+     * 词典编辑弹窗 · AI 一键翻译当前语（SSE，不写库）
+     */
+    public function postEntryAiTranslateStream(): void
+    {
+        $this->streamEntryAiTranslateCurrent();
+    }
+
+    /**
+     * 词典编辑弹窗 · AI 一键翻译当前语（GET 兼容）
+     */
+    public function getEntryAiTranslateStream(): void
+    {
+        $this->streamEntryAiTranslateCurrent();
+    }
+
+    /**
+     * 词典编辑弹窗 · AI 翻译其他语种草稿（SSE，不写库；complete 含 drafts）
+     */
+    public function postEntryAiTranslateOthersStream(): void
+    {
+        $this->streamEntryAiTranslateOthers();
+    }
+
+    /**
+     * 词典编辑弹窗 · AI 翻译其他语种草稿（GET 兼容）
+     */
+    public function getEntryAiTranslateOthersStream(): void
+    {
+        $this->streamEntryAiTranslateOthers();
+    }
+
+    /**
+     * 词典编辑弹窗 · 确认后保存其他语种草稿（upsert + publishLocale）
+     */
+    public function postEntryAiSaveOthers()
+    {
+        $isAsyncRequest = $this->isAsyncRequest();
+        $word = trim((string)$this->request->getPost('word', (string)$this->request->getParam('word', '')));
+        $md5 = trim((string)$this->request->getPost('md5', (string)$this->request->getParam('md5', '')));
+        $excludeLocale = trim((string)$this->request->getPost(
+            'locale_code',
+            (string)$this->request->getPost('current_locale', (string)$this->request->getParam('locale_code', '')),
+        ));
+        $drafts = $this->parseEntryAiDraftsPayload();
+
+        if ($word === '' && $md5 !== '') {
+            try {
+                $this->localeDictionary->load($md5);
+                if ($this->localeDictionary->getId()) {
+                    $word = trim((string)$this->localeDictionary->getData($this->localeDictionary::schema_fields_WORD));
+                    if ($excludeLocale === '') {
+                        $excludeLocale = trim((string)$this->localeDictionary->getData(
+                            $this->localeDictionary::schema_fields_LOCALE_CODE,
+                        ));
+                    }
+                }
+            } catch (\Throwable) {
+                // keep empty word → service rejects
+            }
+        }
+
+        $result = $this->entryAiTranslateService->saveOtherLocales($word, $drafts, $excludeLocale);
+        if ($isAsyncRequest) {
+            return $this->asyncJsonResponse(
+                !empty($result['success']),
+                (string)($result['message'] ?? ''),
+                [
+                    'saved' => $result['saved'] ?? [],
+                    'published' => $result['published'] ?? [],
+                    'skipped' => $result['skipped'] ?? [],
+                    'errors' => $result['errors'] ?? [],
+                    'word' => $word,
+                    'md5' => $md5,
+                ],
+            );
+        }
+
+        if (!empty($result['success'])) {
+            Message::success((string)$result['message']);
+        } else {
+            Message::error((string)($result['message'] ?? __('保存失败')));
+        }
+
+        $this->redirect($this->request->getReferer());
+    }
+
+    private function streamEntryAiTranslateCurrent(): void
+    {
+        $this->layoutType = null;
+        $sse = new SseWriter();
+        if (!$this->assertEntryAiSseCsrf($sse)) {
+            return;
+        }
+
+        $word = trim((string)$this->request->getPost('word', (string)$this->request->getGet('word', '')));
+        $targetLocale = trim((string)$this->request->getPost(
+            'locale_code',
+            (string)$this->request->getGet('locale_code', ''),
+        ));
+        if ($targetLocale === '') {
+            $targetLocale = trim((string)$this->request->getPost(
+                'target_locale',
+                (string)$this->request->getGet('target_locale', ''),
+            ));
+        }
+
+        $this->entryAiTranslateService->streamCurrentLocale($sse, $word, $targetLocale);
+    }
+
+    private function streamEntryAiTranslateOthers(): void
+    {
+        $this->layoutType = null;
+        $sse = new SseWriter();
+        if (!$this->assertEntryAiSseCsrf($sse)) {
+            return;
+        }
+
+        $word = trim((string)$this->request->getPost('word', (string)$this->request->getGet('word', '')));
+        $currentLocale = trim((string)$this->request->getPost(
+            'locale_code',
+            (string)$this->request->getGet('locale_code', ''),
+        ));
+        if ($currentLocale === '') {
+            $currentLocale = trim((string)$this->request->getPost(
+                'current_locale',
+                (string)$this->request->getGet('current_locale', ''),
+            ));
+        }
+        $skipExistingRaw = $this->request->getPost('skip_existing', $this->request->getGet('skip_existing', '1'));
+        $skipExisting = !in_array(strtolower(trim((string)$skipExistingRaw)), ['0', 'false', 'no', 'off'], true);
+
+        $this->entryAiTranslateService->streamOtherLocales($sse, $word, $currentLocale, $skipExisting);
+    }
+
+    private function assertEntryAiSseCsrf(SseWriter $sse): bool
+    {
+        $csrfPost = (string)$this->request->getPost('csrf', (string)$this->request->getGet('csrf', ''));
+        $csrfValid = Token::get('csrf');
+        if ($csrfValid === null || !\hash_equals($csrfValid, $csrfPost)) {
+            // CSRF 失败只发 error 并关闭流，禁止再 complete/done{success:false}，
+            // 否则前端 onDone 会把失败当成「AI 翻译完成」假绿。
+            $sse->start();
+            $sse->sendError((string)__('CSRF 验证失败'));
+            $sse->close();
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function parseEntryAiDraftsPayload(): array
+    {
+        $raw = $this->request->getPost('drafts', $this->request->getPost('translations', null));
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($raw)) {
+            $raw = [];
+        }
+
+        $drafts = [];
+        foreach ($raw as $locale => $translation) {
+            if (!is_string($locale) && !is_int($locale)) {
+                continue;
+            }
+            if (!is_scalar($translation) && $translation !== null) {
+                continue;
+            }
+            $locale = trim(str_replace('-', '_', (string)$locale));
+            $translation = trim((string)$translation);
+            if ($locale === '' || $translation === '') {
+                continue;
+            }
+            $drafts[$locale] = $translation;
+        }
+
+        return $drafts;
+    }
+
     private function streamCollectWords(): void
     {
         $this->layoutType = null;
@@ -1597,139 +1789,34 @@ class Dictionary extends BaseController
     }
 
     /**
-     * 设置翻译模式到env.php
+     * Legacy env translation-mode switch removed.
+     * Use InlineEdit::postStart (店面点译 jump_url) instead.
      */
     public function postSetTranslationMode()
     {
-        // Persistent: resetCurrent only; never while-drain Fiber installed handler.
-        if (Runtime::isPersistent()) {
-            if (FiberOutputBuffer::hasActiveCapture()) {
-                FiberOutputBuffer::resetCurrent();
-            }
-        } else {
-            while (\ob_get_level() > 0) {
-                \ob_end_clean();
-            }
-        }
-        
-        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-        
-        try {
-            $mode = $this->request->getParam('mode'); // 'online' 或 'cache'
-            
-            if (!in_array($mode, ['online', 'cache'])) {
-                throw new \Exception(__('无效的翻译模式'));
-            }
-            
-            // 更新env.php配置
-            $this->updateEnvTranslationMode($mode);
-            
-            // 更新缓存中的翻译模式
-            $this->setTranslationModeCache($mode);
-            
-            return $this->fetchJson([
-                'success' => true,
-                'mode' => $mode,
-                'message' => __('翻译模式设置成功')
-            ]);
-            
-        } catch (\Exception $e) {
-            return $this->fetchJson($this->error($e->getMessage()));
-        }
+        return $this->fetchJson([
+            'success' => false,
+            'message' => __('在线/缓存模式切换已移除，请使用店面点译'),
+        ]);
     }
 
     /**
-     * 更新env.php中的翻译模式配置
-     */
-    private function updateEnvTranslationMode($mode)
-    {
-        $envFile = 'app/etc/env.php';
-        
-        if (!file_exists($envFile)) {
-            throw new \Exception(__('配置文件不存在'));
-        }
-        
-        // Fiber-local silence around include; var_export(..., true) avoids nested bare ob.
-        FiberOutputBuffer::beginCapture();
-        try {
-            // 读取当前配置
-            $config = include $envFile;
-            
-            // 添加或更新翻译模式配置
-            $config['translation'] = [
-                'mode' => $mode,
-                'online' => [
-                    'enabled' => $mode === 'online',
-                    'api_key' => '', // 可以后续添加API密钥配置
-                    'provider' => 'google', // 默认使用Google翻译
-                ],
-                'cache' => [
-                    'enabled' => $mode === 'cache',
-                    'ttl' => 3600, // 缓存1小时
-                ],
-                'auto_register' => $this->isAutoRegisterEnabled(),
-            ];
-            
-            $configString = \var_export($config, true);
-            $content = "<?php return " . $configString . ";";
-            
-            // 写入文件
-            if (file_put_contents($envFile, $content) === false) {
-                throw new \Exception(__('写入配置文件失败'));
-            }
-            
-            FiberOutputBuffer::discardCapture();
-        } catch (\Throwable $e) {
-            FiberOutputBuffer::discardCapture();
-            throw $e;
-        }
-    }
-
-    /**
-     * 设置翻译模式缓存
-     */
-    private function setTranslationModeCache($mode)
-    {
-        $cacheKey = 'i18n_translation_mode';
-        $cache = $this->i18n->i18nCache;
-        $cache->set($cacheKey, $mode, 0); // 永久缓存
-    }
-
-    /**
-     * 获取当前翻译模式
+     * Status chip for dictionary UI (no env mode).
      */
     public function getCurrentTranslationMode()
     {
-        
         try {
-            // 先从缓存获取
-            $cacheKey = 'i18n_translation_mode';
-            $cache = $this->i18n->i18nCache;
-            $mode = $cache->get($cacheKey);
-            
-            // 如果缓存中没有，从env.php读取
-            if (!$mode) {
-                $envFile = 'app/etc/env.php';
-                if (file_exists($envFile)) {
-                    $config = include $envFile;
-                    $mode = $config['translation']['mode'] ?? 'cache';
-                } else {
-                    $mode = 'cache'; // 默认缓存模式
-                }
-            }
-            
             return $this->fetchJson([
-                'mode' => $mode,
-                'mode_name' => $mode === 'online' ? '在线翻译模式' : '缓存模式',
-                'auto_register' => $this->isAutoRegisterEnabled()
+                'mode' => 'dictionary',
+                'mode_name' => (string)__('词典管理'),
+                'auto_register' => $this->isAutoRegisterEnabled(),
             ]);
-            
         } catch (\Exception $e) {
             return $this->fetchJson([
-                'mode' => 'cache',
-                'mode_name' => '缓存模式',
+                'mode' => 'dictionary',
+                'mode_name' => (string)__('词典管理'),
                 'auto_register' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -1781,17 +1868,74 @@ class Dictionary extends BaseController
     }
 
     /**
-     * 模块 Tab：模块列表 JSON（切换语言/搜索时刷新）。
+     * 模块 Tab：轻量模块壳层（不读 CSV 正文；进度由 getModuleCatalogStats 分批补齐）。
      */
     public function getModuleCatalog()
     {
-        $localeCode = trim((string)$this->request->getGet('locale_code', ''));
-        $search = trim((string)$this->request->getGet('module_search', ''));
+        $localeCode = trim((string)$this->request->getPost(
+            'locale_code',
+            (string)$this->request->getGet('locale_code', '')
+        ));
+        $search = trim((string)$this->request->getPost(
+            'module_search',
+            (string)$this->request->getGet('module_search', '')
+        ));
 
         return $this->fetchJson([
             'success' => true,
-            'items' => $this->moduleCatalogService->listModules($localeCode, $search),
+            'items' => $this->moduleCatalogService->listModulesShell($localeCode, $search),
             'dev_environment' => $this->moduleCatalogService->isDevEnvironment(),
+        ]);
+    }
+
+    /**
+     * 模块 Tab：按批计算单个/多个模块精确进度（读该模块 CSV + 批量 DB）。
+     */
+    public function getModuleCatalogStats()
+    {
+        $localeCode = trim((string)$this->request->getPost(
+            'locale_code',
+            (string)$this->request->getGet(
+                'locale_code',
+                (string)$this->request->getParam('locale_code', '')
+            )
+        ));
+        $rawModules = $this->request->getPost(
+            'modules',
+            $this->request->getGet(
+                'modules',
+                $this->request->getParam('modules', [])
+            )
+        );
+        if (\is_string($rawModules)) {
+            $rawModules = \preg_split('/\s*,\s*/', $rawModules) ?: [];
+        }
+        if (!\is_array($rawModules)) {
+            $rawModules = [];
+        }
+
+        $modules = [];
+        foreach ($rawModules as $moduleName) {
+            $moduleName = \trim((string)$moduleName);
+            if ($moduleName !== '') {
+                $modules[$moduleName] = $moduleName;
+            }
+        }
+        $modules = \array_slice(\array_values($modules), 0, 8);
+
+        $items = [];
+        foreach ($modules as $moduleName) {
+            $row = $this->moduleCatalogService->describeModule($moduleName, $localeCode);
+            if ($row === null) {
+                continue;
+            }
+            $row['stats_ready'] = true;
+            $items[] = $row;
+        }
+
+        return $this->fetchJson([
+            'success' => true,
+            'items' => $items,
         ]);
     }
 
@@ -1848,13 +1992,7 @@ class Dictionary extends BaseController
      */
     private function findModuleCatalogRow(string $localeCode, string $module): ?array
     {
-        foreach ($this->moduleCatalogService->listModules($localeCode) as $row) {
-            if (($row['module'] ?? '') === $module) {
-                return $row;
-            }
-        }
-
-        return null;
+        return $this->moduleCatalogService->describeModule($module, $localeCode);
     }
 
     /**

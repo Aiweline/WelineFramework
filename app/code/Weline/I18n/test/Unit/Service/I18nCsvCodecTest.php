@@ -39,6 +39,39 @@ final class I18nCsvCodecTest extends TestCase
         self::assertFalse(I18nCsvCodec::isJunkTranslation(''));
     }
 
+    public function testIsUntranslatedEchoRejectsCrossLanguageIdentity(): void
+    {
+        self::assertSame('zh', I18nCsvCodec::localeLanguageTag('zh_Hans_CN'));
+        self::assertSame('ga', I18nCsvCodec::localeLanguageTag('ga_IE'));
+        self::assertSame('en', I18nCsvCodec::localeLanguageTag('en-US'));
+
+        self::assertTrue(I18nCsvCodec::isUntranslatedEcho(
+            '编译后缓存已清理',
+            '编译后缓存已清理',
+            'zh_Hans_CN',
+            'ga_IE',
+        ));
+        self::assertTrue(I18nCsvCodec::isUntranslatedEcho(
+            'Hello',
+            'Hello',
+            'en_US',
+            'fr_FR',
+        ));
+        // 同语言主标签允许相同（品牌名 / en_US↔en_GB）
+        self::assertFalse(I18nCsvCodec::isUntranslatedEcho(
+            'Weline',
+            'Weline',
+            'en_US',
+            'en_GB',
+        ));
+        self::assertFalse(I18nCsvCodec::isUntranslatedEcho(
+            '编译后缓存已清理',
+            'Compiled cache cleared',
+            'zh_Hans_CN',
+            'en_US',
+        ));
+    }
+
     public function testReadWordsDropsGarbledRowsInsteadOfSalvaging(): void
     {
         $tmp = tempnam(sys_get_temp_dir(), 'i18n-bom-');

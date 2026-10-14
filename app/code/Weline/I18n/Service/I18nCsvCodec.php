@@ -72,6 +72,53 @@ final class I18nCsvCodec
         return false;
     }
 
+    /**
+     * Locale → 语言主标签（en_US→en，zh_Hans_CN→zh）。用于跨语种「回声」判定。
+     */
+    public static function localeLanguageTag(string $locale): string
+    {
+        $locale = str_replace('-', '_', trim($locale));
+        if ($locale === '') {
+            return '';
+        }
+        $parts = explode('_', $locale);
+        $lang = strtolower((string)($parts[0] ?? ''));
+
+        return $lang;
+    }
+
+    /**
+     * 跨语种却与原文完全相同 → 视为 AI 未真正翻译（回声），不可当可用译文落库/确认。
+     * 同语言主标签（如 en_US↔en_GB）允许相同（品牌名等）。
+     */
+    public static function isUntranslatedEcho(
+        string $word,
+        string $translation,
+        string $sourceLocale,
+        string $targetLocale,
+    ): bool {
+        $word = trim($word);
+        $translation = trim($translation);
+        if ($word === '' || $translation === '') {
+            return false;
+        }
+
+        $same = function_exists('mb_strtolower')
+            ? (mb_strtolower($word, 'UTF-8') === mb_strtolower($translation, 'UTF-8'))
+            : (strtolower($word) === strtolower($translation));
+        if (!$same) {
+            return false;
+        }
+
+        $sourceLang = self::localeLanguageTag($sourceLocale);
+        $targetLang = self::localeLanguageTag($targetLocale);
+        if ($sourceLang === '' || $targetLang === '') {
+            return false;
+        }
+
+        return $sourceLang !== $targetLang;
+    }
+
     public static function stripBom(string $value): string
     {
         while ($value !== '' && str_starts_with($value, self::UTF8_BOM)) {

@@ -4,6 +4,8 @@
 
 机器翻译的中立契约为 `Weline_I18n::machine_translate`，由 I18n 拥有。AI 模块通过 `TranslationRequestObserver` 提供可选实现，并继续监听 `Weline_Ai::translate` 作为一版兼容入口。新代码应优先通过 I18n 适配器调用。
 
+**回声契约（根治）**：`TranslationService` 对跨语种「译文===原文」fail-closed（一次强化重试后抛错，`success=false`）；禁止失败时回退返回原文。I18n 词典层仍可二次拦截。
+
 ## 事件列表
 
 ### 1. Weline_Ai::translate - AI翻译调用事件

@@ -272,7 +272,8 @@ class TranslationAdapter implements ScenarioAdapterInterface
             . "Return only the translation text — no quotes, labels, or explanations.\n"
             . "Use concise natural UI wording; preserve placeholders (%{1}, %{name}), HTML, and template tokens.\n"
             . "Prefer \"advanced maintenance\" for 高级维护 and \"identity\" for system 身份.\n"
-            . "Do not return the source unchanged when languages differ.\n\n"
+            . "Do not return the source unchanged when languages differ; identity echo is invalid.\n"
+            . "Produce real {$targetLanguage}, never pinyin or a copy of the source.\n\n"
             . $text;
     }
 
@@ -295,7 +296,8 @@ class TranslationAdapter implements ScenarioAdapterInterface
             . "1. Accurate, domain-appropriate terminology\n"
             . "2. Preserve structure, placeholders, and HTML exactly\n"
             . "3. Prefer conventional admin wording over marketing tone\n"
-            . "4. Return only the translation\n\n"
+            . "4. Return only the translation — never echo the source when languages differ\n"
+            . "5. Produce real {$targetLanguage}, not pinyin or an unchanged copy\n\n"
             . $text;
     }
 
