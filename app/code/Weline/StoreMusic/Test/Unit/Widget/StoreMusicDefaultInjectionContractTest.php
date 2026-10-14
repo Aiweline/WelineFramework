@@ -26,7 +26,7 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('"required":true', $src);
         self::assertStringContainsString('"enabled":true', $src);
         self::assertStringContainsString('"tracks":[]', $src);
-        self::assertStringContainsString('"try_autoplay":true', $src);
+        self::assertStringContainsString('"try_autoplay":false', $src);
         self::assertStringContainsString('"waveform_default":true', $src);
     }
 
@@ -59,7 +59,7 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         }
         self::assertSame(true, $params['enabled']['default'] ?? null);
         self::assertSame([], $params['tracks']['default'] ?? null);
-        self::assertSame(true, $params['try_autoplay']['default'] ?? null);
+        self::assertSame(false, $params['try_autoplay']['default'] ?? null);
         self::assertSame(true, $params['waveform_default']['default'] ?? null);
         self::assertSame('array', $params['tracks']['type'] ?? null);
         self::assertSame('media_image', $params['tracks']['item_schema']['url']['type'] ?? null);

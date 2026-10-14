@@ -37,6 +37,10 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('store_music/music/track', $template);
         self::assertStringContainsString('store_music/music/delay_seconds', $template);
         self::assertStringContainsString('store_music/music/try_autoplay', $template);
+        self::assertMatchesRegularExpression(
+            '/key="store_music\/music\/try_autoplay"[\s\S]*?default="0"/',
+            $template
+        );
         self::assertStringContainsString('store_music/music/loop', $template);
         self::assertStringContainsString('store_music/music/default_volume', $template);
         self::assertStringContainsString('store_music/visual/waveform_default', $template);
@@ -56,7 +60,7 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('KEY_PLAYLIST', $settings);
         self::assertStringContainsString('KEY_AVATAR_SPIN', $settings);
         self::assertStringContainsString('boolean(self::KEY_ENABLED, true)', $settings);
-        self::assertStringContainsString('boolean(self::KEY_TRY_AUTOPLAY, true)', $settings);
+        self::assertStringContainsString('boolean(self::KEY_TRY_AUTOPLAY, false)', $settings);
         self::assertStringContainsString('"enabled":true', $widget);
         self::assertStringContainsString('@param enabled {default=true', $widget);
         self::assertStringContainsString('tracksMatchDefaultCatalog', $settings);
@@ -105,7 +109,8 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringNotContainsString("\$esc((string)__(\$word))", $widget);
         self::assertStringNotContainsString('CustomerService', $widget);
         self::assertStringContainsString('storefront-float-start', $widget);
-        self::assertStringContainsString("'slot' => 'storefront-float-start'", $widgetRegistry);
+        self::assertStringContainsString('"slot":"storefront-float-start"', $widget);
+        self::assertStringContainsString('Weline_StoreMusic::templates/frontend/widgets/store-music.phtml', $widgetRegistry);
         self::assertFileDoesNotExist(
             $moduleRoot . '/view/hooks/Weline_Theme/frontend/layouts/base/float-slot-start.phtml'
         );

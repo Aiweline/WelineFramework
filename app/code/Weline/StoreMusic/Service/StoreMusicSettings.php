@@ -133,7 +133,7 @@ class StoreMusicSettings
 
     public function tryAutoplay(): bool
     {
-        return $this->boolean(self::KEY_TRY_AUTOPLAY, true);
+        return $this->boolean(self::KEY_TRY_AUTOPLAY, false);
     }
 
     public function loop(): bool
