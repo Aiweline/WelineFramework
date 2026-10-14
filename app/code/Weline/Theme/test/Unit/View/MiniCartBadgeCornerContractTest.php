@@ -151,13 +151,14 @@ final class MiniCartBadgeCornerContractTest extends TestCase
             'Must not drop search to own row at 1360 — mid desktop keeps one row via search shrink',
         );
         self::assertMatchesRegularExpression(
-            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,1600}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
+            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,2800}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
             $chrome,
             '≤768 must keep search on its own row (amazon flex:1 1 0 must not win)',
         );
         // Phone humanization: avatar-only + hide duplicate nav All (belt hamburger owns drawer).
+        self::assertStringContainsString('.header-top-bar-locale', $chrome);
         self::assertMatchesRegularExpression(
-            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,1600}?header-user-area \.account-text[\s\S]{0,400}?display:\s*none\s*!important/s',
+            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,2800}?header-user-area \.account-text[\s\S]{0,400}?display:\s*none\s*!important/s',
             $chrome,
         );
         self::assertMatchesRegularExpression(

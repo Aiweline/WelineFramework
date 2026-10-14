@@ -226,6 +226,98 @@
     height: var(--weline-space-4);
 }
 
+/*
+ * Notice-bar language + currency (cream peers of 帮助/收藏).
+ * Light chrome tokens on dark belt must NOT bleed here — inherit notice ink.
+ */
+.weline-header .header-top-bar-locale {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-3);
+    min-width: 0;
+    color: inherit;
+}
+
+.weline-header .header-top-bar-locale .header-language-switcher,
+.weline-header .header-top-bar-locale .header-currency-switcher,
+.weline-header .header-top-bar-locale .header-top-bar-locale__item {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    color: inherit;
+}
+
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-language-switcher__trigger.w-button,
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-currency-switcher__trigger.w-button,
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-language-switcher__trigger,
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-currency-switcher__trigger,
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-button[data-tone="quiet"] {
+    color: inherit;
+    background: transparent;
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    gap: var(--weline-space-1);
+    padding: 0 var(--weline-space-1);
+    min-height: auto;
+    font-size: inherit;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-language-switcher__trigger.w-button:hover,
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-currency-switcher__trigger.w-button:hover,
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-language-switcher__trigger:hover,
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-currency-switcher__trigger:hover,
+.weline-header .header-top-bar-rights-cluster .header-top-bar-locale .w-button[data-tone="quiet"]:hover {
+    color: inherit;
+    background: transparent;
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    opacity: 0.88;
+    text-decoration: underline;
+}
+
+.weline-header .header-top-bar-locale .w-icon,
+.weline-header .header-top-bar-locale svg.w-icon,
+.weline-header .header-top-bar-locale .language-switcher-icon,
+.weline-header .header-top-bar-locale .currency-switcher-icon,
+.weline-header .header-top-bar-locale .language-switcher-icon svg,
+.weline-header .header-top-bar-locale .currency-switcher-icon svg {
+    color: inherit;
+    stroke: currentColor;
+}
+
+.weline-header .header-top-bar-locale .w-language-switcher__code,
+.weline-header .header-top-bar-locale .w-currency-switcher__code,
+.weline-header .header-top-bar-locale .w-currency-switcher__symbol,
+.weline-header .header-top-bar-locale .w-header-account__line1,
+.weline-header .header-top-bar-locale .w-header-account__line2 {
+    /* Belt uses chrome light-secondary; on cream notice must keep notice ink. */
+    color: inherit !important;
+    opacity: 1;
+}
+
+/* Raised locale menus on cream bar — paper ink, not notice inherit. */
+.weline-header .header-top-bar-locale .w-language-switcher__menu,
+.weline-header .header-top-bar-locale .w-language-switcher__panel,
+.weline-header .header-top-bar-locale .w-currency-switcher__menu,
+.weline-header .header-top-bar-locale .w-currency-switcher__panel {
+    color: var(--amz-drawer-text, var(--weline-theme-text));
+}
+
+.weline-header .header-top-bar-locale .w-language-switcher__menu a,
+.weline-header .header-top-bar-locale .w-language-switcher__menu a:visited,
+.weline-header .header-top-bar-locale .w-language-switcher__menu span,
+.weline-header .header-top-bar-locale .w-currency-switcher__menu a,
+.weline-header .header-top-bar-locale .w-currency-switcher__menu a:visited,
+.weline-header .header-top-bar-locale .w-currency-switcher__menu span {
+    color: var(--amz-drawer-text, var(--weline-theme-text));
+}
+
 .weline-header .header-site-notice-links .wishlist-count,
 .weline-header .header-top-bar-rights-slot .wishlist-count {
     font-size: var(--weline-font-size-xs);
@@ -466,8 +558,10 @@
         white-space: nowrap;
     }
 
-    .weline-header .w-language-switcher__trigger,
-    .weline-header .w-currency-switcher__trigger,
+    .weline-header .header-actions .w-language-switcher__trigger,
+    .weline-header .header-actions .w-currency-switcher__trigger,
+    .weline-header .header-top-bar-locale .w-language-switcher__trigger,
+    .weline-header .header-top-bar-locale .w-currency-switcher__trigger,
     .weline-header .header-actions .w-button[data-tone="quiet"],
     .weline-header .header-user-area .account-link,
     .weline-header .w-header-account__trigger {

@@ -3518,9 +3518,10 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         max-width: 5.5rem;
     }
 
-    .header-language-switcher,
-    .header-currency-switcher,
-    .header-account:not(.mobile-only),
+    /* Phone: locale lives in notice bar; belt actions keep account/cart only. */
+    .header-actions .header-language-switcher,
+    .header-actions .header-currency-switcher,
+    .header-actions .header-account:not(.mobile-only),
     .header-action-item:has([href*="orders"]):not(.mobile-only),
     .header-my-menu.mobile-only {
         display: none !important;
