@@ -64,7 +64,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        [$theme_name, $modules, $allVersions, $scopeFilter] = self::parseArguments($args);
+        [$theme_name, $modules, $allVersions, $scopeFilter, $layoutType, $layoutOption] = self::parseArguments($args);
         $themes = $this->resolveThemesToUpgrade($theme_name);
         if ($themes === []) {
             throw new ConsoleException(__('未找到范围已绑定主题，请用 -t/--theme 指定主题名。'));
@@ -75,12 +75,19 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
 
         // C-RP-07：-t 指定主题；无 -t → 仅范围已绑定主题；默认正式+草稿；--all 全历史版本
+        // 布局级联：无 -l → 全部布局；-l 无 -o → 该布局下全部选项；-l -o → 仅该选项
         $solidifyOptions = [];
         if ($allVersions) {
             $solidifyOptions['all_versions'] = true;
         }
         if ($scopeFilter !== '') {
             $solidifyOptions['scope'] = $scopeFilter;
+        }
+        if ($layoutType !== '') {
+            $solidifyOptions['layout_type'] = $layoutType;
+        }
+        if ($layoutOption !== '') {
+            $solidifyOptions['layout_option'] = $layoutOption;
         }
         $this->printing->warning(__('开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…'));
         if ($allVersions) {
@@ -90,6 +97,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
         if ($scopeFilter !== '') {
             $this->printing->note(__('范围过滤：') . $scopeFilter);
+        }
+        if ($layoutType !== '') {
+            $this->printing->note(
+                $layoutOption !== ''
+                    ? __('布局过滤：') . $layoutType . '/' . $layoutOption
+                    : __('布局过滤：') . $layoutType . __('（该布局下全部选项）')
+            );
         }
         $cutover = $this->layoutSolidifyService->cutoverFromThemeCommand(
             $theme_name !== '' ? ($themes[0] ?? null) : null,
@@ -130,6 +144,17 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $usage = ObjectManager::getInstance(\Weline\Theme\Service\ThemeApplicationUsageService::class);
 
         return $usage->themesForDefaultUpgrade();
+    }
+
+    /**
+     * Publish static assets for one theme (design overlay + module theme assets).
+     * Used by theme:upgrade and by ThemeLayoutOriginWatchService (dev Cron).
+     *
+     * @param list<string> $modules
+     */
+    public function publishStaticAssets(WelineTheme $theme, array $modules = []): void
+    {
+        $this->upgradeOneTheme($theme, $modules);
     }
 
     /**
@@ -187,7 +212,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
-     * @return array{0:string,1:list<string>,2:bool,3:string} themeName, modules, allVersions, scopeFilter
+     * @return array{0:string,1:list<string>,2:bool,3:string,4:string,5:string}
+     *         themeName, modules, allVersions, scopeFilter, layoutType, layoutOption
      */
     public static function parseArguments(array $args): array
     {
@@ -206,6 +232,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $modules = [];
         $allVersions = false;
         $scopeFilter = '';
+        $layoutType = '';
+        $layoutOption = '';
         for ($index = 0, $count = count($positionals); $index < $count; $index++) {
             $argument = $positionals[$index];
             if ($argument === '-t' || $argument === '--theme') {
@@ -220,6 +248,22 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $scopeFilter = trim((string)($positionals[$index + 1] ?? ''));
                 if ($scopeFilter === '') {
                     throw new ConsoleException(__('设置了 -s/--scope 参数，但却没有范围值！'));
+                }
+                $index++;
+                continue;
+            }
+            if ($argument === '-l' || $argument === '--layout') {
+                $layoutType = trim((string)($positionals[$index + 1] ?? ''));
+                if ($layoutType === '') {
+                    throw new ConsoleException(__('设置了 -l/--layout 参数，但却没有布局类型值！'));
+                }
+                $index++;
+                continue;
+            }
+            if ($argument === '-o' || $argument === '--option' || $argument === '--layout-option') {
+                $layoutOption = trim((string)($positionals[$index + 1] ?? ''));
+                if ($layoutOption === '') {
+                    throw new ConsoleException(__('设置了 -o/--option 参数，但却没有布局选项值！'));
                 }
                 $index++;
                 continue;
@@ -245,14 +289,29 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $scopeFilter = $namedScope;
             }
         }
+        if ($layoutType === '') {
+            $namedLayout = trim((string)($args['l'] ?? $args['layout'] ?? ''));
+            if ($namedLayout !== '') {
+                $layoutType = $namedLayout;
+            }
+        }
+        if ($layoutOption === '') {
+            $namedOption = trim((string)($args['o'] ?? $args['option'] ?? $args['layout-option'] ?? ''));
+            if ($namedOption !== '') {
+                $layoutOption = $namedOption;
+            }
+        }
         if (!$allVersions) {
             $allFlag = $args['a'] ?? $args['all'] ?? null;
             if ($allFlag === true || $allFlag === 1 || $allFlag === '1' || $allFlag === '') {
                 $allVersions = true;
             }
         }
+        if ($layoutOption !== '' && $layoutType === '') {
+            throw new ConsoleException(__('指定了布局选项（-o/--option）时必须同时指定布局类型（-l/--layout）。'));
+        }
 
-        return [$themeName, array_values(array_unique($modules)), $allVersions, $scopeFilter];
+        return [$themeName, array_values(array_unique($modules)), $allVersions, $scopeFilter, $layoutType, $layoutOption];
     }
 
     private function copyThemeFile(string $source, string $destinationDirectory): void
@@ -467,6 +526,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '-h, --help' => '显示帮助信息',
                 '-t, --theme <name>' => '指定主题名（如 daocharms / hanfu）；省略则仅处理范围已绑定主题（未绑定跳过）',
                 '-s, --scope <canonical>' => '仅处理指定规范范围（如 default.default.default）',
+                '-l, --layout <type>' => '仅固化指定布局类型（如 homepage / checkout）；省略则处理全部布局',
+                '-o, --option <name>' => '仅固化该布局下指定选项（如 default）；须同时提供 -l；省略 -o 则处理该布局下全部选项',
                 '-a, --all' => '部署并编译该主题（或全部站绑主题）下全部历史版本；默认仅当前正式版+草稿',
             ],
             [
@@ -476,6 +537,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '范围已绑定主题（正式+草稿）' => 'php bin/w theme:upgrade',
                 '指定主题' => 'php bin/w theme:upgrade -t daocharms',
                 '指定范围' => 'php bin/w theme:upgrade -t hanfu --scope default.default.default',
+                '指定布局全部选项' => 'php bin/w theme:upgrade -t hanfu -l homepage',
+                '指定布局+选项' => 'php bin/w theme:upgrade -t hanfu -l homepage -o default',
                 '全部历史版本' => 'php bin/w theme:upgrade --all -t hanfu',
                 '指定主题+模块过滤' => 'php bin/w theme:upgrade -t daocharms Weline_Theme',
             ]

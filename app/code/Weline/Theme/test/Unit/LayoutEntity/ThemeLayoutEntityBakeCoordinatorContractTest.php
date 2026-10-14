@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\LayoutEntity;
 use PHPUnit\Framework\TestCase;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator;
 final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
 {
@@ -147,6 +148,10 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertStringContainsString('$includeSelectedDraft = true', $source);
         self::assertStringContainsString("\$options['all_versions']", $source);
         self::assertStringContainsString("\$options['scope']", $source);
+        self::assertStringContainsString("\$options['layout_type']", $source);
+        self::assertStringContainsString("\$options['layout_option']", $source);
+        self::assertStringContainsString('function applyLayoutCascadeFilter', $source);
+        self::assertStringContainsString('function catalogLayoutOptions', $source);
         self::assertStringContainsString('!$allVersions && !$this->isCurrentlyEffectiveScopeVersion', $source);
         $upgrade = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityUpgradeSolidifyService.php';
         $upgradeSrc = (string)file_get_contents($upgrade);
@@ -154,6 +159,8 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertStringContainsString('themesForDefaultUpgrade', $upgradeSrc);
         self::assertStringContainsString('rebakeAfterInjectionCollect(', $upgradeSrc);
         self::assertStringNotContainsString('rebakeAfterInjectionCollect(null,', $upgradeSrc);
+        self::assertStringContainsString("\$options['layout_type']", $upgradeSrc);
+        self::assertStringContainsString("\$options['layout_option']", $upgradeSrc);
         $coordinator = (new \ReflectionClass(ThemeLayoutEntityBakeCoordinator::class))->newInstanceWithoutConstructor();
         $unique = new \ReflectionMethod($coordinator, 'uniqueLayoutTargets');
         $out = $unique->invoke($coordinator, [
@@ -164,5 +171,32 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertCount(2, $out);
         self::assertSame('checkout', $out[0]['layout_type']);
         self::assertSame('cart', $out[1]['layout_type']);
+
+        $identity = new ThemeVersionIdentity(
+            1,
+            'default.default.default',
+            'live',
+            'frontend',
+            1,
+            ThemeVersionIdentity::MODE_FORMAL,
+            1,
+        );
+        $cascade = new \ReflectionMethod($coordinator, 'applyLayoutCascadeFilter');
+        $cascade->setAccessible(true);
+        $narrowed = $cascade->invoke($coordinator, [
+            ['layout_type' => 'checkout', 'layout_option' => 'default', 'target_type' => 'global', 'target_id' => 0],
+            ['layout_type' => 'cart', 'layout_option' => 'default', 'target_type' => 'global', 'target_id' => 0],
+            ['layout_type' => 'checkout', 'layout_option' => 'express', 'target_type' => 'global', 'target_id' => 0],
+        ], 'checkout', '', $identity);
+        self::assertSame(['checkout'], array_values(array_unique(array_column($narrowed, 'layout_type'))));
+        self::assertContains('default', array_column($narrowed, 'layout_option'));
+        self::assertContains('express', array_column($narrowed, 'layout_option'));
+
+        $one = $cascade->invoke($coordinator, [
+            ['layout_type' => 'checkout', 'layout_option' => 'default', 'target_type' => 'global', 'target_id' => 0],
+            ['layout_type' => 'checkout', 'layout_option' => 'express', 'target_type' => 'global', 'target_id' => 0],
+        ], 'checkout', 'express', $identity);
+        self::assertCount(1, $one);
+        self::assertSame('express', $one[0]['layout_option']);
     }
 }

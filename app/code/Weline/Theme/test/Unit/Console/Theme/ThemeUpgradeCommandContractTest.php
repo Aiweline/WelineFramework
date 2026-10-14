@@ -56,12 +56,12 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertIsString($source);
         self::assertStringContainsString('publishDesignAreaAssetsIntoThemeModuleNamespace', $source);
         self::assertStringContainsString("buildNamespacedModuleThemeRequestPath(\n                    \$publicThemePath,\n                    'Weline',\n                    'Theme'", $source);
-        self::assertStringContainsString('设计主题 area 资源双写到 Weline/Theme/view/theme', $source);
+        self::assertStringContainsString('设计主题 area 非图片资源双写到 Weline/Theme/view/theme', $source);
     }
 
     public function testCliMetadataIsNotTreatedAsAModuleFilter(): void
     {
-        [$themeName, $modules, $allVersions, $scope] = ThemeUpgradeCommand::parseArguments([
+        [$themeName, $modules, $allVersions, $scope, $layout, $option] = ThemeUpgradeCommand::parseArguments([
             0 => 'theme:upgrade',
             1 => '-t',
             2 => 'weshop-motor',
@@ -73,11 +73,13 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertSame([], $modules);
         self::assertFalse($allVersions);
         self::assertSame('', $scope);
+        self::assertSame('', $layout);
+        self::assertSame('', $option);
     }
 
     public function testNamedThemeFlagFromAssociativeArgs(): void
     {
-        [$themeName, $modules, $allVersions, $scope] = ThemeUpgradeCommand::parseArguments([
+        [$themeName, $modules, $allVersions, $scope, $layout, $option] = ThemeUpgradeCommand::parseArguments([
             'command' => 'theme:upgrade',
             't' => 'daocharms',
         ]);
@@ -86,11 +88,13 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertSame([], $modules);
         self::assertFalse($allVersions);
         self::assertSame('', $scope);
+        self::assertSame('', $layout);
+        self::assertSame('', $option);
     }
 
     public function testParseArgumentsRecognizesAllAndScopeFilters(): void
     {
-        [$themeName, $modules, $allVersions, $scope] = ThemeUpgradeCommand::parseArguments([
+        [$themeName, $modules, $allVersions, $scope, $layout, $option] = ThemeUpgradeCommand::parseArguments([
             0 => 'theme:upgrade',
             1 => '--all',
             2 => '-t',
@@ -103,6 +107,46 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertSame([], $modules);
         self::assertTrue($allVersions);
         self::assertSame('default.default.default', $scope);
+        self::assertSame('', $layout);
+        self::assertSame('', $option);
+    }
+
+    public function testParseArgumentsRecognizesLayoutAndOptionCascade(): void
+    {
+        [$themeName, $modules, $allVersions, $scope, $layout, $option] = ThemeUpgradeCommand::parseArguments([
+            0 => 'theme:upgrade',
+            1 => '-t',
+            2 => 'hanfu',
+            3 => '-l',
+            4 => 'homepage',
+            5 => '-o',
+            6 => 'default',
+        ]);
+
+        self::assertSame('hanfu', $themeName);
+        self::assertSame([], $modules);
+        self::assertFalse($allVersions);
+        self::assertSame('', $scope);
+        self::assertSame('homepage', $layout);
+        self::assertSame('default', $option);
+
+        [, , , , $layoutOnly, $optionOnly] = ThemeUpgradeCommand::parseArguments([
+            0 => 'theme:upgrade',
+            1 => '--layout',
+            2 => 'checkout',
+        ]);
+        self::assertSame('checkout', $layoutOnly);
+        self::assertSame('', $optionOnly);
+    }
+
+    public function testParseArgumentsRejectsOptionWithoutLayout(): void
+    {
+        $this->expectException(\Weline\Framework\Console\ConsoleException::class);
+        ThemeUpgradeCommand::parseArguments([
+            0 => 'theme:upgrade',
+            1 => '-o',
+            2 => 'default',
+        ]);
     }
 
     public function testTipDescribesBoundThemesNotLegacyActiveFlags(): void
@@ -112,6 +156,9 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertStringContainsString('当前正式版 + 当前草稿', $source);
         self::assertStringContainsString('--all', $source);
         self::assertStringContainsString('--scope', $source);
+        self::assertStringContainsString('--layout', $source);
+        self::assertStringContainsString('--option', $source);
+        self::assertStringContainsString('layout_type', $source);
         self::assertStringNotContainsString('getActiveTheme($area)', $source);
         self::assertStringNotContainsString('前台+后台激活主题', $source);
     }

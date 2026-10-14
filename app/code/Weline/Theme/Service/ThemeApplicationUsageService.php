@@ -222,9 +222,64 @@ final class ThemeApplicationUsageService
     }
 
     /**
+     * Own theme-application rows for solidify/watch: owner scope comes from reference JSON only.
+     *
+     * @return list<array{
+     *   theme_id:int,
+     *   area:string,
+     *   store_mode:string,
+     *   scope_key:string,
+     *   scope_kind:string,
+     *   website_id:int|null,
+     *   version_owner_scope:string
+     * }>
+     */
+    public function ownSolidifyTargetsForTheme(int $themeId): array
+    {
+        if ($themeId < 1) {
+            return [];
+        }
+        $out = [];
+        foreach (['frontend', 'backend'] as $area) {
+            foreach ($this->listOwnApplicationDetailRows($area) as $row) {
+                if ((int)$row['theme_id'] !== $themeId) {
+                    continue;
+                }
+                $out[] = $row;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * @return list<array{scope_key:string,theme_id:int}>
      */
     private function listOwnApplicationRows(string $area): array
+    {
+        $out = [];
+        foreach ($this->listOwnApplicationDetailRows($area) as $row) {
+            $out[] = [
+                'scope_key' => $row['scope_key'],
+                'theme_id' => $row['theme_id'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<array{
+     *   theme_id:int,
+     *   area:string,
+     *   store_mode:string,
+     *   scope_key:string,
+     *   scope_kind:string,
+     *   website_id:int|null,
+     *   version_owner_scope:string
+     * }>
+     */
+    private function listOwnApplicationDetailRows(string $area): array
     {
         try {
             $rows = (clone $this->applications)->clear()
@@ -258,12 +313,38 @@ final class ThemeApplicationUsageService
             }
             $themeId = (int)($data['theme_id'] ?? 0);
             $scopeKey = (string)($row[ThemeApplication::schema_fields_SCOPE_KEY] ?? '');
-            if ($scopeKey === '') {
+            $ownerScope = \trim((string)($data['version_owner_scope'] ?? ''));
+            if ($scopeKey === '' || $ownerScope === '') {
                 continue;
             }
+            $parts = \explode('|', $scopeKey);
+            $scopeKind = (string)($parts[0] ?? ScopeIdentity::KIND_WEBSITE);
+            if (!\in_array($scopeKind, ScopeIdentity::KINDS, true)) {
+                $scopeKind = ScopeIdentity::KIND_WEBSITE;
+            }
+            $websiteId = null;
+            if ($scopeKind === ScopeIdentity::KIND_WEBSITE) {
+                $wid = (int)($parts[1] ?? -1);
+                $websiteId = $wid >= 0 ? $wid : null;
+            }
+            $storeMode = \trim((string)($data['version_owner_store_mode']
+                ?? $row[ThemeApplication::schema_fields_STORE_MODE]
+                ?? ScopeIdentity::MODE_NORMAL));
+            if (!\in_array($storeMode, [ScopeIdentity::MODE_NORMAL, ScopeIdentity::MODE_DEV, ScopeIdentity::MODE_TEST], true)) {
+                $storeMode = ScopeIdentity::MODE_NORMAL;
+            }
+            $refArea = \trim((string)($data['area'] ?? $area));
+            if ($refArea !== 'frontend' && $refArea !== 'backend') {
+                $refArea = $area;
+            }
             $out[] = [
-                'scope_key' => $scopeKey,
                 'theme_id' => $themeId,
+                'area' => $refArea,
+                'store_mode' => $storeMode,
+                'scope_key' => $scopeKey,
+                'scope_kind' => $scopeKind,
+                'website_id' => $websiteId,
+                'version_owner_scope' => $ownerScope,
             ];
         }
 

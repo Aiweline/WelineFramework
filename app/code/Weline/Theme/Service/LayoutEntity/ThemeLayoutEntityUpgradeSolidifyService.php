@@ -34,7 +34,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
      */
     public function runOnce(string $invalidationReason, array $options = []): array
     {
@@ -50,7 +50,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
      * setup:upgrade / theme:upgrade（无 -t）：仅站点 frontend 绑定主题
      * + 后台应用主题 + 注册 Default；默认每范围正式版+草稿。
      *
-     * @param array{scope?:string,all_versions?:bool} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
      */
     public function solidifyAllThemes(?string $area = null, array $options = []): int
     {
@@ -73,12 +73,21 @@ final class ThemeLayoutEntityUpgradeSolidifyService
                 $themeIds[] = $themeId;
             }
         }
+        $layoutNote = '';
+        $layoutType = trim((string)($options['layout_type'] ?? ''));
+        if ($layoutType !== '') {
+            $layoutOption = trim((string)($options['layout_option'] ?? ''));
+            $layoutNote = $layoutOption !== ''
+                ? ' layout=' . $layoutType . '/' . $layoutOption
+                : ' layout=' . $layoutType . '/*';
+        }
         $this->printing->note(sprintf(
-            '%s bound_themes=%d pipeline=global_flat%s%s',
+            '%s bound_themes=%d pipeline=global_flat%s%s%s',
             (string)__('主题布局预固化仅处理站点已绑定主题'),
             count($themeIds),
             !empty($options['all_versions']) ? ' versions=all' : ' versions=current+draft',
             ($options['scope'] ?? '') !== '' ? ' scope=' . (string)$options['scope'] : '',
+            $layoutNote,
         ));
         // One solidify/compile pipeline across all bound themes (not per-theme serial).
         // Different themeId ⇒ different ownerHash ⇒ pools fill across themes; same scope draft/formal still mutex.
@@ -96,7 +105,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
      */
     public function solidifyTheme(int $themeId, ?string $area = null, array $options = []): int
     {
@@ -122,7 +131,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
      */
     public function solidifyFromThemeCommand(?WelineTheme $theme, array $options = []): int
     {
@@ -132,7 +141,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
      */
     public function cutoverFromThemeCommand(?WelineTheme $theme = null, array $options = []): array
     {
@@ -140,7 +149,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
      */
     private function cutover(?WelineTheme $theme, string $reason, array $options = []): array
     {
@@ -185,8 +194,8 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool} $options
-     * @return array{scope?:string,all_versions?:bool}
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
+     * @return array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string}
      */
     private function bakeOptions(array $options): array
     {
@@ -197,6 +206,14 @@ final class ThemeLayoutEntityUpgradeSolidifyService
         }
         if (!empty($options['all_versions'])) {
             $out['all_versions'] = true;
+        }
+        $layoutType = trim((string)($options['layout_type'] ?? ''));
+        if ($layoutType !== '') {
+            $out['layout_type'] = $layoutType;
+        }
+        $layoutOption = trim((string)($options['layout_option'] ?? ''));
+        if ($layoutOption !== '') {
+            $out['layout_option'] = $layoutOption;
         }
 
         return $out;

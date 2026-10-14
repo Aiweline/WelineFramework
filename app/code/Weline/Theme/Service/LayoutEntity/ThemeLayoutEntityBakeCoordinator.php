@@ -8,7 +8,9 @@ use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
+use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Model\ThemeScopeVersion;
+use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Service\ThemeScopeVersionService;
 use Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService;
@@ -778,7 +780,7 @@ final class ThemeLayoutEntityBakeCoordinator
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
      * @return list<array{identity:ThemeVersionIdentity,pending:list<array<string,mixed>>,changes:array}>
      */
     private function collectRebakeWorkItems(
@@ -790,6 +792,8 @@ final class ThemeLayoutEntityBakeCoordinator
         $planDigest = $this->injectionPlanDigest();
         $scopeFilter = trim((string)($options['scope'] ?? ''));
         $allVersions = !empty($options['all_versions']);
+        $layoutTypeFilter = trim((string)($options['layout_type'] ?? ''));
+        $layoutOptionFilter = trim((string)($options['layout_option'] ?? ''));
         $query = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery();
         if ($themeId !== null) {
             $query->where('theme_id', $themeId);
@@ -870,7 +874,7 @@ final class ThemeLayoutEntityBakeCoordinator
                 $this->existingPageTargets($identity),
                 $this->declaredPageTargets($identity, $changes),
             ));
-            if ($targets === []) {
+            if ($targets === [] && $layoutTypeFilter === '') {
                 $targets[] = [
                     'layout_type' => 'homepage',
                     'layout_option' => 'default',
@@ -878,6 +882,7 @@ final class ThemeLayoutEntityBakeCoordinator
                     'target_id' => 0,
                 ];
             }
+            $targets = $this->applyLayoutCascadeFilter($targets, $layoutTypeFilter, $layoutOptionFilter, $identity);
             $pending = [];
             foreach ($targets as $key) {
                 $type = (string)($key['layout_type'] ?? 'default');
@@ -929,7 +934,8 @@ final class ThemeLayoutEntityBakeCoordinator
             if ($pending === []) {
                 // Pages unchanged / inherit-skipped: identity never enters pipeline.
                 // Still force chrome heal so draft/formal RAW cannot survive upgrade.
-                if ($this->rematerializeChromeIfStale(
+                // Layout cascade narrows pages only — skip chrome heal when -l/-o is set.
+                if ($layoutTypeFilter === '' && $this->rematerializeChromeIfStale(
                     $identity->themeId,
                     $identity->canonicalScope,
                     $identity->themeVersionId,
@@ -1294,6 +1300,94 @@ final class ThemeLayoutEntityBakeCoordinator
     }
 
     /** @param list<array<string,mixed>> $targets @return list<array{layout_type:string,layout_option:string,target_type:string,target_id:int}> */
+    /**
+     * theme:upgrade -l/--layout [-o/--option] cascade:
+     * - no layout → keep all targets
+     * - layout only → every option under that layout (catalog + existing)
+     * - layout + option → that option only
+     *
+     * @param list<array<string,mixed>> $targets
+     * @return list<array{layout_type:string,layout_option:string,target_type:string,target_id:int}>
+     */
+    private function applyLayoutCascadeFilter(
+        array $targets,
+        string $layoutTypeFilter,
+        string $layoutOptionFilter,
+        ThemeVersionIdentity $identity,
+    ): array {
+        if ($layoutTypeFilter === '') {
+            return $targets;
+        }
+        $expanded = $targets;
+        if ($layoutOptionFilter === '') {
+            foreach ($this->catalogLayoutOptions($identity, $layoutTypeFilter) as $optionName) {
+                $expanded[] = [
+                    'layout_type' => $layoutTypeFilter,
+                    'layout_option' => $optionName,
+                    'target_type' => 'global',
+                    'target_id' => 0,
+                ];
+            }
+        } else {
+            $expanded[] = [
+                'layout_type' => $layoutTypeFilter,
+                'layout_option' => $layoutOptionFilter,
+                'target_type' => 'global',
+                'target_id' => 0,
+            ];
+        }
+        $filtered = [];
+        foreach ($this->uniqueLayoutTargets($expanded) as $key) {
+            $type = (string)($key['layout_type'] ?? '');
+            $option = (string)($key['layout_option'] ?? 'default');
+            if ($type !== $layoutTypeFilter) {
+                continue;
+            }
+            if ($layoutOptionFilter !== '' && $option !== $layoutOptionFilter) {
+                continue;
+            }
+            $filtered[] = $key;
+        }
+        if ($filtered === []) {
+            $filtered[] = [
+                'layout_type' => $layoutTypeFilter,
+                'layout_option' => $layoutOptionFilter !== '' ? $layoutOptionFilter : 'default',
+                'target_type' => 'global',
+                'target_id' => 0,
+            ];
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function catalogLayoutOptions(ThemeVersionIdentity $identity, string $layoutType): array
+    {
+        try {
+            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($identity->themeId);
+            if ((int)$theme->getId() !== $identity->themeId) {
+                return ['default'];
+            }
+            $options = LayoutScanner::scanLayouts($theme, $identity->area)[$layoutType] ?? [];
+            $values = [];
+            foreach ($options as $option) {
+                if (!\is_array($option)) {
+                    continue;
+                }
+                $value = trim((string)($option['value'] ?? ''));
+                if ($value !== '') {
+                    $values[] = $value;
+                }
+            }
+
+            return $values !== [] ? array_values(array_unique($values)) : ['default'];
+        } catch (\Throwable) {
+            return ['default'];
+        }
+    }
+
     private function uniqueLayoutTargets(array $targets): array
     {
         $out = [];
