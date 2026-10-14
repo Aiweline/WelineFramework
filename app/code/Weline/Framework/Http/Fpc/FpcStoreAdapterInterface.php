@@ -16,6 +16,14 @@ interface FpcStoreAdapterInterface
     /** @param list<string> $urls */
     public function purgeUrls(array $urls): void;
 
+    /**
+     * Purge storefront slug leaves under host trees (locale×currency path variants).
+     *
+     * @param list<string> $hosts
+     * @param list<string> $slugs
+     */
+    public function purgeSlugs(array $hosts, array $slugs): void;
+
     public function purgeAll(string $reason = ''): void;
 
     public function clearProcessCache(): void;

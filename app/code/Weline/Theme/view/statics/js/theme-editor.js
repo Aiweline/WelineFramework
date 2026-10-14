@@ -5078,6 +5078,8 @@
         config.apiRestoreScopeDefaults = container.dataset.apiRestoreScopeDefaults || `${config.apiBase}/restore-scope-defaults`;
         config.apiInheritVersion = container.dataset.apiInheritVersion || `${config.apiBase}/inherit-version`;
         config.apiClearThemeCache = container.dataset.apiClearThemeCache || `${config.apiBase}/clear-theme-cache`;
+        config.apiPurgeCurrentStorefront = container.dataset.apiPurgeCurrentStorefront
+            || `${config.apiBase}/purge-current-storefront`;
         config.apiResetDraftResources = container.dataset.apiResetDraftResources || `${config.apiBase}/reset-draft-resources`;
         config.apiSolidifyScopeVersion = container.dataset.apiSolidifyScopeVersion
             || `${config.apiBase}/solidify-scope-version`;
@@ -5163,6 +5165,8 @@
             btnPublish: document.getElementById('btnPublish'),
             btnPublishCurrentPage: document.getElementById('btnPublishCurrentPage'),
             btnPublishCurrentPageStrip: document.getElementById('btnPublishCurrentPageStrip'),
+            btnUpdateCurrentStorefront: document.getElementById('btnUpdateCurrentStorefront'),
+            btnUpdateCurrentStorefrontStrip: document.getElementById('btnUpdateCurrentStorefrontStrip'),
             btnFrontendPreview: document.getElementById('btnFrontendPreview'),
             btnRestoreLayout: document.getElementById('btnRestoreLayout'),
             btnClearThemeCache: document.getElementById('btnClearThemeCache'),
@@ -5992,6 +5996,8 @@
         // 只发布本页：publish_set 只含当前 layout，未选中的资源由后端分配 D' 留在草稿里。
         elements.btnPublishCurrentPage?.addEventListener('click', publishCurrentPage);
         elements.btnPublishCurrentPageStrip?.addEventListener('click', publishCurrentPage);
+        elements.btnUpdateCurrentStorefront?.addEventListener('click', updateCurrentStorefront);
+        elements.btnUpdateCurrentStorefrontStrip?.addEventListener('click', updateCurrentStorefront);
 
         // 预览按钮
         elements.btnPreview?.addEventListener('click', openPreview);
@@ -20084,6 +20090,32 @@
     /** 「只发布本页」入口：只把当前 layout 的改动推上线，其余留在草稿里。 */
     async function publishCurrentPage() {
         return publishThemeWithScope('current_page');
+    }
+
+    /** 「更新当前」：只清当前布局店面 slug 的 FPC，不发新版本。 */
+    async function updateCurrentStorefront() {
+        if (!state.themeId) {
+            showToast(window.__('请先选择主题'), 'warning');
+            return;
+        }
+        try {
+            showToast(window.__('正在更新当前页缓存…'), 'info');
+            const api = config.apiPurgeCurrentStorefront
+                || `${config.apiBase}/purge-current-storefront`;
+            const result = await apiJson(api, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(buildLayoutVersionIdentityPayload()),
+            });
+            if (!result?.success) {
+                throw new Error(result?.message || window.__('更新当前页缓存失败'));
+            }
+            showToast(result.message || window.__('已更新当前页缓存'), 'success');
+            refreshPreview();
+        } catch (error) {
+            console.error('[ThemeEditor] Update current storefront failed:', error);
+            showToast(window.__('更新当前页缓存失败：') + (error?.message || ''), 'error');
+        }
     }
 
     async function publishThemeWithScope(publishScope) {

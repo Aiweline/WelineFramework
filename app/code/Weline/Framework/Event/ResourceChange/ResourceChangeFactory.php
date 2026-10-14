@@ -23,6 +23,7 @@ final class ResourceChangeFactory
      *   previous_namespaces?:list<string>,
      *   urls?:list<string>,
      *   previous_urls?:list<string>,
+     *   slugs?:list<string>,
      *   website_ids?:list<int>,
      *   url_matrix_ready?:bool,
      *   cache_ops?:list<array{pool:string,keys:list<string>}>
@@ -73,6 +74,15 @@ final class ResourceChangeFactory
             $normalizedImpact[$key] = $this->stringList((array)($impact[$key] ?? []));
             sort($normalizedImpact[$key], SORT_STRING);
         }
+        $slugs = [];
+        foreach ((array)($impact['slugs'] ?? []) as $slug) {
+            $slug = ltrim(trim((string)$slug), '/');
+            if ($slug !== '') {
+                $slugs[$slug] = $slug;
+            }
+        }
+        $normalizedImpact['slugs'] = array_values($slugs);
+        sort($normalizedImpact['slugs'], SORT_STRING);
         if (array_key_exists('website_ids', $impact)) {
             $normalizedImpact['website_ids'] = $this->nonNegativeIntList((array)$impact['website_ids']);
         }

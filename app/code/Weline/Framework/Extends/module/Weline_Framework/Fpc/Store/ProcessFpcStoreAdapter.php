@@ -23,6 +23,12 @@ final class ProcessFpcStoreAdapter implements FpcStoreAdapterInterface
         $this->clearProcessCache();
     }
 
+    public function purgeSlugs(array $hosts, array $slugs): void
+    {
+        unset($hosts, $slugs);
+        $this->clearProcessCache();
+    }
+
     public function purgeAll(string $reason = ''): void
     {
         unset($reason);

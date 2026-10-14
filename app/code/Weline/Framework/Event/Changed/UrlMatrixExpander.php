@@ -50,9 +50,37 @@ final class UrlMatrixExpander
             if (count($expanded) >= self::MAX_KEYS) {
                 return ['urls' => array_values($expanded), 'degraded' => true];
             }
+            // Pass 1: every locale × default currency first so multi-lang cold disk
+            // is covered before currency×locale explosion hits MAX_KEYS.
+            foreach ($locales as $locale) {
+                $variant = $this->withPathVariant(
+                    $url,
+                    (string)$locale,
+                    $defaultCurrency,
+                    $defaultLang,
+                    $defaultCurrency,
+                );
+                if ($variant === '') {
+                    continue;
+                }
+                $expanded[$variant] = $variant;
+                if (count($expanded) >= self::MAX_KEYS) {
+                    return ['urls' => array_values($expanded), 'degraded' => true];
+                }
+            }
+            // Pass 2: remaining currency × locale variants (optional completeness).
             foreach ($locales as $locale) {
                 foreach ($currencies as $currency) {
-                    $variant = $this->withPathVariant($url, (string)$locale, (string)$currency, $defaultLang, $defaultCurrency);
+                    if (strcasecmp((string)$currency, $defaultCurrency) === 0) {
+                        continue;
+                    }
+                    $variant = $this->withPathVariant(
+                        $url,
+                        (string)$locale,
+                        (string)$currency,
+                        $defaultLang,
+                        $defaultCurrency,
+                    );
                     if ($variant === '') {
                         continue;
                     }
@@ -239,7 +267,11 @@ final class UrlMatrixExpander
         $defaultCurrency = strtoupper(trim((string)($currencies[0] ?? 'CNY'))) ?: 'CNY';
         try {
             if (function_exists('w_query')) {
-                $row = w_query('websites', 'getWebsiteById', ['website_id' => $websiteId]);
+                // WebsiteData bag via Query — never forceReload when process/request face exists.
+                $row = w_query('websites', 'getWebsiteById', [
+                    'website_id' => $websiteId,
+                    'force_reload' => false,
+                ]);
                 if (is_array($row)) {
                     $lang = trim((string)($row['default_language'] ?? ''));
                     $cur = strtoupper(trim((string)($row['default_currency'] ?? '')));
@@ -262,7 +294,10 @@ final class UrlMatrixExpander
     {
         try {
             if (function_exists('w_query')) {
-                $codes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
+                $codes = w_query('websites', 'getWebsiteLanguageCodes', [
+                    'website_id' => $websiteId,
+                    'force_reload' => false,
+                ]);
                 if (is_array($codes)) {
                     return array_values(array_filter(array_map('strval', $codes)));
                 }
@@ -278,7 +313,10 @@ final class UrlMatrixExpander
     {
         try {
             if (function_exists('w_query')) {
-                $codes = w_query('websites', 'getWebsiteCurrencyCodes', ['website_id' => $websiteId]);
+                $codes = w_query('websites', 'getWebsiteCurrencyCodes', [
+                    'website_id' => $websiteId,
+                    'force_reload' => false,
+                ]);
                 if (is_array($codes) && $codes !== []) {
                     return array_values(array_filter(array_map('strval', $codes)));
                 }

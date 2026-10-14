@@ -146,10 +146,11 @@ class ChangedPipeline
                 is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
                 is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
             );
+            $slugs = is_array($impact['slugs'] ?? null) ? $impact['slugs'] : [];
             $payloadUrls = is_array($effect->payload['urls'] ?? null) ? $effect->payload['urls'] : [];
-            if ($urls === [] && $payloadUrls === [] && empty($effect->payload['allow_empty'])) {
+            if ($urls === [] && $slugs === [] && $payloadUrls === [] && empty($effect->payload['allow_empty'])) {
                 throw new \LogicException(__(
-                    'ChangedType %{type} Recipe 需要 urls，Enricher/impact 仍为空',
+                    'ChangedType %{type} Recipe 需要 urls 或 slugs，Enricher/impact 仍为空',
                     ['type' => $change->resourceType()]
                 ));
             }
@@ -208,10 +209,19 @@ class ChangedPipeline
     private function expandUrlMatrix(InvalidationEffect $effect, ResourceChange $change): InvalidationEffect
     {
         $impact = $change->toArray()['impact'] ?? [];
+        $slugPaths = [];
+        foreach (is_array($impact['slugs'] ?? null) ? $impact['slugs'] : [] as $slug) {
+            $slug = trim((string)$slug);
+            if ($slug === '') {
+                continue;
+            }
+            $slugPaths[] = '/' . ltrim($slug, '/');
+        }
         $base = array_values(array_unique(array_merge(
             is_array($effect->payload['urls'] ?? null) ? $effect->payload['urls'] : [],
             is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
             is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
+            $slugPaths,
         )));
         // Product (and similar) may pre-expand × each member website's locale/currency so foreign hosts
         // are not expanded with the mutation website's defaults.
@@ -219,6 +229,12 @@ class ChangedPipeline
             $payload = $effect->payload;
             $payload['urls'] = $base;
             $payload['degraded'] = false;
+            if ($slugPaths !== []) {
+                $payload['slugs'] = array_values(array_unique(array_map(
+                    static fn(string $p): string => ltrim($p, '/'),
+                    $slugPaths,
+                )));
+            }
 
             return new InvalidationEffect($effect->code, $effect->phase, $payload);
         }
@@ -228,6 +244,12 @@ class ChangedPipeline
         $payload = $effect->payload;
         $payload['urls'] = $expanded['urls'];
         $payload['degraded'] = $expanded['degraded'];
+        if ($slugPaths !== []) {
+            $payload['slugs'] = array_values(array_unique(array_map(
+                static fn(string $p): string => ltrim($p, '/'),
+                $slugPaths,
+            )));
+        }
         return new InvalidationEffect($effect->code, $effect->phase, $payload);
     }
 
@@ -316,7 +338,7 @@ class ChangedPipeline
     private function mergeImpact(array $derived, array $explicit): array
     {
         $out = $derived;
-        foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls', 'cache_ops', 'website_ids'] as $key) {
+        foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls', 'slugs', 'cache_ops', 'website_ids'] as $key) {
             if (!array_key_exists($key, $explicit)) {
                 continue;
             }
@@ -337,10 +359,13 @@ class ChangedPipeline
     private function withImpact(ResourceChange $change, array $impact): ResourceChange
     {
         $data = $change->toArray();
-        foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls'] as $key) {
+        foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls', 'slugs'] as $key) {
             $list = [];
             foreach ((array)($impact[$key] ?? []) as $item) {
                 $item = trim((string)$item);
+                if ($key === 'slugs') {
+                    $item = ltrim($item, '/');
+                }
                 if ($item !== '') {
                     $list[$item] = $item;
                 }

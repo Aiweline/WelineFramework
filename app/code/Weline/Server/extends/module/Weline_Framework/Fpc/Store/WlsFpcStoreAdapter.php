@@ -29,6 +29,15 @@ final class WlsFpcStoreAdapter implements FpcStoreAdapterInterface
         }
     }
 
+    public function purgeSlugs(array $hosts, array $slugs): void
+    {
+        $this->clearProcessCache();
+        try {
+            FpcHtmlDiskStore::purgeSlugs($hosts, $slugs);
+        } catch (\Throwable) {
+        }
+    }
+
     public function purgeAll(string $reason = ''): void
     {
         $this->clearProcessCache();

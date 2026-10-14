@@ -176,11 +176,14 @@ final readonly class ResourceChange
         self::assertObjectKeys(
             $data['impact'],
             ['namespaces', 'previous_namespaces', 'urls', 'previous_urls'],
-            ['cache_ops', 'website_ids', 'url_matrix_ready'],
+            ['cache_ops', 'website_ids', 'url_matrix_ready', 'slugs'],
             'impact',
         );
         foreach (['namespaces', 'previous_namespaces', 'urls', 'previous_urls'] as $key) {
             self::assertStringList($data['impact'][$key], 'impact.' . $key);
+        }
+        if (array_key_exists('slugs', $data['impact'])) {
+            self::assertStringList($data['impact']['slugs'], 'impact.slugs');
         }
         if (array_key_exists('website_ids', $data['impact'])) {
             self::assertNonNegativeIntList($data['impact']['website_ids'], 'impact.website_ids');

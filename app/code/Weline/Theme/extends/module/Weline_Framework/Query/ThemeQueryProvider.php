@@ -917,6 +917,7 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/restore-scope-defaults' => ($themeEditor ??= $this->createDirectThemeEditor())->restoreScopeDefaultsPayload(),
                 '/theme/backend/theme-editor/inherit-version' => ($themeEditor ??= $this->createDirectThemeEditor())->postInheritVersion(),
                 '/theme/backend/theme-editor/clear-theme-cache' => ($themeEditor ??= $this->createDirectThemeEditor())->clearThemeCachePayload(),
+                '/theme/backend/theme-editor/purge-current-storefront' => ($themeEditor ??= $this->createDirectThemeEditor())->purgeCurrentStorefrontPayload(),
                 '/theme/backend/theme-editor/reset-draft-resources' => ($themeEditor ??= $this->createDirectThemeEditor())->resetDraftResourcesPayload(),
                 '/theme/backend/theme-editor/solidify-scope-version' => ($themeEditor ??= $this->createDirectThemeEditor())->solidifyScopeVersionPayload(),
                 '/theme/backend/theme-editor/factory-reset' => ($themeEditor ??= $this->createDirectThemeEditor())->factoryResetPayload(),

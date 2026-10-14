@@ -248,6 +248,45 @@ final class FpcHtmlDiskStore
     }
 
     /**
+     * Slug-level soft invalidate under host trees (locale/currency prefix variants).
+     * Used when UrlMatrix is degraded or relative-only; does not rotate generations.
+     *
+     * @param list<string> $hosts Host keys as stored under live/{host}/ (no scheme).
+     * @param list<string> $slugs Storefront paths without locale/currency prefix (e.g. policy/privacy).
+     */
+    public static function purgeSlugs(array $hosts, array $slugs): void
+    {
+        $stop = self::writeBaseRoot();
+        $normalizedSlugs = [];
+        foreach ($slugs as $slug) {
+            $slug = \trim(\str_replace('\\', '/', (string)$slug), '/');
+            if ($slug === '' || \str_contains($slug, '..')) {
+                continue;
+            }
+            if (\preg_match('#^[a-z0-9][a-z0-9_./-]*$#Di', $slug) !== 1) {
+                continue;
+            }
+            $normalizedSlugs[$slug] = $slug;
+        }
+        if ($normalizedSlugs === []) {
+            return;
+        }
+        foreach ($hosts as $host) {
+            $host = \strtolower(\trim((string)$host));
+            if ($host === '' || \preg_match('/^[a-z0-9._:-]+$/Di', $host) !== 1) {
+                continue;
+            }
+            $hostRoot = $stop . \DIRECTORY_SEPARATOR . $host;
+            if (!\is_dir($hostRoot)) {
+                continue;
+            }
+            foreach ($normalizedSlugs as $slug) {
+                self::purgeSlugUnderHostRoot($hostRoot, $slug, $stop);
+            }
+        }
+    }
+
+    /**
      * Whole-tree soft invalidate: flip live to a new empty generation.
      * Previous live becomes `previous` (rollback). Older gens are GC'd.
      */
@@ -745,6 +784,63 @@ final class FpcHtmlDiskStore
         }
 
         return true;
+    }
+
+    private static function purgeSlugUnderHostRoot(string $hostRoot, string $slugRel, string $stopRoot): void
+    {
+        $slugFs = \str_replace('/', \DIRECTORY_SEPARATOR, $slugRel);
+        $candidates = [
+            $hostRoot . \DIRECTORY_SEPARATOR . $slugFs,
+        ];
+        $level1 = @\scandir($hostRoot);
+        if (\is_array($level1)) {
+            foreach ($level1 as $a) {
+                if ($a === '.' || $a === '..') {
+                    continue;
+                }
+                $pathA = $hostRoot . \DIRECTORY_SEPARATOR . $a;
+                if (!\is_dir($pathA) || \is_link($pathA)) {
+                    continue;
+                }
+                if (!self::isLocaleOrCurrencyDirName($a)) {
+                    continue;
+                }
+                $candidates[] = $pathA . \DIRECTORY_SEPARATOR . $slugFs;
+                $level2 = @\scandir($pathA);
+                if (!\is_array($level2)) {
+                    continue;
+                }
+                foreach ($level2 as $b) {
+                    if ($b === '.' || $b === '..') {
+                        continue;
+                    }
+                    $pathB = $pathA . \DIRECTORY_SEPARATOR . $b;
+                    if (!\is_dir($pathB) || \is_link($pathB)) {
+                        continue;
+                    }
+                    if (!self::isLocaleOrCurrencyDirName($b)) {
+                        continue;
+                    }
+                    $candidates[] = $pathB . \DIRECTORY_SEPARATOR . $slugFs;
+                }
+            }
+        }
+        foreach ($candidates as $dir) {
+            if (!\is_dir($dir)) {
+                continue;
+            }
+            self::unlinkPageFiles($dir);
+            self::removeEmptyParents($dir, $stopRoot);
+        }
+    }
+
+    private static function isLocaleOrCurrencyDirName(string $name): bool
+    {
+        if (\preg_match('/^[A-Z]{3}$/', $name) === 1) {
+            return true;
+        }
+
+        return \preg_match('/^[a-z]{2}(_[A-Za-z0-9]+)+$/', $name) === 1;
     }
 
     private static function unlinkPageFiles(string $dir): void

@@ -88,10 +88,19 @@ final class ThemeScopedEditorSaveService
                     }
                 }
             }
-            return $this->workspace->replaceEffectivePayload($context,
+            $saved = $this->workspace->replaceEffectivePayload($context,
                 (int)($input['expected_revision'] ?? $state['revision'] ?? 0),
                 array_key_exists('expected_parent_release_id', $input) ? $input['expected_parent_release_id'] : ($state['expected_parent_release_id'] ?? null),
                 $target, $actorId, $actorName, 'editor_full_layout_save');
+            // Active storefront slug pages (policy etc.): save immediately purges that slug's FPC.
+            try {
+                $publisher = ObjectManager::getInstance(\Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher::class);
+                if ($publisher->isActiveStorefrontSlug((string)$context->layoutType, (string)($context->layoutOption ?: 'default'))) {
+                    $publisher->purgeCurrentLayout($context, 'theme_editor_active_slug_save');
+                }
+            } catch (\Throwable) {
+            }
+            return $saved;
         });
     }
 

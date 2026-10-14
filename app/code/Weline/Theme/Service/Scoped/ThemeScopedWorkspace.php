@@ -3107,6 +3107,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             $after['content_revision'] = $contentRevision;
         }
         $urls = ['/'];
+        $slugs = [];
         if ($resourceType === 'theme_layout') {
             try {
                 /** @var ThemePageTypeResolver $resolver */
@@ -3119,8 +3120,13 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 if ($previewPath !== '') {
                     $urls = [$previewPath];
                 }
+                $slug = \ltrim($previewPath === '/' ? '' : $previewPath, '/');
+                if ($slug !== '') {
+                    $slugs = [$slug];
+                }
             } catch (\Throwable) {
                 $urls = ['/'];
+                $slugs = [];
             }
         }
         if ($themeVersionId === null || $themeVersionId < 1) {
@@ -3150,6 +3156,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             impact: [
                 'namespaces' => $namespaces,
                 'urls' => $urls,
+                'slugs' => $slugs,
             ],
             origin: ['entry' => $entry],
             siteId: null,

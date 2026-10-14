@@ -7132,6 +7132,49 @@ HTML;
         return $resolved !== '' && is_file($resolved) ? $resolved : '';
     }
 
+    /**
+     * 更新当前：只清当前布局 storefront slug 的 FPC，不发新版本。
+     * 路由: /theme/backend/theme-editor/purge-current-storefront (POST)
+     *
+     * @return array{success:bool,message?:string,data?:array<string,mixed>}
+     */
+    public function purgeCurrentStorefrontPayload(): array
+    {
+        $data = $this->getVersionRequestData();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+        if ($themeId < 1) {
+            return [
+                'success' => false,
+                'message' => (string)__('请先选择主题'),
+            ];
+        }
+        try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            /** @var \Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher $publisher */
+            $publisher = ObjectManager::getInstance(\Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher::class);
+            $result = $publisher->purgeCurrentLayout($context, 'theme_editor_update_current');
+            if (!$result['ok']) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('当前布局没有可清理的店面路径'),
+                    'data' => $result,
+                ];
+            }
+
+            return [
+                'success' => true,
+                'message' => (string)__('已更新当前页缓存'),
+                'data' => $result,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
     public function clearThemeCachePayload(): array
     {
         $data = $this->getVersionRequestData();

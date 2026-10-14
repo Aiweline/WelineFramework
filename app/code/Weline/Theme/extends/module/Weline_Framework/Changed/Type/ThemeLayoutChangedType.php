@@ -39,8 +39,10 @@ final class ThemeLayoutChangedType implements ChangedTypeInterface
         }
         $urls = $this->stringList($impact['urls'] ?? []);
         $previousUrls = $this->stringList($impact['previous_urls'] ?? []);
+        $slugs = $this->slugList($impact['slugs'] ?? []);
         // Website-scoped publish must never fall back to empty urls (would tempt purge_all).
-        if ($urls === [] && $change->hasWebsiteContext()) {
+        // Do NOT inject "/" when slugs alone materialize the invalidation face.
+        if ($urls === [] && $slugs === [] && $change->hasWebsiteContext()) {
             $urls = ['/'];
         }
 
@@ -49,25 +51,29 @@ final class ThemeLayoutChangedType implements ChangedTypeInterface
             'previous_namespaces' => $this->stringList($impact['previous_namespaces'] ?? []),
             'urls' => $urls,
             'previous_urls' => $previousUrls,
+            'slugs' => $slugs,
         ];
     }
 
     public function recipe(ResourceChange $change): array
     {
-        if ($this->isPreview($change)) {
+        $impact = $change->toArray()['impact'] ?? [];
+        $slugs = $this->slugList($impact['slugs'] ?? []);
+        // Draft preview normally only bumps namespaces — except active-slug / 更新当前
+        // which declare storefront slugs and must purge production FPC without publishing.
+        if ($this->isPreview($change) && $slugs === []) {
             return [
                 new InvalidationEffect(InvalidationEffect::CODE_BUMP_NAMESPACES, InvalidationEffect::PHASE_SYNC),
             ];
         }
         $action = $change->action();
         if ($action === 'publish' || $action === 'unpublish') {
-            $impact = $change->toArray()['impact'] ?? [];
             $urls = array_merge(
                 is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
                 is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
             );
             // Website / scoped publish: selective purge only. Never purge_fpc_all for one site.
-            if ($change->hasWebsiteContext() || $urls !== []) {
+            if ($change->hasWebsiteContext() || $urls !== [] || $slugs !== []) {
                 return [
                     new InvalidationEffect(InvalidationEffect::CODE_BUMP_NAMESPACES, InvalidationEffect::PHASE_SYNC),
                     new InvalidationEffect(InvalidationEffect::CODE_PURGE_FPC_URLS, InvalidationEffect::PHASE_AFTER_COMMIT),
@@ -96,12 +102,11 @@ final class ThemeLayoutChangedType implements ChangedTypeInterface
             new InvalidationEffect(InvalidationEffect::CODE_BUMP_NAMESPACES, InvalidationEffect::PHASE_SYNC),
             new InvalidationEffect(InvalidationEffect::CODE_THEME_RUNTIME_CLEAR, InvalidationEffect::PHASE_AFTER_COMMIT),
         ];
-        $impact = $change->toArray()['impact'] ?? [];
         $urls = array_merge(
             is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
             is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
         );
-        if ($urls !== []) {
+        if ($urls !== [] || $slugs !== []) {
             $effects[] = new InvalidationEffect(InvalidationEffect::CODE_PURGE_FPC_URLS, InvalidationEffect::PHASE_AFTER_COMMIT);
             $effects[] = new InvalidationEffect(InvalidationEffect::CODE_CDN_PURGE, InvalidationEffect::PHASE_AFTER_COMMIT);
         }
@@ -124,6 +129,22 @@ final class ThemeLayoutChangedType implements ChangedTypeInterface
         $out = [];
         foreach ($values as $v) {
             $v = trim((string)$v);
+            if ($v !== '') {
+                $out[$v] = $v;
+            }
+        }
+        return array_values($out);
+    }
+
+    /** @param mixed $values @return list<string> */
+    private function slugList(mixed $values): array
+    {
+        if (!is_array($values)) {
+            return [];
+        }
+        $out = [];
+        foreach ($values as $v) {
+            $v = ltrim(trim((string)$v), '/');
             if ($v !== '') {
                 $out[$v] = $v;
             }
