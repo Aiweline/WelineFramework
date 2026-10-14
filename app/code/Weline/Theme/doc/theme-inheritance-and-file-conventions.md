@@ -33,6 +33,8 @@
 | 设计主题覆盖邮件模板 | `app/design/{Vendor}/{theme}/{Module_Code}/email/...`（与 templates 同一 `resolveThemeTemplatePath` 继承链） |
 | 编译/生成模板 | `view/tpl/`，禁止直接修改 |
 
+**不发布面（`theme:upgrade` / pub/static）**：设计主题下的 `{Module_Code}/templates/**` 与 `{Module_Code}/email/**` 同属服务器模板，由路径解析消费；**禁止**铺进 `pub/static`，也**禁止**镜像进 Default `Weline/Theme/view/theme/{Module}/`。`StaticPublishExclusion` 排除 `.phtml`；Upgrade 另按路径段硬跳过 `templates`/`email`，越界 origin fail-soft skip。
+
 ## 继承链优先级
 
 `WelineTheme::getThemeChain()` 返回基础主题到当前主题的链路。`ThemeDirectoryResolver::getAreaDirectories()` 在实际资源发现时按当前主题优先处理，然后父主题，再默认层，再模块贡献层。

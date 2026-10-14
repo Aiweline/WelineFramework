@@ -918,11 +918,19 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
     opacity: 1;
 }
 
-.header-cart .mini-cart-drawer__extras-tab.is-active {
-    color: var(--amz-drawer-text, var(--weline-chrome-body-text, #0f1111));
-    -webkit-text-fill-color: var(--amz-drawer-text, var(--weline-chrome-body-text, #0f1111));
-    font-weight: 600;
-    border-bottom-color: var(--amz-drawer-price);
+/*
+ * Active = primary ink (not near-black): which tab is on must be readable from text alone.
+ * Beat theme-head `[data-surface=inverse] button…{color:inherit}` (0,7,1) with button+class
+ * chain; -webkit-text-fill-color keeps Blink/WebKit paint when color alone is contested.
+ */
+.header-cart button.mini-cart-drawer__extras-tab.is-active,
+.header-cart .mini-cart-drawer__extras-tab.is-active,
+.header-cart .mini-cart-drawer__extras-tab[aria-selected="true"] {
+    /* !important: beat theme-head inverse button color:inherit (0,7,1) until theme-head rebakes exclusions. */
+    color: var(--color-primary, var(--weline-theme-primary, var(--amz-drawer-price))) !important;
+    -webkit-text-fill-color: var(--color-primary, var(--weline-theme-primary, var(--amz-drawer-price))) !important;
+    font-weight: 700;
+    border-bottom-color: var(--color-primary, var(--weline-theme-primary, var(--amz-drawer-price)));
 }
 
 .header-cart .mini-cart-drawer__extras-tab:focus-visible {
@@ -998,6 +1006,129 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 .header-cart .mini-cart-drawer__extras:empty {
     display: none;
     margin-bottom: 0;
+}
+
+/*
+ * Shared extras-tabs chrome (cart page + checkout): same underline rail as mini-cart.
+ * Cart/Checkout must NOT invent pill tabs — they opt into this class tree only.
+ */
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs,
+.weline-checkout__extras .mini-cart-drawer__extras-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--weline-space-2, 0.5rem);
+}
+
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tablist,
+.weline-checkout__extras .mini-cart-drawer__extras-tablist {
+    display: flex;
+    align-items: stretch;
+    gap: var(--weline-space-1, 0.25rem);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    margin: 0;
+    padding: 0;
+    border-bottom: var(--border-width-thin, 1px) solid var(--weline-theme-border, #e5e7eb);
+}
+
+/* Match theme-head `body .weline-cart-shell--amazon …` specificity so underline rail wins over pill chrome. */
+body .weline-cart-shell--amazon .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab,
+body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab,
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab,
+.weline-checkout__extras .mini-cart-drawer__extras-tab {
+    appearance: none;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    margin: 0;
+    min-height: 0;
+    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+    border: 0;
+    border-radius: 0;
+    border-bottom: var(--border-width-medium, 2px) solid transparent;
+    background: transparent;
+    color: var(--weline-theme-text-muted, var(--weline-chrome-body-text-secondary, #565959));
+    -webkit-text-fill-color: var(--weline-theme-text-muted, var(--weline-chrome-body-text-secondary, #565959));
+    font: inherit;
+    font-size: var(--weline-font-size-xs, 13px);
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+body .weline-cart-shell--amazon .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab.is-active,
+body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-active,
+.weline-cart-shell__summary-extras button.mini-cart-drawer__extras-tab.is-active,
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab.is-active,
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab[aria-selected="true"],
+.weline-checkout__extras button.mini-cart-drawer__extras-tab.is-active,
+.weline-checkout__extras .mini-cart-drawer__extras-tab.is-active,
+.weline-checkout__extras .mini-cart-drawer__extras-tab[aria-selected="true"] {
+    background: transparent !important;
+    color: var(--color-primary, var(--weline-theme-primary)) !important;
+    -webkit-text-fill-color: var(--color-primary, var(--weline-theme-primary)) !important;
+    font-weight: 700;
+    border-color: transparent;
+    border-bottom-color: var(--color-primary, var(--weline-theme-primary));
+    box-shadow: none;
+}
+
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab:focus-visible,
+.weline-checkout__extras .mini-cart-drawer__extras-tab:focus-visible {
+    outline: var(--border-width-medium, 2px) solid var(--color-primary, var(--weline-theme-primary));
+    outline-offset: 2px;
+}
+
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-panel,
+.weline-checkout__extras .mini-cart-drawer__extras-panel {
+    display: none;
+}
+
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-panel.is-active,
+.weline-checkout__extras .mini-cart-drawer__extras-panel.is-active {
+    display: block;
+}
+
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__header,
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__label,
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-order-notice__label,
+.weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__label,
+.weline-checkout__extras .mini-cart-drawer__extras-tabs .w-order-notice__label,
+.weline-checkout__extras .mini-cart-drawer__extras-tabs .w-b2b-checkout-credit__label {
+    display: none;
+}
+
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon,
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-order-notice,
+.weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon,
+.weline-checkout__extras .mini-cart-drawer__extras-tabs .w-order-notice {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__row,
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__controls,
+.weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__controls {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-2, 0.5rem);
+    width: 100%;
+}
+
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__input,
+.weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__input {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-order-notice__input,
+.weline-checkout__extras .mini-cart-drawer__extras-tabs .w-order-notice__input {
+    width: 100%;
+    min-height: var(--weline-space-10, 2.5rem);
+    max-height: 4.5rem;
 }
 
 .header-cart .mini-cart-drawer__totals {

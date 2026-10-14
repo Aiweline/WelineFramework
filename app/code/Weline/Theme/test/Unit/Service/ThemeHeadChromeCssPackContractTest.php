@@ -23,7 +23,7 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         return $content;
     }
 
-    public function testStorefrontPackJoinsTokensUiThemeAndToastAtRuntime(): void
+    public function testStorefrontPackJoinsTokensUiThemeWithoutToastStyleShell(): void
     {
         $src = $this->read('Service/ThemeHeadChromeCssPack.php');
         self::assertStringContainsString('PACK_STOREFRONT', $src);
@@ -34,7 +34,17 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertStringContainsString('variables/_auto-literals.css', $src);
         self::assertStringContainsString('weline-foundation.css', $src);
         self::assertStringContainsString('assets/css/theme.css', $src);
-        self::assertStringContainsString('storefront-shopper-toast-amazon.css', $src);
+        // Style leaves stay out of layout pack (backend style selection generates CSS).
+        self::assertStringContainsString('Style leaves', $src);
+        self::assertStringContainsString('never hard-@static', $src);
+        self::assertDoesNotMatchRegularExpression(
+            "/PACK_STOREFRONT\\s*=>\\s*\\[[^\\]]*storefront-shopper-toast-amazon\\.css/s",
+            $src,
+        );
+        self::assertMatchesRegularExpression(
+            "/PACK_BACKEND\\s*=>\\s*\\[[\\s\\S]*?assets\\/css\\/theme\\.css/s",
+            $src,
+        );
         self::assertStringContainsString('theme_css_merge', $src);
         self::assertStringContainsString('warmAreaPacks', $src);
         self::assertStringContainsString('theme-head-chrome-v6', $src);
@@ -79,6 +89,8 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertLessThan($emitPack, $critical, 'layout CSS pack must come after critical CSS');
         self::assertLessThan($earlyJs, $emitPack, 'layout CSS pack must come before any head JS');
         self::assertStringContainsString('PACK_STOREFRONT', $prefix);
+        // Style leaves (amazon toast etc.) are backend-selected → generated CSS; theme head must not hard-@static them.
+        self::assertStringNotContainsString('storefront-shopper-toast-amazon.css', $prefix);
 
         $suffix = $this->read('view/theme/frontend/partials/head/assets-suffix.phtml');
         self::assertStringContainsString('Weline_Theme::frontend::partials::head::styles-after', $suffix);
@@ -87,6 +99,8 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
             $suffix,
             'layout CSS pack must not be emitted twice (suffix)',
         );
+        self::assertStringContainsString('if ($storefrontPackHtml === null)', $suffix);
+        self::assertStringNotContainsString('storefront-shopper-toast-amazon.css', $suffix);
     }
 
     public function testPackClassConstantsMatchHeadWiring(): void
@@ -124,6 +138,47 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
                     $theme . ' skin fallback must keep ' . $basename . ' when merge off',
                 );
             }
+        }
+    }
+
+    /**
+     * Shared extras-tab geometry/active fill belongs to Theme mini-cart-drawer.css.
+     * Design overlay leaves + design statics/css must not reintroduce pill chrome.
+     */
+    public function testHanfuDesignCssMustNotRestyleSharedExtrasTabChrome(): void
+    {
+        $hanfuRoot = dirname(__DIR__, 6) . '/design/Weline/hanfu';
+        $overlayPath = $hanfuRoot . '/frontend/partials/head/theme-head-css-overlay.php';
+        self::assertFileExists($overlayPath);
+        /** @var list<string> $leaves */
+        $leaves = include $overlayPath;
+        self::assertIsArray($leaves);
+
+        $cssPaths = [];
+        foreach ($leaves as $leaf) {
+            $rel = (string)$leaf;
+            // Overlay entries are theme-relative like theme/frontend/assets/css/hanfu-checkout.css
+            $candidate = $hanfuRoot . '/frontend/' . preg_replace('#^theme/frontend/#', '', $rel);
+            if (is_file($candidate) && str_ends_with($candidate, '.css')) {
+                $cssPaths[] = $candidate;
+            }
+        }
+        $staticsCss = $hanfuRoot . '/frontend/statics/css';
+        if (is_dir($staticsCss)) {
+            foreach (glob($staticsCss . '/*.css') ?: [] as $path) {
+                $cssPaths[] = $path;
+            }
+        }
+        self::assertFileDoesNotExist($hanfuRoot . '/frontend/statics/css/atelier-shell.css');
+
+        $forbidden = '/mini-cart-drawer__extras-tab\.is-active[^{]*\{[^}]*(?:background\s*:|border-radius\s*:)/s';
+        foreach ($cssPaths as $path) {
+            $src = (string)file_get_contents($path);
+            self::assertDoesNotMatchRegularExpression(
+                $forbidden,
+                $src,
+                basename($path) . ' must not set background/border-radius on extras-tab.is-active'
+            );
         }
     }
 }

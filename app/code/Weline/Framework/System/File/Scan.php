@@ -16,14 +16,11 @@ use Weline\Framework\System\File\Data\File;
 
 class Scan
 {
-    private array $dirs = [];
-
-    private int $keepLevel = 0;
-
     /**
-     * 已扫描目录的 realpath 集合，防止符号链接循环导致无限递归
+     * Flat listing buffer for {@see scanDir()} only.
+     * Must not be used by {@see scanDirTree()} — that walk owns its own context.
      */
-    private array $visitedRealPaths = [];
+    private array $dirs = [];
 
     /**
      * @DESC         |初始化
@@ -33,25 +30,8 @@ class Scan
     public function __init()
     {
         $this->dirs = [];
-        $this->keepLevel = 0;
-        $this->visitedRealPaths = [];
     }
 
-    /**
-     * @DESC         |方法描述
-     *
-     * @Author       秋枫雁飞
-     * @Email        aiweline@qq.com
-     * @Forum        https://bbs.aiweline.com
-     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
-     *
-     * 参数区：
-     *
-     * @param string $dirPath
-     * @param int $level
-     *
-     * @return array
-     */
     /**
      * 排除的目录列表（不扫描这些目录）
      */
@@ -82,17 +62,49 @@ class Scan
         '.cache' => true,
     ];
 
+    /**
+     * Recursively collect files under $dirPath.
+     *
+     * Architecture (aligned with {@see dirToArray()} / {@see globFile()}):
+     * each top-level call allocates a private walk context ($dirs + $visited).
+     * The Scan DI singleton must never accumulate tree state across walks —
+     * instance keepLevel/visited used to leak design-theme origins into Default
+     * during bare theme:upgrade, and exceptions could leave keepLevel stuck.
+     *
+     * @param int $level Max walk depth after entry (1 = root files only). 0 = unlimited.
+     *
+     * @return array<string, list<File>>
+     */
     public function scanDirTree(string $dirPath, int $level = 0): array
     {
-        $this->keepLevel += 1;
+        $dirs = [];
+        $visited = [];
+        $this->scanDirTreeInto($dirPath, $level, 1, $dirs, $visited);
+
+        return $dirs;
+    }
+
+    /**
+     * Walk body — protected so contract tests can inject mid-walk failures
+     * without reflecting private state. Production callers use {@see scanDirTree()}.
+     *
+     * @param array<string, list<File>> $dirs
+     * @param array<string, true> $visited realpath → true within this walk only
+     */
+    protected function scanDirTreeInto(
+        string $dirPath,
+        int $level,
+        int $walkDepth,
+        array &$dirs,
+        array &$visited,
+    ): void {
         $dirPath = rtrim($dirPath, DS);
         $rootRealPath = @realpath($dirPath);
-        if ($rootRealPath !== false && isset($this->visitedRealPaths[$rootRealPath])) {
-            $this->keepLevel -= 1;
-            return $this->dirs;
+        if ($rootRealPath !== false && isset($visited[$rootRealPath])) {
+            return;
         }
         if ($rootRealPath !== false) {
-            $this->visitedRealPaths[$rootRealPath] = true;
+            $visited[$rootRealPath] = true;
         }
         if (is_dir($dirPath) && $file_handler = opendir($dirPath)) {
             while (false !== ($file = readdir($file_handler))) {
@@ -113,17 +125,17 @@ class Scan
                         }
                         // 防止符号链接循环导致无限递归
                         $realPath = @realpath($filename);
-                        if ($realPath !== false && isset($this->visitedRealPaths[$realPath])) {
+                        if ($realPath !== false && isset($visited[$realPath])) {
                             continue;
                         }
-                        // 目录层级：是否扫描
+                        // 目录层级：是否扫描（$walkDepth mirrors legacy keepLevel after entry）
                         if ($level) {
-                            if ($this->keepLevel < $level) {
-                                $this->scanDirTree($filename, $level);//递归调用;
+                            if ($walkDepth < $level) {
+                                $this->scanDirTreeInto($filename, $level, $walkDepth + 1, $dirs, $visited);
                             }
                         } else {
                             // 扫描全部目录
-                            $this->scanDirTree($filename);
+                            $this->scanDirTreeInto($filename, $level, $walkDepth + 1, $dirs, $visited);
                         }
                     } else {
                         // 文件
@@ -138,15 +150,12 @@ class Scan
                         $file->setRelate($relateFilename);
                         $file->setSize(filesize($filename));
                         $file->setType(filetype($filename));
-                        $this->dirs[dirname($relateFilename)][] = $file;
+                        $dirs[dirname($relateFilename)][] = $file;
                     }
                 }
             }
             closedir($file_handler);
         }
-        $this->keepLevel -= 1;
-
-        return $this->dirs;
     }
 
     /**

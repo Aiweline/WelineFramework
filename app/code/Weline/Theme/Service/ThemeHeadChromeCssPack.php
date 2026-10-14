@@ -338,7 +338,8 @@ final class ThemeHeadChromeCssPack
                 'statics:ui/weline-foundation.css',
                 'statics:ui/weline-frontend.css',
                 'theme/' . $area . '/assets/css/theme.css',
-                'statics:css/widgets/storefront-shopper-toast-amazon.css',
+                // Style leaves (e.g. *-amazon.css) stay OUT: backend style selection generates CSS;
+                // theme head must never hard-@static them into layout pack.
             ],
             self::PACK_BACKEND => [
                 'theme/' . $area . '/colors/_light.css',
@@ -347,6 +348,7 @@ final class ThemeHeadChromeCssPack
                 'theme/' . $area . '/variables/_auto-literals.css',
                 'statics:ui/weline-foundation.css',
                 'statics:ui/weline-backend.css',
+                'theme/' . $area . '/assets/css/theme.css',
             ],
             self::PACK_TOKENS_PRE => [
                 'theme/' . $area . '/colors/_light.css',

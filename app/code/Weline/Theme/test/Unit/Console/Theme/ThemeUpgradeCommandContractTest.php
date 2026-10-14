@@ -281,4 +281,131 @@ final class ThemeUpgradeCommandContractTest extends TestCase
             '/Users/example/project/pub/static'
         ));
     }
+
+    /**
+     * Design {Module}/email/** is a server-template overlay (same class as templates/) —
+     * path-segment skip must keep it out of fetchThemeFiles even before .phtml exclusion.
+     */
+    public function testFetchThemeFilesSkipsModuleEmailServerTemplates(): void
+    {
+        try {
+            $command = ObjectManager::getInstance(ThemeUpgradeCommand::class);
+        } catch (\Throwable $exception) {
+            self::markTestSkipped('需要框架容器（app/bootstrap_phpunit.php）构建真实命令：' . $exception->getMessage());
+        }
+
+        $workspace = sys_get_temp_dir() . '/weline-theme-email-' . bin2hex(random_bytes(6));
+        $root = $workspace . '/Weline/daocharms';
+        foreach ([
+            $root . '/frontend/assets/css',
+            $root . '/Weline_Smtp/email',
+        ] as $directory) {
+            self::assertTrue(mkdir($directory, 0775, true), 'mkdir ' . $directory);
+        }
+
+        $css = $root . '/frontend/assets/css/theme.css';
+        $email = $root . '/Weline_Smtp/email/shell.phtml';
+        self::assertNotFalse(file_put_contents($css, '.ok{}'));
+        self::assertNotFalse(file_put_contents($email, '<!-- mail -->'));
+
+        try {
+            $theme = (new \ReflectionClass(WelineTheme::class))->newInstanceWithoutConstructor();
+            $theme->setData('path', $root);
+            $theme->setData('origin_path', 'Weline/daocharms');
+
+            $sources = array_keys($command->fetchThemeFiles($theme, $root));
+            self::assertContains($css, $sources);
+            self::assertNotContains($email, $sources);
+        } finally {
+            self::removeTree($workspace);
+        }
+    }
+
+    /**
+     * Out-of-root origin must fail-soft (skip), never throw and abort bare theme:upgrade.
+     */
+    public function testFetchThemeFilesSkipsOutOfRootOriginWithoutThrowing(): void
+    {
+        $source = (string)file_get_contents(dirname(__DIR__, 4) . '/Console/Theme/Upgrade.php');
+        self::assertStringContainsString("DS . 'email' . DS", $source);
+        self::assertStringContainsString('跳过主题外文件（不在允许目录内）', $source);
+        self::assertStringNotContainsString(
+            "throw new ConsoleException(__('主题文件不在允许的主题目录内：')",
+            $source
+        );
+    }
+
+    /**
+     * Default view/theme must not host design-module server-template mirrors
+     * (Vendor_Module/email or Vendor_Module/templates).
+     */
+    public function testDefaultThemeViewTreeHasNoModuleServerTemplateMirrors(): void
+    {
+        $root = dirname(__DIR__, 4) . '/view/theme';
+        self::assertDirectoryExists($root);
+        foreach (glob($root . '/*_*', GLOB_ONLYDIR) ?: [] as $moduleDir) {
+            $base = basename($moduleDir);
+            // Only Vendor_Module-shaped dirs (single underscore vendor/module split).
+            if (!preg_match('/^[A-Za-z0-9]+_[A-Za-z0-9]+$/', $base)) {
+                continue;
+            }
+            self::assertDirectoryDoesNotExist(
+                $moduleDir . '/email',
+                'Default view/theme must not mirror module email: ' . $base
+            );
+            self::assertDirectoryDoesNotExist(
+                $moduleDir . '/templates',
+                'Default view/theme must not mirror module templates: ' . $base
+            );
+        }
+    }
+
+    /**
+     * Shared Scan must not leak a prior design theme's origins into Default fetchThemeFiles.
+     */
+    public function testFetchThemeFilesAfterAnotherThemeDoesNotLeakForeignOrigins(): void
+    {
+        try {
+            $command = ObjectManager::getInstance(ThemeUpgradeCommand::class);
+        } catch (\Throwable $exception) {
+            self::markTestSkipped('需要框架容器：' . $exception->getMessage());
+        }
+
+        $workspace = sys_get_temp_dir() . '/weline-theme-leak-' . bin2hex(random_bytes(6));
+        $design = $workspace . '/design';
+        $default = $workspace . '/default-theme';
+        foreach ([
+            $design . '/frontend/assets/css',
+            $default . '/frontend/assets/css',
+        ] as $directory) {
+            self::assertTrue(mkdir($directory, 0775, true));
+        }
+        $foreignCss = $design . '/frontend/assets/css/foreign.css';
+        $defaultCss = $default . '/frontend/assets/css/theme.css';
+        self::assertNotFalse(file_put_contents($foreignCss, '.foreign{}'));
+        self::assertNotFalse(file_put_contents($defaultCss, '.ok{}'));
+
+        try {
+            $designTheme = (new \ReflectionClass(WelineTheme::class))->newInstanceWithoutConstructor();
+            $designTheme->setData('path', $design);
+            $designTheme->setData('origin_path', 'Weline/design');
+            $command->fetchThemeFiles($designTheme, $design);
+
+            $defaultTheme = (new \ReflectionClass(WelineTheme::class))->newInstanceWithoutConstructor();
+            $defaultTheme->setData('path', $default);
+            $defaultTheme->setData('origin_path', 'Weline/Theme/view/theme');
+            $sources = array_keys($command->fetchThemeFiles($defaultTheme, $default));
+
+            self::assertContains($defaultCss, $sources);
+            self::assertNotContains($foreignCss, $sources);
+            foreach ($sources as $origin) {
+                self::assertStringStartsWith(
+                    rtrim(str_replace('\\', '/', $default), '/') . '/',
+                    str_replace('\\', '/', $origin)
+                );
+            }
+        } finally {
+            self::removeTree($workspace);
+        }
+    }
 }

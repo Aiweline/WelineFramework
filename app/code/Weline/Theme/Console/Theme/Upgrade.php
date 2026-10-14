@@ -498,7 +498,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             /** @var \Weline\Framework\System\File\Data\File $file */
             foreach ($theme_extend_file as $file) {
                 $file_path = $file->getOrigin();
+                // Server templates (design {Module}/templates|email) are resolved from source —
+                // never publish into pub/static. Path-segment skip aligns with StaticPublishExclusion
+                // (.phtml) as defense-in-depth for empty dirs / non-phtml leftovers.
                 if (str_contains($file_path, DS . 'templates' . DS)
+                    || str_contains($file_path, DS . 'email' . DS)
                     || str_ends_with($file_path, DS . 'register.php')
                     || self::isExcludedPublishPath($theme->getPath(), $file_path)
                 ) {
@@ -512,7 +516,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     APP_STATIC_PATH,
                 );
                 if ($destinationDirectory === null) {
-                    throw new ConsoleException(__('主题文件不在允许的主题目录内：') . $file_path);
+                    // Fail-soft: one out-of-root scan entry must not abort bare theme:upgrade.
+                    $this->printing->warning(__('跳过主题外文件（不在允许目录内）：') . $file_path);
+                    continue;
                 }
                 $themes_files_data[$file_path] = $destinationDirectory . DS;
             }
