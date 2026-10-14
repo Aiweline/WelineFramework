@@ -26,16 +26,20 @@ use Weline\Theme\Service\LayoutEntity\WidgetAssetArtifactPublisher;
  * for collectSources composition and merge=off fallbacks in templates.
  * Gated by resource_files/theme_css_merge (auto/on = always on). Source leaves stay editable;
  * runtime join may include theme.css bytes — never write back into source theme.css.
- * Head CSS order (2026-10-14): layout-critical → theme pack (no disk/overlay) → disk →
- * overlay pack → widget layout pack → other. Overlay list stays theme-owned but is emitted
- * as a **separate** pack after disk (not folded into STOREFRONT).
+ * Head CSS order (Amazon-aligned three guns, 2026-10-14):
+ * layout-critical → tokens (① vars/colors) → storefront base (② foundation/theme) →
+ * disk → overlay (③ theme private page leaves, layout-scoped) → widget packs.
+ * Overlay list stays theme-owned; flat lists remain compatible (all pages get full list).
  * Artifacts publish under the **active theme** static namespace and are keyed by
- * **application scope** so themes and scopes never cross-pollute.
+ * **application scope** (+ layout_type for overlay) so themes/scopes/layouts never cross-pollute.
  *
  * work_mode=theme_module_runtime
  */
 final class ThemeHeadChromeCssPack
 {
+    /** ① Theme variables / light color tokens (blocking first link). */
+    public const PACK_TOKENS = 'tokens';
+    /** ② Global base elements + theme.css (+ deferred dark tokens). */
     public const PACK_STOREFRONT = 'storefront';
     public const PACK_BACKEND = 'backend';
     public const PACK_TOKENS_PRE = 'tokens-pre';
@@ -43,7 +47,7 @@ final class ThemeHeadChromeCssPack
     public const PACK_TOKENS_MINIMAL = 'tokens-minimal';
     public const PACK_TOKENS_BACKEND = 'tokens-backend';
     public const PACK_UI = 'ui';
-    /** Design overlay leaves only — emitted after theme + disk (not inside STOREFRONT). */
+    /** ③ Design theme private leaves — after theme + disk; layout-scoped when manifest has layouts{}. */
     public const PACK_OVERLAY = 'overlay';
 
     /** Design/theme-owned overlay list relative to theme view root. */
@@ -81,15 +85,44 @@ final class ThemeHeadChromeCssPack
         if (!$this->isEnabled($area)) {
             return;
         }
-        $pack = $area === 'backend' ? self::PACK_BACKEND : self::PACK_STOREFRONT;
         try {
-            $this->publishPack($area, $pack, ['include_disk' => false, 'include_theme_overlay' => false]);
-            $this->publishPack($area, self::PACK_OVERLAY, ['include_disk' => false, 'include_theme_overlay' => true]);
+            if ($area === 'backend') {
+                $this->publishPack($area, self::PACK_BACKEND, ['include_disk' => false, 'include_theme_overlay' => false]);
+            } else {
+                $this->publishPack($area, self::PACK_TOKENS, ['include_disk' => false, 'include_theme_overlay' => false]);
+                $this->publishPack($area, self::PACK_STOREFRONT, ['include_disk' => false, 'include_theme_overlay' => false]);
+                foreach ($this->warmOverlayLayoutTypes($area) as $layoutType) {
+                    $this->publishPack($area, self::PACK_OVERLAY, [
+                        'include_disk' => false,
+                        'include_theme_overlay' => true,
+                        'layout_type' => $layoutType,
+                    ]);
+                }
+            }
         } catch (\Throwable $e) {
             if (function_exists('w_log_warning')) {
                 w_log_warning('Theme head chrome CSS warm failed: ' . $e->getMessage());
             }
         }
+    }
+
+    /**
+     * Layout types to pre-warm for overlay packs (common-only + known storefront layouts).
+     *
+     * @return list<string>
+     */
+    private function warmOverlayLayoutTypes(string $area): array
+    {
+        $theme = $this->resolveTheme($area);
+        $manifest = $theme instanceof WelineTheme
+            ? $this->loadThemeOverlayManifest($area, $theme)
+            : ['common' => [], 'layouts' => []];
+        $types = array_keys($manifest['layouts']);
+        if ($types === []) {
+            return [''];
+        }
+        // Always warm empty layout (common-only) plus each declared layout key (incl. *).
+        return array_values(array_unique(array_merge([''], $types)));
     }
 
     /**
@@ -121,6 +154,9 @@ final class ThemeHeadChromeCssPack
         if ($pack === self::PACK_OVERLAY) {
             $attrs .= ' data-weline-theme-overlay="1"';
         }
+        if ($pack === self::PACK_TOKENS) {
+            $attrs .= ' data-weline-theme-tokens="1"';
+        }
 
         return '<link' . $attrs . ' href="' . $safe . '"/>';
     }
@@ -150,18 +186,21 @@ final class ThemeHeadChromeCssPack
         if (!$theme instanceof WelineTheme || (int)$theme->getId() < 1) {
             return false;
         }
-        return $this->collectThemeOverlaySources($area, $theme) !== [];
+        $manifest = $this->loadThemeOverlayManifest($area, $theme);
+
+        return $manifest['common'] !== [] || $manifest['layouts'] !== [];
     }
 
     private function publishPack(string $area, string $pack, array $options): string
     {
         $theme = $this->resolveTheme($area);
-        $sources = $this->collectSources($area, $pack, $theme, $options);
+        $layoutType = $pack === self::PACK_OVERLAY ? $this->resolveLayoutType($options) : '';
+        $sources = $this->collectSources($area, $pack, $theme, $options + ['layout_type' => $layoutType]);
         if ($sources === []) {
             return '';
         }
         // Base Theme shell must never absorb leaves resolved from app/design/* (scope/theme pollution).
-        if ($pack === self::PACK_STOREFRONT && $this->isBaseThemeShell($theme)) {
+        if (in_array($pack, [self::PACK_STOREFRONT, self::PACK_TOKENS], true) && $this->isBaseThemeShell($theme)) {
             $filtered = [];
             foreach ($sources as $source) {
                 $sourcePath = str_replace('\\', '/', (string)($source['path'] ?? ''));
@@ -193,9 +232,10 @@ final class ThemeHeadChromeCssPack
         }
         $scopeFp = $this->resolvePackScopeFingerprint($area);
         $key = hash('sha256', json_encode([
-            'theme-head-chrome-v7',
+            'theme-head-chrome-v8',
             $area,
             $pack,
+            $layoutType,
             $minify,
             (int)($theme?->getId() ?? 0),
             $themeIdentity,
@@ -321,17 +361,20 @@ final class ThemeHeadChromeCssPack
     private function collectSources(string $area, string $pack, ?WelineTheme $theme, array $options): array
     {
         $leaves = match ($pack) {
-            // Industry order inside theme pack: layout/shell CSS → size vars → colors.
-            self::PACK_STOREFRONT => [
-                'statics:ui/weline-foundation.css',
-                'statics:ui/weline-frontend.css',
-                'theme/' . $area . '/assets/css/theme.css',
+            // ① Variables + light tokens only (blocking first gun).
+            self::PACK_TOKENS => [
                 'theme/' . $area . '/variables/_spacing.css',
                 'theme/' . $area . '/variables/_auto-literals.css',
                 'theme/' . $area . '/variables/_typography.css',
                 'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
                 'theme/' . $area . '/colors/_ink.css',
+            ],
+            // ② Global base elements + theme shell (+ dark tokens; not first gun).
+            self::PACK_STOREFRONT => [
+                'statics:ui/weline-foundation.css',
+                'statics:ui/weline-frontend.css',
+                'theme/' . $area . '/assets/css/theme.css',
                 'theme/' . $area . '/colors/_dark.css',
                 // Style leaves (e.g. *-amazon.css) stay OUT: backend style selection generates CSS;
                 // theme head must never hard-@static them into layout pack.
@@ -402,7 +445,7 @@ final class ThemeHeadChromeCssPack
         $includeOverlay = $pack === self::PACK_OVERLAY
             || (($options['include_theme_overlay'] ?? false) && $pack === self::PACK_STOREFRONT);
         if ($includeOverlay) {
-            foreach ($this->collectThemeOverlaySources($area, $theme) as $overlay) {
+            foreach ($this->collectThemeOverlaySources($area, $theme, (string)($options['layout_type'] ?? '')) as $overlay) {
                 $sources[] = $overlay;
             }
         }
@@ -413,12 +456,15 @@ final class ThemeHeadChromeCssPack
     /**
      * @return list<array{label:string,path:string,url:string,content:string,hash:string}>
      */
-    private function collectThemeOverlaySources(string $area, ?WelineTheme $theme): array
+    private function collectThemeOverlaySources(string $area, ?WelineTheme $theme, string $layoutType = ''): array
     {
         if (!$theme instanceof WelineTheme || (int)$theme->getId() < 1) {
             return [];
         }
-        $leaves = $this->loadThemeOverlayLeafList($area, $theme);
+        $leaves = $this->resolveOverlayLeavesForLayout(
+            $this->loadThemeOverlayManifest($area, $theme),
+            $layoutType
+        );
         if ($leaves === []) {
             return [];
         }
@@ -434,51 +480,220 @@ final class ThemeHeadChromeCssPack
     }
 
     /**
-     * @return list<string> theme-relative CSS paths (e.g. theme/frontend/assets/css/hanfu-ink.css)
+     * @return array{common:list<string>,layouts:array<string,list<string>>}
      */
-    private function loadThemeOverlayLeafList(string $area, WelineTheme $theme): array
+    private function loadThemeOverlayManifest(string $area, WelineTheme $theme): array
     {
+        $empty = ['common' => [], 'layouts' => []];
         $module = Env::getInstance()->getModuleList()['Weline_Theme'] ?? null;
         if (!is_array($module)) {
-            return [];
+            return $empty;
         }
         $modulePath = rtrim((string)$module['base_path'], '/\\')
             . '/view/theme/' . $area . '/' . self::OVERLAY_LIST_RELATIVE;
         $absolute = $this->pathResolver->resolveThemeFile($modulePath, $theme);
         if (!is_string($absolute) || $absolute === '' || !is_file($absolute)) {
-            return [];
+            return $empty;
         }
         // Only accept design/theme override — never the missing base stub as brand list.
         $normalizedAbs = str_replace('\\', '/', $absolute);
         $normalizedMod = str_replace('\\', '/', $modulePath);
         if ($normalizedAbs === $normalizedMod) {
-            return [];
+            return $empty;
         }
         try {
             /** @var mixed $list */
             $list = include $absolute;
         } catch (\Throwable) {
-            return [];
+            return $empty;
         }
         if (!is_array($list)) {
-            return [];
+            return $empty;
         }
-        $out = [];
-        foreach ($list as $item) {
-            if (!is_string($item)) {
-                continue;
-            }
+
+        return $this->normalizeOverlayManifest($list);
+    }
+
+    /**
+     * Flat list ⇒ all leaves in common (legacy). Structured ⇒ common + layouts[type].
+     *
+     * @param array<mixed> $list
+     * @return array{common:list<string>,layouts:array<string,list<string>>}
+     */
+    private function normalizeOverlayManifest(array $list): array
+    {
+        $normalizeLeaf = static function (string $item): string {
             $item = ltrim(str_replace('\\', '/', trim($item)), '/');
             if ($item === '' || str_contains($item, '..')) {
-                continue;
+                return '';
             }
             if (!str_starts_with($item, 'theme/')) {
                 $item = 'theme/' . $item;
             }
-            $out[] = $item;
+
+            return $item;
+        };
+        $hasStructure = array_key_exists('common', $list) || array_key_exists('layouts', $list);
+        if (!$hasStructure) {
+            $common = [];
+            foreach ($list as $item) {
+                if (!is_string($item)) {
+                    continue;
+                }
+                $leaf = $normalizeLeaf($item);
+                if ($leaf !== '') {
+                    $common[] = $leaf;
+                }
+            }
+
+            return ['common' => array_values(array_unique($common)), 'layouts' => []];
+        }
+        $common = [];
+        foreach ((array)($list['common'] ?? []) as $item) {
+            if (!is_string($item)) {
+                continue;
+            }
+            $leaf = $normalizeLeaf($item);
+            if ($leaf !== '') {
+                $common[] = $leaf;
+            }
+        }
+        $layouts = [];
+        foreach ((array)($list['layouts'] ?? []) as $type => $items) {
+            if (!is_string($type) || !is_array($items)) {
+                continue;
+            }
+            $type = trim($type);
+            if ($type === '') {
+                continue;
+            }
+            $bucket = [];
+            foreach ($items as $item) {
+                if (!is_string($item)) {
+                    continue;
+                }
+                $leaf = $normalizeLeaf($item);
+                if ($leaf !== '') {
+                    $bucket[] = $leaf;
+                }
+            }
+            if ($bucket !== []) {
+                $layouts[$type] = array_values(array_unique($bucket));
+            }
+        }
+
+        return ['common' => array_values(array_unique($common)), 'layouts' => $layouts];
+    }
+
+    /**
+     * Pick common + the most-specific layouts{} bucket for a layout type.
+     * Exact key first, then dotted base, then path prefixes (account/login → account).
+     *
+     * @param array{common:list<string>,layouts:array<string,list<string>>} $manifest
+     * @return list<string>
+     */
+    public static function selectOverlayLeaves(array $manifest, string $layoutType): array
+    {
+        $common = array_values(array_unique(array_map('strval', $manifest['common'] ?? [])));
+        $layouts = is_array($manifest['layouts'] ?? null) ? $manifest['layouts'] : [];
+        $out = $common;
+        $layoutType = trim(str_replace('\\', '/', $layoutType));
+        foreach (self::overlayLayoutLookupKeys($layoutType) as $key) {
+            if ($key !== '' && isset($layouts[$key]) && is_array($layouts[$key])) {
+                foreach ($layouts[$key] as $leaf) {
+                    if (is_string($leaf) && $leaf !== '') {
+                        $out[] = $leaf;
+                    }
+                }
+                break;
+            }
+        }
+        if (isset($layouts['*']) && is_array($layouts['*'])) {
+            foreach ($layouts['*'] as $leaf) {
+                if (is_string($leaf) && $leaf !== '') {
+                    $out[] = $leaf;
+                }
+            }
         }
 
         return array_values(array_unique($out));
+    }
+
+    /**
+     * Most-specific → least-specific lookup keys for overlay layouts{}.
+     *
+     * @return list<string>
+     */
+    public static function overlayLayoutLookupKeys(string $layoutType): array
+    {
+        $layoutType = trim(str_replace('\\', '/', $layoutType));
+        if ($layoutType === '') {
+            return [];
+        }
+        $keys = [$layoutType];
+        if (str_contains($layoutType, '.')) {
+            $keys[] = trim(explode('.', $layoutType, 2)[0]);
+        }
+        $norm = str_replace('.', '/', $layoutType);
+        $parts = array_values(array_filter(explode('/', $norm), static fn(string $p): bool => $p !== ''));
+        for ($i = count($parts); $i >= 1; --$i) {
+            $keys[] = implode('/', array_slice($parts, 0, $i));
+        }
+
+        return array_values(array_unique(array_filter($keys, static fn(string $k): bool => $k !== '')));
+    }
+
+    /**
+     * @param array{common:list<string>,layouts:array<string,list<string>>} $manifest
+     * @return list<string>
+     */
+    private function resolveOverlayLeavesForLayout(array $manifest, string $layoutType): array
+    {
+        return self::selectOverlayLeaves($manifest, $layoutType);
+    }
+
+    /**
+     * Current page layout_type for overlay scoping.
+     * Prefer explicit option / Template bake, then ThemePageTypeResolver (request/controller/URI).
+     * Empty ⇒ common-only overlay (no guessed "default" bucket).
+     *
+     * @param array<string,mixed> $options
+     */
+    private function resolveLayoutType(array $options): string
+    {
+        $fromOpt = trim((string)($options['layout_type'] ?? ''));
+        if ($fromOpt !== '') {
+            return $fromOpt;
+        }
+        $fromTpl = '';
+        try {
+            $tpl = ObjectManager::getInstance(Template::class);
+            if ($tpl instanceof Template) {
+                foreach (['layoutType', 'theme.current_layout_name', 'layout_type'] as $key) {
+                    $value = trim((string)$tpl->getData($key));
+                    if ($value !== '') {
+                        $fromTpl = $value;
+                        break;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+        if ($fromTpl !== '') {
+            return $fromTpl;
+        }
+        try {
+            /** @var ThemePageTypeResolver $resolver */
+            $resolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
+            // Empty default: undetected pages stay common-only (do not force PAGE_TYPE_DEFAULT).
+            $resolved = trim($resolver->resolveLayoutType(null, null, null, ''));
+            if ($resolved !== '') {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
     }
 
     /**

@@ -547,6 +547,7 @@ pending,等待中
 "部署后命令失败（exit %{1}）：%{2}","部署后命令失败（exit %{1}）：%{2}"
 "Deploy：Webhook 已入队%{1}","Deploy：Webhook 已入队%{1}"
 Deploy：已排队等待进行中发布%{1},Deploy：已排队等待进行中发布%{1}
+Deploy：旧发布任务已作废%{1},Deploy：旧发布任务已作废%{1}
 Deploy：开始消费队列%{1},Deploy：开始消费队列%{1}
 Deploy：开始发布%{1},Deploy：开始发布%{1}
 Deploy：备份中,Deploy：备份中

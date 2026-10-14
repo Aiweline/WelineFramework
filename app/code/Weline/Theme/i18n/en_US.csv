@@ -946,6 +946,11 @@ NEW,NEW
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+件商品,"items of goods"
+展开社交媒体,"Expand social media"
+收起社交媒体,"Collapse social media"
+关闭通知,"Close notification"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1028,7 +1033,6 @@ ERROR,ERROR
 退出登录,"Log out"
 语言,language
 货币,currency
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
@@ -1112,7 +1116,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1141,8 +1144,6 @@ Weline,Weline
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
 精选轮播,"Featured Carousel"
-展开社交媒体,"Expand social media"
-收起社交媒体,"Collapse social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1164,7 +1165,6 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
-关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"

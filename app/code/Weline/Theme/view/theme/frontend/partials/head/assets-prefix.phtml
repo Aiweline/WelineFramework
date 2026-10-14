@@ -1,14 +1,15 @@
 <?php
 /**
- * Route-invariant head prefix (critical → theme → disk → overlay → prepaint).
+ * Route-invariant head prefix (critical → tokens → base → disk → overlay → prepaint).
  * Big widget layout pack is placed after theme/disk/overlay by WidgetAssetHtmlPlacement.
  *
- * Head CSS order (2026-10-14, industry fast+correct):
+ * Head CSS order (Amazon-aligned, 2026-10-14):
  * 1) layout-critical (tiny skeleton)
- * 2) theme pack (shell + vars + colors; no disk/overlay)
- * 3) theme config disk override
- * 4) design overlay pack
- * 5) (later) big layout pack / other CSS via placement
+ * 2) tokens pack (① variables / light colors)
+ * 3) storefront base pack (② foundation + theme.css + dark)
+ * 4) theme config disk override
+ * 5) design overlay pack (③ layout-scoped private leaves)
+ * 6) (later) big layout pack / other CSS via placement
  *
  * work_mode=default_theme — head emission only; pack service is theme_module_runtime.
  *
@@ -28,11 +29,17 @@ try {
 $this->assign('__head_disk_override_html', $diskOverrideHtml);
 
 $headPack = null;
+$tokensPackHtml = null;
 $storefrontPackHtml = null;
 $overlayPackHtml = null;
 try {
     $headPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
+    );
+    $tokensPackHtml = $headPack->tryLinkHtml(
+        'frontend',
+        \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS,
+        ['include_disk' => false, 'include_theme_overlay' => false]
     );
     $storefrontPackHtml = $headPack->tryLinkHtml(
         'frontend',
@@ -46,6 +53,7 @@ try {
     );
 } catch (\Throwable $e) {
     $headPack = null;
+    $tokensPackHtml = null;
     $storefrontPackHtml = null;
     $overlayPackHtml = null;
 }
@@ -65,18 +73,23 @@ try {
 ?>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
 <theme:layout-critical area="frontend"/>
+<?php if ($tokensPackHtml !== null): ?>
+<?= $tokensPackHtml ?>
+<?php endif; ?>
 <?php if ($storefrontPackHtml !== null): ?>
 <?= $storefrontPackHtml ?>
 <?php else: ?>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
-<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<?php if ($tokensPackHtml === null): ?>
 <theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/variables/_auto-literals.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/variables/_typography.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_default.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
+<?php endif; ?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
 <?php endif; ?>
 <?php if (!$diskAbsorbed) { echo $diskOverrideHtml; } ?>

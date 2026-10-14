@@ -134,5 +134,31 @@ final class CrawlerBlockCatalogTest extends TestCase
             'Mozilla/5.0 (compatible; GPTBot/1.0)',
             $rule
         ));
+        self::assertTrue(CrawlerBlockCatalog::isAllowPass(
+            'Mozilla/5.0 (compatible; GPTBot/1.0)',
+            $rule
+        ));
+    }
+
+    public function testIsAllowPassHardFloorForFriendlySearch(): void
+    {
+        $google = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+        self::assertTrue(CrawlerBlockCatalog::isAllowPass($google, []));
+        self::assertTrue(CrawlerBlockCatalog::isAllowPass($google, CrawlerBlockCatalog::defaultRule()));
+        // Even if a site entry tries to block Google, hard floor still passes for ban gate.
+        self::assertTrue(CrawlerBlockCatalog::isAllowPass($google, [
+            'enabled' => true,
+            'entries' => [
+                [
+                    'id' => 'block-google',
+                    'name' => 'Block Google',
+                    'pattern' => '/Googlebot/i',
+                    'action' => 'block',
+                    'enabled' => true,
+                ],
+            ],
+        ]));
+        self::assertFalse(CrawlerBlockCatalog::isAllowPass('curl/8.0', []));
+        self::assertFalse(CrawlerBlockCatalog::isAllowPass('', CrawlerBlockCatalog::defaultRule()));
     }
 }

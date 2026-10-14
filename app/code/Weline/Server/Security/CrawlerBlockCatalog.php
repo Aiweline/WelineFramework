@@ -421,6 +421,46 @@ final class CrawlerBlockCatalog
     }
 
     /**
+     * True when UA is a crawler-policy allow pass (SEO / site allow entries).
+     *
+     * Hard floor: built-in friendly search/social allowlist always passes, even when
+     * a website publishes explicit `entries` (prevents accidental SEO shared_ban).
+     * Site `action=allow` entries also pass. Used by WorkerPolicyKernel to skip
+     * shared_ban / path_scan IP bans — not an Origin-Token or attack-deny bypass.
+     *
+     * @param array<string, mixed> $rule
+     */
+    public static function isAllowPass(string $ua, array $rule = []): bool
+    {
+        $ua = \trim($ua);
+        if ($ua === '') {
+            return false;
+        }
+
+        foreach (self::allowlistPatterns() as $allow) {
+            if (@\preg_match($allow, $ua) === 1) {
+                return true;
+            }
+        }
+
+        if ($rule === []) {
+            return false;
+        }
+
+        $resolved = self::resolveEntries($rule);
+        foreach ($resolved as $entry) {
+            if (($entry['action'] ?? 'block') !== 'allow') {
+                continue;
+            }
+            if (@\preg_match((string)$entry['pattern'], $ua) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Match UA: allow entries win first, then block entries.
      * Legacy rules without `entries` keep the hard friendly allowlist floor.
      *
@@ -433,24 +473,12 @@ final class CrawlerBlockCatalog
             return null;
         }
 
-        $hasExplicitEntries = \is_array($rule['entries'] ?? null) && $rule['entries'] !== [];
-        if (!$hasExplicitEntries) {
-            foreach (self::allowlistPatterns() as $allow) {
-                if (@\preg_match($allow, $ua) === 1) {
-                    return null;
-                }
-            }
+        // Allow pass ⇒ not a crawler_block hit (same semantics as legacy floor).
+        if (self::isAllowPass($ua, $rule)) {
+            return null;
         }
 
         $resolved = self::resolveEntries($rule);
-        foreach ($resolved as $entry) {
-            if (($entry['action'] ?? 'block') !== 'allow') {
-                continue;
-            }
-            if (@\preg_match((string)$entry['pattern'], $ua) === 1) {
-                return null;
-            }
-        }
         foreach ($resolved as $entry) {
             if (($entry['action'] ?? 'block') !== 'block') {
                 continue;

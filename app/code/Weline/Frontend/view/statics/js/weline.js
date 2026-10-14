@@ -1331,8 +1331,52 @@
     }
 
     /**
-     * Theme/UI tip + auto-reload when cookie identity ≠ page bake stamp.
-     * Never uses native window.confirm/alert (no_native_js_dialogs).
+     * Align readable generation cookie to the document bake stamp (host + apex Domain).
+     * html-disk / shared FPC HIT cannot Set-Cookie; a wrong-scope sticky cookie must
+     * not force reload loops against a correct page stamp.
+     * @param {string} pageId
+     * @returns {boolean} true when write attempted
+     */
+    function syncStorefrontGenerationCookieToPage(pageId) {
+        const id = String(pageId || '').trim();
+        if (id === '') {
+            return false;
+        }
+        try {
+            const name = STOREFRONT_GEN_COOKIE;
+            const enc = encodeURIComponent(id);
+            const host = String((location && location.hostname) || '').replace(/^\./, '');
+            document.cookie = name + '=; Path=/; Max-Age=0';
+            if (host) {
+                document.cookie = name + '=; Path=/; Domain=.' + host + '; Max-Age=0; Secure';
+                document.cookie = name + '=; Path=/; Domain=' + host + '; Max-Age=0; Secure';
+                // Apex sibling (.example.com) when on www.example.com
+                const parts = host.split('.');
+                if (parts.length >= 2) {
+                    const apex = parts.slice(-2).join('.');
+                    if (apex && apex !== host) {
+                        document.cookie = name + '=; Path=/; Domain=.' + apex + '; Max-Age=0; Secure';
+                    }
+                }
+            }
+            document.cookie = name + '=' + enc + '; Path=/; Max-Age=31536000; Secure; SameSite=Lax';
+            if (host) {
+                const parts = host.split('.');
+                if (parts.length >= 2) {
+                    const apex = parts.slice(-2).join('.');
+                    document.cookie = name + '=' + enc
+                        + '; Path=/; Domain=.' + apex + '; Max-Age=31536000; Secure; SameSite=Lax';
+                }
+            }
+            return true;
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    /**
+     * Theme/UI tip + auto-reload when *server* generation left the page behind
+     * (ScopeBootstrap / QueryBin). Never uses native window.confirm/alert.
      * @param {string} [message]
      * @returns {boolean} true when reload started (or tip shown with reload attempted)
      */
@@ -1373,15 +1417,25 @@
     }
 
     /**
-     * @returns {boolean} true when cookie and page stamp both non-empty and differ
+     * Cookie vs page bake stamp: page stamp is authority for this HTML document.
+     * Mismatch → sync cookie to page (no toast/reload). True publish advance is
+     * detected when ScopeBootstrap/QueryBin server id ≠ page id.
+     * @returns {boolean} true when a mismatch was healed by cookie sync
      */
     function checkStorefrontGenerationIdentity() {
         const cookieId = readStorefrontGenerationCookie();
         const pageId = readPageStorefrontGenerationId();
-        if (cookieId === '' || pageId === '' || cookieId === pageId) {
+        if (pageId === '') {
             return false;
         }
-        return promptStorefrontGenerationRefresh();
+        if (cookieId === '' || cookieId === pageId) {
+            if (cookieId === '' && pageId !== '') {
+                syncStorefrontGenerationCookieToPage(pageId);
+            }
+            return false;
+        }
+        syncStorefrontGenerationCookieToPage(pageId);
+        return true;
     }
 
     // 挂载到全局
@@ -1400,6 +1454,7 @@
     Weline.shouldDeferAttributeModule = shouldDeferAttributeModule;
     Weline.observeMutationsCoalesced = observeMutationsCoalesced;
     Weline.readStorefrontGenerationCookie = readStorefrontGenerationCookie;
+    Weline.syncStorefrontGenerationCookieToPage = syncStorefrontGenerationCookieToPage;
     Weline.promptStorefrontGenerationRefresh = promptStorefrontGenerationRefresh;
     Weline.checkStorefrontGenerationIdentity = checkStorefrontGenerationIdentity;
     Weline.dom = Object.assign({}, Weline.dom || {}, {

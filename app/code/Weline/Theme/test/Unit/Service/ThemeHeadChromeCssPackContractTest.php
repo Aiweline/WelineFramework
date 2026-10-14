@@ -9,7 +9,7 @@ use Weline\Theme\Service\ThemeHeadChromeCssPack;
 use Weline\Theme\Service\ThemeResourceGateway;
 
 /**
- * Head chrome CSS pack: single STOREFRONT/BACKEND shells; theme overlay belongs to active theme.
+ * Head chrome CSS: tokens → storefront base → layout-scoped overlay (Amazon-aligned).
  */
 final class ThemeHeadChromeCssPackContractTest extends TestCase
 {
@@ -23,56 +23,86 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         return $content;
     }
 
-    public function testStorefrontPackJoinsTokensUiThemeWithoutToastStyleShell(): void
+    /** @return list<string> */
+    private function flattenOverlayManifest(mixed $list): array
+    {
+        self::assertIsArray($list);
+        if (array_key_exists('common', $list) || array_key_exists('layouts', $list)) {
+            $out = [];
+            foreach ((array)($list['common'] ?? []) as $item) {
+                if (is_string($item) && $item !== '') {
+                    $out[] = $item;
+                }
+            }
+            foreach ((array)($list['layouts'] ?? []) as $items) {
+                if (!is_array($items)) {
+                    continue;
+                }
+                foreach ($items as $item) {
+                    if (is_string($item) && $item !== '') {
+                        $out[] = $item;
+                    }
+                }
+            }
+
+            return array_values(array_unique($out));
+        }
+        $out = [];
+        foreach ($list as $item) {
+            if (is_string($item) && $item !== '') {
+                $out[] = $item;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    public function testStorefrontPackIsBaseOnlyAndTokensHoldVariables(): void
     {
         $src = $this->read('Service/ThemeHeadChromeCssPack.php');
+        self::assertStringContainsString('PACK_TOKENS', $src);
         self::assertStringContainsString('PACK_STOREFRONT', $src);
         self::assertStringContainsString('PACK_BACKEND', $src);
-        self::assertStringContainsString('colors/_light.css', $src);
-        self::assertStringContainsString('colors/_ink.css', $src);
-        self::assertStringContainsString('variables/_spacing.css', $src);
-        self::assertStringContainsString('variables/_auto-literals.css', $src);
-        self::assertStringContainsString('weline-foundation.css', $src);
-        self::assertStringContainsString('assets/css/theme.css', $src);
-        // Style leaves stay out of layout pack (backend style selection generates CSS).
+        self::assertStringContainsString('theme-head-chrome-v8', $src);
+        self::assertStringContainsString('normalizeOverlayManifest', $src);
+        self::assertStringContainsString('resolveOverlayLeavesForLayout', $src);
+        self::assertStringContainsString('selectOverlayLeaves', $src);
+        self::assertStringContainsString('ThemePageTypeResolver', $src);
+        self::assertStringContainsString('resolveLayoutType', $src);
         self::assertStringContainsString('Style leaves', $src);
         self::assertStringContainsString('never hard-@static', $src);
         self::assertDoesNotMatchRegularExpression(
             "/PACK_STOREFRONT\\s*=>\\s*\\[[^\\]]*storefront-shopper-toast-amazon\\.css/s",
             $src,
         );
-        self::assertMatchesRegularExpression(
-            "/PACK_BACKEND\\s*=>\\s*\\[[\\s\\S]*?assets\\/css\\/theme\\.css/s",
-            $src,
-        );
-        self::assertStringContainsString('theme_css_merge', $src);
-        self::assertStringContainsString('warmAreaPacks', $src);
-        self::assertStringContainsString('theme-head-chrome-v7', $src);
-        self::assertStringContainsString('PACK_OVERLAY', $src);
-        self::assertStringContainsString('themeOverlayAbsorbed', $src);
-        self::assertStringContainsString('OVERLAY_LIST_RELATIVE', $src);
-        self::assertStringContainsString('collectThemeOverlaySources', $src);
-        // Theme pack leaf order: foundation/theme before variables before colors.
+
+        $tokens = strpos($src, "self::PACK_TOKENS => [");
         $sf = strpos($src, "self::PACK_STOREFRONT => [");
+        self::assertNotFalse($tokens);
         self::assertNotFalse($sf);
-        $sfBlock = substr($src, $sf, 900);
-        $foundation = strpos($sfBlock, 'weline-foundation.css');
-        $spacing = strpos($sfBlock, 'variables/_spacing.css');
-        $light = strpos($sfBlock, 'colors/_light.css');
-        self::assertNotFalse($foundation);
-        self::assertNotFalse($spacing);
-        self::assertNotFalse($light);
-        self::assertLessThan($spacing, $foundation, 'layout/shell CSS before variables');
-        self::assertLessThan($light, $spacing, 'variables before colors');
+        self::assertGreaterThan($tokens, $sf);
+        $tokensBlock = substr($src, $tokens, $sf - $tokens);
+        self::assertStringContainsString('variables/_spacing.css', $tokensBlock);
+        self::assertStringContainsString('colors/_light.css', $tokensBlock);
+        self::assertStringContainsString('colors/_ink.css', $tokensBlock);
+        self::assertStringNotContainsString('weline-foundation.css', $tokensBlock);
+        self::assertStringNotContainsString('assets/css/theme.css', $tokensBlock);
+        self::assertStringNotContainsString('colors/_dark.css', $tokensBlock);
+
+        $sfEnd = strpos($src, 'self::PACK_BACKEND => [', $sf);
+        self::assertNotFalse($sfEnd);
+        $sfBlock = substr($src, $sf, $sfEnd - $sf);
+        self::assertStringContainsString('weline-foundation.css', $sfBlock);
+        self::assertStringContainsString('assets/css/theme.css', $sfBlock);
+        self::assertStringContainsString('colors/_dark.css', $sfBlock);
+        self::assertStringNotContainsString('variables/_spacing.css', $sfBlock);
+        self::assertStringNotContainsString('colors/_light.css', $sfBlock);
+
         self::assertDoesNotMatchRegularExpression(
             '/\$attrs\s*\.=\\s*[\'"] data-weline-layout-css/',
             $this->extractTryLinkAttrsSnippet($src),
             'theme pack link must not set data-weline-layout-css'
         );
-        self::assertStringContainsString('resolvePackScopeFingerprint', $src);
-        self::assertStringContainsString('artifactPathBelongsToTheme', $src);
-        self::assertStringContainsString('ThemeApplicationContext', $src);
-        self::assertStringNotContainsString("['css_merge']", $src);
     }
 
     public function testGatewayPublishesHeadChromeUnderActiveThemeNamespace(): void
@@ -92,23 +122,25 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
 
     public function testStorefrontPackEmitsBeforeStylesAfterHook(): void
     {
-        // 2026-10-14：critical → theme pack → disk → overlay → early JS.
-        // Big widget layout pack is placed after theme chrome by WidgetAssetHtmlPlacement.
         $prefix = $this->read('view/theme/frontend/partials/head/assets-prefix.phtml');
+        $tokens = strpos($prefix, '<?= $tokensPackHtml');
         $emitPack = strpos($prefix, '<?= $storefrontPackHtml');
         $critical = strpos($prefix, 'theme:layout-critical');
         $diskEcho = strpos($prefix, 'echo $diskOverrideHtml');
         $overlayEmit = strpos($prefix, '<?= $overlayPackHtml');
         $earlyJs = strpos($prefix, '<?= $earlyJsHtml');
+        self::assertNotFalse($tokens);
         self::assertNotFalse($emitPack);
         self::assertNotFalse($critical);
         self::assertNotFalse($earlyJs);
         self::assertNotFalse($diskEcho);
-        self::assertLessThan($emitPack, $critical, 'theme pack must come after critical CSS');
-        self::assertLessThan($diskEcho, $emitPack, 'disk override after theme pack');
+        self::assertLessThan($tokens, $critical, 'tokens after critical');
+        self::assertLessThan($emitPack, $tokens, 'storefront base after tokens');
+        self::assertLessThan($diskEcho, $emitPack, 'disk after storefront base');
         self::assertNotFalse($overlayEmit);
         self::assertLessThan($overlayEmit, $diskEcho, 'overlay after disk');
         self::assertLessThan($earlyJs, $overlayEmit, 'early JS after overlay');
+        self::assertStringContainsString('PACK_TOKENS', $prefix);
         self::assertStringContainsString('PACK_STOREFRONT', $prefix);
         self::assertStringContainsString('PACK_OVERLAY', $prefix);
         self::assertStringContainsString("'include_disk' => false", $prefix);
@@ -116,12 +148,8 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
 
         $suffix = $this->read('view/theme/frontend/partials/head/assets-suffix.phtml');
         self::assertStringContainsString('Weline_Theme::frontend::partials::head::styles-after', $suffix);
-        self::assertStringNotContainsString(
-            '<?= $storefrontPackHtml',
-            $suffix,
-            'theme pack must not be emitted twice from suffix when pack path succeeded',
-        );
-        self::assertStringContainsString('if ($storefrontPackHtml === null)', $suffix);
+        self::assertStringContainsString('PACK_TOKENS', $suffix);
+        self::assertStringContainsString('if ($tokensPackHtml === null && $storefrontPackHtml === null)', $suffix);
         self::assertStringNotContainsString('storefront-shopper-toast-amazon.css', $suffix);
     }
 
@@ -130,11 +158,12 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         $fn = strpos($src, 'function tryLinkHtml');
         self::assertNotFalse($fn);
 
-        return substr($src, $fn, 1200);
+        return substr($src, $fn, 1400);
     }
 
     public function testPackClassConstantsMatchHeadWiring(): void
     {
+        self::assertSame('tokens', ThemeHeadChromeCssPack::PACK_TOKENS);
         self::assertSame('storefront', ThemeHeadChromeCssPack::PACK_STOREFRONT);
         self::assertSame('backend', ThemeHeadChromeCssPack::PACK_BACKEND);
         self::assertSame('tokens-pre', ThemeHeadChromeCssPack::PACK_TOKENS_PRE);
@@ -155,9 +184,7 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
             $skinPath = $designRoot . '/' . $theme . '/frontend/partials/head/' . $skin;
             self::assertFileExists($overlayPath, $theme . ' overlay list missing');
             self::assertFileExists($skinPath, $theme . ' skin missing');
-            /** @var list<string> $leaves */
-            $leaves = include $overlayPath;
-            self::assertIsArray($leaves);
+            $leaves = $this->flattenOverlayManifest(include $overlayPath);
             self::assertNotEmpty($leaves, $theme . ' overlay must list brand CSS');
             $skinSrc = (string)file_get_contents($skinPath);
             self::assertStringContainsString('themeOverlayAbsorbed', $skinSrc);
@@ -169,7 +196,6 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
                     $theme . ' skin fallback must keep ' . $basename . ' when merge off',
                 );
             }
-            // Absorb gate must wrap every overlay leaf — no force-emit after endif (duplicate pack).
             self::assertMatchesRegularExpression(
                 '/if\s*\(\s*!?\s*\$absorbOverlayCss\s*\)\s*:\s*\?>[\s\S]*endif/i',
                 $skinSrc,
@@ -187,6 +213,42 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         }
     }
 
+    public function testHanfuOverlayScopesHomepageCheckoutAccount(): void
+    {
+        $path = dirname(__DIR__, 6) . '/design/Weline/hanfu/frontend/partials/head/theme-head-css-overlay.php';
+        self::assertFileExists($path);
+        /** @var array{common?:list<string>,layouts?:array<string,list<string>>} $manifest */
+        $manifest = include $path;
+        self::assertArrayHasKey('common', $manifest);
+        self::assertArrayHasKey('layouts', $manifest);
+        $common = implode("\n", $manifest['common']);
+        self::assertStringContainsString('hanfu-ui-sot.css', $common);
+        self::assertStringNotContainsString('hanfu-homepage.css', $common);
+        self::assertStringNotContainsString('hanfu-checkout.css', $common);
+        self::assertStringNotContainsString('hanfu-account.css', $common);
+        self::assertStringContainsString('hanfu-homepage.css', implode("\n", $manifest['layouts']['homepage'] ?? []));
+        self::assertStringContainsString('hanfu-checkout.css', implode("\n", $manifest['layouts']['checkout'] ?? []));
+        self::assertStringContainsString('hanfu-account.css', implode("\n", $manifest['layouts']['account'] ?? []));
+
+        $homeLeaves = implode("\n", ThemeHeadChromeCssPack::selectOverlayLeaves($manifest, 'homepage'));
+        self::assertStringContainsString('hanfu-ui-sot.css', $homeLeaves);
+        self::assertStringContainsString('hanfu-homepage.css', $homeLeaves);
+        self::assertStringNotContainsString('hanfu-checkout.css', $homeLeaves);
+        self::assertStringNotContainsString('hanfu-account.css', $homeLeaves);
+
+        $checkoutLeaves = implode("\n", ThemeHeadChromeCssPack::selectOverlayLeaves($manifest, 'checkout'));
+        self::assertStringContainsString('hanfu-checkout.css', $checkoutLeaves);
+        self::assertStringNotContainsString('hanfu-homepage.css', $checkoutLeaves);
+
+        $accountLogin = implode("\n", ThemeHeadChromeCssPack::selectOverlayLeaves($manifest, 'account/login'));
+        self::assertStringContainsString('hanfu-account.css', $accountLogin);
+        self::assertStringNotContainsString('hanfu-checkout.css', $accountLogin);
+
+        $commonOnly = implode("\n", ThemeHeadChromeCssPack::selectOverlayLeaves($manifest, ''));
+        self::assertStringContainsString('hanfu-ui-sot.css', $commonOnly);
+        self::assertStringNotContainsString('hanfu-homepage.css', $commonOnly);
+    }
+
     /**
      * Shared extras-tab geometry/active fill belongs to Theme mini-cart-drawer.css.
      * Design overlay leaves + design statics/css must not reintroduce pill chrome.
@@ -196,14 +258,11 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         $hanfuRoot = dirname(__DIR__, 6) . '/design/Weline/hanfu';
         $overlayPath = $hanfuRoot . '/frontend/partials/head/theme-head-css-overlay.php';
         self::assertFileExists($overlayPath);
-        /** @var list<string> $leaves */
-        $leaves = include $overlayPath;
-        self::assertIsArray($leaves);
+        $leaves = $this->flattenOverlayManifest(include $overlayPath);
 
         $cssPaths = [];
         foreach ($leaves as $leaf) {
             $rel = (string)$leaf;
-            // Overlay entries are theme-relative like theme/frontend/assets/css/hanfu-checkout.css
             $candidate = $hanfuRoot . '/frontend/' . preg_replace('#^theme/frontend/#', '', $rel);
             if (is_file($candidate) && str_ends_with($candidate, '.css')) {
                 $cssPaths[] = $candidate;

@@ -19,11 +19,17 @@ if ($diskOverrideHtml === '') {
     }
 }
 $headPack = null;
+$tokensPackHtml = null;
 $storefrontPackHtml = null;
 $overlayPackHtml = null;
 try {
     $headPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
+    );
+    $tokensPackHtml = $headPack->tryLinkHtml(
+        'frontend',
+        \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS,
+        ['include_disk' => false, 'include_theme_overlay' => false]
     );
     $storefrontPackHtml = $headPack->tryLinkHtml(
         'frontend',
@@ -37,6 +43,7 @@ try {
     );
 } catch (\Throwable $e) {
     $headPack = null;
+    $tokensPackHtml = null;
     $storefrontPackHtml = null;
     $overlayPackHtml = null;
 }
@@ -50,16 +57,16 @@ try {
     $afterCssJsHtml = null;
 }
 ?>
-<?php if ($storefrontPackHtml === null): ?>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
-<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<?php if ($tokensPackHtml === null && $storefrontPackHtml === null): ?>
 <theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/variables/_auto-literals.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/variables/_typography.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_default.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
 <?php if (!$diskAbsorbed) { echo $diskOverrideHtml; } ?>
 <?php if ($overlayPackHtml !== null): ?>

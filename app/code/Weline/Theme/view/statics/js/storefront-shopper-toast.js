@@ -6,9 +6,101 @@
         return;
     }
 
-    var REGION_CLASS = 'w-amz-shopper-notice-region';
-    var LEGACY_REGION_CLASS = 'w-amz-cart-added-region';
+    var REGION_CLASS = 'w-shopper-notice-region';
+    var LEGACY_REGION_CLASS = 'w-amz-shopper-notice-region';
+    var LEGACY_CART_REGION = 'w-amz-cart-added-region';
+    var CART_REGION_CLASS = 'w-shopper-cart-added-region';
     var DEFAULT_DISMISS_MS = 5200;
+    var CSS_STAMP = '20261015-shopper-toast-arch-v1';
+    var CSS_ATTR = 'data-weline-shopper-toast-live';
+    var W18N_RE = /\[\[W18N:([A-Za-z0-9_-]+):([A-Za-z0-9_-]+)\]\]/g;
+    var toastCssReady = false;
+
+    function b64urlDecode(encoded) {
+        try {
+            var s = String(encoded || '').replace(/-/g, '+').replace(/_/g, '/');
+            while (s.length % 4) {
+                s += '=';
+            }
+            return decodeURIComponent(escape(atob(s)));
+        } catch (e) {
+            return '';
+        }
+    }
+
+    /** Peel nested/polluted [[W18N:…]] before textContent (inline-edit markers). */
+    function unwrapW18nDisplay(raw) {
+        var s = String(raw == null ? '' : raw);
+        var guard = 0;
+        while (guard++ < 8 && s.indexOf('[[W18N:') !== -1) {
+            W18N_RE.lastIndex = 0;
+            var next = s.replace(W18N_RE, function (_, srcB64, trB64) {
+                return b64urlDecode(trB64) || b64urlDecode(srcB64) || '';
+            });
+            if (next === s) {
+                break;
+            }
+            s = next;
+        }
+        return s;
+    }
+
+    function resolvePublicStaticUrl(devPath) {
+        try {
+            var cfgNode = doc.getElementById('weline-frontend-runtime-config');
+            if (cfgNode && cfgNode.textContent) {
+                var cfg = JSON.parse(cfgNode.textContent);
+                if (cfg && cfg.env && cfg.env.useProductionPublicUrls) {
+                    var m = String(devPath).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
+                    if (m) {
+                        return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                    }
+                }
+            }
+        } catch (err) { /* keep DEV path */ }
+        return String(devPath);
+    }
+
+    function ensureStylesheet() {
+        if (toastCssReady) {
+            var existingLive = doc.querySelector('link[' + CSS_ATTR + '="1"]');
+            if (existingLive) {
+                return;
+            }
+        }
+        var assetVersion = '';
+        try {
+            var cfgNode = doc.getElementById('weline-frontend-runtime-config');
+            if (cfgNode && cfgNode.textContent) {
+                var cfg = JSON.parse(cfgNode.textContent);
+                assetVersion = String((cfg && cfg.assetVersion) || '');
+            }
+        } catch (err) {
+            assetVersion = '';
+        }
+        var href = resolvePublicStaticUrl(
+            '/Weline/Theme/view/statics/css/widgets/storefront-shopper-toast.css',
+        ) + '?v=' + CSS_STAMP;
+        if (assetVersion) {
+            href += '&_weline_dev=' + encodeURIComponent(assetVersion);
+        }
+        var existing = doc.querySelector(
+            'link[' + CSS_ATTR + '="1"], link[rel="stylesheet"][href*="storefront-shopper-toast"]',
+        );
+        if (existing) {
+            if (String(existing.getAttribute('href') || '').indexOf(CSS_STAMP) === -1) {
+                existing.setAttribute('href', href);
+                existing.setAttribute(CSS_ATTR, '1');
+            }
+        } else {
+            var link = doc.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.setAttribute(CSS_ATTR, '1');
+            doc.head.appendChild(link);
+        }
+        toastCssReady = true;
+    }
 
     function readCloseLabel() {
         var lang = String(
@@ -31,13 +123,15 @@
             if (!bar) {
                 return fallback;
             }
-            var value = String(bar.getAttribute(name) || '').trim();
+            var value = unwrapW18nDisplay(String(bar.getAttribute(name) || '').trim());
             return value || fallback;
         };
         var compareLink = bar ? bar.querySelector('a[href*="/compare"]') : null;
         return {
             compare: readAttr('data-i18n-compare-label', isZh ? '对比' : 'Compare'),
-            startCompare: compareLink ? compareLink.textContent.trim() : (isZh ? '开始对比' : 'Compare now'),
+            startCompare: compareLink
+                ? unwrapW18nDisplay(compareLink.textContent).trim()
+                : (isZh ? '开始对比' : 'Compare now'),
             continueShopping: isZh ? '继续购物' : 'Continue shopping',
             compareUrl: compareLink ? (compareLink.getAttribute('href') || '/compare') : '/compare',
             close: readCloseLabel(),
@@ -72,16 +166,17 @@
     }
 
     function ensureRegion() {
+        ensureStylesheet();
         var host = doc.querySelector('.' + REGION_CLASS)
-            || doc.querySelector('.' + LEGACY_REGION_CLASS);
+            || doc.querySelector('.' + LEGACY_REGION_CLASS)
+            || doc.querySelector('.' + LEGACY_CART_REGION)
+            || doc.querySelector('.' + CART_REGION_CLASS);
         if (host) {
-            if (!host.classList.contains(REGION_CLASS)) {
-                host.classList.add(REGION_CLASS);
-            }
+            host.classList.add(REGION_CLASS, CART_REGION_CLASS);
             return host;
         }
         host = doc.createElement('div');
-        host.className = REGION_CLASS + ' ' + LEGACY_REGION_CLASS;
+        host.className = REGION_CLASS + ' ' + CART_REGION_CLASS;
         host.setAttribute('aria-live', 'polite');
         host.setAttribute('aria-atomic', 'false');
         doc.body.appendChild(host);
@@ -132,6 +227,7 @@
     }
 
     function mountActionPanel(panelClassName, buildBody) {
+        ensureStylesheet();
         var host = ensureRegion();
         positionRegion(host);
         host.querySelectorAll('.' + panelClassName.split(/\s+/)[0]).forEach(function (existing) {
@@ -143,24 +239,24 @@
         panel.setAttribute('role', 'status');
 
         var header = doc.createElement('div');
-        header.className = 'w-amz-cart-added__header';
+        header.className = 'w-shopper-cart-added__header';
 
         var titleWrap = doc.createElement('div');
-        titleWrap.className = 'w-amz-cart-added__title-wrap';
+        titleWrap.className = 'w-shopper-cart-added__title-wrap';
 
         var check = doc.createElement('span');
-        check.className = 'w-amz-cart-added__check';
+        check.className = 'w-shopper-cart-added__check';
         check.setAttribute('aria-hidden', 'true');
         check.textContent = '✓';
 
         var title = doc.createElement('strong');
-        title.className = 'w-amz-cart-added__title';
+        title.className = 'w-shopper-cart-added__title';
 
         titleWrap.append(check, title);
 
         var close = doc.createElement('button');
         close.type = 'button';
-        close.className = 'w-amz-cart-added__close';
+        close.className = 'w-shopper-cart-added__close';
         close.setAttribute('aria-label', readCloseLabel());
         close.textContent = '×';
 
@@ -186,41 +282,42 @@
     function buildCompactNotice(message, options) {
         options = options || {};
         var tone = normalizeTone(options.tone) || 'success';
-        var text = String(message || '').trim();
+        var text = unwrapW18nDisplay(String(message || '')).trim();
         if (text === '') {
             return null;
         }
 
+        ensureStylesheet();
         var host = ensureRegion();
         positionRegion(host);
-        host.querySelectorAll('.w-amz-shopper-toast').forEach(function (existing) {
+        host.querySelectorAll('.w-shopper-toast, .w-amz-shopper-toast').forEach(function (existing) {
             dismissPanel(existing);
         });
 
         var panel = doc.createElement('aside');
-        panel.className = 'w-amz-shopper-toast w-amz-shopper-toast--' + tone;
+        panel.className = 'w-shopper-toast w-shopper-toast--' + tone;
         panel.setAttribute('role', tone === 'danger' ? 'alert' : 'status');
 
         var header = doc.createElement('div');
-        header.className = 'w-amz-shopper-toast__header';
+        header.className = 'w-shopper-toast__header';
 
         var titleWrap = doc.createElement('div');
-        titleWrap.className = 'w-amz-shopper-toast__title-wrap';
+        titleWrap.className = 'w-shopper-toast__title-wrap';
 
         var check = doc.createElement('span');
-        check.className = 'w-amz-shopper-toast__check';
+        check.className = 'w-shopper-toast__check';
         check.setAttribute('aria-hidden', 'true');
         check.textContent = tone === 'danger' ? '!' : '✓';
 
         var title = doc.createElement('strong');
-        title.className = 'w-amz-shopper-toast__title';
+        title.className = 'w-shopper-toast__title';
         title.textContent = text;
 
         titleWrap.append(check, title);
 
         var close = doc.createElement('button');
         close.type = 'button';
-        close.className = 'w-amz-shopper-toast__close';
+        close.className = 'w-shopper-toast__close';
         close.setAttribute('aria-label', readCloseLabel());
         close.textContent = '×';
 
@@ -248,7 +345,7 @@
 
     function buildCompareAddedNotice(message, options) {
         options = options || {};
-        var text = String(message || '').trim();
+        var text = unwrapW18nDisplay(String(message || '')).trim();
         if (text === '') {
             return null;
         }
@@ -256,33 +353,33 @@
         var labels = readCompareNoticeLabels();
         var count = Math.max(0, Number(options.count) || 0);
         var max = Math.max(1, Number(options.max) || 8);
-        var mounted = mountActionPanel('w-amz-cart-added w-amz-compare-added', function (panel, title, dismiss) {
+        var mounted = mountActionPanel('w-shopper-cart-added w-shopper-compare-added', function (panel, title, dismiss) {
             title.textContent = text;
 
             var subtotalRow = doc.createElement('div');
-            subtotalRow.className = 'w-amz-cart-added__subtotal';
+            subtotalRow.className = 'w-shopper-cart-added__subtotal';
 
             var subtotalLabel = doc.createElement('span');
-            subtotalLabel.className = 'w-amz-cart-added__subtotal-label';
+            subtotalLabel.className = 'w-shopper-cart-added__subtotal-label';
             subtotalLabel.textContent = formatCompareCountLabel(count, labels.compare);
 
             var subtotalAmount = doc.createElement('span');
-            subtotalAmount.className = 'w-amz-cart-added__subtotal-amount';
+            subtotalAmount.className = 'w-shopper-cart-added__subtotal-amount';
             subtotalAmount.textContent = count + '/' + max;
 
             subtotalRow.append(subtotalLabel, subtotalAmount);
 
             var actions = doc.createElement('div');
-            actions.className = 'w-amz-cart-added__actions';
+            actions.className = 'w-shopper-cart-added__actions';
 
             var startCompare = doc.createElement('a');
-            startCompare.className = 'w-amz-cart-added__btn w-amz-cart-added__btn--checkout';
+            startCompare.className = 'w-shopper-cart-added__btn w-shopper-cart-added__btn--checkout';
             startCompare.href = labels.compareUrl;
             startCompare.textContent = labels.startCompare;
 
             var continueShopping = doc.createElement('button');
             continueShopping.type = 'button';
-            continueShopping.className = 'w-amz-cart-added__btn w-amz-cart-added__btn--cart';
+            continueShopping.className = 'w-shopper-cart-added__btn w-shopper-cart-added__btn--cart';
             continueShopping.textContent = labels.continueShopping;
             continueShopping.addEventListener('click', dismiss);
 
@@ -300,8 +397,10 @@
 
     global.Weline = global.Weline || {};
     global.Weline.ShopperNotice = {
+        ensureStylesheet: ensureStylesheet,
         ensureRegion: ensureRegion,
         positionRegion: positionRegion,
+        unwrapW18nDisplay: unwrapW18nDisplay,
         showCompact: buildCompactNotice,
         showCompareAdded: buildCompareAddedNotice,
         dismiss: dismissPanel,
@@ -309,7 +408,7 @@
 
     function patchToast() {
         var ui = global.Weline && global.Weline.UI;
-        if (!ui || !ui.toast || ui.toast.__shopperAmazonPatched) {
+        if (!ui || !ui.toast || ui.toast.__shopperToastPatched || ui.toast.__shopperAmazonPatched) {
             return;
         }
         if (typeof ui.toast.show !== 'function') {
@@ -324,9 +423,9 @@
             info: typeof ui.toast.info === 'function' ? ui.toast.info.bind(ui.toast) : null,
         };
 
-        function delegateAmazon(message, options, fallbackFn, defaultTone) {
+        function delegateShopper(message, options, fallbackFn, defaultTone) {
             options = options || {};
-            if (options.amazon === false || options.title) {
+            if (options.amazon === false || options.shopper === false || options.title) {
                 return fallbackFn(message, options);
             }
             var tone = normalizeTone(options.tone != null ? options.tone : defaultTone);
@@ -337,37 +436,40 @@
         }
 
         ui.toast.show = function (message, options) {
-            return delegateAmazon(message, options, originals.show, 'neutral');
+            return delegateShopper(message, options, originals.show, 'neutral');
         };
         if (originals.success) {
             ui.toast.success = function (message, options) {
-                return delegateAmazon(message, options, originals.success, 'success');
+                return delegateShopper(message, options, originals.success, 'success');
             };
         }
         if (originals.warning) {
             ui.toast.warning = function (message, options) {
-                return delegateAmazon(message, options, originals.warning, 'warning');
+                return delegateShopper(message, options, originals.warning, 'warning');
             };
         }
         if (originals.error) {
             ui.toast.error = function (message, options) {
-                return delegateAmazon(message, options, originals.error, 'danger');
+                return delegateShopper(message, options, originals.error, 'danger');
             };
         }
         if (originals.info) {
             ui.toast.info = function (message, options) {
-                return delegateAmazon(message, options, originals.info, 'info');
+                return delegateShopper(message, options, originals.info, 'info');
             };
         }
 
+        ui.toast.__shopperToastPatched = true;
         ui.toast.__shopperAmazonPatched = true;
     }
 
     function boot() {
+        ensureStylesheet();
         var attempts = 0;
         (function tryPatch() {
             patchToast();
-            if (!global.Weline || !global.Weline.UI || !global.Weline.UI.toast || !global.Weline.UI.toast.__shopperAmazonPatched) {
+            if (!global.Weline || !global.Weline.UI || !global.Weline.UI.toast
+                || !(global.Weline.UI.toast.__shopperToastPatched || global.Weline.UI.toast.__shopperAmazonPatched)) {
                 attempts += 1;
                 if (attempts < 120) {
                     global.setTimeout(tryPatch, 50);
@@ -382,14 +484,14 @@
     doc.addEventListener('weline:ui:ready', boot);
 
     global.addEventListener('resize', function () {
-        var host = doc.querySelector('.' + REGION_CLASS);
+        var host = doc.querySelector('.' + REGION_CLASS + ', .' + LEGACY_REGION_CLASS);
         if (host && host.childElementCount > 0) {
             positionRegion(host);
         }
     });
 
     global.addEventListener('scroll', function () {
-        var host = doc.querySelector('.' + REGION_CLASS);
+        var host = doc.querySelector('.' + REGION_CLASS + ', .' + LEGACY_REGION_CLASS);
         if (host && host.childElementCount > 0) {
             positionRegion(host);
         }

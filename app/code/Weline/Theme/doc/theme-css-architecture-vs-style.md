@@ -63,7 +63,7 @@ php bin/w theme:disk:compile
 | 风格壳类名 | `.amazon-*`、`.w-amz-*`、某品牌专属 BEM 皮肤块 | `view/statics/css/widgets/*-amazon.css` 等风格叶；**后台选型 → 编译/生成后发射** |
 | 单页英雄/关于/FAQ/政策皮肤 | about/faq/policy hero 的 Amazon 视觉细节 | 风格叶或 design 独立 brand CSS（非 theme.css） |
 | Chrome 皮肤 | header/footer Amazon chrome | `header-chrome-amazon.css` 等；部件 `@widget.layout_source` 或 Partials/design 壳 `SharedChromeService::emitPartialsHeaderShellLayoutCssHtml()`（layout + module-source → 大布局包）——**禁止裸 `<link>`**；**勿写入 theme-head 合包** |
-| 购物者 toast 皮肤 | `.w-amz-shopper-toast` 等 | `storefront-shopper-toast-amazon.css`；**勿写入 PACK_STOREFRONT** |
+| 购物者 toast（架构部件） | `.w-shopper-toast` / `.w-shopper-cart-added` | `storefront-shopper-toast.css`；由 `storefront-shopper-toast.js` ensure 加载；**勿写入 theme.css / PACK_STOREFRONT**；`*-amazon.css` 仅为兼容 `@import` shim |
 | 站点/品牌开站货架视觉 | 某站专属色板字面量当「全局」 | 外观盘 + disk compile；或 design colors/variables + 独立 brand CSS（进 overlay，非硬嵌 amazon） |
 
 ## 分责速查

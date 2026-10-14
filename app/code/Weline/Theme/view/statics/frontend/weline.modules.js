@@ -64,11 +64,11 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     storefrontShopperToast: {
         paths: [
-            "Weline_Theme::js/storefront-shopper-toast.js"
+            "Weline_Theme::js/storefront-shopper-toast.js?v=20261015-shopper-toast-arch-v1"
         ],
         globalVar: null,
         load: "defer",
-        description: "店面购物者 Toast 区域"
+        description: "店面购物者 Toast 区域（架构 CSS ensure）"
     },
     footerSocialFloat: {
         paths: [

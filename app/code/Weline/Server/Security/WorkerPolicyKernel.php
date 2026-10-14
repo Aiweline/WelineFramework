@@ -462,11 +462,14 @@ final class WorkerPolicyKernel
             $this->clearSecurityBans($clientIp, false);
         }
 
-        // 已封禁 IP：即便在白名单也要拦（否则无法验收「锁定后访问」）；
-        // 探针豁免 token 与探针自助解封/会话路径除外。
+        // 已封禁 IP：即便在 CIDR 白名单也要拦（否则无法验收「锁定后访问」）；
+        // 探针豁免 token / 探针自助解封路径除外。
+        // 爬虫策略 allow 通行证（站内放行 + 友好搜索硬底）：跳过 shared_ban，避免 path_scan
+        // 误封 Googlebot 等同 IP 后整站 403 杀收录。非 Origin/攻击 deny 旁路。
         if (!$probeMode
             && !$this->isSecurityProbeSelfServicePath($parsed['path'])
             && $this->rateLimiter->isBanned($clientIp)
+            && !$this->isCrawlerAllowPass($parsed['headers'] ?? [], (string)($parsed['host'] ?? ''))
         ) {
             return $this->deny($parsed, $clientIp, $trustedProxy, 403, 'shared_ban');
         }
@@ -718,6 +721,7 @@ final class WorkerPolicyKernel
                         : [];
                     if (($pathScan['enabled'] ?? false)
                         && $this->shouldTrackPathForScan($envelope)
+                        && !$this->isCrawlerAllowPass($envelope->headers, (string)$envelope->host)
                         && !$this->rateLimiter->allowUniquePath(
                             $envelope->peerIp,
                             $envelope->path,
@@ -761,7 +765,10 @@ final class WorkerPolicyKernel
                     if (!$probeMode) {
                         $banSeconds = (int)($attack['block_duration'] ?? 300);
                         // 0 = deny this request only (GlobalRateLimiter::ban clamps ttl to >=1)
-                        if ($banSeconds > 0) {
+                        // Crawler allow pass: still deny this request, never poison IP ban list.
+                        if ($banSeconds > 0
+                            && !$this->isCrawlerAllowPass($envelope->headers, (string)$envelope->host)
+                        ) {
                             $this->rateLimiter->ban($envelope->peerIp, $banSeconds);
                         }
                         AttackLogService::log(
@@ -1710,6 +1717,53 @@ final class WorkerPolicyKernel
             }
         }
         return false;
+    }
+
+    /**
+     * Crawler-policy allow pass for this Host + UA (site allow entries + friendly floor).
+     *
+     * @param array<string, mixed> $headers
+     */
+    private function isCrawlerAllowPass(array $headers, string $host): bool
+    {
+        $ua = '';
+        if (\array_key_exists('user-agent', $headers)) {
+            $ua = \is_array($headers['user-agent'])
+                ? (string)($headers['user-agent'][0] ?? '')
+                : (string)$headers['user-agent'];
+        } elseif (\array_key_exists('User-Agent', $headers)) {
+            $ua = \is_array($headers['User-Agent'])
+                ? (string)($headers['User-Agent'][0] ?? '')
+                : (string)$headers['User-Agent'];
+        }
+        $ua = \trim($ua);
+        if ($ua === '') {
+            return false;
+        }
+
+        $matcher = $this->attackRulesMatcher();
+        $rule = $matcher !== []
+            ? $this->resolveCrawlerBlockRuleForHost($matcher, $host)
+            : [];
+
+        return CrawlerBlockCatalog::isAllowPass($ua, $rule);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function attackRulesMatcher(): array
+    {
+        foreach ($this->mandatoryDescriptors as $descriptor) {
+            $type = (string)($descriptor->matcher['type'] ?? '');
+            if ($type === 'attack_rules'
+                || (string)($descriptor->id ?? '') === 'server.request.attack_guard'
+            ) {
+                return \is_array($descriptor->matcher ?? null) ? $descriptor->matcher : [];
+            }
+        }
+
+        return [];
     }
 
     /**

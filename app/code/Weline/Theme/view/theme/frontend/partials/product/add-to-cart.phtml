@@ -53,7 +53,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     if (!$cssOwnedByProductCard) {
         ProductCardAddToCartParams::emitPurchaseActionsAssetsOnce(static function (): void {
             echo ProductCardAddToCartParams::buildPurchaseActionsStyleTag();
-            // cart JS：本槽 data-weline-load="cart"；toast CSS 在 theme.css；toast JS：storefrontShopperToast
+            // cart JS：本槽 data-weline-load="cart"；toast CSS：storefront-shopper-toast.js ensure；toast JS：storefrontShopperToast
         });
     }
     ?>
