@@ -28,6 +28,8 @@ $title = (string)($meta['title'] ?? __('指南'));
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::guide::head-after</w:hook>
     <style>
+        /* guide 壳：只保粘顶不被 flex 裁切 + 正文版心。
+         * 禁止在此强制深色顶栏——浅色店招主题（如汉服 atelier）会被刷成大块黑底。 */
         body.guide-layout {
             margin: 0;
             min-height: 100vh;
@@ -39,10 +41,8 @@ $title = (string)($meta['title'] ?? __('指南'));
             display: flex;
             flex-direction: column;
             background: transparent;
-            /* 禁止 flex 子项默认 shrink 把粘性顶栏裁成「只剩配送至/扩展链」 */
             overflow: visible;
         }
-        /* 顶栏槽/壳：不可被主列 flex 挤压；保留 sticky 全宽深色铬 */
         .amazon-policy-doc.weline-page-wrapper > .weline-header-slot,
         .amazon-policy-doc.weline-page-wrapper > .weline-header {
             flex: 0 0 auto;
@@ -50,18 +50,6 @@ $title = (string)($meta['title'] ?? __('指南'));
             min-width: 0;
             overflow: visible;
             align-self: stretch;
-        }
-        .amazon-policy-doc.weline-page-wrapper .weline-header {
-            background-color: var(--weline-chrome-bg-dark, var(--color-bg-dark-secondary, #16181a));
-            color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, #f7f4ef));
-        }
-        .amazon-policy-doc.weline-page-wrapper .weline-header :is(.header-belt, .header-site-notice, .header-main-nav, .header-container) {
-            background-color: var(--weline-chrome-bg-dark, var(--color-bg-dark-secondary, #16181a));
-            color: inherit;
-        }
-        .amazon-policy-doc.weline-page-wrapper .weline-header .header-site-notice,
-        .amazon-policy-doc.weline-page-wrapper .weline-header .header-main-nav {
-            background-color: var(--weline-chrome-bg-dark-secondary, var(--color-bg-dark, #1f2124));
         }
         .amazon-policy-doc__main {
             flex: 1 1 auto;
