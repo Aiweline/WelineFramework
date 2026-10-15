@@ -2597,6 +2597,28 @@ $checks = [
         ToolService::instructions(),
         'framework_demos_live_in_weline_demo'
     ),
+    'mcp_operational include production_http_probe_forbids_agent_local_curl' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'production_http_probe_forbids_agent_local_curl'
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
+            && str_contains((string) ($rule['summary'] ?? ''), 'shared_ban')
+            && str_contains((string) ($rule['summary'] ?? ''), '127.0.0.1')
+            && str_contains((string) ($rule['summary'] ?? ''), 'production-http-probe-forbids-agent-local-curl.mdc')),
+        false,
+    ),
+    'global_rules_dual_write mentions production_http_probe_forbids_agent_local_curl mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'production_http_probe_forbids_agent_local_curl')
+            && str_contains((string) ($rule['summary'] ?? ''), 'production-http-probe-forbids-agent-local-curl.mdc')),
+        false,
+    ),
+    'mcp instructions mention production_http_probe_forbids_agent_local_curl' => str_contains(
+        ToolService::instructions(),
+        'production_http_probe_forbids_agent_local_curl'
+    ),
     'MCP hard constraints require skills fetch from MCP' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)

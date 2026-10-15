@@ -343,6 +343,19 @@ MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁
 
 SSH 主机映射只解决「要连生产时连哪台」，不改变查询目标默认值。
 
+## 8a. 生产公网 HTTP 探活禁 Agent 本机 curl（`production_http_probe_forbids_agent_local_curl`，强制）
+
+| 必须 | 禁止 |
+|------|------|
+| 用户已授权线上/生产时，探活公网店面：SSH 到站柜 **主用 SSH Host**，在远端对 `127.0.0.1`（或本机 loopback）带 `Host:` / SNI 做 curl；或等价 SSH MCP | 从 Cursor/Agent **本机**对生产公网 FQDN（含 apex/www、CDN 前）`curl`/`wget`/`httpie`/裸 `fetch` 做连通性/状态/抽 HTML |
+| 命中 `shared_ban` / 浏览器 Forbidden：在目标机 `php bin/w server:security:unblock --ip=…` 或 `--clear-all`（按运维判断） | 用更多本机公网 curl「再试一次」解封；把非浏览器 UA 探活当成浏览器验收 |
+
+**豁免（互补）**：本机验收 Host（`*.test.weline.com`、项目 `127.0.0.1`/`localhost` 端口）仍按 `browser_operator_fail_closed_release` 允许打开 Browser 前 curl 探活；宿主 Browser WB-OP（真实浏览器 UA）不走本条封禁路径。
+
+**为何**：WLS `attack_guard` / `path_scan` 可对非浏览器 UA 写入 `shared_ban`，封的是共享出口 IP——会连带操作员本机浏览器 Forbidden。
+
+技能：`production_http_probe` / `weline-production-http-probe`。宿主双写：`~/.cursor/rules/production-http-probe-forbids-agent-local-curl.mdc`。
+
 ### websites 站点柜 → SSH Host（防误绑）
 
 本机 `websites/<site>/`（不进 Git）是各公网站点的**生产主机事实柜**。做该站线上/生产/部署前必须 Read 对应 `README.md`。

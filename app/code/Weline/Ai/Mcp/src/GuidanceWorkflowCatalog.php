@@ -50,6 +50,8 @@ final class GuidanceWorkflowCatalog
 
     public const SURFACE_HC_SL_RULE_LIFECYCLE = 'hc_sl_rule_lifecycle';
 
+    public const SURFACE_PRODUCTION_HTTP_PROBE = 'production_http_probe';
+
     public const SURFACE_TRANSLATION_ENGINEER = 'translation_engineer';
 
     public const SURFACE_DOCUMENTATION_ENGINEER = 'documentation_engineer';
@@ -87,6 +89,7 @@ final class GuidanceWorkflowCatalog
             'dev/ai-command/ai/性能检查.md',
             'dev/ai-command/ai/提示词优化.md',
             'dev/ai-command/ai/HC-SL硬规则生命周期.md',
+            'dev/ai-command/ai/生产HTTP探活.md',
             'dev/ai-command/ai/翻译工程师.md',
             'dev/ai-command/ai/文档工程师.md',
         ];
@@ -866,6 +869,7 @@ final class GuidanceWorkflowCatalog
             self::SURFACE_PERFORMANCE_CHECK => self::performanceCheckSurface(),
             self::SURFACE_PROMPT_OPTIMIZATION => self::promptOptimizationSurface(),
             self::SURFACE_HC_SL_RULE_LIFECYCLE => self::hcSlRuleLifecycleSurface(),
+            self::SURFACE_PRODUCTION_HTTP_PROBE => self::productionHttpProbeSurface(),
             self::SURFACE_TRANSLATION_ENGINEER => self::translationEngineerSurface(),
             self::SURFACE_DOCUMENTATION_ENGINEER => self::documentationEngineerSurface(),
             self::SURFACE_CODE_REVIEW => self::codeReviewSurface(),
@@ -2117,6 +2121,55 @@ final class GuidanceWorkflowCatalog
                     'Keep summary, formula, gloss_zh, legend, and references synchronized per lifecycle op',
                     'Run HardConstraintsSymbolDsl::validateCatalogConsistency() and hard-constraints-symbol-dsl tests after edits',
                 ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function productionHttpProbeSurface(): array
+    {
+        return [
+            'id' => self::SURFACE_PRODUCTION_HTTP_PROBE,
+            'label' => '生产公网 HTTP 探活（SSH 本机，禁 Agent 本机 curl）',
+            'description' => '生产/公网店面连通性与 HTTP 状态探活：禁止从 Cursor/Agent 本机 curl 公网 FQDN（易 WLS shared_ban 连带浏览器 Forbidden）。必须 Read 站柜 README 主用 SSH Host，SSH 后对 127.0.0.1 带 Host 头探活；解封走 server:security:unblock。本机 *.test.weline.com 验收 curl 仍允许。',
+            'triggers' => [
+                '生产探活', '线上探活', '公网探活', 'shared_ban', 'Forbidden',
+                '生产 curl', '线上 curl', '本机 curl 生产', 'curl 公网',
+                'production probe', 'production http probe', 'production_http_probe',
+                'weline-production-http-probe',
+            ],
+            'authoritative_skill' => 'weline-production-http-probe',
+            'authoritative_doc' => 'dev/ai-command/ai/生产HTTP探活.md',
+            'authoritative_docs' => [
+                'dev/ai-command/ai/生产HTTP探活.md',
+                'app/code/Weline/Ai/doc/ai/skills/production-http-probe/SKILL.md',
+                'app/code/Weline/Ai/doc/规则/00-MCP调用与会话.md',
+                'app/code/Weline/Ai/doc/AI硬规则索引.md',
+            ],
+            'norms' => [
+                ['id' => 'prod_probe_forbid_agent_local_curl', 'summary' => '禁止 Agent 本机对生产公网 FQDN curl/wget/httpie'],
+                ['id' => 'prod_probe_ssh_localhost', 'summary' => '须 SSH 站柜主 Host 后对本机 127.0.0.1+Host 探活'],
+                ['id' => 'prod_probe_unblock_cli', 'summary' => 'shared_ban 解封走 server:security:unblock，禁止更多本机公网 curl'],
+                ['id' => 'prod_probe_local_accept_exempt', 'summary' => '本机 *.test.weline.com / localhost 验收 curl 豁免'],
+            ],
+            'verification_commands' => [
+                'rg -n "production_http_probe_forbids_agent_local_curl" app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php',
+                'php app/code/Weline/Ai/Mcp/tests/hard-constraints-symbol-dsl.php',
+            ],
+            'template_surface_rules' => [
+                'forbidden' => [
+                    'curl/wget the production public FQDN from the Agent local workstation',
+                    'Retrying public curls to “fix” shared_ban Forbidden',
+                ],
+                'required' => [
+                    'Read websites/<site>/README.md primary SSH Host before production probe',
+                    'SSH then curl 127.0.0.1 with Host header (or SSH MCP equivalent)',
+                    'On shared_ban use server:security:unblock on the target instance',
+                ],
+            ],
+            'hard_constraint_ids' => [
+                'production_http_probe_forbids_agent_local_curl',
+                'runtime_status_query_local_first',
             ],
         ];
     }

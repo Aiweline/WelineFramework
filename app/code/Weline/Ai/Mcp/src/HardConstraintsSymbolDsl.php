@@ -182,6 +182,9 @@ final class HardConstraintsSymbolDsl
             'CssImp' => ['gloss_zh' => '默认主题视觉!important', 'rule_ids' => ['theme_default_forbids_css_important']],
             'Staff' => ['gloss_zh' => '专席真实子智能体', 'rule_ids' => ['engineering_team_for_new_requirements']],
             'Pass' => ['gloss_zh' => '可宣称通过/完成', 'rule_ids' => ['requirement_acceptance_always']],
+            'ProdProbe' => ['gloss_zh' => '生产/公网店面HTTP探活', 'rule_ids' => ['production_http_probe_forbids_agent_local_curl']],
+            'AgentLocalCurl' => ['gloss_zh' => 'Agent宿主本机curl公网Host', 'rule_ids' => ['production_http_probe_forbids_agent_local_curl']],
+            'SshLocalhost' => ['gloss_zh' => 'SSH站柜主Host后本机127.0.0.1+Host头', 'rule_ids' => ['production_http_probe_forbids_agent_local_curl']],
         ];
     }
 
@@ -337,6 +340,11 @@ final class HardConstraintsSymbolDsl
                 'formula' => 'DemoPage→□Weline_Demo∧¬Git',
                 'gloss_zh' => '演示页只落本机Weline_Demo；禁入库',
                 'cluster' => '§A',
+            ],
+            'production_http_probe_forbids_agent_local_curl' => [
+                'formula' => 'ProdProbe→□SshLocalhost∧¬AgentLocalCurl',
+                'gloss_zh' => '生产公网探活禁本机curl；须SSH本机探',
+                'cluster' => '§P',
             ],
             'global_rules_dual_write_mcp_and_host' => [
                 'formula' => 'GlobalRuleEdit→□(MCP∧HostMdc)',
