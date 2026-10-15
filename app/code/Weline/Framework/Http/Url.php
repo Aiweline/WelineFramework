@@ -291,6 +291,35 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                 }
             }
         }
+        // Immutable visitor path for Shared FPC / engine live/{host}/{path}.
+        // ORIGIN may later be polluted to /guide?view=|/guide?d=; this key must not.
+        $existingVisitor = (string)(
+            self::$parserServer['WELINE_VISITOR_REQUEST_URI']
+            ?? \Weline\Framework\Env\WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '')
+            ?? ''
+        );
+        if ($existingVisitor === ''
+            || \Weline\Framework\Http\Fpc\FpcEngineIdentity::isGuideControllerUri($existingVisitor)
+        ) {
+            if (!\Weline\Framework\Http\Fpc\FpcEngineIdentity::isGuideControllerUri($uri)) {
+                self::$parserServer['WELINE_VISITOR_REQUEST_URI'] = $uri;
+                if (!\class_exists(\Weline\Framework\Runtime\Runtime::class)
+                    || !\Weline\Framework\Runtime\Runtime::isPersistent()
+                ) {
+                    $_SERVER['WELINE_VISITOR_REQUEST_URI'] = $uri;
+                }
+                if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)) {
+                    try {
+                        \Weline\Framework\Env\WelineEnv::setServer(
+                            'WELINE_VISITOR_REQUEST_URI',
+                            $uri,
+                            'Url::lockVisitorFacingRequestUri'
+                        );
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+        }
 
         $segments = \array_values(\array_filter(
             \explode('/', \trim($path, '/')),

@@ -53,6 +53,9 @@ final class FpcStaticDiskStore
     /**
      * Mirror a resolved on-disk file into the static FPC tree.
      * No-op when the source is already pub/ or this store.
+     *
+     * Plaintext early-out (size+mtime) must still refresh `$target.br`:
+     * Nginx brotli_static prefers stale `.br` for Accept-Encoding:br clients.
      */
     public static function publishFromFile(string $host, string $uriPath, string $sourceAbsolutePath): bool
     {
@@ -76,6 +79,9 @@ final class FpcStaticDiskStore
                 && \is_int($sourceMtime)
                 && $existingMtime >= $sourceMtime
             ) {
+                // Plaintext already mirrors source — still heal/refresh `.br` sidecar.
+                StaticAssetBrotliSidecar::publish($target);
+
                 return true;
             }
         }
@@ -233,7 +239,8 @@ final class FpcStaticDiskStore
     /**
      * Refresh (or create) the live FPC mirror for one URI on every known host.
      * Used when module static sources change in DEV while Nginx still serves stale live leaves.
-     * Content-hash compared: identical → count as ok; diverge → unlink then publishFromFile.
+     * Content-hash compared: identical → still refresh `.br` sidecar then count ok;
+     * diverge → unlink then publishFromFile (which also writes `.br`).
      */
     public static function republishFromFileOnAllHosts(string $uriPath, string $sourceAbsolutePath): int
     {
@@ -251,6 +258,8 @@ final class FpcStaticDiskStore
             if ($target !== null && \is_file($target) && $srcHash !== '') {
                 $dstHash = \hash_file('sha256', $target) ?: '';
                 if ($dstHash === $srcHash) {
+                    // Hash match must not leave a stale precompressed sidecar for br clients.
+                    StaticAssetBrotliSidecar::publish($target);
                     ++$ok;
                     continue;
                 }

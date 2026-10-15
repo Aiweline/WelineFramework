@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Http\Fpc;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Http\ContentEncodingNegotiator;
 use Weline\Framework\Http\Fpc\FpcStaticDiskStore;
+use Weline\Framework\Http\Fpc\StaticAssetBrotliSidecar;
 use Weline\Framework\Test\ProjectRoot;
 
 final class FpcStaticDiskStoreContractTest extends TestCase
@@ -23,13 +25,16 @@ final class FpcStaticDiskStoreContractTest extends TestCase
             @\mkdir($dir, 0775, true);
         }
         $this->sourceFile = $dir . \DIRECTORY_SEPARATOR . 'geo-fixture.js';
-        \file_put_contents($this->sourceFile, "console.log('fpc-static');\n");
+        // ≥ MIN_BYTES so StaticAssetBrotliSidecar will write `.br`.
+        \file_put_contents($this->sourceFile, \str_repeat("console.log('fpc-static');\n", 80));
     }
 
     protected function tearDown(): void
     {
         FpcStaticDiskStore::purgePaths($this->fixtureHost, [
             '/Weline/Geo/view/statics/frontend/js/geo-fixture.js',
+            '/Weline/Geo/view/statics/frontend/js/geo-fixture-live-mirror.js',
+            '/Weline/Geo/view/statics/frontend/js/geo-fixture-br-heal.js',
         ]);
         if ($this->sourceFile !== '' && \is_file($this->sourceFile)) {
             @\unlink($this->sourceFile);
@@ -38,6 +43,16 @@ final class FpcStaticDiskStoreContractTest extends TestCase
 
     public function testPublishFromAppCodeMirrorAndSkipPub(): void
     {
+        $storeSrc = (string)\file_get_contents(
+            BP . 'app/code/Weline/Framework/Http/Fpc/FpcStaticDiskStore.php'
+        );
+        self::assertStringContainsString('StaticAssetBrotliSidecar::publish($target)', $storeSrc);
+        self::assertGreaterThanOrEqual(
+            3,
+            \substr_count($storeSrc, 'StaticAssetBrotliSidecar::publish($target)'),
+            'publishFromFile early-out + copy path + republish hash-match must all refresh .br',
+        );
+
         $uri = '/Weline/Geo/view/statics/frontend/js/geo-fixture.js';
         self::assertTrue(FpcStaticDiskStore::shouldMirrorResolvedFile($this->sourceFile));
         self::assertTrue(FpcStaticDiskStore::publishFromFile($this->fixtureHost, $uri, $this->sourceFile));
@@ -48,7 +63,7 @@ final class FpcStaticDiskStoreContractTest extends TestCase
             \DIRECTORY_SEPARATOR . 'static' . \DIRECTORY_SEPARATOR . 'live' . \DIRECTORY_SEPARATOR,
             $target,
         );
-        self::assertSame("console.log('fpc-static');\n", (string)\file_get_contents($target));
+        self::assertStringContainsString("console.log('fpc-static');", (string)\file_get_contents($target));
 
         $pubProbe = BP . 'pub' . \DIRECTORY_SEPARATOR . 'static' . \DIRECTORY_SEPARATOR . 'probe-skip.js';
         $pubDir = \dirname($pubProbe);
@@ -113,6 +128,66 @@ final class FpcStaticDiskStoreContractTest extends TestCase
             self::assertFileDoesNotExist($mappedTarget);
         } finally {
             FpcStaticDiskStore::purgePaths($this->fixtureHost, [$mappedUri, $uri]);
+            if (\is_file($moduleSrc)) {
+                @\unlink($moduleSrc);
+            }
+        }
+    }
+
+    public function testPublishFromFileEarlyOutStillRefreshesStaleBrotliSidecar(): void
+    {
+        if (!ContentEncodingNegotiator::brotliAvailable()) {
+            self::markTestSkipped('ext-brotli required');
+        }
+        $uri = '/Weline/Geo/view/statics/frontend/js/geo-fixture-br-heal.js';
+        self::assertTrue(FpcStaticDiskStore::publishFromFile($this->fixtureHost, $uri, $this->sourceFile));
+        $target = FpcStaticDiskStore::absolutePath($this->fixtureHost, $uri);
+        self::assertIsString($target);
+        $br = $target . '.br';
+        self::assertFileExists($br);
+        // Poison sidecar while leaving plaintext identical to source (early-out path).
+        \file_put_contents($br, 'NOT-BROTLI-STALE');
+        @\touch($br, \time() - 3600);
+        self::assertTrue(FpcStaticDiskStore::publishFromFile($this->fixtureHost, $uri, $this->sourceFile));
+        $decoded = ContentEncodingNegotiator::decode(
+            (string)\file_get_contents($br),
+            ContentEncodingNegotiator::ENCODING_BROTLI,
+        );
+        self::assertSame((string)\file_get_contents($target), $decoded);
+        FpcStaticDiskStore::purgePaths($this->fixtureHost, [$uri]);
+    }
+
+    public function testRepublishHashMatchStillRefreshesStaleBrotliSidecar(): void
+    {
+        if (!ContentEncodingNegotiator::brotliAvailable()) {
+            self::markTestSkipped('ext-brotli required');
+        }
+        $moduleSrcDir = BP . 'app' . \DIRECTORY_SEPARATOR . 'code' . \DIRECTORY_SEPARATOR . 'Weline'
+            . \DIRECTORY_SEPARATOR . 'Geo' . \DIRECTORY_SEPARATOR . 'view' . \DIRECTORY_SEPARATOR . 'statics'
+            . \DIRECTORY_SEPARATOR . 'frontend' . \DIRECTORY_SEPARATOR . 'js';
+        if (!\is_dir($moduleSrcDir)) {
+            @\mkdir($moduleSrcDir, 0775, true);
+        }
+        $moduleSrc = $moduleSrcDir . \DIRECTORY_SEPARATOR . 'geo-fixture-br-heal.js';
+        $body = \str_repeat("console.log('br-heal');\n", 80);
+        \file_put_contents($moduleSrc, $body);
+        $uri = '/Weline/Geo/view/statics/frontend/js/geo-fixture-br-heal.js';
+        try {
+            self::assertTrue(FpcStaticDiskStore::publishFromFile($this->fixtureHost, $uri, $moduleSrc));
+            $target = FpcStaticDiskStore::absolutePath($this->fixtureHost, $uri);
+            self::assertIsString($target);
+            $br = $target . '.br';
+            self::assertFileExists($br);
+            \file_put_contents($br, 'NOT-BROTLI-STALE');
+            $n = FpcStaticDiskStore::republishFromFileOnAllHosts($uri, $moduleSrc);
+            self::assertGreaterThan(0, $n);
+            $decoded = ContentEncodingNegotiator::decode(
+                (string)\file_get_contents($br),
+                ContentEncodingNegotiator::ENCODING_BROTLI,
+            );
+            self::assertSame($body, $decoded);
+        } finally {
+            FpcStaticDiskStore::purgePaths($this->fixtureHost, [$uri]);
             if (\is_file($moduleSrc)) {
                 @\unlink($moduleSrc);
             }

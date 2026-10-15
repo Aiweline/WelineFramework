@@ -3362,6 +3362,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
         $cached = $forceSharedPrime ? null : $this->getProcessCachedPayload($cacheKey);
         $cacheSource = 'process';
+        if ($cached !== null) {
+            FpcDiag::event('fpc_lookup', [
+                'key_sha' => \substr(\sha1($cacheKey), 0, 12),
+                'full_key' => $cacheKey,
+                'cache_key_full_uri' => $this->getCacheKeyFullUri(),
+                'raw_full_uri' => $this->getRawFullUri(),
+                'engine_identity' => (string)(RequestContext::get('fpc.engine_identity_url', '') ?? ''),
+                'source' => 'process',
+                'found' => true,
+            ]);
+        }
         if ($cached === null) {
             if ($processOnly) {
                 RequestContext::set('wls.fpc.hit_source', 'process-miss');
@@ -3374,6 +3385,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             FpcDiag::event('fpc_lookup', [
                 'key_sha' => \substr(\sha1($cacheKey), 0, 12),
                 'full_key' => $cacheKey,
+                'cache_key_full_uri' => $this->getCacheKeyFullUri(),
+                'raw_full_uri' => $this->getRawFullUri(),
+                'engine_identity' => (string)(RequestContext::get('fpc.engine_identity_url', '') ?? ''),
+                'source' => 'shared',
                 'variant' => $this->buildCurrentFpcVariant(),
                 'found' => \is_array($cached),
             ]);
@@ -5930,16 +5945,43 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     private function getRawFullUri(): string
     {
+        // Engine-aligned Shared identity: same scheme://host/path as
+        // generated/html/live/{host}/{path}. Frozen visitor pretty path wins;
+        // reject /guide?view=|/guide?d= controller identities (they collapse
+        // to /guide after path-only query strip).
+        try {
+            $frozen = \trim((string)(RequestContext::get('fpc.engine_identity_url', '') ?? ''));
+            if ($frozen !== ''
+                && \str_contains($frozen, '://')
+                && KeyBuilder::isValidFullPageCacheKey($frozen)
+                && !\Weline\Framework\Http\Fpc\FpcEngineIdentity::isGuideControllerUri($frozen)
+            ) {
+                return $frozen;
+            }
+        } catch (\Throwable) {
+            // RequestContext may be unavailable in early CLI probes.
+        }
+
         $full = \trim((string)(\w_env('full_request_uri', '') ?? ''));
         // Prefer visitor-facing pretty path (pre url_rewrite). Otherwise
         // /destinations and /routes both become /guide?view=* and cold-disk
         // / Shared collide after query stripping or rewrite.
-        $originPath = \trim((string)(
-            WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
-            ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? '')
-            ?: WelineEnv::server('ORIGIN_REQUEST_URI', '')
-            ?: ($_SERVER['ORIGIN_REQUEST_URI'] ?? '')
-        ));
+        $originPath = \Weline\Framework\Http\Fpc\FpcEngineIdentity::preferVisitorUri(
+            (string)(
+                WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '')
+                ?: ($_SERVER['WELINE_VISITOR_REQUEST_URI'] ?? '')
+            ),
+            (string)(
+                WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
+                ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? '')
+                ?: WelineEnv::server('ORIGIN_REQUEST_URI', '')
+                ?: ($_SERVER['ORIGIN_REQUEST_URI'] ?? '')
+            ),
+            (string)(
+                WelineEnv::server('REQUEST_URI', '')
+                ?: ($_SERVER['REQUEST_URI'] ?? '')
+            ),
+        );
         if ($originPath !== '' && \str_starts_with($originPath, '/')) {
             $scheme = '';
             $host = '';
@@ -5976,6 +6018,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             if ($host !== '') {
                 return $scheme . '://' . $host . $originPath;
             }
+        }
+
+        if ($full !== '' && \Weline\Framework\Http\Fpc\FpcEngineIdentity::isGuideControllerUri($full)) {
+            return '';
         }
 
         return $full;
@@ -6044,12 +6090,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
         WelineEnv::setServer('REQUEST_URI', $requestUri, 'FPC canonical cache build');
         WelineEnv::setServer('QUERY_STRING', $query, 'FPC canonical cache build');
-        WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $requestUri, 'FPC canonical cache build');
-        WelineEnv::setServer('WELINE_FULL_REQUEST_URI', $cacheKeyFullUri, 'FPC canonical cache build');
+        // Do NOT overwrite WELINE_ORIGIN_REQUEST_URI / full_request_uri here.
+        // Engine disk keys by visitor host+path; Shared must keep the same
+        // identity. Rewriting ORIGIN to a stripped /guide (query dropped) made
+        // /destinations/* and /routes share one Shared HIT body.
         WelineEnv::set('request.uri', $requestUri, 'FPC canonical cache build');
         WelineEnv::set('request.query_string', $query, 'FPC canonical cache build');
-        WelineEnv::set('origin_request_uri', $requestUri, 'FPC canonical cache build');
-        WelineEnv::set('full_request_uri', $cacheKeyFullUri, 'FPC canonical cache build');
         // Router process_uri_before injects internal layout routing keys into GET
         // (layout_type / layout_option / page_type / theme_page_title). They must
         // survive path-only FPC canonicalize — they are not visitor query and must
@@ -6066,6 +6112,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         RequestContext::set('fpc.canonicalized_request', true);
         RequestContext::set('fpc.raw_full_uri', $rawFullUri);
         RequestContext::set('fpc.cache_key_full_uri', $cacheKeyFullUri);
+        if ($rawFullUri !== '' && \str_contains($rawFullUri, '://')) {
+            // Keep engine identity stable even if callers later mutate Env.
+            \Weline\Framework\Http\Fpc\FpcEngineIdentity::freezeFullUrl($rawFullUri);
+        }
 
         try {
             $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);

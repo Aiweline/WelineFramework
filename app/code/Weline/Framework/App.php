@@ -446,6 +446,25 @@ class App
         Context::current()->set('input.server.WELINE_FULL_REQUEST_URI', $originFullRequestUri);
         WelineEnv::set('origin_request_uri', $rawRequestUri, 'App applyParsedUrl');
         WelineEnv::set('full_request_uri', $originFullRequestUri, 'App applyParsedUrl');
+        // Freeze Shared FPC identity to the same host+path engine disk uses
+        // (generated/html/live/{host}/{path}). Prefer visitor pretty path when
+        // ORIGIN was already promoted to /guide?view=|/guide?d= by SEO rewrite.
+        $visitorIdentityPath = \Weline\Framework\Http\Fpc\FpcEngineIdentity::preferVisitorUri(
+            (string)(
+                WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '')
+                ?: ($_SERVER['WELINE_VISITOR_REQUEST_URI'] ?? '')
+                ?: ($server['WELINE_VISITOR_REQUEST_URI'] ?? '')
+            ),
+            $rawRequestUri,
+            $currentUri,
+            (string)($_SERVER['REQUEST_URI'] ?? ''),
+        );
+        $visitorIdentityFull = ($host !== '' && $visitorIdentityPath !== '')
+            ? $scheme . '://' . $host . (
+                \str_starts_with($visitorIdentityPath, '/') ? $visitorIdentityPath : '/' . $visitorIdentityPath
+            )
+            : $originFullRequestUri;
+        \Weline\Framework\Http\Fpc\FpcEngineIdentity::freezeFullUrl($visitorIdentityFull);
         $markApplyUrlStep('full_request_uri', [
             'host' => $host,
             'scheme' => $scheme,
