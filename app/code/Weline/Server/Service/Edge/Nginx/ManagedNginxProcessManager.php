@@ -654,6 +654,7 @@ final class ManagedNginxProcessManager
             : ($http3Module
                 ? 'ngx_http_v3_module is compiled in.' : 'nginx was built without --with-http_v3_module.');
         $httpSslModule = \str_contains($text, '--with-http_ssl_module');
+        $realipModule = \str_contains($text, '--with-http_realip_module');
         $rewriteModule = !\str_contains($text, '--without-http_rewrite_module');
         $gzipModule = !\str_contains($text, '--without-http_gzip_module');
         $opensslVersion = '';
@@ -683,6 +684,7 @@ final class ManagedNginxProcessManager
             'version' => $version,
             'http2_module' => $http2Module,
             'http_ssl_module' => $httpSslModule,
+            'realip_module' => $realipModule,
             'rewrite_module' => $rewriteModule,
             'gzip_module' => $gzipModule,
             'http3_module' => $http3Module,

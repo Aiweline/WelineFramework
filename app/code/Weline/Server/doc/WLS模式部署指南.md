@@ -204,6 +204,9 @@ server {
 - WLS 不曾修改宿主机 `/etc/nginx`；当前模式则只管理项目隔离目录，不接管系统 Nginx。
 - 当前 `server:start`/`server:stop` 只形成项目托管 Nginx 与本实例 WLS 的完整生命周期。
 - 若启用可信代理，把宿主机反代网段列入 `trusted_proxy_cidrs`。
+- 后台安全规则 `cdn_trusted_ips`（及默认 Cloudflare 官方段、`wls.accept_gate.trusted_proxy_cidrs`）由 `TrustedProxyCidrResolver` 同源供给：WLS `trusted_proxy_cidrs`（含 loopback 传输 peer）与托管 Nginx `http{}` 的 `real_ip_header CF-Connecting-IP` + `set_real_ip_from`（**不含** loopback）。
+- 托管 Nginx 须以 `--with-http_realip_module` 构建（`server:nginx:install`）；旧二进制无该模块时配置**不写** real_ip，避免 `nginx -t` 失败，保存后文案会提示重装。
+- 面板保存安全规则成功后，**同请求内**重写并 reload 托管 Nginx；未运行则跳过并明示。WLS 仍保留 XFF 剥离作第二道。
 
 ### 1.3 本项目托管 Nginx（多项目互不干扰）
 

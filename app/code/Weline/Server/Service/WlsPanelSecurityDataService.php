@@ -160,21 +160,95 @@ class WlsPanelSecurityDataService
         }
 
         $notificationPending = (bool)($commit['notification_pending'] ?? false);
-        $message = (string)__('Security rules saved. WLS workers will reload the committed generation.');
+        $nginxRefresh = $this->syncRefreshManagedNginxAfterSecurityRulesSave();
+        $message = (string)__('安全规则已保存。WLS Worker 将重载已提交的代次。');
+        $message .= ' ' . (string)($nginxRefresh['message'] ?? '');
         if ($notificationPending || $auditPending) {
-            $message .= ' ' . (string)__('The rules are committed, but one post-commit notification is pending.');
+            $message .= ' ' . (string)__('规则已提交，但有一项后置通知仍待重试。');
         }
 
         return [
             'success' => true,
-            'message' => $message,
+            'message' => \trim($message),
             'generation' => (int)$commit['generation'],
             'digest' => (string)$commit['digest'],
             'notification_pending' => $notificationPending,
             'notification_error' => (string)($commit['notification_error'] ?? ''),
             'audit_pending' => $auditPending,
             'audit_error' => $auditError,
+            'nginx_refresh' => $nginxRefresh,
         ];
+    }
+
+    /**
+     * After security-rules commit: rewrite + reload managed Nginx in the same request.
+     *
+     * @return array{ok:bool,skipped:bool,message:string}
+     */
+    private function syncRefreshManagedNginxAfterSecurityRulesSave(): array
+    {
+        $budgetSeconds = 45.0;
+        try {
+            $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
+            $deadline = \hrtime(true) / 1e9 + $budgetSeconds;
+            $running = $service->runtimeRunningSnapshot($deadline);
+            if (!(bool)($running['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'skipped' => true,
+                    'message' => (string)__(
+                        '托管 Nginx 运行态探针失败，未刷新 Edge：%{1}',
+                        [(string)($running['message'] ?? 'unsafe identity')],
+                    ),
+                ];
+            }
+            if (!(bool)($running['running'] ?? false)) {
+                return [
+                    'ok' => true,
+                    'skipped' => true,
+                    'message' => (string)__('托管 Nginx 未运行，已跳过 Edge 重写与 reload。'),
+                ];
+            }
+            $caps = $service->binaryCapabilities();
+            $realIp = (bool)($caps['realip_module'] ?? false);
+
+            $result = $service->reload($deadline, ['light_verification' => true]);
+            if (!($result['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'skipped' => false,
+                    'message' => (string)__(
+                        '托管 Nginx 重写/reload 失败：%{1}',
+                        [(string)($result['message'] ?? 'unknown')],
+                    ),
+                ];
+            }
+
+            if (!$realIp) {
+                return [
+                    'ok' => true,
+                    'skipped' => false,
+                    'message' => (string)__(
+                        '托管 Nginx 已 reload，但当前二进制未编入 real_ip；请执行 php bin/w server:nginx:install 后保存规则以写入 set_real_ip_from。',
+                    ),
+                ];
+            }
+
+            return [
+                'ok' => true,
+                'skipped' => false,
+                'message' => (string)__('托管 Nginx 已同步重写并 reload（含 real_ip 受信代理）。'),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'skipped' => false,
+                'message' => (string)__(
+                    '托管 Nginx 刷新异常：%{1}',
+                    [$e->getMessage()],
+                ),
+            ];
+        }
     }
 
     /**

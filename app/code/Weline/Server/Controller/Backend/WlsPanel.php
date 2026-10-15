@@ -421,11 +421,16 @@ class WlsPanel extends BackendController
         $params = !empty($result['success'])
             ? ['panel_notice' => 'security_rules_saved']
             : ['panel_error' => (string)($result['message'] ?? __('安全规则保存失败。'))];
+        $nginxRefresh = \is_array($result['nginx_refresh'] ?? null) ? $result['nginx_refresh'] : null;
         if (!empty($result['success'])
-            && (!empty($result['notification_pending']) || !empty($result['audit_pending']))
+            && (
+                !empty($result['notification_pending'])
+                || !empty($result['audit_pending'])
+                || ($nginxRefresh !== null && empty($nginxRefresh['ok']))
+            )
         ) {
             $params['panel_error'] = (string)($result['message']
-                ?? __('安全规则已提交，但后置通知仍待重试。'));
+                ?? __('安全规则已提交，但后置通知或 Nginx 刷新未完成。'));
         }
         foreach (['security_scope', 'security_instance', 'security_ip', 'security_severity', 'security_type', 'security_blocked'] as $key) {
             $value = \trim((string)($post[$key] ?? ''));
@@ -1045,7 +1050,7 @@ class WlsPanel extends BackendController
         return match ($code) {
             'project_saved' => (string)__('托管项目已保存。'),
             'project_removed' => (string)__('托管项目已删除。'),
-            'security_rules_saved' => (string)__('安全规则已保存。'),
+            'security_rules_saved' => (string)__('安全规则已保存；托管 Nginx 已同步重写并 reload（未运行则跳过）。'),
             'plugins_refreshed' => (string)__('面板插件能力已刷新。'),
             'fpc_pierce_rotated' => (string)__('FPC 打穿章已轮换，Nginx map 已刷新。'),
             'fpc_pierce_rotate_failed' => (string)__('FPC 打穿章轮换未完全成功，请检查 Nginx map / reload。'),

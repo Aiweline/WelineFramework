@@ -1006,6 +1006,8 @@ final class ManagedNginxInstaller
                 '--with-http_ssl_module',
                 '--with-http_v2_module',
                 '--with-http_v3_module',
+                // Orange-cloud / cdn_trusted_ips → $remote_addr peel (real_ip_header).
+                '--with-http_realip_module',
                 '--with-cc=' . $compiler,
             ];
             foreach (\preg_split('/\s+/', \trim((string)$deps['configure_extra'])) ?: [] as $option) {

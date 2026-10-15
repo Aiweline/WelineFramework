@@ -263,11 +263,11 @@ store,店铺
 托管项目删除失败。,托管项目删除失败。
 规则版本已缺失，请刷新页面后重试。,规则版本已缺失，请刷新页面后重试。
 安全规则保存失败。,安全规则保存失败。
-安全规则已提交，但后置通知仍待重试。,安全规则已提交，但后置通知仍待重试。
+"安全规则已提交，但后置通知或 Nginx 刷新未完成。","安全规则已提交，但后置通知或 Nginx 刷新未完成。"
 插件能力,插件能力
 托管项目已保存。,托管项目已保存。
 托管项目已删除。,托管项目已删除。
-安全规则已保存。,安全规则已保存。
+"安全规则已保存；托管 Nginx 已同步重写并 reload（未运行则跳过）。","安全规则已保存；托管 Nginx 已同步重写并 reload（未运行则跳过）。"
 面板插件能力已刷新。,面板插件能力已刷新。
 "FPC 打穿章已轮换，Nginx map 已刷新。","FPC 打穿章已轮换，Nginx map 已刷新。"
 "FPC 打穿章轮换未完全成功，请检查 Nginx map / reload。","FPC 打穿章轮换未完全成功，请检查 Nginx map / reload。"
@@ -1817,8 +1817,13 @@ Ready,准备好
 "已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效","已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效"
 "Security rules JSON cannot be empty.","安全规则 JSON 不能为空。"
 "Security rules JSON is invalid.","安全规则 JSON 格式无效。"
-"Security rules saved. WLS workers will reload the committed generation.","已保存安全规则。 WLS 工作人员将重新加载已提交的一代。"
-"The rules are committed, but one post-commit notification is pending.",规则已提交，但一项提交后通知正在等待处理。
+"安全规则已保存。WLS Worker 将重载已提交的代次。","安全规则已保存。WLS Worker 将重载已提交的代次。"
+规则已提交，但有一项后置通知仍待重试。,规则已提交，但有一项后置通知仍待重试。
+"托管 Nginx 运行态探针失败，未刷新 Edge：%{1}","托管 Nginx 运行态探针失败，未刷新 Edge：%{1}"
+"托管 Nginx 未运行，已跳过 Edge 重写与 reload。","托管 Nginx 未运行，已跳过 Edge 重写与 reload。"
+"托管 Nginx 重写/reload 失败：%{1}","托管 Nginx 重写/reload 失败：%{1}"
+"托管 Nginx 已同步重写并 reload（含 real_ip 受信代理）。","托管 Nginx 已同步重写并 reload（含 real_ip 受信代理）。"
+"托管 Nginx 刷新异常：%{1}","托管 Nginx 刷新异常：%{1}"
 "Security rules JSON is invalid. Visual fields were not saved.","安全规则 JSON 格式无效，可视化字段未保存。"
 "Security rules JSON is invalid. Project policy was not saved.","安全规则 JSON 无效。项目政策未保存。"
 "Select one managed project before saving a project security policy.",在保存项目安全策略之前选择一个托管项目。
@@ -3087,6 +3092,10 @@ Previous：%{1},上一篇：%{1}
 无法证明受管代次时拒绝发送任何终止信号,无法证明受管代次时拒绝发送任何终止信号
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","已退役：console:server:start 不再启动 PHP 内置 Web Server。"
 "已退役：PHP 内置 Web Server 启动入口","已退役：PHP 内置 Web Server 启动入口"
+安全规则已提交，但后置通知仍待重试。,安全规则已提交，但后置通知仍待重试。
+安全规则已保存。,安全规则已保存。
+"Security rules saved. WLS workers will reload the committed generation.","已保存安全规则。 WLS 工作人员将重新加载已提交的一代。"
+"The rules are committed, but one post-commit notification is pending.",规则已提交，但一项提交后通知正在等待处理。
 WLS错误扫描,WLS错误扫描
 攻击信号监控,攻击信号监控
 "SSL 证书自动续签","SSL 证书自动续签"
@@ -3762,3 +3771,4 @@ Nginx-only,"仅限 Nginx"
 "边缘 PID","边缘 PID"
 "删除证书（被站点引用时需 --confirm）","删除证书（被站点引用时需 --confirm）"
 "确认启用维护模式？前台与后台（含本页）都会被维护门禁拦截；退出请点「退出维护」，或本机执行 php bin/w maintenance:disable。","确认启用维护模式？前台与后台（含本页）都会被维护门禁拦截；退出请点「退出维护」，或本机执行 php bin/w maintenance:disable。"
+"托管 Nginx 已 reload，但当前二进制未编入 real_ip；请执行 php bin/w server:nginx:install 后保存规则以写入 set_real_ip_from。","托管 Nginx 已 reload，但当前二进制未编入 real_ip；请执行 php bin/w server:nginx:install 后保存规则以写入 set_real_ip_from。"

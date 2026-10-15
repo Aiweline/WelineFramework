@@ -52,6 +52,14 @@ final class ManagedNginxService
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function binaryCapabilities(): array
+    {
+        return $this->processManager->probeBinaryCapabilities();
+    }
+
+    /**
      * @return array<string,mixed>|null
      */
     public function ownerSnapshot(): ?array
@@ -283,6 +291,8 @@ final class ManagedNginxService
                     && $this->http3VerifierAvailable(),
                 $upstreamPorts,
                 $certificateGeneration,
+                null,
+                (bool)($capabilities['realip_module'] ?? false),
             );
             if (!(bool)($written['ssl'] ?? false)) {
                 $this->configWriter->discardCandidate((string)$written['conf']);
@@ -930,6 +940,7 @@ final class ManagedNginxService
                 $upstreamPorts,
                 $certificateGeneration,
                 $edgeCacheState,
+                (bool)($capabilities['realip_module'] ?? false),
             );
             $candidate = (string)$refreshed['conf'];
             if (!$this->probeWlsBackendPool(
@@ -2815,6 +2826,8 @@ final class ManagedNginxService
                 false,
                 $upstreamPorts,
                 $certificateGeneration,
+                null,
+                (bool)($capabilities['realip_module'] ?? false),
             );
             $candidate = (string)($degraded['conf'] ?? '');
             $this->assertHttp3DegradedConfigIdentity($currentConfig, $degraded, $candidate);
@@ -5246,6 +5259,7 @@ final class ManagedNginxService
                 'quic_tls_recommended' => false,
                 'shared_session_ticket_keys' => false,
                 'http_ssl_module' => false,
+                'realip_module' => false,
                 'rewrite_module' => false,
                 'gzip_module' => false,
                 'openssl_version' => '',
@@ -5331,6 +5345,7 @@ final class ManagedNginxService
             'http3_quic_tls_recommended' => (bool)($binaryCapabilities['quic_tls_recommended'] ?? false),
             'shared_session_ticket_keys_supported' => (bool)($binaryCapabilities['shared_session_ticket_keys'] ?? false),
             'http_ssl_module' => (bool)($binaryCapabilities['http_ssl_module'] ?? false),
+            'realip_module' => (bool)($binaryCapabilities['realip_module'] ?? false),
             'rewrite_module' => (bool)($binaryCapabilities['rewrite_module'] ?? false),
             'gzip_module' => (bool)($binaryCapabilities['gzip_module'] ?? false),
             'openssl_version' => (string)($binaryCapabilities['openssl_version'] ?? ''),

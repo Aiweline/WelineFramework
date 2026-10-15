@@ -66,6 +66,9 @@ final class ManagedNginxConfigWriter
      * @phpstan-param array<array-key,mixed> $upstreamPorts
      * @return array{conf:string,http:int,https:int,upstream:string,upstreams:list<string>,config_generation:string,config_sha256:string,candidate:bool}
      */
+    /**
+     * @param list<string>|null $nginxTrustedProxyCidrs Override for tests; null resolves from security rules + accept_gate
+     */
     public function write(
         int $upstreamPort,
         string $upstreamHost = '127.0.0.1',
@@ -77,6 +80,8 @@ final class ManagedNginxConfigWriter
         array $upstreamPorts = [],
         ?array $certificateGeneration = null,
         ?array $edgeCacheState = null,
+        bool $realIpSupported = false,
+        ?array $nginxTrustedProxyCidrs = null,
     ): array
     {
         $this->paths->ensureRuntimeDirectories();
@@ -185,6 +190,11 @@ NGINX;
         $edgeLimitLocation = (string)($edgeLimit['location_directives'] ?? '');
         $mimeTypes = $this->stageMimeTypesDependency();
         $quotedMimeTypes = $this->nginxQuotedPath($mimeTypes);
+        $realIpHttpBlock = $realIpSupported
+            ? $this->buildRealIpHttpBlock(
+                $nginxTrustedProxyCidrs ?? $this->resolveNginxTrustedProxyCidrs(),
+            )
+            : '';
 
         $tempBlock = '';
         if ($isWindows) {
@@ -634,7 +644,7 @@ http {
     # Default nginx is 1m — that rejects MediaManager / StoreMusic uploads (UI allows up to 512M)
     # while the picker still shows「允许的文件大小：20 MB」. Align with WLS + MediaAssetUploadService.
     client_max_body_size 512m;
-    tcp_nopush    on;
+{$realIpHttpBlock}    tcp_nopush    on;
     tcp_nodelay   on;
     keepalive_timeout  65;
     keepalive_requests 100000;
@@ -2232,6 +2242,57 @@ NGINX;
         }
 
         return $frontend !== '' && \strtolower($prefix) === $frontend;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveNginxTrustedProxyCidrs(): array
+    {
+        $rules = ['cdn_trusted_ips' => ['enabled' => true, 'ips' => []]];
+        try {
+            if (\class_exists(\Weline\Server\Security\AttackDetector::class)) {
+                $loaded = \Weline\Server\Security\AttackDetector::getInstance()->getRules();
+                if (\is_array($loaded)) {
+                    $rules = $loaded;
+                }
+            }
+        } catch (\Throwable) {
+            // Unit tests / pre-bootstrap: fall back to CF catalog defaults.
+        }
+
+        $acceptGate = [];
+        try {
+            $wls = Env::getInstance()->getConfig('wls') ?? [];
+            if (\is_array($wls) && \is_array($wls['accept_gate'] ?? null)) {
+                $acceptGate = $wls['accept_gate'];
+            }
+        } catch (\Throwable) {
+            $acceptGate = [];
+        }
+
+        return \Weline\Server\Security\TrustedProxyCidrResolver::forNginx($rules, $acceptGate);
+    }
+
+    /**
+     * @param list<string> $cidrs
+     */
+    private function buildRealIpHttpBlock(array $cidrs): string
+    {
+        $cidrs = \Weline\Server\Security\TrustedProxyCidrResolver::withoutLoopback($cidrs);
+        if ($cidrs === []) {
+            return '';
+        }
+
+        $lines = [
+            '    # Trusted proxies (cdn_trusted_ips + CF catalog + accept_gate) → real client $remote_addr',
+            '    real_ip_header CF-Connecting-IP;',
+        ];
+        foreach ($cidrs as $cidr) {
+            $lines[] = '    set_real_ip_from ' . $cidr . ';';
+        }
+
+        return \implode("\n", $lines) . "\n";
     }
 
     private function nginxQuotedPath(string $path): string

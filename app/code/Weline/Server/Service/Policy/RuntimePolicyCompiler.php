@@ -410,26 +410,10 @@ final class RuntimePolicyCompiler
             }
         }
 
-        $trustedProxyCidrs = [];
-        $trustedProxy = \is_array($rules['cdn_trusted_ips'] ?? null) ? $rules['cdn_trusted_ips'] : [];
-        if (($trustedProxy['enabled'] ?? true) !== false) {
-            $trustedProxyCidrs = (array)($trustedProxy['ips'] ?? []);
-            // Orange-cloud: Nginx `$remote_addr` is a CF edge; peel it from XFF
-            // so shared_ban never keys on the POP. Operators may still append
-            // extra CDN CIDRs via cdn_trusted_ips.ips / accept_gate.
-            $trustedProxyCidrs = \array_merge(
-                $trustedProxyCidrs,
-                \Weline\Server\Security\CloudflareTrustedProxyCatalog::cidrs(),
-            );
-        }
-        $trustedProxyCidrs = \array_merge(
-            $trustedProxyCidrs,
-            (array)($acceptGate['trusted_proxy_cidrs'] ?? []),
-            // Nginx-only WLS binds the private backend to loopback. These are
-            // transport peers, not client identities; trusting them is what
-            // permits the managed Nginx scheme and client-IP facts to survive
-            // the plaintext H1 hop without trusting public spoofed headers.
-            ['127.0.0.0/8', '::1/128'],
+        // Shared with managed Nginx real_ip (loopback kept for WLS transport only).
+        $trustedProxyCidrs = \Weline\Server\Security\TrustedProxyCidrResolver::forWls(
+            $rules,
+            $acceptGate,
         );
 
         $whitelistCidrs = [];
