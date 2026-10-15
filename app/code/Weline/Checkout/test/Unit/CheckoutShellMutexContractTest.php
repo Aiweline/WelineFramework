@@ -18,7 +18,9 @@ final class CheckoutShellMutexContractTest extends TestCase
             \dirname(__DIR__, 2) . '/view/frontend/checkout/index.phtml'
         );
 
-        self::assertStringContainsString('data-checkout-view="ready"', $template);
+        // Initial view is ready|empty from SSR cart lines — not a hard-coded ready string.
+        self::assertStringContainsString('data-checkout-view="<?= htmlspecialchars($ssrInitialView, ENT_QUOTES, \'UTF-8\') ?>"', $template);
+        self::assertStringContainsString('$ssrInitialView = $ssrHasLineItems ? \'ready\' : \'empty\'', $template);
         self::assertStringContainsString('data-checkout-form-host', $template);
         self::assertStringNotContainsString('data-checkout-form-host hidden', $template);
         // 无消息不展示 notice 灰条。
@@ -26,7 +28,7 @@ final class CheckoutShellMutexContractTest extends TestCase
             '/data-checkout-message[^>]*\bhidden\b/',
             $template
         );
-        self::assertStringContainsString('message.hidden = !hasText', $template);
+        self::assertStringContainsString('setShellHidden(message, !hasText)', $template);
         self::assertStringContainsString('.weline-checkout__notice:empty', $template);
         self::assertStringNotContainsString('data-checkout-page-loading', $template);
         self::assertStringContainsString('function showCheckoutShell(mode)', $template);

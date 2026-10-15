@@ -42,14 +42,25 @@ $copy = [
 ];
 $ssrShippingHtml = trim((string)($this->getData('checkout_shipping_methods_html') ?? ''));
 $ssrPaymentHtml = trim((string)($this->getData('checkout_payment_methods_html') ?? ''));
-$ssrReady = !empty($this->getData('checkout_ssr_ready'))
+$ssrQuoteToken = trim((string)($this->getData('checkout_ssr_quote_token') ?? ''));
+$ssrCart = \is_array($this->getData('checkout_ssr_cart')) ? $this->getData('checkout_ssr_cart') : [];
+$ssrItems = \is_array($this->getData('checkout_items')) ? $this->getData('checkout_items') : [];
+$ssrHasLineItems = $ssrItems !== []
+    || (
+        $ssrCart !== []
+        && empty($ssrCart['is_empty'])
+        && (int) ($ssrCart['item_count'] ?? 0) > 0
+    );
+// Payment/shipping HTML alone must not mark SSR ready when the cart is empty.
+$ssrReady = $ssrHasLineItems && (
+    !empty($this->getData('checkout_ssr_ready'))
     || $ssrShippingHtml !== ''
     || $ssrPaymentHtml !== ''
-    || (is_array($this->getData('checkout_items')) && $this->getData('checkout_items') !== []);
-$ssrQuoteToken = trim((string)($this->getData('checkout_ssr_quote_token') ?? ''));
+    || $ssrItems !== []
+);
+$ssrInitialView = $ssrHasLineItems ? 'ready' : 'empty';
 // SSR 有车时首屏即露出快捷支付；勿等 getData.render 再 unhide（ssrReady 会跳过 hydrate）。
 $ssrExpressVisible = $ssrReady;
-$ssrCart = \is_array($this->getData('checkout_ssr_cart')) ? $this->getData('checkout_ssr_cart') : [];
 $ssrCurrency = strtoupper(trim((string)($this->getData('checkout_currency') ?? ($ssrCart['currency'] ?? 'USD'))));
 if (!preg_match('/^[A-Z]{3}$/', $ssrCurrency)) {
     $ssrCurrency = 'USD';
@@ -63,6 +74,12 @@ $ssrShippingMethods = \is_array($this->getData('checkout_ssr_shipping_methods'))
 $ssrPaymentMethods = \is_array($this->getData('checkout_ssr_payment_methods'))
     ? $this->getData('checkout_ssr_payment_methods')
     : [];
+if (!$ssrHasLineItems) {
+    $ssrPaymentHtml = '';
+    $ssrPaymentMethods = [];
+    $ssrShippingHtml = '';
+    $ssrShippingMethods = [];
+}
 $ssrRequiresShipping = (bool)($this->getData('checkout_ssr_requires_shipping') ?? true);
 $ssrMoneySummary = \is_array($this->getData('checkout_ssr_money_summary'))
     ? $this->getData('checkout_ssr_money_summary')
@@ -85,7 +102,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     $ssrBootStateJson = '{"currency":"USD","cart":{},"ready":false}';
 }
 ?>
-<section class="weline-checkout" weline-code="checkout.checkout.index.section_1" data-weline-checkout data-checkout-view="ready"<?= $ssrReady ? ' data-checkout-ssr-ready="1"' : '' ?><?= $ssrQuoteToken !== '' ? ' data-checkout-ssr-quote-token="' . htmlspecialchars($ssrQuoteToken, ENT_QUOTES, 'UTF-8') . '"' : '' ?> data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle,storefrontMoneySummary" data-testid="checkout-form-page" aria-busy="false">
+<section class="weline-checkout" weline-code="checkout.checkout.index.section_1" data-weline-checkout data-checkout-view="<?= htmlspecialchars($ssrInitialView, ENT_QUOTES, 'UTF-8') ?>"<?= $ssrReady ? ' data-checkout-ssr-ready="1"' : '' ?><?= $ssrQuoteToken !== '' ? ' data-checkout-ssr-quote-token="' . htmlspecialchars($ssrQuoteToken, ENT_QUOTES, 'UTF-8') . '"' : '' ?> data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle,storefrontMoneySummary" data-testid="checkout-form-page" aria-busy="false">
     <script type="application/json" data-checkout-ssr-boot><?= $ssrBootStateJson ?></script>
     <header class="weline-checkout__header">
         <div class="weline-checkout__header-title">
@@ -4614,8 +4631,10 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             loadCheckoutWithRetry().catch(function () {});
         });
     } else {
-        // 传统结账：首屏即 ready。SSR 已灌商品/配送/支付时禁止再 soft getData（无变化不异步）。
-        showCheckoutShell('ready');
+        // 传统结账：有货首屏 ready；空车必须 empty（禁止 payment HTML alone 冒充 ready）。
+        hydrateCheckoutStateFromSsr();
+        const bootCartEmpty = !!(checkoutState.cart && checkoutState.cart.is_empty);
+        showCheckoutShell(bootCartEmpty ? 'empty' : 'ready');
         setMessage('', '');
         try {
             const migrateKey = 'weline_checkout_cpay_isolate_v2_' + quoteTokenStorageKey();
@@ -4632,10 +4651,16 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         }
         // 本地清隔离；有续付痕迹时后台 release（不挡 SSR 首屏）。
         const releasePromise = releaseContinuePayIsolation();
+        if (bootCartEmpty) {
+            guestTokenAligned = true;
+            syncExpressHostVisibility({ cartIsEmpty: true });
+            renderTotalsWhenMoneySummaryReady();
+            releasePromise.catch(function () {});
+            return;
+        }
         if (ssrReady) {
             guestTokenAligned = true;
             // 跳过 soft hydrate：仍须用 SSR cart 灌 checkoutState，否则券事件只刷优惠、小计/应付变 0。
-            hydrateCheckoutStateFromSsr();
             syncExpressHostVisibility({ cartIsEmpty: false });
             // 默认支付激励：SSR 已扣应付；部件异步就绪前后都须露出优惠行。
             renderTotalsWhenMoneySummaryReady();
@@ -4644,7 +4669,6 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             return;
         }
         // 非 SSR：先灌服务端 cart，再 soft getData，避免首屏券竞态。
-        hydrateCheckoutStateFromSsr();
         renderTotalsWhenMoneySummaryReady();
         loadCheckoutWithRetry({
             soft: true,

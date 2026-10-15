@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Checkout',
-    "version" => '1.5.113',
+    "version" => '1.5.114',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Cart' => '*',
@@ -17,6 +17,7 @@ return [
     "optional" => [
         'Weline_Tax' => '*',
         'Weline_Marketing' => '*',
+        'Weline_Product' => '*',
     ],
     "provides" => [
         \Weline\Checkout\Api\CheckoutSessionStoreInterface::class

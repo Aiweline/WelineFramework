@@ -111,6 +111,26 @@ $orderItemsDisplay = $this->getData('order_v2_items_display');
 $orderItems = is_array($orderItemsDisplay) && $orderItemsDisplay !== []
     ? $orderItemsDisplay
     : $orderItemsRaw;
+$digitalDeliveryEntriesRaw = $this->getData('digital_delivery_entries');
+$digitalDeliveryEntries = [];
+if (is_array($digitalDeliveryEntriesRaw)) {
+    foreach ($digitalDeliveryEntriesRaw as $deliveryRow) {
+        if (!is_array($deliveryRow)) {
+            continue;
+        }
+        $href = trim((string)($deliveryRow['href'] ?? ''));
+        if ($href === '' || str_starts_with($href, '/routes/')) {
+            continue;
+        }
+        $digitalDeliveryEntries[] = [
+            'href' => $href,
+            'label' => trim((string)($deliveryRow['label'] ?? '')) !== ''
+                ? trim((string)$deliveryRow['label'])
+                : (string)__('打开数字交付'),
+            'entitlement_uuid' => trim((string)($deliveryRow['entitlement_uuid'] ?? '')),
+        ];
+    }
+}
 $money = is_array($orderV2) && is_array($orderV2['money'] ?? null) ? $orderV2['money'] : [];
 $totalsLines = [];
 if ($orderCurrency !== '' && $money !== []) {
@@ -476,11 +496,27 @@ foreach ($orderItems as $pixelItemRow) {
             <?= $escape(__('查看订单列表')) ?>
         </a>
         <?php else: ?>
+        <?php if ($digitalDeliveryEntries !== []): ?>
+            <?php foreach ($digitalDeliveryEntries as $deliveryIndex => $deliveryEntry): ?>
+        <a href="<?= $escape((string)$deliveryEntry['href']) ?>"
+           class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button"
+           data-tone="primary"
+           data-testid="<?= $deliveryIndex === 0 ? 'checkout-success-digital-delivery' : 'checkout-success-digital-delivery-' . $escape((string)$deliveryIndex) ?>">
+            <?= $escape((string)$deliveryEntry['label']) ?>
+        </a>
+            <?php endforeach; ?>
+        <a href="@url{'products'}"
+           class="amz-order-confirm__btn amz-order-confirm__btn--secondary w-button weline-pixel::continue_shopping"
+           data-tone="neutral">
+            <?= $escape(__('继续购物')) ?>
+        </a>
+        <?php else: ?>
         <a href="@url{'products'}"
            class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button weline-pixel::continue_shopping"
            data-tone="primary">
             <?= $escape(__('继续购物')) ?>
         </a>
+        <?php endif; ?>
         <?php if ($requestOrderUuid !== ''): ?>
         <a href="@url{'customer/account/index'|['order_uuid' => $requestOrderUuid]}#orders"
            class="amz-order-confirm__btn amz-order-confirm__btn--secondary w-button weline-pixel::view_order"

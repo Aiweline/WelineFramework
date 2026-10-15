@@ -8,7 +8,9 @@ use Weline\Checkout\Service\OrderService;
 use Weline\Checkout\Service\CheckoutSessionAccessService;
 use Weline\Checkout\Service\CheckoutSuccessPresentationService;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Api\OrderFacadeInterface;
+use Weline\Product\Api\OrderDigitalDeliveryProjectionInterface;
 
 /**
  * Storefront checkout success page at /checkout/success.
@@ -177,9 +179,43 @@ class Success extends FrontendController
                 number_format(((int)($order->money['grand_total_minor'] ?? 0)) / 100, 2, '.', ','),
             ),
         );
+        $this->assignDigitalDeliveryEntries(
+            $orderUuid,
+            $currentCustomerId,
+            $capabilityAllowed,
+            $isCancel,
+        );
         $this->assignContinuePayForCancel($orderUuid, $checkoutToken, (string)($order->status ?? ''), $isCancel, $cancelAlready);
 
         return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
+    }
+
+    private function assignDigitalDeliveryEntries(
+        string $orderUuid,
+        ?int $viewerCustomerId,
+        bool $accessCapability,
+        bool $isCancel,
+    ): void {
+        $this->assign('digital_delivery_entries', []);
+        if ($isCancel || $orderUuid === '') {
+            return;
+        }
+        try {
+            $projection = ObjectManager::getInstance(OrderDigitalDeliveryProjectionInterface::class);
+            if (!$projection instanceof OrderDigitalDeliveryProjectionInterface) {
+                return;
+            }
+            $projected = $projection->project($orderUuid, $viewerCustomerId, $accessCapability);
+            $entries = is_array($projected['entries'] ?? null) ? $projected['entries'] : [];
+            $this->assign('digital_delivery_entries', array_values(array_filter(
+                $entries,
+                static fn(mixed $row): bool => is_array($row)
+                    && trim((string)($row['href'] ?? '')) !== ''
+                    && !str_starts_with(trim((string)($row['href'] ?? '')), '/routes/'),
+            )));
+        } catch (\Throwable) {
+            $this->assign('digital_delivery_entries', []);
+        }
     }
 
     private function assignContinuePayForCancel(
@@ -281,6 +317,12 @@ class Success extends FrontendController
         $this->assign('order_v2_display_number', $display !== '' ? $display : (string) ($order->orderUuid ?? ''));
         $this->assign('order_v2_status', 'paid');
         $this->assign('order_v2_total_label', $totalLabel);
+        $this->assignDigitalDeliveryEntries(
+            (string)($order->orderUuid ?? $arr['order_uuid'] ?? ''),
+            $this->isLoggedIn() ? (int)$this->getLoginUserId() : null,
+            false,
+            false,
+        );
 
         return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
     }
@@ -313,6 +355,7 @@ class Success extends FrontendController
         $this->assign('order_v2_total_label', 'CNY 0.00');
         $this->assign('order_v2_items_display', []);
         $this->assign('shipping_method_label', '');
+        $this->assign('digital_delivery_entries', []);
 
         return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
     }

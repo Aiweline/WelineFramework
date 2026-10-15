@@ -108,9 +108,15 @@ final class CheckoutStorefrontSsrService
             }
         }
 
-        $ready = $items !== []
-            || $shippingHtml !== ''
-            || $paymentHtml !== '';
+        // ready = durable cart has lines. Payment/shipping HTML alone must not mark ready:
+        // empty-cart + fake_card SSR previously painted form + empty/recovery copy together.
+        $ready = $items !== [];
+        if (!$ready) {
+            $paymentHtml = '';
+            $paymentMethods = [];
+            $shippingHtml = '';
+            $shippingMethods = [];
+        }
 
         $payload = [
             'ready' => $ready,
@@ -227,8 +233,16 @@ final class CheckoutStorefrontSsrService
             );
         }
 
+        $ready = $items !== [];
+        if (!$ready) {
+            $paymentHtml = '';
+            $methods = [];
+            $shippingHtml = '';
+            $shippingMethods = [];
+        }
+
         $payload = [
-            'ready' => $items !== [] || $paymentHtml !== '',
+            'ready' => $ready,
             'items' => $items,
             'currency' => $currency,
             'cart_type' => $mode,
@@ -237,6 +251,7 @@ final class CheckoutStorefrontSsrService
                 'cart_type' => $mode,
                 'grand_total' => $grand,
                 'currency' => $currency,
+                'is_empty' => $items === [],
             ]),
             'shipping_methods' => $shippingMethods,
             'payment_methods' => $methods,

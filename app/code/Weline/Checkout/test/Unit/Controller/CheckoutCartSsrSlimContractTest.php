@@ -59,6 +59,9 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
         self::assertStringContainsString('shipping_methods_html', $src);
         self::assertStringContainsString('payment_methods_html', $src);
         self::assertStringContainsString("'tax_estimate'", $src);
+        // Empty cart must not be ready solely because payment HTML (fake_card) exists.
+        self::assertStringContainsString('$ready = $items !== [];', $src);
+        self::assertStringContainsString('Payment/shipping HTML alone must not mark ready', $src);
     }
 
     public function testCheckoutTemplatePaintsSsrMethodsAndSkipsBootHydrate(): void

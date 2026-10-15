@@ -369,6 +369,10 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('CheckoutSessionAccessService', $controller);
         self::assertStringContainsString('CheckoutSuccessPresentationService', $controller);
         self::assertStringContainsString('order_v2_items_display', $controller);
+        self::assertStringContainsString('digital_delivery_entries', $controller);
+        self::assertStringContainsString('OrderDigitalDeliveryProjectionInterface', $controller);
+        self::assertStringNotContainsString("product_type === 'travel_route'", $controller);
+        self::assertStringNotContainsString("'travel_route'", $controller);
         self::assertStringContainsString('shipping_method_label', $controller);
         self::assertStringContainsString("getParam('checkout_token'", $controller);
         self::assertStringContainsString('canAccess(', $controller);
@@ -379,6 +383,9 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         );
 
         self::assertStringContainsString('order_v2_items_display', $template);
+        self::assertStringContainsString('digital_delivery_entries', $template);
+        self::assertStringContainsString('checkout-success-digital-delivery', $template);
+        self::assertStringNotContainsString("product_type === 'travel_route'", $template);
         self::assertStringContainsString("getData('shipping_method_label')", $template);
         self::assertStringContainsString("\$shipping['method_label']", $template);
         self::assertStringContainsString('__($shippingMethod)', $template);
