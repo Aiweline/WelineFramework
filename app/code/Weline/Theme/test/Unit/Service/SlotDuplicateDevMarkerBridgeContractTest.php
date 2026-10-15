@@ -44,6 +44,8 @@ final class SlotDuplicateDevMarkerBridgeContractTest extends TestCase
             dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityWidgetRenderer.php'
         );
         self::assertStringContainsString("'data-widget-source' => \$source", $src);
+        // Legacy bake without source must not omit the attr (DEV would show 未知).
+        self::assertStringContainsString("source = 'entity_node'", $src);
     }
 
     public function testTaglibInlineMarksTemplateSource(): void

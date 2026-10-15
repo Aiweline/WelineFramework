@@ -119,7 +119,13 @@ final class ThemeLayoutEntityWidgetRenderer
             'share' => $share,
         ];
         $html = ResolvedLayoutSlots::with($slots, fn(): string => $this->componentRenderer->renderResolved($definition, $config, $theme, $context));
+        // Empty provenance (legacy bake without source) must still stamp an attr so DEV
+        // dup markers do not fall back to「未知」and operators can tell entity path from
+        // default_injection_runtime_safety_net. Prefer real stamps from Contract/BakeMerger.
         $source = \trim((string)($entry['source'] ?? $config['_source'] ?? $config['source'] ?? ''));
+        if ($source === '') {
+            $source = 'entity_node';
+        }
         $attributes = [
             'data-node-uid' => $uid,
             'data-widget-code' => $code,

@@ -56,8 +56,38 @@ final class RequiredDefaultInjectionBakeMerger
         );
 
         $merged = $this->bySlotToNodes($mergedSlots);
+        $requiredKeys = [];
+        foreach (RequiredDefaultInjectionContract::requiredInjections($declarations, $pageType) as $item) {
+            if (RequiredDefaultInjectionContract::isUninstalled(
+                $omissions,
+                (string)($item['slot_id'] ?? ''),
+                (string)($item['widget_module'] ?? ''),
+                (string)($item['widget_code'] ?? ''),
+            )) {
+                continue;
+            }
+            $requiredKeys[strtolower(trim((string)($item['slot_id'] ?? '')))
+                . '|' . strtolower(trim((string)($item['widget_module'] ?? '')))
+                . '|' . strtolower(trim((string)($item['widget_code'] ?? '')))] = true;
+        }
         foreach ($merged as $uid => &$node) {
-            if (!isset($nodes[$uid])) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            $src = \trim((string)($node['source'] ?? $node['config']['_source'] ?? ''));
+            if ($src !== '') {
+                // Promote config._source when top-level source was omitted from older snapshots.
+                if (!isset($node['source']) || \trim((string)$node['source']) === '') {
+                    $node['source'] = $src;
+                }
+                continue;
+            }
+            $key = strtolower(trim((string)($node['slot_id'] ?? '')))
+                . '|' . strtolower(trim((string)($node['widget_module'] ?? '')))
+                . '|' . strtolower(trim((string)($node['widget_code'] ?? '')));
+            // New merge nodes OR empty-provenance survivors of a required identity —
+            // never leave data-widget-source blank (DEV would show 来源=未知).
+            if (!isset($nodes[$uid]) || isset($requiredKeys[$key])) {
                 $node['source'] = 'default_injection';
             }
         }

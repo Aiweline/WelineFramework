@@ -207,6 +207,50 @@ HTML;
         ));
     }
 
+    public function testSlotHasWidgetPresentSeesSiblingWrapperClaimingSlot(): void
+    {
+        // Bake mis-nest: host empty, wrapper is a sibling but stamps data-slot-id.
+        $html = <<<'HTML'
+<section data-slot-id="cart-recommendations" class="theme-published-slot"></section>
+<div class="widget-wrapper" data-widget-module="Weline_Product" data-widget-code="cross-sell" data-slot-id="cart-recommendations" data-widget-source="entity_node"></div>
+HTML;
+        self::assertTrue(RequiredDefaultInjectionContract::slotHasWidgetPresent(
+            $html,
+            'cart-recommendations',
+            'Weline_Product',
+            'cross-sell',
+        ));
+        self::assertTrue(RequiredDefaultInjectionContract::slotClaimedByWidgetWrapper(
+            $html,
+            'cart-recommendations',
+            'Weline_Product',
+            'cross-sell',
+        ));
+        // Must not treat a different slot claim as present for this slot.
+        self::assertFalse(RequiredDefaultInjectionContract::slotHasWidgetPresent(
+            $html,
+            'product-cross-sell',
+            'Weline_Product',
+            'cross-sell',
+        ));
+    }
+
+    public function testRequiredInjectionNodeStampsDefaultInjectionSource(): void
+    {
+        $items = RequiredDefaultInjectionContract::requiredInjections([[
+            'module' => 'Weline_Product',
+            'type' => 'product',
+            'code' => 'cross-sell',
+            'default_injections' => [[
+                'layout_type' => 'cart',
+                'slot' => 'cart-recommendations',
+                'required' => true,
+            ]],
+        ]], 'cart');
+        self::assertNotSame([], $items);
+        self::assertSame('default_injection', $items[0]['node']['source'] ?? null);
+    }
+
     public function testMergeKeepsSameIdentityOnMultipleDeclaredSlots(): void
     {
         $declaration = [

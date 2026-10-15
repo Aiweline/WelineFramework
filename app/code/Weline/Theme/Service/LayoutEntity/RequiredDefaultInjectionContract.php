@@ -110,6 +110,11 @@ final class RequiredDefaultInjectionContract
     /**
      * Slot-scoped presence: required injection XOR is per declared slot, not whole page.
      * Mini-cart already having checkout-coupon must not suppress checkout-summary-discount.
+     *
+     * Also treats a widget-wrapper that stamps the same data-slot-id + data-widget-code
+     * as present — bake / strip nesting can leave the wrapper as a sibling of the host
+     * (outside host inner). Inner-only checks would miss it and the runtime safety net
+     * would inject a second copy; DEV dup markers already key on wrapper data-slot-id.
      */
     public static function slotHasWidgetPresent(
         string $pageHtml,
@@ -122,11 +127,38 @@ final class RequiredDefaultInjectionContract
             return false;
         }
         $inner = self::extractSlotInnerHtml($pageHtml, $slotId);
-        if ($inner === null) {
-            return false;
+        if ($inner !== null && self::slotInnerHasWidgetCode($inner, $module, $code)) {
+            return true;
         }
 
-        return self::slotInnerHasWidgetCode($inner, $module, $code);
+        return self::slotClaimedByWidgetWrapper($pageHtml, $slotId, $module, $code);
+    }
+
+    /**
+     * True when any single open tag claims both this slot and widget code
+     * (typical .widget-wrapper from ThemeLayoutEntityWidgetRenderer).
+     */
+    public static function slotClaimedByWidgetWrapper(
+        string $pageHtml,
+        string $slotId,
+        string $module,
+        string $code,
+    ): bool {
+        unset($module);
+        $slotId = strtolower(trim($slotId));
+        $code = strtolower(trim($code));
+        if ($slotId === '' || $code === '' || $pageHtml === '') {
+            return false;
+        }
+        $plain = strtolower(self::stripIgnoredPresenceRegions($pageHtml));
+        $slotQ = preg_quote($slotId, '/');
+        $codeQ = preg_quote($code, '/');
+
+        return (bool)preg_match(
+            '/<[^>]*\bdata-slot-id\s*=\s*(["\'])' . $slotQ . '\1[^>]*\bdata-widget-code\s*=\s*(["\'])' . $codeQ . '\2[^>]*>'
+            . '|<[^>]*\bdata-widget-code\s*=\s*(["\'])' . $codeQ . '\3[^>]*\bdata-slot-id\s*=\s*(["\'])' . $slotQ . '\4[^>]*>/',
+            $plain,
+        );
     }
 
     /**
@@ -693,6 +725,8 @@ final class RequiredDefaultInjectionContract
                         'area' => $area,
                         'slot_id' => $slotId,
                         'config' => $config,
+                        // Provenance for data-widget-source / DEV dup markers / XOR.
+                        'source' => 'default_injection',
                     ],
                 ];
             }

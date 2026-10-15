@@ -104,7 +104,30 @@ final class RequiredDefaultInjectionBakeMergerContractTest extends TestCase
         self::assertSame([], $merged['list-filters'] ?? []);
     }
 
+    public function testMergeIntoNodesStampsSourceOnEmptyProvenanceSurvivor(): void
+    {
+        $path = \dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionBakeMerger.php';
+        $src = (string)\file_get_contents($path);
+        self::assertStringContainsString('requiredKeys', $src);
+        self::assertStringContainsString("\$node['source'] = 'default_injection'", $src);
+        // Empty-provenance survivors of a required identity must be stamped — not only new uids.
+        self::assertStringContainsString('isset($requiredKeys[$key])', $src);
+        self::assertStringContainsString('empty-provenance survivors', $src);
+    }
 
-
-
+    public function testMergeAddsNodeAlreadyCarriesDefaultInjectionSource(): void
+    {
+        $declarations = [[
+            'module' => 'Weline_Product',
+            'type' => 'product',
+            'code' => 'cross-sell',
+            'default_injections' => [[
+                'layout_type' => 'cart',
+                'slot' => 'cart-recommendations',
+                'required' => true,
+            ]],
+        ]];
+        $merged = RequiredDefaultInjectionContract::merge([], 'cart', $declarations, []);
+        self::assertSame('default_injection', $merged['cart-recommendations'][0]['source'] ?? null);
+    }
 }
