@@ -332,6 +332,31 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'shentu')),
         false,
     ),
+    'ui_driven_development command surface and doc exist' => (static function (): bool {
+        $root = dirname(__DIR__, 6);
+        if (!is_dir($root . '/dev/ai-command')) {
+            $root = dirname(__DIR__, 5);
+        }
+        $cmd = $root . '/dev/ai-command/theme/按UI开发.md';
+        $skill = $root . '/app/code/Weline/Ai/doc/ai/skills/ui-driven-dev/SKILL.md';
+        if (!is_file($cmd) || !is_file($skill)) {
+            return false;
+        }
+        $cmdBody = (string) file_get_contents($cmd);
+        $surface = GuidanceWorkflowCatalog::allSurfaces()[GuidanceWorkflowCatalog::SURFACE_UI_DRIVEN_DEVELOPMENT] ?? [];
+        $policy = McpSkillCatalog::policy($root);
+        $bundle = is_array($policy['ui_driven_development_bundle'] ?? null)
+            ? $policy['ui_driven_development_bundle']
+            : [];
+
+        return ($surface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_UI_DRIVEN_DEVELOPMENT
+            && ($surface['authoritative_doc'] ?? '') === 'dev/ai-command/theme/按UI开发.md'
+            && str_contains($cmdBody, '按UI开发')
+            && str_contains($cmdBody, '截图')
+            && str_contains($cmdBody, '参考 UI')
+            && ($bundle['command_path'] ?? '') === 'dev/ai-command/theme/按UI开发.md'
+            && in_array('按UI开发', $bundle['triggers'] ?? [], true);
+    })(),
     'hard_constraints include closeout_requires_huishen' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)

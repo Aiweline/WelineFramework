@@ -52,6 +52,8 @@ final class GuidanceWorkflowCatalog
 
     public const SURFACE_PRODUCTION_HTTP_PROBE = 'production_http_probe';
 
+    public const SURFACE_UI_DRIVEN_DEVELOPMENT = 'ui_driven_development';
+
     public const SURFACE_TRANSLATION_ENGINEER = 'translation_engineer';
 
     public const SURFACE_DOCUMENTATION_ENGINEER = 'documentation_engineer';
@@ -90,6 +92,7 @@ final class GuidanceWorkflowCatalog
             'dev/ai-command/ai/提示词优化.md',
             'dev/ai-command/ai/HC-SL硬规则生命周期.md',
             'dev/ai-command/ai/生产HTTP探活.md',
+            'dev/ai-command/theme/按UI开发.md',
             'dev/ai-command/ai/翻译工程师.md',
             'dev/ai-command/ai/文档工程师.md',
         ];
@@ -870,6 +873,7 @@ final class GuidanceWorkflowCatalog
             self::SURFACE_PROMPT_OPTIMIZATION => self::promptOptimizationSurface(),
             self::SURFACE_HC_SL_RULE_LIFECYCLE => self::hcSlRuleLifecycleSurface(),
             self::SURFACE_PRODUCTION_HTTP_PROBE => self::productionHttpProbeSurface(),
+            self::SURFACE_UI_DRIVEN_DEVELOPMENT => self::uiDrivenDevelopmentSurface(),
             self::SURFACE_TRANSLATION_ENGINEER => self::translationEngineerSurface(),
             self::SURFACE_DOCUMENTATION_ENGINEER => self::documentationEngineerSurface(),
             self::SURFACE_CODE_REVIEW => self::codeReviewSurface(),
@@ -2170,6 +2174,59 @@ final class GuidanceWorkflowCatalog
             'hard_constraint_ids' => [
                 'production_http_probe_forbids_agent_local_curl',
                 'runtime_status_query_local_first',
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function uiDrivenDevelopmentSurface(): array
+    {
+        return [
+            'id' => self::SURFACE_UI_DRIVEN_DEVELOPMENT,
+            'label' => '按 UI 开发（切片实现 → 截图对稿 → 调整）',
+            'description' => '按参考 UI / 设计稿开发：每完成一个功能切片必须 Browser 禁缓存截图并 Read，对照参考 UI 列差异再调整，对齐后才进入下一切片。与「审图」（用户附图）互补；对稿 fail 同回合转入审图联合流水线。无参考稿禁止假装对稿。',
+            'triggers' => [
+                '按UI开发', '按 UI 开发', 'UI驱动开发', 'UI 驱动开发',
+                '对照UI开发', '对照 UI 开发', '对着设计稿开发',
+                'design to code', 'ui-driven', 'ui driven development',
+                'ui_driven_development', 'weline-ui-driven-dev',
+            ],
+            'authoritative_skill' => 'weline-ui-driven-dev',
+            'authoritative_doc' => 'dev/ai-command/theme/按UI开发.md',
+            'authoritative_docs' => [
+                'dev/ai-command/theme/按UI开发.md',
+                'dev/ai-command/theme/审图.md',
+                'app/code/Weline/Ai/doc/ai/skills/ui-driven-dev/SKILL.md',
+                'app/code/Weline/Ai/doc/规则/20-前端与主题.md',
+                'app/code/Weline/Ai/doc/AI硬规则索引.md',
+            ],
+            'norms' => [
+                ['id' => 'ui_driven_slice_then_shot', 'summary' => '每功能切片实现后必须截图并对稿，禁止整页做完才第一次截图'],
+                ['id' => 'ui_driven_read_screenshot', 'summary' => '截图后必须 Read 图像文件做视觉对稿，禁止只 snapshot/metrics'],
+                ['id' => 'ui_driven_needs_reference', 'summary' => '无参考 UI 须先向用户索取，禁止假装已对稿'],
+                ['id' => 'ui_driven_fix_before_next', 'summary' => '本切片未对齐禁止扩大到下一功能切片'],
+            ],
+            'verification_commands' => [
+                'test -f dev/ai-command/theme/按UI开发.md',
+                'rg -n "ui_driven_development" app/code/Weline/Ai/Mcp/src/GuidanceWorkflowCatalog.php',
+            ],
+            'template_surface_rules' => [
+                'forbidden' => [
+                    'Claim UI alignment without a reference mock/screenshot',
+                    'Skip Read of browser screenshots when doing ui-driven development',
+                    'Move to the next feature slice while the current slice still mismatches the reference UI',
+                ],
+                'required' => [
+                    'Lock reference UI before coding',
+                    'After each feature slice: cache-off Browser → screenshot → Read → diff vs reference → fix until aligned',
+                    'On visual fails, run 审图 joint pipeline (wireframe/prototype/frontend-design/theme) same turn',
+                ],
+            ],
+            'hard_constraint_ids' => [
+                'acceptance_phase_requires_shentu',
+                'browser_operator_self_test',
+                'requirement_acceptance_always',
+                'user_image_attachment_triggers_shentu',
             ],
         ];
     }
