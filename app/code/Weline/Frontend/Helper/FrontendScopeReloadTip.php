@@ -21,6 +21,7 @@ final class FrontendScopeReloadTip
         'scope_context_conflict',
         'request_scope_already_conflicts',
         'deploy_reload_required',
+        'scope_bootstrap_waiting',
     ];
 
     /**
@@ -50,6 +51,11 @@ final class FrontendScopeReloadTip
             'deploy_reload_required' => [
                 '站点已更新',
                 '主题已发布新版本。请重新加载页面以继续。',
+            ],
+            // Soft wait while first Scope stamp ensures — title empty-safe: same phrase.
+            'scope_bootstrap_waiting' => [
+                '请稍等片刻...',
+                '请稍等片刻...',
             ],
         ];
     }

@@ -947,6 +947,58 @@
         scope_context_conflict: true,
         request_scope_already_conflicts: true,
         deploy_reload_required: true,
+        scope_bootstrap_waiting: true,
+    };
+
+    const SCOPE_WAIT_TIP_SOURCE = '请稍等片刻...';
+    const SCOPE_WAIT_TIP_EN_FALLBACK = 'Please wait a moment...';
+
+    const isChineseFamilyLocale = (locale) => {
+        const loc = normalizeLocale(locale) || '';
+        return loc === 'zh_Hans_CN'
+            || loc === 'zh_Hant_TW'
+            || loc === 'zh_Hant_HK'
+            || loc.startsWith('zh_Hans')
+            || loc.startsWith('zh_Hant')
+            || loc === 'zh'
+            || loc.startsWith('zh-');
+    };
+
+    /**
+     * Soft wait tip: config.api.softTips → locale tip cache → i18nText → EN hard fallback
+     * when active locale is not Chinese-family but result still equals Chinese source.
+     */
+    const resolveScopeBootstrapWaitingMessage = () => {
+        const locale = currentStorefrontLocale();
+        try {
+            const cfg = (window.Weline && window.Weline.config) || {};
+            const api = cfg.api && typeof cfg.api === 'object' ? cfg.api : {};
+            const softTips = api.softTips && typeof api.softTips === 'object' ? api.softTips : null;
+            const fromConfig = normalizeScopeTip(softTips && softTips.scope_bootstrap_waiting);
+            if (fromConfig) {
+                const msg = fromConfig.message || fromConfig.title;
+                if (msg) {
+                    return msg;
+                }
+            }
+        } catch (_error) {
+            // Fall through.
+        }
+        const cached = readScopeTipCache(locale, 'scope_bootstrap_waiting');
+        if (cached) {
+            const msg = cached.message || cached.title;
+            if (msg) {
+                return msg;
+            }
+        }
+        let message = i18nText(SCOPE_WAIT_TIP_SOURCE);
+        if (
+            !isChineseFamilyLocale(locale)
+            && String(message || '').trim() === SCOPE_WAIT_TIP_SOURCE
+        ) {
+            message = SCOPE_WAIT_TIP_EN_FALLBACK;
+        }
+        return message || SCOPE_WAIT_TIP_EN_FALLBACK;
     };
 
     const currentStorefrontLocale = () => {
@@ -2759,7 +2811,7 @@
                     return;
                 }
                 scopeWaitTipAt = now;
-                const message = i18nText('请稍等片刻...');
+                const message = resolveScopeBootstrapWaitingMessage();
                 let shown = false;
                 try {
                     const Toast = this.resolveToastComponent();

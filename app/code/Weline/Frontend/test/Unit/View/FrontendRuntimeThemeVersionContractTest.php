@@ -36,6 +36,10 @@ class FrontendRuntimeThemeVersionContractTest extends TestCore
         self::assertStringContainsString('frontendJsMtime', $src);
         self::assertStringContainsString('frontendAssetVersion', $src);
         self::assertStringContainsString("'assetVersion' => \$frontendAssetVersion", $src);
+        // Soft Scope wait tip seeded under api (server __(), not page i18n bag).
+        self::assertStringContainsString("'softTips'", $src);
+        self::assertStringContainsString('scope_bootstrap_waiting', $src);
+        self::assertStringContainsString('FrontendScopeReloadTip::build', $src);
     }
 
     /**

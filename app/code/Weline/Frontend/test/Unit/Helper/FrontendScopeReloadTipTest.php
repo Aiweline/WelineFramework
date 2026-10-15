@@ -16,7 +16,16 @@ final class FrontendScopeReloadTipTest extends TestCase
         self::assertTrue(FrontendScopeReloadTip::isTipCode('scope_binding_required'));
         self::assertTrue(FrontendScopeReloadTip::isTipCode('scope_context_conflict'));
         self::assertTrue(FrontendScopeReloadTip::isTipCode('request_scope_already_conflicts'));
+        self::assertTrue(FrontendScopeReloadTip::isTipCode('scope_bootstrap_waiting'));
         self::assertFalse(FrontendScopeReloadTip::isTipCode('protocol_error'));
+    }
+
+    public function testScopeBootstrapWaitingUsesPleaseWaitPhrase(): void
+    {
+        $tip = FrontendScopeReloadTip::build('scope_bootstrap_waiting');
+        self::assertNotNull($tip);
+        self::assertNotSame('', (string)$tip['message']);
+        self::assertSame((string)$tip['title'], (string)$tip['message']);
     }
 
     public function testBuildReturnsLocalizedTipShape(): void

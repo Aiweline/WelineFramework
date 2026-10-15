@@ -193,6 +193,10 @@ $runtime = [
         'website_id' => (int)($scopeMeta['website_id'] ?? 0),
         'store_id' => (int)($scopeMeta['store_id'] ?? 0),
         'channel_id' => (int)($scopeMeta['channel_id'] ?? 0),
+        // Soft Scope wait tip: server-localized (not page i18n bag) — first paint before bootstrap tips cache.
+        'softTips' => [
+            'scope_bootstrap_waiting' => \Weline\Frontend\Helper\FrontendScopeReloadTip::build('scope_bootstrap_waiting'),
+        ],
     ],
     'url' => [
         'origin' => $host,
