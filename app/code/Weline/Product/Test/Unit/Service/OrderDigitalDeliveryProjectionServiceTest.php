@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Product\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Order\Api\Data\OrderReadResult;
 use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Product\Api\ProductDownloadEntitlementInterface;
 use Weline\Product\Service\OrderDigitalDeliveryProjectionService;
@@ -25,18 +26,23 @@ final class OrderDigitalDeliveryProjectionServiceTest extends TestCase
 
     public function testProjectReturnsEntitlementHrefWithoutPublicRoutes(): void
     {
-        $order = new class {
-            public string $status = 'paid';
-            public ?int $customerId = 42;
-            public array $items = [[
+        $order = new OrderReadResult(
+            orderUuid: self::ORDER_UUID,
+            checkoutGroupUuid: 'cg',
+            status: 'paid',
+            currency: 'USD',
+            websiteId: 1,
+            storeId: 1,
+            items: [[
                 'name' => 'Golden Triangle Pack',
                 'fulfillment_metadata' => [
                     'digital_download' => [
-                        'global_offer_uuid' => OrderDigitalDeliveryProjectionServiceTest::OFFER_UUID,
+                        'global_offer_uuid' => self::OFFER_UUID,
                     ],
                 ],
-            ]];
-        };
+            ]],
+            customerId: 42,
+        );
 
         $orders = $this->createMock(OrderFacadeInterface::class);
         $orders->method('get')->with(self::ORDER_UUID)->willReturn($order);
@@ -62,11 +68,15 @@ final class OrderDigitalDeliveryProjectionServiceTest extends TestCase
 
     public function testProjectDeniesForeignCustomerWithoutCapability(): void
     {
-        $order = new class {
-            public string $status = 'paid';
-            public ?int $customerId = 42;
-            public array $items = [];
-        };
+        $order = new OrderReadResult(
+            orderUuid: self::ORDER_UUID,
+            checkoutGroupUuid: 'cg',
+            status: 'paid',
+            currency: 'USD',
+            websiteId: 1,
+            storeId: 1,
+            customerId: 42,
+        );
         $orders = $this->createMock(OrderFacadeInterface::class);
         $orders->method('get')->willReturn($order);
         $entitlements = $this->createMock(ProductDownloadEntitlementInterface::class);

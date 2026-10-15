@@ -166,8 +166,8 @@ chart,chart
 显示帮助,"Show help"
 "重建全部 Provider 索引","Rebuild all provider indexes"
 "仅重建 Blog 索引","Rebuild Blog index only"
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计

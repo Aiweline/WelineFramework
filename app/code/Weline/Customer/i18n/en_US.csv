@@ -524,8 +524,8 @@ Session标识,"Session ID"
 与真正重要的事物和谐相处。,"LIVE IN HARMONY WITH WHAT MATTERS."
 欢迎回来,"Welcome back"
 "共 %{1} 个提供方","%{1} providers"
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 "按 kind 粗评是否命中分群（无 DB 分群表）","Coarse-check segment hit by kind (no DB segment table)"
 "无法连接 Google 或 Facebook 登录服务。请确认本机出站代理已启动，或在「顾客社媒登录 → 出站代理」填写可用代理。","Unable to reach Google or Facebook sign-in. Start your local outbound proxy, or set a working proxy under Customer social login → Outbound proxy."
 社媒登录暂时失败，请稍后重试。,"Social sign-in failed temporarily. Please try again."

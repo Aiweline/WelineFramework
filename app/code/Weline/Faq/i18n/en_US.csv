@@ -115,8 +115,8 @@ Slug,Slug
 "FAQ 类型编码无效。","Invalid FAQ type code."
 "FAQ 类型不存在或尚未注册：%{1}","FAQ type missing or unregistered: %{1}"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计

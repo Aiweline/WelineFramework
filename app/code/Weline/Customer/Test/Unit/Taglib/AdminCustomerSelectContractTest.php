@@ -35,5 +35,8 @@ final class AdminCustomerSelectContractTest extends TestCase
         self::assertStringNotContainsString('w-field__control', $renderer);
         self::assertStringContainsString("UI.define('customer-select'", $script);
         self::assertStringContainsString('floating.portal', $script);
+        self::assertStringContainsString('email:', $script);
+        self::assertStringContainsString('getEmail:', $script);
+        self::assertStringContainsString('dataset.wCustomerEmail', $script);
     }
 }

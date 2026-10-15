@@ -315,11 +315,6 @@ Token无效,"Token is invalid"
 暂无通知,"No notifications"
 查看全部,"View all"
 管理订阅,"Manage subscriptions"
-关闭,closure
-确定,Sure
-取消,Cancel
-请重试,"Please try again"
-未找到可提交的表单。,"No submittable form found."
 发送通知失败,"Failed to send notification"
 总用户数,"Total Users"
 总订单数,"Total Orders"
@@ -339,6 +334,7 @@ PHP版本,"PHP version"
 添加渠道,"Add Channel"
 再添加渠道,"Add another channel"
 联系人名称,"Contact name"
+取消,Cancel
 保存,Save
 渠道,Channel
 请选择渠道,"Please select a channel"
@@ -617,6 +613,10 @@ DI编译失败：%{1},"DI compilation failed: %{1}"
 重建后台菜单搜索索引...,"Rebuilding backend menu search index..."
 "后台菜单搜索索引已重建：%{1} 条","Backend menu search index rebuilt: %{1} entries"
 后台菜单搜索索引重建失败：%{1},"Failed to rebuild backend menu search index: %{1}"
+关闭,closure
+确定,Sure
+请重试,"Please try again"
+未找到可提交的表单。,"No submittable form found."
 mail,mail
 folder,folder
 时区,"Time zone"

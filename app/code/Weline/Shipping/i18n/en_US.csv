@@ -775,8 +775,8 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 "孤儿运单处理：done=%{1} dead=%{2} processed=%{3}","Orphan waybill handling: done=%{1} dead=%{2} processed=%{3}"
 China,China
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 运费,"Shipping charges"
 发货记录,发货记录
 暂无发货记录,"No Shipment Records"
