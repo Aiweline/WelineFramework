@@ -869,12 +869,12 @@ class AttackDetector
     }
 
     /**
-     * Loopback / Cloudflare edges are transport hops, never client identities.
+     * Loopback / Cloudflare edges are transport hops, never client identities
+     * (loopback may opt into shared_ban for local repro only).
      */
     private function isNonBanableInfrastructureIp(string $ip): bool
     {
-        return GlobalRateLimiter::isLoopbackIp($ip)
-            || GlobalRateLimiter::isCloudflareEdgeIp($ip);
+        return GlobalRateLimiter::isNonBanableClientIp($ip);
     }
 
     /**

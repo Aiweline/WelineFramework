@@ -10,12 +10,19 @@ use Weline\Server\Security\GlobalRateLimiter;
 require_once \dirname(__DIR__, 7) . '/app/bootstrap_phpunit.php';
 
 /**
- * T-BAN: 127.0.0.0/8 and ::1 must never enter / match shared_ban.
+ * T-BAN: 127.0.0.0/8 and ::1 must never enter / match shared_ban by default.
  */
 final class GlobalRateLimiterLoopbackBanTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        \putenv('WLS_ALLOW_LOOPBACK_SHARED_BAN');
+        parent::tearDown();
+    }
+
     public function testBanAndIsBannedShortCircuitLoopbackAddresses(): void
     {
+        \putenv('WLS_ALLOW_LOOPBACK_SHARED_BAN=0');
         $instance = 'loopback-ban-' . \bin2hex(\random_bytes(4));
         $limiter = new GlobalRateLimiter(null, 1, $instance);
 
@@ -30,7 +37,24 @@ final class GlobalRateLimiterLoopbackBanTest extends TestCase
                 "loopback {$ip} ban delta must be rejected",
             );
             self::assertTrue(GlobalRateLimiter::isLoopbackIp($ip));
+            self::assertTrue(GlobalRateLimiter::isNonBanableClientIp($ip));
         }
+    }
+
+    public function testLoopbackSharedBanAllowedWhenEnvOptIn(): void
+    {
+        \putenv('WLS_ALLOW_LOOPBACK_SHARED_BAN=1');
+        self::assertTrue(GlobalRateLimiter::isLoopbackSharedBanAllowed());
+
+        $instance = 'loopback-ban-allow-' . \bin2hex(\random_bytes(4));
+        $limiter = new GlobalRateLimiter(null, 1, $instance);
+        $ip = '127.0.0.1';
+
+        self::assertFalse(GlobalRateLimiter::isNonBanableClientIp($ip));
+        $limiter->ban($ip, 600);
+        self::assertTrue($limiter->isBanned($ip));
+        self::assertTrue($limiter->clearBans($ip));
+        self::assertFalse($limiter->isBanned($ip));
     }
 
     public function testNonLoopbackBanStillWorks(): void

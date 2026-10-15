@@ -9205,6 +9205,18 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         WelineEnv::set('origin_request_uri', $this->requestServer('WELINE_ORIGIN_REQUEST_URI'), 'WlsRuntime processUrlParse');
         WelineEnv::set('full_request_uri', $this->requestServer('WELINE_FULL_REQUEST_URI'), 'WlsRuntime processUrlParse');
         WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $this->requestServer('WELINE_ORIGIN_REQUEST_URI'), 'WlsRuntime processUrlParse');
+        // Align Shared FPC with engine live/{host}/{path}: freeze visitor pretty
+        // path (never /guide?view=|/guide?d= controller identities).
+        $visitorPath = \Weline\Framework\Http\Fpc\FpcEngineIdentity::preferVisitorUri(
+            (string)($this->requestServer('WELINE_VISITOR_REQUEST_URI') ?? ''),
+            (string)($this->requestServer('WELINE_ORIGIN_REQUEST_URI') ?? ''),
+            (string)($this->requestServer('REQUEST_URI') ?? ''),
+            $currentUri,
+        );
+        if ($visitorPath !== '' && $host !== '') {
+            $visitorPath = \str_starts_with($visitorPath, '/') ? $visitorPath : '/' . $visitorPath;
+            \Weline\Framework\Http\Fpc\FpcEngineIdentity::freezeFullUrl($scheme . '://' . $host . $visitorPath);
+        }
         
         // 设置后端标识
         $welineArea = $this->requestServer('WELINE_AREA') ?? '';

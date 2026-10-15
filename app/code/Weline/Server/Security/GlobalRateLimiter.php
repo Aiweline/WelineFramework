@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Security;
 
+use Weline\Framework\App\Env;
 use Weline\Server\Service\Contract\MemoryStateFacadeInterface;
 
 /**
@@ -89,7 +90,7 @@ final class GlobalRateLimiter
         if ($instanceName === '' || $ip === '' || $expiresAt <= \time()) {
             return false;
         }
-        if (self::isLoopbackIp($ip) || self::isCloudflareEdgeIp($ip)) {
+        if (self::isNonBanableClientIp($ip)) {
             return false;
         }
         if ($expectedInstanceName !== '' && !\hash_equals($expectedInstanceName, $instanceName)) {
@@ -106,10 +107,11 @@ final class GlobalRateLimiter
             return false;
         }
         $ip = self::normalizeIp($ip);
-        if ($ip === '' || self::isLoopbackIp($ip) || self::isCloudflareEdgeIp($ip)) {
+        if ($ip === '' || self::isNonBanableClientIp($ip)) {
             // Existing loopback / CF-edge ban keys are inert: Nginx→WLS peer is
             // always 127.0.0.0/8 or ::1, and mis-peeled orange-cloud XFF used to
             // ban CF POPs (site-wide 403 for that edge).
+            // Local repro opt-in: wls.allow_loopback_shared_ban / WLS_ALLOW_LOOPBACK_SHARED_BAN.
             return false;
         }
         // Authoritative ban expiries are epoch seconds because they survive
@@ -160,7 +162,7 @@ final class GlobalRateLimiter
             return;
         }
         $ip = self::normalizeIp($ip);
-        if ($ip === '' || self::isLoopbackIp($ip) || self::isCloudflareEdgeIp($ip)) {
+        if ($ip === '' || self::isNonBanableClientIp($ip)) {
             return;
         }
         $expiresAt = \time() + \max(1, $ttl);
@@ -445,8 +447,43 @@ final class GlobalRateLimiter
     }
 
     /**
-     * 127.0.0.0/8 and ::1 must never enter shared_ban — Nginx proxy_pass peers
-     * are loopback, so a loopback ban 403s every public request.
+     * Transport hops that must not become shared_ban client identity.
+     * Cloudflare edges are always exempt; loopback is exempt unless local repro
+     * opt-in {@see isLoopbackSharedBanAllowed()} is on.
+     */
+    public static function isNonBanableClientIp(string $ip): bool
+    {
+        if (self::isCloudflareEdgeIp($ip)) {
+            return true;
+        }
+
+        return self::isLoopbackIp($ip) && !self::isLoopbackSharedBanAllowed();
+    }
+
+    /**
+     * Local-only repro: allow 127.0.0.0/8 / ::1 into shared_ban.
+     * Env: wls.allow_loopback_shared_ban=true or WLS_ALLOW_LOOPBACK_SHARED_BAN=1.
+     * Warning: one ban then Forbiddens every same-machine browser until unblock.
+     */
+    public static function isLoopbackSharedBanAllowed(): bool
+    {
+        $flag = \getenv('WLS_ALLOW_LOOPBACK_SHARED_BAN');
+        if ($flag !== false && $flag !== '') {
+            $normalized = \strtolower(\trim((string)$flag));
+
+            return $normalized === '1' || $normalized === 'true' || $normalized === 'on' || $normalized === 'yes';
+        }
+
+        try {
+            return (bool)Env::get('wls.allow_loopback_shared_ban', false);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * 127.0.0.0/8 and ::1 must never enter shared_ban by default — Nginx
+     * proxy_pass peers are loopback, so a loopback ban 403s every public request.
      */
     public static function isLoopbackIp(string $ip): bool
     {
