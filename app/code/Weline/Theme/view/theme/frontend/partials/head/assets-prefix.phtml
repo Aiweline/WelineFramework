@@ -1,15 +1,19 @@
 <?php
 /**
- * Route-invariant head prefix (critical → tokens → base → disk → overlay → prepaint).
+ * Route-invariant head prefix (critical → tokens → base → disk → overlay).
  * Big widget layout pack is placed after theme/disk/overlay by WidgetAssetHtmlPlacement.
  *
- * Head CSS order (Amazon-aligned, 2026-10-14):
+ * Head CSS order (Amazon-aligned):
  * 1) layout-critical (tiny skeleton)
  * 2) tokens pack (① variables / light colors)
  * 3) storefront base pack (② foundation + theme.css + dark)
  * 4) theme config disk override
  * 5) design overlay pack (③ layout-scoped private leaves)
  * 6) (later) big layout pack / other CSS via placement
+ *
+ * JS policy (default Theme): **no Theme scripts in head**. Frontend `weline.js`
+ * (pixel/ModuleLoader bootstrap) stays via Weline_Frontend::header/base. Theme
+ * chrome JS → modules / body-end. Custom design themes are out of this wave.
  *
  * work_mode=default_theme — head emission only; pack service is theme_module_runtime.
  *
@@ -66,15 +70,6 @@ $diskAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPac
 $overlayAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
     && $overlayPackHtml !== null
     && $headPack->themeOverlayAbsorbed('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_OVERLAY);
-
-$earlyJsHtml = null;
-try {
-    $earlyJsHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\Theme\Service\ThemeHeadChromeJsPack::class
-    )->tryInlineScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_EARLY);
-} catch (\Throwable $e) {
-    $earlyJsHtml = null;
-}
 ?>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
 <theme:layout-critical area="frontend"/>
@@ -101,10 +96,4 @@ try {
 <?php if ($overlayPackHtml !== null): ?>
 <?= $overlayPackHtml ?>
 <?php endif; ?>
-<?php if ($earlyJsHtml !== null): ?>
-<?= $earlyJsHtml ?>
-<?php else: ?>
-<script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)"></script>
-<?php endif; ?>
-<?php // head 顺序自检：前端访问时产出 window.__WELINE_HEAD_ORDER__（只读 DOM、不发请求）。 ?>
-<theme:js defer>Weline_Theme::theme/frontend/assets/js/weline-head-order-check.js</theme:js>
+<?php // no Theme scripts here — weline.js from Frontend header/base only ?>

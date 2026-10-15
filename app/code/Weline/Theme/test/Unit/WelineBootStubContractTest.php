@@ -60,10 +60,12 @@ final class WelineBootStubContractTest extends TestCase
         self::assertNotFalse($stubPos, 'base.phtml 缺少启动桩');
         self::assertNotFalse($runtimePos, 'base.phtml 缺少 defer 的 runtime.js');
         self::assertLessThan($runtimePos, $stubPos, '启动桩必须排在 defer 脚本之前');
-        // 主题前缀段只负责 prepaint 内联，不再挂桩（避免双源）。
+        // Default Theme Amazon-style：前缀段仅 CSS，Theme chrome JS → modules / body-end。
         $prefix = $this->read('view/theme/frontend/partials/head/assets-prefix.phtml');
         self::assertStringNotContainsString('weline-boot-stub', $prefix);
-        self::assertStringContainsString('tryInlineScriptHtml', $prefix);
+        self::assertStringNotContainsString('tryInlineScriptHtml', $prefix);
+        self::assertStringNotContainsString('ThemeHeadChromeJsPack', $prefix);
+        self::assertStringNotContainsString('<script', $prefix);
     }
 
     public function testWelineJsDrainsBootQueue(): void

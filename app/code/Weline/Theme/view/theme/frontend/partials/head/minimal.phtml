@@ -6,7 +6,9 @@
  * @meta.assets.ui {default="module",name="UI JS 以 ES module 加载"}
  *
  * work_mode=default_theme — head emission; packs via ThemeHeadChromeCssPack.
- * Order: critical → tokens → storefront base → disk → overlay (then page head / widget layout later).
+ * Order: critical → tokens → storefront base → disk → overlay.
+ * JS: no Theme scripts in head (Amazon-style). Frontend weline.js only;
+ * Theme chrome JS via modules / body-end.
  */
 $diskOverrideHtml = '';
 try {
@@ -46,14 +48,6 @@ try {
     $overlayPackHtml = null;
 }
 $diskAbsorbed = false;
-$earlyJsHtml = null;
-try {
-    $earlyJsHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\Theme\Service\ThemeHeadChromeJsPack::class
-    )->tryScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_EARLY);
-} catch (\Throwable $e) {
-    $earlyJsHtml = null;
-}
 ?>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
 <theme:layout-critical area="frontend"/>
@@ -78,10 +72,5 @@ try {
 <?php if ($overlayPackHtml !== null): ?>
 <?= $overlayPackHtml ?>
 <?php endif; ?>
-<?php if ($earlyJsHtml !== null): ?>
-<?= $earlyJsHtml ?>
-<?php else: ?>
-<script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)"></script>
-<?php endif; ?>
 <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
-<script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
+<?php // no Theme scripts — weline.js from Frontend; Theme chrome → modules / body-end ?>

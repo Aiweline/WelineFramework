@@ -526,7 +526,92 @@ final class ThemePageTypeResolver implements ProcessSharedInterface
             return ThemeLayout::PAGE_TYPE_NOT_FOUND;
         }
 
+        // Path ↔ layout 1:1 for known frontend layout folders (article/journal/sanctuary/…).
+        // Allowlist only — never treat arbitrary catalog/CMS slugs as layout types.
+        // Needed so theme-head overlay can layout-scope CSS when Template layoutType
+        // is not yet assigned at head render time.
+        $fromSegment = $this->detectLayoutTypeFromKnownLayoutSegment($path);
+        if ($fromSegment !== '') {
+            return $fromSegment;
+        }
+
         return '';
+    }
+
+    /**
+     * Path element → layout type when it is a registered storefront layout folder.
+     * Prefer the first segment; if locale/currency prefixes were not peeled (unit /
+     * early head), accept a later exact segment (e.g. en_us/article → article).
+     * Never invent layouts from arbitrary catalog slug paths.
+     */
+    private function detectLayoutTypeFromKnownLayoutSegment(string $normalizedPath): string
+    {
+        $set = $this->knownStorefrontLayoutSegmentSet();
+        $segments = \array_values(\array_filter(
+            \explode('/', $normalizedPath),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return '';
+        }
+        $first = \strtolower($segments[0]);
+        if (isset($set[$first])) {
+            return $first;
+        }
+        foreach ($segments as $segment) {
+            $segment = \strtolower($segment);
+            if (isset($set[$segment])) {
+                return $segment;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Single-segment layout identities safe for URI→overlay scoping.
+     *
+     * @return array<string, true>
+     */
+    private function knownStorefrontLayoutSegmentSet(): array
+    {
+        static $set = null;
+        if (\is_array($set)) {
+            return $set;
+        }
+        $set = [];
+        try {
+            foreach ((new \ReflectionClass(ThemeLayout::class))->getConstants() as $name => $value) {
+                if (!\is_string($name) || !\str_starts_with($name, 'PAGE_TYPE_') || !\is_string($value)) {
+                    continue;
+                }
+                $segment = \strtolower(\trim($value));
+                if ($segment === '' || \str_contains($segment, '/') || \str_contains($segment, '.')) {
+                    continue;
+                }
+                $set[$segment] = true;
+            }
+        } catch (\Throwable) {
+            // Fall through to the explicit shell list below.
+        }
+        // Design / Theme layout folders with public path ↔ layouts/{name} (not all in PAGE_TYPE_*).
+        foreach ([
+            'article',
+            'journal',
+            'journal-article',
+            'sanctuary',
+            'lounge',
+            'readingnote',
+            'shop',
+            'quiz',
+            'blank',
+        ] as $segment) {
+            $set[$segment] = true;
+        }
+        // Keep empty/cms/error/default as non-URI identities (handled elsewhere or must stay empty).
+        unset($set['default'], $set['cms_page'], $set['error'], $set['test']);
+
+        return $set;
     }
 
     private function normalizeStorefrontPath(string $requestUri): string

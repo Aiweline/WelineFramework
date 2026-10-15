@@ -17,5 +17,14 @@ final class PartialsBreadcrumbContextContractTest extends TestCase
         self::assertStringContainsString("storefront_category_breadcrumbs", $src);
         self::assertStringContainsString("\$seoBag['breadcrumbs']", $src);
         self::assertStringContainsString("\$data['breadcrumbs'] = \$seoBag['breadcrumbs']", $src);
+        // Page-trail partial must not fall into shared chrome cache (poisoned PLP crumbs).
+        self::assertDoesNotMatchRegularExpression(
+            "/'head', 'loading', 'scripts', 'topnav', 'sidebar', 'right-sidebar', 'header', 'footer', 'breadcrumb' => 'role'/",
+            $src,
+        );
+        self::assertStringContainsString(
+            "'head', 'loading', 'scripts', 'topnav', 'sidebar', 'right-sidebar', 'header', 'footer' => 'role'",
+            $src,
+        );
     }
 }

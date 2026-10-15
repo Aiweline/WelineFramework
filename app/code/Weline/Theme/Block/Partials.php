@@ -1002,7 +1002,8 @@ class Partials extends Block
 
     /**
      * FOUC pending without unlock leaves body visibility:hidden forever.
-     * Design themes may override assets-suffix and drop css-ready — Theme owns the gate.
+     * Default Theme amazon-progressive FOUC has no pending → this gate is a no-op.
+     * Design themes may still set pending and drop css-ready — Theme owns the gate.
      */
     private function ensureStorefrontHeadCssReadyGate(string $html): string
     {
@@ -1223,9 +1224,11 @@ class Partials extends Block
                 return null;
             }
             // Compatibility fallback for default backend shells while declarative marks propagate.
+            // Breadcrumb is page-trail chrome, NOT shared shell — never chrome-cache it.
+            // (Shared chrome bag omitted trail fp and poisoned PLP crumbs across routes.)
             $fallbackAuth = match ($type) {
                 'topbar' => 'user',
-                'head', 'loading', 'scripts', 'topnav', 'sidebar', 'right-sidebar', 'header', 'footer', 'breadcrumb' => 'role',
+                'head', 'loading', 'scripts', 'topnav', 'sidebar', 'right-sidebar', 'header', 'footer' => 'role',
                 default => null,
             };
             if ($fallbackAuth === null) {

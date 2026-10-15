@@ -189,4 +189,38 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             $resolver->resolvePageTypeFromUri('/editorial/hanfu-care', ThemeLayout::PAGE_TYPE_CMS)
         );
     }
+
+    public function testDesignShellUrisResolvePathToLayoutOneToOne(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        // After Url::peelWebsiteMountPathFromRelativePath (live website context),
+        // /{website}/article collapses to article — unit tests use post-peel paths.
+        $cases = [
+            '/article' => 'article',
+            '/en_US/article' => 'article',
+            '/journal' => 'journal',
+            '/journal-article' => 'journal-article',
+            '/sanctuary' => 'sanctuary',
+            '/lounge' => 'lounge',
+            '/readingnote' => 'readingnote',
+            '/shop' => 'shop',
+            '/quiz' => 'quiz',
+        ];
+        foreach ($cases as $uri => $expected) {
+            self::assertSame($expected, $resolver->resolveLayoutTypeFromUri($uri, ''), $uri);
+        }
+    }
+
+    public function testArbitraryCatalogSlugDoesNotBecomeLayoutType(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        self::assertSame(
+            '',
+            $resolver->resolveLayoutTypeFromUri('/wearable-rituals/jade-pendant', '')
+        );
+        self::assertSame(
+            '',
+            $resolver->resolveLayoutTypeFromUri('/editorial/hanfu-care', '')
+        );
+    }
 }

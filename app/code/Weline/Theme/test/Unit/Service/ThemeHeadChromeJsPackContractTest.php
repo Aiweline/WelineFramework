@@ -25,23 +25,26 @@ final class ThemeHeadChromeJsPackContractTest extends TestCase
         self::assertSame('after-css', ThemeHeadChromeJsPack::PACK_AFTER_CSS);
     }
 
-    public function testHeadsWireJsPackWithModuleUiLeftIndependent(): void
+    public function testDefaultThemeFrontendHeadsAreCssOnlyJsViaModules(): void
     {
         foreach ([
             'view/theme/frontend/partials/head/assets-prefix.phtml',
             'view/theme/frontend/partials/head/assets-suffix.phtml',
             'view/theme/frontend/partials/head/default.phtml',
-            'view/theme/backend/partials/head/default.phtml',
+            'view/theme/frontend/partials/head/minimal.phtml',
         ] as $relative) {
             $src = (string)file_get_contents(dirname(__DIR__, 3) . '/' . $relative);
-            self::assertStringContainsString('ThemeHeadChromeJsPack', $src, $relative);
-            if (str_contains($relative, 'assets-prefix')) {
-                self::assertStringContainsString('PACK_EARLY', $src);
-            }
-            if (str_contains($relative, 'assets-suffix') || str_contains($relative, 'default.phtml')) {
-                self::assertStringContainsString('type="module"', $src);
-                self::assertStringContainsString('weline-ui.js', $src);
-            }
+            self::assertStringNotContainsString('ThemeHeadChromeJsPack', $src, $relative);
+            self::assertStringNotContainsString('weline-theme-prepaint.js', $src, $relative);
+            self::assertStringNotContainsString('weline-css-ready.js', $src, $relative);
+            self::assertStringNotContainsString('<script', $src, $relative);
         }
+
+        $backend = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/theme/backend/partials/head/default.phtml'
+        );
+        // Backend still owns head chrome JS (out of this storefront Amazon wave).
+        self::assertStringContainsString('weline-theme-prepaint.js', $backend);
+        self::assertStringContainsString('weline-ui.js', $backend);
     }
 }

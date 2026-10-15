@@ -2,6 +2,7 @@
 /**
  * @meta.name {default="Weline UI 2.0 面包屑",name="Weline UI 2.0 面包屑"}
  * @param.items {default=[],name="面包屑项"}
+ * @meta.cache.mode {default="off",name="缓存模式",description="面包屑随页面轨迹变化，禁止 chrome 共享缓存"}
  */
 $items = $this->getData('meta.items') ?? $this->getData('items') ?? [];
 $items = is_array($items) ? $items : [];
@@ -19,6 +20,10 @@ if ($items === []) {
             : [];
     }
     if (is_array($raw) && $raw !== []) {
+        if (class_exists(\Weline\Product\Service\StorefrontSeoListingFacts::class)) {
+            $facts = new \Weline\Product\Service\StorefrontSeoListingFacts();
+            $raw = $facts->dedupeBreadcrumbs($facts->normalizeBreadcrumbs($raw));
+        }
         $normalized = [];
         $total = count($raw);
         $i = 0;

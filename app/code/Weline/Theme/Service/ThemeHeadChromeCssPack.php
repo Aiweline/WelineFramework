@@ -26,12 +26,17 @@ use Weline\Theme\Service\LayoutEntity\WidgetAssetArtifactPublisher;
  * for collectSources composition and merge=off fallbacks in templates.
  * Gated by resource_files/theme_css_merge (auto/on = always on). Source leaves stay editable;
  * runtime join may include theme.css bytes — never write back into source theme.css.
- * Head CSS order (Amazon-aligned three guns, 2026-10-14):
+ * Head CSS order (Amazon-aligned three guns):
  * layout-critical → tokens (① vars/colors) → storefront base (② foundation/theme) →
  * disk → overlay (③ theme private page leaves, layout-scoped) → widget packs.
  * Overlay list stays theme-owned; flat lists remain compatible (all pages get full list).
  * Artifacts publish under the **active theme** static namespace and are keyed by
  * **application scope** (+ layout_type for overlay) so themes/scopes/layouts never cross-pollute.
+ *
+ * FOUC policy (amazon-progressive): progressive paint, no whole-page body hide.
+ * Chrome packs (PACK_TOKENS / PACK_STOREFRONT / PACK_OVERLAY) MUST stay blocking —
+ * tryLinkHtml MUST NOT emit media="print" onload. media=print defer is reserved for
+ * widget late source only (WidgetAssetOptimizer).
  *
  * work_mode=theme_module_runtime
  */
@@ -39,7 +44,7 @@ final class ThemeHeadChromeCssPack
 {
     /** ① Theme variables / light color tokens (blocking first link). */
     public const PACK_TOKENS = 'tokens';
-    /** ② Global base elements + theme.css (+ deferred dark tokens). */
+    /** ② Global base elements + theme.css + dark tokens (blocking; not print-deferred). */
     public const PACK_STOREFRONT = 'storefront';
     public const PACK_BACKEND = 'backend';
     public const PACK_TOKENS_PRE = 'tokens-pre';
@@ -147,6 +152,8 @@ final class ThemeHeadChromeCssPack
             return null;
         }
         $safe = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        // amazon-progressive FOUC: chrome packs stay blocking — never media="print" here.
+        // media=print onload is reserved for widget late source (WidgetAssetOptimizer).
         $attrs = ' rel="stylesheet" type="text/css" data-weline-theme-head-pack="'
             . htmlspecialchars($pack, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
         // FOUC gate waits only on layout-critical (inline). Theme/disk/overlay must NOT
@@ -701,9 +708,23 @@ final class ThemeHeadChromeCssPack
             /** @var ThemePageTypeResolver $resolver */
             $resolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
             // Empty default: undetected pages stay common-only (do not force PAGE_TYPE_DEFAULT).
-            $resolved = trim($resolver->resolveLayoutType(null, null, null, ''));
+            // Pass current Request so URI path↔layout (article/journal/…) can scope overlay.
+            $request = null;
+            try {
+                $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            } catch (\Throwable) {
+                $request = null;
+            }
+            $resolved = trim($resolver->resolveLayoutType(null, null, $request, ''));
             if ($resolved !== '') {
                 return $resolved;
+            }
+            $uri = (string)(\w_env('request.uri', '') ?? '');
+            if ($uri !== '') {
+                $fromUri = trim($resolver->resolveLayoutTypeFromUri($uri, ''));
+                if ($fromUri !== '') {
+                    return $fromUri;
+                }
             }
         } catch (\Throwable) {
         }

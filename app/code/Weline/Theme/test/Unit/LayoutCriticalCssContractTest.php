@@ -47,16 +47,18 @@ final class LayoutCriticalCssContractTest extends TestCase
         self::assertStringContainsString('padding-inline-end', $html);
     }
 
-    public function testStorefrontHeadAssetsPrefixIncludesFoucBootstrapAndCriticalTag(): void
+    public function testStorefrontHeadAssetsPrefixIsCssOnlyAmazonStyle(): void
     {
         $path = BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/assets-prefix.phtml';
         $src = (string) file_get_contents($path);
         self::assertStringContainsString('css-fouc-bootstrap.phtml', $src);
         self::assertStringContainsString('theme:layout-critical', $src);
-        self::assertStringContainsString('weline-theme-prepaint.js', $src);
+        self::assertStringNotContainsString('weline-theme-prepaint.js', $src);
+        self::assertStringNotContainsString('ThemeHeadChromeJsPack', $src);
+        self::assertStringNotContainsString('<script', $src);
     }
 
-    public function testMinimalHeadIncludesCriticalWithoutHardStyleLeaf(): void
+    public function testMinimalHeadIncludesCriticalWithoutHardStyleLeafOrThemeScript(): void
     {
         $path = BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/minimal.phtml';
         $src = (string) file_get_contents($path);
@@ -65,14 +67,19 @@ final class LayoutCriticalCssContractTest extends TestCase
         // FOUC waits on critical inline; theme pack must not carry data-weline-layout-css.
         self::assertStringNotContainsString('data-weline-layout-css', $src);
         self::assertStringNotContainsString('storefront-shopper-toast-amazon.css', $src);
+        self::assertStringNotContainsString('weline-theme-prepaint.js', $src);
+        self::assertStringNotContainsString('weline-ui.js', $src);
+        self::assertStringNotContainsString('<script', $src);
     }
 
-    public function testStorefrontHeadAssetsSuffixMarksCssReady(): void
+    public function testStorefrontHeadAssetsSuffixHasNoCssReadyScript(): void
     {
         $path = BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/assets-suffix.phtml';
         $src = (string) file_get_contents($path);
         self::assertStringNotContainsString('data-weline-layout-css', $src);
-        self::assertStringContainsString('weline-css-ready.js', $src);
+        self::assertStringNotContainsString('weline-css-ready.js', $src);
+        self::assertStringNotContainsString('<script', $src);
+        self::assertStringContainsString('module-declarations', $src);
     }
 
     public function testCssReadyScriptSetsPendingAndFailOpen(): void
@@ -84,6 +91,16 @@ final class LayoutCriticalCssContractTest extends TestCase
         self::assertStringContainsString('1800', $src);
     }
 
+    public function testAmazonFoucBootstrapHasNoHeadJsOrBodyHide(): void
+    {
+        $path = BP . 'app/code/Weline/Theme/view/templates/partials/head/css-fouc-bootstrap.phtml';
+        $src = (string) file_get_contents($path);
+        self::assertStringContainsString('amazon-progressive', $src);
+        self::assertStringNotContainsString('<script', $src);
+        self::assertStringNotContainsString('visibility:hidden', $src);
+        self::assertStringNotContainsString('data-weline-css="pending"', $src);
+    }
+
     public function testPartialsEnsuresCssReadyWhenFoucPendingWithoutUnlock(): void
     {
         $src = (string) file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
@@ -92,5 +109,20 @@ final class LayoutCriticalCssContractTest extends TestCase
         self::assertStringContainsString('data-weline-theme-head-pack="after-css"', $src);
         $ready = (string) file_get_contents(BP . 'app/code/Weline/Theme/view/templates/partials/head/css-ready.phtml');
         self::assertStringContainsString('weline-css-ready.js', $ready);
+    }
+
+    public function testBodyEndDeclaresThemeChromeModules(): void
+    {
+        $body = (string) file_get_contents(
+            BP . 'app/code/Weline/Theme/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml'
+        );
+        self::assertStringContainsString('data-weline-load="themePrepaint,welineUi"', $body);
+        $modules = (string) file_get_contents(
+            BP . 'app/code/Weline/Theme/view/statics/frontend/weline.modules.js'
+        );
+        self::assertStringContainsString('themePrepaint:', $modules);
+        self::assertStringContainsString('welineUi:', $modules);
+        self::assertStringContainsString('Weline_Theme::ui/weline-theme-prepaint.js', $modules);
+        self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $modules);
     }
 }

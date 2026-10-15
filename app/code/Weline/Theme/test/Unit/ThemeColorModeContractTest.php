@@ -243,17 +243,13 @@ final class ThemeColorModeContractTest extends TestCase
 
         foreach (['default.phtml', 'minimal.phtml', 'assets-suffix.phtml'] as $head) {
             $frontend = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/head/' . $head);
-            if ($head !== 'assets-suffix.phtml') {
-                self::assertStringContainsString('Weline_Theme::ui/weline-theme-prepaint.js', $frontend);
-            }
+            // Default Theme Amazon-style: Theme chrome JS not in head (modules / body-end).
+            self::assertStringNotContainsString('Weline_Theme::ui/weline-theme-prepaint.js', $frontend);
+            self::assertStringNotContainsString('Weline_Theme::ui/weline-ui.js', $frontend);
+            self::assertStringNotContainsString('<script', $frontend);
             self::assertStringContainsString('ThemeHeadChromeCssPack', $frontend);
             self::assertStringContainsString('Weline_Theme::ui/weline-foundation.css', $frontend);
             self::assertStringContainsString('Weline_Theme::ui/weline-frontend.css', $frontend);
-            if ($head !== 'assets-suffix.phtml') {
-                self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $frontend);
-            } else {
-                self::assertStringContainsString('weline-ui.js', $frontend);
-            }
             self::assertSame(1, substr_count($frontend, 'colors/_light.css'));
             self::assertSame(1, substr_count($frontend, 'colors/_default.css'));
             self::assertSame(1, substr_count($frontend, 'colors/_ink.css'));

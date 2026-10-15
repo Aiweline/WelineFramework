@@ -31,3 +31,9 @@ window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?
      data-weline-load-when="idle"
      aria-hidden="true"></div>
 <?php // Theme 全局店面 JS：经 modules + data-weline-load，禁止 @static 直引 ?>
+<?php // Default Theme chrome (Amazon head-zero Theme JS): eager modules after weline.js ?>
+<div hidden
+     data-weline-load="themePrepaint,welineUi"
+     data-weline-load-when="idle"
+     data-weline-theme-chrome="1"
+     aria-hidden="true"></div>

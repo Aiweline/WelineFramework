@@ -1,7 +1,10 @@
 <?php
 /**
- * Route-invariant head suffix (theme UI JS / module declarations + theme-CSS fallback).
+ * Route-invariant head suffix (module declarations + theme-CSS fallback).
  * Big layout pack is injected by WidgetAssetHtmlPlacement after theme/disk/overlay.
+ *
+ * JS policy (default Theme): no Theme scripts in head. weline-ui / prepaint load via
+ * modules + body-end after Frontend weline.js. Custom design themes out of this wave.
  *
  * @meta.name {default="Storefront head assets suffix",name="店面 head 资源后缀"}
  * @meta.cache.mode {default="chrome",name="缓存模式"}
@@ -48,14 +51,6 @@ try {
     $overlayPackHtml = null;
 }
 $diskAbsorbed = false;
-$afterCssJsHtml = null;
-try {
-    $afterCssJsHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\Theme\Service\ThemeHeadChromeJsPack::class
-    )->tryScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_AFTER_CSS, true);
-} catch (\Throwable $e) {
-    $afterCssJsHtml = null;
-}
 ?>
 <?php if ($tokensPackHtml === null && $storefrontPackHtml === null): ?>
 <theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
@@ -74,12 +69,6 @@ try {
 <?php endif; ?>
 <?php endif; ?>
 <w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>
-<?php if ($afterCssJsHtml !== null): ?>
-<?= $afterCssJsHtml ?>
-<?php else: ?>
-<script defer src="@static(Weline_Theme::ui/weline-css-ready.js)"></script>
-<?php endif; ?>
-<?php // site-blocks.css：由部件 @widget.source bake→head（page.phtml HeadAssets），禁止此处 @static 重复 ?>
-<script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
+<?php // site-blocks.css：由部件 @widget.source bake→head；禁止此处 @static 重复 ?>
 <?php // weline.js 已由 Frontend header/base 注入；此后声明业务模块（含 i18n） ?>
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

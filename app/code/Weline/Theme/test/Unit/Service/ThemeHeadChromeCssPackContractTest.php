@@ -69,6 +69,8 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertStringContainsString('selectOverlayLeaves', $src);
         self::assertStringContainsString('ThemePageTypeResolver', $src);
         self::assertStringContainsString('resolveLayoutType', $src);
+        self::assertStringContainsString('resolveLayoutTypeFromUri', $src);
+        self::assertStringContainsString('Weline\\Framework\\Http\\Request', $src);
         self::assertStringContainsString('Style leaves', $src);
         self::assertStringContainsString('never hard-@static', $src);
         self::assertDoesNotMatchRegularExpression(
@@ -98,11 +100,25 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertStringNotContainsString('variables/_spacing.css', $sfBlock);
         self::assertStringNotContainsString('colors/_light.css', $sfBlock);
 
+        $tryLinkAttrs = $this->extractTryLinkAttrsSnippet($src);
         self::assertDoesNotMatchRegularExpression(
             '/\$attrs\s*\.=\\s*[\'"] data-weline-layout-css/',
-            $this->extractTryLinkAttrsSnippet($src),
+            $tryLinkAttrs,
             'theme pack link must not set data-weline-layout-css'
         );
+        // Pin attribute assignment only — comments may mention media="print" as forbidden.
+        self::assertDoesNotMatchRegularExpression(
+            '/\$attrs\s*(?:\.=|=)\s*[\'"][^\'"]*\bmedia\s*=/',
+            $tryLinkAttrs,
+            'amazon-progressive: chrome packs must not set media= (print-defer reserved for widget late source)'
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/return\s+[\'"]<link[^\'"]*\bmedia\s*=/',
+            $tryLinkAttrs,
+            'amazon-progressive: tryLinkHtml return must stay blocking stylesheet (no media=)'
+        );
+        self::assertStringContainsString('amazon-progressive', $src);
+        self::assertStringContainsString('WidgetAssetOptimizer', $src);
     }
 
     public function testGatewayPublishesHeadChromeUnderActiveThemeNamespace(): void
@@ -128,21 +144,34 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         $critical = strpos($prefix, 'theme:layout-critical');
         $diskEcho = strpos($prefix, 'echo $diskOverrideHtml');
         $overlayEmit = strpos($prefix, '<?= $overlayPackHtml');
-        $earlyJs = strpos($prefix, '<?= $earlyJsHtml');
         self::assertNotFalse($tokens);
         self::assertNotFalse($emitPack);
         self::assertNotFalse($critical);
-        self::assertNotFalse($earlyJs);
         self::assertNotFalse($diskEcho);
         self::assertLessThan($tokens, $critical, 'tokens after critical');
         self::assertLessThan($emitPack, $tokens, 'storefront base after tokens');
         self::assertLessThan($diskEcho, $emitPack, 'disk after storefront base');
         self::assertNotFalse($overlayEmit);
         self::assertLessThan($overlayEmit, $diskEcho, 'overlay after disk');
-        self::assertLessThan($earlyJs, $overlayEmit, 'early JS after overlay');
+        // Amazon-style default Theme: no Theme JS / early pack in head prefix.
+        self::assertStringNotContainsString('earlyJsHtml', $prefix);
+        self::assertStringNotContainsString('ThemeHeadChromeJsPack', $prefix);
+        self::assertStringNotContainsString('<script', $prefix);
         self::assertStringContainsString('PACK_TOKENS', $prefix);
         self::assertStringContainsString('PACK_STOREFRONT', $prefix);
         self::assertStringContainsString('PACK_OVERLAY', $prefix);
+        // P2-revised: tokens gun before storefront gun (blocking shell, no print-defer).
+        // File convention: assertLessThan($laterPos, $earlierPos) ⇒ earlier < later.
+        $tokensConst = strpos($prefix, 'ThemeHeadChromeCssPack::PACK_TOKENS');
+        $storefrontConst = strpos($prefix, 'ThemeHeadChromeCssPack::PACK_STOREFRONT');
+        self::assertNotFalse($tokensConst);
+        self::assertNotFalse($storefrontConst);
+        self::assertLessThan($storefrontConst, $tokensConst, 'PACK_TOKENS before PACK_STOREFRONT');
+        self::assertDoesNotMatchRegularExpression(
+            '/<(?:link|style)[^>]*\bmedia\s*=\s*[\'"]print[\'"]/i',
+            $prefix,
+            'prefix must not emit print-deferred chrome CSS tags'
+        );
         self::assertMatchesRegularExpression(
             "/PACK_STOREFRONT[\s\S]{0,240}'include_disk'\\s*=>\\s*true/",
             $prefix,

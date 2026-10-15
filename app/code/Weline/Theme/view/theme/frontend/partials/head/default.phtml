@@ -1,7 +1,7 @@
 <?php
 /**
  * @meta.name {default="Weline UI 2.0 Frontend Head",name="Weline UI 2.0 前台头部"}
- * @meta.description {default="Frontend foundation, light/dark color palettes, and theme runtime via css/js tags.",name="前台 UI/主题资源入口"}
+ * @meta.description {default="Frontend foundation, light/dark color palettes, and theme runtime via css tags.",name="前台 UI/主题资源入口"}
  * @meta.cache.mode {default="chrome",name="缓存模式"}
  * @meta.cache.auth {default="guest",name="鉴权维度"}
  * @meta.cache.ttl {default="300",name="新鲜期秒"}
@@ -10,8 +10,9 @@
  * wave9-9s: Partials prefers composed assets-prefix + page + assets-suffix when present.
  * This monolithic file remains the meta/chrome policy source and legacy fallback.
  *
- * Order: critical → tokens → storefront base → disk → overlay → styles-after / css-ready.
- * work_mode=default_theme — head emission; packs via ThemeHeadChromeCssPack (theme_module_runtime).
+ * Order: critical → tokens → storefront base → disk → overlay → styles-after.
+ * JS: no Theme scripts in head (Amazon-style). Frontend weline.js only; Theme chrome
+ * JS via modules / body-end. work_mode=default_theme.
  */
 $diskOverrideHtml = '';
 try {
@@ -51,18 +52,6 @@ try {
     $overlayPackHtml = null;
 }
 $diskAbsorbed = false;
-$earlyJsHtml = null;
-$afterCssJsHtml = null;
-try {
-    $jsPack = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\Theme\Service\ThemeHeadChromeJsPack::class
-    );
-    $earlyJsHtml = $jsPack->tryInlineScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_EARLY);
-    $afterCssJsHtml = $jsPack->tryScriptHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_AFTER_CSS, true);
-} catch (\Throwable $e) {
-    $earlyJsHtml = null;
-    $afterCssJsHtml = null;
-}
 ?>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
 <theme:layout-critical area="frontend"/>
@@ -89,19 +78,7 @@ try {
 <?php if ($overlayPackHtml !== null): ?>
 <?= $overlayPackHtml ?>
 <?php endif; ?>
-<?php if ($earlyJsHtml !== null): ?>
-<?= $earlyJsHtml ?>
-<?php else: ?>
-<script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)"></script>
-<?php endif; ?>
 <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
 <w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>
-<?php if ($afterCssJsHtml !== null): ?>
-<?= $afterCssJsHtml ?>
-<?php else: ?>
-<script defer src="@static(Weline_Theme::ui/weline-css-ready.js)"></script>
-<?php endif; ?>
-<?php // site-blocks.css：由部件 @widget.source bake→head（page.phtml HeadAssets），禁止此处 @static 重复 ?>
-<script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>
-<?php // weline.js 已由 Frontend header/base 注入；此后声明业务模块（含 i18n） ?>
+<?php // site-blocks.css：由部件 bake→head；Theme chrome JS → modules / body-end（无 head script） ?>
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

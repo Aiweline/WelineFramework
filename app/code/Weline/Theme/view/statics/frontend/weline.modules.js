@@ -7,6 +7,27 @@ window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAliases || {};
 
 Object.assign(window.WelineModulesConfig.modules, {
+    // Default Theme chrome JS (Amazon-style): not in head — load after Frontend weline.js.
+    themePrepaint: {
+        paths: ["Weline_Theme::ui/weline-theme-prepaint.js"],
+        globalVar: null,
+        load: "eager",
+        description: "html data-theme / colorScheme before interactive chrome"
+    },
+    welineUi: {
+        paths: ["Weline_Theme::ui/weline-ui.js"],
+        globalVar: null,
+        load: "eager",
+        description: "Weline UI 2 runtime (classic script; was type=module in head)"
+    },
+    // Legacy FOUC unlock only — do NOT declare on amazon-progressive storefront
+    // (css-ready sets data-weline-css=pending). Kept for design themes / backend.
+    themeCssReady: {
+        paths: ["Weline_Theme::ui/weline-css-ready.js"],
+        globalVar: null,
+        load: "defer",
+        description: "FOUC pending→ready gate (legacy / design themes)"
+    },
     siteBlocks: {
         paths: ["Weline_Theme::js/widgets/site-blocks.js"],
         globalVar: "WelineSiteBlocks",
