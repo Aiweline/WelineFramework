@@ -66,7 +66,7 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
             /** @var ThemeScopeVersionService $versions */
             $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
             foreach ($this->themeIdChain($themeId) as $candidateThemeId) {
-                foreach ($this->scopeCandidates() as $scope) {
+                foreach ($this->scopeCandidates($candidateThemeId) as $scope) {
                     $published = $versions->getPublished($candidateThemeId, $scope);
                     if (!$published instanceof ThemeScopeVersion || $published->getVersionId() <= 0) {
                         continue;
@@ -117,10 +117,11 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
     /**
      * Acceptable storefront generation ids after FPC promote (multi-host / multi-Scope).
      *
-     * CLI `currentVersionId()` alone is RequestContext-sensitive and can resolve to a
-     * Global owner stamp while live html-disk hosts bake Website/Store stamps — that
-     * false-fails setup:upgrade. Promote assert must accept any sealed published id
-     * reachable from Env theme + frontend-bound themes across storefront scope probes.
+     * CLI without Channel RequestContext used to resolve only Global defaults while
+     * html-disk Host pages bake Channel-published stamps — that false-failed promote
+     * and caused FE「有新版本」reload loops (cookie/API Global ≠ page Channel).
+     * Accept any sealed published id reachable from Env theme + frontend-bound themes
+     * across storefront scope probes (Channel fallback chain included).
      *
      * @return array<string, true> map of themePublishedVersionId => true
      */
@@ -179,9 +180,16 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
     }
 
     /**
+     * Storage scopes nearest-first for storefront generation resolve.
+     *
+     * When RequestContext already has Website/Store/Channel, use that fallback chain.
+     * Otherwise (CLI, /api hole-punch without Channel pin, Global-only API) still probe
+     * Channel→Store→Website chains from frontend theme bindings so Host html-disk stamps
+     * and outbound Cookie/JSON agree — never prefer orphan Global publish over Channel.
+     *
      * @return list<string>
      */
-    private function scopeCandidates(): array
+    private function scopeCandidates(int $themeId): array
     {
         $list = [];
         $seen = [];
@@ -208,6 +216,9 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
             // CLI / early bootstrap.
         }
 
+        // RequestContext Global / missing: still prefer bound Channel publish over Global.
+        $this->pushFrontendBoundChannelFallbackScopes($themeId, $push);
+
         foreach ($this->defaultStorefrontScopes() as $scope) {
             $push($scope);
         }
@@ -217,6 +228,7 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
 
     /**
      * RequestContext-independent scopes to probe for promote stamp acceptance.
+     * Channel fallback chain must be included — html-disk Host pages bake Channel V.
      *
      * @return list<string>
      */
@@ -233,19 +245,36 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
             $list[] = $scope;
         };
 
+        $this->pushFrontendBoundChannelFallbackScopes($themeId, $push);
+
         foreach ($this->defaultStorefrontScopes() as $scope) {
             $push($scope);
         }
 
+        return $list;
+    }
+
+    /**
+     * Push ScopeHierarchy fallback chains for frontend-bound websites as Channel.
+     * Uses ScopeIdentity::channel + hierarchy — never hardcode storage scope literals.
+     *
+     * @param callable(string):void $push
+     */
+    private function pushFrontendBoundChannelFallbackScopes(int $themeId, callable $push): void
+    {
         try {
             if (!\class_exists(ThemeApplicationUsageService::class)) {
-                return $list;
+                return;
             }
             /** @var ThemeApplicationUsageService $usage */
             $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
             $bindings = $usage->frontendWebsiteBindingsByThemeId()[$themeId] ?? [];
             if ($bindings === []) {
-                return $list;
+                // Unbound theme: still probe default-website Channel (storefront Host bake).
+                $bindings = [[
+                    'website_id' => 0,
+                    'website_code' => 'default',
+                ]];
             }
             /** @var ScopeHierarchyInterface $scopes */
             $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
@@ -256,18 +285,22 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                     continue;
                 }
                 try {
-                    $push($scopes->toStorageScope(ScopeIdentity::website($websiteId, $websiteCode)));
-                    $push($scopes->toStorageScope(
-                        ScopeIdentity::store($websiteId, $websiteCode, 'default', ScopeIdentity::MODE_NORMAL),
-                    ));
+                    $channel = ScopeIdentity::channel(
+                        $websiteId,
+                        $websiteCode,
+                        'default',
+                        'default',
+                        ScopeIdentity::MODE_NORMAL,
+                    );
+                    foreach ($scopes->contextFromIdentity($channel)->fallbackStorageScopes as $storageScope) {
+                        $push((string)$storageScope);
+                    }
                 } catch (\Throwable) {
                     continue;
                 }
             }
         } catch (\Throwable) {
         }
-
-        return $list;
     }
 
     /**

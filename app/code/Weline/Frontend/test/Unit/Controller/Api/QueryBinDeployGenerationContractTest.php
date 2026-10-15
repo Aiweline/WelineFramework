@@ -21,6 +21,7 @@ final class QueryBinDeployGenerationContractTest extends TestCase
         self::assertStringContainsString("'deploy_reload_required'", $src);
         self::assertStringContainsString('主题已发布新版本。请重新加载页面以继续。', $src);
         self::assertStringContainsString('StorefrontGenerationIdentity', $src);
+        self::assertStringContainsString('collectAcceptableStorefrontGenerationIds', $src);
         self::assertStringContainsString('theme_published_version_id', $src);
         self::assertStringNotContainsString('assertClientDeployGenerationCurrent', $src);
         self::assertStringNotContainsString('currentServerDeployVersion', $src);

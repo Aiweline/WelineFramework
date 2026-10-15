@@ -729,6 +729,25 @@ class QueryBin extends FrontendRestController
             return;
         }
 
+        // Multi-Scope: page may bake Channel published id while a bare resolve briefly
+        // hit another sealed owner — accept any sealed id in the storefront probe set.
+        $clientId = \trim($clientThemePublishedVersionId);
+        if ($clientId !== ''
+            && \class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+            try {
+                /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+                $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+                );
+                $acceptable = $resolver->collectAcceptableStorefrontGenerationIds();
+                if (isset($acceptable[$clientId])) {
+                    return;
+                }
+            } catch (\Throwable) {
+                // Fall through to reload required.
+            }
+        }
+
         throw new FrontendQueryException(
             'deploy_reload_required',
             '主题已发布新版本。请重新加载页面以继续。',
