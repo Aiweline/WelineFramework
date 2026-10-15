@@ -17,10 +17,8 @@ framework,framework
 模块不存在，请检查模块名称!,"Module does not exist, please check the module name!"
 通知,Notification
 暂无通知,"No notification yet"
-关闭,closure
-确定,Sure
-取消,Cancel
-请重试,"Please try again"
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
 "模块 %{1} 加载超时：%{2}","Module %{1} load timed out: %{2}"
 "模块 %{1} 加载失败：未找到 %{2}","Module %{1} failed to load: %{2} not found."
 "模块 %{1} 加载失败：无法加载 %{2}","Module %{1} failed to load: unable to load %{2}"
@@ -49,6 +47,10 @@ framework,framework
 切换,Toggle
 用户不存在，请先在系统中注册,"The user does not exist, please register in the system first"
 用户头像,"User Avatar"
+关闭,closure
+确定,Sure
+取消,Cancel
+请重试,"Please try again"
 前端账户登录后,"After Frontend Account Login"
 前端用户登录成功后触发，允许其他模块监听登录事件并执行相应操作。,"Triggered after a frontend user logs in successfully, allowing other modules to listen for the login event and perform corresponding actions."
 前端用户注册成功后触发，允许其他模块监听注册事件并执行相应操作。,"Triggered after a frontend user registers successfully, allowing other modules to listen for the registration event and perform corresponding actions."

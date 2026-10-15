@@ -98,6 +98,24 @@ final class StorefrontGenerationOutboundContractTest extends TestCase
         self::assertStringContainsString('StorefrontGenerationOutbound::applyToResponse', $src);
     }
 
+    public function testOutboundResolveVersionIdOnlyUsesStorefrontGenerationIdentity(): void
+    {
+        $src = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Http/StorefrontGenerationOutbound.php');
+        self::assertStringContainsString('StorefrontGenerationIdentity::currentVersionId()', $src);
+        self::assertStringNotContainsString('deploy_version', $src);
+        self::assertStringNotContainsString('deployVersion', $src);
+        // Single cookie write path — no alternate setCookie of this name in Framework Http.
+        $httpDir = \dirname(__DIR__, 3) . '/Http';
+        $hits = 0;
+        foreach (\glob($httpDir . '/*.php') ?: [] as $file) {
+            $body = (string)\file_get_contents($file);
+            if (\str_contains($body, "COOKIE_NAME") && \str_contains($body, 'weline_storefront_gen')) {
+                ++$hits;
+            }
+        }
+        self::assertSame(1, $hits, 'Only StorefrontGenerationOutbound may own weline_storefront_gen constant');
+    }
+
     public function testWelineJsReadsIdentityCookieConstant(): void
     {
         $js = (string)\file_get_contents(

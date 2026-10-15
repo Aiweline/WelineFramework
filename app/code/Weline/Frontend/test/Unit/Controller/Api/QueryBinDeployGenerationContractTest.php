@@ -45,6 +45,21 @@ final class QueryBinDeployGenerationContractTest extends TestCase
         self::assertStringContainsString('rememberScopeTipsFromPayload(payload)', $script);
         self::assertStringContainsString("locale: pageLocale || undefined", $script);
         self::assertStringNotContainsString('payload.deploy_version', $script);
+        // Client response-cache generation segment = theme published id, not system deploy.
+        self::assertStringContainsString('config.themePublishedVersionId', $script);
+        self::assertMatchesRegularExpression(
+            '/buildClientResponseCacheKey[\s\S]*?themePublishedVersionId[\s\S]*?join\(\'\|\'\)/',
+            $script
+        );
+        self::assertStringNotContainsString(
+            "String((config && config.deployVersion) || ''),\n            String((config && config.locale) || ''),",
+            $script
+        );
+        // SharedWorker config refresh clears L1 only on theme generation change.
+        self::assertStringContainsString(
+            'Storefront generation = Scope-published theme id only (not system deployVersion).',
+            $script
+        );
     }
 
     public function testQueryBinErrorEnvelopeCarriesLocaleTipForDeployReload(): void

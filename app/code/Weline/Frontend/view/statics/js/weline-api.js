@@ -105,16 +105,17 @@
     const SCOPE_WAIT_TIP_COOLDOWN_MS = 4500;
     /** Delay before tip so fast stamp ensure / Cookie re-verify does not flash. */
     const SCOPE_WAIT_TIP_DELAY_MS = 280;
-    /** Tab memory: long Scope Cookie was ensured for this host+canonical (HttpOnly invisible to JS). */
+    /** Tab memory: long Scope Cookie / no-stamp decision for this host+canonical (HttpOnly invisible to JS). */
     const SCOPE_STAMP_MEMORY_KEY = 'weline.api.scopeStampKey';
     /** Refresh / re-punch this many ms before Cookie expires_at (unix seconds → ms). */
     const SCOPE_STAMP_SKEW_MS = 60000;
     /**
      * Same-page memory: Scope already ensured (HttpOnly Cookie cannot be read from JS).
-     * Must always pair with expiresAt — key alone must never skip POST forever.
+     * Real visa must pair with expiresAt. noStamp decision is tab-scoped (not a Cookie TTL).
      */
     let scopeStampEnsuredKey = '';
     let scopeStampEnsuredExpiresAt = 0;
+    let scopeStampNoStampEnsured = false;
     let scopeStampInFlight = null;
     let scopeStampRenewTimer = null;
     let scopeStampVisibilityBound = false;
@@ -122,7 +123,8 @@
     let scopeWaitTipTimer = null;
 
     /**
-     * @returns {{key:string,expiresAt:number}|null} expiresAt = unix seconds; 0 = unknown/legacy
+     * @returns {{key:string,expiresAt:number,noStamp?:boolean}|null}
+     *   expiresAt = unix seconds; 0 = unknown/legacy/noStamp
      */
     const readRememberedScopeStamp = () => {
         try {
@@ -139,9 +141,11 @@
             if (key === '') {
                 return null;
             }
+            const noStamp = !!(parsed && parsed.noStamp);
             return {
                 key,
                 expiresAt: Math.max(0, Number((parsed && parsed.expiresAt) || 0) || 0),
+                noStamp: noStamp,
             };
         } catch (_storageError) {
             return null;
@@ -201,6 +205,7 @@
         }
         scopeStampEnsuredKey = key;
         scopeStampEnsuredExpiresAt = expiresAt;
+        scopeStampNoStampEnsured = false;
         try {
             sessionStorage.setItem(SCOPE_STAMP_MEMORY_KEY, JSON.stringify({ key, expiresAt }));
         } catch (_storageError) {
@@ -209,9 +214,31 @@
         scheduleScopeStampRenewal(key, expiresAt);
     };
 
+    /**
+     * 204 / rollout-off: server said no long Cookie visa is required.
+     * Remember the decision for this tab+Scope so navigations do not re-POST.
+     * This is NOT a forged Cookie soft-TTL visa.
+     */
+    const rememberNoStampDecision = (stampKey) => {
+        const key = String(stampKey || '');
+        if (key === '') {
+            return;
+        }
+        scopeStampEnsuredKey = key;
+        scopeStampEnsuredExpiresAt = 0;
+        scopeStampNoStampEnsured = true;
+        clearScopeStampRenewSchedule();
+        try {
+            sessionStorage.setItem(SCOPE_STAMP_MEMORY_KEY, JSON.stringify({ key, noStamp: true, expiresAt: 0 }));
+        } catch (_storageError) {
+            /* private mode — page memory still works */
+        }
+    };
+
     const forgetScopeStampKey = () => {
         scopeStampEnsuredKey = '';
         scopeStampEnsuredExpiresAt = 0;
+        scopeStampNoStampEnsured = false;
         clearScopeStampRenewSchedule();
         try {
             sessionStorage.removeItem(SCOPE_STAMP_MEMORY_KEY);
@@ -230,11 +257,15 @@
 
     const isScopeStampAlreadyEnsured = (ids) => {
         const stampKey = pageScopeSessionKey(ids || {});
+        // Tab decision: rollout-off / no visa required — skip POST until forget/recover.
+        if (scopeStampEnsuredKey === stampKey && scopeStampNoStampEnsured) {
+            return true;
+        }
         // In-page key alone is not enough — must still honor expiresAt + skew.
         if (scopeStampEnsuredKey === stampKey && isScopeStampFresh(scopeStampEnsuredExpiresAt)) {
             return true;
         }
-        if (scopeStampEnsuredKey === stampKey && !isScopeStampFresh(scopeStampEnsuredExpiresAt)) {
+        if (scopeStampEnsuredKey === stampKey && !scopeStampNoStampEnsured && !isScopeStampFresh(scopeStampEnsuredExpiresAt)) {
             scopeStampEnsuredKey = '';
             scopeStampEnsuredExpiresAt = 0;
         }
@@ -242,19 +273,27 @@
         if (!remembered || remembered.key !== stampKey) {
             return false;
         }
+        if (remembered.noStamp === true) {
+            scopeStampEnsuredKey = stampKey;
+            scopeStampEnsuredExpiresAt = 0;
+            scopeStampNoStampEnsured = true;
+            clearScopeStampRenewSchedule();
+            return true;
+        }
         // Unknown/legacy expiry → re-punch (Cookie may already be gone).
         if (!isScopeStampFresh(remembered.expiresAt)) {
             return false;
         }
         scopeStampEnsuredKey = stampKey;
         scopeStampEnsuredExpiresAt = remembered.expiresAt;
+        scopeStampNoStampEnsured = false;
         scheduleScopeStampRenewal(stampKey, remembered.expiresAt);
         return true;
     };
 
     /**
-     * Tab awake / BFCache restore: if soft memory says expired (or missing), re-punch
-     * before the next QueryBin so Cookie death is not discovered only via 401.
+     * Tab awake / BFCache restore: re-arm Cookie renew timer only when a visa is
+     * already remembered. Never hole-punch here — punch is Worker-session demand.
      */
     const bindScopeStampVisibilityRenew = () => {
         if (scopeStampVisibilityBound || typeof document === 'undefined') {
@@ -268,12 +307,8 @@
             const ids = (window.Weline && window.Weline.Api && typeof window.Weline.Api.getClient === 'function')
                 ? (window.Weline.Api.getClient().config || {})
                 : {};
-            if (isScopeStampAlreadyEnsured(ids)) {
-                return;
-            }
-            ensureScopeStamp(ids).catch(() => {
-                /* visibility renew is best-effort */
-            });
+            // Re-arms scheduleScopeStampRenewal when memory is fresh; no POST if missing.
+            isScopeStampAlreadyEnsured(ids);
         };
         document.addEventListener('visibilitychange', onVisible);
         window.addEventListener('pageshow', (event) => {
@@ -392,7 +427,7 @@
         scopeStampInFlight = fetch('/api/frontend/scope-bootstrap', fetchOptions).then((res) => {
             if (res.status === 204) {
                 // Rollout off / no stamp required — not a long Cookie visa.
-                // Do not invent soft TTL; leave memory empty so future ensure still POSTs.
+                // Remember tab decision (not a forged Cookie TTL) so navigations skip re-POST.
                 return { ok: true, skipped: true, no_stamp: true };
             }
             if (res.status === 429) {
@@ -437,9 +472,9 @@
                 }
                 throw error;
             }
-            // 204 / rollout-off: success without a long visa — do not remember as ensured.
+            // 204 / rollout-off: success without a long visa — remember decision, skip re-POST.
             if (payload && payload.no_stamp === true) {
-                forgetScopeStampKey();
+                rememberNoStampDecision(stampKey);
                 return true;
             }
             // Success does not require bootstrap_id (opaque bridge retired for storefront).
@@ -836,9 +871,10 @@
 
     const buildClientResponseCacheKey = (config, provider, operation, params) => {
         const capability = String(provider || '') + '.' + String(operation || '');
+        // Segment 2 = Scope-published theme generation (not system deployVersion).
         return [
             'wqrc1',
-            String((config && config.deployVersion) || ''),
+            String((config && config.themePublishedVersionId) || ''),
             String((config && config.locale) || ''),
             String((config && config.currency) || ''),
             capability,
@@ -1845,8 +1881,8 @@
         }
         client.config.endpoint = freshConfig.endpoint;
         client.config.workerUrl = freshConfig.workerUrl;
-        if (String(client.config.themePublishedVersionId || '') !== String(freshConfig.themePublishedVersionId || '')
-            || String(client.config.deployVersion || '') !== String(freshConfig.deployVersion || '')) {
+        // Storefront generation = Scope-published theme id only (not system deployVersion).
+        if (String(client.config.themePublishedVersionId || '') !== String(freshConfig.themePublishedVersionId || '')) {
             client.responseCacheL1.clear();
         }
         client.config.deployVersion = freshConfig.deployVersion;
@@ -2577,14 +2613,14 @@
             if (!targets || targets.length === 0) {
                 return;
             }
-            const deploy = String(this.config.deployVersion || '');
+            const themeGen = String(this.config.themePublishedVersionId || '');
             const locale = String(this.config.locale || '');
             const currency = String(this.config.currency || '');
             targets.forEach((target) => {
                 const needle = '|' + String(target) + '|';
                 Array.from(this.responseCacheL1.keys()).forEach((key) => {
                     if (String(key).indexOf(needle) !== -1
-                        && String(key).indexOf('|' + deploy + '|') !== -1
+                        && (themeGen === '' || String(key).indexOf('|' + themeGen + '|') !== -1)
                         && String(key).indexOf('|' + locale + '|') !== -1
                         && String(key).indexOf('|' + currency + '|') !== -1) {
                         this.responseCacheL1.delete(key);
@@ -2737,21 +2773,33 @@
                 this.scopeWarmupComplete = false;
             }
             if (!this.scopeWarmupPromise) {
-                const runWarmup = (allowRepunch) => ensureScopeStamp(this.config).then(() => {
-                    // Handshake uses credentials Cookie only — no scope_bootstrap_id.
-                    // forceHandshake drops SharedWorker badge so a new Cookie is not ignored.
-                    return this.sendToWorker({
-                        type: 'scope-bootstrap',
-                        options: { silent: true, forceHandshake: forceHandshake },
+                // Ordinary path: Worker handshake only (SharedWorker may already hold a session).
+                // Hole-punch POST only when forcing a new session after Cookie re-issue, or when
+                // handshake fails with a stamp-recoverable error (Worker demanded a visa).
+                const runWarmup = (allowRepunch) => {
+                    const beforeHandshake = forceHandshake
+                        ? ensureScopeStamp(this.config)
+                        : Promise.resolve(true);
+                    return beforeHandshake.then(() => {
+                        // Handshake uses credentials Cookie only — no scope_bootstrap_id.
+                        // forceHandshake drops SharedWorker badge so a new Cookie is not ignored.
+                        return this.sendToWorker({
+                            type: 'scope-bootstrap',
+                            options: { silent: true, forceHandshake: forceHandshake },
+                        });
+                    }).catch((error) => {
+                        // Worker needs a Scope visa → one silent punch + forced re-handshake.
+                        if (allowRepunch && isScopeStampRecoverableError(error)) {
+                            forgetScopeStampKey();
+                            this.notifyScopeBootstrapWaiting();
+                            return ensureScopeStamp(this.config).then(() => this.sendToWorker({
+                                type: 'scope-bootstrap',
+                                options: { silent: true, forceHandshake: true },
+                            }));
+                        }
+                        throw error;
                     });
-                }).catch((error) => {
-                    // Tab memory said OK but Cookie gone → one silent re-punch, no stuck Reload modal.
-                    if (allowRepunch && isScopeStampRecoverableError(error)) {
-                        forgetScopeStampKey();
-                        return runWarmup(false);
-                    }
-                    throw error;
-                });
+                };
                 this.scopeWarmupPromise = runWarmup(true).then((result) => {
                     this.scopeWarmupComplete = true;
                     clearScopeWaitTipSchedule();
@@ -2766,8 +2814,8 @@
         }
 
         /**
-         * Cookie / binding expired while the page stayed open: forget optimistic stamp,
-         * POST scope-bootstrap, force SharedWorker re-handshake, then callers retry once.
+         * Worker demanded a new session (Cookie / binding missing or expired): forget
+         * optimistic stamp, POST scope-bootstrap, force SharedWorker re-handshake, retry.
          */
         recoverScopeStamp() {
             if (this.scopeStampRecoverPromise) {
@@ -2952,11 +3000,8 @@
 
         dispatchToWorker(payload) {
             if (payload && payload.type !== 'scope-bootstrap') {
-                // Ensure Scope stamp + Worker session before QueryBin (anonymous FPC OK).
-                // Tip only while first long-visa ensure is pending — not after Cookie authorized.
-                if (!this.scopeWarmupComplete && !isScopeStampAlreadyEnsured(this.config)) {
-                    this.notifyScopeBootstrapWaiting();
-                }
+                // Ensure Worker session before QueryBin (handshake-only). Stamp POST happens
+                // only when Worker rejects for missing/expired Cookie (recoverScopeStamp).
                 return this.warmup().then(() => this.sendToWorker(payload));
             }
             return this.sendToWorker(payload);
@@ -3655,23 +3700,11 @@
     // Always promote — stub must not remain if full module loaded (order races with weline.js).
     window.Weline.Api = ApiModule;
 
-    // Eager warmup: meta stamp OR hole-punch. Do not wait for the first filter click.
+    // Bind visibility renew only. Do NOT eager bootstrapScope / hole-punch on script load —
+    // Worker ensureSession demand (or recoverScopeStamp) owns when a new visa is required.
     try {
         bindScopeStampVisibilityRenew();
-        ApiModule.bootstrapScope().catch((error) => {
-            window.dispatchEvent(new CustomEvent('weline:scope-bootstrap-failed', {
-                detail: {
-                    code: error && error.code ? error.code : 'scope_bootstrap_invalid',
-                    status: error && error.status ? error.status : 0,
-                },
-            }));
-        });
-    } catch (error) {
-        window.dispatchEvent(new CustomEvent('weline:scope-bootstrap-failed', {
-            detail: {
-                code: error && error.code ? error.code : 'scope_bootstrap_invalid',
-                status: 0,
-            },
-        }));
+    } catch (_bindError) {
+        /* ignore — first QueryBin still drives session via warmup/recover */
     }
 })(window);

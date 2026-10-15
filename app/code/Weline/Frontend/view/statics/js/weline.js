@@ -1886,21 +1886,13 @@
     })();
 
     /**
-     * A server-issued Scope bootstrap is short-lived and one-time. Load the
-     * official API module after DOM is ready so the response-injected meta
-     * marker is present without racing Document parse.
+     * Prefetch the official API module after DOM ready. Do NOT call bootstrapScope /
+     * hole-punch here — Worker session demand owns when a new Scope visa is required.
      */
-    (function preLoadScopeBootstrapApi() {
+    (function preLoadApiModule() {
         const preload = () => {
-            // Meta stamp OR hole-punch — FPC pages have no meta; still warm Scope early.
-            Weline.preLoad('api').then((apiModule) => {
-                if (apiModule && typeof apiModule.bootstrapScope === 'function') {
-                    return apiModule.bootstrapScope();
-                }
-                return null;
-            }).catch(() => {
-                // The API module emits a structured scope-bootstrap failure
-                // event; the loader must not replace the page with a fallback.
+            Weline.preLoad('api').catch(() => {
+                /* lazy load on first QueryBin still works */
             });
         };
 

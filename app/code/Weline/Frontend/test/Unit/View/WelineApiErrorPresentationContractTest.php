@@ -185,9 +185,17 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         self::assertStringContainsString('scheduleScopeStampRenewal', $script);
         self::assertStringContainsString('bindScopeStampVisibilityRenew', $script);
         self::assertStringContainsString('scopeStampEnsuredExpiresAt', $script);
-        // 204 / rollout-off must not invent a long soft TTL visa.
+        // 204 / rollout-off: remember tab decision (not a forged Cookie soft TTL).
         self::assertStringContainsString('no_stamp: true', $script);
+        self::assertStringContainsString('rememberNoStampDecision', $script);
+        self::assertStringContainsString('scopeStampNoStampEnsured', $script);
+        self::assertStringContainsString('noStamp: true', $script);
         self::assertStringNotContainsString('SCOPE_STAMP_SOFT_TTL_SEC', $script);
+        // Must not clear memory on 204 success (that caused every-page re-POST).
+        self::assertStringNotContainsString(
+            "if (payload && payload.no_stamp === true) {\n                forgetScopeStampKey();",
+            $script,
+        );
         self::assertStringContainsString('isScopeBindingMissingError', $script);
         // Binding miss must drop optimistic memory (Reload otherwise loops forever).
         self::assertStringContainsString('forgetScopeStampKey();', $script);
@@ -198,16 +206,18 @@ final class WelineApiErrorPresentationContractTest extends TestCase
         self::assertStringContainsString('Success does not require bootstrap_id', $script);
         self::assertStringNotContainsString('SCOPE_BOOTSTRAP_OPAQUE', $script);
         self::assertStringNotContainsString('readScopeBootstrapId', $script);
-        // Non-bootstrap QueryBin must queue behind warmup; tip only when stamp not yet ensured.
-        self::assertStringContainsString('!isScopeStampAlreadyEnsured(this.config)', $script);
+        // Non-bootstrap QueryBin queues behind handshake-only warmup; tip only on Worker demand.
         self::assertStringContainsString('notifyScopeBootstrapWaiting()', $script);
         self::assertStringContainsString('return this.warmup().then(() => this.sendToWorker(payload));', $script);
-        // Eager warmup even without meta (FPC stamp ensure).
-        self::assertStringContainsString('ApiModule.bootstrapScope().catch((error) => {', $script);
+        self::assertStringContainsString('Worker ensureSession demand', $script);
+        self::assertStringContainsString('Ordinary path: Worker handshake only', $script);
+        // Must NOT eager bootstrapScope / hole-punch on script load.
+        self::assertStringNotContainsString('ApiModule.bootstrapScope().catch((error) => {', $script);
         self::assertStringNotContainsString(
             "if (readScopeBootstrapId() !== '') {\n            ApiModule.bootstrapScope()",
             $script,
         );
+        self::assertStringContainsString('bindScopeStampVisibilityRenew();', $script);
         // Full module must always promote onto Weline.Api (stub must not stick).
         self::assertStringContainsString('window.Weline.Api = ApiModule;', $script);
         self::assertStringContainsString(
@@ -228,5 +238,10 @@ final class WelineApiErrorPresentationContractTest extends TestCase
             'never leave a stub on top of an already-full WelineApiModule',
             $script,
         );
+        // Prefetch API module only — must not call bootstrapScope on DOM ready.
+        self::assertStringContainsString('preLoadApiModule', $script);
+        self::assertStringContainsString("Weline.preLoad('api')", $script);
+        self::assertStringNotContainsString('apiModule.bootstrapScope()', $script);
+        self::assertStringNotContainsString('preLoadScopeBootstrapApi', $script);
     }
 }

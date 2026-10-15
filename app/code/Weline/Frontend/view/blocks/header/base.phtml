@@ -184,6 +184,36 @@ $runtime = [
         'softTips' => [
             'scope_bootstrap_waiting' => \Weline\Frontend\Helper\FrontendScopeReloadTip::build('scope_bootstrap_waiting'),
         ],
+        // Float-edge a11y: published slots may bake Chinese attrs; client overlays these.
+        'floatEdge' => (static function () use ($currentLang): array {
+            $sources = ['收起悬浮', '展开悬浮'];
+            try {
+                \Weline\Framework\Phrase\Parser::prefetchWords($sources, (string)$currentLang);
+            } catch (\Throwable) {
+            }
+            $dismiss = '';
+            $recall = '';
+            try {
+                $dismiss = \trim((string)__('收起悬浮'));
+                $recall = \trim((string)__('展开悬浮'));
+            } catch (\Throwable) {
+            }
+            $isZh = (bool)\preg_match('/^zh(_|-|$)/i', (string)$currentLang);
+            if (!$isZh) {
+                if ($dismiss === '' || $dismiss === '收起悬浮') {
+                    $dismiss = 'Collapse float';
+                }
+                if ($recall === '' || $recall === '展开悬浮') {
+                    $recall = 'Expand float';
+                }
+            }
+
+            return [
+                'dismiss' => $dismiss !== '' ? $dismiss : 'Collapse float',
+                'recall' => $recall !== '' ? $recall : 'Expand float',
+                'locale' => (string)$currentLang,
+            ];
+        })(),
     ],
     'url' => [
         'origin' => $host,
