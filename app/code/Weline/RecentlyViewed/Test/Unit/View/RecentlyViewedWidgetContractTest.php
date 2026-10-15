@@ -43,6 +43,9 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('data-testid="recently-viewed-deferred"', $source);
         self::assertStringContainsString('data-hydrate-operation="recentlyViewedCards"', $source);
         self::assertStringContainsString('data-weline-hydrate="1"', $source);
+        self::assertStringContainsString('data-wrv-cookie-name=', $source);
+        self::assertStringContainsString('data-wrv-cookie-path=', $source);
+        self::assertStringContainsString('CookieScope::qualifyName', $source);
         self::assertStringContainsString('"limit":6', $source);
         self::assertStringContainsString('@param limit {default=6', $source);
         self::assertStringContainsString('data-wrv-track', $source);
@@ -73,6 +76,14 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('function formatCardPrice(card)', $js);
         self::assertStringContainsString('formatted_price', $js);
         self::assertStringContainsString('Never invent a client currency symbol table', $js);
+        self::assertStringContainsString('function resolveCookieScope', $js);
+        self::assertStringContainsString('data-wrv-cookie-name', $js);
+        self::assertStringContainsString('data-website-id', $js);
+        self::assertStringNotContainsString(
+            "pairs[i].name.indexOf(COOKIE_BASE + '_') === 0",
+            $js,
+            'Client must not pick the first sibling website recently-viewed cookie.',
+        );
         self::assertStringNotContainsString(
             "esc(price.toFixed(2))",
             $js,

@@ -18,17 +18,40 @@
     });
   }
 
-  function resolveCookieName() {
-    var pairs = cookiePairs();
-    var i;
-    for (i = 0; i < pairs.length; i += 1) {
-      if (pairs[i].name === COOKIE_BASE || pairs[i].name.indexOf(COOKIE_BASE + '_') === 0) {
-        if (pairs[i].value) {
-          return pairs[i].name;
-        }
+  /**
+   * Current-website CookieScope wire name + mount path only.
+   * Never pick the first weline_recently_viewed_* in the jar — sibling
+   * websites on the same host (e.g. /daocharms) must not bleed MRU ids.
+   */
+  function resolveCookieScope(scope) {
+    var root = (scope || document).querySelector(
+      '.weline-recently-viewed[data-wrv-cookie-name], [data-wrv-cookie-name]'
+    );
+    if (root) {
+      var wired = String(root.getAttribute('data-wrv-cookie-name') || '').trim();
+      var wiredPath = String(root.getAttribute('data-wrv-cookie-path') || '').trim();
+      if (wired) {
+        return {
+          name: wired,
+          path: wiredPath || '/',
+        };
       }
     }
-    return COOKIE_BASE;
+    var el = (scope || document).querySelector('[data-website-id]');
+    var websiteId = el ? parseInt(el.getAttribute('data-website-id') || '', 10) : NaN;
+    var mount = el ? String(el.getAttribute('data-website-mount') || '').trim() : '';
+    var name = COOKIE_BASE;
+    if (Number.isFinite(websiteId) && websiteId >= 0) {
+      name = COOKIE_BASE + '_w' + websiteId;
+    }
+    var path = '/';
+    if (mount && mount !== '/') {
+      path = mount.charAt(0) === '/' ? mount.replace(/\/+$/, '') : '/' + mount.replace(/^\/+|\/+$/g, '');
+      if (path === '') {
+        path = '/';
+      }
+    }
+    return { name: name, path: path };
   }
 
   function readIds(name) {
@@ -57,30 +80,32 @@
     }
   }
 
-  function writeIds(name, ids) {
+  function writeIds(name, path, ids) {
     var secure = location.protocol === 'https:' ? '; Secure' : '';
+    var cookiePath = path && path.charAt(0) === '/' ? path : '/';
     document.cookie = name
       + '='
       + encodeURIComponent(JSON.stringify(ids))
-      + '; Path=/'
+      + '; Path='
+      + cookiePath
       + '; Max-Age='
       + MAX_AGE
       + '; SameSite=Lax'
       + secure;
   }
 
-  function recordProductId(productId) {
+  function recordProductId(productId, scope) {
     productId = parseInt(productId, 10) || 0;
     if (productId <= 0) {
       return;
     }
-    var name = resolveCookieName();
-    var ids = readIds(name).filter(function (id) { return id !== productId; });
+    var cookieScope = resolveCookieScope(scope);
+    var ids = readIds(cookieScope.name).filter(function (id) { return id !== productId; });
     ids.unshift(productId);
     if (ids.length > MAX_ITEMS) {
       ids = ids.slice(0, MAX_ITEMS);
     }
-    writeIds(name, ids);
+    writeIds(cookieScope.name, cookieScope.path, ids);
   }
 
   function recordFromDocument(scope) {
@@ -93,7 +118,7 @@
     var productId = root.getAttribute('data-product-id')
       || root.getAttribute('data-wrv-record-product-id')
       || '0';
-    recordProductId(productId);
+    recordProductId(productId, scope);
   }
 
   function esc(value) {

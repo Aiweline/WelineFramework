@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace Weline\RecentlyViewed\Service;
 
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\CookieScope;
 
 /**
  * Guest/logged-in recently-viewed product ids (MRU) persisted in a scoped cookie.
+ *
+ * Cookie wire name / Path follow {@see CookieScope} (website suffix + mount path).
+ * Never scan sibling website suffixes — shared project hosts (apex + /daocharms)
+ * must not bleed DaoCharms MRU ids into Hanfu hydrate.
  */
 class RecentlyViewedSessionStore
 {
@@ -87,6 +92,7 @@ class RecentlyViewedSessionStore
             $encoded,
             60 * 60 * 24 * 180,
             [
+                // HeaderCollector rewrites Path=/ onto CookieScope mount_path.
                 'path' => '/',
                 'httponly' => false,
                 'samesite' => 'Lax',
@@ -107,23 +113,19 @@ class RecentlyViewedSessionStore
         return $this->readRawCookieFromSuperglobal();
     }
 
+    /**
+     * Fallback only for the current CookieScope wire name (or unscoped base when
+     * isolation is inactive). Sibling suffixes like _w158 must never feed _w0.
+     */
     private function readRawCookieFromSuperglobal(): string
     {
         $cookies = is_array($_COOKIE ?? null) ? $_COOKIE : [];
-        $prefix = self::COOKIE_NAME;
-        foreach ($cookies as $name => $value) {
-            if (!is_string($name) || !is_scalar($value)) {
-                continue;
-            }
-            if ($name !== $prefix && !str_starts_with($name, $prefix . '_')) {
-                continue;
-            }
-            $candidate = trim((string)$value);
-            if ($candidate !== '') {
-                return $candidate;
-            }
+        $wireName = CookieScope::qualifyName(self::COOKIE_NAME);
+        if ($wireName === '' || !isset($cookies[$wireName]) || !is_scalar($cookies[$wireName])) {
+            return '';
         }
+        $candidate = trim((string)$cookies[$wireName]);
 
-        return '';
+        return $candidate !== '' ? $candidate : '';
     }
 }
