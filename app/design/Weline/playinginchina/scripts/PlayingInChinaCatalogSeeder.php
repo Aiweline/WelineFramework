@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Design\PlayingInChina;
 
+use Weline\FileManager\Model\FileAsset;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Inventory\Service\InventoryService;
 use Weline\Product\Model\Shard\Media;
@@ -21,6 +22,7 @@ use Weline\Product\Service\ProductAdminMutationService;
 use Weline\Product\Service\ProductCatalogEavBootstrap;
 use Weline\Product\Service\ProductCategoryAttributeService;
 use Weline\Product\Service\StorefrontCatalogCacheCoordinator;
+use Weline\Storage\Api\Data\StorageDiskCode;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 use Weline\Websites\Model\Website;
 
@@ -111,11 +113,10 @@ final class PlayingInChinaCatalogSeeder
             foreach ((array)($r['itin'] ?? []) as $row) {
                 $itinLines[] = \PlayingInChinaData::t((string)($row[0] ?? '')) . ': ' . \PlayingInChinaData::t((string)($row[1] ?? ''));
             }
-            $routePath = \PlayingInChinaData::routePublicPath($r);
             $long = 'DIGITAL DECISION INFORMATION PACK — not a guided tour, hotel package, or ticket fulfillment.'
                 . "\n\nIncludes: day-by-day decision framework, seasonal/budget/family variant notes, attraction checklist with links, scenery gallery from stops on this route."
                 . "\nDoes NOT include: guide/driver, hotels, flights, attraction tickets, visa processing, or guaranteed outcomes."
-                . "\nDelivery: after payment, order email + account note with deep link to " . $routePath . ' (full itinerary page).'
+                . "\nDelivery: after payment (login required), exclusive download entry via /product-download/{entitlement} — not the public /routes preview page."
                 . "\n\n" . $desc
                 . "\n\nCities: " . \PlayingInChinaData::t($r['cities'] ?? '')
                 . "\nDuration: " . $days . " days"
@@ -126,6 +127,7 @@ final class PlayingInChinaCatalogSeeder
                 . "\n\nItinerary outline:\n- " . \implode("\n- ", $itinLines);
 
             $seoSlug = \PlayingInChinaData::routeProductSlug($r);
+            $assetId = $this->ensurePrivatePackAsset($sku, (string)($r['title'] ?? $sku), $itinLines);
             $gallery = \PlayingInChinaData::routeGallery($r, 12);
             $main = (string)($r['img'] ?? '');
             if ($main === '' && $gallery !== []) {
@@ -157,6 +159,7 @@ final class PlayingInChinaCatalogSeeder
                 'product_type' => 'travel_route',
                 'categories' => ['pic-packages'],
                 'source_route_id' => (string)($r['id'] ?? ''),
+                'download_asset_id' => $assetId,
             ];
             $this->upsertProduct($websiteId, $item, $currency, $stock, $storeIds, $categoryIds, $stats);
             ++$stats['packages'];
@@ -332,6 +335,126 @@ final class PlayingInChinaCatalogSeeder
         foreach ($pairs as [$code, $value]) {
             $this->attributes->writeExplicit($websiteId, 0, 'product', $productId, $code, '', $value, true);
         }
+
+        $assetId = trim((string)($item['download_asset_id'] ?? ''));
+        if ($assetId !== '' && strtolower(trim((string)($item['product_type'] ?? ''))) === 'travel_route') {
+            $this->attributes->writeTyped(
+                $websiteId,
+                0,
+                'product',
+                $productId,
+                'type_configuration',
+                '',
+                'json',
+                [
+                    'download_assets' => [[
+                        'asset_id' => $assetId,
+                        'private' => true,
+                    ]],
+                    'entitlement_policy' => [
+                        'download_limit' => null,
+                        'expires_after_days' => null,
+                    ],
+                ],
+                true,
+            );
+        }
+    }
+
+    /**
+     * Register a private FileAsset row for pack download entitlements.
+     * Direct ORM insert (local public disk has no private temporary URL adapter);
+     * cart/grant only need ready+private+product_download policy metadata.
+     */
+    private function ensurePrivatePackAsset(string $sku, string $title, array $itinLines): string
+    {
+        $skuKey = strtolower(preg_replace('/[^a-z0-9]+/i', '-', $sku) ?: $sku);
+        $objectKey = 'pic-packs/' . $skuKey . '-information-pack.html';
+        $diskCode = StorageDiskCode::BUILTIN_LOCAL_MEDIA;
+        $identityHash = FileAsset::objectIdentityHash($diskCode, $objectKey);
+
+        try {
+            /** @var FileAsset $existing */
+            $existing = ObjectManager::getInstance(FileAsset::class);
+            $existing->clear()
+                ->where(FileAsset::schema_fields_OBJECT_IDENTITY_HASH, $identityHash)
+                ->find()
+                ->fetch();
+            if ($existing->getAssetId() !== '' && !$existing->isDeleted()) {
+                if ($existing->getVisibility() !== FileAsset::VISIBILITY_PRIVATE
+                    || !$existing->isReady()
+                ) {
+                    $existing->setData(FileAsset::schema_fields_VISIBILITY, FileAsset::VISIBILITY_PRIVATE);
+                    $existing->setData(FileAsset::schema_fields_LIFECYCLE_STATE, FileAsset::STATE_READY);
+                    $existing->setData(FileAsset::schema_fields_METADATA, json_encode([
+                        'access_policy' => [
+                            'allowed_roles' => ['product_download'],
+                            'policy_revision' => 1,
+                        ],
+                        'source' => 'playinginchina-catalog-seed',
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                    $existing->setData(
+                        FileAsset::schema_fields_ASSET_REVISION,
+                        max(1, (int)$existing->getData(FileAsset::schema_fields_ASSET_REVISION)) + 1,
+                    );
+                    $existing->save();
+                }
+
+                return $existing->getAssetId();
+            }
+        } catch (\Throwable) {
+            // fall through to create
+        }
+
+        $body = "<!doctype html><html><head><meta charset=\"utf-8\"><title>"
+            . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . " — Information Pack</title></head><body>"
+            . '<h1>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h1>'
+            . '<p>Exclusive paid decision pack content. Not available on the public /routes preview.</p>'
+            . '<ol>';
+        foreach ($itinLines as $line) {
+            $body .= '<li>' . htmlspecialchars((string)$line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</li>';
+        }
+        $body .= '</ol></body></html>';
+
+        $root = rtrim((string)PUB, '/\\') . DIRECTORY_SEPARATOR . 'media';
+        $abs = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $objectKey);
+        $dir = dirname($abs);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        @file_put_contents($abs, $body);
+        $bytes = is_file($abs) ? (int)filesize($abs) : strlen($body);
+        $sha = hash('sha256', $body);
+        $now = date('Y-m-d H:i:s');
+
+        /** @var FileAsset $asset */
+        $asset = ObjectManager::getInstance(FileAsset::class);
+        $asset->clear()->setData([
+            FileAsset::schema_fields_DISK_CODE => $diskCode,
+            FileAsset::schema_fields_OBJECT_KEY => $objectKey,
+            FileAsset::schema_fields_ORIGINAL_NAME => $sku . '-information-pack.html',
+            FileAsset::schema_fields_MIME_TYPE => 'text/html',
+            FileAsset::schema_fields_BYTES => $bytes,
+            FileAsset::schema_fields_SHA256 => $sha,
+            FileAsset::schema_fields_DEFAULT_LOCALE => 'en_US',
+            FileAsset::schema_fields_VISIBILITY => FileAsset::VISIBILITY_PRIVATE,
+            FileAsset::schema_fields_LIFECYCLE_STATE => FileAsset::STATE_READY,
+            FileAsset::schema_fields_ASSET_REVISION => 1,
+            FileAsset::schema_fields_METADATA => json_encode([
+                'access_policy' => [
+                    'allowed_roles' => ['product_download'],
+                    'policy_revision' => 1,
+                ],
+                'source' => 'playinginchina-catalog-seed',
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            FileAsset::schema_fields_CREATED_AT => $now,
+            FileAsset::schema_fields_UPDATED_AT => $now,
+            FileAsset::schema_fields_DELETED_AT => null,
+        ]);
+        $asset->save();
+
+        return $asset->getAssetId();
     }
 
     /**
