@@ -29,15 +29,13 @@ final class FrontendRuntimeI18nDictionaryTest extends TestCore
         self::assertTrue(FrontendRuntimeI18nDictionary::isClientSafePhrase('关闭'));
     }
 
-    public function testHeaderUsesFilterForClientNotApiErrorSeedMerge(): void
+    public function testHeaderNoLongerEmbedsPageDictionaryBag(): void
     {
         $path = dirname(__DIR__, 3) . '/view/blocks/header/base.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
-        self::assertStringContainsString(
-            'FrontendRuntimeI18nDictionary::filterForClient',
-            $src,
-        );
+        self::assertStringContainsString('i18n-client', $src);
+        self::assertStringNotContainsString("'dictionary' => \$i18nWords", $src);
         self::assertStringNotContainsString(
             'mergeApiErrorPresentationPhrases',
             $src,

@@ -2811,24 +2811,39 @@
                     return;
                 }
                 scopeWaitTipAt = now;
-                const message = resolveScopeBootstrapWaitingMessage();
-                let shown = false;
-                try {
-                    const Toast = this.resolveToastComponent();
-                    if (Toast && typeof Toast.info === 'function') {
-                        Toast.info(message, { duration: 2800 });
-                        shown = true;
-                    } else if (Toast && typeof Toast.show === 'function') {
-                        Toast.show(message, { type: 'info', tone: 'info', duration: 2800 });
-                        shown = true;
+                const showTip = () => {
+                    if (this.scopeWarmupComplete || isScopeStampAlreadyEnsured(this.config)) {
+                        return;
                     }
-                } catch (_toastError) {
-                    /* tip is best-effort */
-                }
-                // Only fallback when no Toast API succeeded — do not re-probe Theme Notice
-                // DOM (Weline.UI.toast uses .w-toast; dual probe caused duplicate tips).
-                if (!shown) {
-                    this.renderScopeWaitTip(message);
+                    const message = resolveScopeBootstrapWaitingMessage();
+                    let shown = false;
+                    try {
+                        const Toast = this.resolveToastComponent();
+                        if (Toast && typeof Toast.info === 'function') {
+                            Toast.info(message, { duration: 2800 });
+                            shown = true;
+                        } else if (Toast && typeof Toast.show === 'function') {
+                            Toast.show(message, { type: 'info', tone: 'info', duration: 2800 });
+                            shown = true;
+                        }
+                    } catch (_toastError) {
+                        /* tip is best-effort */
+                    }
+                    // Only fallback when no Toast API succeeded — do not re-probe Theme Notice
+                    // DOM (Weline.UI.toast uses .w-toast; dual probe caused duplicate tips).
+                    if (!shown) {
+                        this.renderScopeWaitTip(message);
+                    }
+                };
+                // Wait briefly for footer i18n-client bag → Weline.i18n.setDictionary.
+                const ready = window.Weline && window.Weline.i18n && window.Weline.i18n.ready;
+                if (ready && typeof ready.then === 'function') {
+                    Promise.race([
+                        ready,
+                        new Promise((resolve) => { window.setTimeout(resolve, 600); }),
+                    ]).then(showTip).catch(showTip);
+                } else {
+                    showTip();
                 }
             }, SCOPE_WAIT_TIP_DELAY_MS);
         }

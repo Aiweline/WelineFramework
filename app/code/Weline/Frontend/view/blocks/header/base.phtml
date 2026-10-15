@@ -52,21 +52,8 @@ $useProdPublicUrls = DeployPublicUrlMode::useProduction();
 $mediaTemplate = $host . '/' . (!$useProdPublicUrls
     ? '{module}/view/statics/{path}'
     : 'static/' . trim($themePath, '/') . '/{module}/view/statics/{path}');
-$i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
-if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
-    try {
-        $registeredWords = \Weline\I18n\Helper\JsWordsRegistry::getWordsWithTranslations();
-        if (is_array($registeredWords)) {
-            $i18nWords = array_merge($i18nWords, $registeredWords);
-        }
-    } catch (\Throwable) {
-    }
-}
-// Drop multiline / oversized docs so storefront runtime JSON stays small.
-// Scope/theme reload tips are NOT seeded here — server returns locale tip; client caches by lang.
-$i18nWords = \Weline\Frontend\Helper\FrontendRuntimeI18nDictionary::filterForClient(
-    is_array($i18nWords) ? $i18nWords : []
-);
+// Client JS dictionary is no longer embedded in head — footer loads
+// Weline_I18n::i18n-client/{area}/{locale}.js into Weline.i18n (ClientI18nBagPublisher).
 $deployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
 $deployVersion = is_array($deployMeta) ? (string)($deployMeta['deploy_version'] ?? '') : '';
 $workerBuildId = is_array($deployMeta) ? (string)($deployMeta['worker_build_id'] ?? '') : '';
@@ -207,11 +194,8 @@ $runtime = [
         'defaultCurrency' => $defaultCurrency,
     ],
     'i18n' => [
-        'dictionary' => $i18nWords,
-        'close' => (string)__('关闭'),
-        'confirm' => (string)__('确定'),
-        'cancel' => (string)__('取消'),
-        'retry' => (string)__('请重试'),
+        'locale' => $currentLang,
+        'area' => 'frontend',
     ],
     'site' => [
         'user_id' => $userId,
@@ -225,7 +209,6 @@ $runtime = [
         'api_host' => $apiHost,
         'currency' => $currentCurrency,
         'lang' => $currentLang,
-        'i18n' => $i18nWords,
     ],
 ];
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP

@@ -908,29 +908,59 @@
         const defaultApiUrl = `/i18n/${area}/word/get-translations`;
         const apiUrl = resolveApiUrl(i18nConfig.apiUrl || defaultApiUrl);
 
-        // 初始化字典
-        let dictionary = i18nConfig.dictionary || {};
+        // 初始化字典（head 不再内嵌大袋；优先 drain footer/client-bag 队列）
+        let dictionary = {};
+        if (window.__WelineI18nBagQueue && Array.isArray(window.__WelineI18nBagQueue) && window.__WelineI18nBagQueue.length) {
+            window.__WelineI18nBagQueue.forEach(function (chunk) {
+                if (chunk && typeof chunk === 'object') {
+                    Object.assign(dictionary, chunk);
+                }
+            });
+            window.__WelineI18nBagQueue.length = 0;
+        }
+        if (Object.keys(dictionary).length === 0
+            && window.__WelineI18nDictionary
+            && typeof window.__WelineI18nDictionary === 'object'
+            && Object.keys(window.__WelineI18nDictionary).length > 0) {
+            dictionary = Object.assign({}, window.__WelineI18nDictionary);
+        }
+        if (Object.keys(dictionary).length === 0
+            && window.site
+            && window.site.i18n
+            && typeof window.site.i18n === 'object'
+            && Object.keys(window.site.i18n).length > 0) {
+            dictionary = Object.assign({}, window.site.i18n);
+        }
+        if (Object.keys(dictionary).length === 0 && i18nConfig.dictionary && typeof i18nConfig.dictionary === 'object') {
+            dictionary = Object.assign({}, i18nConfig.dictionary);
+        }
 
-        // 如果字典为空，尝试从多个来源读取
-        if (Object.keys(dictionary).length === 0) {
-            // 1. 从 window.site.i18n 读取（footer hook 设置的）
-            if (window.site && window.site.i18n && typeof window.site.i18n === 'object' && Object.keys(window.site.i18n).length > 0) {
-                dictionary = window.site.i18n;
-            }
-            // 2. 从 window.__WelineI18nDictionary 读取（如果存在）
-            else if (window.__WelineI18nDictionary && typeof window.__WelineI18nDictionary === 'object' && Object.keys(window.__WelineI18nDictionary).length > 0) {
-                dictionary = window.__WelineI18nDictionary;
-                delete window.__WelineI18nDictionary; // 清理临时变量
-            }
+        let bagReadyResolve;
+        const bagReady = new Promise(function (resolve) {
+            bagReadyResolve = resolve;
+        });
+        if (Object.keys(dictionary).length > 0) {
+            try { bagReadyResolve(); } catch (_e) { /* ignore */ }
         }
 
         const i18nObj = {
             currentLang: currentLang,
             dictionary: dictionary,
             apiUrl: apiUrl,
+            ready: bagReady,
+            notifyBagReady: function () {
+                try { bagReadyResolve(); } catch (_e) { /* ignore */ }
+            },
 
             setDictionary: (dict) => {
                 i18nObj.dictionary = dict || {};
+                if (window.site) {
+                    window.site.i18n = i18nObj.dictionary;
+                }
+                if (window.WelineI18n) {
+                    window.WelineI18n.dictionary = i18nObj.dictionary;
+                }
+                i18nObj.notifyBagReady();
             },
 
             translate: (key, params = {}) => {
@@ -1005,6 +1035,8 @@
             setDictionary: (dict) => i18nObj.setDictionary(dict),
             translate: (key, params) => i18nObj.translate(key, params),
             loadDictionary: () => i18nObj.loadDictionary(),
+            ready: i18nObj.ready,
+            notifyBagReady: () => i18nObj.notifyBagReady(),
             switchLang: switchLang,
             getCurrentLang: getCurrentLang,
             getLangDisplay: getLangDisplay,
@@ -1036,6 +1068,8 @@
         setDictionary: i18nObj.setDictionary,
         translate: i18nObj.translate,
         loadDictionary: i18nObj.loadDictionary,
+        ready: i18nObj.ready,
+        notifyBagReady: i18nObj.notifyBagReady,
         init: initLanguageSwitcher
     };
 

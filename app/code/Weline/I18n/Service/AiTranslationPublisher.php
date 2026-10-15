@@ -137,7 +137,7 @@ class AiTranslationPublisher
         $replaced = false;
         $areaByWord ??= $this->loadBaseWordAreas();
 
-        return ObjectManager::getInstance(I18nResourceChangePublisher::class)->publishLocaleFile(
+        $ok = ObjectManager::getInstance(I18nResourceChangePublisher::class)->publishLocaleFile(
             $localeCode,
             function () use ($localeCode, $unionFile, $areaFiles, $areaByWord, &$previousByPath, &$mode, &$replaced): array {
                 foreach ([$unionFile, ...array_values($areaFiles)] as $path) {
@@ -249,6 +249,19 @@ class AiTranslationPublisher
                 }
             },
         );
+        if ($ok) {
+            try {
+                ObjectManager::getInstance(ClientI18nBagPublisher::class)->publishForLocale($localeCode);
+            } catch (\Throwable $e) {
+                w_log_error(
+                    'ClientI18nBagPublisher failed for ' . $localeCode . ': ' . $e->getMessage(),
+                    [],
+                    'i18n',
+                );
+            }
+        }
+
+        return $ok;
     }
 
     private function localeFileFingerprint(string $localeCode): ?string

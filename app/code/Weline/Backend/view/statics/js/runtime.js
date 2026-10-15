@@ -75,7 +75,8 @@
     var Weline = window.Weline = window.Weline || {};
     var site = merge({}, config.site || {});
     site.computePath = site.computePath || {};
-    site.i18n = site.i18n || config.i18n && config.i18n.dictionary || {};
+    // Dictionary arrives via footer i18n-client bag → Weline.i18n.setDictionary.
+    site.i18n = site.i18n && typeof site.i18n === 'object' ? site.i18n : {};
 
     var Runtime = {
         config: config,

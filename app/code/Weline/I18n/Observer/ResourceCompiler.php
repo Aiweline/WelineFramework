@@ -16,6 +16,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Helper\JsTranslationsExtractor;
 use Weline\Framework\App\Env;
 use Weline\I18n\Model\I18n;
+use Weline\I18n\Service\ClientWordSetStore;
+use Weline\I18n\Service\DictionaryAreaPolicy;
 
 /**
  * 资源编译观察者
@@ -105,55 +107,43 @@ class ResourceCompiler implements ObserverInterface
                 }
             }
             
-            // 获取翻译并更新模块映射中的 i18n 数据
-            if (!empty($allJsWords)) {
-                // 获取当前语言的翻译
-                $locale = \Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_LANGUAGE', 'zh_Hans_CN'));
-                $translations = $this->getTranslations($allJsWords, $locale);
-                
-                // 更新每个区域的模块映射中的 i18n 数据
-                foreach ($modulesMap as $area => $areaModules) {
-                    foreach ($areaModules as $moduleName => $moduleData) {
-                        if (isset($moduleData['i18n']) && is_array($moduleData['i18n'])) {
-                            $moduleTranslations = [];
-                            foreach ($moduleData['i18n'] as $word => $original) {
-                                // 从翻译字典中获取翻译，如果没有则使用原文
-                                $moduleTranslations[$word] = $translations[$word] ?? $word;
+            // Persist locale-agnostic ClientWordSet per area (translations ship via ClientI18nBagPublisher).
+            foreach ($modulesMap as $area => $areaModules) {
+                $areaWords = [];
+                foreach ($areaModules as $moduleName => $moduleData) {
+                    if (!is_array($moduleData)) {
+                        continue;
+                    }
+                    if (isset($moduleData['i18n']) && is_array($moduleData['i18n'])) {
+                        foreach ($moduleData['i18n'] as $word => $original) {
+                            $source = is_string($word) && !is_numeric($word) ? $word : (string)$original;
+                            $source = trim($source);
+                            if ($source !== '') {
+                                $areaWords[$source] = $source;
                             }
-                            $modulesMap[$area][$moduleName]['i18n'] = $moduleTranslations;
                         }
+                        unset($modulesMap[$area][$moduleName]['i18n']);
                     }
                 }
-            }
-            
-            // 生成模块映射 JSON 文件（此时 i18n 数据已经包含翻译）
-            $this->generateModulesMapJson($modulesMap);
-            
-            if (empty($allJsWords)) {
-                return;
-            }
-            
-            // 获取当前语言的翻译（如果上面没有获取，这里再获取一次）
-            if (!isset($translations)) {
-                $locale = \Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_LANGUAGE', 'zh_Hans_CN'));
-                $translations = $this->getTranslations($allJsWords, $locale);
-            }
-            
-            // 生成翻译对象和__()函数的JavaScript代码
-            $translationCode = $this->generateTranslationCode($translations);
-            
-            // 将翻译代码追加到每个区域的资源内容中
-            $updatedResources = [];
-            foreach ($resources as $area => $areaResources) {
-                if (is_string($areaResources)) {
-                    $updatedResources[$area] = $areaResources . "\n\n" . $translationCode;
-                } else {
-                    $updatedResources[$area] = $areaResources;
+                $normalizedArea = DictionaryAreaPolicy::normalize((string)$area);
+                if ($normalizedArea === DictionaryAreaPolicy::AREA_SHARED) {
+                    $normalizedArea = DictionaryAreaPolicy::AREA_FRONTEND;
+                }
+                if ($normalizedArea === DictionaryAreaPolicy::AREA_FRONTEND
+                    || $normalizedArea === DictionaryAreaPolicy::AREA_BACKEND
+                ) {
+                    ClientWordSetStore::save($normalizedArea, $areaWords);
                 }
             }
-            
-            // 更新事件数据
-            $eventData->setData('resources', $updatedResources);
+            if (!empty($allJsWords)) {
+                ClientWordSetStore::save(
+                    DictionaryAreaPolicy::AREA_FRONTEND,
+                    array_merge(ClientWordSetStore::load(DictionaryAreaPolicy::AREA_FRONTEND), $allJsWords)
+                );
+            }
+
+            // modules.map.json: paths only (no locale-baked phrase keys).
+            $this->generateModulesMapJson($modulesMap);
         } catch (\Exception $e) {
             // 静默处理错误，避免影响资源编译
             w_log_error('I18n资源编译观察者执行失败: ' . $e->getMessage(), [], 'i18n');
@@ -574,16 +564,10 @@ class ResourceCompiler implements ObserverInterface
                     if (is_array($moduleData)) {
                         // 新格式：['paths' => [...], 'i18n' => [...]]
                         if (isset($moduleData['paths'])) {
-                            $formattedModule = [
-                                'paths' => $moduleData['paths']
+                            // paths only — client translations live in i18n-client/{area}/{locale}.js
+                            $formattedModules[$moduleName] = [
+                                'paths' => $moduleData['paths'],
                             ];
-                            // 将翻译词直接作为模块对象的属性
-                            if (isset($moduleData['i18n']) && is_array($moduleData['i18n'])) {
-                                foreach ($moduleData['i18n'] as $word => $translation) {
-                                    $formattedModule[$word] = $translation;
-                                }
-                            }
-                            $formattedModules[$moduleName] = $formattedModule;
                         } else {
                             // 兼容旧格式：直接是路径数组
                             $formattedModules[$moduleName] = [

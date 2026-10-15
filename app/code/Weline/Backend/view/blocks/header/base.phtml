@@ -28,16 +28,7 @@ $mediaTemplate = $host . '/' . (!$useProdPublicUrls
     : 'static/' . trim($themePath, '/') . '/{module}/view/statics/{path}');
 $csrfToken = \Weline\Framework\Security\Token::create('csrf', 16, 600);
 
-$i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
-if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
-    try {
-        $registeredWords = \Weline\I18n\Helper\JsWordsRegistry::getWordsWithTranslations();
-        if (is_array($registeredWords)) {
-            $i18nWords = array_merge($i18nWords, $registeredWords);
-        }
-    } catch (\Throwable) {
-    }
-}
+// Client JS dictionary loads from footer i18n-client bag (not head runtime-config).
 
 \Weline\Framework\Runtime\FiberOutputBuffer::beginCapture();
 try {
@@ -112,12 +103,8 @@ $runtime = [
         'apiAdminArea' => $backendApiArea,
     ],
     'i18n' => [
-        'dictionary' => $i18nWords,
-        'close' => (string)__('关闭'),
-        'confirm' => (string)__('确定'),
-        'cancel' => (string)__('取消'),
-        'retry' => (string)__('请重试'),
-        'formNotFound' => (string)__('未找到可提交的表单。'),
+        'locale' => (string)\w_env_lang(),
+        'area' => 'backend',
     ],
     'theme' => $backendThemeConfig,
     'site' => [
@@ -137,7 +124,6 @@ $runtime = [
         'url_host' => $backendHost,
         'currency' => (string)\w_env_currency(),
         'lang' => (string)\w_env_lang(),
-        'i18n' => $i18nWords,
         'themeConfig' => $backendThemeConfig,
     ],
 ];
