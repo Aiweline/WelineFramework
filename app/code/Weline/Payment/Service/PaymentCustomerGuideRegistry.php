@@ -89,19 +89,44 @@ class PaymentCustomerGuideRegistry
     ): array {
         $entries = $this->listPublishedEntries($forceReload);
         $available = $this->resolveAvailableMethodCodes($context);
-        if ($available === null) {
-            return $entries;
-        }
-
         $alwaysInclude = strtolower(trim($alwaysIncludeMethodCode));
-        if ($alwaysInclude !== '') {
-            $available[$alwaysInclude] = true;
-        }
 
         return array_values(array_filter(
             $entries,
-            static fn(array $entry): bool => isset($available[(string) ($entry['method_code'] ?? '')])
+            function (array $entry) use ($available, $alwaysInclude): bool {
+                $code = strtolower(trim((string) ($entry['method_code'] ?? '')));
+                if ($alwaysInclude !== '' && $code === $alwaysInclude) {
+                    // Detail/legal deep-links stay reachable even for non-public guides.
+                    return true;
+                }
+                // Checkout-available ≠ customer-public hub. Dev sandbox (fake_card) must
+                // remain usable at controlled checkout, but must not appear on /guide/payment.
+                if (!$this->isCustomerPublicGuideEntry($entry)) {
+                    return false;
+                }
+                if ($available === null) {
+                    return true;
+                }
+
+                return isset($available[$code]) || isset($available[(string) ($entry['method_code'] ?? '')]);
+            }
         ));
+    }
+
+    /**
+     * Customer-facing payment guide hub only (not checkout sandbox chrome).
+     *
+     * @param array<string, mixed> $entry
+     */
+    private function isCustomerPublicGuideEntry(array $entry): bool
+    {
+        if (\array_key_exists('customer_public_guide', $entry)) {
+            return (bool) $entry['customer_public_guide'];
+        }
+        $code = strtolower(trim((string) ($entry['method_code'] ?? '')));
+        $provider = strtolower(trim((string) ($entry['provider_code'] ?? '')));
+
+        return $code !== 'fake_card' && $provider !== 'fake';
     }
 
     /**
@@ -286,9 +311,12 @@ class PaymentCustomerGuideRegistry
                 $policyTemplateCode = $this->normalizeTemplateCode($guide->getPolicyTemplateCode(), 'policy');
                 $agreementTemplateCode = $this->normalizeTemplateCode($guide->getAgreementTemplateCode(), 'agreement');
 
+                $providerCode = strtolower(trim($guide->getProviderCode()));
                 $entries[$methodCode] = [
                     'method_code' => $methodCode,
-                    'provider_code' => strtolower(trim($guide->getProviderCode())),
+                    'provider_code' => $providerCode,
+                    // Local test / fake providers stay on checkout in DEV; never list on public hub.
+                    'customer_public_guide' => !($methodCode === 'fake_card' || $providerCode === 'fake'),
                     'title' => (string) $guide->getTitle(),
                     'summary' => (string) $guide->getSummary(),
                     'guide_title' => (string) $guide->getGuideTitle(),

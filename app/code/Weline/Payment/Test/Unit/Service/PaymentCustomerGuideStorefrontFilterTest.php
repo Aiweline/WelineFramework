@@ -71,10 +71,28 @@ final class PaymentCustomerGuideStorefrontFilterTest extends TestCase
             availability: static fn (array $context): ?array => null,
         );
 
-        self::assertSame(
-            $this->codes($registry->listPublishedEntries(true)),
-            $this->codes($registry->listStorefrontPublishedEntries(true)),
-            '可用性不可判定时不得隐藏任何条目，避免把指南 hub 变成空页。',
+        $visible = $this->codes($registry->listStorefrontPublishedEntries(true));
+        self::assertContains('paypal', $visible);
+        self::assertContains('stripe', $visible);
+        // Availability unknown still hides non-customer-public guides (fake_card).
+        self::assertNotContains('fake_card', $visible, '本地测试支付不得出现在公开指南 hub。');
+    }
+
+    public function testStorefrontListHidesFakeCardEvenWhenCheckoutAvailable(): void
+    {
+        $registry = $this->registry(
+            availability: static fn (array $context): array => [
+                'paypal' => true,
+                'fake_card' => true,
+            ],
+        );
+
+        $visible = $this->codes($registry->listStorefrontPublishedEntries(true));
+        self::assertContains('paypal', $visible);
+        self::assertNotContains(
+            'fake_card',
+            $visible,
+            '结账可用的 sandbox 方式仍不得出现在公开 /guide/payment hub。'
         );
     }
 
