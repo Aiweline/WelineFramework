@@ -252,7 +252,6 @@ settings,settings
 正在生成截图…,"Generating screenshot…"
 请在弹出窗口选择「这个标签页」以截取,"In the dialog, choose This Tab to capture"
 生成失败，请重选区域或改用图片上传,"Failed to generate. Reselect an area or upload an image"
-欢迎使用客服服务,"Welcome to customer service"
 会员,Member
 访客,Visitor
 客服,Agent
@@ -414,6 +413,7 @@ settings,settings
 无效的附件消息,"Invalid attachment message"
 图片：%{1},"Image: %{1}"
 文件：%{1},"File: %{1}"
+欢迎使用客服服务,"Welcome to customer service"
 输入回复…,"Type a reply…"
 会话,Session
 检测中...,Checking...

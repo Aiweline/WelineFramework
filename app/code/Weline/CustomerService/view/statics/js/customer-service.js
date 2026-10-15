@@ -346,23 +346,32 @@ const CustomerServiceWidget = (function() {
         widgetTranslationsLoadPromises[locale] = (async function () {
             try {
                 const data = await (await getCustomerServiceApi()).widgetTranslations(
+                    // Only descriptor-allowed key: locales. Extra keys → worker reject
+                    // ("Unknown frontend worker param") and empty bag → Chinese chrome/messages.
                     {locales: locale},
                     {silent: true}
                 );
-                if (data && data.success && data.data && data.data.translations
-                    && typeof data.data.translations === 'object') {
+                // Provider fail-closed empty locales returns translations:[] (JSON array).
+                // Treat array / empty map as failure — never paint Chinese source over SSR EN.
+                const translations = data && data.data ? data.data.translations : null;
+                if (data && data.success && translations
+                    && typeof translations === 'object'
+                    && !Array.isArray(translations)) {
                     if (!config.widgetTranslations || typeof config.widgetTranslations !== 'object'
                         || Array.isArray(config.widgetTranslations)) {
                         config.widgetTranslations = {};
                     }
-                    Object.keys(data.data.translations).forEach(function (code) {
-                        const localeBag = data.data.translations[code];
-                        if (localeBag && typeof localeBag === 'object' && !Array.isArray(localeBag)) {
+                    Object.keys(translations).forEach(function (code) {
+                        const localeBag = translations[code];
+                        if (localeBag && typeof localeBag === 'object' && !Array.isArray(localeBag)
+                            && Object.keys(localeBag).length > 0) {
                             config.widgetTranslations[code] = localeBag;
                         }
                     });
-                    updateWidgetLocaleText();
-                    return true;
+                    if (hasLoadedWidgetTranslationsFor(locale)) {
+                        updateWidgetLocaleText();
+                        return true;
+                    }
                 }
             } catch (error) {
                 console.error('[CustomerService] widget translations load failed', error);
@@ -682,7 +691,14 @@ const CustomerServiceWidget = (function() {
         // 初始化 UI
         initUIState();
         bindWidgetControls();
-        updateWidgetLocaleText();
+        // P0 en_US: do NOT paint Chinese source over SSR chrome before the locale bag loads.
+        // updateWidgetLocaleText runs after ensureWidgetTranslations (or immediately when bag already present).
+        if (hasLoadedWidgetTranslationsFor(state.locale)) {
+            updateWidgetLocaleText();
+        } else {
+            updateWidgetLocaleDirection();
+            void ensureWidgetTranslations(false, state.locale);
+        }
         bindMiniCartLayerState();
         bindEmailBoundSync();
         bindVisibilityLifecycle();
@@ -928,6 +944,12 @@ const CustomerServiceWidget = (function() {
 
     function updateWidgetLocaleText() {
         updateWidgetLocaleDirection();
+        // Hard gate (all call sites): without a non-empty locale bag, __() falls through to
+        // Chinese CSV source / identity window.__ — that overwrites SSR EN on hub pages
+        // (/shop) when ensure returns empty translations[] or initSession races before bag load.
+        if (!hasLoadedWidgetTranslationsFor(state.locale)) {
+            return;
+        }
 
         const textMap = {
             'cs-title-text': __('客服服务'),
@@ -1075,7 +1097,11 @@ const CustomerServiceWidget = (function() {
             if (data.success) {
                 state.sessionId = data.data.session_id;
                 state.sessionToken = data.data.session_token;
-                state.locale = data.data.customer_locale;
+                const storefrontLocale = String(config.storefrontLocale || '').trim();
+                const sessionLocale = String((data.data && data.data.customer_locale) || '').trim();
+                // Storefront path locale wins for chrome (same as init). Session locale is
+                // only used when the page did not declare a storefront locale.
+                state.locale = storefrontLocale || sessionLocale || state.locale;
                 if (data.data.guest_send) {
                     applyGuestSendGate(data.data.guest_send);
                 }
@@ -1093,6 +1119,8 @@ const CustomerServiceWidget = (function() {
                 
                 saveState();
                 initUIState();
+                // Load bag for resolved locale before chrome paint (updateWidgetLocaleText is gated).
+                await ensureWidgetTranslations(false, state.locale);
                 updateWidgetLocaleText();
                 return true;
             }
@@ -1182,7 +1210,11 @@ const CustomerServiceWidget = (function() {
             chatButton.style.display = 'none';
             widget?.classList.add('is-open');
             state.pollIntervalMs = MESSAGE_POLL_INTERVAL_MS;
-            await ensureWidgetTranslations(false, state.locale);
+            let translationsReady = await ensureWidgetTranslations(false, state.locale);
+            if (!translationsReady) {
+                // Hub pages (/shop) may race query-bin before locales bind — force one retry.
+                translationsReady = await ensureWidgetTranslations(true, state.locale);
+            }
             await activateChat();
             await markChatReadFromServer();
         }
@@ -2149,7 +2181,7 @@ const CustomerServiceWidget = (function() {
                 if (messages.length === 0) {
                     messagesContainer.innerHTML = `
                         <div class="cs-welcome-message">
-                            <p>${__('欢迎使用客服服务')}</p>
+                            <p>${__('欢迎使用客服服务！')}</p>
                             <p>${__('请输入您的问题，我们的客服将尽快为您解答。')}</p>
                         </div>
                     `;

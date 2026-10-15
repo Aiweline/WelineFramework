@@ -44,13 +44,32 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('widgetTranslations: <?= json_encode($widgetTranslations', $content);
         $this->assertStringContainsString('ensureWidgetTranslations', $js);
         // One locale at a time — never dump the full matrix with widgetTranslations({}).
+        // Worker descriptor only allows locales — do not send singular locale (unknown param reject).
         $this->assertStringContainsString('{locales: locale}', $js);
+        $this->assertStringNotContainsString('{locales: locale, locale: locale}', $js);
         $this->assertStringContainsString('hasLoadedWidgetTranslationsFor', $js);
         $this->assertStringContainsString('storefrontLocale', $js);
+        // P0: init must not overwrite SSR chrome with Chinese source before the locale bag loads.
+        $this->assertMatchesRegularExpression(
+            '/function init\([\s\S]*?hasLoadedWidgetTranslationsFor\(state\.locale\)[\s\S]*?ensureWidgetTranslations\(false,\s*state\.locale\)/',
+            $js,
+            'init must gate updateWidgetLocaleText behind hasLoadedWidgetTranslationsFor / ensureWidgetTranslations'
+        );
+        // P0 /shop hub: updateWidgetLocaleText itself must refuse to paint without a loaded bag
+        // (empty translations[] / initSession race otherwise overwrites SSR EN via Chinese source).
+        $this->assertMatchesRegularExpression(
+            '/function updateWidgetLocaleText\(\)\s*\{[\s\S]*?hasLoadedWidgetTranslationsFor\(state\.locale\)/',
+            $js,
+            'updateWidgetLocaleText must hard-gate on hasLoadedWidgetTranslationsFor'
+        );
+        $this->assertStringContainsString('!Array.isArray(translations)', $js);
+        $this->assertStringContainsString("aria-label=\"<?= \$cs('发送') ?>\"", $content);
         $this->assertStringNotContainsString('widgetTranslations({}, {silent: true})', $js);
         $this->assertStringContainsString("'name' => 'widgetTranslations'", $provider);
         $this->assertStringContainsString("'widgetTranslations' => \$this->widgetTranslations(\$params)", $provider);
         $this->assertStringContainsString('Fail-closed empty: storefront loads one locale at a time', $provider);
+        $this->assertStringContainsString("\$params['locales'] ?? \$params['locale']", $provider);
+        $this->assertStringContainsString('translations\' => new \\stdClass()', $provider);
     }
 
     public function testFrontendWidgetUsesWelineFormControls(): void

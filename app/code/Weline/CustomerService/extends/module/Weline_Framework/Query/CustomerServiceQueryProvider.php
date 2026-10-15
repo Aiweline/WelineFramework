@@ -464,7 +464,8 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             }
         }
 
-        $raw = trim((string)($params['locales'] ?? ''));
+        // Accept locales=… (preferred) or singular locale=… (hub / worker param alias).
+        $raw = trim((string)($params['locales'] ?? $params['locale'] ?? ''));
         $codes = [];
         if ($raw !== '') {
             foreach (preg_split('/[\s,]+/', $raw) ?: [] as $piece) {
@@ -476,11 +477,12 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
         }
         // Fail-closed empty: storefront loads one locale at a time via locales=…
         // (never dump the full supported matrix into a single query-bin map).
+        // Return {} (object) not [] so JS typeof/array checks do not treat this as a bag.
         if ($codes === []) {
             return [
                 'success' => true,
                 'data' => [
-                    'translations' => [],
+                    'translations' => new \stdClass(),
                 ],
             ];
         }
@@ -597,6 +599,8 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                     'cache_ttl' => 300,
                     'params' => [
                         'locales' => ['type' => 'string', 'required' => false, 'max_length' => 512],
+                        // Optional singular alias (JS must still prefer locales; unknown keys are rejected by worker).
+                        'locale' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Batch customer-service widget chrome dictionaries',
