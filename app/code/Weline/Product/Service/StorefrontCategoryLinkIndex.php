@@ -103,7 +103,8 @@ final class StorefrontCategoryLinkIndex
         /** @var CategoryLink $model */
         $model = ObjectManager::create(CategoryLink::class, [], false);
         $model = $model->forWebsite($websiteId);
-        $raw = $model->clear()->select()->fetchArray();
+        // Stream-safe: full-website link rebuild must not use unbounded fetchArray().
+        $raw = \iterator_to_array($model->clear()->select()->fetchIterator(), false);
         $rows = [];
         foreach ($raw as $row) {
             if (!\is_array($row)) {

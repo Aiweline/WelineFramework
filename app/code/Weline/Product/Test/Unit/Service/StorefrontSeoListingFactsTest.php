@@ -57,4 +57,33 @@ final class StorefrontSeoListingFactsTest extends TestCase
         self::assertSame('Women', $trail[1]['name']);
         self::assertSame('Mamian', $trail[2]['name']);
     }
+
+    public function testDedupeBreadcrumbsCollapsesDuplicateHomeAndKeepsShopLeaf(): void
+    {
+        $facts = new StorefrontSeoListingFacts();
+        $trail = $facts->dedupeBreadcrumbs([
+            ['name' => 'Home Page', 'url' => '/'],
+            ['name' => 'Shop', 'url' => '/shop'],
+            ['name' => 'Home Page', 'url' => '/'],
+            ['name' => 'Ritual Objects', 'url' => '/products'],
+        ]);
+
+        self::assertSame(['Home Page', 'Shop', 'Ritual Objects'], array_column($trail, 'name'));
+        self::assertSame('/', $trail[0]['url']);
+        self::assertSame('/shop', $trail[1]['url']);
+        self::assertSame('/products', $trail[2]['url']);
+    }
+
+    public function testWithHomeBreadcrumbSkipsWhenHomeAlreadyPresent(): void
+    {
+        $facts = new StorefrontSeoListingFacts();
+        $trail = $facts->withHomeBreadcrumb([
+            ['name' => 'Home Page', 'url' => '/'],
+            ['name' => 'Shop', 'url' => '/shop'],
+            ['name' => 'Ritual Objects', 'url' => '/products'],
+        ]);
+
+        self::assertCount(3, $trail);
+        self::assertSame('Shop', $trail[1]['name']);
+    }
 }

@@ -158,11 +158,19 @@ final class ProductRepository extends AbstractWebsiteShardRepository
         if ($productIds === []) {
             return [];
         }
-        $rows = $this->newModel($websiteId)
+        // Large category PLPs (e.g. tickets subtree) pass 10k+ IDs; unbounded
+        // fetchArray() trips QueryAst gate. Stream like listAll().
+        $rows = [];
+        $iterator = $this->newModel($websiteId)
             ->clear()
             ->where(Product::schema_fields_ID, $productIds, 'IN')
             ->select()
-            ->fetchArray();
+            ->fetchIterator();
+        foreach ($iterator as $row) {
+            if (\is_array($row)) {
+                $rows[] = $row;
+            }
+        }
         usort(
             $rows,
             static fn(array $left, array $right): int => (int)($left[Product::schema_fields_ID] ?? 0)

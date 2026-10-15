@@ -75,10 +75,10 @@ final class StorefrontSeoListingFacts
     {
         $homeLabel = trim($homeLabel) !== '' ? trim($homeLabel) : (string)\__('首页');
         $homeUrl = trim($homeUrl) !== '' ? trim($homeUrl) : '/';
+        $trail = $this->dedupeBreadcrumbs($trail);
         $hasHome = false;
         foreach ($trail as $crumb) {
-            $url = trim((string)($crumb['url'] ?? ''));
-            if ($url === '/' || $url === '' || preg_match('#^https?://[^/]+/?$#i', $url)) {
+            if ($this->isHomeCrumb($crumb)) {
                 $hasHome = true;
                 break;
             }
@@ -87,7 +87,120 @@ final class StorefrontSeoListingFacts
             return $trail;
         }
 
-        return array_values(array_merge([['name' => $homeLabel, 'url' => $homeUrl]], $trail));
+        return $this->dedupeBreadcrumbs(array_values(array_merge(
+            [['name' => $homeLabel, 'url' => $homeUrl]],
+            $trail,
+        )));
+    }
+
+    /**
+     * Drop consecutive duplicates and collapse duplicate home crumbs to a single leading home.
+     *
+     * @param list<array{name?:string,url?:string,label?:string,text?:string,href?:string}> $trail
+     * @return list<array{name:string,url:string}>
+     */
+    public function dedupeBreadcrumbs(array $trail): array
+    {
+        $normalized = $this->normalizeBreadcrumbs($trail);
+        if ($normalized === []) {
+            return [];
+        }
+
+        $out = [];
+        $homeKept = false;
+        foreach ($normalized as $crumb) {
+            $isHome = $this->isHomeCrumb($crumb);
+            if ($isHome) {
+                if ($homeKept) {
+                    continue;
+                }
+                // Always keep the first home at the front of the trail.
+                if ($out !== []) {
+                    array_unshift($out, ['name' => $crumb['name'], 'url' => $crumb['url'] !== '' ? $crumb['url'] : '/']);
+                } else {
+                    $out[] = ['name' => $crumb['name'], 'url' => $crumb['url'] !== '' ? $crumb['url'] : '/'];
+                }
+                $homeKept = true;
+                continue;
+            }
+            $prev = $out !== [] ? $out[array_key_last($out)] : null;
+            if (
+                $prev !== null
+                && strcasecmp((string)$prev['name'], (string)$crumb['name']) === 0
+                && $this->sameCrumbUrl((string)$prev['url'], (string)$crumb['url'])
+            ) {
+                continue;
+            }
+            $out[] = $crumb;
+        }
+
+        // If a mid-trail home was moved to front via array_unshift above while out already
+        // had entries, ensure we did not leave a duplicate first home from an earlier pass.
+        if ($out !== [] && $this->isHomeCrumb($out[0])) {
+            $first = array_shift($out);
+            $rest = [];
+            foreach ($out as $crumb) {
+                if ($this->isHomeCrumb($crumb)) {
+                    continue;
+                }
+                $rest[] = $crumb;
+            }
+            array_unshift($rest, $first);
+
+            return array_values($rest);
+        }
+
+        return array_values($out);
+    }
+
+    /**
+     * @param array{name?:string,url?:string} $crumb
+     */
+    private function isHomeCrumb(array $crumb): bool
+    {
+        $url = trim((string)($crumb['url'] ?? ''));
+        $name = strtolower(trim((string)($crumb['name'] ?? '')));
+        $homeNamed = in_array($name, ['首页', 'home', 'home page', 'homepage'], true);
+
+        if ($url === '/') {
+            return true;
+        }
+        if (preg_match('#^https?://[^/]+/?$#i', $url)) {
+            return true;
+        }
+
+        $path = $url;
+        if (preg_match('#^https?://#i', $url)) {
+            $path = (string)(parse_url($url, PHP_URL_PATH) ?? '');
+        }
+        $path = trim(str_replace('\\', '/', $path), '/');
+
+        // Empty URL alone is not home (leaf crumbs often clear url); require home-like name.
+        if ($url === '' || $path === '') {
+            return $homeNamed;
+        }
+
+        // Home-named crumb on a single website-mount segment (e.g. /daocharms).
+        return $homeNamed && !str_contains($path, '/');
+    }
+
+    private function sameCrumbUrl(string $a, string $b): bool
+    {
+        $norm = static function (string $url): string {
+            $url = trim($url);
+            if ($url === '') {
+                return '';
+            }
+            if (preg_match('#^https?://#i', $url)) {
+                $path = (string)(parse_url($url, PHP_URL_PATH) ?? '');
+                $url = $path !== '' ? $path : '/';
+            }
+            $url = '/' . trim(str_replace('\\', '/', $url), '/');
+
+            return $url === '/' ? '/' : rtrim($url, '/');
+        };
+
+        return $norm($a) === $norm($b);
     }
 
     /**

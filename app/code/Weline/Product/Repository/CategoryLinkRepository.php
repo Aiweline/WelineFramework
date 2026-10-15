@@ -262,11 +262,13 @@ final class CategoryLinkRepository extends AbstractWebsiteShardRepository
         if ($storeIds !== null) {
             $query->where(CategoryLink::schema_fields_STORE_ID, $storeIds, 'IN');
         }
-        $raw = $query
-            ->select()
-            ->fetchArray();
+        // Stream-safe: unbounded fetchArray() trips QueryAst gate (threshold 10000).
+        $raw = iterator_to_array($query->select()->fetchIterator(), false);
         $rows = [];
         foreach ($raw as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
             $rows[] = [
                 'link_id' => (int)($row[CategoryLink::schema_fields_ID] ?? 0),
                 'category_id' => (int)($row[CategoryLink::schema_fields_CATEGORY_ID] ?? 0),
@@ -315,11 +317,14 @@ final class CategoryLinkRepository extends AbstractWebsiteShardRepository
         if ($productIds === []) {
             return 0;
         }
-        $rows = $this->newModel($websiteId)
-            ->clear()
-            ->where(CategoryLink::schema_fields_PRODUCT_ID, $productIds, 'IN')
-            ->select()
-            ->fetchArray();
+        $rows = iterator_to_array(
+            $this->newModel($websiteId)
+                ->clear()
+                ->where(CategoryLink::schema_fields_PRODUCT_ID, $productIds, 'IN')
+                ->select()
+                ->fetchIterator(),
+            false,
+        );
         if ($rows === []) {
             return 0;
         }

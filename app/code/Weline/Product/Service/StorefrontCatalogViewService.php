@@ -536,6 +536,13 @@ final class StorefrontCatalogViewService
             \array_map('intval', $productIds),
             static fn(int $id): bool => $id > 0,
         )));
+        // Category PLPs may resolve full subtree link sets (10k+). This path only
+        // returns up to $limit cards — hydrate that window only (bounded Repository
+        // reads + avoid Unbounded SELECT / huge cache keys). Full link sets stay on
+        // StorefrontCategoryViewService::collectCategoryProductIds for Filters.
+        if (\count($filterIds) > $limit) {
+            $filterIds = \array_slice($filterIds, 0, $limit);
+        }
 
         // Targeted hydration must not rebuild the full catalog projection.
         // Search hit cards and related-product widgets pass explicit IDs.

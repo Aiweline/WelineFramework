@@ -243,7 +243,7 @@ final class ProductCatalogCartItemSnapshotResolver
         if ($fxUnavailable) {
             $fulfillmentMetadata['currency_unavailable'] = '1';
         }
-        if ($productType === 'downloadable') {
+        if ($this->productHasDownloadAssets($websiteId, $productId, $productType)) {
             if ($this->currentCustomerId() <= 0) {
                 return $this->unavailable(
                     $identity,
@@ -627,9 +627,9 @@ final class ProductCatalogCartItemSnapshotResolver
                 continue;
             }
 
-            // Downloadable products have per-customer private asset checks; keep
-            // the authoritative single-item path for this uncommon catalog type.
-            if ((string)$facts['type'] === 'downloadable') {
+            // Digital-delivery products (download_assets present) need per-customer
+            // private asset checks; keep the authoritative single-item path.
+            if ($this->productHasDownloadAssets($websiteId, $productId, (string)$facts['type'])) {
                 $snapshots[] = $this->resolve($identity, $scope);
                 continue;
             }
@@ -1267,6 +1267,37 @@ final class ProductCatalogCartItemSnapshotResolver
                 : 0;
         } catch (\Throwable) {
             return 0;
+        }
+    }
+
+    /**
+     * Capability gate: attach digital_download when type_configuration has assets
+     * (or legacy downloadable type). Never branches on site-specific product_type.
+     */
+    private function productHasDownloadAssets(int $websiteId, int $productId, string $productType = ''): bool
+    {
+        if (strtolower(trim($productType)) === 'downloadable') {
+            return true;
+        }
+        if ($websiteId < 0 || $productId < 1) {
+            return false;
+        }
+        try {
+            $resolved = $this->attributes->read(
+                $websiteId,
+                0,
+                'product',
+                $productId,
+                'type_configuration',
+                '',
+                [''],
+            );
+            $configuration = is_array($resolved->value) ? $resolved->value : [];
+            $rows = $configuration['download_assets'] ?? null;
+
+            return is_array($rows) && $rows !== [];
+        } catch (\Throwable) {
+            return false;
         }
     }
 

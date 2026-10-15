@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Product',
-    'version' => '1.1.15',
+    'version' => '1.1.16',
     'requires' => [
         'Weline_Catalog' => '*',
         'Weline_DataTable' => '*',
@@ -60,6 +60,8 @@ return [
             => \Weline\Product\Service\ProductSearchProjectionMutationCoordinator::class,
         \Weline\Product\Api\ProductDownloadEntitlementInterface::class
             => \Weline\Product\Service\ProductDownloadEntitlementService::class,
+        \Weline\Product\Api\OrderDigitalDeliveryProjectionInterface::class
+            => \Weline\Product\Service\OrderDigitalDeliveryProjectionService::class,
         \Weline\Product\Api\StorefrontOfferPriceAssemblerInterface::class
             => \Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class,
         \Weline\Product\Api\ProductQuoteRequestSubmitInterface::class

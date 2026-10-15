@@ -133,7 +133,8 @@ final class OfferRepository extends AbstractWebsiteShardRepository
             return [];
         }
 
-        $representatives = $this->newModel($websiteId)
+        $representatives = [];
+        foreach ($this->newModel($websiteId)
             ->clear()
             ->fields([
                 Offer::schema_fields_PRODUCT_ID,
@@ -143,7 +144,11 @@ final class OfferRepository extends AbstractWebsiteShardRepository
             ->where(Offer::schema_fields_STATUS, Offer::STATUS_PUBLISHED)
             ->group(Offer::schema_fields_PRODUCT_ID)
             ->select()
-            ->fetchArray();
+            ->fetchIterator() as $row) {
+            if (\is_array($row)) {
+                $representatives[] = $row;
+            }
+        }
         $offerIds = array_values(array_filter(array_map(
             static fn(array $row): int => (int)($row['representative_offer_id'] ?? 0),
             $representatives,
@@ -152,13 +157,20 @@ final class OfferRepository extends AbstractWebsiteShardRepository
             return [];
         }
 
-        return $this->newModel($websiteId)
+        $rows = [];
+        foreach ($this->newModel($websiteId)
             ->clear()
             ->fields(self::storefrontCardOfferFields())
             ->where(Offer::schema_fields_ID, $offerIds, 'IN')
             ->order(Offer::schema_fields_ID, 'ASC')
             ->select()
-            ->fetchArray();
+            ->fetchIterator() as $row) {
+            if (\is_array($row)) {
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
     }
 
     /**
@@ -214,10 +226,18 @@ final class OfferRepository extends AbstractWebsiteShardRepository
             $query->where(Offer::schema_fields_STATUS, trim($status));
         }
 
-        return $query
+        // Large PLP ID sets: stream past QueryAst Unbounded SELECT gate.
+        $rows = [];
+        foreach ($query
             ->order(Offer::schema_fields_ID, 'ASC')
             ->select()
-            ->fetchArray();
+            ->fetchIterator() as $row) {
+            if (\is_array($row)) {
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
     }
     /**
      * @param list<int> $productIds
