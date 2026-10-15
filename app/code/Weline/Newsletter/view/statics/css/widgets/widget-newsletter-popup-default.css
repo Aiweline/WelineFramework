@@ -119,6 +119,35 @@
     transform: translateY(0);
 }
 
+/*
+ * 无信笺图时不得继续 absolute 叠层：壳会塌成 0 高，表单飘到页背图上。
+ * 子主题可省略 letter-shell__art；保留 flow 布局作可继承基线。
+ */
+.wc-theme_widget_newsletter_popup .letter-shell:not(:has(.letter-shell__art)) {
+    line-height: normal;
+}
+
+.wc-theme_widget_newsletter_popup .letter-shell:not(:has(.letter-shell__art)) .letter-shell__form {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    inset: auto;
+    opacity: 1;
+    transform: none;
+    overflow: visible;
+    background: var(--weline-theme-surface-raised);
+    border: var(--border-width-thin) solid color-mix(in srgb, var(--weline-theme-border) 55%, transparent);
+    border-radius: var(--weline-radius-sm);
+    padding: var(--weline-space-5) var(--weline-space-4);
+}
+
+.wc-theme_widget_newsletter_popup.is-open .letter-shell:not(:has(.letter-shell__art)) .letter-shell__form {
+    opacity: 1;
+    transform: none;
+}
+
 .wc-theme_widget_newsletter_popup .popup-title {
     font-size: var(--weline-font-size-lg);
     font-weight: 700;
@@ -237,7 +266,7 @@
         max-width: min(var(--token-size-19-5rem), 92vw);
     }
 
-    .wc-theme_widget_newsletter_popup .letter-shell__form {
+    .wc-theme_widget_newsletter_popup .letter-shell:has(.letter-shell__art) .letter-shell__form {
         left: 9%;
         right: 9%;
         top: 11%;
