@@ -1724,6 +1724,19 @@ $checks = [
                 || str_contains((string) ($rule['summary'] ?? ''), '禁止'))),
         false,
     ),
+    'hard_constraints include theme_default_forbids_css_important' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_default_forbids_css_important'
+            && str_contains((string) ($rule['summary'] ?? ''), '!important')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'DEFAULT')
+                || str_contains((string) ($rule['summary'] ?? ''), 'default'))
+            && (str_contains((string) ($rule['summary'] ?? ''), 'FORBID')
+                || str_contains((string) ($rule['summary'] ?? ''), '禁止'))
+            && (str_contains((string) ($rule['summary'] ?? ''), '[hidden]')
+                || str_contains((string) ($rule['summary'] ?? ''), 'prefers-reduced-motion'))),
+        false,
+    ),
     'hard_constraints include theme_mechanism_not_foreign_content' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -1743,7 +1756,9 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'app/design')
             && (str_contains((string) ($rule['summary'] ?? ''), 'FORBID')
                 || str_contains((string) ($rule['summary'] ?? ''), '禁止'))
-            && str_contains((string) ($rule['summary'] ?? ''), 'widgets')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'widgets')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'STOP')
+                || str_contains((string) ($rule['summary'] ?? ''), 'ask'))),
         false,
     ),
     'hard_constraints include theme_design_multi_path_is_inheritance_normal' => array_reduce(
