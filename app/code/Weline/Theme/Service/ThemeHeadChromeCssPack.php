@@ -87,10 +87,10 @@ final class ThemeHeadChromeCssPack
         }
         try {
             if ($area === 'backend') {
-                $this->publishPack($area, self::PACK_BACKEND, ['include_disk' => false, 'include_theme_overlay' => false]);
+                $this->publishPack($area, self::PACK_BACKEND, ['include_disk' => true, 'include_theme_overlay' => false]);
             } else {
                 $this->publishPack($area, self::PACK_TOKENS, ['include_disk' => false, 'include_theme_overlay' => false]);
-                $this->publishPack($area, self::PACK_STOREFRONT, ['include_disk' => false, 'include_theme_overlay' => false]);
+                $this->publishPack($area, self::PACK_STOREFRONT, ['include_disk' => true, 'include_theme_overlay' => false]);
                 foreach ($this->warmOverlayLayoutTypes($area) as $layoutType) {
                     $this->publishPack($area, self::PACK_OVERLAY, [
                         'include_disk' => false,
@@ -163,11 +163,23 @@ final class ThemeHeadChromeCssPack
 
     /**
      * Whether the pack already absorbed the disk override (skip separate link).
-     * STOREFRONT/BACKEND no longer fold disk — always emit ThemeDiskHeadService after theme.
+     * When theme_css_merge is on, STOREFRONT/BACKEND fold meaningful disk after foundation.
      */
     public function diskIncludedInPack(string $area, string $pack): bool
     {
-        return false;
+        $area = $this->themeContext->normalizeArea($area);
+        if (!$this->isEnabled($area)) {
+            return false;
+        }
+        if (!in_array($pack, [self::PACK_STOREFRONT, self::PACK_BACKEND], true)) {
+            return false;
+        }
+        $theme = $this->resolveTheme($area);
+        if (!$theme instanceof WelineTheme || (int)$theme->getId() < 1) {
+            return false;
+        }
+
+        return $this->diskHead->overrideBundleHasMeaningfulCss($area, $theme);
     }
 
     /**
@@ -428,17 +440,20 @@ final class ThemeHeadChromeCssPack
                 $sources[] = $resolved;
             }
         }
-        // Disk is a separate head link after theme (include_disk default false for STOREFRONT/BACKEND).
+        // Disk folds into STOREFRONT/BACKEND when merge on (include_disk); legacy token packs keep opt-in.
         $includeDisk = ($options['include_disk'] ?? false)
             && in_array($pack, [
+                self::PACK_STOREFRONT,
+                self::PACK_BACKEND,
                 self::PACK_TOKENS_POST,
                 self::PACK_TOKENS_MINIMAL,
                 self::PACK_TOKENS_BACKEND,
             ], true);
         if ($includeDisk) {
             $disk = $this->resolveDiskOverrideSource($area, $theme);
-            if ($disk !== null) {
-                $sources[] = $disk;
+            if ($disk !== null && ThemeDiskHeadService::cssContentIsMeaningful($disk['content'])) {
+                $at = $this->diskInsertIndex($pack, $sources);
+                array_splice($sources, $at, 0, [$disk]);
             }
         }
         // Overlay is its own pack (or explicit opt-in); never folded into STOREFRONT by default.

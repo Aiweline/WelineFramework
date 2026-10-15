@@ -99,6 +99,7 @@ final class WidgetAssetOptimizationTest extends TestCase
         self::assertSame([['/layout-a.css', '/layout-b.css', '/layout-c.css']], $publisher->batches);
         self::assertCount(1, $result);
         self::assertStringContainsString('data-weline-layout-pack="1"', $result[0]['tag']);
+        self::assertStringContainsString('data-weline-merged-css="layout-a.css layout-b.css layout-c.css"', $result[0]['tag']);
         self::assertStringNotContainsString('media="print"', $result[0]['tag']);
     }
 

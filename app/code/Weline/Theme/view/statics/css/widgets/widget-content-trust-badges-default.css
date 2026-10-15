@@ -157,7 +157,7 @@
     .wc-theme_widget_trust_badges .badges-grid.columns-2,
     .wc-theme_widget_trust_badges .badges-grid.columns-3,
     .wc-theme_widget_trust_badges .badges-grid.columns-4 {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: var(--weline-space-3);
     }
 
@@ -165,7 +165,7 @@
     .wc-theme_widget_trust_badges.style-card .badges-grid.columns-2,
     .wc-theme_widget_trust_badges.style-card .badges-grid.columns-3,
     .wc-theme_widget_trust_badges.style-card .badges-grid.columns-4 {
-        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-columns: minmax(0, 1fr);
         gap: var(--weline-space-3);
     }
 
@@ -192,7 +192,7 @@
     .wc-theme_widget_trust_badges .badges-grid.columns-2,
     .wc-theme_widget_trust_badges .badges-grid.columns-3,
     .wc-theme_widget_trust_badges .badges-grid.columns-4 {
-        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-columns: minmax(0, 1fr);
         gap: var(--weline-space-3);
     }
 

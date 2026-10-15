@@ -244,7 +244,7 @@
 
 @media (max-width: 768px) {
     .wc-theme_widget_category_grid .category-grid:not(.category-grid--strip) {
-        grid-template-columns: repeat(2, 1fr) !important;
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .wc-theme_widget_category_grid .grid-title {

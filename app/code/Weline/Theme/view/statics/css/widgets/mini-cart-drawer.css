@@ -95,7 +95,7 @@
 }
 
 .header-cart .mini-cart-drawer {
-    position: fixed !important;
+    position: fixed;
     /* Default CLOSED geometry: width 0 at the inline-end edge.
      * Never default to width:100vw/panel + translateX(100%) — that expands
      * document scrollWidth (~2× viewport) and shows a blank right gutter. */
@@ -132,20 +132,20 @@
 
 /* Closed (explicit): keep geometry collapsed even if a late sheet races. */
 .header-cart .mini-cart-drawer[aria-hidden="true"] {
-    visibility: hidden !important;
-    pointer-events: none !important;
-    transform: none !important;
-    inset-inline-start: auto !important;
-    inset-inline-end: 0 !important;
-    left: auto !important;
-    right: 0 !important;
-    width: 0 !important;
-    max-width: 0 !important;
-    min-width: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    overflow: hidden !important;
-    box-shadow: none !important;
+    visibility: hidden;
+    pointer-events: none;
+    transform: none;
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    left: auto;
+    right: 0;
+    width: 0;
+    max-width: 0;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    overflow: hidden;
+    box-shadow: none;
     content-visibility: hidden;
     clip-path: inset(0 0 0 0);
 }
@@ -195,16 +195,16 @@
 .header-cart.is-drawer-open .mini-cart-drawer,
 .header-cart.is-drawer-open .mini-cart-drawer.is-open,
 .header-cart .mini-cart-drawer[aria-hidden="false"] {
-    transform: none !important;
-    width: min(var(--size-panel-400, 25rem), 100%) !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
+    transform: none;
+    width: min(var(--size-panel-400, 25rem), 100%);
+    max-width: 100%;
+    min-width: 0;
     padding: 0;
     border: unset;
     box-shadow: var(--weline-shadow-lg);
     overflow: hidden;
-    visibility: visible !important;
-    pointer-events: auto !important;
+    visibility: visible;
+    pointer-events: auto;
     content-visibility: visible;
 }
 
@@ -230,8 +230,8 @@
     .header-cart.is-drawer-open .mini-cart-drawer,
     .header-cart.is-drawer-open .mini-cart-drawer.is-open,
     .header-cart .mini-cart-drawer[aria-hidden="false"] {
-        width: 100% !important;
-        max-width: 100% !important;
+        width: 100%;
+        max-width: 100%;
     }
 }
 
@@ -926,9 +926,9 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 .header-cart button.mini-cart-drawer__extras-tab.is-active,
 .header-cart .mini-cart-drawer__extras-tab.is-active,
 .header-cart .mini-cart-drawer__extras-tab[aria-selected="true"] {
-    /* !important: beat theme-head inverse button color:inherit (0,7,1) until theme-head rebakes exclusions. */
-    color: var(--color-primary, var(--weline-theme-primary, var(--amz-drawer-price))) !important;
-    -webkit-text-fill-color: var(--color-primary, var(--weline-theme-primary, var(--amz-drawer-price))) !important;
+    /*: beat theme-head inverse button color:inherit (0,7,1) until theme-head rebakes exclusions. */
+    color: var(--color-primary, var(--weline-theme-primary, var(--amz-drawer-price)));
+    -webkit-text-fill-color: var(--color-primary, var(--weline-theme-primary, var(--amz-drawer-price)));
     font-weight: 700;
     border-bottom-color: var(--color-primary, var(--weline-theme-primary, var(--amz-drawer-price)));
 }
@@ -1066,9 +1066,9 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-
 .weline-checkout__extras button.mini-cart-drawer__extras-tab.is-active,
 .weline-checkout__extras .mini-cart-drawer__extras-tab.is-active,
 .weline-checkout__extras .mini-cart-drawer__extras-tab[aria-selected="true"] {
-    background: transparent !important;
-    color: var(--color-primary, var(--weline-theme-primary)) !important;
-    -webkit-text-fill-color: var(--color-primary, var(--weline-theme-primary)) !important;
+    background: transparent;
+    color: var(--color-primary, var(--weline-theme-primary));
+    -webkit-text-fill-color: var(--color-primary, var(--weline-theme-primary));
     font-weight: 700;
     border-color: transparent;
     border-bottom-color: var(--color-primary, var(--weline-theme-primary));
@@ -1328,7 +1328,7 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-
 .widget-preview-canvas .header-cart .mini-cart-drawer__overlay,
 .header-cart.is-preview .mini-cart-drawer,
 .header-cart.is-preview .mini-cart-drawer__overlay {
-    display: none !important;
+    display: none;
 }
 
 /* Belt: storefront must not grow a horizontal page scrollbar from off-canvas chrome. */
@@ -1340,3 +1340,158 @@ body {
     overflow-x: clip;
     max-width: 100%;
 }
+
+/*
+ * Cart qty stacking gate (source of truth: Weline_Cart::css/mini-cart-drawer-qty-hit.css).
+ * Folded here so the layout pack already paints it — JS must not open a second RTT for 0.8KB.
+ */
+.header-cart .mini-cart-drawer__body {
+    position: relative;
+    z-index: 1;
+}
+
+.header-cart .mini-cart-drawer__footer {
+    /* Do not override Theme footer height cap (drawer minus 100px). */
+    position: relative;
+    z-index: 0;
+}
+
+/* --- folded from widget-header-mini-cart-icon-default.css (one widget → one sheet) --- */
+.wc-theme_widget_mini_cart_icon {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    max-width: 100%;
+}
+
+.wc-theme_widget_mini_cart_icon .cart-link {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-2);
+    text-decoration: none;
+    color: inherit;
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border-radius: var(--weline-radius-md);
+    transition: background-color var(--weline-theme-transition-base);
+}
+
+.wc-theme_widget_mini_cart_icon .cart-link:hover {
+    background-color: var(--color-on-dark-soft);
+}
+
+.wc-theme_widget_mini_cart_icon .cart-icon-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    /* Keep badge anchors on the icon box, not the whole cart-link. */
+    inline-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
+    block-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
+}
+
+.wc-theme_widget_mini_cart_icon .header-cart-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    block-size: 100%;
+    color: inherit;
+}
+
+.wc-theme_widget_mini_cart_icon .header-cart-icon svg {
+    width: 100%;
+    height: 100%;
+    stroke-width: 1.75;
+}
+
+.wc-theme_widget_mini_cart_icon .cart-count {
+    /* Do NOT use --token-size-Npx here: auto-literals may be negative / missing (e.g. 4px=-4px, 2px undefined). */
+    position: absolute;
+    /* Hang outside the icon box (Amazon-style). Physical top/right only —
+       never pair logical inset-* with top/right:auto (resets → flex-centered cover). */
+    top: calc(var(--weline-space-2) * -1);
+    right: calc(var(--weline-space-2) * -1);
+    left: auto;
+    bottom: auto;
+    z-index: 1;
+    min-width: var(--spacing-4_5);
+    height: var(--spacing-4_5);
+    background: var(--weline-chrome-primary, var(--weline-theme-primary));
+    /* Light ink on primary fill (align search-submit); not chrome-text-primary/paper ink. */
+    color: var(--color-on-primary);
+    font-size: var(--weline-font-size-xs);
+    font-weight: 700;
+    line-height: 1;
+    border-radius: var(--weline-radius-round);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--weline-space-1);
+    pointer-events: none;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.wc-theme_widget_mini_cart_icon .cart-link:hover .cart-count {
+    transform: scale(1.2);
+}
+
+/* 两行：购物车 / 零售 · $…（宽随 meta；禁 min-width:0 单独塌成短宽） */
+.wc-theme_widget_mini_cart_icon .cart-info {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 0;
+    width: fit-content;
+    min-width: 0;
+    max-width: var(--token-size-11rem);
+    overflow: hidden;
+    font-size: var(--weline-font-size-xs);
+}
+
+.wc-theme_widget_mini_cart_icon .cart-label {
+    color: var(--weline-chrome-text-light-secondary, var(--token-color-rgba-255-255-255-0-75));
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.wc-theme_widget_mini_cart_icon .cart-meta {
+    display: inline-flex;
+    align-items: baseline;
+    flex-wrap: nowrap;
+    gap: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.wc-theme_widget_mini_cart_icon .cart-subtotal {
+    font-weight: 700;
+    color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark));
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .wc-theme_widget_mini_cart_icon .cart-info {
+        display: none;
+    }
+
+    .wc-theme_widget_mini_cart_icon .cart-link {
+        padding: var(--spacing-1_5);
+        min-width: var(--size-control-lg);
+        min-height: var(--size-control-lg);
+        justify-content: center;
+    }
+
+    .wc-theme_widget_mini_cart_icon .cart-count[hidden] {
+        display: flex;
+    }
+}
+
+[data-widget-style-class="beb8cfc5edbbbf39"] {width: 0%}

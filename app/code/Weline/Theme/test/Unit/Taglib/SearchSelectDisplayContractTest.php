@@ -15,7 +15,8 @@ final class SearchSelectDisplayContractTest extends TestCase
     {
         $src = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Taglib/SearchSelect.php');
 
-        self::assertStringContainsString('.w-search-select.is-filtering .w-search-select-display{display:none!important}', $src);
+        self::assertStringContainsString('.w-search-select.has-value:not(.is-multiple).is-filtering .w-search-select-display{display:none}', $src);
+        self::assertStringNotContainsString('.w-search-select.is-filtering .w-search-select-display{display:none!important}', $src);
         self::assertStringContainsString('z-index:calc(var(--weline-z-menu,1050) + 3)', $src);
         self::assertStringContainsString('.w-search-select.open{z-index:calc(var(--weline-z-menu,1050) + 3)}', $src);
         self::assertStringNotContainsString('.w-search-select-input:focus + .w-search-select-display{display:none}', $src);

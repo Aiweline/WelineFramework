@@ -143,7 +143,12 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertStringContainsString('PACK_TOKENS', $prefix);
         self::assertStringContainsString('PACK_STOREFRONT', $prefix);
         self::assertStringContainsString('PACK_OVERLAY', $prefix);
-        self::assertStringContainsString("'include_disk' => false", $prefix);
+        self::assertMatchesRegularExpression(
+            "/PACK_STOREFRONT[\s\S]{0,240}'include_disk'\\s*=>\\s*true/",
+            $prefix,
+            'storefront pack must absorb disk when merge on'
+        );
+        self::assertStringContainsString('diskIncludedInPack', $prefix);
         self::assertStringNotContainsString('storefront-shopper-toast-amazon.css', $prefix);
 
         $suffix = $this->read('view/theme/frontend/partials/head/assets-suffix.phtml');
@@ -159,6 +164,22 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertNotFalse($fn);
 
         return substr($src, $fn, 1400);
+    }
+
+    public function testDiskOverrideMeaningfulCssGate(): void
+    {
+        self::assertFalse(\Weline\Theme\Service\Disk\ThemeDiskHeadService::cssContentIsMeaningful(''));
+        self::assertFalse(\Weline\Theme\Service\Disk\ThemeDiskHeadService::cssContentIsMeaningful('/* only comment */'));
+        self::assertTrue(\Weline\Theme\Service\Disk\ThemeDiskHeadService::cssContentIsMeaningful(
+            ":root { --test-color: #ff0000; }"
+        ));
+        $src = $this->read('Service/ThemeHeadChromeCssPack.php');
+        self::assertStringContainsString('overrideBundleHasMeaningfulCss', $src);
+        self::assertStringContainsString('PACK_STOREFRONT', $src);
+        self::assertMatchesRegularExpression(
+            "/include_disk[\\s\\S]{0,120}PACK_STOREFRONT/",
+            $src
+        );
     }
 
     public function testPackClassConstantsMatchHeadWiring(): void

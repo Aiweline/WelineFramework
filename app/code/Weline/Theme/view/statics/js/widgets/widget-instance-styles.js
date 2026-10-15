@@ -8,6 +8,16 @@
     let sheet;
     function resolveSheet() {
         if (sheet) return sheet;
+        // Prefer constructable sheet — no dedicated 0.4KB network RTT for an empty host file.
+        if (typeof CSSStyleSheet === 'function' && 'adoptedStyleSheets' in document) {
+            try {
+                sheet = new CSSStyleSheet();
+                document.adoptedStyleSheets = document.adoptedStyleSheets.concat(sheet);
+                return sheet;
+            } catch (error) {
+                sheet = null;
+            }
+        }
         const link = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).find(function (item) {
             return item.href.indexOf('widget-instance-styles') !== -1;
         });
@@ -18,9 +28,8 @@
             void candidate.cssRules;
             sheet = candidate;
         } catch (error) {
-            if (error.name !== 'SecurityError' || typeof CSSStyleSheet !== 'function' || !('adoptedStyleSheets' in document)) throw error;
-            sheet = new CSSStyleSheet();
-            document.adoptedStyleSheets = document.adoptedStyleSheets.concat(sheet);
+            if (error.name !== 'SecurityError') throw error;
+            return null;
         }
         return sheet;
     }

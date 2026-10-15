@@ -307,11 +307,14 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         $css = (string)file_get_contents(dirname(__DIR__, 2) . '/view/statics/css/widgets/mini-cart-drawer.css');
 
         self::assertStringContainsString('inset-inline-start: auto', $css);
-        self::assertStringContainsString('width: 0 !important', $css);
+        self::assertStringContainsString('width: 0', $css);
+        self::assertStringNotContainsString('width: 0 !important', $css);
         self::assertStringContainsString('overflow-x: clip', $css);
         self::assertStringContainsString('.weline-page-wrapper', $css);
-        self::assertStringContainsString('width: min(var(--size-panel-400, 25rem), 100%) !important', $css);
-        self::assertStringContainsString('visibility: visible !important', $css);
+        self::assertStringContainsString('width: min(var(--size-panel-400, 25rem), 100%)', $css);
+        self::assertStringNotContainsString('width: min(var(--size-panel-400, 25rem), 100%) !important', $css);
+        self::assertStringContainsString('visibility: visible', $css);
+        self::assertStringNotContainsString('visibility: visible !important', $css);
         // Closed default must not park with translateX(100%) / 100vw.
         self::assertDoesNotMatchRegularExpression(
             '/\.header-cart \.mini-cart-drawer\s*\{[^}]*transform:\s*translate/s',
@@ -330,9 +333,14 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         );
         // Open-state mobile full-bleed must use literal 768px (var() in @media never matches).
         self::assertMatchesRegularExpression(
-            '/@media\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*is-drawer-open[^}]*width:\s*100%\s*!important/s',
+            '/@media\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*is-drawer-open[^}]*width:\s*100%/s',
             $css,
             'Open drawer on phone must full-bleed via literal max-width:768px media',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*is-drawer-open[^}]*width:\s*100%\s*!important/s',
+            $css,
+            'Default theme must not use !important for drawer width (theme_default_forbids_css_important)',
         );
         self::assertDoesNotMatchRegularExpression(
             '/@media\s*\(\s*max-width:\s*var\(--breakpoint-md\)/s',
@@ -370,7 +378,10 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
             '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*safe-area-inset-bottom/s',
             $css
         );
-        self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
+        // Qty-hit gate folds into mini-cart-drawer.css (one widget → one Theme sheet).
+        self::assertStringNotContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
+        self::assertStringContainsString('Folded here so the layout pack already paints it', $css);
+        self::assertStringContainsString('wc-theme_widget_mini_cart_icon', $css);
         self::assertStringNotContainsString('max-height: min(40vh', $css);
         // Swatch width/height use --token-size-22px; a negative leaf makes width invalid → intrinsic blowout.
         $literals = (string)file_get_contents(
@@ -438,13 +449,16 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
             '/max-height:\\s*calc\\(\\s*100%\\s*-\\s*var\\(--token-size-100px\\)/s',
             $css
         );
-        self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
+        self::assertStringContainsString('Weline_Theme::css/widgets/mini-cart-drawer.css', $source);
+        self::assertStringNotContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
         self::assertStringContainsString('setFooterCollapsed', $js);
         self::assertStringContainsString('aria-hidden', $js);
         self::assertStringContainsString('drawerContentIsFresh', $js);
         self::assertStringContainsString('skipItems', $js);
         self::assertStringContainsString('drawerCssReady', $js);
-        self::assertStringContainsString('minicart-paper-ink-v24', $js);
+        // Layout pack stamps data-weline-merged-css — skip re-inject when drawer already packed.
+        self::assertStringContainsString('cssLeafInPage', $js);
+        self::assertStringContainsString('data-weline-merged-css', $js);
         self::assertMatchesRegularExpression(
             '/\\.header-cart \\.mini-cart-drawer__body\\s*\\{[^}]*flex:\\s*1\\s+1\\s+auto/s',
             $css

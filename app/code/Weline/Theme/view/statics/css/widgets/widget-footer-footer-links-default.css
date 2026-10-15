@@ -42,7 +42,7 @@
 
 .widget-preview-canvas .wc-theme_widget_footer_links,
 .wc-theme_widget_footer_links.is-preview {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--weline-space-4);
 }
 
@@ -54,6 +54,6 @@
 
 @media (max-width: 576px) {
     .wc-theme_widget_footer_links {
-        grid-template-columns: 1fr !important;
+        grid-template-columns: 1fr;
     }
 }

@@ -128,9 +128,58 @@ class ThemeDiskHeadService
         if ($href === '') {
             return '';
         }
+        // Skip empty / comment-only / trivial designer leftovers (avoids a full RTT for ~70B).
+        if (!$this->overrideBundleHasMeaningfulCss($area, $theme, $scope)) {
+            return '';
+        }
         $safe = htmlspecialchars($href, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
         return '<link rel="stylesheet" type="text/css" href="' . $safe . '" data-weline-theme-disk="1"/>';
+    }
+
+    /**
+     * True when the compiled disk override has real declarations (not empty / comments-only).
+     */
+    public function overrideBundleHasMeaningfulCss(string $area, ?WelineTheme $theme = null, string $scope = 'default'): bool
+    {
+        $area = ThemeDiskKeys::normalizeArea($area);
+        $scope = ThemeDiskKeys::normalizeScope($scope);
+        $theme = $theme ?? $this->resolveTheme($area);
+        if (!$theme || !(int)$theme->getId()) {
+            return false;
+        }
+        ThemeData::setCurrentTheme($theme);
+        ThemeData::setCurrentArea($area);
+        $bundleMap = ThemeData::getConfigList($area, 'disk_bundle', $scope);
+        $hash = (string)($bundleMap[$scope] ?? $bundleMap['default'] ?? '');
+        if ($hash === '') {
+            return false;
+        }
+        $filePath = $this->compileService->resolveBundlePath((int)$theme->getId(), $area, $scope, $hash);
+        if ($filePath === '' || !is_file($filePath)) {
+            return false;
+        }
+        $raw = file_get_contents($filePath);
+        if (!is_string($raw) || $raw === '') {
+            return false;
+        }
+
+        return self::cssContentIsMeaningful($raw);
+    }
+
+    /**
+     * Strip comments / whitespace; require at least one property-like declaration.
+     */
+    public static function cssContentIsMeaningful(string $css): bool
+    {
+        $stripped = preg_replace('!/\*.*?\*/!s', '', $css) ?? '';
+        $stripped = trim(preg_replace('/\s+/', ' ', $stripped) ?? '');
+        if ($stripped === '' || strlen($stripped) < 12) {
+            return false;
+        }
+
+        // Need a real declaration (property: value) — not only a selector shell.
+        return (bool)preg_match('/[a-zA-Z_-][\w-]*\s*:\s*[^;{}]+/', $stripped);
     }
 
     private function resolveTheme(string $area): ?WelineTheme

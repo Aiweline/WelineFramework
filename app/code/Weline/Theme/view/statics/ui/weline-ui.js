@@ -1529,8 +1529,17 @@ function loadLazyComponent(name, element) {
         const shellQuery = new URL(import.meta.url).search;
         if (shellQuery && !styleUrl.search) styleUrl.search = shellQuery;
         if (!lazyStyleLoads.has(styleUrl.href)) {
+            const styleBasename = styleUrl.pathname.split('/').pop() || '';
             const existing = [...document.querySelectorAll('link[rel="stylesheet"]')]
-                .find((link) => link.href === styleUrl.href);
+                .find((link) => {
+                    if (!(link instanceof HTMLLinkElement)) return false;
+                    if (link.href === styleUrl.href) return true;
+                    if (link.dataset.wUiStylesheet === name) return true;
+                    const merged = link.getAttribute('data-weline-merged-css') || '';
+                    if (styleBasename && merged.split(/\s+/).includes(styleBasename)) return true;
+                    if (styleBasename && link.href.includes(styleBasename)) return true;
+                    return false;
+                });
             if (existing instanceof HTMLLinkElement) {
                 lazyStyleLoads.set(styleUrl.href, Promise.resolve(existing));
             } else {

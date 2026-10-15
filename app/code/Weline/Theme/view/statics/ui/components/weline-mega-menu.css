@@ -8,7 +8,7 @@
     --w-floating-inline-size: min(1100px, calc(100vw - 2rem));
     inline-size: min(1100px, calc(100vw - 2rem));
     min-inline-size: min(680px, calc(100vw - 2rem));
-    max-inline-size: min(1100px, calc(100vw - 2rem)) !important;
+    max-inline-size: min(1100px, calc(100vw - 2rem));
     padding: var(--weline-space-8, 2rem);
     border: 1px solid color-mix(in srgb, var(--weline-theme-text-on-dark, #ffffff) 18%, transparent);
     background: var(--weline-chrome-bg-dark-secondary, #232f3e);

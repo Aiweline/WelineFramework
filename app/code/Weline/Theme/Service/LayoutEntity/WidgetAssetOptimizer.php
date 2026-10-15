@@ -150,6 +150,9 @@ final class WidgetAssetOptimizer
                 ? $asset['tag']
                 : str_replace('<link ', '<link data-weline-product-card-css="1" ', $asset['tag']);
         }
+        if ($type === 'css') {
+            $asset['tag'] = $this->stampMergedCssBasenames($asset['tag'], $pending);
+        }
         $asset['tag'] = preg_replace('/\sdata-weline-module-source=["\'][^"\']*["\']/', '', $asset['tag']) ?? $asset['tag'];
         if ($type === 'js' && !preg_match('/\sdefer(?:\s|=|>|\/)/i', $asset['tag'])) {
             $asset['tag'] = preg_replace('/^<script\b/i', '<script defer', $asset['tag']) ?? $asset['tag'];
@@ -161,6 +164,41 @@ final class WidgetAssetOptimizer
         $asset['url'] = $url;
 
         return $asset;
+    }
+
+    /**
+     * Stamp leaf basenames on the merged &lt;link&gt; so runtime JS can skip re-injecting
+     * the same tiny sheets (href no longer contains the original filenames).
+     *
+     * @param list<array<string,mixed>> $pending
+     */
+    private function stampMergedCssBasenames(string $tag, array $pending): string
+    {
+        if (str_contains($tag, 'data-weline-merged-css=')) {
+            return $tag;
+        }
+        $basenames = [];
+        foreach ($pending as $item) {
+            $moduleSource = \trim((string)($item['module_source'] ?? ''));
+            if ($moduleSource !== '' && \str_contains($moduleSource, '::')) {
+                $rel = \explode('::', $moduleSource, 2)[1];
+                $base = \basename(\str_replace('\\', '/', $rel));
+                if ($base !== '' && \preg_match('/\.css$/i', $base)) {
+                    $basenames[$base] = true;
+                }
+            }
+            $leafUrl = (string)($item['url'] ?? '');
+            // Delimiter must not be # — character class includes # and would truncate the pattern.
+            if ($leafUrl !== '' && \preg_match('~/([^/?#]+\.css)~i', $leafUrl, $m)) {
+                $basenames[$m[1]] = true;
+            }
+        }
+        if ($basenames === []) {
+            return $tag;
+        }
+        $list = \htmlspecialchars(\implode(' ', \array_keys($basenames)), ENT_QUOTES, 'UTF-8');
+
+        return \preg_replace('/^<link\b/i', '<link data-weline-merged-css="' . $list . '"', $tag) ?? $tag;
     }
 
     private function markLayoutPack(string $tag): string

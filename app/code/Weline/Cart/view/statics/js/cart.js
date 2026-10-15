@@ -1012,15 +1012,26 @@
     global.WelineCart = api;
 
     /**
-     * Cart-owned mini-cart qty hit-target gate. Theme chrome may bake this via
-     * layout_source; Cart also ensures the sheet wherever WelineCart boots.
+     * Cart-owned mini-cart qty hit-target gate. Rules are folded into Theme
+     * mini-cart-drawer.css (layout pack). Only inject when neither leaf is present
+     * (preview / editor without bake) — never waste a storefront RTT.
      */
     function ensureMiniCartQtyHitCss() {
         try {
             if (!global.document || !global.document.head) {
                 return;
             }
-            var stamp = '20261007-cart-qty-hit-v3';
+            if (global.document.querySelector(
+                'link[data-weline-merged-css~="mini-cart-drawer.css"],'
+                + 'link[data-weline-merged-css*="mini-cart-drawer.css"],'
+                + 'link[data-weline-merged-css~="mini-cart-drawer-qty-hit.css"],'
+                + 'link[data-weline-merged-css*="mini-cart-drawer-qty-hit.css"],'
+                + 'link[rel="stylesheet"][href*="mini-cart-drawer.css"],'
+                + 'link[rel="stylesheet"][href*="mini-cart-drawer-qty-hit.css"]'
+            )) {
+                return;
+            }
+            var stamp = '20261015-qty-hit-fold-v1';
             var href = (function(d){try{var c=JSON.parse((document.getElementById('weline-frontend-runtime-config')||{}).textContent||'{}');if(c&&c.miniCartQtyHitCss)return c.miniCartQtyHitCss;}catch(e){}return d;})('/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css') + '?v=' + stamp;
             var existing = global.document.querySelector(
                 'link[data-weline-cart-mini-cart-qty-hit="1"], link[rel="stylesheet"][href*="mini-cart-drawer-qty-hit.css"]'

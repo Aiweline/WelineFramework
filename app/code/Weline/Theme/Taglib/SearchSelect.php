@@ -273,7 +273,7 @@ class SearchSelect implements TaglibInterface
 .w-search-select-display{display:none;position:absolute;left:10px;right:30px;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--weline-theme-text,#495057)}
 .w-search-select.has-value:not(.is-multiple) .w-search-select-display{display:block}
 .w-search-select.has-value:not(.is-multiple) .w-search-select-input::placeholder{color:transparent}
-.w-search-select.is-filtering .w-search-select-display{display:none!important}
+.w-search-select.has-value:not(.is-multiple).is-filtering .w-search-select-display{display:none}
 .w-search-select-arrow{position:absolute;top:50%;right:10px;transform:translateY(-50%);color:var(--weline-theme-text-muted,#6c757d);font-size:10px;line-height:1;transition:transform .2s}
 .w-search-select.open .w-search-select-arrow{transform:translateY(-50%) rotate(180deg)}
 .w-search-select-clear{position:absolute;top:50%;right:25px;transform:translateY(-50%);color:var(--weline-theme-text-muted,#6c757d);cursor:pointer;display:none;font-size:16px;line-height:1}

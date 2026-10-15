@@ -2639,6 +2639,19 @@
         return link;
     }
 
+    /**
+     * Layout/source packs stamp data-weline-merged-css with leaf basenames.
+     * After merge the href is a hash — without this gate JS re-opens tiny RTTs.
+     * Also accept substring match (* =) for long attribute values / older packs.
+     */
+    function cssLeafInPage(basename) {
+        return !!document.querySelector(
+            'link[data-weline-merged-css~="' + basename + '"],'
+            + 'link[data-weline-merged-css*="' + basename + '"],'
+            + 'link[rel="stylesheet"][href*="' + basename + '"]'
+        );
+    }
+
     function resolvePublicStaticUrl(devPath) {
         try {
             var cfgNode = document.getElementById('weline-frontend-runtime-config');
@@ -2662,6 +2675,11 @@
     }
 
     function ensureCartQtyHitCss(assetVersion) {
+        // Qty-hit rules are folded into mini-cart-drawer.css for the layout pack.
+        // Skip when either leaf (or the drawer pack) is already present.
+        if (cssLeafInPage('mini-cart-drawer-qty-hit.css') || cssLeafInPage('mini-cart-drawer.css')) {
+            return;
+        }
         // Cart-owned qty hit-target gate — Theme only ensures the sheet is present.
         var stamp = '20261007-cart-qty-hit-v3';
         var href = resolvePublicStaticUrl('/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css') + '?v=' + stamp;
@@ -2688,6 +2706,11 @@
             return;
         }
         drawerCssReady = true;
+        // One widget → one sheet: layout pack already has mini-cart-drawer.css
+        // (icon chrome + qty-hit gate folded in). Never open bare RTTs on storefront.
+        if (cssLeafInPage('mini-cart-drawer.css') || cssLeafInPage('mini-cart-drawer-qty-hit.css')) {
+            return;
+        }
         var cssStamp = '20261014-extras-tabs-unify-v4';
         var assetVersion = '';
         try {

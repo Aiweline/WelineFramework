@@ -131,7 +131,7 @@
     }
 
     .wc-theme_widget_mini_cart_icon .cart-count[hidden] {
-        display: flex !important;
+        display: flex;
     }
 }
 

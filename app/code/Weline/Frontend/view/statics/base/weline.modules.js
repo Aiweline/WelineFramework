@@ -40,8 +40,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261010-shell-toc-wins1"],
-            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261010-shell-toc-wins1"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261015-css-leaf-skip2"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261015-css-leaf-skip2"],
             globalVar: "WelineMiniCartIcon",
             load: "eager",
             description: "迷你购物车图标与抽屉"
@@ -67,8 +67,8 @@
             description: "店面左右悬浮槽 adopt 兜底与贴边收起"
         },
         storefrontShopperToast: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-shopper-toast.js"],
-            paths: ["Weline_Theme::js/storefront-shopper-toast.js"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-shopper-toast.js?v=20261015-shopper-toast-arch-v1"],
+            paths: ["Weline_Theme::js/storefront-shopper-toast.js?v=20261015-shopper-toast-arch-v1"],
             globalVar: null,
             load: "defer",
             description: "店面购物者 Toast 区域"
@@ -291,8 +291,8 @@
             description: "账户中心发货/收货地址维护"
         },
         cart: {
-            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20261007-cart-qty-hit-v3", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions-w18n-v3.js"],
-            paths: ["Weline_Cart::js/cart.js?v=20261007-cart-qty-hit-v3", "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "Weline_Cart::js/widgets/product-purchase-actions-w18n-v3.js"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-shopper-toast.js?v=20261015-shopper-toast-arch-v1", "app/code/Weline/Cart/view/statics/js/cart.js?v=20261007-cart-qty-hit-v3", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions-w18n-v3.js?v=20261015-shopper-toast-v1"],
+            paths: ["Weline_Theme::js/storefront-shopper-toast.js?v=20261015-shopper-toast-arch-v1", "Weline_Cart::js/cart.js?v=20261007-cart-qty-hit-v3", "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "Weline_Cart::js/widgets/product-purchase-actions-w18n-v3.js?v=20261015-shopper-toast-v1"],
             globalVar: "WelineCartPurchaseActions",
             load: "defer",
             description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记"
@@ -429,3 +429,5 @@
         storefrontMoneySummary: "storefrontMoneySummary"
     });
 })();
+
+/* css-rtt-bust-1792033971 */

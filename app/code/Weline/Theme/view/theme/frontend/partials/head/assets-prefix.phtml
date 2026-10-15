@@ -44,7 +44,7 @@ try {
     $storefrontPackHtml = $headPack->tryLinkHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT,
-        ['include_disk' => false, 'include_theme_overlay' => false]
+        ['include_disk' => true, 'include_theme_overlay' => false]
     );
     $overlayPackHtml = $headPack->tryLinkHtml(
         'frontend',
@@ -57,7 +57,12 @@ try {
     $storefrontPackHtml = null;
     $overlayPackHtml = null;
 }
-$diskAbsorbed = false;
+$diskAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
+    && $storefrontPackHtml !== null
+    && $headPack->diskIncludedInPack(
+        'frontend',
+        \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT
+    );
 $overlayAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
     && $overlayPackHtml !== null
     && $headPack->themeOverlayAbsorbed('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_OVERLAY);

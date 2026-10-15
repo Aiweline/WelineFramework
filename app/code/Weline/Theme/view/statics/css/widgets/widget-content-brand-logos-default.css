@@ -166,7 +166,7 @@
 
 @media (max-width: 768px) {
     .wc-theme_widget_brand_logos .brands-grid {
-        grid-template-columns: repeat(3, 1fr) !important;
+        grid-template-columns: repeat(3, 1fr);
     }
 
     .wc-theme_widget_brand_logos .brand-logo {
@@ -176,6 +176,6 @@
 
 @media (max-width: 480px) {
     .wc-theme_widget_brand_logos .brands-grid {
-        grid-template-columns: repeat(2, 1fr) !important;
+        grid-template-columns: repeat(2, 1fr);
     }
 }

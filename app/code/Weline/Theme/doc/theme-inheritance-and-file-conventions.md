@@ -207,8 +207,9 @@ theme/{area}/layouts/{layoutType}/{option}.phtml
 | 你要做什么 | 先改哪里 | 不要改哪里 |
 |---|---|---|
 | 修改某个设计主题外观 | `app/design/{Vendor}/{theme}/{area}/...` | `Weline_Theme/view/theme`，除非要改全局默认 |
-| **design 主题改某部件外观 / CSS / JS**（硬：`theme_design_must_inherit_not_mutate_source_widgets`） | **继承**：`app/design/{Vendor}/{theme}/{area}/widgets/...` 同 key 覆盖 PHTML；优先品牌 `colors/`·`variables/`·`assets/css/{brand}*.css` | **禁止**改 `app/code/**/view/theme/**/widgets/**` 与 `app/code/**/view/statics/{css,js}/widgets/**` 源头（一改污染所有用该部件的主题） |
-| 修改框架默认主题能力 | `app/code/Weline/Theme/view/theme/{area}/...` | `view/tpl/`、`generated/` |
+| **design 主题改某部件外观 / CSS / JS**（硬：`theme_design_must_inherit_not_mutate_source_widgets`） | **继承**：`app/design/{Vendor}/{theme}/{area}/widgets/...` 同 key 覆盖 PHTML；优先品牌 `colors/`·`variables/`·`assets/css/{brand}*.css` | **禁止**改上游 `app/code/**/view/theme/**` 与 `view/statics/{css,js}/widgets/**`；做不到 → **停手问用户**（框架缺口），禁静默改上游 |
+| **默认主题写 CSS**（硬：`theme_default_forbids_css_important`） | 选择器特异性 + 加载顺序 + Token 叶子，使样式原生生效 | **禁止**视觉/布局声明加 `!important`（会堵死 design 继承覆盖） |
+| 修改框架默认主题能力 | `app/code/Weline/Theme/view/theme/{area}/...`（须无新增 `!important`） | `view/tpl/`、`generated/`；也勿借「某站皮肤」偷改默认层 |
 | 给业务模块新增可选 layout | `app/code/{Vendor}/{Module}/view/theme/{area}/layouts/...` | `app/design`，除非只属于某个设计主题 |
 | 覆盖业务模块普通模板 | `app/design/{Vendor}/{theme}/{Module_Code}/templates/{area}/...` | `app/design/{Vendor}/{theme}/{area}/templates/...` |
 | 新增 partial | 默认能力放 `Weline_Theme/view/theme/{area}/partials/...`，主题定制放 `app/design/.../{area}/partials/...` | layout 文件内堆重复片段 |

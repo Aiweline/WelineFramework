@@ -68,6 +68,22 @@
 | 阴影/边框观感 | 自写 `box-shadow:` / `border-radius:` 数字字面量 |
 | 行内样式 | `style="color:#..."`、`style="font-size:14px"` |
 | 假变量 | `var(--x, #fff)` / `var(--x, 16px)` 用字面量作 fallback（须收敛为纯 Token） |
+| **`!important`（默认层硬 · `theme_default_forbids_css_important`）** | 默认主题（`app/code/Weline/Theme/view/theme/**` 与默认层静态 CSS）视觉/布局/呈现声明写 `!important`「硬抢」（**含** `var(--token) !important`）——会逼自定义主题跟着打战争 |
+
+### 默认层禁 `!important` · design 只继承改（流程）
+
+1. **默认层（Mode A）**：样式须靠选择器特异性、加载顺序、Token 叶子**原生生效**；**禁止**新增业务/视觉 `!important`（含 `var() !important`）。历史债务勿扩大。
+2. **自定义主题（Mode B）**：只在 `app/design/{Vendor}/{theme}/` 用品牌盘 / 独立 CSS / 同 key 模板覆盖去改外观；**禁止**直接改上游 `app/code` 主题源。
+3. **做不到则停**：缺覆盖钩子或被默认层压死 → **停手询问用户**（框架缺口）；禁止静默改上游解围。
+
+**UA / 无障碍窄例外（仅此两类可保留 `!important`）**：
+
+| 允许 | 禁止当作例外 |
+|------|----------------|
+| `[hidden]` → `display: none !important`（压过显示声明） | 任意视觉色/间距/宽度/定位用 `!important` |
+| `@media (prefers-reduced-motion: reduce)` 内缩短 `transition`/`animation`/`scroll-behavior` | `var(--token) !important`「逼人只改变量」 |
+
+权威流程：[主题开发.md「默认层级联与 design 继承改法」](../../../../../dev/ai-command/ai/主题开发.md)；互补硬规则 `theme_design_must_inherit_not_mutate_source_widgets`。
 
 ## 允许
 
@@ -76,6 +92,7 @@
 - `0`、`none`、`transparent`、`currentColor`、`inherit`、`auto`、`100%`（仅流式布局宽高）、`1`/`0` 作为 `opacity`/`flex` 等非主题色盘语义
 - **inverse 下 raised 纸面钉**（见上「WO-UI-CONTRAST-INVERSE 纸面钉例外」）：面板根上的 `#0f1111` / `#565959` / `#666666` 用于钉 `--weline-chrome-body-text*`——**不是**违规硬编码
 - `@media` 断点字面量（见上「@media 断点例外」）
+- **UA 窄例外**的 `!important`（见上表）
 - 纯结构类名与 Taglib，不含视觉字面量
 
 ## 写法对照

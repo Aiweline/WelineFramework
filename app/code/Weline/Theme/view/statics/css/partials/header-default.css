@@ -806,8 +806,8 @@ textarea::-webkit-scrollbar-thumb:hover,
 .search-type-menu.search-category-menu .search-type-submenu .w-menu__item[aria-selected="true"],
 .search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
 .search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
-    background: var(--weline-theme-surface-hover, rgba(15, 17, 17, 0.06)) !important;
-    color: var(--_paper-text, var(--amz-drawer-text, #0f1111)) !important;
+    background: var(--weline-theme-surface-hover, rgba(15, 17, 17, 0.06));
+    color: var(--_paper-text, var(--amz-drawer-text, #0f1111));
     outline: 0;
 }
 
@@ -819,7 +819,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 .search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
 .search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
 .search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
-    color: var(--_paper-muted, var(--amz-drawer-muted, #565959)) !important;
+    color: var(--_paper-muted, var(--amz-drawer-muted, #565959));
 }
 
 /* 搜索建议下拉 */
@@ -929,7 +929,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 /* 桌面端隐藏移动端专用元素 */
 @media (min-width: 769px) {
     .mobile-only {
-        display: none !important;
+        display: none;
     }
 }
 
@@ -937,7 +937,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     display: flex;
     align-items: center;
     padding: var(--spacing-sm) var(--token-size-0-6rem);
-    color: var(--weline-theme-text-on-dark) !important;
+    color: var(--weline-theme-text-on-dark);
     text-decoration: none;
     border: var(--border-width-thin) solid transparent;
     border-radius: var(--border-radius-sm);
@@ -1027,7 +1027,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     height: var(--spacing-px);
     background: linear-gradient(to right, transparent, var(--color-bg-tertiary), transparent);
     margin: var(--weline-space-3) var(--weline-space-5);
-    padding: 0 !important;
+    padding: 0;
     border: none;
 }
 
@@ -1775,7 +1775,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 .header-policy-links .header-policy-links__menu-wrap.is-nav-overflow-hidden,
 .header-policy-links .header-policy-links__inline.hidden,
 .header-policy-links .header-policy-links__menu-wrap.hidden {
-    display: none !important;
+    display: none;
 }
 @media (max-width: 768px) {
     .header-policy-links-slot {
@@ -1869,7 +1869,15 @@ textarea::-webkit-scrollbar-thumb:hover,
 }
 
 /* 「更多」未展开时不占 flex 位；出现时（JS 写 display:flex）再申请宽度 */
-.header-nav-right-cluster > .nav-more-wrapper[style*="display: none"],
+.header-nav-right-cluster > .nav-more-wrapper[style*="display: none"] {
+    display: none;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+    flex: 0 0 0;
+}
 .header-nav-right-cluster > .nav-more-wrapper[hidden] {
     display: none !important;
     margin: 0;
@@ -1882,7 +1890,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 .header-nav-right-cluster > .header-nav-extension-link.is-nav-overflow-hidden,
 .header-nav-right-cluster .nav-links-list > li.is-nav-overflow-hidden {
-    display: none !important;
+    display: none;
 }
 
 /* 左簇整体 More：挂在左簇末（分类+政策之后），未展开不占位 */
@@ -1893,7 +1901,15 @@ textarea::-webkit-scrollbar-thumb:hover,
     flex: 0 0 auto;
     flex-shrink: 0;
 }
-.header-nav-left-cluster > .categories-overflow-wrapper.header-left-cluster-more[style*="display: none"],
+.header-nav-left-cluster > .categories-overflow-wrapper.header-left-cluster-more[style*="display: none"] {
+    display: none;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+    flex: 0 0 0;
+}
 .header-nav-left-cluster > .categories-overflow-wrapper.header-left-cluster-more[hidden] {
     display: none !important;
     margin: 0;
@@ -1904,7 +1920,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     flex: 0 0 0;
 }
 .categories-list > .category-item.is-nav-overflow-hidden {
-    display: none !important;
+    display: none;
 }
 
 /*
@@ -1997,7 +2013,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 /* 当宽度小于 200px 时隐藏 */
 .header-categories.hide-narrow {
-    display: none !important;
+    display: none;
 }
 
 /* 渐变遮罩：提示有更多内容 (移至父容器以保持固定) */
@@ -2049,7 +2065,7 @@ html.is-rtl .header-categories::after {
 }
 
 .categories-list > li.hidden {
-    display: none !important;
+    display: none;
 }
 
 .category-link-wrapper {
@@ -2078,7 +2094,7 @@ html.is-rtl .header-categories::after {
 
 .header-main-nav .categories-list > .category-item > .category-link:hover,
 .header-main-nav .categories-list > .category-item > .category-link-wrapper:hover > .category-link {
-    background-color: var(--weline-theme-mega-menu-top-hover-bg, var(--weline-chrome-mega-menu-top-hover-bg, var(--color-on-dark-15, rgba(255, 255, 255, 0.15)))) !important;
+    background-color: var(--weline-theme-mega-menu-top-hover-bg, var(--weline-chrome-mega-menu-top-hover-bg, var(--color-on-dark-15, rgba(255, 255, 255, 0.15))));
     color: var(--weline-theme-mega-menu-top-hover-color, var(--weline-chrome-mega-menu-top-hover-color, #ffffff));
 }
 
@@ -2128,7 +2144,7 @@ html.is-rtl .header-categories::after {
     --w-floating-inline-size: min(1100px, calc(100vw - 2rem));
     inline-size: min(1100px, calc(100vw - 2rem));
     min-inline-size: min(680px, calc(100vw - 2rem));
-    max-inline-size: min(1100px, calc(100vw - 2rem)) !important;
+    max-inline-size: min(1100px, calc(100vw - 2rem));
     padding: 2rem;
     border: 1px solid color-mix(in srgb, var(--weline-theme-text-on-dark, #ffffff) 18%, transparent);
     /* 顶层 chrome 沿用主导航底色，右侧内容区由 .mega-menu-panels 自带浅色表面 */
@@ -2582,15 +2598,15 @@ html.is-rtl .header-categories::after {
 
 .header-category-panel.is-megamenu .header-category-panel__list > .category-item > .category-link:hover,
 .header-category-panel.is-megamenu .header-category-panel__list > .category-item > .category-link-wrapper:hover .category-link {
-    background: transparent !important;
-    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover)) !important;
+    background: transparent;
+    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover));
     border-bottom-color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover));
 }
 
 .header-category-panel.w-surface-body .category-link:hover,
 .header-category-panel.w-surface-body .category-link-wrapper:hover .category-link {
-    background: var(--weline-theme-surface-hover, rgba(0, 0, 0, 0.06)) !important;
-    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover)) !important;
+    background: var(--weline-theme-surface-hover, rgba(0, 0, 0, 0.06));
+    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover));
 }
 
 .header-category-panel.w-surface-body .category-arrow {
@@ -2628,7 +2644,7 @@ html.is-rtl .header-categories::after {
     border-radius: var(--weline-radius-sm, 6px);
     color: var(--weline-theme-body-text, var(--color-text-primary));
     background: transparent;
-    text-decoration: none !important;
+    text-decoration: none;
     font-size: var(--font-size-sm, 0.875rem);
     font-weight: 500;
     white-space: nowrap;
@@ -2651,9 +2667,9 @@ html.is-rtl .header-categories::after {
 .categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link-wrapper:hover > .category-link,
 .categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item[data-state="open"] > .category-link-wrapper,
 .categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item[data-state="open"] > .category-link-wrapper > .category-link {
-    background: var(--weline-theme-surface-hover, rgba(0, 0, 0, 0.06)) !important;
-    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover, var(--color-primary))) !important;
-    text-decoration: none !important;
+    background: var(--weline-theme-surface-hover, rgba(0, 0, 0, 0.06));
+    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover, var(--color-primary)));
+    text-decoration: none;
 }
 
 .categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item .category-arrow {
@@ -2802,7 +2818,7 @@ html.is-rtl .header-categories::after {
 /* 抽屉飞出层必须高于侧栏(1000)与遮罩(999)，否则被遮罩截获 hover */
 body > .header-category-panel.is-drawer-flyout[data-w-floating-portal],
 body > .header-category-panel.is-drawer-flyout {
-    z-index: 1102 !important;
+    z-index: 1102;
 }
 
 body > .header-category-panel.is-drawer-flyout.is-megamenu[data-state="open"] {
@@ -2814,7 +2830,7 @@ body > .header-category-panel.is-drawer-flyout.is-mega-panel-split {
     --w-floating-inline-size: min(52rem, calc(100vw - min(88vw, var(--size-panel-300, 22rem)) - 0.5rem));
     inline-size: min(52rem, calc(100vw - min(88vw, var(--size-panel-300, 22rem)) - 0.5rem));
     min-inline-size: min(36rem, calc(100vw - min(88vw, var(--size-panel-300, 22rem)) - 0.5rem));
-    max-inline-size: min(52rem, calc(100vw - min(88vw, var(--size-panel-300, 22rem)) - 0.5rem)) !important;
+    max-inline-size: min(52rem, calc(100vw - min(88vw, var(--size-panel-300, 22rem)) - 0.5rem));
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
     /* 限制高度，避免 viewport clamp 把面板顶得远离当前 hover 项 */
@@ -2914,7 +2930,7 @@ body > .header-category-panel.is-drawer-flyout .mega-menu-layout {
 
 .categories-overflow-list .category-link {
     color: var(--weline-theme-body-text, var(--color-text-primary));
-    text-decoration: none !important;
+    text-decoration: none;
 }
 
 
@@ -2970,7 +2986,7 @@ body > .header-category-panel.is-drawer-flyout .mega-menu-layout {
     --w-surface-fg-muted: var(--weline-theme-body-text-muted, #666666);
     --w-floating-max-inline-size: min(28rem, calc(100vw - 2rem));
     min-inline-size: min(16rem, calc(100vw - 2rem));
-    max-inline-size: min(28rem, calc(100vw - 2rem)) !important;
+    max-inline-size: min(28rem, calc(100vw - 2rem));
     padding: var(--weline-space-3, 0.75rem);
     border: 1px solid rgba(255, 255, 255, 0.72);
     background:
@@ -2996,7 +3012,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     --w-floating-max-inline-size: min(1120px, calc(100vw - 2rem));
     inline-size: min(1120px, calc(100vw - 2rem));
     min-inline-size: min(860px, calc(100vw - 2rem));
-    max-inline-size: min(1120px, calc(100vw - 2rem)) !important;
+    max-inline-size: min(1120px, calc(100vw - 2rem));
     padding: 0;
     overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--weline-theme-text-on-dark, #ffffff) 18%, transparent);
@@ -3453,7 +3469,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     }
 
     .header-search-toggle {
-        display: none !important;
+        display: none;
     }
 
     .header-search-wrapper {
@@ -3482,9 +3498,9 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     .w-menu.search-type-menu[data-w-menu-panel],
     .search-type-menu[data-w-menu-panel] {
         --w-floating-max-inline-size: min(12.5rem, 52vw);
-        max-inline-size: min(12.5rem, 52vw) !important;
-        inline-size: max-content !important;
-        width: max-content !important;
+        max-inline-size: min(12.5rem, 52vw);
+        inline-size: max-content;
+        width: max-content;
     }
 
     .header-search-form {
@@ -3524,7 +3540,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     .header-actions .header-account:not(.mobile-only),
     .header-action-item:has([href*="orders"]):not(.mobile-only),
     .header-my-menu.mobile-only {
-        display: none !important;
+        display: none;
     }
 
     .header-user-area {
@@ -3541,12 +3557,12 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     .header-user-area .w-header-account__copy,
     .header-user-area .account-link > .w-icon:last-of-type,
     .header-user-area .w-header-account__trigger > .w-icon:last-of-type {
-        display: none !important;
+        display: none;
     }
 
     .header-user-area .account-link,
     .header-user-area .w-header-account__trigger {
-        color: var(--color-bg-primary) !important;
+        color: var(--color-bg-primary);
         padding: var(--spacing-1_5) var(--spacing-0_4);
         gap: 0;
         background: transparent;
@@ -3564,7 +3580,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     .cart-info,
     .cart-label,
     .cart-subtotal {
-        display: none !important;
+        display: none;
     }
 
     .cart-link {
@@ -3574,17 +3590,17 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         flex-direction: row;
         gap: 0;
         justify-content: center;
-        color: var(--color-bg-primary) !important;
+        color: var(--color-bg-primary);
     }
 
     .cart-icon {
         font-size: var(--token-size-1-55rem);
-        color: var(--color-bg-primary) !important;
+        color: var(--color-bg-primary);
     }
 
     .cart-count,
     [data-cart-count-badge] {
-        display: inline-flex !important;
+        display: inline-flex;
         background-color: var(--color-primary);
         color: var(--color-on-primary, #ffffff);
         /* Same as desktop: physical hang-off; no top/right:auto with logical inset. */
@@ -3595,7 +3611,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     }
 
     .mini-cart-dropdown {
-        display: none !important;
+        display: none;
     }
 
     .header-main-nav-inner {
@@ -3605,7 +3621,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     /* Belt hamburger opens drawer — duplicate nav All is clutter on phone. */
     .header-nav-all,
     #header-nav-all-root {
-        display: none !important;
+        display: none;
     }
 
     /* Phone: horizontal scroll replaces More collapse. */
@@ -3613,7 +3629,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     .header-left-cluster-more,
     #nav-more-wrapper,
     .nav-more-wrapper {
-        display: none !important;
+        display: none;
     }
 
     .header-nav-left,
@@ -3682,7 +3698,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     .category-arrow,
     .category-submenu,
     .categories-submenu {
-        display: none !important;
+        display: none;
     }
 
     /* Phone: More already display:none above; do not re-assert flex-shrink-only
@@ -3690,7 +3706,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
 
     /* 窄屏禁用 hide-narrow，避免分类整块消失只剩右侧残链 */
     .header-categories.hide-narrow {
-        display: flex !important;
+        display: flex;
     }
 
     .categories-nav::after {

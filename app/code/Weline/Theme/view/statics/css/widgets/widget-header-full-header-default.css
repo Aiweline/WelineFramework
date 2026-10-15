@@ -15,7 +15,7 @@
 }
 
 .wc-theme_widget_full_header.is-sticky + .header-placeholder {
-    display: block !important;
+    display: block;
 }
 
 .wc-theme_widget_full_header .header-topbar {

@@ -37,11 +37,15 @@ final class MiniCartQtyHitGateContractTest extends TestCase
         );
         self::assertStringContainsString('ensureMiniCartQtyHitCss', $cartJs);
         self::assertStringContainsString('mini-cart-drawer-qty-hit.css', $cartJs);
-        self::assertStringContainsString('20261007-cart-qty-hit-v3', $modules);
-        self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $themeWidget);
+        self::assertStringContainsString('data-weline-merged-css', $cartJs);
+        self::assertStringContainsString('20261015-qty-hit-fold-v1', $modules);
+        // Theme widget no longer lists Cart qty-hit as a separate leaf — folded into drawer.
+        self::assertStringNotContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $themeWidget);
+        self::assertStringContainsString('Weline_Theme::css/widgets/mini-cart-drawer.css', $themeWidget);
+        self::assertStringContainsString('Folded here so the layout pack already paints it', $themeDrawerCss);
         // Theme owns drawer − 100px footer cap + content-sized details.
         self::assertMatchesRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(\\s*100%\\s*-\\s*100px/s',
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(\\s*100%\\s*-\\s*var\\(--token-size-100px\\)/s',
             $themeDrawerCss
         );
         self::assertMatchesRegularExpression(
@@ -50,7 +54,7 @@ final class MiniCartQtyHitGateContractTest extends TestCase
         );
         // Collapsed-only body floor remains Theme-owned.
         self::assertMatchesRegularExpression(
-            '/\\.header-cart\\.is-footer-collapsed \\.mini-cart-drawer__body\\s*\\{[^}]*min-height:\\s*min\\(40vh,\\s*12rem\\)/s',
+            '/\\.header-cart\\.is-footer-collapsed \\.mini-cart-drawer__body\\s*\\{[^}]*min-height:\\s*min\\(40vh,\\s*var\\(--token-size-12rem\\)\\)/s',
             $themeDrawerCss
         );
     }

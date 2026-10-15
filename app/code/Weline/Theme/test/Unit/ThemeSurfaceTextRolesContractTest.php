@@ -246,6 +246,10 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
             $headerDefault
         );
         self::assertStringContainsString(
+            'color: var(--_paper-text, var(--amz-drawer-text, #0f1111))',
+            $headerDefault
+        );
+        self::assertStringNotContainsString(
             'color: var(--_paper-text, var(--amz-drawer-text, #0f1111)) !important',
             $headerDefault
         );

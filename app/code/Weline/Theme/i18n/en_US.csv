@@ -946,11 +946,6 @@ NEW,NEW
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
-件商品,"items of goods"
-展开社交媒体,"Expand social media"
-收起社交媒体,"Collapse social media"
-关闭通知,"Close notification"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1033,6 +1028,7 @@ ERROR,ERROR
 退出登录,"Log out"
 语言,language
 货币,currency
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
@@ -1116,6 +1112,7 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1144,6 +1141,8 @@ Weline,Weline
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
 精选轮播,"Featured Carousel"
+展开社交媒体,"Expand social media"
+收起社交媒体,"Collapse social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1165,6 +1164,7 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
+关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -1608,7 +1608,6 @@ AI目录加载失败,"AI directory loading failed"
 打开主题编辑器,打开主题编辑器
 在主题编辑器中打开当前店面主题,在主题编辑器中打开当前店面主题
 请先选择前台主题后再打开编辑器,请先选择前台主题后再打开编辑器
-选购,Shop
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
 字体子集预热开始…,"Font subset warm-up begins..."
@@ -1624,6 +1623,7 @@ AI目录加载失败,"AI directory loading failed"
 道记,"Dao Notes"
 道记文章,道记文章
 无为空间,"Wu Wei Sanctuary"
+选购,Shop
 道家居服,"Daoist Lounge Wear"
 测试页,"Test Page"
 "-- 选择主题 --","-- Select Theme --"
@@ -4875,3 +4875,5 @@ cookie政策,"Cookie Policy"
 更新当前页缓存失败,"Failed to update current page cache"
 "合并布局 bake 的部件 CSS（layout 整页单包 + source 前 N 个阻塞合包、其后延迟合包→/widget-assets/）。自动与开启均始终合包；关闭可显式关掉。","Merge layout-baked widget CSS (one layout page pack + source: first N blocking pack, then deferred pack → /widget-assets/). Auto and On always pack; Off disables."
 "合并布局 bake 的部件 source JS（前 N 个阻塞合包、其后再合包→/widget-assets/）。自动与开启均始终合包；关闭可显式关掉。","Merge layout-baked widget source JS (first N blocking pack, then another pack → /widget-assets/). Auto and On always pack; Off disables."
+按品类浏览明制、宋制、唐制与马面裙，或直接进入全部商品列表。,"Browse Ming, Song, and Tang styles and mamian skirts by category, or go directly to the full product list."
+语言与货币,"Language & Currency"

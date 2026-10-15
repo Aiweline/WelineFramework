@@ -586,7 +586,7 @@
         }
         html[data-backend-sidebar-collapsed="true"] .w-backend-nav > nav > .w-backend-nav__list > .w-backend-nav__entry > .w-backend-nav__disclosure > .w-backend-nav__list,
         .w-backend-shell[data-sidebar-collapsed="true"] .w-backend-nav > nav > .w-backend-nav__list > .w-backend-nav__entry > .w-backend-nav__disclosure > .w-backend-nav__list {
-            display: none !important;
+            display: none;
         }
         html[data-backend-sidebar-collapsed="true"] .w-backend-nav > nav > .w-backend-nav__list > .w-backend-nav__entry > .w-backend-nav__item,
         html[data-backend-sidebar-collapsed="true"] .w-backend-nav > nav > .w-backend-nav__list > .w-backend-nav__entry > .w-backend-nav__disclosure > summary,

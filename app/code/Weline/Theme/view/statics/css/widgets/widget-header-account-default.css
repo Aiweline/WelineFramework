@@ -61,7 +61,7 @@
 }
 
 .wc-theme_widget_account .account-avatar__fallback[data-has-initial="1"] > :not([data-account-avatar-initial]) {
-    display: none !important;
+    display: none;
 }
 
 .wc-theme_widget_account .dropdown-header .account-avatar--menu:has([data-has-initial="1"]) {
@@ -303,9 +303,11 @@
     margin: var(--weline-space-2) 0;
 }
 
-.wc-theme_widget_account [data-account-menu-auth][hidden],
-.wc-theme_widget_account [data-account-menu-auth].is-account-menu-hidden {
+.wc-theme_widget_account [data-account-menu-auth][hidden] {
     display: none !important;
+}
+.wc-theme_widget_account [data-account-menu-auth].is-account-menu-hidden {
+    display: none;
 }
 
 /* 仅部件库小画布压缩；整页 theme-preview 必须保留 hover 下拉（与店面一致）。 */
@@ -332,7 +334,7 @@
     .wc-theme_widget_account .account-text,
     .wc-theme_widget_account .account-name,
     .wc-theme_widget_account .account-link > .w-icon:last-of-type {
-        display: none !important;
+        display: none;
     }
 
     .wc-theme_widget_account .account-dropdown {

@@ -104,7 +104,54 @@ final class SharedChromeService
         'Weline_Theme::css/widgets/header-chrome-amazon.css',
         'Weline_Theme::css/widgets/header-search-amazon.css',
         'Weline_Theme::css/partials/header-default.css',
+        // Nested header chrome widgets — ride layout pack (avoid mid-body 1KB source packs).
+        'Weline_Websites::css/widgets/scope-switcher.css',
+        'Weline_Visitor::css/widgets/widget-storefront-pixel-bootstrap.css',
+        // Weline UI lazy leaves used on every storefront chrome — fold into layout pack
+        // so weline-ui.js does not open separate sub-1KB stylesheet RTTs.
+        'Weline_Theme::ui/components/weline-choice-selector.css',
+        'Weline_Theme::ui/components/weline-mega-menu.css',
     ];
+
+    /**
+     * Emit one Module::css leaf as a layout-pack marker (mergeable; never bare RTT).
+     *
+     * @param array<string,string> $extraAttrs HTML attribute map (data-* etc.)
+     */
+    public static function emitModuleLayoutCssHtml(string $modulePath, array $extraAttrs = []): string
+    {
+        $modulePath = \trim($modulePath);
+        if ($modulePath === '' || !\str_contains($modulePath, '::')) {
+            return '';
+        }
+        $url = '';
+        try {
+            /** @var Template $template */
+            $template = ObjectManager::getInstance(Template::class);
+            $url = \trim((string)$template->fetchTagSource(DataInterface::dir_type_STATICS, $modulePath));
+        } catch (\Throwable) {
+            $url = '';
+        }
+        if ($url === '') {
+            return '';
+        }
+        $safeUrl = \htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+        $safeSrc = \htmlspecialchars($modulePath, ENT_QUOTES, 'UTF-8');
+        $extra = '';
+        foreach ($extraAttrs as $name => $value) {
+            $name = \trim((string)$name);
+            if ($name === '' || !\preg_match('/^[a-zA-Z_:][\w:.-]*$/', $name)) {
+                continue;
+            }
+            $extra .= ' ' . $name . '="' . \htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8') . '"';
+        }
+
+        return '<link rel="stylesheet" href="' . $safeUrl
+            . '" data-weline-widget-asset="layout"'
+            . ' data-weline-source-position="head"'
+            . ' data-weline-module-source="' . $safeSrc . '"'
+            . $extra . '>';
+    }
 
     /**
      * Emit Partials / design shell header CSS as layout-pack markers.
@@ -117,27 +164,10 @@ final class SharedChromeService
     {
         $chunks = [];
         foreach (self::PARTIALS_HEADER_SHELL_LAYOUT_CSS as $modulePath) {
-            $modulePath = \trim((string)$modulePath);
-            if ($modulePath === '' || !\str_contains($modulePath, '::')) {
-                continue;
+            $html = self::emitModuleLayoutCssHtml($modulePath);
+            if ($html !== '') {
+                $chunks[] = $html;
             }
-            $url = '';
-            try {
-                /** @var Template $template */
-                $template = ObjectManager::getInstance(Template::class);
-                $url = \trim((string)$template->fetchTagSource(DataInterface::dir_type_STATICS, $modulePath));
-            } catch (\Throwable) {
-                $url = '';
-            }
-            if ($url === '') {
-                continue;
-            }
-            $safeUrl = \htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
-            $safeSrc = \htmlspecialchars($modulePath, ENT_QUOTES, 'UTF-8');
-            $chunks[] = '<link rel="stylesheet" href="' . $safeUrl
-                . '" data-weline-widget-asset="layout"'
-                . ' data-weline-source-position="head"'
-                . ' data-weline-module-source="' . $safeSrc . '">';
         }
 
         return $chunks === [] ? '' : \implode("\n", $chunks) . "\n";

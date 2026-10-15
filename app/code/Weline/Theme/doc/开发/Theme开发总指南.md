@@ -4,7 +4,9 @@
 >
 > **先判 `work_mode`（硬）**：维护默认主题 / 新开 design / Theme PHP 运行时是三件事。工程团队主题席须先声明 `work_mode∈{default_theme,design_theme,theme_module_runtime}` 再落文件——完整双模式手册见 [主题开发.md](../../../../../../dev/ai-command/ai/主题开发.md)；新建 design 操作摘要见 [theme-inheritance「新建设计主题」](../theme-inheritance-and-file-conventions.md#新建设计主题操作摘要)。
 >
-> **`design_theme` 继承硬禁（`theme_design_must_inherit_not_mutate_source_widgets`）**：已有 `app/design/{Vendor}/{theme}` 时，改部件 CSS/JS/PHTML 外观**只能**在 design 树继承覆盖；**禁止**改 `app/code` 源头部件（一改影响所有使用该部件的主题）。
+> **`design_theme` 继承硬禁（`theme_design_must_inherit_not_mutate_source_widgets`）**：已有 `app/design/{Vendor}/{theme}` 时，改外观**只能**在 design 树继承覆盖；**禁止**直接改上游 `app/code` 主题源。若仅靠 design 继承做不到 → **停手询问用户**（框架/默认层缺口），禁止静默改上游解围。
+>
+> **默认层禁 `!important`（`theme_default_forbids_css_important`）**：默认主题视觉/布局 CSS **禁止** `!important`；须靠级联原生生效，便于自定义主题继承覆盖。流程见 [主题开发.md「默认层级联与 design 继承改法」](../../../../../../dev/ai-command/ai/主题开发.md) 与 [theme-css-variables-only.md](../theme-css-variables-only.md)。
 >
 > **`theme.css` 架构≠风格（`theme_css_architecture_not_style_shell`）**：`assets/css/theme.css` 只定主题架构。Token/变量：外观盘 → `theme:disk:compile` → theme-head 合包。风格叶**禁止**进 `theme.css` / theme-head 布局合包；店面 chrome 仍走部件 bake——**加强合包 ≠ 拆 header 风格**。详见 [theme-css-architecture-vs-style.md](../theme-css-architecture-vs-style.md) 与 [主题开发.md Mode A](../../../../../../dev/ai-command/ai/主题开发.md)。
 >

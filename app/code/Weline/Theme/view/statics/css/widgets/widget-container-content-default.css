@@ -54,9 +54,9 @@
 .wc-theme_widget_content_container .content-slot.slot-selected,
 .wc-theme_widget_content_container [data-slot].slot-selected,
 .wc-theme_widget_content_container [data-wslot].slot-selected {
-    outline: var(--spacing-1_5) solid var(--weline-theme-primary) !important;
+    outline: var(--spacing-1_5) solid var(--weline-theme-primary);
     outline-offset: var(--spacing-0_5);
-    background: color-mix(in srgb, var(--weline-theme-primary) 5%, transparent) !important;
+    background: color-mix(in srgb, var(--weline-theme-primary) 5%, transparent);
 }
 
 .wc-theme_widget_content_container .slot-widget {
@@ -80,12 +80,12 @@
 
     .wc-theme_widget_content_container .slot-sidebar-left,
     .wc-theme_widget_content_container .slot-sidebar-right {
-        flex: 0 0 100% !important;
+        flex: 0 0 100%;
         order: 2;
     }
 
     .wc-theme_widget_content_container .slot-main {
         order: 1;
-        flex: 0 0 100% !important;
+        flex: 0 0 100%;
     }
 }

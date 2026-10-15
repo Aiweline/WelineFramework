@@ -16,8 +16,11 @@
  * @widget.slot {user-area}
  * @widget.supports {["layout-header-actions","layout-global-header-actions"]}
  *
- * @widget.layout_source {Weline_Theme::css/widgets/mini-cart-drawer.css,Weline_Cart::css/mini-cart-drawer-qty-hit.css,Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css,Weline_Checkout::css/widgets/storefront-money-summary.css}
- * @widget.source {Weline_Theme::css/widgets/mini-cart-drawer.css,Weline_Cart::css/mini-cart-drawer-qty-hit.css,Weline_Theme::css/widgets/widget-header-mini-cart-icon-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js,Weline_Checkout::css/widgets/storefront-money-summary.css}
+ * One Theme sheet for this widget (icon chrome + drawer + qty-hit gate folded into
+ * mini-cart-drawer.css). Checkout money-summary stays a nested peer (other module).
+ * JS loads via weline.modules (not @widget.source) — must not re-inject CSS RTTs.
+ * @widget.layout_source {Weline_Theme::css/widgets/mini-cart-drawer.css,Weline_Checkout::css/widgets/storefront-money-summary.css}
+ * @widget.source {Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param show_quantity {default=true,type="bool",label="显示数量"}
  * @param show_subtotal {default=true,type="bool",label="显示小计"}
  * @param icon_style {default="cart",type="select",label="图标样式",options={cart:"购物车",bag:"购物袋",basket:"购物篮"}}

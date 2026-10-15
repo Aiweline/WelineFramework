@@ -126,7 +126,7 @@
 /*
  * UC-P1-03 / HF-ED-P1-REWORK：编辑器预览 iframe 常见 CSS 宽 ≈700px。
  * 旧规则在 max-width:768 把任意 products-grid（含 columns-4）打成 2 列 → 实渲 344×2。
- * columns-4 保持到 ≥560；仅真窄屏（<560）降 2 列。!important 压过布局内联 MQ。
+ * columns-4 保持到 ≥560；仅真窄屏（<560）降 2 列（靠选择器特异度，不用 !important）。
  */
 @media (max-width: 992px) {
     .wc-theme_widget_featured_products .products-grid.columns-5,
@@ -135,19 +135,19 @@
     }
 
     .wc-theme_widget_featured_products .products-grid.columns-4 {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 768px) {
     /* 禁止在此档把 columns-4 打成 2：700px 编辑器预览必须仍 4 列 */
     .wc-theme_widget_featured_products .products-grid.columns-4 {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .wc-theme_widget_featured_products .products-grid.columns-5,
     .wc-theme_widget_featured_products .products-grid.columns-6 {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .wc-theme_widget_featured_products .widget-title {
@@ -163,6 +163,6 @@
     .wc-theme_widget_featured_products .products-grid.columns-4,
     .wc-theme_widget_featured_products .products-grid.columns-5,
     .wc-theme_widget_featured_products .products-grid.columns-6 {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }

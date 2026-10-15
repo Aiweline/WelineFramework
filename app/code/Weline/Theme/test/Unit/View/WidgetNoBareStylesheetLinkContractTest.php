@@ -109,6 +109,10 @@ final class WidgetNoBareStylesheetLinkContractTest extends TestCase
             'Weline_Theme::css/widgets/header-chrome-amazon.css',
             'Weline_Theme::css/widgets/header-search-amazon.css',
             'Weline_Theme::css/partials/header-default.css',
+            'Weline_Websites::css/widgets/scope-switcher.css',
+            'Weline_Visitor::css/widgets/widget-storefront-pixel-bootstrap.css',
+            'Weline_Theme::ui/components/weline-choice-selector.css',
+            'Weline_Theme::ui/components/weline-mega-menu.css',
         ], $peers);
         $headerWidget = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/theme/frontend/widgets/container/header/default.phtml'
@@ -116,6 +120,9 @@ final class WidgetNoBareStylesheetLinkContractTest extends TestCase
         foreach ($peers as $path) {
             self::assertStringContainsString($path, $headerWidget);
         }
+        self::assertStringContainsString('function emitModuleLayoutCssHtml', (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/SharedChromeService.php'
+        ));
     }
 
     public function testEmitPartialsHeaderShellLayoutCssHtmlIncludesModuleSource(): void

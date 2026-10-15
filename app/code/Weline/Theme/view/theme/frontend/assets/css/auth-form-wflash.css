@@ -372,7 +372,7 @@
 
 .auth-login-language .weline-i18n-switcher-toggle svg,
 .auth-login-language .weline-i18n-switcher-toggle img {
-    display: none !important;
+    display: none;
 }
 
 .auth-login-language .weline-i18n-switcher-panel {
@@ -951,8 +951,8 @@ html.dark .auth-form__password-toggle:hover {
 .auth-form .auth-form__input:-webkit-autofill:hover,
 .auth-form .auth-form__input:-webkit-autofill:focus,
 .auth-form .auth-form__input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 var(--token-size-1000px) var(--color-bg-secondary) inset !important;
-    -webkit-text-fill-color: var(--color-text-primary) !important;
+    -webkit-box-shadow: 0 0 0 var(--token-size-1000px) var(--color-bg-secondary) inset;
+    -webkit-text-fill-color: var(--color-text-primary);
     caret-color: var(--color-text-primary);
     transition: background-color 5000s ease-in-out 0s;
 }
@@ -1007,8 +1007,8 @@ html.dark .auth-form .auth-form__input:-webkit-autofill,
 html.dark .auth-form .auth-form__input:-webkit-autofill:hover,
 html.dark .auth-form .auth-form__input:-webkit-autofill:focus,
 html.dark .auth-form .auth-form__input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 var(--token-size-1000px) var(--color-bg-dark-tertiary) inset !important;
-    -webkit-text-fill-color: var(--color-text-light) !important;
+    -webkit-box-shadow: 0 0 0 var(--token-size-1000px) var(--color-bg-dark-tertiary) inset;
+    -webkit-text-fill-color: var(--color-text-light);
     caret-color: var(--color-text-light);
 }
 

@@ -61,6 +61,13 @@ final class StorefrontFloatLayerContractTest extends TestCase
         );
         self::assertStringContainsString('data-weline-load="storefrontFloatLayer"', $footer);
         self::assertStringContainsString('data-testid="storefront-float-layer"', $footer);
+        self::assertStringContainsString('emitModuleLayoutCssHtml', $footer);
+        self::assertStringContainsString('Weline_Theme::css/storefront-float-layer.css', $footer);
+        self::assertDoesNotMatchRegularExpression(
+            '/<link\b[^>]*storefront-float-layer\.css/i',
+            $footer,
+            'float-layer CSS must emit via SharedChrome layout helper (not bare link)'
+        );
         self::assertMatchesRegularExpression(
             '/id="w-storefront-float-layer"[^>]*data-weline-load="storefrontFloatLayer"/s',
             $footer
@@ -92,7 +99,8 @@ final class StorefrontFloatLayerContractTest extends TestCase
         self::assertStringNotContainsString('padding-bottom: var(--weline-product-sticky-purchase-clearance', $css);
         self::assertStringContainsString('__slot--start', $css);
         self::assertStringContainsString('__slot--end', $css);
-        self::assertStringContainsString('position: relative !important', $css);
+        self::assertStringContainsString('position: relative', $css);
+        self::assertStringNotContainsString('position: relative !important', $css);
         self::assertStringContainsString('storefront-float-edge-dock-v1', $css);
         self::assertStringContainsString('storefront-float-edge-flush-v2', $css);
         self::assertStringContainsString('storefront-float-edge-transform-clear-v1', $css);
@@ -100,8 +108,10 @@ final class StorefrontFloatLayerContractTest extends TestCase
         self::assertStringContainsString('.w-storefront-float-edge__dismiss', $css);
         self::assertStringContainsString('storefront-float-dismiss-contrast-v1', $css);
         self::assertStringContainsString('.w-storefront-float-edge__recall', $css);
-        self::assertStringContainsString('visibility: hidden !important', $css);
-        self::assertStringContainsString("left: max(0px, env(safe-area-inset-left, 0px)) !important", $css);
+        self::assertStringContainsString('visibility: hidden', $css);
+        self::assertStringNotContainsString('visibility: hidden !important', $css);
+        self::assertStringContainsString('left: max(0px, env(safe-area-inset-left, 0px))', $css);
+        self::assertStringNotContainsString("left: max(0px, env(safe-area-inset-left, 0px)) !important", $css);
         // Expanded slots must not advertise will-change:transform (fixed CB).
         self::assertDoesNotMatchRegularExpression(
             '/\.w-storefront-float-layer__slot\s*\{[^}]*will-change:\s*transform/s',

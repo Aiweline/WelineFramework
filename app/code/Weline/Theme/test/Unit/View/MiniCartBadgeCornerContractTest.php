@@ -157,6 +157,7 @@ final class MiniCartBadgeCornerContractTest extends TestCase
         );
         // Phone humanization: avatar-only + hide duplicate nav All (belt hamburger owns drawer).
         self::assertStringContainsString('.header-top-bar-locale', $chrome);
+        // Wave C (amazon chrome) still has historical !important; Wave B does not touch that file.
         self::assertMatchesRegularExpression(
             '/@media\s*\(max-width:\s*768px\)[\s\S]{0,2800}?header-user-area \.account-text[\s\S]{0,400}?display:\s*none\s*!important/s',
             $chrome,

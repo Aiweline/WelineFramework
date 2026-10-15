@@ -11,7 +11,10 @@ if ($isBackend) {
     return;
 }
 ?>
-<link rel="stylesheet" href="@static(Weline_Compare::css/product-shopper-chrome.css)&v=20261010-qv-product-info1" data-no-extract="true" data-weline-product-shopper-chrome="1">
+<?= \Weline\Theme\Service\SharedChromeService::emitModuleLayoutCssHtml(
+    'Weline_Compare::css/product-shopper-chrome.css',
+    ['data-weline-product-shopper-chrome' => '1']
+) ?>
 <dialog id="weline-product-quickview-dialog"
         class="w-dialog w-product-quickview w-product-quickview--product-info"
         data-w-component="dialog"

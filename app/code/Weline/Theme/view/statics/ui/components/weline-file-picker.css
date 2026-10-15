@@ -356,9 +356,9 @@
         min-block-size: 0;
         min-height: 0;
         block-size: auto;
-        max-height: none !important;
-        padding: 0 !important;
-        overflow: hidden !important;
+        max-height: none;
+        padding: 0;
+        overflow: hidden;
         display: flex;
         flex-direction: column;
     }

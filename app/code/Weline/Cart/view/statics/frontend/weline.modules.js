@@ -8,12 +8,13 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     cart: {
         paths: [
-            "Weline_Cart::js/cart.js?v=20261007-cart-qty-hit-v3",
+            "Weline_Theme::js/storefront-shopper-toast.js?v=20261015-shopper-toast-arch-v1",
+            "Weline_Cart::js/cart.js?v=20261015-qty-hit-fold-v1",
             "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2",
-            "Weline_Cart::js/widgets/product-purchase-actions-w18n-v3.js"
+            "Weline_Cart::js/widgets/product-purchase-actions-w18n-v3.js?v=20261015-shopper-toast-v1"
         ],
         globalVar: "WelineCartPurchaseActions",
         load: "defer",
-        description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记"
+        description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记 / shopper toast"
     }
 });

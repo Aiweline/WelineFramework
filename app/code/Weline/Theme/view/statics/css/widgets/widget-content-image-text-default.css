@@ -154,7 +154,7 @@
     }
 
     .wc-theme_widget_image_text .image-section {
-        flex: none !important;
+        flex: none;
         width: 100%;
     }
 
