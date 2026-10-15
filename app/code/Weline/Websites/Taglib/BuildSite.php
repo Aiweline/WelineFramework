@@ -9,6 +9,8 @@ declare(strict_types=1);
  * 使用示例：
  * 添加：id="add_website" mode="add"
  * 编辑：mode="edit" vars="website" action-params="{id:website.website_id}"
+ *
+ * 含动态属性时走 renderRuntimeTag；须 runtimeCallback 直接返回 OffCanvas HTML。
  */
 
 namespace Weline\Websites\Taglib;
@@ -17,9 +19,17 @@ use Weline\Component\Api\OffCanvasRendererInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Taglib\TaglibInterface;
+use Weline\Framework\View\Template;
 
 class BuildSite implements TaglibInterface
 {
+    /** @var list<string> */
+    private const SCOPE_ATTRS = [
+        'mode', 'action', 'title', 'target-button-text', 'target-button-class',
+        'icon', 'direction', 'class-names', 'close-button-show', 'close-button-text',
+        'save', 'vars', 'action-params', 'website_id',
+    ];
+
     public static function name(): string
     {
         return 'websites:website:build';
@@ -44,8 +54,8 @@ class BuildSite implements TaglibInterface
     {
         return [
             'id' => true,
-            'mode' => false,           // add | edit，默认 add
-            'action' => false,         // 覆盖默认 action，如 */backend/websiteManagement/add
+            'mode' => false,
+            'action' => false,
             'title' => false,
             'target-button-text' => false,
             'target-button-class' => false,
@@ -57,68 +67,98 @@ class BuildSite implements TaglibInterface
             'save' => false,
             'vars' => false,
             'action-params' => false,
-            'website_id' => false,     // 编辑时直接传网站 ID，避免依赖 vars 解析
+            'website_id' => false,
         ];
     }
 
     public static function callback(): callable
     {
-        return function ($tag_key, $config, $tag_data, $attributes) {
-            $id = $attributes['id'] ?? 'build_site';
-            $mode = isset($attributes['mode']) ? strtolower(trim((string) $attributes['mode'])) : 'add';
-            $action = $attributes['action'] ?? '';
-            if ($action === '') {
-                $action = $mode === 'edit' ? '*/admin/website/edit' : '*/admin/website/add';
-            }
-            $rawTitle = $attributes['title'] ?? ($mode === 'edit' ? __('编辑网站') : __('新建站点'));
-            $rawTargetText = $attributes['target-button-text'] ?? ($mode === 'edit' ? __('编辑') : __('新建站点'));
-            $title = __($rawTitle);
-            $targetButtonText = __($rawTargetText);
-            $targetButtonClass = $attributes['target-button-class'] ?? ($mode === 'edit' ? 'btn btn-sm btn-outline-info' : 'btn btn-primary');
-            $icon = $attributes['icon'] ?? ($mode === 'edit' ? 'edit' : 'plus');
-            $direction = $attributes['direction'] ?? 'right';
-            $classNames = $attributes['class-names'] ?? 'w-75 h-100';
-            $closeButtonShow = $attributes['close-button-show'] ?? '1';
-            $closeButtonText = $attributes['close-button-text'] ?? __('关闭');
-            $save = $attributes['save'] ?? '1';
-            $vars = $attributes['vars'] ?? '';
-            $actionParams = $attributes['action-params'] ?? '';
-            $websiteId = $attributes['website_id'] ?? '';
-            if ($mode === 'edit' && $websiteId !== '' && $actionParams === '') {
-                $actionParams = '{id:' . trim((string) $websiteId) . '}';
-            }
-
-            $blockData = [
-                'cache' => '0',
-                'id' => preg_replace('/[^\w]+/', '', $id),
-                'action' => $action,
-                'title' => $title,
-                'target-tag' => 'a',
-                'target-button-text' => $targetButtonText,
-                'target-button-class' => $targetButtonClass,
-                'icon' => $icon,
-                'direction' => $direction,
-                'class-names' => $classNames,
-                'close-button-show' => $closeButtonShow,
-                'close-button-text' => $closeButtonText,
-                'save' => $save,
-                'off-canvas-body-style' => '',
-            ];
-            if ($vars !== '') {
-                $blockData['vars'] = $vars;
-            }
-            if ($actionParams !== '') {
-                $blockData['action-params'] = $actionParams;
-            }
-
-            $renderer = ObjectManager::getInstance(RuntimeProviderResolver::class)
-                ->resolve(OffCanvasRendererInterface::class);
-            if (!$renderer instanceof OffCanvasRendererInterface) {
-                throw new \RuntimeException('Weline_Component OffCanvas renderer provider is unavailable.');
-            }
-
-            return $renderer->render($blockData);
+        return static function ($tag_key, $config, $tag_data, $attributes) {
+            return self::buildMarkup(\is_array($attributes) ? $attributes : []);
         };
+    }
+
+    public static function runtimeCallback(): callable
+    {
+        return static function (
+            Template $template,
+            string $tagKey,
+            array $attributes,
+            string $content,
+        ): string {
+            unset($content);
+            if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs') {
+                return '';
+            }
+            $attrs = TaglibRuntimeScope::resolve(
+                $template,
+                \is_array($attributes) ? $attributes : [],
+                self::SCOPE_ATTRS,
+            );
+
+            return self::buildMarkup($attrs);
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    public static function buildMarkup(array $attributes): string
+    {
+        $id = $attributes['id'] ?? 'build_site';
+        $mode = isset($attributes['mode']) ? \strtolower(\trim((string)$attributes['mode'])) : 'add';
+        $action = $attributes['action'] ?? '';
+        if ($action === '') {
+            $action = $mode === 'edit' ? '*/admin/website/edit' : '*/admin/website/add';
+        }
+        $rawTitle = $attributes['title'] ?? ($mode === 'edit' ? __('编辑网站') : __('新建站点'));
+        $rawTargetText = $attributes['target-button-text'] ?? ($mode === 'edit' ? __('编辑') : __('新建站点'));
+        $title = __($rawTitle);
+        $targetButtonText = __($rawTargetText);
+        $targetButtonClass = $attributes['target-button-class'] ?? ($mode === 'edit' ? 'btn btn-sm btn-outline-info' : 'btn btn-primary');
+        $icon = $attributes['icon'] ?? ($mode === 'edit' ? 'edit' : 'plus');
+        $direction = $attributes['direction'] ?? 'right';
+        $classNames = $attributes['class-names'] ?? 'w-75 h-100';
+        $closeButtonShow = $attributes['close-button-show'] ?? '1';
+        $closeButtonText = $attributes['close-button-text'] ?? __('关闭');
+        $save = $attributes['save'] ?? '1';
+        $vars = $attributes['vars'] ?? '';
+        $actionParams = $attributes['action-params'] ?? '';
+        $websiteId = $attributes['website_id'] ?? '';
+        if ($mode === 'edit' && $websiteId !== '' && $actionParams === '') {
+            $actionParams = '{id:' . \trim((string)$websiteId) . '}';
+        }
+
+        $blockData = [
+            'cache' => '0',
+            'id' => \preg_replace('/[^\w]+/', '', (string)$id),
+            'action' => $action,
+            'title' => $title,
+            'target-tag' => 'a',
+            'target-button-text' => $targetButtonText,
+            'target-button-class' => $targetButtonClass,
+            'icon' => $icon,
+            'direction' => $direction,
+            'class-names' => $classNames,
+            'close-button-show' => $closeButtonShow,
+            'close-button-text' => $closeButtonText,
+            'save' => $save,
+            'off-canvas-body-style' => '',
+        ];
+        if ($vars !== '') {
+            $blockData['vars'] = $vars;
+        }
+        if ($actionParams !== '') {
+            $blockData['action-params'] = $actionParams;
+        }
+
+        $renderer = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(OffCanvasRendererInterface::class);
+        if (!$renderer instanceof OffCanvasRendererInterface) {
+            throw new \RuntimeException('Weline_Component OffCanvas renderer provider is unavailable.');
+        }
+
+        return $renderer->render($blockData);
     }
 
     public static function tag_self_close(): bool

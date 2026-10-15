@@ -96,6 +96,10 @@ foreach ($websites as $site) {
     ];
 }
 $dashboardWebsiteSelectOptionsJson = json_encode($dashboardWebsiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+// renderRuntimeTag 只看 Template::getData；声明式 value/display/options 须可解析。
+$this->setData('dashboardWebsiteId', $dashboardWebsiteId);
+$this->setData('dashboardWebsiteDisplay', $dashboardWebsiteDisplay);
+$this->setData('dashboardWebsiteSelectOptionsJson', $dashboardWebsiteSelectOptionsJson);
 ?>
 
 <div class="w-dashboard" data-dashboard-root>

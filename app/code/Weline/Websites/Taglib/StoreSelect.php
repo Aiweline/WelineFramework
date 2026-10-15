@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Websites\Taglib;
 
 use Weline\Framework\Taglib\TaglibInterface;
+use Weline\Framework\View\Template;
 
 /**
  * Store 选择标签（可搜索单选）。
@@ -18,9 +19,14 @@ use Weline\Framework\Taglib\TaglibInterface;
  *     empty-label="wscStoreEmpty"
  *     placeholder="wscStorePlaceholder"
  * />
+ *
+ * 含 @lang / <?= ?> 等动态属性时走 renderRuntimeTag；必须提供 runtimeCallback。
  */
 class StoreSelect implements TaglibInterface
 {
+    /** @var list<string> */
+    private const SCOPE_ATTRS = ['value', 'options', 'empty-label', 'placeholder'];
+
     public static function name(): string
     {
         return 'websites:store:select';
@@ -61,33 +67,72 @@ class StoreSelect implements TaglibInterface
 
     public static function callback(): callable
     {
-        return function ($tag_key, $config, $tag_data, $attributes) {
+        return static function ($tag_key, $config, $tag_data, $attributes) {
             if (empty($attributes['id'])) {
                 throw new \Exception(__('id属性不能为空'));
             }
 
-            $allowEmptyRaw = (string)($attributes['allow-empty'] ?? 'true');
-            $allowEmpty = \in_array(\strtolower(\trim($allowEmptyRaw)), ['true', '1', 'yes', ''], true);
-            $clearableRaw = (string)($attributes['clearable'] ?? ($allowEmpty ? 'true' : 'false'));
-            $clearable = \in_array(\strtolower(\trim($clearableRaw)), ['true', '1', 'yes'], true);
-
-            return SearchableCodeSelect::render([
-                'id' => (string)$attributes['id'],
-                'name' => (string)($attributes['name'] ?? 'store_code'),
-                'class' => (string)($attributes['class'] ?? ''),
-                'style' => (string)($attributes['style'] ?? ''),
-                'form' => (string)($attributes['form'] ?? ''),
-                'on-change' => (string)($attributes['on-change'] ?? ''),
-                'allow-empty' => $allowEmpty,
-                'clearable' => $clearable,
-                'component' => 'store-select',
-                'api-ns' => 'WelineStoreSelect',
-                'default-empty-label' => (string)__('Website 层'),
-                'default-placeholder' => (string)__('搜索 Store'),
-                'not-found' => (string)__('未找到匹配 Store'),
-                'attributes' => $attributes,
-            ]);
+            return SearchableCodeSelect::render(self::toConfig($attributes));
         };
+    }
+
+    public static function runtimeCallback(): callable
+    {
+        return static function (
+            Template $template,
+            string $tagKey,
+            array $attributes,
+            string $content,
+        ): string {
+            unset($content);
+            if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs') {
+                return '';
+            }
+            $attrs = TaglibRuntimeScope::resolve($template, \is_array($attributes) ? $attributes : [], self::SCOPE_ATTRS);
+            if (empty($attrs['id'])) {
+                throw new \Exception(__('id属性不能为空'));
+            }
+
+            return SearchableCodeSelect::buildMarkup(self::toConfig($attrs));
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     * @return array<string, mixed>
+     */
+    private static function toConfig(array $attributes): array
+    {
+        $allowEmpty = TaglibRuntimeScope::isTruthy($attributes['allow-empty'] ?? 'true', true);
+        // 空字符串 allow-empty 历史兼容：视为 true
+        if (\is_string($attributes['allow-empty'] ?? null) && \trim((string)$attributes['allow-empty']) === '') {
+            $allowEmpty = true;
+        }
+        $clearable = TaglibRuntimeScope::isTruthy(
+            $attributes['clearable'] ?? ($allowEmpty ? 'true' : 'false'),
+            $allowEmpty
+        );
+
+        return [
+            'id' => (string)$attributes['id'],
+            'name' => (string)($attributes['name'] ?? 'store_code'),
+            'class' => (string)($attributes['class'] ?? ''),
+            'style' => (string)($attributes['style'] ?? ''),
+            'form' => (string)($attributes['form'] ?? ''),
+            'on-change' => (string)($attributes['on-change'] ?? ''),
+            'allow-empty' => $allowEmpty,
+            'clearable' => $clearable,
+            'component' => 'store-select',
+            'api-ns' => 'WelineStoreSelect',
+            'default-empty-label' => (string)__('Website 层'),
+            'default-placeholder' => (string)__('搜索 Store'),
+            'not-found' => (string)__('未找到匹配 Store'),
+            'attributes' => $attributes,
+            'value' => $attributes['value'] ?? '',
+            'options' => $attributes['options'] ?? null,
+            'empty-label' => $attributes['empty-label'] ?? '',
+            'placeholder' => $attributes['placeholder'] ?? '',
+        ];
     }
 
     public static function tag_self_close(): bool

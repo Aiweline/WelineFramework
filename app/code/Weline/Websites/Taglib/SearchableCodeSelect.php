@@ -6,11 +6,14 @@ namespace Weline\Websites\Taglib;
 
 /**
  * Website / Store / Channel 等 code 字段共用的可搜索单选渲染器。
- * 由具体 Taglib 包装；id/name/form/on-change 为编译期字面量。
+ * 由具体 Taglib 包装；编译期走 AttributeCodeCompiler + echo buildMarkup，
+ * 运行期（含 @lang）由包装 Taglib 的 runtimeCallback 直接调 buildMarkup。
  */
 final class SearchableCodeSelect
 {
     /**
+     * 编译期片段：ACC 解析声明式属性后 echo buildMarkup。
+     *
      * @param array{
      *   id:string,
      *   name:string,
@@ -44,67 +47,105 @@ final class SearchableCodeSelect
         $defaultEmpty = (string)$config['default-empty-label'];
         $defaultPlaceholder = (string)$config['default-placeholder'];
         $notFound = (string)$config['not-found'];
-        $clearTitle = (string)__('清空');
 
         $attrs = $attributes;
         unset($attrs['id'], $attrs['name'], $attrs['form'], $attrs['class'], $attrs['style'], $attrs['on-change'], $attrs['allow-empty'], $attrs['clearable']);
         $attrs['id'] = $idLiteral;
         $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attrs);
 
-        $html = [];
-        $html[] = '<?php ' . $code . ' ?>';
-        $html[] = '<?php $__scs_id = ' . \var_export($idLiteral, true)
-            . '; $__scs_name = ' . \var_export($nameLiteral, true)
-            . '; $__scs_form = ' . \var_export($formAttr, true)
-            . '; $__scs_default_empty = ' . \var_export($defaultEmpty, true)
-            . '; $__scs_default_placeholder = ' . \var_export($defaultPlaceholder, true)
-            . '; ?>';
-        $html[] = <<<'PHP'
-<?php
-$__scs_value = \trim((string)($Taglib__value ?? ''));
-$__scs_empty_label = \trim((string)($Taglib__empty_label ?? ''));
-if ($__scs_empty_label === '') {
-    $__scs_empty_label = (string)$__scs_default_empty;
-}
-$__scs_placeholder = \trim((string)($Taglib__placeholder ?? ''));
-if ($__scs_placeholder === '') {
-    $__scs_placeholder = (string)$__scs_default_placeholder;
-}
-$__scs_options_raw = $Taglib__options ?? null;
-$__scs_options = [];
-if (\is_string($__scs_options_raw) && $__scs_options_raw !== '') {
-    $decoded = \json_decode($__scs_options_raw, true);
-    if (\is_array($decoded)) {
-        $__scs_options = $decoded;
-    }
-} elseif (\is_array($__scs_options_raw)) {
-    $__scs_options = $__scs_options_raw;
-}
-$__scs_normalized = [];
-foreach ($__scs_options as $__row) {
-    if (!\is_array($__row)) {
-        continue;
-    }
-    $__val = (string)($__row['value'] ?? $__row['code'] ?? $__row['id'] ?? '');
-    if ($__val === '') {
-        continue;
-    }
-    $__scs_normalized[] = [
-        'value' => $__val,
-        'label' => (string)($__row['label'] ?? $__row['name'] ?? $__val),
-        'meta' => (string)($__row['meta'] ?? $__row['code'] ?? ''),
-    ];
-}
-$__scs_display = '';
-foreach ($__scs_normalized as $__row) {
-    if (\hash_equals((string)$__row['value'], $__scs_value)) {
-        $__scs_display = (string)$__row['label'];
-        break;
-    }
-}
-?>
-PHP;
+        $phpOpen = '<' . '?php ';
+        $phpClose = '?' . '>';
+        $echoOpen = '<' . '?= ';
 
+        return $phpOpen . $code . ' ' . $phpClose . "\n"
+            . $echoOpen . '\\' . self::class . '::buildMarkup(['
+            . "'id' => " . \var_export($idLiteral, true) . ','
+            . "'name' => " . \var_export($nameLiteral, true) . ','
+            . "'form' => " . \var_export($formAttr, true) . ','
+            . "'class' => " . \var_export($class, true) . ','
+            . "'style' => " . \var_export($style, true) . ','
+            . "'on-change' => " . \var_export($onChange, true) . ','
+            . "'allow-empty' => " . \var_export($allowEmpty, true) . ','
+            . "'clearable' => " . \var_export($clearable, true) . ','
+            . "'component' => " . \var_export($component, true) . ','
+            . "'api-ns' => " . \var_export($apiNs, true) . ','
+            . "'default-empty-label' => " . \var_export($defaultEmpty, true) . ','
+            . "'default-placeholder' => " . \var_export($defaultPlaceholder, true) . ','
+            . "'not-found' => " . \var_export($notFound, true) . ','
+            . "'value' => \$Taglib__value ?? '',"
+            . "'options' => \$Taglib__options ?? null,"
+            . "'empty-label' => \$Taglib__empty_label ?? '',"
+            . "'placeholder' => \$Taglib__placeholder ?? '',"
+            . ']) ' . $phpClose;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    public static function buildMarkup(array $config): string
+    {
+        $id = \trim((string)($config['id'] ?? ''));
+        $name = \trim((string)($config['name'] ?? ''));
+        $form = \trim((string)($config['form'] ?? ''));
+        $class = (string)($config['class'] ?? '');
+        $style = (string)($config['style'] ?? '');
+        $onChange = (string)($config['on-change'] ?? '');
+        $allowEmpty = (bool)($config['allow-empty'] ?? true);
+        $clearable = (bool)($config['clearable'] ?? false);
+        $component = (string)($config['component'] ?? 'code-select');
+        $apiNs = (string)($config['api-ns'] ?? 'WelineCodeSelect');
+        $defaultEmpty = (string)($config['default-empty-label'] ?? '');
+        $defaultPlaceholder = (string)($config['default-placeholder'] ?? '');
+        $notFound = (string)($config['not-found'] ?? '');
+        $clearTitle = (string)__('清空');
+
+        $value = \trim((string)($config['value'] ?? ''));
+        $emptyLabel = \trim((string)($config['empty-label'] ?? ''));
+        if ($emptyLabel === '') {
+            $emptyLabel = $defaultEmpty;
+        }
+        $placeholder = \trim((string)($config['placeholder'] ?? ''));
+        if ($placeholder === '') {
+            $placeholder = $defaultPlaceholder;
+        }
+
+        $optionsRaw = $config['options'] ?? null;
+        $options = [];
+        if (\is_string($optionsRaw) && $optionsRaw !== '') {
+            $decoded = \json_decode($optionsRaw, true);
+            if (\is_array($decoded)) {
+                $options = $decoded;
+            }
+        } elseif (\is_array($optionsRaw)) {
+            $options = $optionsRaw;
+        }
+        $normalized = [];
+        foreach ($options as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $val = (string)($row['value'] ?? $row['code'] ?? $row['id'] ?? '');
+            if ($val === '') {
+                continue;
+            }
+            $normalized[] = [
+                'value' => $val,
+                'label' => (string)($row['label'] ?? $row['name'] ?? $val),
+                'meta' => (string)($row['meta'] ?? $row['code'] ?? ''),
+            ];
+        }
+        $display = '';
+        foreach ($normalized as $row) {
+            if (\hash_equals((string)$row['value'], $value)) {
+                $display = (string)$row['label'];
+                break;
+            }
+        }
+
+        $h = static fn(string $s): string => \htmlspecialchars($s, ENT_QUOTES);
+        $j = static fn(mixed $v): string => \json_encode($v, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        $html = [];
         $html[] = '<style>';
         $html[] = '.weline-code-select{position:relative;min-width:160px;max-width:100%;width:100%;color:var(--weline-theme-text,var(--backend-color-text-primary,#162033))}';
         $html[] = '.weline-code-select-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;box-sizing:border-box;min-height:var(--weline-control-height);height:var(--weline-control-height);padding:0 var(--weline-space-3);background:var(--weline-theme-surface,var(--backend-color-card-bg,#fff));border:1px solid var(--weline-theme-border-strong,var(--backend-color-border-default,#dbe3ef));border-radius:var(--weline-radius-md,6px);color:var(--weline-theme-text,var(--backend-color-text-primary,#162033));text-align:left;cursor:pointer}';
@@ -128,37 +169,38 @@ PHP;
         $html[] = '.weline-code-select-empty{padding:10px;text-align:center;color:var(--weline-theme-text-muted,var(--backend-color-text-secondary,#64748b));font-size:.85rem}';
         $html[] = '</style>';
 
-        $html[] = '<div class="weline-code-select ' . \htmlspecialchars($class, ENT_QUOTES) . '" style="' . \htmlspecialchars($style, ENT_QUOTES) . '" id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>_wrapper" data-component="' . \htmlspecialchars($component, ENT_QUOTES) . '">';
-        $html[] = '  <button type="button" class="weline-code-select-trigger" id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>_trigger" aria-haspopup="listbox" aria-expanded="false">';
-        $html[] = '    <span class="weline-code-select-label<?= $__scs_display === \'\' ? \' is-empty\' : \'\' ?>" id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>_display"><?= htmlspecialchars($__scs_display !== \'\' ? $__scs_display : $__scs_empty_label, ENT_QUOTES) ?></span>';
+
+        $emptyClass = $display === '' ? ' is-empty' : '';
+        $labelText = $display !== '' ? $display : $emptyLabel;
+        $html[] = '<div class="weline-code-select ' . $h($class) . '" style="' . $h($style) . '" id="' . $h($id) . '_wrapper" data-component="' . $h($component) . '">';
+        $html[] = '  <button type="button" class="weline-code-select-trigger" id="' . $h($id) . '_trigger" aria-haspopup="listbox" aria-expanded="false">';
+        $html[] = '    <span class="weline-code-select-label' . $emptyClass . '" id="' . $h($id) . '_display">' . $h($labelText) . '</span>';
         $html[] = '    <span class="weline-code-select-actions">';
         if ($clearable) {
-            $html[] = '      <span class="weline-code-select-clear" id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>_clear" title="' . \htmlspecialchars($clearTitle, ENT_QUOTES) . '" hidden>&times;</span>';
+            $html[] = '      <span class="weline-code-select-clear" id="' . $h($id) . '_clear" title="' . $h($clearTitle) . '" hidden>&times;</span>';
         }
         $html[] = '      <span class="weline-code-select-chevron" aria-hidden="true">⌄</span>';
         $html[] = '    </span>';
         $html[] = '  </button>';
-        $formAttrHtml = $formAttr !== ''
-            ? ' form="<?= htmlspecialchars($__scs_form, ENT_QUOTES) ?>"'
-            : '';
-        $html[] = '  <input type="hidden" id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>" name="<?= htmlspecialchars($__scs_name, ENT_QUOTES) ?>" value="<?= htmlspecialchars($__scs_value, ENT_QUOTES) ?>"' . $formAttrHtml . ' data-code-select-value>';
-        $html[] = '  <div class="weline-code-select-dropdown" id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>_dropdown" hidden>';
-        $html[] = '    <input type="search" class="weline-code-select-search" id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>_search" placeholder="<?= htmlspecialchars($__scs_placeholder, ENT_QUOTES) ?>" autocomplete="off">';
-        $html[] = '    <div class="weline-code-select-list" id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>_list" role="listbox"></div>';
+        $formAttrHtml = $form !== '' ? ' form="' . $h($form) . '"' : '';
+        $html[] = '  <input type="hidden" id="' . $h($id) . '" name="' . $h($name) . '" value="' . $h($value) . '"' . $formAttrHtml . ' data-code-select-value>';
+        $html[] = '  <div class="weline-code-select-dropdown" id="' . $h($id) . '_dropdown" hidden>';
+        $html[] = '    <input type="search" class="weline-code-select-search" id="' . $h($id) . '_search" placeholder="' . $h($placeholder) . '" autocomplete="off">';
+        $html[] = '    <div class="weline-code-select-list" id="' . $h($id) . '_list" role="listbox"></div>';
         $html[] = '  </div>';
         $html[] = '</div>';
 
         $html[] = \Weline\Framework\View\Taglib\Support\FloatingDropdownEmitter::script();
         $html[] = '<script>(function(){';
         $html[] = '"use strict";';
-        $html[] = 'var id = <?= json_encode((string)$__scs_id, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>;';
-        $html[] = 'var emptyLabel = <?= json_encode((string)$__scs_empty_label, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>;';
-        $html[] = 'var notFound = ' . \json_encode($notFound, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . ';';
+        $html[] = 'var id = ' . $j((string)$id) . ';';
+        $html[] = 'var emptyLabel = ' . $j((string)$emptyLabel) . ';';
+        $html[] = 'var notFound = ' . $j($notFound) . ';';
         $html[] = 'var allowEmpty = ' . ($allowEmpty ? 'true' : 'false') . ';';
         $html[] = 'var clearable = ' . ($clearable ? 'true' : 'false') . ';';
-        $html[] = 'var onChangeCode = ' . \json_encode($onChange, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . ';';
-        $html[] = 'var apiNs = ' . \json_encode($apiNs, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . ';';
-        $html[] = 'var options = <?= json_encode($__scs_normalized, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>;';
+        $html[] = 'var onChangeCode = ' . $j($onChange) . ';';
+        $html[] = 'var apiNs = ' . $j($apiNs) . ';';
+        $html[] = 'var options = ' . $j($normalized) . ';';
         $html[] = 'var wrapper = document.getElementById(id + "_wrapper");';
         $html[] = 'var trigger = document.getElementById(id + "_trigger");';
         $html[] = 'var dropdown = document.getElementById(id + "_dropdown");';
@@ -192,81 +234,7 @@ PHP;
         $html[] = '  selected = String(value == null ? "" : value);';
         $html[] = '  hidden.value = selected;';
         $html[] = '  syncDisplay();';
-        $html[] = '  if (fire) fireChange();';
-        $html[] = '}';
-        $html[] = 'function renderList(keyword){';
-        $html[] = '  var q = String(keyword || "").trim().toLowerCase();';
-        $html[] = '  list.innerHTML = "";';
-        $html[] = '  var matched = options.filter(function(item){';
-        $html[] = '    if (!q) return true;';
-        $html[] = '    return String(item.value).toLowerCase().indexOf(q) >= 0 || String(item.label).toLowerCase().indexOf(q) >= 0 || String(item.meta || "").toLowerCase().indexOf(q) >= 0;';
-        $html[] = '  });';
-        $html[] = '  if (allowEmpty && !q) {';
-        $html[] = '    var emptyItem = document.createElement("button");';
-        $html[] = '    emptyItem.type = "button";';
-        $html[] = '    emptyItem.className = "weline-code-select-item" + (selected === "" ? " is-selected" : "");';
-        $html[] = '    emptyItem.innerHTML = \'<span class="weline-code-select-item-label"></span>\';';
-        $html[] = '    emptyItem.querySelector(".weline-code-select-item-label").textContent = emptyLabel;';
-        $html[] = '    emptyItem.addEventListener("click", function(){ setValue("", true); close(); });';
-        $html[] = '    list.appendChild(emptyItem);';
-        $html[] = '  }';
-        $html[] = '  if (!matched.length && !(allowEmpty && !q)) {';
-        $html[] = '    var empty = document.createElement("div");';
-        $html[] = '    empty.className = "weline-code-select-empty";';
-        $html[] = '    empty.textContent = notFound;';
-        $html[] = '    list.appendChild(empty);';
-        $html[] = '    return;';
-        $html[] = '  }';
-        $html[] = '  matched.forEach(function(item){';
-        $html[] = '    var btn = document.createElement("button");';
-        $html[] = '    btn.type = "button";';
-        $html[] = '    btn.className = "weline-code-select-item" + (String(item.value) === selected ? " is-selected" : "");';
-        $html[] = '    btn.innerHTML = \'<span class="weline-code-select-item-label"></span>\' + (item.meta && item.meta !== item.label ? \'<span class="weline-code-select-item-meta"></span>\' : "");';
-        $html[] = '    btn.querySelector(".weline-code-select-item-label").textContent = item.label;';
-        $html[] = '    if (item.meta && item.meta !== item.label) btn.querySelector(".weline-code-select-item-meta").textContent = item.meta;';
-        $html[] = '    btn.addEventListener("click", function(){ setValue(item.value, true); close(); });';
-        $html[] = '    list.appendChild(btn);';
-        $html[] = '  });';
-        $html[] = '}';
-        $html[] = 'function openDropdown(){';
-        $html[] = '  if (open) return;';
-        $html[] = '  open = true;';
-        $html[] = '  wrapper.classList.add("is-open");';
-        $html[] = '  trigger.setAttribute("aria-expanded", "true");';
-        $html[] = '  renderList(search.value);';
-        $html[] = '  window.WelineTaglibFloatingDropdown.mount(trigger, dropdown, { minWidth: 220, preferredHeight: 320, zIndex: 4200 });';
-        $html[] = '  setTimeout(function(){ search.focus(); }, 0);';
-        $html[] = '}';
-        $html[] = 'function close(){';
-        $html[] = '  if (!open) return;';
-        $html[] = '  open = false;';
-        $html[] = '  wrapper.classList.remove("is-open");';
-        $html[] = '  trigger.setAttribute("aria-expanded", "false");';
-        $html[] = '  window.WelineTaglibFloatingDropdown.unmount(dropdown);';
-        $html[] = '}';
-        $html[] = 'trigger.addEventListener("click", function(e){';
-        $html[] = '  e.preventDefault();';
-        $html[] = '  if (open) close(); else openDropdown();';
-        $html[] = '});';
-        $html[] = 'search.addEventListener("input", function(){ renderList(search.value); });';
-        $html[] = 'if (clearBtn) {';
-        $html[] = '  clearBtn.addEventListener("click", function(e){';
-        $html[] = '    e.preventDefault();';
-        $html[] = '    e.stopPropagation();';
-        $html[] = '    setValue("", true);';
-        $html[] = '    close();';
-        $html[] = '  });';
-        $html[] = '}';
-        $html[] = 'document.addEventListener("click", function(e){';
-        $html[] = '  if (!open) return;';
-        $html[] = '  if (wrapper.contains(e.target) || dropdown.contains(e.target)) return;';
-        $html[] = '  close();';
-        $html[] = '});';
-        $html[] = 'window.addEventListener("resize", function(){ if (open) window.WelineTaglibFloatingDropdown.mount(trigger, dropdown, { minWidth: 220, preferredHeight: 320, zIndex: 4200 }); });';
-        $html[] = 'window.addEventListener("scroll", function(){ if (open) close(); }, true);';
-        $html[] = 'window[apiNs] = window[apiNs] || {};';
-        $html[] = 'window[apiNs][id] = { setValue: function(v){ setValue(v, true); }, getValue: function(){ return String(hidden.value == null ? "" : hidden.value); }, setOptions: function(next){ options = Array.isArray(next) ? next : []; selected = options.some(function(o){ return String(o.value) === selected; }) ? selected : ""; hidden.value = selected; syncDisplay(); if (open) renderList(search.value); } };';
-        $html[] = 'syncDisplay();';
+
         $html[] = '})();</script>';
 
         return \implode("\n", $html);

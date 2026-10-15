@@ -25,6 +25,7 @@ declare(strict_types=1);
 namespace Weline\Websites\Taglib;
 
 use Weline\Framework\Taglib\TaglibInterface;
+use Weline\Framework\View\Template;
 
 class WebsiteForm implements TaglibInterface
 {
@@ -344,6 +345,226 @@ class WebsiteForm implements TaglibInterface
 
             return implode("\n", $html);
         };
+    }
+
+    /** @var list<string> */
+    private const SCOPE_ATTRS = [
+        'website', 'locales', 'currencies', 'timezones',
+        'selected_currencies', 'selected_languages', 'selected_pool_ids', 'selected_domain_names',
+        'form_action', 'show_save_btn', 'save_btn_text', 'cancel_url',
+    ];
+
+    /**
+     * 动态属性路径：resolve 后直接出 HTML。
+     * 嵌套 domain/language 走其 buildMarkup；currency 走 renderRuntimeTag（其若缺 runtimeCallback 会再暴露，属 Currency 模块债）。
+     */
+    public static function runtimeCallback(): callable
+    {
+        return static function (
+            Template $template,
+            string $tagKey,
+            array $attributes,
+            string $content,
+        ): string {
+            unset($content);
+            if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs') {
+                return '';
+            }
+            $attrs = TaglibRuntimeScope::resolve(
+                $template,
+                \is_array($attributes) ? $attributes : [],
+                self::SCOPE_ATTRS,
+            );
+            if (empty($attrs['id'])) {
+                throw new \Exception(__('id属性不能为空'));
+            }
+
+            return self::buildMarkup($template, $attrs);
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $attributes 已解析属性
+     */
+    public static function buildMarkup(Template $template, array $attributes): string
+    {
+        $id = \trim((string)($attributes['id'] ?? ''), "'\"");
+        $website = $attributes['website'] ?? [];
+        if (!\is_array($website)) {
+            $website = [];
+        }
+        $selectedCurrencies = $attributes['selected_currencies'] ?? [];
+        if (!\is_array($selectedCurrencies)) {
+            $selectedCurrencies = [];
+        }
+        $selectedLanguages = $attributes['selected_languages'] ?? [];
+        $selectedPoolIds = $attributes['selected_pool_ids'] ?? [];
+        $selectedDomainNames = $attributes['selected_domain_names'] ?? [];
+        $showSaveBtn = (string)($attributes['show_save_btn'] ?? 'true');
+        $saveBtnText = $attributes['save_btn_text'] ?? __('保存');
+        if (\is_string($saveBtnText)) {
+            $saveBtnText = \trim($saveBtnText, "'\"");
+        }
+        $cancelUrl = $attributes['cancel_url'] ?? '';
+        if (\is_string($cancelUrl)) {
+            $cancelUrl = \trim($cancelUrl, "'\"");
+        }
+        $hasCancelUrl = \array_key_exists('cancel_url', $attributes) && $cancelUrl !== '';
+        $h = static fn(string $s): string => \htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+
+        $poolStr = \is_array($selectedPoolIds)
+            ? \implode(',', \array_map('strval', $selectedPoolIds))
+            : (string)$selectedPoolIds;
+        $domainStr = \is_array($selectedDomainNames)
+            ? \implode(',', \array_values(\array_filter(\array_map(static fn($v) => \trim((string)$v), $selectedDomainNames), static fn($v) => $v !== '')))
+            : \trim((string)$selectedDomainNames);
+        $websiteId = isset($website['website_id']) ? (int)$website['website_id'] : 0;
+        $defaultCurrency = (string)($website['default_currency'] ?? '');
+        $currencySelected = $selectedCurrencies;
+        if ($defaultCurrency !== '' && !\in_array($defaultCurrency, $currencySelected, true)) {
+            $currencySelected[] = $defaultCurrency;
+        }
+        $currencyReadonly = $defaultCurrency !== '' ? [$defaultCurrency] : [];
+        $defaultLanguage = (string)($website['default_language'] ?? '');
+        $languageSelected = \is_array($selectedLanguages) ? $selectedLanguages : [];
+        if ($defaultLanguage !== '' && !\in_array($defaultLanguage, $languageSelected, true)) {
+            $languageSelected[] = $defaultLanguage;
+        }
+        $languageReadonly = $defaultLanguage !== '' ? [$defaultLanguage] : [];
+
+        $html = [];
+        $html[] = '<style>';
+        $html[] = '.website-form-accordion .accordion-item { border: 1px solid var(--backend-color-border-default); border-radius: var(--backend-border-radius-md); margin-bottom: 1rem; background-color: var(--backend-color-card-bg); }';
+        $html[] = '.website-form-accordion .accordion-header { padding: 1rem 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between; background-color: var(--backend-color-bg-tertiary); border-radius: var(--backend-border-radius-md); }';
+        $html[] = '</style>';
+        $html[] = '<div class="website-form-accordion" id="' . $h($id) . '_wrapper">';
+
+        $html[] = '  <div class="w-disclosure" data-w-component="disclosure">';
+        $html[] = '    <h2 id="' . $h($id) . '_basic_header"><button class="w-disclosure__trigger" type="button" aria-expanded="true" aria-controls="' . $h($id) . '_basic_body" data-w-target="#' . $h($id) . '_basic_body" data-w-action="disclosure.toggle" data-w-disclosure-trigger><i class="mdi mdiInformation-outline"></i><span><lang>基本信息</lang></span></button></h2>';
+        $html[] = '    <div id="' . $h($id) . '_basic_body" class="w-disclosure__panel" aria-labelledby="' . $h($id) . '_basic_header" data-w-disclosure-panel><div class="w-disclosure__body"></div></div>';
+        $html[] = '  </div>';
+
+        $html[] = '  <div class="w-disclosure" data-w-component="disclosure">';
+        $html[] = '    <h2 id="' . $h($id) . '_domains_header"><button class="w-disclosure__trigger" type="button" aria-expanded="true" aria-controls="' . $h($id) . '_domains_body" data-w-target="#' . $h($id) . '_domains_body" data-w-action="disclosure.toggle" data-w-disclosure-trigger><w-icon name="globe" size="sm"></w-icon><span><lang>域名管理</lang></span></button></h2>';
+        $html[] = '    <div id="' . $h($id) . '_domains_body" class="w-disclosure__panel" aria-labelledby="' . $h($id) . '_domains_header" data-w-disclosure-panel><div class="w-disclosure__body">';
+        $html[] = DomainSelect::buildMarkup([
+            'id' => $id . '_domain_select',
+            'name' => 'pool_ids',
+            'value' => $poolStr,
+            'display' => (string)__('点击选择域名（可多选）'),
+            'selected-domains' => $domainStr,
+            'multiple' => 'true',
+            'value-type' => 'pool_id',
+            'site-ready-only' => 'true',
+            'website-id' => (string)$websiteId,
+            'auto-fill-code' => $id . '_code',
+            'auto-fill-name' => $id . '_name',
+        ]);
+        $html[] = '        <input type="hidden" name="domain_values" value="' . $h($domainStr) . '">';
+        $html[] = '        <div class="w-field__hint"><lang>从域名池选择已就绪的域名（可多选）；选择后网站代码与网站名称将自动填充</lang></div>';
+        $html[] = '    </div></div>';
+        $html[] = '  </div>';
+
+        $html[] = '  <div class="w-disclosure" data-w-component="disclosure">';
+        $html[] = '    <h2 id="' . $h($id) . '_advanced_header"><button class="w-disclosure__trigger collapsed" type="button" aria-expanded="false" aria-controls="' . $h($id) . '_advanced_body" data-w-target="#' . $h($id) . '_advanced_body" data-w-action="disclosure.toggle" data-w-disclosure-trigger><w-icon name="settings" size="sm"></w-icon><span><lang>高级选项</lang></span></button></h2>';
+        $html[] = '    <div id="' . $h($id) . '_advanced_body" class="w-disclosure__panel" aria-labelledby="' . $h($id) . '_advanced_header" data-w-disclosure-panel hidden><div class="w-disclosure__body"><div class="w-grid">';
+
+        $codeVal = isset($website['website_id']) ? $h((string)($website['code'] ?? '')) : '';
+        $nameVal = isset($website['website_id']) ? $h((string)($website['name'] ?? '')) : '';
+        $urlVal = isset($website['website_id']) ? $h((string)($website['url'] ?? '')) : '';
+        $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);"><label for="' . $h($id) . '_code" class="w-field__label"><lang>网站代码</lang></label><input type="text" class="w-input" id="' . $h($id) . '_code" name="code" value="' . $codeVal . '" required></div>';
+        $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);"><label for="' . $h($id) . '_name" class="w-field__label"><lang>网站名称</lang></label><input type="text" class="w-input" id="' . $h($id) . '_name" name="name" value="' . $nameVal . '" required></div>';
+        $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);"><label for="' . $h($id) . '_url" class="w-field__label"><lang>网站URL</lang></label><input type="url" class="w-input" id="' . $h($id) . '_url" name="url" value="' . $urlVal . '" required></div>';
+
+        $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);"><label class="w-field__label"><lang>默认货币</lang></label>';
+        $html[] = self::renderNestedRuntimeTag($template, 'currency:select', [
+            'id' => $id . '_default_currency_selector',
+            'name' => 'default_currency',
+            'input-id' => $id . '_default_currency',
+            'value' => $defaultCurrency,
+            'currencies' => $attributes['currencies'] ?? [],
+            'allow-empty' => 'true',
+            'data-w-width' => 'full',
+        ], '<input type="hidden" name="default_currency" value="' . $h($defaultCurrency) . '">');
+        $html[] = '</div>';
+
+        $html[] = '          <div style="--w-span:4;--w-mb:var(--weline-space-4);"><label class="w-field__label"><lang>默认语言</lang></label>';
+        $html[] = \Weline\I18n\Taglib\LanguageSelect::buildMarkup([
+            'id' => $id . '_default_language_selector',
+            'name' => 'default_language',
+            'input-id' => $id . '_default_language',
+            'value' => $defaultLanguage,
+            'allow-empty' => 'true',
+            'data-w-width' => 'full',
+        ]);
+        $html[] = '</div>';
+
+        $html[] = '          <div style="--w-span:6;--w-mb:var(--weline-space-4);"><label class="w-field__label"><lang>关联货币</lang></label>';
+        $html[] = self::renderNestedRuntimeTag($template, 'currency:select', [
+            'id' => $id . '_currency_codes_selector',
+            'name' => 'currency_codes[]',
+            'input-id' => $id . '_currency_codes',
+            'value' => $currencySelected,
+            'readonly-values' => $currencyReadonly,
+            'currencies' => $attributes['currencies'] ?? [],
+            'multiple' => 'true',
+            'data-w-width' => 'full',
+        ], '<input type="hidden" name="currency_codes" value="' . $h(\implode(',', \array_map('strval', $currencySelected))) . '">');
+        $html[] = '</div>';
+
+        $html[] = '          <div style="--w-span:6;--w-mb:var(--weline-space-4);"><label class="w-field__label"><lang>关联语言</lang></label>';
+        $html[] = \Weline\I18n\Taglib\LanguageSelect::buildMarkup([
+            'id' => $id . '_language_codes_selector',
+            'name' => 'language_codes[]',
+            'input-id' => $id . '_language_codes',
+            'value' => $languageSelected,
+            'readonly-values' => $languageReadonly,
+            'multiple' => 'true',
+            'data-w-width' => 'full',
+        ]);
+        $html[] = '</div>';
+
+        $html[] = '        </div></div></div>';
+        $html[] = '  </div>';
+
+        if ($showSaveBtn === 'true' || $showSaveBtn === '1') {
+            $html[] = '  <div class="w-cluster" data-justify="between" style="--w-mt:var(--weline-space-6);--w-pt:var(--weline-space-2);">';
+            if ($hasCancelUrl) {
+                $html[] = '    <a href="' . $h((string)$cancelUrl) . '" class="w-button" data-tone="neutral"><lang>取消</lang></a>';
+            } else {
+                $html[] = '    <button type="button" class="w-button" data-website-form-action="history-back" data-tone="neutral"><lang>取消</lang></button>';
+            }
+            $html[] = '    <button type="submit" class="w-button" data-tone="primary">' . $h((string)$saveBtnText) . '</button>';
+            $html[] = '  </div>';
+        }
+        if (!$hasCancelUrl) {
+            $html[] = '<script>(function(){document.addEventListener("click",function(event){var trigger=event.target.closest("[data-website-form-action]");if(!trigger||trigger.getAttribute("data-website-form-action")!=="history-back"){return;}event.preventDefault();window.history.back();});})();</script>';
+        }
+        $html[] = '</div>';
+
+        return \implode("\n", $html);
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    private static function renderNestedRuntimeTag(
+        Template $template,
+        string $tagName,
+        array $attributes,
+        string $fallbackHtml,
+    ): string {
+        $html = $template->getTaglib()->renderRuntimeTag(
+            $template,
+            $tagName,
+            'tag-self-close',
+            $attributes,
+        );
+        if (!\is_string($html) || $html === '' || \str_contains($html, '<?php') || \str_contains($html, 'Weline_Taglib_resolve')) {
+            return $fallbackHtml;
+        }
+
+        return $html;
     }
 
     public static function tag_self_close(): bool
