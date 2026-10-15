@@ -1165,13 +1165,16 @@ if ($oauthCfError === 'invalid_scope') {
                         'code' => 'smtp_cname',
                         'label' => (string)__('默认必需'),
                         'text' => 'smtp.' . $domainName . ' CNAME ' . $host . ' · DNS-only',
-                        'guide' => (string)__('默认 Smtp 提交主机。必须 DNS-only，且 Stalwart/ACME 证书需覆盖该主机名。'),
+                        'guide' => (string)__('Smtp 模块启用时的提交主机（可与企业邮同域或外接）。须 DNS 解析正确后入域名池出证。'),
                         'record' => 'smtp.' . $domainName . ' CNAME ' . $host,
                     ],
                 ];
                 $requiredOk = is_array($live) ? !empty($live['ok']) : false;
                 $formOriginIp = $originIp;
-                $defaultSmtpAccountId = (int)$domain->getData(MailDomain::schema_fields_DEFAULT_SMTP_ACCOUNT_ID);
+                $outboundHost = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_HOST));
+                $outboundPort = (int)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_PORT);
+                $outboundUser = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_USERNAME));
+                $outboundTls = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_TLS)) ?: 'starttls';
                 $domainActiveAccounts = [];
                 foreach ($accounts as $acct) {
                     if ((int)$acct->getData(MailAccount::schema_fields_DOMAIN_ID) !== $domainId) {
@@ -1324,7 +1327,7 @@ if ($oauthCfError === 'invalid_scope') {
                         </details>
                         <div class="mail-enterprise__domain-lifecycle">
                             <p class="w-text" data-tone="muted" data-size="sm">
-                                <?= __('启用域名时会自动开通 contact@（人收）与默认 Smtp 提交账号（初值 smtp@，密码仅提示一次）；系统发信默认全部走该中继，可在下方改绑。') ?>
+                                <?= __('启用域名时自动开通 contact@（企业邮箱人收）。Smtp 中继请在「Smtp 配置」独立启用（可选池内域名或自填外接域名，DNS 解析通过后入域名池出证）。') ?>
                             </p>
                             <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}">
                                 <input type="hidden" name="return_view" value="domains">
@@ -1335,30 +1338,64 @@ if ($oauthCfError === 'invalid_scope') {
                                 </button>
                             </w:form>
                             <?php if ((string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active'): ?>
-                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-default-smtp-account'}" data-testid="mail-domain-default-smtp-<?= $domainId ?>">
-                                    <input type="hidden" name="return_view" value="domains">
-                                    <input type="hidden" name="domain_id" value="<?= $domainId ?>">
-                                    <label class="w-field__label" for="mail-default-smtp-<?= $domainId ?>"><?= __('默认 Smtp 提交账号（中继）') ?></label>
-                                    <div style="display:flex; gap:var(--weline-space-2); flex-wrap:wrap; align-items:flex-end;">
-                                        <select id="mail-default-smtp-<?= $domainId ?>" class="w-select" name="account_id" required style="min-width:12rem;">
-                                            <option value=""><?= __('请选择账号') ?></option>
+                                <div class="mail-enterprise__outbound" data-testid="mail-domain-outbound-<?= $domainId ?>" style="--w-mt:var(--weline-space-3);">
+                                    <h3 class="w-text" data-size="sm" style="--w-m:0; --w-mb:var(--weline-space-2);"><?= __('企业邮箱外投 smarthost') ?></h3>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0; --w-mb:var(--weline-space-2);">
+                                        <?= __('未勾选外投的邮箱仍走 MX:25。可填外部 SMTP，或粘贴 Smtp 模块账户凭据。本机自指且云厂商禁 25 时外投仍会失败。') ?>
+                                    </p>
+                                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/save-outbound-relay'}">
+                                        <input type="hidden" name="return_view" value="domains">
+                                        <input type="hidden" name="domain_id" value="<?= $domainId ?>">
+                                        <div style="display:grid; gap:var(--weline-space-2); grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));">
+                                            <label class="w-field">
+                                                <span class="w-field__label"><?= __('主机') ?></span>
+                                                <input class="w-input" type="text" name="outbound_relay_host" value="<?= $escape($outboundHost) ?>" placeholder="smtp.example.com">
+                                            </label>
+                                            <label class="w-field">
+                                                <span class="w-field__label"><?= __('端口') ?></span>
+                                                <input class="w-input" type="number" name="outbound_relay_port" value="<?= $outboundPort > 0 ? $outboundPort : 587 ?>" min="1" max="65535">
+                                            </label>
+                                            <label class="w-field">
+                                                <span class="w-field__label"><?= __('用户名') ?></span>
+                                                <input class="w-input" type="text" name="outbound_relay_username" value="<?= $escape($outboundUser) ?>">
+                                            </label>
+                                            <label class="w-field">
+                                                <span class="w-field__label"><?= __('密码（留空不改）') ?></span>
+                                                <input class="w-input" type="password" name="outbound_relay_password" value="" autocomplete="new-password">
+                                            </label>
+                                            <label class="w-field">
+                                                <span class="w-field__label"><?= __('TLS') ?></span>
+                                                <select class="w-select" name="outbound_relay_tls">
+                                                    <option value="starttls" <?= $outboundTls === 'starttls' ? 'selected' : '' ?>>STARTTLS</option>
+                                                    <option value="smtps" <?= $outboundTls === 'smtps' ? 'selected' : '' ?>>SMTPS</option>
+                                                    <option value="none" <?= $outboundTls === 'none' ? 'selected' : '' ?>><?= __('无') ?></option>
+                                                </select>
+                                            </label>
+                                        </div>
+                                        <button class="w-button" data-variant="primary" data-size="sm" type="submit" style="--w-mt:var(--weline-space-2);"><?= __('保存外投 smarthost') ?></button>
+                                    </w:form>
+                                    <?php if ($domainActiveAccounts !== []): ?>
+                                        <div style="--w-mt:var(--weline-space-3);">
+                                            <p class="w-text" data-size="sm" style="--w-m:0; --w-mb:var(--weline-space-2);"><?= __('账号外投开关') ?></p>
                                             <?php foreach ($domainActiveAccounts as $acct):
                                                 $aid = (int)$acct->getId();
                                                 $aemail = (string)$acct->getData(MailAccount::schema_fields_EMAIL);
+                                                $on = (int)$acct->getData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED) === 1;
                                                 ?>
-                                                <option value="<?= $aid ?>" <?= $aid === $defaultSmtpAccountId ? 'selected' : '' ?>>
-                                                    <?= $escape($aemail) ?>
-                                                </option>
+                                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-account-outbound-relay'}" style="display:flex; gap:var(--weline-space-2); align-items:center; flex-wrap:wrap; --w-mb:var(--weline-space-1);">
+                                                    <input type="hidden" name="return_view" value="domains">
+                                                    <input type="hidden" name="account_id" value="<?= $aid ?>">
+                                                    <span class="w-text" data-size="sm"><?= $escape($aemail) ?></span>
+                                                    <label class="w-text" data-size="sm">
+                                                        <input type="checkbox" name="outbound_relay_enabled" value="1" <?= $on ? 'checked' : '' ?>>
+                                                        <?= __('外投走中继') ?>
+                                                    </label>
+                                                    <button class="w-button" data-variant="outline" data-size="sm" type="submit"><?= __('保存') ?></button>
+                                                </w:form>
                                             <?php endforeach; ?>
-                                        </select>
-                                        <button class="w-button" data-variant="primary" data-size="sm" type="submit">
-                                            <?= __('保存默认中继') ?>
-                                        </button>
-                                    </div>
-                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0; --w-mt:var(--weline-space-1);">
-                                        <?= __('提交主机为 smtp.%{1}:587（证书随域名池）。外投 QQ 等仍依赖云厂商出站 TCP/25。', [$domainName]) ?>
-                                    </p>
-                                </w:form>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
                             <?php endif; ?>
                         </div>
                     </div>

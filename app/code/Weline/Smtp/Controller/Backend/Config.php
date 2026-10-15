@@ -20,6 +20,9 @@ use Weline\Smtp\Helper\SmtpSender;
 use Weline\Smtp\Service\MailAccountTransportProvisioner;
 use Weline\Smtp\Service\MailChannelCollector;
 use Weline\Smtp\Service\MailSmtpBootstrapService;
+use Weline\Smtp\Service\SmtpAccountManageService;
+use Weline\Smtp\Service\SmtpServiceEnableService;
+use Weline\Smtp\Model\SmtpAccount;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 
@@ -76,6 +79,25 @@ class Config extends BackendController
         $this->assign('smtp_unbound_channels', $provisioner->unboundChannels($storageScope));
         $this->assign('mail_bootstrap_ready', $bootstrap->canEnsure());
         $this->assign('mail_has_routing', $bootstrap->hasMailboxRouting($storageScope));
+        $serviceState = $this->data->getServiceState($storageScope);
+        $this->assign('smtp_service', $serviceState);
+        /** @var SmtpAccountManageService $smtpAcctSvc */
+        $smtpAcctSvc = ObjectManager::getInstance(SmtpAccountManageService::class);
+        $this->assign(
+            'smtp_service_accounts',
+            $smtpAcctSvc->listAccounts((string)($serviceState['domain_name'] ?? ''))
+        );
+        $poolDomains = [];
+        try {
+            $poolRes = w_query('websites', 'getDomainPoolList', ['limit' => 200]);
+            if (is_array($poolRes) && !empty($poolRes['success']) && is_array($poolRes['items'] ?? null)) {
+                $poolDomains = $poolRes['items'];
+            } elseif (is_array($poolRes['items'] ?? null)) {
+                $poolDomains = $poolRes['items'];
+            }
+        } catch (\Throwable) {
+        }
+        $this->assign('smtp_pool_domains', $poolDomains);
         $configUrl = $this->scopedConfigUrl($workScope);
         $this->assign(
             'ensure_mail_url',
@@ -90,8 +112,134 @@ class Config extends BackendController
                 'channel_code' => (string)($workScope['channel_code'] ?? ''),
             ])
         );
+        $scopeQs = [
+            'target_scope' => $storageScope,
+            'website_code' => (string)($workScope['website_code'] ?? ''),
+            'store_code' => (string)($workScope['store_code'] ?? ''),
+            'channel_code' => (string)($workScope['channel_code'] ?? ''),
+        ];
+        $this->assign('smtp_enable_service_url', $this->_url->getBackendUrl('smtp/backend/config/enableService', $scopeQs));
+        $this->assign('smtp_disable_service_url', $this->_url->getBackendUrl('smtp/backend/config/disableService', $scopeQs));
+        $this->assign('smtp_create_account_url', $this->_url->getBackendUrl('smtp/backend/config/createSmtpAccount', $scopeQs));
+        $this->assign('smtp_reset_account_url', $this->_url->getBackendUrl('smtp/backend/config/resetSmtpAccountPassword', $scopeQs));
+        $this->assign('smtp_set_relay_url', $this->_url->getBackendUrl('smtp/backend/config/setRelayService', $scopeQs));
         $this->assignScopeVars($workScope);
         return $this->fetch('Weline_Smtp::backend/Config');
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postEnableService(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $storageScope = (string)$workScope['storage_scope'];
+        $mode = trim((string)$this->request->getPost('domain_mode', 'type'));
+        $domain = $mode === 'pool'
+            ? trim((string)$this->request->getPost('pool_domain', ''))
+            : trim((string)$this->request->getPost('typed_domain', ''));
+        $expectedIp = trim((string)$this->request->getPost('expected_ip', ''));
+        $relay = (int)$this->request->getPost('relay_service', 0) === 1;
+        /** @var SmtpServiceEnableService $svc */
+        $svc = ObjectManager::getInstance(SmtpServiceEnableService::class);
+        $result = $svc->enable($domain, $storageScope, $expectedIp, $relay);
+        if (!empty($result['success'])) {
+            $this->getMessageManager()->addSuccess((string)$result['message']);
+        } else {
+            $this->getMessageManager()->addError((string)($result['message'] ?? __('启用失败')));
+        }
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postDisableService(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $storageScope = (string)$workScope['storage_scope'];
+        /** @var SmtpServiceEnableService $svc */
+        $svc = ObjectManager::getInstance(SmtpServiceEnableService::class);
+        $result = $svc->disable($storageScope);
+        $this->getMessageManager()->addSuccess((string)($result['message'] ?? __('已关闭')));
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postSetRelayService(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $storageScope = (string)$workScope['storage_scope'];
+        $state = $this->data->getServiceState($storageScope);
+        if (empty($state['enabled'])) {
+            $this->getMessageManager()->addError((string)__('请先启用 Smtp 服务'));
+            $this->redirect($this->scopedConfigUrl($workScope));
+
+            return '';
+        }
+        $on = (int)$this->request->getPost('relay_service', 0) === 1;
+        $this->data->setServiceState([
+            'enabled' => '1',
+            'domain_name' => (string)($state['domain_name'] ?? ''),
+            'smtp_hostname' => (string)($state['smtp_hostname'] ?? ''),
+            'relay_service' => $on ? '1' : '0',
+            'pool_domain_id' => (string)(int)($state['pool_domain_id'] ?? 0),
+        ], $storageScope);
+        $this->getMessageManager()->addSuccess(
+            $on ? (string)__('中继服务已开启') : (string)__('中继服务已关闭')
+        );
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postCreateSmtpAccount(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $storageScope = (string)$workScope['storage_scope'];
+        $local = trim((string)$this->request->getPost('local_part', ''));
+        $role = trim((string)$this->request->getPost('account_role', SmtpAccount::ROLE_SUBMIT));
+        $display = trim((string)$this->request->getPost('display_name', ''));
+        /** @var SmtpAccountManageService $svc */
+        $svc = ObjectManager::getInstance(SmtpAccountManageService::class);
+        $result = $svc->createAccount($local, $role, $display, $storageScope);
+        if (!empty($result['success'])) {
+            $once = (string)($result['password_once'] ?? '');
+            $msg = (string)$result['message'];
+            if ($once !== '') {
+                $msg .= ' ' . (string)__('密码（仅一次）：%{1}', [$once]);
+            }
+            $this->getMessageManager()->addSuccess($msg);
+        } else {
+            $this->getMessageManager()->addError((string)($result['message'] ?? __('创建失败')));
+        }
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postResetSmtpAccountPassword(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $accountId = (int)$this->request->getPost('smtp_account_id', 0);
+        /** @var SmtpAccountManageService $svc */
+        $svc = ObjectManager::getInstance(SmtpAccountManageService::class);
+        $result = $svc->resetPassword($accountId);
+        if (!empty($result['success'])) {
+            $once = (string)($result['password_once'] ?? '');
+            $msg = (string)$result['message'];
+            if ($once !== '') {
+                $msg .= ' ' . (string)__('密码（仅一次）：%{1}', [$once]);
+            }
+            $this->getMessageManager()->addSuccess($msg);
+        } else {
+            $this->getMessageManager()->addError((string)($result['message'] ?? __('重置失败')));
+        }
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
     }
 
     #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]

@@ -46,8 +46,24 @@ class MailDomain extends Model
     #[Col('text', nullable: true, comment: 'DNS 检测结果JSON')]
     public const schema_fields_DNS_STATUS_JSON = 'dns_status_json';
 
-    #[Col('int', nullable: true, comment: '默认 Smtp 提交账号 ID（可后台改绑）')]
+    /** @deprecated 邮局⊥Smtp：业务停用，列保留兼容已部署库 */
+    #[Col('int', nullable: true, comment: '（停用）旧默认 Smtp 提交账号 ID')]
     public const schema_fields_DEFAULT_SMTP_ACCOUNT_ID = 'default_smtp_account_id';
+
+    #[Col('varchar', 255, nullable: true, comment: '企业邮箱外投 smarthost 主机')]
+    public const schema_fields_OUTBOUND_RELAY_HOST = 'outbound_relay_host';
+
+    #[Col('int', nullable: true, comment: '企业邮箱外投 smarthost 端口')]
+    public const schema_fields_OUTBOUND_RELAY_PORT = 'outbound_relay_port';
+
+    #[Col('varchar', 255, nullable: true, comment: '企业邮箱外投 smarthost 用户名')]
+    public const schema_fields_OUTBOUND_RELAY_USERNAME = 'outbound_relay_username';
+
+    #[Col('text', nullable: true, comment: '企业邮箱外投 smarthost 密码密封')]
+    public const schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED = 'outbound_relay_password_sealed';
+
+    #[Col('varchar', 16, default: 'starttls', comment: '外投 TLS：starttls|smtps|none')]
+    public const schema_fields_OUTBOUND_RELAY_TLS = 'outbound_relay_tls';
 
     #[Col('datetime', nullable: true, comment: '最后检测时间')]
     public const schema_fields_LAST_CHECKED_AT = 'last_checked_at';

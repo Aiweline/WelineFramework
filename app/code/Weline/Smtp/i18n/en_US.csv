@@ -85,6 +85,14 @@ settings,settings
 邮件配置项管理,"Email config item management"
 查看邮件配置,"View email settings"
 查看邮件配置项,"View email config items"
+启用失败,启用失败
+已关闭,已关闭
+"请先启用 Smtp 服务","请先启用 Smtp 服务"
+中继服务已开启,中继服务已开启
+中继服务已关闭,中继服务已关闭
+密码（仅一次）：%{1},密码（仅一次）：%{1}
+创建失败,创建失败
+重置失败,重置失败
 完成,完成
 失败,失败
 分流邮箱已挂接,分流邮箱已挂接
@@ -144,7 +152,7 @@ copy,copy
 "发件人账户写入当前作用范围；切换网站范围后按新范围加载。未覆盖时继承 Global。","Sender accounts write to current scope; after switching website scope reload for new scope. Uncovered inherits Global."
 在统一配置中心打开,"Open in unified config center"
 作用范围,Scope
-"一键确保 contact@ 域名邮箱，写入 mail_account 传输并挂接渠道。已有分流邮箱时默认只补未绑定，不会冲掉分流；需要全渠切回 contact 时在 URL 加 rebind=1。","One click ensures contact@, writes a mail_account transport, and binds channels. Existing routed mailboxes are kept unless rebind=1."
+"旧「一键绑邮局账号」已停用：请先启用上方 Smtp 服务并创建账户，再手工配置传输。","旧「一键绑邮局账号」已停用：请先启用上方 Smtp 服务并创建账户，再手工配置传输。"
 用自建邮局一键配置,"One-click self-hosted mail setup"
 分流：新建邮局邮箱并挂渠道,"Route: create mailbox and bind channels"
 "默认全渠走 contact@。若某业务要独立发件身份，填写 local_part、勾选渠道后提交即可。","All channels use contact@ by default. Create a local_part and select channels for a separate From identity."
@@ -168,11 +176,34 @@ copy,copy
 "暂无模块注册发信渠道。业务模块需 Extends 实现 MailChannelProviderInterface。","No module-registered send channels yet. Business modules must Extends implement MailChannelProviderInterface."
 绑定传输账户,"Bind transfer account"
 说明,Description
-"<strong>发信路径</strong>：外部 SMTP 手工填连接；自建邮局一键会确保 contact@ 并写 mail_account 传输、挂接渠道（已有分流时默认不冲绑）。","<strong>发信路径</strong>：外部 SMTP 手工填连接；自建邮局一键会确保 contact@ 并写 mail_account 传输、挂接渠道（已有分流时默认不冲绑）。"
+"<strong>Smtp 服务</strong>：与邮局企业邮箱拆分。先启用（池选或自填域名，DNS 解析通过后入域名池出证），再建 Smtp 账户；可另开中继服务拷贝凭据给外部。","<strong>Smtp 服务</strong>：与邮局企业邮箱拆分。先启用（池选或自填域名，DNS 解析通过后入域名池出证），再建 Smtp 账户；可另开中继服务拷贝凭据给外部。"
+"<strong>发信路径</strong>：外部 SMTP 手工填连接；或选用已启用的 Smtp 账户作传输。","<strong>发信路径</strong>：外部 SMTP 手工填连接；或选用已启用的 Smtp 账户作传输。"
 "<strong>传输账户管理</strong>：录入 SMTP 连接；可在账户上直接用标签绑定发信渠道。","<strong>Transfer account management</strong>: enter SMTP connection; bind send channels with tags directly on the account."
 <strong>发信渠道绑定</strong>：按渠道选择传输账户；也可稍后在此集中调整。,"<strong>Send channel binding</strong>: pick transfer accounts per channel; or adjust centrally here later."
 "上方用 Tab 切换两个分区，无需整页上下翻找。","Use Tabs above to switch the two sections; no need to scroll the whole page."
 账号/渠道选择使用系统可搜索标签（theme:search-select），支持搜索。,"Account/channel selection uses system searchable tags (theme:search-select) with search support."
+"Smtp 服务（独立于邮局）","Smtp 服务（独立于邮局）"
+已启用,已启用
+中继服务开,中继服务开
+关闭中继服务,关闭中继服务
+开启中继服务,开启中继服务
+"关闭 Smtp 服务","关闭 Smtp 服务"
+"新建账户 local_part","新建账户 local_part"
+角色,角色
+提交账号,提交账号
+中继账号（需已开中继服务）,中继账号（需已开中继服务）
+创建并显示一次密码,创建并显示一次密码
+重置密码,重置密码
+"启用时录入域名：须 DNS 已解析，才会统一进入域名池并申请证书。可外接，不必是本机站。","启用时录入域名：须 DNS 已解析，才会统一进入域名池并申请证书。可外接，不必是本机站。"
+域名来源,域名来源
+从域名池选择,从域名池选择
+自己填写（可外接）,自己填写（可外接）
+域名池,域名池
+请选择,请选择
+"自填域名或 smtp.主机","自填域名或 smtp.主机"
+"预期解析 IP（可选）","预期解析 IP（可选）"
+同时开启中继服务（允许创建可拷贝给外部的中继账号）,同时开启中继服务（允许创建可拷贝给外部的中继账号）
+启用并入池出证,启用并入池出证
 当前路径,"Current path"
 "未绑定渠道 %{1} 个","%{1} unbound channel(s)"
 已有分流,Routed
@@ -337,14 +368,22 @@ Smtp配置,"Smtp configuration"
 系统,System
 官方商城客户服务,"Official store customer service"
 "周一至周五 9:00 - 18:00","Mon–Fri 9:00–18:00"
-"无法确保默认 Smtp 提交账号","无法确保默认 Smtp 提交账号"
-"默认 Smtp 账号结果缺少 account_id","默认 Smtp 账号结果缺少 account_id"
-"已确保默认 Smtp %{1}。","已确保默认 Smtp %{1}。"
+"邮局与 Smtp 已拆分：请在 Smtp 配置中启用服务（选池或自填域名，DNS 通过后入池），创建 Smtp 账户后再绑定渠道传输。","邮局与 Smtp 已拆分：请在 Smtp 配置中启用服务（选池或自填域名，DNS 通过后入池），创建 Smtp 账户后再绑定渠道传输。"
 请至少选择一个发信渠道,请至少选择一个发信渠道
 未知发信渠道：%{1},未知发信渠道：%{1}
 分流邮箱开通失败,分流邮箱开通失败
 分流邮箱结果无效,分流邮箱结果无效
 "已将 %{1} 挂到 %{2} 个渠道（传输 %{3}）。","已将 %{1} 挂到 %{2} 个渠道（传输 %{3}）。"
+"请选择或填写 Smtp 域名","请选择或填写 Smtp 域名"
+"DNS 未解析通过，不能入池","DNS 未解析通过，不能入池"
+入域名池失败：%{1},入域名池失败：%{1}
+入域名池失败,入域名池失败
+"Smtp 已启用：DNS 已通并已入域名池申请证书","Smtp 已启用：DNS 已通并已入域名池申请证书"
+"Smtp 服务已关闭（域名池记录保留；账户停止新建）","Smtp 服务已关闭（域名池记录保留；账户停止新建）"
+主机名为空,主机名为空
+"主机 %{1} 尚未解析到 A/AAAA，不能入域名池","主机 %{1} 尚未解析到 A/AAAA，不能入域名池"
+"主机 %{1} 解析到 %{2}，与预期 %{3} 不符","主机 %{1} 解析到 %{2}，与预期 %{3} 不符"
+"DNS 已解析","DNS 已解析"
 "异步/CLI 发信必须显式传入 scope 或 website_code","Async/CLI send must pass scope or website_code explicitly"
 "异步/CLI 发信必须显式传入 locale，或确保网站有默认语言","Async/CLI send must pass locale explicitly, or ensure website has a default language"
 未标注渠道,"Unlabeled channel"
@@ -355,12 +394,26 @@ Global,Global
 "已同步自建邮局传输账户 %{1}，并将 %{2} 个发信渠道切到该传输。请发送测试邮件确认。","Synced self-hosted transport %{1} and pointed %{2} channel(s) to it. Send a test email to confirm."
 "已同步自建邮局传输账户 %{1}，并补齐 %{2} 个未绑定渠道。请发送测试邮件确认。","Synced self-hosted transport %{1} and bound %{2} unbound channel(s). Send a test email to confirm."
 "真实邮局账号请在传输账户中填写 SMTP 密码后再测试。","For real mailboxes, set the SMTP password on the transport before testing."
+"请先启用 Smtp 并完成域名入池","请先启用 Smtp 并完成域名入池"
+请先开启中继服务再创建中继账号,请先开启中继服务再创建中继账号
+账号名格式无效,账号名格式无效
+"该 Smtp 账户已存在","该 Smtp 账户已存在"
+密码密封失败：%{1},密码密封失败：%{1}
+"Smtp 账户保存失败","Smtp 账户保存失败"
+"Smtp 账户已创建，请立即复制密码","Smtp 账户已创建，请立即复制密码"
+"Smtp 账户不存在","Smtp 账户不存在"
+密码已重置，请立即复制,密码已重置，请立即复制
 配置项不齐全%{1},"Configuration item is incomplete %{1}"
 "发件人配置不完整：缺少 host 或 username","Sender configuration incomplete: missing host or username"
 "SMTP Host 未配置","SMTP Host is not configured"
 "SMTP 用户名未配置","SMTP username is not configured"
 接受者邮箱为空：请正确设置接收邮箱！,"Recipient email is empty: Please set the receiving email correctly!"
 发送者邮箱为空：请正确设置发件邮箱！,"Sender email is empty: please set the sending email correctly!"
+"一键确保 contact@ 域名邮箱，写入 mail_account 传输并挂接渠道。已有分流邮箱时默认只补未绑定，不会冲掉分流；需要全渠切回 contact 时在 URL 加 rebind=1。","One click ensures contact@, writes a mail_account transport, and binds channels. Existing routed mailboxes are kept unless rebind=1."
+"<strong>发信路径</strong>：外部 SMTP 手工填连接；自建邮局一键会确保 contact@ 并写 mail_account 传输、挂接渠道（已有分流时默认不冲绑）。","<strong>发信路径</strong>：外部 SMTP 手工填连接；自建邮局一键会确保 contact@ 并写 mail_account 传输、挂接渠道（已有分流时默认不冲绑）。"
+"无法确保默认 Smtp 提交账号","无法确保默认 Smtp 提交账号"
+"默认 Smtp 账号结果缺少 account_id","默认 Smtp 账号结果缺少 account_id"
+"已确保默认 Smtp %{1}。","已确保默认 Smtp %{1}。"
 "无法确保 contact@ 邮局账号","无法确保 contact@ 邮局账号"
 "contact@ 账号创建结果缺少 account_id","contact@ 账号创建结果缺少 account_id"
 "已确保 %{1}。","已确保 %{1}。"

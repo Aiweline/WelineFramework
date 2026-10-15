@@ -6,36 +6,27 @@ namespace Weline\Smtp\Test\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Smtp 一键默认全部中继：ensureDefaultSmtpAccount + rebindAll 默认 true。
+ * 邮局⊥Smtp：一键 ensure 不再调用 mail ensureDefaultSmtpAccount。
  */
 final class MailSmtpBootstrapDefaultRelayContractTest extends TestCase
 {
-    public function testBootstrapUsesDefaultSmtpAccountNotContact(): void
+    public function testBootstrapNoLongerEnsuresMailDefaultSmtp(): void
     {
         $path = BP . '/app/code/Weline/Smtp/Service/MailSmtpBootstrapService.php';
         $src = (string) \file_get_contents($path);
-        self::assertStringContainsString("'ensureDefaultSmtpAccount'", $src);
-        self::assertStringContainsString('default_smtp_account_id', $src);
-        self::assertStringContainsString('$doRebind = $rebindAll ?? true', $src);
-        self::assertStringNotContainsString(
-            "'ensureContactAccount'",
-            $this->bootstrapEnsureBody($src)
-        );
+        $body = $this->bootstrapEnsureBody($src);
+        self::assertStringNotContainsString("'ensureDefaultSmtpAccount'", $body);
+        self::assertStringContainsString('邮局与 Smtp 已拆分', $body);
     }
 
-    public function testProvisionerPrefersSmtpLocal(): void
+    public function testEnableServiceDnsBeforePoolContract(): void
     {
-        $path = BP . '/app/code/Weline/Smtp/Service/MailAccountTransportProvisioner.php';
+        $path = BP . '/app/code/Weline/Smtp/Service/SmtpServiceEnableService.php';
         $src = (string) \file_get_contents($path);
-        self::assertMatchesRegularExpression(
-            "/preferredLocals\s*=\s*\[[^\]]*['\"]smtp['\"]/",
-            $src
-        );
-        $smtpPos = strpos($src, "'smtp'");
-        $contactPos = strpos($src, "'contact'");
-        self::assertNotFalse($smtpPos);
-        self::assertNotFalse($contactPos);
-        self::assertLessThan($contactPos, $smtpPos);
+        self::assertStringContainsString('assertDnsResolved', $src);
+        self::assertStringContainsString('ensurePublicDnsHostnamesInPool', $src);
+        self::assertStringContainsString('request_certificate', $src);
+        self::assertStringContainsString('normalizeDomainInput', $src);
     }
 
     private function bootstrapEnsureBody(string $src): string

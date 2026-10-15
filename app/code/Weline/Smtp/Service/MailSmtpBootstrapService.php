@@ -66,75 +66,17 @@ class MailSmtpBootstrapService
         int $domainId = 0,
         ?bool $rebindAll = null,
     ): array {
-        // 全部默认中继：优先默认 Smtp 提交账号（初值 smtp@，后台可改绑）；contact@ 仍只做人收。
-        $smtpDefault = $this->queryMail('ensureDefaultSmtpAccount', [
-            'domain_id' => $domainId,
-        ]);
-        if ($smtpDefault === null || empty($smtpDefault['success'])) {
-            return [
-                'success' => false,
-                'message' => (string)($smtpDefault['message'] ?? __('无法确保默认 Smtp 提交账号')),
-                'account_id' => 0,
-                'transport_code' => '',
-                'bound_channels' => 0,
-                'created_mailbox' => false,
-                'rebind_all' => false,
-            ];
-        }
-
-        $accountId = (int)($smtpDefault['default_smtp_account_id'] ?? $smtpDefault['account_id'] ?? 0);
-        if ($accountId <= 0) {
-            $accountId = (int)($smtpDefault['account_id'] ?? 0);
-        }
-        if ($accountId <= 0) {
-            return [
-                'success' => false,
-                'message' => (string)__('默认 Smtp 账号结果缺少 account_id'),
-                'account_id' => 0,
-                'transport_code' => '',
-                'bound_channels' => 0,
-                'created_mailbox' => !empty($smtpDefault['created']),
-                'rebind_all' => false,
-            ];
-        }
-
-        // 全渠默认绑中继；调用方可显式传 false 仅补未绑定。
-        $doRebind = $rebindAll ?? true;
-        $ensured = $this->provisioner()->ensure($scope, $accountId, $doRebind);
-        if (empty($ensured['success'])) {
-            return array_merge($ensured, [
-                'created_mailbox' => !empty($smtpDefault['created']),
-                'account_id' => $accountId,
-            ]);
-        }
-
-        $passwordOnce = trim((string)($smtpDefault['smtp_password_once'] ?? ''));
-        if ($passwordOnce !== '') {
-            $this->applySmtpPasswordToTransport(
-                $scope,
-                (string)($ensured['transport_code'] ?? MailAccountTransportProvisioner::TRANSPORT_CODE),
-                $passwordOnce
-            );
-        }
-
-        $message = (string)($ensured['message'] ?? '');
-        if (!empty($smtpDefault['created'])) {
-            $message = (string)__('已确保默认 Smtp %{1}。', [(string)($smtpDefault['email'] ?? 'smtp@')])
-                . ' ' . $message;
-        }
-
+        // 邮局⊥Smtp：不再经 mail ensureDefaultSmtpAccount 开通。
         return [
-            'success' => true,
-            'message' => $message,
-            'account_id' => $accountId,
-            'email' => (string)($smtpDefault['email'] ?? ''),
-            'transport_code' => (string)($ensured['transport_code'] ?? ''),
-            'bound_channels' => (int)($ensured['bound_channels'] ?? 0),
-            'created_transport' => !empty($ensured['created_transport']),
-            'created_mailbox' => !empty($smtpDefault['created']),
-            'needs_password' => !empty($ensured['needs_password']) && $passwordOnce === '',
-            'is_fake' => !empty($smtpDefault['is_fake']),
-            'rebind_all' => $doRebind,
+            'success' => false,
+            'message' => (string)__(
+                '邮局与 Smtp 已拆分：请在 Smtp 配置中启用服务（选池或自填域名，DNS 通过后入池），创建 Smtp 账户后再绑定渠道传输。'
+            ),
+            'account_id' => 0,
+            'transport_code' => '',
+            'bound_channels' => 0,
+            'created_mailbox' => false,
+            'rebind_all' => false,
         ];
     }
 

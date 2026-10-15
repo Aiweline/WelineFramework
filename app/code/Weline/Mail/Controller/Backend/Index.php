@@ -281,7 +281,7 @@ class Index extends BackendController
             ->save();
 
         $message = (string)__('邮箱域名状态已更新');
-        // 启用域名：contact@（人收）+ 默认 Smtp 提交账号（可后台改绑）
+        // 启用域名：仅企业邮箱 contact@。Smtp 中继在 Smtp 模块独立启用，不在邮局开通。
         if ($status === 'active') {
             try {
                 /** @var \Weline\Mail\Service\MailAccountEnsureService $ensure */
@@ -307,25 +307,6 @@ class Index extends BackendController
                         : (string)__('自动开通 contact@ 失败');
                 }
 
-                $smtpDefault = $ensure->ensureDefaultSmtpAccount($domainId);
-                if (!empty($smtpDefault['success'])) {
-                    $smtpEmail = (string)($smtpDefault['email'] ?? '');
-                    $once = (string)($smtpDefault['smtp_password_once'] ?? '');
-                    if (!empty($smtpDefault['created']) && $once !== '') {
-                        $parts[] = (string)__(
-                            '默认 Smtp 提交账号 %{1} 已开通，密码（仅一次）：%{2}',
-                            [$smtpEmail, $once]
-                        );
-                    } elseif ($smtpEmail !== '') {
-                        $parts[] = (string)__('默认 Smtp 提交账号 %{1} 已就绪', [$smtpEmail]);
-                    }
-                } else {
-                    $detail = (string)($smtpDefault['message'] ?? '');
-                    $parts[] = $detail !== ''
-                        ? (string)__('自动开通默认 Smtp 账号失败：%{1}', [$detail])
-                        : (string)__('自动开通默认 Smtp 账号失败');
-                }
-
                 $message = (string)__('域名已启用') . '；' . implode('；', $parts);
             } catch (\Throwable $e) {
                 w_log_error(
@@ -344,24 +325,90 @@ class Index extends BackendController
     }
 
     /**
-     * 后台改绑域名默认 Smtp 提交账号（全部默认中继跟此指针）。
+     * @deprecated Smtp 已与邮局拆分；保留入口避免旧书签 404，一律提示去 Smtp 启用。
      */
     public function postSetDefaultSmtpAccount(): string
     {
+        return $this->respondFormResult(
+            410,
+            (string)__('默认 Smtp 提交已迁至 Smtp 模块：请在「Smtp 配置」中启用并自配域名与账户，邮局不再开通 Smtp。')
+        );
+    }
+
+    public function postSaveOutboundRelay(): string
+    {
         $domainId = (int)$this->request->getParam('domain_id', 0);
-        $accountId = (int)$this->request->getParam('account_id', 0);
-        /** @var \Weline\Mail\Service\MailAccountEnsureService $ensure */
-        $ensure = ObjectManager::getInstance(\Weline\Mail\Service\MailAccountEnsureService::class);
-        $result = $ensure->setDefaultSmtpAccount($domainId, $accountId);
-        $code = !empty($result['success']) ? 200 : (int)($result['code'] ?? 422);
-        if ($code < 400 && empty($result['success'])) {
-            $code = 422;
+        /** @var MailDomain $domain */
+        $domain = ObjectManager::getInstance(MailDomain::class)->clear()->load($domainId);
+        if (!$domain->getId()) {
+            return $this->respondFormResult(404, __('邮箱域名不存在'));
+        }
+        $host = strtolower(trim((string)$this->request->getParam('outbound_relay_host', '')));
+        $port = (int)$this->request->getParam('outbound_relay_port', 587);
+        $user = trim((string)$this->request->getParam('outbound_relay_username', ''));
+        $password = (string)$this->request->getParam('outbound_relay_password', '');
+        $tls = strtolower(trim((string)$this->request->getParam('outbound_relay_tls', 'starttls')));
+        if (!in_array($tls, ['starttls', 'smtps', 'none'], true)) {
+            $tls = 'starttls';
+        }
+        if ($port < 1 || $port > 65535) {
+            $port = 587;
+        }
+        $domain->setData(MailDomain::schema_fields_OUTBOUND_RELAY_HOST, $host !== '' ? $host : null)
+            ->setData(MailDomain::schema_fields_OUTBOUND_RELAY_PORT, $host !== '' ? $port : null)
+            ->setData(MailDomain::schema_fields_OUTBOUND_RELAY_USERNAME, $user !== '' ? $user : null)
+            ->setData(MailDomain::schema_fields_OUTBOUND_RELAY_TLS, $tls)
+            ->setData(MailDomain::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+        if (trim($password) !== '') {
+            try {
+                /** @var \Weline\Mail\Service\MailOutboundRelaySecretService $secrets */
+                $secrets = ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySecretService::class);
+                $domain->setData(
+                    MailDomain::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED,
+                    $secrets->seal($password)
+                );
+            } catch (\Throwable $e) {
+                return $this->respondFormResult(500, __('外投密码密封失败：%{1}', [$e->getMessage()]));
+            }
+        }
+        if ($host === '') {
+            $domain->setData(MailDomain::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED, null);
+        }
+        $domain->save();
+        /** @var \Weline\Mail\Service\MailOutboundRelaySyncService $sync */
+        $sync = ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySyncService::class);
+        $result = $sync->syncAll();
+        $msg = (string)__('外投 smarthost 已保存');
+        if (!empty($result['message'])) {
+            $msg .= '；' . (string)$result['message'];
         }
 
-        return $this->respondFormResult(
-            $code,
-            (string)($result['message'] ?? __('保存默认 Smtp 账号失败'))
-        );
+        return $this->respondFormResult(!empty($result['success']) ? 200 : 500, $msg);
+    }
+
+    public function postSetAccountOutboundRelay(): string
+    {
+        $accountId = (int)$this->request->getParam('account_id', 0);
+        $enabled = (int)$this->request->getParam('outbound_relay_enabled', 0) === 1 ? 1 : 0;
+        /** @var MailAccount $account */
+        $account = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);
+        if (!$account->getId()) {
+            return $this->respondFormResult(404, __('邮箱账号不存在'));
+        }
+        $account->setData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED, $enabled)
+            ->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
+            ->save();
+        /** @var \Weline\Mail\Service\MailOutboundRelaySyncService $sync */
+        $sync = ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySyncService::class);
+        $result = $sync->syncAll();
+        $msg = $enabled
+            ? (string)__('已开启该账号外投中继')
+            : (string)__('已关闭该账号外投中继');
+        if (!empty($result['message'])) {
+            $msg .= '；' . (string)$result['message'];
+        }
+
+        return $this->respondFormResult(!empty($result['success']) ? 200 : 500, $msg);
     }
 
     /**

@@ -59,6 +59,12 @@ class Data
     public const key_smtp_mail_shell_regions = 'smtp_mail_shell_regions';
     /** 建站进度：当前 scope 已通过测试确认 */
     public const key_smtp_setup_confirmed = 'smtp_setup_confirmed';
+    /** Smtp 独立服务：是否启用（与邮局拆分） */
+    public const key_smtp_service_enabled = 'smtp_service_enabled';
+    public const key_smtp_service_domain = 'smtp_service_domain';
+    public const key_smtp_service_hostname = 'smtp_service_hostname';
+    public const key_smtp_service_relay = 'smtp_service_relay';
+    public const key_smtp_service_pool_domain_id = 'smtp_service_pool_domain_id';
     public const TRANSPORT_ID_PATTERN = '/^[A-Za-z][A-Za-z0-9_]*$/';
 
     private const AREA = ConfigReader::area_BACKEND;
@@ -503,6 +509,71 @@ class Data
     }
 
     /** @return array<string, string> */
+    /**
+     * @return array{
+     *   enabled: bool,
+     *   domain_name: string,
+     *   smtp_hostname: string,
+     *   relay_service: bool,
+     *   pool_domain_id: int
+     * }
+     */
+    public function getServiceState(?string $scope = null): array
+    {
+        $scope = $this->resolveScope($scope);
+        $read = function (string $key) use ($scope): string {
+            try {
+                $val = $this->reader->getConfig(
+                    $key,
+                    'Weline_Smtp',
+                    self::AREA,
+                    null,
+                    $scope,
+                    ConfigReader::LOCALE_DEFAULT,
+                );
+
+                return $val !== null && $val !== '' ? trim((string)$val) : '';
+            } catch (\Throwable) {
+                return '';
+            }
+        };
+
+        return [
+            'enabled' => $read(self::key_smtp_service_enabled) === '1',
+            'domain_name' => $read(self::key_smtp_service_domain),
+            'smtp_hostname' => $read(self::key_smtp_service_hostname),
+            'relay_service' => $read(self::key_smtp_service_relay) === '1',
+            'pool_domain_id' => (int)$read(self::key_smtp_service_pool_domain_id),
+        ];
+    }
+
+    /**
+     * @param array{
+     *   enabled?: string,
+     *   domain_name?: string,
+     *   smtp_hostname?: string,
+     *   relay_service?: string,
+     *   pool_domain_id?: string
+     * } $state
+     */
+    public function setServiceState(array $state, ?string $scope = null): void
+    {
+        $scope = $this->resolveScope($scope);
+        $map = [
+            'enabled' => self::key_smtp_service_enabled,
+            'domain_name' => self::key_smtp_service_domain,
+            'smtp_hostname' => self::key_smtp_service_hostname,
+            'relay_service' => self::key_smtp_service_relay,
+            'pool_domain_id' => self::key_smtp_service_pool_domain_id,
+        ];
+        foreach ($map as $field => $key) {
+            if (!array_key_exists($field, $state)) {
+                continue;
+            }
+            $this->writeScoped($key, trim((string)$state[$field]), 'Weline_Smtp', $scope, 'string');
+        }
+    }
+
     public function getChannelBindings(string $module = 'Weline_Smtp', ?string $scope = null): array
     {
         $scope = $this->resolveScope($scope);

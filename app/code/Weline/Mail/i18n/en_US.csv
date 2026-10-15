@@ -55,16 +55,16 @@
 "邮局域名/账号已可用。请打开 Smtp配置 点「用自建邮局一键配置」：自动确保 contact@、写入传输并绑定全部发信渠道，然后点「测试」跑通发信。","邮局域名/账号已可用。请打开 Smtp配置 点「用自建邮局一键配置」：自动确保 contact@、写入传输并绑定全部发信渠道，然后点「测试」跑通发信。"
 "请先完成：① 安装启动邮局引擎 ② 开通并启用真实域名 ③ 配好 MX/SPF/DKIM。完成后本任务会引导 Smtp 一键确保 contact@ 并测发。","请先完成：① 安装启动邮局引擎 ② 开通并启用真实域名 ③ 配好 MX/SPF/DKIM。完成后本任务会引导 Smtp 一键确保 contact@ 并测发。"
 未找到匹配邮箱,"No matching mailbox found"
-id属性不能为空,id属性不能为空
-"mail:account:select 当前仅支持单选","mail:account:select 当前仅支持单选"
-请选择邮箱,"Please select a mailbox"
-搜索邮箱或显示名,"Search by email or display name"
 企业邮箱沟通,"Business email chat"
 关闭,Close
 发送,Send
 沟通历史,"Chat history"
 暂无沟通记录,"No chat records"
 加载中…,Loading...
+id属性不能为空,id属性不能为空
+"mail:account:select 当前仅支持单选","mail:account:select 当前仅支持单选"
+请选择邮箱,"Please select a mailbox"
+搜索邮箱或显示名,"Search by email or display name"
 请先登录,"Please sign in first"
 请选择已绑定的本机企业邮箱,"Select a bound local business email"
 只能使用本人已启用的企业邮箱账号,"You may only use your own active enterprise mailbox"
@@ -85,14 +85,15 @@ id属性不能为空,id属性不能为空
 "联系邮箱 %{1} 已就绪","联系邮箱 %{1} 已就绪"
 "自动开通 contact@ 失败：%{1}","自动开通 contact@ 失败：%{1}"
 "自动开通 contact@ 失败","自动开通 contact@ 失败"
-"默认 Smtp 提交账号 %{1} 已开通，密码（仅一次）：%{2}","默认 Smtp 提交账号 %{1} 已开通，密码（仅一次）：%{2}"
-"默认 Smtp 提交账号 %{1} 已就绪","默认 Smtp 提交账号 %{1} 已就绪"
-"自动开通默认 Smtp 账号失败：%{1}","自动开通默认 Smtp 账号失败：%{1}"
-"自动开通默认 Smtp 账号失败","自动开通默认 Smtp 账号失败"
 域名已启用,域名已启用
 启用域名后自动开通邮箱失败：%{1},启用域名后自动开通邮箱失败：%{1}
 域名已启用，但自动开通邮箱异常：%{1},域名已启用，但自动开通邮箱异常：%{1}
-"保存默认 Smtp 账号失败","保存默认 Smtp 账号失败"
+"默认 Smtp 提交已迁至 Smtp 模块：请在「Smtp 配置」中启用并自配域名与账户，邮局不再开通 Smtp。","默认 Smtp 提交已迁至 Smtp 模块：请在「Smtp 配置」中启用并自配域名与账户，邮局不再开通 Smtp。"
+外投密码密封失败：%{1},外投密码密封失败：%{1}
+"外投 smarthost 已保存","外投 smarthost 已保存"
+邮箱账号不存在,"Mailbox account does not exist"
+已开启该账号外投中继,已开启该账号外投中继
+已关闭该账号外投中继,已关闭该账号外投中继
 请选择已启用的本机企业邮箱账号,"Select an enabled local business email account"
 邮件发送失败,"Failed to send email"
 "邮箱域名 ID 无效。","The email domain ID is invalid."
@@ -378,13 +379,12 @@ STARTTLS（推荐）,"STARTTLS (recommended)"
 "先完成本机 Stalwart 引擎安装与管理连接，再配置下方域名 DNS。可在服务器上运行检测与安装计划命令。","Finish local Stalwart engine install and management connection first, then configure domain DNS below. Run the check and install-plan commands on the server."
 检测企业邮箱服务环境,"Detect corporate email service environment"
 查看或执行安装计划,"View or run the install plan"
-"Stalwart TLS / ACME（默认必需）","Stalwart TLS / ACME（默认必需）"
-"客户端与系统 Smtp 走 587/465/993 需要有效证书。请在 Stalwart Admin 为 mail 与 smtp 主机名启用 ACME（Let’s Encrypt），消除日志中的 No TLS certificates available。","客户端与系统 Smtp 走 587/465/993 需要有效证书。请在 Stalwart Admin 为 mail 与 smtp 主机名启用 ACME（Let’s Encrypt），消除日志中的 No TLS certificates available。"
-证书须覆盖：,证书须覆盖：
+"邮件主机 TLS（走域名池，不必手开 Stalwart ACME）","邮件主机 TLS（走域名池，不必手开 Stalwart ACME）"
+"mail / smtp 主机名随 DNS 一键同步入 Websites 域名池并申请证书后即可使用；无需在 Stalwart Admin 单独启用 Let’s Encrypt。若日志仍报 No TLS certificates available，先确认域名池已有对应主机与有效证书。","mail / smtp 主机名随 DNS 一键同步入 Websites 域名池并申请证书后即可使用；无需在 Stalwart Admin 单独启用 Let’s Encrypt。若日志仍报 No TLS certificates available，先确认域名池已有对应主机与有效证书。"
+须入池并出证：,须入池并出证：
 与,与
-"HTTP-01 需公网可访问校验路径；或改用 DNS-01（Cloudflare API）。","HTTP-01 需公网可访问校验路径；或改用 DNS-01（Cloudflare API）。"
-配置后执行,配置后执行
-并复查,并复查
+"一键写 DNS 成功后会自动","一键写 DNS 成功后会自动"
+（含申请证书）。,（含申请证书）。
 方向,Direction
 操作提示,"Operator tip"
 STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port."
@@ -407,7 +407,7 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "选择器默认 default。公钥来自本机 Stalwart；未生成前清单会显示「公钥待生成」，生成后摘要与完整值会出现在此。","Selector defaults to default. The public key comes from local Stalwart; until generated the checklist shows pending, then the summary and full value appear here."
 "一键同步默认写入 p=quarantine；确认对齐后可再升级 reject。","One-click sync writes p=quarantine by default; raise to reject after alignment is confirmed."
 默认必需,默认必需
-"默认 Smtp 提交主机。必须 DNS-only，且 Stalwart/ACME 证书需覆盖该主机名。","默认 Smtp 提交主机。必须 DNS-only，且 Stalwart/ACME 证书需覆盖该主机名。"
+"Smtp 模块启用时的提交主机（可与企业邮同域或外接）。须 DNS 解析正确后入域名池出证。","Smtp 模块启用时的提交主机（可与企业邮同域或外接）。须 DNS 解析正确后入域名池出证。"
 "本机邮局 IP %{1}","Local mailer IP %{1}"
 "DNS 已通过","DNS passed"
 期望记录,"Expected record"
@@ -429,13 +429,19 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 预览变更,"Preview changes."
 "应用 DNS","Applying DNS."
 "改用 OAuth 重新授权（可选）","Switch to OAuth re-authorize (optional)"
-"启用域名时会自动开通 contact@（人收）与默认 Smtp 提交账号（初值 smtp@，密码仅提示一次）；系统发信默认全部走该中继，可在下方改绑。","启用域名时会自动开通 contact@（人收）与默认 Smtp 提交账号（初值 smtp@，密码仅提示一次）；系统发信默认全部走该中继，可在下方改绑。"
+"启用域名时自动开通 contact@（企业邮箱人收）。Smtp 中继请在「Smtp 配置」独立启用（可选池内域名或自填外接域名，DNS 解析通过后入域名池出证）。","启用域名时自动开通 contact@（企业邮箱人收）。Smtp 中继请在「Smtp 配置」独立启用（可选池内域名或自填外接域名，DNS 解析通过后入域名池出证）。"
 暂停域名,"Suspend domain."
 启用域名,"Enable domain."
-"默认 Smtp 提交账号（中继）","默认 Smtp 提交账号（中继）"
-请选择账号,请选择账号
-保存默认中继,保存默认中继
-"提交主机为 smtp.%{1}:587（需 ACME 证书）。外投 QQ 等仍依赖云厂商出站 TCP/25。","提交主机为 smtp.%{1}:587（需 ACME 证书）。外投 QQ 等仍依赖云厂商出站 TCP/25。"
+"企业邮箱外投 smarthost","企业邮箱外投 smarthost"
+"未勾选外投的邮箱仍走 MX:25。可填外部 SMTP，或粘贴 Smtp 模块账户凭据。本机自指且云厂商禁 25 时外投仍会失败。","未勾选外投的邮箱仍走 MX:25。可填外部 SMTP，或粘贴 Smtp 模块账户凭据。本机自指且云厂商禁 25 时外投仍会失败。"
+用户名,用户名
+密码（留空不改）,密码（留空不改）
+TLS,TLS
+无,无
+"保存外投 smarthost","保存外投 smarthost"
+账号外投开关,账号外投开关
+外投走中继,外投走中继
+保存,保存
 收件邮箱格式不正确,"Recipient email format is invalid"
 主题和正文不能为空,"Subject and body are required"
 邮箱地址必须属于所选域名,"Email address must belong to the selected domain name"
@@ -444,7 +450,6 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 邮箱账号已开通,"Mailbox provisioned"
 "邮箱账号开通失败，请检查 Stalwart 管理连接","Email account creation failed. Please check the Stalwart management connection."
 邮箱账号状态参数无效,"Invalid email account status parameter."
-邮箱账号不存在,"Mailbox account does not exist"
 "请先通过“开通/重置密码”在 Stalwart 中开通该账号","Please first activate or reset the password for this account within Stalwart."
 "无法确认 Stalwart 账号状态，请检查管理连接","Unable to verify the Stalwart account status. Please check the management connection."
 邮箱账号状态已更新,"Email account status updated."
@@ -492,6 +497,10 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 邮箱账号已暂停,"Mailbox account has been suspended"
 邮箱账号已恢复启用,"Mailbox account has been restored to active"
 邮箱账号已恢复为待同步状态,"Mailbox account has been restored to pending sync"
+"已生成外投路由载荷（无 Stalwart 管理凭据，未下发）","已生成外投路由载荷（无 Stalwart 管理凭据，未下发）"
+外投路由下发失败：%{1},外投路由下发失败：%{1}
+外投路由已下发（检测到可能本机自指，外投未必可达）,外投路由已下发（检测到可能本机自指，外投未必可达）
+外投路由已下发,外投路由已下发
 未找到已启用的邮局域名。请先在企业邮箱中开通并启用域名。,未找到已启用的邮局域名。请先在企业邮箱中开通并启用域名。
 "存在多个已启用的真实邮局域名，请指定 domain_id 后再一键配置。","存在多个已启用的真实邮局域名，请指定 domain_id 后再一键配置。"
 未找到可用的邮局域名。,未找到可用的邮局域名。
@@ -574,6 +583,24 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "检测企业邮箱 DNS 记录","Detect corporate email DNS records"
 "检测 MX/SPF/DKIM/DMARC 记录是否存在","Check if MX/SPF/DKIM/DMARC records exist"
 邮件服务主机名,"Mail service host name"
+"默认 Smtp 提交账号 %{1} 已开通，密码（仅一次）：%{2}","默认 Smtp 提交账号 %{1} 已开通，密码（仅一次）：%{2}"
+"默认 Smtp 提交账号 %{1} 已就绪","默认 Smtp 提交账号 %{1} 已就绪"
+"自动开通默认 Smtp 账号失败：%{1}","自动开通默认 Smtp 账号失败：%{1}"
+"自动开通默认 Smtp 账号失败","自动开通默认 Smtp 账号失败"
+"保存默认 Smtp 账号失败","保存默认 Smtp 账号失败"
+"默认 Smtp 提交主机。必须 DNS-only，且 Stalwart/ACME 证书需覆盖该主机名。","默认 Smtp 提交主机。必须 DNS-only，且 Stalwart/ACME 证书需覆盖该主机名。"
+"启用域名时会自动开通 contact@（人收）与默认 Smtp 提交账号（初值 smtp@，密码仅提示一次）；系统发信默认全部走该中继，可在下方改绑。","启用域名时会自动开通 contact@（人收）与默认 Smtp 提交账号（初值 smtp@，密码仅提示一次）；系统发信默认全部走该中继，可在下方改绑。"
+"默认 Smtp 提交账号（中继）","默认 Smtp 提交账号（中继）"
+请选择账号,请选择账号
+保存默认中继,保存默认中继
+"提交主机为 smtp.%{1}:587（证书随域名池）。外投 QQ 等仍依赖云厂商出站 TCP/25。","提交主机为 smtp.%{1}:587（证书随域名池）。外投 QQ 等仍依赖云厂商出站 TCP/25。"
+"Stalwart TLS / ACME（默认必需）","Stalwart TLS / ACME（默认必需）"
+"客户端与系统 Smtp 走 587/465/993 需要有效证书。请在 Stalwart Admin 为 mail 与 smtp 主机名启用 ACME（Let’s Encrypt），消除日志中的 No TLS certificates available。","客户端与系统 Smtp 走 587/465/993 需要有效证书。请在 Stalwart Admin 为 mail 与 smtp 主机名启用 ACME（Let’s Encrypt），消除日志中的 No TLS certificates available。"
+证书须覆盖：,证书须覆盖：
+"HTTP-01 需公网可访问校验路径；或改用 DNS-01（Cloudflare API）。","HTTP-01 需公网可访问校验路径；或改用 DNS-01（Cloudflare API）。"
+配置后执行,配置后执行
+并复查,并复查
+"提交主机为 smtp.%{1}:587（需 ACME 证书）。外投 QQ 等仍依赖云厂商出站 TCP/25。","提交主机为 smtp.%{1}:587（需 ACME 证书）。外投 QQ 等仍依赖云厂商出站 TCP/25。"
 "域名已启用；已自动开通 %{1}，SMTP 密码（仅显示一次）：%{2}","Domain enabled; auto-created %{1}. SMTP password (shown once): %{2}"
 "域名已启用；联系邮箱 %{1} 已就绪。","Domain enabled; contact mailbox %{1} is ready."
 "域名已启用，但自动开通 contact@ 失败：%{1}","Domain enabled, but auto-creating contact@ failed: %{1}"

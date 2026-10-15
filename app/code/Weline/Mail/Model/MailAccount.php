@@ -39,6 +39,9 @@ class MailAccount extends Model
     #[Col('varchar', 32, default: 'pending', comment: '账号状态')]
     public const schema_fields_STATUS = 'status';
 
+    #[Col('tinyint', default: 0, comment: '企业邮箱外投是否走域级 smarthost')]
+    public const schema_fields_OUTBOUND_RELAY_ENABLED = 'outbound_relay_enabled';
+
     #[Col('varchar', 255, nullable: true, comment: '本地登录密码哈希')]
     public const schema_fields_PASSWORD_HASH = 'password_hash';
 

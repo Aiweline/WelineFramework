@@ -106,6 +106,61 @@ final class StalwartManagementAdapter
         return $id;
     }
 
+    /**
+     * 确保 Stalwart 侧域名存在；已存在则返回其 id。
+     */
+    public function ensureDomain(string $domainName): string
+    {
+        $domainName = strtolower(trim($domainName));
+        if ($domainName === '' || !preg_match('/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/', $domainName)) {
+            throw new \InvalidArgumentException('域名格式无效。');
+        }
+        try {
+            return $this->domainId($domainName);
+        } catch (\DomainException) {
+            // continue create
+        }
+        $result = $this->managementCall('x:Domain/set', [
+            'create' => [
+                'domain' => [
+                    '@type' => 'Domain',
+                    'name' => $domainName,
+                ],
+            ],
+        ]);
+        $id = (string)($result['created']['domain']['id'] ?? '');
+        if ($id === '') {
+            $type = (string)($result['notCreated']['domain']['type'] ?? '');
+            throw new \RuntimeException('Stalwart 域名开通失败' . ($type !== '' ? '：' . $type : '。'));
+        }
+
+        return $id;
+    }
+
+    /**
+     * 持久化外投 Relay/route 意图；Stalwart Settings 对象写入随后续 API 对齐。
+     *
+     * @param list<array<string, mixed>> $routes
+     * @param array<string, mixed> $strategyRoute
+     */
+    public function applyOutboundRelayRoutes(array $routes, array $strategyRoute): void
+    {
+        $dir = rtrim((string)BP, '/\\') . '/var/mail';
+        if (!is_dir($dir) && !@mkdir($dir, 0750, true) && !is_dir($dir)) {
+            throw new \RuntimeException('无法写入 var/mail 外投路由目录。');
+        }
+        $payload = [
+            'updated_at' => gmdate('c'),
+            'routes' => $routes,
+            'strategy_route' => $strategyRoute,
+        ];
+        $path = $dir . '/outbound-relay-routes.json';
+        $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        if ($json === false || @file_put_contents($path, $json) === false) {
+            throw new \RuntimeException('外投路由载荷落盘失败。');
+        }
+    }
+
     public function provisionOrResetAccount(string $mailbox, string $password, int $quotaMb): string
     {
         [$localPart, $domainName] = $this->splitMailbox($mailbox);
