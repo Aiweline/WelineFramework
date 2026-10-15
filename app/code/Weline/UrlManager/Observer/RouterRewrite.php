@@ -420,9 +420,11 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             ?? $_SERVER['ORIGIN_REQUEST_URI']
             ?? ''
         );
-        $originIsInternal = \str_contains(\strtolower($originRequestUri), 'pagebuilder/frontend/page');
+        $originIsInternal = \str_contains(\strtolower($originRequestUri), 'pagebuilder/frontend/page')
+            || \Weline\Framework\Http\Fpc\FpcEngineIdentity::isGuideControllerUri($originRequestUri);
         $existingIsPretty = $existingOrigin !== ''
-            && !\str_contains(\strtolower($existingOrigin), 'pagebuilder/frontend/page');
+            && !\str_contains(\strtolower($existingOrigin), 'pagebuilder/frontend/page')
+            && !\Weline\Framework\Http\Fpc\FpcEngineIdentity::isGuideControllerUri($existingOrigin);
         if ($originIsInternal) {
             // Prefer any non-internal origin (parser ORIGIN may still hold /en_US/about
             // or the stripped /about). Never let the controller path become ORIGIN.
