@@ -79,6 +79,14 @@ final class StorefrontFloatLayerContractTest extends TestCase
         self::assertStringContainsString('data-weline-load="storefrontFloatLayer"', $host);
         self::assertStringContainsString('ensureFloatLayerModuleLoadAttr', $host);
         self::assertStringContainsString('storefront-float-load-on-layer-v1', $host);
+        self::assertStringContainsString('healBakedChineseFloatEdgeLabels', $host);
+        self::assertStringContainsString('storefront-float-edge-label-heal-v1', $host);
+        // Published synthetic host defaults English (heal search needles may still mention 展开悬浮).
+        self::assertStringContainsString('data-edge-recall-label="Expand float"', $host);
+        self::assertMatchesRegularExpression(
+            '/publishedSlotLayerMarkup[\s\S]*?data-edge-recall-label="Expand float"/',
+            $host
+        );
 
         $stale = '<div id="w-storefront-float-layer" class="w-storefront-float-layer" data-storefront-float-layer aria-live="off">'
             . '<div data-slot-id="storefront-float-start" data-testid="storefront-float-start"></div>'
@@ -86,6 +94,10 @@ final class StorefrontFloatLayerContractTest extends TestCase
             . '</div>';
         $healed = \Weline\Theme\Service\LayoutEntity\StorefrontFloatLayerHost::ensureInHtml($stale);
         self::assertStringContainsString('data-weline-load="storefrontFloatLayer"', $healed);
+
+        // Runtime heal needs full App State (w_env); covered by MISS storefront probe.
+        self::assertStringContainsString("'展开悬浮'", $host);
+        self::assertStringContainsString("'Expand float'", $host);
     }
 
     public function testFloatLayerCssOwnsStickyClearanceOnce(): void
@@ -134,6 +146,11 @@ final class StorefrontFloatLayerContractTest extends TestCase
         self::assertStringContainsString('localStorage', $js);
         self::assertStringContainsString('data-float-edge-dismiss', $js);
         self::assertStringContainsString('data-float-edge-recall', $js);
+        // Last-resort a11y when attrs missing must not hardcode Chinese on en_US.
+        self::assertStringContainsString("'Expand float'", $js);
+        self::assertStringContainsString("'Collapse float'", $js);
+        self::assertStringNotContainsString("|| '展开悬浮'", $js);
+        self::assertStringNotContainsString("|| '收起悬浮'", $js);
         self::assertStringContainsString('is-edge-collapsed', $js);
         self::assertStringContainsString('translateX(-100%)', $js);
         self::assertStringContainsString('translateX(100%)', $js);
@@ -153,6 +170,9 @@ final class StorefrontFloatLayerContractTest extends TestCase
         self::assertStringContainsString('data-edge-recall-label', $footer);
         self::assertStringContainsString("__('收起悬浮')", $footer);
         self::assertStringContainsString("__('展开悬浮')", $footer);
+        self::assertStringContainsString('Parser::prefetchWords', $footer);
+        self::assertStringContainsString('Expand float', $footer);
+        self::assertStringContainsString('Collapse float', $footer);
         self::assertStringContainsString('is-edge-collapsed', $footer);
         self::assertStringContainsString('storefront-float-edge-transform-clear-v1', $footer);
         self::assertStringContainsString('will-change:auto', $footer);

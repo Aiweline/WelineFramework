@@ -61,7 +61,7 @@ final class ThemeUpgradeCommandContractTest extends TestCase
 
     public function testCliMetadataIsNotTreatedAsAModuleFilter(): void
     {
-        [$themeName, $modules, $allVersions, $scope, $layout, $option] = ThemeUpgradeCommand::parseArguments([
+        [$themeName, $modules, $allVersions, $scope, $layout, $option, $flushFpc] = ThemeUpgradeCommand::parseArguments([
             0 => 'theme:upgrade',
             1 => '-t',
             2 => 'weshop-motor',
@@ -75,11 +75,12 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertSame('', $scope);
         self::assertSame('', $layout);
         self::assertSame('', $option);
+        self::assertFalse($flushFpc);
     }
 
     public function testNamedThemeFlagFromAssociativeArgs(): void
     {
-        [$themeName, $modules, $allVersions, $scope, $layout, $option] = ThemeUpgradeCommand::parseArguments([
+        [$themeName, $modules, $allVersions, $scope, $layout, $option, $flushFpc] = ThemeUpgradeCommand::parseArguments([
             'command' => 'theme:upgrade',
             't' => 'daocharms',
         ]);
@@ -90,11 +91,12 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertSame('', $scope);
         self::assertSame('', $layout);
         self::assertSame('', $option);
+        self::assertFalse($flushFpc);
     }
 
     public function testParseArgumentsRecognizesAllAndScopeFilters(): void
     {
-        [$themeName, $modules, $allVersions, $scope, $layout, $option] = ThemeUpgradeCommand::parseArguments([
+        [$themeName, $modules, $allVersions, $scope, $layout, $option, $flushFpc] = ThemeUpgradeCommand::parseArguments([
             0 => 'theme:upgrade',
             1 => '--all',
             2 => '-t',
@@ -109,11 +111,12 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertSame('default.default.default', $scope);
         self::assertSame('', $layout);
         self::assertSame('', $option);
+        self::assertFalse($flushFpc);
     }
 
     public function testParseArgumentsRecognizesLayoutAndOptionCascade(): void
     {
-        [$themeName, $modules, $allVersions, $scope, $layout, $option] = ThemeUpgradeCommand::parseArguments([
+        [$themeName, $modules, $allVersions, $scope, $layout, $option, $flushFpc] = ThemeUpgradeCommand::parseArguments([
             0 => 'theme:upgrade',
             1 => '-t',
             2 => 'hanfu',
@@ -129,6 +132,7 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertSame('', $scope);
         self::assertSame('homepage', $layout);
         self::assertSame('default', $option);
+        self::assertFalse($flushFpc);
 
         [, , , , $layoutOnly, $optionOnly] = ThemeUpgradeCommand::parseArguments([
             0 => 'theme:upgrade',
@@ -137,6 +141,40 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         ]);
         self::assertSame('checkout', $layoutOnly);
         self::assertSame('', $optionOnly);
+    }
+
+    public function testParseArgumentsRecognizesForceFlushStorefrontFpc(): void
+    {
+        [, , , , , , $flushPositional] = ThemeUpgradeCommand::parseArguments([
+            0 => 'theme:upgrade',
+            1 => '-t',
+            2 => 'hanfu',
+            3 => '-f',
+        ]);
+        self::assertTrue($flushPositional);
+
+        [, , , , , , $flushLong] = ThemeUpgradeCommand::parseArguments([
+            0 => 'theme:upgrade',
+            1 => '--force',
+            2 => '-t',
+            3 => 'hanfu',
+        ]);
+        self::assertTrue($flushLong);
+
+        [, , , , , , $flushAssoc] = ThemeUpgradeCommand::parseArguments([
+            'command' => 'theme:upgrade',
+            't' => 'hanfu',
+            'f' => true,
+        ]);
+        self::assertTrue($flushAssoc);
+
+        $source = (string)file_get_contents(dirname(__DIR__, 4) . '/Console/Theme/Upgrade.php');
+        self::assertStringContainsString('flushStorefrontFpcAfterUpgrade', $source);
+        self::assertStringContainsString('ThemeRuntimeCacheCleaner', $source);
+        self::assertStringContainsString('clearAllThemeRelatedCaches', $source);
+        self::assertStringContainsString('theme_upgrade_force_fpc', $source);
+        self::assertStringContainsString('-f, --force', $source);
+        self::assertStringContainsString('升级并清店面 FPC/CDN', $source);
     }
 
     public function testParseArgumentsRejectsOptionWithoutLayout(): void

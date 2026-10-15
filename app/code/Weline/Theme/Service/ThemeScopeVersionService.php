@@ -336,6 +336,197 @@ final class ThemeScopeVersionService
         return $revision;
     }
 
+    /**
+     * Advance the Scope-published storefront generation without stealing the editor draft.
+     *
+     * Copies chrome from the current published ThemeScopeVersion into a new sealed row and
+     * markPublished() it. Does NOT call createRevisionFrom() (that unsetCurrent + drafts).
+     * Identity for Cookie / HTML bake / handshake is the new version id.
+     */
+    public function advancePublishedStorefrontGeneration(
+        int $themeId,
+        string $scope,
+        string $storeMode = 'normal',
+        string $area = 'frontend',
+        string $actor = 'theme_upgrade_storefront_generation',
+    ): ?ThemeScopeVersion {
+        $scope = $this->normalizeScope($scope);
+        $storeMode = $storeMode !== '' ? $storeMode : 'normal';
+        $area = \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
+        if ($themeId < 1 || $scope === '') {
+            return null;
+        }
+
+        $source = $this->getPublished($themeId, $scope, $storeMode, $area);
+        if (!$source instanceof ThemeScopeVersion || $source->getVersionId() < 1) {
+            return null;
+        }
+
+        // getPublished may walk ancestors — advance the owner that actually holds published.
+        $ownerScope = $this->normalizeScope((string)$source->getScope());
+        $ownerStoreMode = $source->getStoreMode() !== '' ? $source->getStoreMode() : $storeMode;
+        $ownerArea = \in_array($source->getArea(), ['frontend', 'backend'], true)
+            ? $source->getArea()
+            : $area;
+        if ($ownerScope === '') {
+            return null;
+        }
+
+        $contentRevision = max(1, (int)$source->getContentRevision());
+        $nextNumber = $this->nextVersionNumber($themeId, $ownerScope);
+
+        // Capture editor draft before markPublished — some selection writes clear it.
+        $selectionBefore = $this->loadSelection($themeId, $ownerScope, $ownerStoreMode, $ownerArea);
+        $preservedDraftId = (int)($selectionBefore['draft_version_id'] ?? 0);
+
+        $revision = clone $this->versionModel;
+        $revision->reset()
+            ->clearData()
+            ->setThemeId($themeId)
+            ->setScope($ownerScope)
+            ->setScopeKind($source->getScopeKind())
+            ->setWebsiteId($source->getWebsiteId())
+            ->setStoreMode($ownerStoreMode)
+            ->setArea($ownerArea)
+            ->setVersionNumber($nextNumber)
+            ->setVersionName('v' . $nextNumber)
+            ->setVersionType(ThemeScopeVersion::TYPE_PUBLISH)
+            ->setLifecycle(ThemeScopeVersion::LIFECYCLE_SEALED)
+            ->setContentRevision($contentRevision)
+            ->setCreationSourceKind(\Weline\Theme\Api\Version\ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT)
+            ->setChromePayload($source->getChromePayload())
+            ->setStructureKey($source->getStructureKey() !== ''
+                ? $source->getStructureKey()
+                : $this->hashStructure($source->getChromePayload()))
+            ->setParentVersionId($source->getVersionId())
+            ->setIsCurrent(false)
+            ->setIsPublished(false)
+            ->setDescription($actor !== '' ? ('by ' . $actor) : null)
+            ->save();
+
+        $this->markPublished($revision);
+
+        // Restore draft when it was a real editor pointer (not the newly published row).
+        if ($preservedDraftId > 0 && $preservedDraftId !== (int)$revision->getVersionId()) {
+            $this->persistSelectionDraft(
+                $themeId,
+                $ownerScope,
+                $ownerStoreMode,
+                $ownerArea,
+                $preservedDraftId,
+                (int)$revision->getVersionId(),
+                false,
+            );
+        }
+
+        return $revision;
+    }
+
+    /**
+     * Advance published storefront generation for every frontend Scope that currently
+     * holds a published ThemeScopeVersion for this theme (application owners + selection
+     * / is_published rows). Dedupes by resolved published owner so Channel/Store/Website
+     * probes that inherit the same published row advance once.
+     *
+     * @return list<int> new published version ids
+     */
+    public function advancePublishedStorefrontGenerationsForTheme(
+        int $themeId,
+        string $actor = 'theme_upgrade_storefront_generation',
+    ): array {
+        if ($themeId < 1) {
+            return [];
+        }
+
+        $ids = [];
+        $seenOwners = [];
+        foreach ($this->listFrontendPublishedOwnerProbes($themeId) as $probe) {
+            $scope = $probe['scope'];
+            $storeMode = $probe['store_mode'];
+            $area = $probe['area'];
+            $source = $this->getPublished($themeId, $scope, $storeMode, $area);
+            if (!$source instanceof ThemeScopeVersion || $source->getVersionId() < 1) {
+                continue;
+            }
+            $ownerScope = $this->normalizeScope((string)$source->getScope());
+            $ownerStoreMode = $source->getStoreMode() !== '' ? $source->getStoreMode() : $storeMode;
+            $ownerArea = \in_array($source->getArea(), ['frontend', 'backend'], true)
+                ? $source->getArea()
+                : $area;
+            $ownerKey = $themeId . '|' . $ownerScope . '|' . $ownerStoreMode . '|' . $ownerArea;
+            if ($ownerScope === '' || isset($seenOwners[$ownerKey])) {
+                continue;
+            }
+            $seenOwners[$ownerKey] = true;
+            $advanced = $this->advancePublishedStorefrontGeneration(
+                $themeId,
+                $ownerScope,
+                $ownerStoreMode,
+                $ownerArea,
+                $actor,
+            );
+            if ($advanced instanceof ThemeScopeVersion && $advanced->getVersionId() > 0) {
+                $ids[] = (int)$advanced->getVersionId();
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Probe scopes for storefront generation advance: application owners + the
+     * Scope currently chosen by ThemePublishedVersionRuntimeResolver (Channel/Store
+     * identity). Avoid scanning every historical e2e selection row.
+     *
+     * @return list<array{scope:string,store_mode:string,area:string}>
+     */
+    private function listFrontendPublishedOwnerProbes(int $themeId): array
+    {
+        $probes = [];
+        $push = static function (string $scope, string $storeMode = 'normal') use (&$probes): void {
+            $scope = \trim($scope);
+            if ($scope === '') {
+                return;
+            }
+            $storeMode = $storeMode !== '' ? $storeMode : 'normal';
+            $probes[] = [
+                'scope' => $scope,
+                'store_mode' => $storeMode,
+                'area' => 'frontend',
+            ];
+        };
+
+        try {
+            /** @var ThemeApplicationUsageService $usage */
+            $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
+            foreach ($usage->ownSolidifyTargetsForTheme($themeId) as $row) {
+                if (!\is_array($row) || ($row['area'] ?? '') !== 'frontend') {
+                    continue;
+                }
+                $push(
+                    (string)($row['version_owner_scope'] ?? ''),
+                    (string)($row['store_mode'] ?? 'normal'),
+                );
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (\class_exists(ThemePublishedVersionRuntimeResolver::class)) {
+                /** @var ThemePublishedVersionRuntimeResolver $resolver */
+                $resolver = ObjectManager::getInstance(ThemePublishedVersionRuntimeResolver::class);
+                $identity = $resolver->resolveGenerationIdentity($themeId);
+                $canonical = \trim((string)($identity['canonicalScope'] ?? ''));
+                if ($canonical !== '') {
+                    $push($canonical, 'normal');
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return $probes;
+    }
+
     private function loadFlagged(int $themeId, string $scope, string $flagField, string $storeMode, string $area): ?ThemeScopeVersion
     {
         $cacheKey = $this->flaggedCacheKey($themeId, $scope, $flagField, $storeMode, $area);

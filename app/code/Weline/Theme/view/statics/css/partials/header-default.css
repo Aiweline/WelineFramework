@@ -119,14 +119,15 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 .weline-header.is-compact .header-belt {
     min-height: var(--size-control-50);
-    padding: var(--spacing-xs) var(--spacing-md);
+    padding-block: var(--spacing-xs);
+    padding-inline: 0;
 }
 
 .weline-header.is-compact .header-logo img {
     height: calc(var(--header-logo-height) * 0.8); /* compact状态下使用配置高度的80% */
 }
 
-/* 主栏：背景全宽（与 notice / main-nav 同构），内容走 .header-belt-row-1 版心 */
+/* 主栏：背景全宽（与 notice / main-nav 同构），内容走 .header-belt-inner 版心 */
 .header-container {
     width: 100%;
     max-width: none;
@@ -283,26 +284,31 @@ textarea::-webkit-scrollbar-thumb:hover,
 /* ========== 顶部栏（nav-belt）- 亚马逊风格 ========== */
 .header-belt {
     display: flex;
-    flex-direction: column; /* 移动端改为纵向布局 */
+    flex-direction: column;
     position: relative;
     z-index: 1;
     background-color: var(--weline-chrome-bg-dark);
     color: var(--weline-theme-text-on-dark);
-    padding: var(--spacing-sm) var(--spacing-md);
+    /* 左右 gutter 归 .header-belt-inner；外层只保纵向 */
+    padding-block: var(--spacing-sm);
+    padding-inline: 0;
     min-height: var(--spacing-15);
     gap: 0;
     width: 100%;
+    box-sizing: border-box;
+}
+
+/* 版心：与 .header-site-notice-inner / .header-main-nav-inner 同构 */
+.header-belt-inner {
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline);
+    box-sizing: border-box;
 }
 
 /* 桌面端：Logo + 搜索 + Actions 同排；放得下就同排，放不下搜索换到下面 */
 @media (min-width: 769px) {
-    .header-belt {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--spacing-md);
-    }
-
     /*
      * Belt continuum owned by header-chrome-amazon.css (nowrap + search yield).
      * Do NOT re-declare flex-wrap:wrap / search own-row mid breakpoints here —
@@ -341,15 +347,12 @@ textarea::-webkit-scrollbar-thumb:hover,
     }
 }
 
-/* 第一行：Logo + Actions；版心宽（背景在外层 .header-container / .header-belt 满宽） */
+/* 第一行：Logo + Actions；宽度吃满版心内层 */
 .header-belt-row-1 {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    width: min(100%, var(--weline-layout-content-max-width));
-    max-width: 100%;
-    margin-inline: auto;
-    padding-inline: var(--weline-layout-content-padding-inline);
+    width: 100%;
     box-sizing: border-box;
     gap: var(--spacing-md);
     flex-shrink: 0;
@@ -3424,7 +3427,8 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     }
 
     .header-belt {
-        padding: var(--spacing-0_4) var(--weline-space-3) var(--spacing-0_55);
+        padding-block: var(--spacing-0_4) var(--spacing-0_55);
+        padding-inline: 0;
         gap: var(--spacing-0_45);
         min-height: 0;
     }
@@ -3763,7 +3767,8 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
 
 @media (max-width: 480px) {
     .header-belt {
-        padding: var(--spacing-1_5) var(--token-size-0-6rem) var(--spacing-sm);
+        padding-block: var(--spacing-1_5) var(--spacing-sm);
+        padding-inline: 0;
     }
 
     .header-logo img {

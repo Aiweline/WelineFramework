@@ -116,6 +116,12 @@ final class FooterContainerWidgetContractTest extends TestCase
         self::assertStringContainsString('position: fixed', $css);
         self::assertStringContainsString('[data-side="left"]', $css);
         self::assertStringContainsString('[data-side="right"]', $css);
+        self::assertStringContainsString('--footer-social-float-hit', $css);
+        self::assertStringContainsString('--footer-social-float-icon', $css);
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(\s*max-width:\s*560px\s*\)\s*\{[^}]*\.footer-social-float[^}]*display:\s*none/s',
+            $css,
+        );
         self::assertStringContainsString('var(--color-primary', $css);
         self::assertStringContainsString('linear-gradient(', $css);
         self::assertMatchesRegularExpression(

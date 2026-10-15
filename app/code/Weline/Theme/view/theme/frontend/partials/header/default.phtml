@@ -351,6 +351,8 @@ $defaultNavItemsFactory = static function (): array {
     <div class="header-container">
         <!-- 顶部栏：Logo + 配送地址 + 搜索 + 用户功能（参考亚马逊 nav-belt） -->
         <div class="header-belt w-surface-inverse" data-surface="inverse">
+            <!-- 版心：与 notice-inner / main-nav-inner 同构；外层 belt/container 满宽底色 -->
+            <div class="header-belt-inner">
             <!-- 第一行：Logo + 搜索 + Actions；宽屏同排，窄屏搜索换到下一行 -->
             <div class="header-belt-row-1">
                 <div class="header-belt-left">
@@ -523,6 +525,7 @@ $defaultNavItemsFactory = static function (): array {
                 </w:slot>
                 </div>
                 <w:hook>Weline_Theme::frontend::partials::header::actions-after</w:hook>
+            </div>
             </div>
         </div>
     </div>

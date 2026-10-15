@@ -21,16 +21,18 @@ final class ThemeDefaultContainerWidthContractTest extends TestCase
             $spacing
         );
         self::assertStringContainsString(
-            '--weline-layout-content-padding-inline: clamp(',
+            '--weline-layout-content-padding-inline: var(--spacing-container-padding);',
             $spacing
         );
-        self::assertStringContainsString(
+        self::assertStringNotContainsString(
+            'clamp(0px',
+            $spacing,
+            'content-padding-inline must not zero at ≥ max-width (edge flush).'
+        );
+        self::assertStringNotContainsString(
             'calc((var(--spacing-container-max-width) - 100vw) * 9999)',
-            $spacing
-        );
-        self::assertStringContainsString(
-            'var(--spacing-container-padding)',
-            $spacing
+            $spacing,
+            'Retired zero-at-wide formula must not return.'
         );
         self::assertSame(
             1,
@@ -53,12 +55,13 @@ final class ThemeDefaultContainerWidthContractTest extends TestCase
             $themeCss
         );
         self::assertStringContainsString(
-            '--weline-layout-content-padding-inline: clamp(',
+            '--weline-layout-content-padding-inline: var(--spacing-container-padding);',
             $themeCss
         );
-        self::assertStringContainsString(
-            'calc((var(--spacing-container-max-width) - 100vw) * 9999)',
-            $themeCss
+        self::assertStringNotContainsString(
+            'clamp(0px',
+            $themeCss,
+            'theme.css must not reintroduce zero-at-wide content padding.'
         );
         self::assertStringNotContainsString('1440px', $themeCss);
         self::assertStringNotContainsString('1280px', $themeCss);

@@ -93,9 +93,46 @@ final class ThemeRuntimeCacheCleaner
      */
     public function clearAllThemeRelatedCaches(?int $themeId = null, string $reason = 'theme_changed'): array
     {
+        // Storefront generation = Scope-published ThemeScopeVersion id (not system deploy).
+        // Advance published identity BEFORE purge/rewarm so Cookie / HTML bake / handshake share
+        // the same new id after staging→warm→promote.
+        $result = [
+            'reason' => $reason,
+            'theme_id' => $themeId,
+            'steps' => [],
+            'failures' => [],
+            'advanced_published_version_ids' => [],
+        ];
+        $this->runStep($result, 'advance_scope_published_storefront_generation', function () use ($themeId, $reason, &$result): void {
+            $actor = $reason !== '' ? $reason : 'theme_upgrade_storefront_generation';
+            /** @var ThemeScopeVersionService $versions */
+            $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
+            $ids = [];
+            if ($themeId !== null && $themeId > 0) {
+                $ids = $versions->advancePublishedStorefrontGenerationsForTheme($themeId, $actor);
+            } else {
+                try {
+                    /** @var ThemeApplicationUsageService $usage */
+                    $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
+                    foreach ($usage->frontendBoundThemeIds() as $boundId) {
+                        if ($boundId < 1) {
+                            continue;
+                        }
+                        foreach ($versions->advancePublishedStorefrontGenerationsForTheme($boundId, $actor) as $vid) {
+                            $ids[] = $vid;
+                        }
+                    }
+                } catch (\Throwable) {
+                }
+            }
+            $result['advanced_published_version_ids'] = $ids;
+        });
+
         // Skip nested staging warm — Shared/process purge below would wipe it.
         // Atomic closure: purge pointers first, then one final staging→warm→promote.
-        $result = $this->clearNonGlobalCaches($themeId, $reason, false);
+        $cleared = $this->clearNonGlobalCaches($themeId, $reason, false);
+        $result['steps'] = \array_merge($result['steps'], $cleared['steps'] ?? []);
+        $result['failures'] = \array_merge($result['failures'], $cleared['failures'] ?? []);
         $result['reason'] = $reason;
 
         $this->runStep($result, 'theme_namespace_generations_all', function (): void {

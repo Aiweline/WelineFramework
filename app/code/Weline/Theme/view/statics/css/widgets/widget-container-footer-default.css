@@ -1,5 +1,15 @@
-/* 悬浮社媒贴边收起：关键态内联兜底（layout CSS 缓存未刷新时仍可用） */
+/* 悬浮社媒贴边收起：架构尺寸 + 响应式不断缩小（手机很小；禁止直接 display:none） */
 .weline-footer .footer-social-float {
+    /* 图标 / 命中框 / 间距：随视口流体缩小（约桌面 16→平板 13→手机 9） */
+    --footer-social-float-icon: clamp(0.5625rem, 0.35rem + 0.9vw, 1rem);
+    --footer-social-float-hit: clamp(1.125rem, 0.7rem + 1.35vw, 1.75rem);
+    --footer-social-float-gap: clamp(0.125rem, 0.08rem + 0.35vw, 0.25rem);
+    --footer-social-float-pad-block: clamp(0.125rem, 0.08rem + 0.3vw, 0.25rem);
+    --footer-social-float-pad-inline: clamp(0.0625rem, 0.04rem + 0.2vw, 0.125rem);
+    --footer-social-float-toggle-width: clamp(0.75rem, 0.45rem + 0.85vw, 1.25rem);
+    --footer-social-float-rail: clamp(0.125rem, 0.08rem + 0.3vw, 0.25rem);
+    gap: var(--footer-social-float-gap);
+    padding: var(--footer-social-float-pad-block) var(--footer-social-float-pad-inline);
     transition: transform var(--weline-theme-duration-normal, 0.28s)
         var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
 }
@@ -7,7 +17,28 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--footer-social-float-gap);
+}
+/* 盖过 .footer-social-link 的 size-control-md；flex 项须 min-*-size:0 才能真正缩小 */
+.weline-footer .footer-social-float .footer-social-link.footer-social-float__link,
+.weline-footer .footer-social-float .footer-social-float__link {
+    box-sizing: border-box;
+    width: var(--footer-social-float-hit);
+    height: var(--footer-social-float-hit);
+    min-width: 0;
+    min-height: 0;
+    max-width: var(--footer-social-float-hit);
+    max-height: var(--footer-social-float-hit);
+}
+.weline-footer .footer-social-float .footer-social-float__link .footer-social-icon,
+.weline-footer .footer-social-float .footer-social-link .footer-social-icon,
+.weline-footer .footer-social-float .footer-social-icon {
+    width: var(--footer-social-float-icon);
+    height: var(--footer-social-float-icon);
+    min-width: 0;
+    min-height: 0;
+    max-width: var(--footer-social-float-icon);
+    max-height: var(--footer-social-float-icon);
 }
 .weline-footer .footer-social-float__toggle {
     position: absolute;
@@ -15,8 +46,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--weline-space-5);
-    height: calc(var(--size-icon-sm) + var(--spacing-sm));
+    width: var(--footer-social-float-toggle-width);
+    height: var(--footer-social-float-hit);
     margin: 0;
     padding: 0;
     color: var(--color-primary, var(--weline-chrome-primary));
@@ -32,6 +63,17 @@
         );
     cursor: pointer;
     appearance: none;
+}
+@media (max-width: 480px) {
+    .weline-footer .footer-social-float {
+        --footer-social-float-icon: 0.5rem;
+        --footer-social-float-hit: 1rem;
+        --footer-social-float-gap: 0.1rem;
+        --footer-social-float-pad-block: 0.1rem;
+        --footer-social-float-pad-inline: 0.05rem;
+        --footer-social-float-toggle-width: 0.65rem;
+        --footer-social-float-rail: 0.1rem;
+    }
 }
 .weline-footer .footer-social-float[data-side="left"] .footer-social-float__toggle {
     left: 100%;

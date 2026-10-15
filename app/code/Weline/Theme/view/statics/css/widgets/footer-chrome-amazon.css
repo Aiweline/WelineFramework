@@ -278,8 +278,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-xs);
-    padding: var(--spacing-xs) var(--spacing-0_5);
+    /* 尺寸由 widget-container-footer-default 的 --footer-social-float-* 流体 Token 管 */
+    gap: var(--footer-social-float-gap, var(--spacing-xs));
+    padding: var(--footer-social-float-pad-block, var(--spacing-xs))
+        var(--footer-social-float-pad-inline, var(--spacing-0_5));
     transform: translateY(-50%);
     color: var(--color-text-primary, var(--weline-chrome-text-primary));
     background:
@@ -314,7 +316,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--footer-social-float-gap, var(--spacing-xs));
 }
 
 .weline-footer .footer-social-float__toggle {
@@ -324,8 +326,8 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: var(--weline-space-5);
-    height: calc(var(--size-icon-sm) + var(--spacing-sm));
+    width: var(--footer-social-float-toggle-width, var(--weline-space-5));
+    height: var(--footer-social-float-hit, calc(var(--size-icon-sm) + var(--spacing-sm)));
     margin: 0;
     padding: 0;
     color: var(--color-primary, var(--weline-chrome-primary));
@@ -376,7 +378,7 @@
 
 .weline-footer .footer-social-float[data-side="left"] {
     left: max(0px, env(safe-area-inset-left, 0px));
-    border-left: var(--spacing-1) solid
+    border-left: var(--footer-social-float-rail, var(--spacing-1)) solid
         var(--color-primary, var(--weline-chrome-primary));
     border-radius: 0 var(--weline-radius-sm) var(--weline-radius-sm) 0;
 }
@@ -390,7 +392,7 @@
 
 .weline-footer .footer-social-float[data-side="right"] {
     right: max(0px, env(safe-area-inset-right, 0px));
-    border-right: var(--spacing-1) solid
+    border-right: var(--footer-social-float-rail, var(--spacing-1)) solid
         var(--color-primary, var(--weline-chrome-primary));
     border-radius: var(--weline-radius-sm) 0 0 var(--weline-radius-sm);
 }
@@ -428,9 +430,14 @@
     transform: none;
 }
 
+.weline-footer .footer-social-float .footer-social-link.footer-social-float__link,
 .weline-footer .footer-social-float .footer-social-float__link {
-    width: calc(var(--size-icon-sm) + var(--spacing-sm));
-    height: calc(var(--size-icon-sm) + var(--spacing-sm));
+    width: var(--footer-social-float-hit, calc(var(--size-icon-sm) + var(--spacing-sm)));
+    height: var(--footer-social-float-hit, calc(var(--size-icon-sm) + var(--spacing-sm)));
+    min-width: 0;
+    min-height: 0;
+    max-width: var(--footer-social-float-hit, calc(var(--size-icon-sm) + var(--spacing-sm)));
+    max-height: var(--footer-social-float-hit, calc(var(--size-icon-sm) + var(--spacing-sm)));
     color: var(--color-text-primary, var(--weline-chrome-text-primary));
     background: var(
         --color-primary-bg-subtle,
@@ -454,8 +461,8 @@
 }
 
 .weline-footer .footer-social-float .footer-social-float__link .footer-social-icon {
-    width: var(--size-icon-sm);
-    height: var(--size-icon-sm);
+    width: var(--footer-social-float-icon, var(--size-icon-sm));
+    height: var(--footer-social-float-icon, var(--size-icon-sm));
     color: inherit;
     fill: currentColor;
 }
@@ -468,11 +475,7 @@
     }
 }
 
-@media (max-width: 560px) {
-    .weline-footer .footer-social-float {
-        display: none;
-    }
-}
+/* 窄屏：继续缩小（Token 在 architecture CSS），禁止再 display:none 整条藏掉 */
 
 .weline-footer .footer-legal__links {
     display: flex;

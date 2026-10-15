@@ -20,16 +20,21 @@ final class ThemePublishHtmlDiskGenerationAtomicContractTest extends TestCase
         self::assertStringContainsString('clearNonGlobalCaches($themeId, $reason, false)', $src);
         self::assertStringContainsString('assertPromotedHtmlDiskMatchesStorefrontGeneration', $src);
         self::assertStringContainsString('StorefrontWarmupHttpClient', $src);
+        self::assertStringContainsString('advance_scope_published_storefront_generation', $src);
+        self::assertStringContainsString('advancePublishedStorefrontGenerationsForTheme', $src);
 
         $allPos = \strpos($src, 'function clearAllThemeRelatedCaches(');
         self::assertNotFalse($allPos);
-        $chunk = \substr($src, $allPos, 2200);
+        $chunk = \substr($src, $allPos, 5000);
+        $advancePos = \strpos($chunk, 'advance_scope_published_storefront_generation');
         $sharedPos = \strpos($chunk, 'wls_shared_fpc_full');
         $cdnPos = \strpos($chunk, 'cdn_full_page_purge');
         $warmPos = \strpos($chunk, "runStep(\$result, 'fpc_staging_warm_promote'");
+        self::assertNotFalse($advancePos);
         self::assertNotFalse($sharedPos);
         self::assertNotFalse($cdnPos);
         self::assertNotFalse($warmPos);
+        self::assertLessThan($sharedPos, $advancePos, 'scope published advance must run BEFORE shared purge');
         self::assertGreaterThan($sharedPos, $warmPos, 'staging warm must run AFTER shared purge');
         self::assertGreaterThan($cdnPos, $warmPos, 'staging warm must be LAST after CDN purge');
     }

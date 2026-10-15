@@ -2395,7 +2395,7 @@ body:is(.daocharms-storefront,.daocharms-page,:has(.weline-cart-shell),:has(.wel
  *
  * ⚠️ 版心：模块给 `.w-currency-guide` 的是 width:100% / max-width:100% ⇒ 1440 下实测贴边
  *   （x=0），设计稿左右各 48px。这里补内边距（与政策壳同口径，不用
- *   --weline-layout-content-padding-inline：它在 ≥1440 时求值为 0）。
+ *   --weline-layout-content-padding-inline：恒等于 --spacing-container-padding（不再 ≥版心归零）。
  * ⚠️ 链接色必须 !important：全局 `body a:not(…)`（11 枚 :not，特异性 (0,11,2)，
  *   见 daocharms-ritual.css）会把所有链接刷成 --color-link。本主题既定做法即 !important。
  * ========================================================================== */

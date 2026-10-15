@@ -23,6 +23,7 @@ use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService;
 use Weline\Theme\Service\ThemeDesignImageStaticUrl;
 use Weline\Theme\Service\ThemeResourceGateway;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeStaticNamespaceService;
 
 class Upgrade implements \Weline\Framework\Console\CommandInterface
@@ -65,7 +66,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        [$theme_name, $modules, $allVersions, $scopeFilter, $layoutType, $layoutOption] = self::parseArguments($args);
+        [
+            $theme_name,
+            $modules,
+            $allVersions,
+            $scopeFilter,
+            $layoutType,
+            $layoutOption,
+            $flushStorefrontFpc,
+        ] = self::parseArguments($args);
         $themes = $this->resolveThemesToUpgrade($theme_name);
         if ($themes === []) {
             throw new ConsoleException(__('未找到范围已绑定主题，请用 -t/--theme 指定主题名。'));
@@ -117,6 +126,55 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 'legacy' => (int)($cutover['purged_legacy'] ?? 0),
                 'count' => (int)($cutover['solidified'] ?? 0),
             ]
+        ));
+
+        // Opt-in：默认不碰 html-disk / Shared FPC / CDN；发版上线皮肤时加 -f 强制清并重烤。
+        if ($flushStorefrontFpc) {
+            $this->flushStorefrontFpcAfterUpgrade(
+                $theme_name !== '' ? ($themes[0] ?? null) : null,
+            );
+        }
+    }
+
+    /**
+     * Force-clear storefront FPC pools, WLS Shared FPC, CDN full-page cache,
+     * then staging→warm→promote (same path as formal compile / publish).
+     */
+    private function flushStorefrontFpcAfterUpgrade(?WelineTheme $theme): void
+    {
+        $themeId = ($theme instanceof WelineTheme && (int)$theme->getId() > 0)
+            ? (int)$theme->getId()
+            : null;
+        $this->printing->warning(__(
+            '强制清理店面 FPC / Shared FPC / CDN 全页缓存（-f）…'
+        ));
+        if ($themeId !== null) {
+            $this->printing->note(__('主题 ID：') . (string)$themeId);
+        } else {
+            $this->printing->note(__('范围：全部主题命名空间（未指定 -t）'));
+        }
+
+        /** @var ThemeRuntimeCacheCleaner $cleaner */
+        $cleaner = ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class);
+        $result = $cleaner->clearAllThemeRelatedCaches($themeId, 'theme_upgrade_force_fpc');
+        $steps = \is_array($result['steps'] ?? null) ? $result['steps'] : [];
+        $failures = \is_array($result['failures'] ?? null) ? $result['failures'] : [];
+        $ok = 0;
+        $fail = 0;
+        foreach ($steps as $step => $passed) {
+            if ($passed) {
+                $ok++;
+                continue;
+            }
+            $fail++;
+            $detail = \trim((string)($failures[(string)$step] ?? ''));
+            $this->printing->warning(
+                __('步骤失败：') . (string)$step . ($detail !== '' ? ' — ' . $detail : '')
+            );
+        }
+        $this->printing->success(__(
+            '店面 FPC/CDN 清理完成：成功 %{ok}，失败 %{fail}',
+            ['ok' => $ok, 'fail' => $fail]
         ));
     }
 
@@ -213,8 +271,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
-     * @return array{0:string,1:list<string>,2:bool,3:string,4:string,5:string}
-     *         themeName, modules, allVersions, scopeFilter, layoutType, layoutOption
+     * @return array{0:string,1:list<string>,2:bool,3:string,4:string,5:string,6:bool}
+     *         themeName, modules, allVersions, scopeFilter, layoutType, layoutOption, flushStorefrontFpc
      */
     public static function parseArguments(array $args): array
     {
@@ -235,6 +293,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $scopeFilter = '';
         $layoutType = '';
         $layoutOption = '';
+        $flushStorefrontFpc = false;
         for ($index = 0, $count = count($positionals); $index < $count; $index++) {
             $argument = $positionals[$index];
             if ($argument === '-t' || $argument === '--theme') {
@@ -273,6 +332,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $allVersions = true;
                 continue;
             }
+            if ($argument === '-f' || $argument === '--force') {
+                $flushStorefrontFpc = true;
+                continue;
+            }
             if (!str_starts_with($argument, '-')) {
                 $modules[] = $argument;
             }
@@ -308,11 +371,25 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $allVersions = true;
             }
         }
+        if (!$flushStorefrontFpc) {
+            $forceFlag = $args['f'] ?? $args['force'] ?? null;
+            if ($forceFlag === true || $forceFlag === 1 || $forceFlag === '1' || $forceFlag === '') {
+                $flushStorefrontFpc = true;
+            }
+        }
         if ($layoutOption !== '' && $layoutType === '') {
             throw new ConsoleException(__('指定了布局选项（-o/--option）时必须同时指定布局类型（-l/--layout）。'));
         }
 
-        return [$themeName, array_values(array_unique($modules)), $allVersions, $scopeFilter, $layoutType, $layoutOption];
+        return [
+            $themeName,
+            array_values(array_unique($modules)),
+            $allVersions,
+            $scopeFilter,
+            $layoutType,
+            $layoutOption,
+            $flushStorefrontFpc,
+        ];
     }
 
     private function copyThemeFile(string $source, string $destinationDirectory): void
@@ -516,7 +593,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return __('更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿）');
+        return __('更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿；-f 另清店面 FPC/CDN）');
     }
 
     public function help(): array|string
@@ -531,6 +608,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '-l, --layout <type>' => '仅固化指定布局类型（如 homepage / checkout）；省略则处理全部布局',
                 '-o, --option <name>' => '仅固化该布局下指定选项（如 default）；须同时提供 -l；省略 -o 则处理该布局下全部选项',
                 '-a, --all' => '部署并编译该主题（或全部站绑主题）下全部历史版本；默认仅当前正式版+草稿',
+                '-f, --force' => '升级后强制清理店面 FPC / Shared FPC / CDN 全页缓存并 staging→warm→promote（默认不加则只发静态+固化物）',
             ],
             [
                 'module...' => '可选：只处理设计主题下指定模块目录（如 Weline_Theme）',
@@ -543,6 +621,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '指定布局+选项' => 'php bin/w theme:upgrade -t hanfu -l homepage -o default',
                 '全部历史版本' => 'php bin/w theme:upgrade --all -t hanfu',
                 '指定主题+模块过滤' => 'php bin/w theme:upgrade -t daocharms Weline_Theme',
+                '升级并清店面 FPC/CDN' => 'php bin/w theme:upgrade -t hanfu -f',
             ]
         );
     }

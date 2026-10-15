@@ -80,19 +80,38 @@ html body.daocharms-pdp .product-native-detail .affiliate-share-guest[hidden] {
     opacity: 1 !important;
 }
 
-/* buybox 改为 grid 后，Share 占列 2；此处压过模块 inline style / UA */
+/* buybox：flex-wrap（禁 grid 列轨——Ask/Share 会污染 qty|Add 间距） */
 html body.daocharms-pdp .product-native-detail__buybox {
-    display: grid !important;
-    grid-template-columns: max-content max-content minmax(0, 1fr) !important;
-    align-items: baseline !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
     row-gap: 0.75rem !important;
-    column-gap: 0 !important;
+    column-gap: 0.65rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* 空 message 勿占 flex 行（文案为空仍可能有空白节点 → 一并藏） */
+html body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__message:empty {
+    display: none !important;
+}
+
+html body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__message {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
 }
 
 /* contents 下 Ask 包装器不是 buybox 元素树直系子 → 必须挂 actions > */
 html body.daocharms-pdp .product-native-detail__buybox > *,
 html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper {
-    grid-column: 1 / -1;
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 html body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__express,
@@ -100,11 +119,62 @@ html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.w
     display: none !important;
 }
 
+/* 桌面 UI07：qty-row/actions contents 后，qty|Add 成为 buybox 直系 flex 子 */
+@media screen and (min-width: 768px) {
+    html body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__qty-row {
+        display: contents !important;
+    }
+
+    html body.daocharms-pdp .product-native-detail__buybox > .product-native-detail__qty-row + .product-native-detail__actions {
+        display: contents !important;
+    }
+
+    html body.daocharms-pdp .product-native-detail__buybox .product-native-detail__qty-controls {
+        flex: 0 0 auto !important;
+        width: max-content !important;
+        max-width: 100% !important;
+        order: 10 !important;
+    }
+
+    html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.product-native-detail__add),
+    html body.daocharms-pdp .product-native-detail__actions > .weline-cart-product-add-to-cart,
+    html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.weline-cart-product-add-to-cart) {
+        flex: 1 1 12rem !important;
+        width: auto !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        order: 10 !important;
+    }
+
+    html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.product-native-detail__buy-now),
+    html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has(.weline-checkout-product-buy-now) {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        order: 20 !important;
+    }
+
+    html body.daocharms-pdp .product-native-detail__buybox .product-native-detail__wishlist,
+    html body.daocharms-pdp .product-native-detail__buybox .btn-wishlist {
+        order: 30 !important;
+        flex: 1 1 100% !important;
+        width: max-content !important;
+    }
+
+    html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([data-testid="product-help-pay"]),
+    html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([class*="friend_help_pay"]),
+    html body.daocharms-pdp .product-native-detail__buybox > .affiliate-share-panel,
+    html body.daocharms-pdp .product-native-detail__buybox > [data-testid="affiliate-share-panel"] {
+        order: 40 !important;
+    }
+}
+
 html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([data-testid="product-help-pay"]),
 html body.daocharms-pdp .product-native-detail__actions > .widget-wrapper:has([class*="friend_help_pay"]) {
-    grid-column: 1 !important;
+    flex: 0 0 auto !important;
     width: max-content !important;
-    justify-self: start !important;
+    max-width: 100% !important;
 }
 
 html body.daocharms-pdp .product-native-detail .affiliate-share-panel,
@@ -118,8 +188,7 @@ html body.daocharms-pdp .product-native-detail__buybox > .affiliate-share-panel 
     max-width: none !important;
     overflow: visible !important;
     vertical-align: baseline !important;
-    grid-column: 2 !important;
-    justify-self: start !important;
+    flex: 0 0 auto !important;
     margin-inline-start: 0.85rem !important;
     border-inline-start: 1px solid var(--color-border-subtle, #e5e2df) !important;
     padding-inline-start: 0.85rem !important;
@@ -137,4 +206,6 @@ html body.daocharms-pdp .product-native-detail .affiliate-share-apply-cta {
 /* bump 1791808120 */
 
 /* bump 1791804340 */
-/* force-hash 1791806521934123000 */
+/* force-hash 1760520600-buybox-flexwrap-start */
+
+/* stamp-wbop-1760520400 */

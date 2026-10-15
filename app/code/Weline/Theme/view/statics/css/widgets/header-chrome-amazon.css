@@ -50,7 +50,7 @@
     line-height: 1.4;
 }
 
-/* 主栏：背景全宽（与 notice / main-nav 同构），内容走版心 */
+/* 主栏：背景全宽（与 notice / main-nav 同构），内容走 .header-belt-inner 版心 */
 .weline-header .header-container {
     width: 100%;
     max-width: none;
@@ -332,10 +332,20 @@
     z-index: 1;
     background-color: var(--weline-chrome-bg-dark, var(--color-bg-dark-secondary));
     color: var(--weline-chrome-text-light);
-    padding: var(--spacing-sm) 0;
+    padding-block: var(--spacing-sm);
+    padding-inline: 0;
     min-height: var(--spacing-15);
     gap: 0;
     width: 100%;
+    box-sizing: border-box;
+}
+
+/* 版心：与 .header-site-notice-inner / .header-main-nav-inner 同构 */
+.weline-header .header-belt-inner {
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline);
     box-sizing: border-box;
 }
 
@@ -345,10 +355,7 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    width: min(100%, var(--weline-layout-content-max-width));
-    max-width: 100%;
-    margin-inline: auto;
-    padding-inline: var(--weline-layout-content-padding-inline);
+    width: 100%;
     box-sizing: border-box;
     gap: var(--spacing-md);
 }

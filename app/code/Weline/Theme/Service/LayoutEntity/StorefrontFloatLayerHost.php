@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
+use Weline\Framework\App\State;
 use Weline\Theme\Service\SharedChromeService;
 
 /**
@@ -12,6 +13,10 @@ use Weline\Theme\Service\SharedChromeService;
  * Design themes may rewrite footer and drop Theme's `#w-storefront-float-layer`.
  * Required default_injections (store-music / customer-service-float) still need
  * `storefront-float-start|end` shells — synthesize them unless already present.
+ *
+ * Float a11y labels: never bake Chinese source identity into published HTML for
+ * non-zh locales. Request-time heal + English last-resort defaults; runtime
+ * `api.floatEdge` / JS overlay remain the locale authority.
  *
  * Owning: Weline_Theme. Not a substitute for bake; safety net when destinations vanish.
  */
@@ -47,6 +52,7 @@ final class StorefrontFloatLayerHost
      * Post-render HTML: append published-slot shells (data-slot-id) before </body>.
      * Also self-heal: baked footers may lack data-weline-load on an existing layer
      * (hidden-host IO never fired → × chrome missing). Marker: storefront-float-load-on-layer-v1
+     * Marker: storefront-float-edge-label-heal-v1
      */
     public static function ensureInHtml(string $html): string
     {
@@ -54,15 +60,19 @@ final class StorefrontFloatLayerHost
             return $html;
         }
         if (self::htmlHasFloatDestinations($html)) {
-            return self::ensureFloatLayerModuleLoadAttr($html);
+            $html = self::ensureFloatLayerModuleLoadAttr($html);
+
+            return self::healBakedChineseFloatEdgeLabels($html);
         }
 
         $layer = self::publishedSlotLayerMarkup();
         if (stripos($html, '</body>') !== false) {
-            return (string)preg_replace('/<\/body>/i', $layer . '</body>', $html, 1);
+            $html = (string)preg_replace('/<\/body>/i', $layer . '</body>', $html, 1);
+        } else {
+            $html .= $layer;
         }
 
-        return $html . $layer;
+        return self::healBakedChineseFloatEdgeLabels($html);
     }
 
     /**
@@ -102,6 +112,38 @@ final class StorefrontFloatLayerHost
     }
 
     /**
+     * Layout-entity bake may freeze Chinese __() into data-edge-* attrs.
+     * On non-zh active locale, rewrite to English last-resort (runtime floatEdge/JS still overlay).
+     */
+    public static function healBakedChineseFloatEdgeLabels(string $html): string
+    {
+        if ($html === '' || self::activeLocaleLooksChinese()) {
+            return $html;
+        }
+        if (!str_contains($html, '展开悬浮') && !str_contains($html, '收起悬浮')) {
+            return $html;
+        }
+
+        $html = str_replace(
+            [
+                'data-edge-recall-label="展开悬浮"',
+                "data-edge-recall-label='展开悬浮'",
+                'data-edge-dismiss-label="收起悬浮"',
+                "data-edge-dismiss-label='收起悬浮'",
+            ],
+            [
+                'data-edge-recall-label="Expand float"',
+                'data-edge-recall-label="Expand float"',
+                'data-edge-dismiss-label="Collapse float"',
+                'data-edge-dismiss-label="Collapse float"',
+            ],
+            $html
+        );
+
+        return $html;
+    }
+
+    /**
      * Source footer PHTML (pre-bake / design rewrite): restore Theme <w:slot> float layer.
      */
     public static function ensureInSourceTemplate(string $source): string
@@ -113,8 +155,22 @@ final class StorefrontFloatLayerHost
         return rtrim($source) . "\n\n" . self::sourceSlotLayerMarkup() . "\n";
     }
 
+    private static function activeLocaleLooksChinese(): bool
+    {
+        $locale = '';
+        try {
+            $locale = trim((string)(State::getLang() ?: ''));
+        } catch (\Throwable) {
+            $locale = '';
+        }
+
+        return $locale !== '' && (bool)preg_match('/^zh(_|-|$)/i', $locale);
+    }
+
     private static function publishedSlotLayerMarkup(): string
     {
+        // English last-resort defaults (not Chinese source). Request heal + api.floatEdge
+        // / JS overlay supply the active locale. Marker: storefront-float-edge-label-heal-v1
         return <<<'HTML'
 <style data-storefront-float-layer-critical data-required-injection-host="float-layer">
 #w-storefront-float-layer{position:fixed;top:0;left:0;right:0;bottom:var(--weline-product-sticky-purchase-clearance,0px);z-index:2147482900;box-sizing:border-box;pointer-events:none;padding-bottom:0}
@@ -129,14 +185,16 @@ final class StorefrontFloatLayerHost
 @media (max-width:720px){#w-storefront-float-layer .w-store-music__avatar{width:2.5rem;height:2.5rem}#w-storefront-float-layer .cs-chat-button{width:2.5rem;height:2.5rem}}
 </style>
 <div id="w-storefront-float-layer" class="w-storefront-float-layer" data-storefront-float-layer data-weline-load="storefrontFloatLayer" data-testid="storefront-float-layer" data-required-injection-host="float-layer" aria-live="off">
-<div data-slot-id="storefront-float-start" data-slot-multiple="true" data-testid="storefront-float-start" data-float-slot="start" data-edge-dismiss-label="收起悬浮" data-edge-recall-label="展开悬浮" class="w-storefront-float-layer__slot w-storefront-float-layer__slot--start theme-published-slot"></div>
-<div data-slot-id="storefront-float-end" data-slot-multiple="true" data-testid="storefront-float-end" data-float-slot="end" data-edge-dismiss-label="收起悬浮" data-edge-recall-label="展开悬浮" class="w-storefront-float-layer__slot w-storefront-float-layer__slot--end theme-published-slot"></div>
+<div data-slot-id="storefront-float-start" data-slot-multiple="true" data-testid="storefront-float-start" data-float-slot="start" data-edge-dismiss-label="Collapse float" data-edge-recall-label="Expand float" class="w-storefront-float-layer__slot w-storefront-float-layer__slot--start theme-published-slot"></div>
+<div data-slot-id="storefront-float-end" data-slot-multiple="true" data-testid="storefront-float-end" data-float-slot="end" data-edge-dismiss-label="Collapse float" data-edge-recall-label="Expand float" class="w-storefront-float-layer__slot w-storefront-float-layer__slot--end theme-published-slot"></div>
 </div>
 HTML;
     }
 
     private static function sourceSlotLayerMarkup(): string
     {
+        // Keep __() live in source templates so bake/materialize can re-resolve per locale.
+        // Non-zh fallback mirrors footer partial (active_locale_must_show_target_language).
         return <<<'HTML'
 <?php
 /**
@@ -153,6 +211,33 @@ try {
     $floatLayerCssUrl = '';
 }
 $floatLayerCssUrl = htmlspecialchars($floatLayerCssUrl, ENT_QUOTES, 'UTF-8');
+$floatEdgeLabelSources = ['收起悬浮', '展开悬浮'];
+$floatEdgeLocale = '';
+try {
+    $floatEdgeLocale = trim((string)(\Weline\Framework\App\State::getLang() ?: ''));
+} catch (\Throwable) {
+    $floatEdgeLocale = '';
+}
+if ($floatEdgeLocale === '') {
+    $floatEdgeLocale = 'en_US';
+}
+try {
+    \Weline\Framework\Phrase\Parser::prefetchWords($floatEdgeLabelSources, $floatEdgeLocale);
+} catch (\Throwable) {
+}
+$floatEdgeDismissRaw = trim((string)__('收起悬浮'));
+$floatEdgeRecallRaw = trim((string)__('展开悬浮'));
+$floatEdgeLangIsZh = (bool)preg_match('/^zh(_|-|$)/i', $floatEdgeLocale);
+if (!$floatEdgeLangIsZh) {
+    if ($floatEdgeDismissRaw === '' || $floatEdgeDismissRaw === '收起悬浮') {
+        $floatEdgeDismissRaw = 'Collapse float';
+    }
+    if ($floatEdgeRecallRaw === '' || $floatEdgeRecallRaw === '展开悬浮') {
+        $floatEdgeRecallRaw = 'Expand float';
+    }
+}
+$floatEdgeDismissLabel = htmlspecialchars($floatEdgeDismissRaw !== '' ? $floatEdgeDismissRaw : 'Collapse float', ENT_QUOTES, 'UTF-8');
+$floatEdgeRecallLabel = htmlspecialchars($floatEdgeRecallRaw !== '' ? $floatEdgeRecallRaw : 'Expand float', ENT_QUOTES, 'UTF-8');
 ?>
 <?php if ($floatLayerCssUrl !== ''): ?>
 <link rel="stylesheet" href="<?= $floatLayerCssUrl ?>" data-storefront-float-layer-css data-required-injection-host="float-layer">
@@ -185,8 +270,8 @@ $floatLayerCssUrl = htmlspecialchars($floatLayerCssUrl, ENT_QUOTES, 'UTF-8');
             position="footer"
             class="w-storefront-float-layer__slot w-storefront-float-layer__slot--start"
             data-float-slot="start"
-            data-edge-dismiss-label="收起悬浮"
-            data-edge-recall-label="展开悬浮"
+            data-edge-dismiss-label="<?= $floatEdgeDismissLabel ?>"
+            data-edge-recall-label="<?= $floatEdgeRecallLabel ?>"
             data-testid="storefront-float-start"></w:slot>
     <w:slot id="storefront-float-end"
             name="悬浮右侧"
@@ -197,8 +282,8 @@ $floatLayerCssUrl = htmlspecialchars($floatLayerCssUrl, ENT_QUOTES, 'UTF-8');
             position="footer"
             class="w-storefront-float-layer__slot w-storefront-float-layer__slot--end"
             data-float-slot="end"
-            data-edge-dismiss-label="收起悬浮"
-            data-edge-recall-label="展开悬浮"
+            data-edge-dismiss-label="<?= $floatEdgeDismissLabel ?>"
+            data-edge-recall-label="<?= $floatEdgeRecallLabel ?>"
             data-testid="storefront-float-end"></w:slot>
 </div>
 HTML;

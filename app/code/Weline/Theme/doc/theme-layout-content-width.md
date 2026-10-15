@@ -9,15 +9,27 @@
 | Token | 定义链（叶子在 `variables/_spacing.css`） | 用途 |
 |---|---|---|
 | `--weline-layout-content-max-width` | `_spacing.css` → `--layout-max-width` → `--spacing-container-max-width` | 内容区最大宽度 |
-| `--weline-layout-content-padding-inline` | `_spacing.css` → `clamp(0px, (max-width - 100vw) * 9999, --spacing-container-padding)` | 内容区左右内边距；**视口 ≥ max-width 时为 0，窄屏保留 gutter** |
+| `--weline-layout-content-padding-inline` | `_spacing.css` → `var(--spacing-container-padding)` | 内容区左右内边距；**恒 ≥ 容器 padding，禁止视口 ≥ max-width 归零贴边** |
 
 **前台 head 必须加载** `theme/frontend/variables/_spacing.css`（见 `partials/head/default.phtml`），否则 `--weline-layout-content-*` 未定义时 Header 会撑满视口、`.w-container` 却走私有 fallback，版心左沿错位。
 
 Header / Footer / `.w-container` 已消费上述 Token；业务页不得使用不同 fallback 导致左右沿错位。
 
-### PC 最宽时 padding 归零
+### Header 主栏同构（外满宽 + `*-inner` 版心）
 
-`--weline-layout-content-padding-inline` 用 `100vw` 与 `--spacing-container-max-width` 比较：视口达到或超过版心最大宽度时计算为 `0`，避免顶栏/版心在 1440 满宽时仍出现左右绿色 padding；窄于 max-width 时仍等于 `--spacing-container-padding`。禁止再写第二个 `1440px` 媒体断点字面量。
+| 外层（满宽底色） | 内层（版心 Token） |
+|---|---|
+| `.header-site-notice` | `.header-site-notice-inner` |
+| `.header-container` / `.header-belt` | `.header-belt-inner` |
+| `.header-main-nav` | `.header-main-nav-inner` |
+
+`.header-belt-row-1` 只做 flex 行，**禁止**再挂 `max-width` / `padding-inline` 版心。Design 主题若自定 Header DOM（如汉服 `storefront-shell`）可不跟此树，但仍须用同一 Token 对内容宽。
+
+### PC 最宽时仍保留内沿 gutter（硬）
+
+`--weline-layout-content-padding-inline` **恒等于** `--spacing-container-padding`。  
+宽屏（视口 ≥ max-width）外沿空白由 `width:min(100%, max-width)` + `margin-inline:auto` 提供；**禁止**再把内沿 padding 归零——否则 Header `*-inner`、独立壳 B、以及 `display:contents` 提升轨会贴视口边。  
+禁止再写第二个 `1440px` 媒体断点字面量，也禁止恢复旧式 `clamp(0px, (max-width - 100vw) * 9999, …)`。
 
 ## Homepage Shell B 特例（`layouts/homepage/default.phtml`）
 

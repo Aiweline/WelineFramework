@@ -167,8 +167,9 @@
       chrome.setAttribute('data-float-edge-chrome', '');
       chrome.setAttribute('data-float-edge-side', side);
 
-      var dismissLabel = slotEl.getAttribute('data-edge-dismiss-label') || '收起悬浮';
-      var recallLabel = slotEl.getAttribute('data-edge-recall-label') || '展开悬浮';
+      var labels = resolveEdgeLabels(slotEl);
+      var dismissLabel = labels.dismiss;
+      var recallLabel = labels.recall;
 
       var dismiss = document.createElement('button');
       dismiss.type = 'button';
@@ -204,11 +205,79 @@
     };
   }
 
+  function readRuntimeFloatEdge() {
+    try {
+      var el = document.getElementById('weline-frontend-runtime-config');
+      if (!el) {
+        return null;
+      }
+      var cfg = JSON.parse(el.textContent || '{}');
+      var fe = cfg && cfg.api ? cfg.api.floatEdge : null;
+      if (!fe || typeof fe !== 'object') {
+        return null;
+      }
+      return fe;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function pageLocaleLooksChinese() {
+    var html = document.documentElement;
+    var lang = (
+      (html && (html.getAttribute('data-lang') || html.getAttribute('lang'))) ||
+      ''
+    ).toLowerCase();
+    return /^zh([_-]|$)/.test(lang);
+  }
+
+  function resolveEdgeLabels(slotEl) {
+    var fe = readRuntimeFloatEdge();
+    var dismiss =
+      (fe && fe.dismiss) ||
+      (slotEl && slotEl.getAttribute('data-edge-dismiss-label')) ||
+      'Collapse float';
+    var recall =
+      (fe && fe.recall) ||
+      (slotEl && slotEl.getAttribute('data-edge-recall-label')) ||
+      'Expand float';
+    if (!pageLocaleLooksChinese()) {
+      if (dismiss === '收起悬浮') {
+        dismiss = (fe && fe.dismiss) || 'Collapse float';
+      }
+      if (recall === '展开悬浮') {
+        recall = (fe && fe.recall) || 'Expand float';
+      }
+    }
+    return { dismiss: String(dismiss), recall: String(recall) };
+  }
+
+  function applyEdgeLabels(slotEl) {
+    if (!slotEl) {
+      return;
+    }
+    var labels = resolveEdgeLabels(slotEl);
+    slotEl.setAttribute('data-edge-dismiss-label', labels.dismiss);
+    slotEl.setAttribute('data-edge-recall-label', labels.recall);
+    var dismissBtn = slotEl.querySelector('[data-float-edge-dismiss]');
+    var recallBtn = slotEl.querySelector('[data-float-edge-recall]');
+    if (dismissBtn) {
+      dismissBtn.setAttribute('aria-label', labels.dismiss);
+      dismissBtn.title = labels.dismiss;
+    }
+    if (recallBtn) {
+      recallBtn.setAttribute('aria-label', labels.recall);
+      recallBtn.title = labels.recall;
+    }
+  }
+
   function setCollapsed(slotEl, collapsed, persist) {
     var side = sideOf(slotEl);
     var parts = ensureChrome(slotEl);
-    var dismissLabel = slotEl.getAttribute('data-edge-dismiss-label') || '收起悬浮';
-    var recallLabel = slotEl.getAttribute('data-edge-recall-label') || '展开悬浮';
+    applyEdgeLabels(slotEl);
+    var labels = resolveEdgeLabels(slotEl);
+    var dismissLabel = labels.dismiss;
+    var recallLabel = labels.recall;
 
     slotEl.classList.toggle('is-edge-collapsed', collapsed);
     slotEl.setAttribute('data-edge-collapsed', collapsed ? '1' : '0');
@@ -260,6 +329,7 @@
       return;
     }
     var parts = ensureChrome(slotEl);
+    applyEdgeLabels(slotEl);
     if (boundSlots) {
       boundSlots.add(slotEl);
     }

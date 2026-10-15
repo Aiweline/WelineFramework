@@ -734,7 +734,19 @@
                 return Math.max(0, mainW - allW - gap - 8);
             }
 
+            function isOwnHeaderNavMode() {
+                // Design themes that inherit the Amazon shell then CLEAR default left
+                // overflow must set data-header-nav-mode="own" on .weline-header.
+                // Theme must not hardcode brand classes (e.g. .hanfu-slim-nav).
+                const header = document.querySelector('.weline-header');
+                return !!(header && header.getAttribute('data-header-nav-mode') === 'own');
+            }
+
             function collectLeftOverflowCandidates() {
+                // Own-nav design: inherit shell, clear Amazon left overflow ownership.
+                if (isOwnHeaderNavMode()) {
+                    return [];
+                }
                 // 硬约束：左簇 More 不能只收分类 menu；政策直链/下拉与分类同列候选，从簇末往前藏
                 const cats = categoriesList
                     ? Array.from(categoriesList.children).filter(function(item) {

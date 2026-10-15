@@ -234,11 +234,8 @@ html[data-dir="ltr"] {
     --weline-layout-link-color: var(--weline-theme-link);
     --weline-layout-link-hover-color: var(--weline-theme-link-hover);
     --weline-layout-content-max-width: var(--layout-max-width);
-    --weline-layout-content-padding-inline: clamp(
-        0px,
-        calc((var(--spacing-container-max-width) - 100vw) * 9999),
-        var(--spacing-container-padding)
-    );
+    /* 与 variables/_spacing.css 同义：内沿 gutter 恒在，禁止 ≥版心归零贴边 */
+    --weline-layout-content-padding-inline: var(--spacing-container-padding);
     --weline-layout-z-index-dropdown: var(--z-index-dropdown, 1000);
     --weline-layout-z-index-modal: var(--z-index-modal, 1050);
     --weline-component-primary: var(--weline-theme-primary);

@@ -7,12 +7,13 @@ namespace Weline\Theme\Test\Unit\View;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Header main belt: outer shell full-bleed background; content width on belt row
- * (same pattern as site-notice / main-nav). Forbid boxing the mountain/chrome bg.
+ * Header main belt: outer shell full-bleed background; content width on
+ * `.header-belt-inner` (same pattern as site-notice / main-nav). Forbid boxing
+ * the mountain/chrome bg on `.header-container` or hanging width on row-1.
  */
 final class HeaderBeltFullBleedBackgroundContractTest extends TestCase
 {
-    public function testChromeAmazonHeaderContainerIsFullBleedWithContentOnBeltRow(): void
+    public function testChromeAmazonHeaderContainerIsFullBleedWithContentOnBeltInner(): void
     {
         $css = (string) \file_get_contents(
             \dirname(__DIR__, 3) . '/view/statics/css/widgets/header-chrome-amazon.css'
@@ -29,18 +30,23 @@ final class HeaderBeltFullBleedBackgroundContractTest extends TestCase
             'header-container must not use content max-width (boxes the background)'
         );
         self::assertMatchesRegularExpression(
-            '/\.weline-header\s+\.header-belt-row-1\s*\{[^}]*width:\s*min\(\s*100%\s*,\s*var\(--weline-layout-content-max-width\)\);/s',
+            '/\.weline-header\s+\.header-belt-inner\s*\{[^}]*width:\s*min\(\s*100%\s*,\s*var\(--weline-layout-content-max-width\)\);/s',
             $css,
-            'header-belt-row-1 must carry the content max-width'
+            'header-belt-inner must carry the content max-width'
         );
         self::assertMatchesRegularExpression(
-            '/\.weline-header\s+\.header-belt-row-1\s*\{[^}]*padding-inline:\s*var\(--weline-layout-content-padding-inline\);/s',
+            '/\.weline-header\s+\.header-belt-inner\s*\{[^}]*padding-inline:\s*var\(--weline-layout-content-padding-inline\);/s',
             $css,
-            'header-belt-row-1 must use layout content padding-inline'
+            'header-belt-inner must use layout content padding-inline'
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/\.weline-header\s+\.header-belt-row-1\s*\{[^}]*width:\s*min\(\s*100%\s*,\s*var\(--weline-layout-content-max-width\)\);/s',
+            $css,
+            'header-belt-row-1 must not carry content max-width (belongs on belt-inner)'
         );
     }
 
-    public function testHeaderDefaultPartialContainerIsFullBleedWithContentOnBeltRow(): void
+    public function testHeaderDefaultPartialContainerIsFullBleedWithContentOnBeltInner(): void
     {
         $css = (string) \file_get_contents(
             \dirname(__DIR__, 3) . '/view/statics/css/partials/header-default.css'
@@ -57,9 +63,37 @@ final class HeaderBeltFullBleedBackgroundContractTest extends TestCase
             'header-default .header-container must not box the background'
         );
         self::assertMatchesRegularExpression(
+            '/\.header-belt-inner\s*\{[^}]*width:\s*min\(\s*100%\s*,\s*var\(--weline-layout-content-max-width\)\);/s',
+            $css,
+            'header-default .header-belt-inner must carry content width'
+        );
+        self::assertMatchesRegularExpression(
+            '/\.header-belt-inner\s*\{[^}]*padding-inline:\s*var\(--weline-layout-content-padding-inline\);/s',
+            $css,
+            'header-default .header-belt-inner must use layout content padding-inline'
+        );
+        self::assertDoesNotMatchRegularExpression(
             '/\.header-belt-row-1\s*\{[^}]*width:\s*min\(\s*100%\s*,\s*var\(--weline-layout-content-max-width\)\);/s',
             $css,
-            'header-default .header-belt-row-1 must carry content width'
+            'header-default .header-belt-row-1 must not carry content max-width'
+        );
+    }
+
+    public function testDefaultHeaderPartialDeclaresBeltInnerWrapper(): void
+    {
+        $src = (string) \file_get_contents(
+            \dirname(__DIR__, 3) . '/view/theme/frontend/partials/header/default.phtml'
+        );
+
+        self::assertStringContainsString(
+            'class="header-belt-inner"',
+            $src,
+            'default header partial must declare header-belt-inner wrapper'
+        );
+        self::assertMatchesRegularExpression(
+            '/class="header-belt-inner"[\s\S]*?class="header-belt-row-1"/',
+            $src,
+            'header-belt-row-1 must nest inside header-belt-inner'
         );
     }
 }
