@@ -72,7 +72,7 @@ final class StorageContractsTest extends TestCase
         }
     }
 
-    public function testLocalAdapterEncodesEachPathSegmentAndFailsClosedForTemporaryUrls(): void
+    public function testLocalAdapterEncodesEachPathSegmentAndSignsTemporaryUrls(): void
     {
         $adapter = new LocalFilesystemUrlAdapter(
             'local::filesystem::media',
@@ -90,11 +90,23 @@ final class StorageContractsTest extends TestCase
         );
         self::assertTrue($resolved->cacheable);
 
-        $this->expectException(\RuntimeException::class);
-        $adapter->temporaryUrl(
+        $before = time();
+        $temporary = $adapter->temporaryUrl(
             $object,
             new StorageUrlOptions(StorageUrlOptions::KIND_TEMPORARY, 300),
         );
+        $after = time();
+        self::assertSame(StorageUrlOptions::KIND_TEMPORARY, $temporary->kind);
+        self::assertFalse($temporary->cacheable);
+        self::assertNotNull($temporary->expiresAt);
+        self::assertGreaterThanOrEqual($before + 300, (int)$temporary->expiresAt);
+        self::assertLessThanOrEqual($after + 300, (int)$temporary->expiresAt);
+        self::assertStringStartsWith('/storage/frontend/temporary?', $temporary->url);
+        self::assertMatchesRegularExpression('/[?&]disk=[A-Za-z0-9_-]+/', $temporary->url);
+        self::assertStringNotContainsString('local%3A%3A', $temporary->url);
+        self::assertStringContainsString('sig=', $temporary->url);
+        self::assertStringNotContainsString('/pub/media/', $temporary->url);
+        self::assertStringNotContainsString('cdn.example.test', $temporary->url);
     }
 
     public function testResolvedTemporaryUrlMustExpireAndMustNotBeSharedCacheable(): void

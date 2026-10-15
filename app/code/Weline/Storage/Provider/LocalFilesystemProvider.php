@@ -121,6 +121,7 @@ final class LocalFilesystemProvider implements StorageDriverConfigurationProvide
         return new LocalFilesystemUrlAdapter(
             $snapshot->diskCode,
             (string)($config['base_url'] ?? '/pub/media'),
+            $snapshot->configRevision,
         );
     }
 

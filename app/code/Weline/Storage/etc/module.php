@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Storage',
-    "version" => '1.2.1',
+    "version" => '1.2.2',
     "requires" => [
         'Weline_Framework' => '>=2.5.0',
     ],
