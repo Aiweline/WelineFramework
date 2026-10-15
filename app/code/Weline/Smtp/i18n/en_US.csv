@@ -337,9 +337,9 @@ Smtp配置,"Smtp configuration"
 系统,System
 官方商城客户服务,"Official store customer service"
 "周一至周五 9:00 - 18:00","Mon–Fri 9:00–18:00"
-"无法确保 contact@ 邮局账号","无法确保 contact@ 邮局账号"
-"contact@ 账号创建结果缺少 account_id","contact@ 账号创建结果缺少 account_id"
-"已确保 %{1}。","已确保 %{1}。"
+"无法确保默认 Smtp 提交账号","无法确保默认 Smtp 提交账号"
+"默认 Smtp 账号结果缺少 account_id","默认 Smtp 账号结果缺少 account_id"
+"已确保默认 Smtp %{1}。","已确保默认 Smtp %{1}。"
 请至少选择一个发信渠道,请至少选择一个发信渠道
 未知发信渠道：%{1},未知发信渠道：%{1}
 分流邮箱开通失败,分流邮箱开通失败
@@ -361,6 +361,9 @@ Global,Global
 "SMTP 用户名未配置","SMTP username is not configured"
 接受者邮箱为空：请正确设置接收邮箱！,"Recipient email is empty: Please set the receiving email correctly!"
 发送者邮箱为空：请正确设置发件邮箱！,"Sender email is empty: please set the sending email correctly!"
+"无法确保 contact@ 邮局账号","无法确保 contact@ 邮局账号"
+"contact@ 账号创建结果缺少 account_id","contact@ 账号创建结果缺少 account_id"
+"已确保 %{1}。","已确保 %{1}。"
 "请选择发信方式：在 Smtp配置 使用「外部 SMTP」，或点「用自建邮局一键配置」由 Smtp 自动挂接邮局账号并绑定渠道。","Choose a send path: add External SMTP on Smtp config, or click One-click self-hosted mail so Smtp attaches a mailbox and binds channels."
 "请选择发信方式：在 Smtp配置 添加「外部 SMTP」；若要用本站域名邮箱，请先完成企业邮箱（引擎/域名/账号）再建传输。","Choose a send path: add External SMTP on Smtp config; for domain mailboxes finish Mail (engine/domain/account) first."
 "当前为自建邮局路径（mail_account）。传输与渠道绑定由 Smtp 自管，请完成测试确认。","Self-hosted path (mail_account). Smtp owns transport/bindings—finish with a test send."

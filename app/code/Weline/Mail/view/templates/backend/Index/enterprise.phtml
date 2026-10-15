@@ -34,6 +34,10 @@ $composeSourceId = (int)($compose_source_id ?? 0);
 $composeAccountId = (int)($compose_account_id ?? $selectedAccountId);
 $composeAccountLocked = (bool)($compose_account_locked ?? false);
 $composeCanPickAccount = (bool)($compose_can_pick_account ?? false);
+$composeCustomerSelectValue = (string)($compose_customer_select_value ?? '');
+$composeCustomerSelectDisplay = (string)($compose_customer_select_display ?? '');
+$mailComposeCustomerPlaceholder = (string)__('搜索客户姓名或邮箱');
+$mailComposeCustomerEmptyLabel = (string)__('选择客户');
 $navItems = [
     'mailbox' => __('邮箱'),
     'accounts' => __('用户与账号'),
@@ -385,6 +389,11 @@ if ($oauthCfError === 'invalid_scope') {
             'account' => $selectedAccountId,
             'folder' => $folder,
         ];
+        $composeSentParams = [
+            'view' => 'mailbox',
+            'account' => $selectedAccountId > 0 ? $selectedAccountId : $composeAccountId,
+            'folder' => 'sent',
+        ];
         $folderLabel = $folder === 'sent' ? __('已发送') : __('收件箱');
         ?>
         <div class="w-toolbar" data-testid="mail-enterprise-mailbox-toolbar">
@@ -448,7 +457,17 @@ if ($oauthCfError === 'invalid_scope') {
                     <?php if ($composeAccountLocked && $composeAccountId <= 0): ?>
                         <div class="w-alert" data-tone="warning"><?= __('当前账号邮箱不是本机企业邮箱，需外部发送。') ?></div>
                     <?php else: ?>
-                        <w:form method="post" action="@backend-url{'weline_mail/backend/index/send-as'}">
+                        <w:form
+                            id="mail-enterprise-compose-form"
+                            method="post"
+                            action="@backend-url{'weline_mail/backend/index/send-as'}"
+                            data-testid="mail-enterprise-compose-form"
+                            data-mail-compose-sent-url="@backend-url{$basePath|$composeSentParams}"
+                            data-mail-compose-loading="<?= $escape(__('正在发送邮件，请稍候…')) ?>"
+                            data-mail-compose-success="<?= $escape(__('邮件已发送')) ?>"
+                            data-mail-compose-fail="<?= $escape(__('邮件发送失败')) ?>"
+                            data-mail-compose-unavailable="<?= $escape(__('发送能力不可用，请刷新后重试')) ?>"
+                        >
                             <input type="hidden" name="return_view" value="mailbox">
                             <input type="hidden" name="folder" value="sent">
                             <?php if ($composeSource !== ''): ?>
@@ -480,10 +499,76 @@ if ($oauthCfError === 'invalid_scope') {
                                         </select>
                                     <?php endif; ?>
                                 </label>
-                                <label class="w-field">
+                                <div class="w-field" data-testid="mail-enterprise-compose-to">
                                     <span class="w-field__label"><?= __('收件人') ?></span>
-                                    <input class="w-input" type="text" name="to_email" value="<?= $escape($composeTo) ?>" required>
-                                </label>
+                                    <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                                        <w:customer:admin:select
+                                            id="mail-compose-customer"
+                                            name="compose_customer_id"
+                                            value="composeCustomerSelectValue"
+                                            display="composeCustomerSelectDisplay"
+                                            allow-empty="true"
+                                            clearable="true"
+                                            placeholder="mailComposeCustomerPlaceholder"
+                                            empty-label="mailComposeCustomerEmptyLabel"
+                                        />
+                                        <input
+                                            class="w-input"
+                                            type="email"
+                                            name="to_email"
+                                            id="mail-compose-to-email"
+                                            value="<?= $escape($composeTo) ?>"
+                                            required
+                                            placeholder="name@example.com"
+                                            data-testid="mail-enterprise-compose-to-email"
+                                            aria-label="<?= __('收件邮箱') ?>"
+                                        >
+                                    </div>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;--w-mt:var(--weline-space-1);">
+                                        <?= __('可从客户列表选择；也可直接填写邮箱。') ?>
+                                    </p>
+                                </div>
+                                <script>
+                                (function () {
+                                    var field = document.getElementById('mail-compose-customer');
+                                    var toEmail = document.getElementById('mail-compose-to-email');
+                                    var wrapper = document.getElementById('mail-compose-customer_wrapper');
+                                    if (!field || !toEmail) return;
+
+                                    function applyEmail(email) {
+                                        var next = String(email || '').trim().toLowerCase();
+                                        if (next === '') return;
+                                        toEmail.value = next;
+                                        toEmail.dispatchEvent(new Event('input', { bubbles: true }));
+                                    }
+
+                                    function syncFromSelect() {
+                                        var fromData = String(field.getAttribute('data-w-customer-email') || '').trim();
+                                        if (fromData !== '') {
+                                            applyEmail(fromData);
+                                            return;
+                                        }
+                                        var mount = window.Weline && window.Weline.UI && typeof window.Weline.UI.get === 'function'
+                                            ? window.Weline.UI.get(wrapper, 'customer-select')
+                                            : null;
+                                        if (mount && typeof mount.getEmail === 'function') {
+                                            applyEmail(mount.getEmail());
+                                            return;
+                                        }
+                                        var detail = mount && typeof mount.getDetail === 'function' ? mount.getDetail() : null;
+                                        if (detail && detail.email) {
+                                            applyEmail(detail.email);
+                                        }
+                                    }
+
+                                    field.addEventListener('change', syncFromSelect);
+                                    field.addEventListener('input', syncFromSelect);
+                                    if (wrapper) {
+                                        wrapper.addEventListener('weline:ui:change', syncFromSelect);
+                                        wrapper.addEventListener('weline:ui:ready', syncFromSelect);
+                                    }
+                                })();
+                                </script>
                                 <label class="w-field is-wide">
                                     <span class="w-field__label"><?= __('主题') ?></span>
                                     <input class="w-input" type="text" name="subject" value="<?= $escape($composeSubject) ?>" maxlength="180" required>
@@ -494,12 +579,144 @@ if ($oauthCfError === 'invalid_scope') {
                                 </label>
                             </div>
                             <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-3);">
-                                <button class="w-button" data-tone="primary" type="submit"><?= __('发送邮件') ?></button>
+                                <button class="w-button" data-tone="primary" type="submit" data-testid="mail-enterprise-compose-send"><?= __('发送邮件') ?></button>
                                 <a class="w-button" data-variant="outline"
                                    href="@backend-url{$basePath|$composeCloseParams}"
                                    data-testid="mail-enterprise-compose-cancel-secondary"><?= __('取消') ?></a>
                             </div>
                         </w:form>
+                        <script>
+                        (function () {
+                            var form = document.getElementById('mail-enterprise-compose-form');
+                            if (!(form instanceof HTMLFormElement) || form.dataset.mailComposeBound === '1') return;
+                            form.dataset.mailComposeBound = '1';
+
+                            var loadingMsg = form.getAttribute('data-mail-compose-loading') || '';
+                            var successFallback = form.getAttribute('data-mail-compose-success') || '';
+                            var failFallback = form.getAttribute('data-mail-compose-fail') || '';
+                            var unavailableMsg = form.getAttribute('data-mail-compose-unavailable') || '';
+                            var sentUrl = form.getAttribute('data-mail-compose-sent-url') || '';
+                            var sending = false;
+
+                            function unwrapBusiness(value) {
+                                var current = value;
+                                for (var depth = 0; depth < 4; depth += 1) {
+                                    if (!current || typeof current !== 'object') break;
+                                    if (Object.prototype.hasOwnProperty.call(current, 'success')
+                                        || Object.prototype.hasOwnProperty.call(current, 'message')
+                                        || Object.prototype.hasOwnProperty.call(current, 'msg')) {
+                                        break;
+                                    }
+                                    if (current.data && typeof current.data === 'object') {
+                                        current = current.data;
+                                        continue;
+                                    }
+                                    break;
+                                }
+                                return current || {};
+                            }
+
+                            function toast(kind, message) {
+                                var ui = window.Weline && window.Weline.UI;
+                                var api = ui && ui.toast;
+                                var text = String(message || '').trim();
+                                if (!text) return;
+                                if (api && typeof api[kind] === 'function') {
+                                    api[kind](text);
+                                    return;
+                                }
+                                if (api && typeof api.show === 'function') {
+                                    api.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+                                }
+                            }
+
+                            function mailApi() {
+                                if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                                    return Promise.reject(new Error(unavailableMsg || 'unavailable'));
+                                }
+                                if (typeof window.Weline.load === 'function') {
+                                    return window.Weline.load('api').then(function () {
+                                        return window.Weline.Api.resource('mail');
+                                    });
+                                }
+                                return Promise.resolve(window.Weline.Api.resource('mail'));
+                            }
+
+                            function readField(name) {
+                                var el = form.elements.namedItem(name);
+                                if (!el) return '';
+                                if (el instanceof RadioNodeList) {
+                                    return String(el.value || '');
+                                }
+                                return String(el.value || '');
+                            }
+
+                            form.addEventListener('submit', function (event) {
+                                if (sending) {
+                                    event.preventDefault();
+                                    return;
+                                }
+                                if (typeof form.reportValidity === 'function' && !form.reportValidity()) {
+                                    return;
+                                }
+                                event.preventDefault();
+                                sending = true;
+                                var submitBtn = form.querySelector('[data-testid="mail-enterprise-compose-send"]');
+                                if (submitBtn instanceof HTMLButtonElement) {
+                                    submitBtn.disabled = true;
+                                }
+
+                                var payload = {
+                                    account_id: parseInt(readField('account_id'), 10) || 0,
+                                    to: String(readField('to_email') || '').trim(),
+                                    subject: String(readField('subject') || '').trim(),
+                                    body: String(readField('body') || ''),
+                                    source: String(readField('source') || '').trim(),
+                                    source_id: parseInt(readField('source_id'), 10) || 0
+                                };
+
+                                var run = function () {
+                                    return mailApi().then(function (resource) {
+                                        if (!resource || typeof resource.sendComposerMessage !== 'function') {
+                                            throw new Error(unavailableMsg || 'unavailable');
+                                        }
+                                        return resource.sendComposerMessage(payload, {
+                                            keepBusinessResult: true,
+                                            silent: true
+                                        });
+                                    }).then(function (raw) {
+                                        var result = unwrapBusiness(raw);
+                                        var ok = !!(result.success || result.code === 200 || result.code === '200');
+                                        var message = String(result.message || result.msg || (ok ? successFallback : failFallback) || '').trim();
+                                        if (ok) {
+                                            toast('success', message || successFallback);
+                                            if (sentUrl) {
+                                                window.setTimeout(function () {
+                                                    window.location.assign(sentUrl);
+                                                }, 450);
+                                            }
+                                            return;
+                                        }
+                                        toast('error', message || failFallback);
+                                    });
+                                };
+
+                                var loading = window.Weline && window.Weline.UI && window.Weline.UI.loading;
+                                var task = (loading && typeof loading.with === 'function')
+                                    ? loading.with(run, { message: loadingMsg })
+                                    : run();
+
+                                Promise.resolve(task).catch(function (error) {
+                                    toast('error', (error && error.message) ? error.message : failFallback);
+                                }).finally(function () {
+                                    sending = false;
+                                    if (submitBtn instanceof HTMLButtonElement) {
+                                        submitBtn.disabled = false;
+                                    }
+                                });
+                            });
+                        })();
+                        </script>
                     <?php endif; ?>
                 </div>
             </section>
@@ -704,6 +921,19 @@ if ($oauthCfError === 'invalid_scope') {
                     <li><code>php bin/w mail:env:install</code> — <?= __('查看或执行安装计划') ?></li>
                 </ul>
 
+                <div class="w-alert" data-tone="info" data-testid="mail-enterprise-acme-tls">
+                    <div class="w-alert__content">
+                        <div class="w-alert__title"><?= __('邮件主机 TLS（走域名池，不必手开 Stalwart ACME）') ?></div>
+                        <p class="w-text" data-size="sm" style="--w-m:0;">
+                            <?= __('mail / smtp 主机名随 DNS 一键同步入 Websites 域名池并申请证书后即可使用；无需在 Stalwart Admin 单独启用 Let’s Encrypt。若日志仍报 No TLS certificates available，先确认域名池已有对应主机与有效证书。') ?>
+                        </p>
+                        <ul class="w-text" data-size="sm" style="--w-m:0; --w-mt:var(--weline-space-2); padding-inline-start:1.25rem;">
+                            <li><?= __('须入池并出证：') ?> <code>mail.示例.com</code> <?= __('与') ?> <code>smtp.示例.com</code>（DNS-only）</li>
+                            <li><?= __('一键写 DNS 成功后会自动') ?> <code>ensurePublicDnsHostnamesInPool</code> <?= __('（含申请证书）。') ?></li>
+                        </ul>
+                    </div>
+                </div>
+
                 <div class="w-alert" data-tone="info" data-testid="mail-enterprise-admin-login">
                     <div class="w-alert__content">
                         <div class="w-alert__title"><?= __('Stalwart Admin（:8080）登录账户与初始密码') ?></div>
@@ -896,14 +1126,25 @@ if ($oauthCfError === 'invalid_scope') {
                     ],
                     [
                         'code' => 'smtp_cname',
-                        'label' => (string)__('可选'),
+                        'label' => (string)__('默认必需'),
                         'text' => 'smtp.' . $domainName . ' CNAME ' . $host . ' · DNS-only',
-                        'guide' => (string)__('可选友好别名。若配置，同样必须 DNS-only，且证书需覆盖该主机名。'),
+                        'guide' => (string)__('默认 Smtp 提交主机。必须 DNS-only，且 Stalwart/ACME 证书需覆盖该主机名。'),
                         'record' => 'smtp.' . $domainName . ' CNAME ' . $host,
                     ],
                 ];
                 $requiredOk = is_array($live) ? !empty($live['ok']) : false;
                 $formOriginIp = $originIp;
+                $defaultSmtpAccountId = (int)$domain->getData(MailDomain::schema_fields_DEFAULT_SMTP_ACCOUNT_ID);
+                $domainActiveAccounts = [];
+                foreach ($accounts as $acct) {
+                    if ((int)$acct->getData(MailAccount::schema_fields_DOMAIN_ID) !== $domainId) {
+                        continue;
+                    }
+                    if ((string)$acct->getData(MailAccount::schema_fields_STATUS) !== 'active') {
+                        continue;
+                    }
+                    $domainActiveAccounts[] = $acct;
+                }
                 ?>
                 <article class="w-card" data-testid="mail-domain-card-<?= $domainId ?>">
                     <header class="w-card__header">
@@ -1046,7 +1287,7 @@ if ($oauthCfError === 'invalid_scope') {
                         </details>
                         <div class="mail-enterprise__domain-lifecycle">
                             <p class="w-text" data-tone="muted" data-size="sm">
-                                <?= __('启用域名时会自动开通 contact@ 联系邮箱并生成一次性 SMTP 密码（仅成功提示中显示一次）。') ?>
+                                <?= __('启用域名时会自动开通 contact@（人收）与默认 Smtp 提交账号（初值 smtp@，密码仅提示一次）；系统发信默认全部走该中继，可在下方改绑。') ?>
                             </p>
                             <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}">
                                 <input type="hidden" name="return_view" value="domains">
@@ -1056,6 +1297,32 @@ if ($oauthCfError === 'invalid_scope') {
                                     <?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? __('暂停域名') : __('启用域名') ?>
                                 </button>
                             </w:form>
+                            <?php if ((string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active'): ?>
+                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-default-smtp-account'}" data-testid="mail-domain-default-smtp-<?= $domainId ?>">
+                                    <input type="hidden" name="return_view" value="domains">
+                                    <input type="hidden" name="domain_id" value="<?= $domainId ?>">
+                                    <label class="w-field__label" for="mail-default-smtp-<?= $domainId ?>"><?= __('默认 Smtp 提交账号（中继）') ?></label>
+                                    <div style="display:flex; gap:var(--weline-space-2); flex-wrap:wrap; align-items:flex-end;">
+                                        <select id="mail-default-smtp-<?= $domainId ?>" class="w-select" name="account_id" required style="min-width:12rem;">
+                                            <option value=""><?= __('请选择账号') ?></option>
+                                            <?php foreach ($domainActiveAccounts as $acct):
+                                                $aid = (int)$acct->getId();
+                                                $aemail = (string)$acct->getData(MailAccount::schema_fields_EMAIL);
+                                                ?>
+                                                <option value="<?= $aid ?>" <?= $aid === $defaultSmtpAccountId ? 'selected' : '' ?>>
+                                                    <?= $escape($aemail) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <button class="w-button" data-variant="primary" data-size="sm" type="submit">
+                                            <?= __('保存默认中继') ?>
+                                        </button>
+                                    </div>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0; --w-mt:var(--weline-space-1);">
+                                        <?= __('提交主机为 smtp.%{1}:587（证书随域名池）。外投 QQ 等仍依赖云厂商出站 TCP/25。', [$domainName]) ?>
+                                    </p>
+                                </w:form>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </article>

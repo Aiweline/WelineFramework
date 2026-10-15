@@ -40,6 +40,8 @@ class MailQueryProvider implements QueryProviderInterface
             'sendComposerMessage' => $this->sendComposerMessage($params),
             'resolveActiveMailDomain' => $this->resolveActiveMailDomain($params),
             'ensureContactAccount' => $this->ensureContactAccount($params),
+            'ensureDefaultSmtpAccount' => $this->ensureDefaultSmtpAccount($params),
+            'setDefaultSmtpAccount' => $this->setDefaultSmtpAccount($params),
             'ensureMailbox' => $this->ensureMailbox($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Mail 查询器不支持的操作：%{1}', $operation)
@@ -55,6 +57,19 @@ class MailQueryProvider implements QueryProviderInterface
     private function ensureContactAccount(array $params): array
     {
         return $this->ensureService()->ensureContactAccount((int)($params['domain_id'] ?? 0));
+    }
+
+    private function ensureDefaultSmtpAccount(array $params): array
+    {
+        return $this->ensureService()->ensureDefaultSmtpAccount((int)($params['domain_id'] ?? 0));
+    }
+
+    private function setDefaultSmtpAccount(array $params): array
+    {
+        return $this->ensureService()->setDefaultSmtpAccount(
+            (int)($params['domain_id'] ?? 0),
+            (int)($params['account_id'] ?? 0)
+        );
     }
 
     private function ensureMailbox(array $params): array
@@ -211,6 +226,15 @@ class MailQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'sendComposerMessage',
                     'description' => __('写信浮层发送并写入业务线程'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Mail::mail_send_as',
+                    ],
                     'params' => [
                         ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('发件账号')],
                         ['name' => 'to', 'type' => 'string', 'required' => true, 'description' => __('收件人')],
@@ -232,6 +256,21 @@ class MailQueryProvider implements QueryProviderInterface
                     'description' => __('幂等确保 contact@域名 邮局账号；新建真实账号时返回一次性 SMTP 密码'),
                     'params' => [
                         ['name' => 'domain_id', 'type' => 'int', 'required' => false, 'description' => __('显式域名ID')],
+                    ],
+                ],
+                [
+                    'name' => 'ensureDefaultSmtpAccount',
+                    'description' => __('幂等确保默认 Smtp 提交账号（初值 smtp@）并写入域名 default_smtp_account_id'),
+                    'params' => [
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false, 'description' => __('显式域名ID')],
+                    ],
+                ],
+                [
+                    'name' => 'setDefaultSmtpAccount',
+                    'description' => __('将域名默认 Smtp 提交账号改绑为指定本域 active 账号'),
+                    'params' => [
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => true, 'description' => __('域名ID')],
+                        ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('邮局账号ID')],
                     ],
                 ],
                 [

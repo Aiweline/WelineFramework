@@ -17,6 +17,9 @@ final class EnterpriseEngineSetupGuideContractTest extends TestCase
         self::assertStringContainsString('data-testid="mail-enterprise-firewall-ports"', $enterprise);
         self::assertStringContainsString('data-testid="mail-enterprise-firewall-ports-table"', $enterprise);
         self::assertStringContainsString('data-testid="mail-enterprise-admin-login"', $enterprise);
+        self::assertStringContainsString('data-testid="mail-enterprise-acme-tls"', $enterprise);
+        self::assertStringContainsString('域名池', $enterprise);
+        self::assertStringContainsString('不必手开 Stalwart ACME', $enterprise);
         self::assertStringContainsString('云安全组 / 防火墙：先放行这些端口（必需）', $enterprise);
         self::assertStringContainsString('25/tcp', $enterprise);
         self::assertStringContainsString('587/tcp', $enterprise);

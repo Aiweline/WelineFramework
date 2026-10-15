@@ -40,7 +40,7 @@ team_path: ../team/mail-channel-default-mailboxes/
 
 ### OQ 冻结（2026-10-08 · 用户表述）
 
-1. **OQ-1** 默认共享 `contact@`；分流 = 显式新建邮箱 + 挂指定渠道 — **已冻**
+1. **OQ-1** ~~默认共享 `contact@`~~ → **改冻（2026-10-15）**：默认 Smtp 中继 = 可配置 `default_smtp_account_id`（启域初值 `smtp@`）；`contact@` 只做人收；分流 = 显式新建 + 挂渠道 — **已冻**
 2. **OQ-2** 扩展现有一键/`ensure_mail`（幂等）；不加域名 Observer — **已冻**
 3. **OQ-3** QQ 迁移 — **用户已表态（2026-09-22）**：本机可继续 QQ；线上 `deploy.env-map` 按档位替换（另波）
 4. **OQ-4** 生产邮箱域名 + Stalwart/DNS — **另波**（本波仅本机 fake）

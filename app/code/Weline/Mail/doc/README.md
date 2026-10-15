@@ -75,7 +75,7 @@ fake 引擎仅用于 `.test` / `.invalid` 域名的本地业务冒烟。fake 账
 
 ### smtp 别名、TLS 与端口
 
-`smtp.example.com` 不是必需项，客户端可以直接连接 `mail.example.com`。如需友好别名，可用 CNAME 指向 `mail.example.com`，也可使用指向同一公网 IPv4 的 A 记录；TLS 证书必须覆盖客户端实际连接的主机名。
+默认 Smtp 提交主机为 `smtp.example.com`（CNAME → `mail.example.com`，DNS-only）。客户端也可直连 `mail.example.com`。**TLS 证书由 Websites 域名池颁发**（DNS 一键同步后 `ensurePublicDnsHostnamesInPool` + 申请证书）；**不必**在 Stalwart Admin 手开 ACME。启域会自动开通默认 Smtp 提交账号（初值 `smtp@`，后台可改绑）；系统发信默认全部走该中继。
 
 #### 云安全组 / 防火墙（入站放行，必需）
 

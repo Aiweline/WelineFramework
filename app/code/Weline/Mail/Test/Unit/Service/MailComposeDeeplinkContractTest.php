@@ -25,6 +25,13 @@ final class MailComposeDeeplinkContractTest extends TestCase
         self::assertStringContainsString('listLocalMailboxes', $src);
         self::assertStringContainsString('listThreadBySource', $src);
         self::assertStringContainsString('sendComposerMessage', $src);
+        $sendPos = strpos($src, "'name' => 'sendComposerMessage'");
+        self::assertNotFalse($sendPos);
+        $sendSlice = substr($src, $sendPos, 700);
+        self::assertStringContainsString("'frontend' => true", $sendSlice);
+        self::assertStringContainsString("'mode' => 'write'", $sendSlice);
+        self::assertStringContainsString("'auth' => 'backend'", $sendSlice);
+        self::assertStringContainsString('Weline_Mail::mail_send_as', $sendSlice);
     }
 
     public function testBackendComposePrefillAndSendEvent(): void
@@ -52,8 +59,20 @@ final class MailComposeDeeplinkContractTest extends TestCase
         self::assertStringNotContainsString('<summary', $mailboxTpl);
         self::assertStringContainsString('if ($composeOpen)', $mailboxTpl);
         self::assertStringContainsString('id="mail-compose"', $mailboxTpl);
+        self::assertStringContainsString('w:customer:admin:select', $mailboxTpl);
+        self::assertStringContainsString('mail-compose-customer', $mailboxTpl);
+        self::assertStringContainsString('mail-enterprise-compose-to', $mailboxTpl);
+        self::assertStringContainsString('name="to_email"', $mailboxTpl);
+        self::assertStringContainsString('mail-enterprise-compose-form', $mailboxTpl);
+        self::assertStringContainsString('mail-enterprise-compose-send', $mailboxTpl);
+        self::assertStringContainsString('sendComposerMessage', $mailboxTpl);
+        self::assertStringContainsString('UI.loading', $mailboxTpl);
+        self::assertStringContainsString('toast', $mailboxTpl);
         self::assertStringNotContainsString('展开写信', $mailboxTpl);
         self::assertStringNotContainsString('收起写信', $mailboxTpl);
+
+        self::assertStringContainsString('resolveComposeCustomerPick', $controller);
+        self::assertStringContainsString('compose_customer_select_value', $controller);
 
         $eventsSrc = (string)file_get_contents(BP . 'app/code/Weline/Mail/event.php');
         self::assertStringContainsString('Weline_Mail::mail_message_sent', $eventsSrc);
@@ -63,6 +82,6 @@ final class MailComposeDeeplinkContractTest extends TestCase
     public function testModuleVersion(): void
     {
         $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-        self::assertSame('0.2.1', $module['version'] ?? null);
+        self::assertSame('0.2.20', $module['version'] ?? null);
     }
 }

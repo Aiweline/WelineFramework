@@ -160,11 +160,15 @@ class StalwartEngineAdapter implements MailEngineInterface
 
     public function clientSettings(string $domain, string $hostname): array
     {
+        $domain = strtolower(rtrim(trim($domain), '.'));
+        $hostname = strtolower(rtrim(trim($hostname), '.'));
+        $smtpHost = $domain !== '' ? ('smtp.' . $domain) : $hostname;
+
         return [
             'domain' => $domain,
             'hostname' => $hostname,
             'smtp' => [
-                'host' => $hostname,
+                'host' => $smtpHost !== '' ? $smtpHost : $hostname,
                 'port' => 587,
                 'security' => 'STARTTLS',
                 'auth' => true,

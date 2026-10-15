@@ -46,6 +46,9 @@ class MailDomain extends Model
     #[Col('text', nullable: true, comment: 'DNS 检测结果JSON')]
     public const schema_fields_DNS_STATUS_JSON = 'dns_status_json';
 
+    #[Col('int', nullable: true, comment: '默认 Smtp 提交账号 ID（可后台改绑）')]
+    public const schema_fields_DEFAULT_SMTP_ACCOUNT_ID = 'default_smtp_account_id';
+
     #[Col('datetime', nullable: true, comment: '最后检测时间')]
     public const schema_fields_LAST_CHECKED_AT = 'last_checked_at';
 

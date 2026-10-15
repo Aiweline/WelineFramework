@@ -376,7 +376,8 @@ class MailAccountTransportProvisioner
             return null;
         }
 
-        $preferredLocals = ['contact', 'noreply', 'no-reply', 'system', 'notify', 'orders', 'mailer'];
+        // 全部默认中继：优先 smtp@（可配置默认），其次历史 contact/noreply 等
+        $preferredLocals = ['smtp', 'mailer', 'system', 'noreply', 'no-reply', 'notify', 'orders', 'contact'];
         $scored = [];
         foreach ($items as $item) {
             if (!is_array($item)) {

@@ -15,7 +15,7 @@ use Weline\Mail\Service\StalwartEngineAdapter;
 
 #[\Weline\Framework\Acl\Acl(
     'Weline_Mail::mail',
-    '企业邮箱管理',
+    '企业邮局',
     'mail',
     '管理企业邮箱、用户账号、邮件与 DNS'
 )]
@@ -181,6 +181,8 @@ class Index extends BackendController
         $this->assign('compose_account_id', $compose['account_id']);
         $this->assign('compose_account_locked', $compose['account_locked']);
         $this->assign('compose_can_pick_account', $compose['can_pick_account']);
+        $this->assign('compose_customer_select_value', $compose['customer_id']);
+        $this->assign('compose_customer_select_display', $compose['customer_display']);
 
         return $this->fetch('Weline_Mail::templates/backend/Index/enterprise.phtml');
     }
@@ -279,48 +281,87 @@ class Index extends BackendController
             ->save();
 
         $message = (string)__('邮箱域名状态已更新');
-        // 启用域名时幂等开通 contact@，新建则带回一次性 SMTP 密码（仅此一次展示）
+        // 启用域名：contact@（人收）+ 默认 Smtp 提交账号（可后台改绑）
         if ($status === 'active') {
             try {
                 /** @var \Weline\Mail\Service\MailAccountEnsureService $ensure */
                 $ensure = ObjectManager::getInstance(
                     \Weline\Mail\Service\MailAccountEnsureService::class
                 );
+                $parts = [];
                 $contact = $ensure->ensureContactAccount($domainId);
                 if (!empty($contact['success'])) {
                     $email = (string)($contact['email'] ?? '');
-                    $once = (string)($contact['smtp_password_once'] ?? '');
-                    if (!empty($contact['created']) && $once !== '') {
-                        $message = (string)__(
-                            '域名已启用；已自动开通 %{1}，SMTP 密码（仅显示一次）：%{2}',
-                            [$email, $once]
+                    if (!empty($contact['created']) && (string)($contact['smtp_password_once'] ?? '') !== '') {
+                        $parts[] = (string)__(
+                            '联系邮箱 %{1} 已开通，密码（仅一次）：%{2}',
+                            [$email, (string)$contact['smtp_password_once']]
                         );
                     } elseif ($email !== '') {
-                        $message = (string)__(
-                            '域名已启用；联系邮箱 %{1} 已就绪。',
-                            [$email]
-                        );
+                        $parts[] = (string)__('联系邮箱 %{1} 已就绪', [$email]);
                     }
                 } else {
                     $detail = (string)($contact['message'] ?? '');
-                    $message = $detail !== ''
-                        ? (string)__('域名已启用，但自动开通 contact@ 失败：%{1}', [$detail])
-                        : (string)__('域名已启用，但自动开通 contact@ 失败。');
+                    $parts[] = $detail !== ''
+                        ? (string)__('自动开通 contact@ 失败：%{1}', [$detail])
+                        : (string)__('自动开通 contact@ 失败');
                 }
+
+                $smtpDefault = $ensure->ensureDefaultSmtpAccount($domainId);
+                if (!empty($smtpDefault['success'])) {
+                    $smtpEmail = (string)($smtpDefault['email'] ?? '');
+                    $once = (string)($smtpDefault['smtp_password_once'] ?? '');
+                    if (!empty($smtpDefault['created']) && $once !== '') {
+                        $parts[] = (string)__(
+                            '默认 Smtp 提交账号 %{1} 已开通，密码（仅一次）：%{2}',
+                            [$smtpEmail, $once]
+                        );
+                    } elseif ($smtpEmail !== '') {
+                        $parts[] = (string)__('默认 Smtp 提交账号 %{1} 已就绪', [$smtpEmail]);
+                    }
+                } else {
+                    $detail = (string)($smtpDefault['message'] ?? '');
+                    $parts[] = $detail !== ''
+                        ? (string)__('自动开通默认 Smtp 账号失败：%{1}', [$detail])
+                        : (string)__('自动开通默认 Smtp 账号失败');
+                }
+
+                $message = (string)__('域名已启用') . '；' . implode('；', $parts);
             } catch (\Throwable $e) {
                 w_log_error(
-                    '[Mail] ' . __('启用域名后自动开通 contact@ 失败：%{1}', [$e->getMessage()]),
+                    '[Mail] ' . __('启用域名后自动开通邮箱失败：%{1}', [$e->getMessage()]),
                     [],
                     'mail'
                 );
                 $message = (string)__(
-                    '域名已启用，但自动开通 contact@ 异常：%{1}',
+                    '域名已启用，但自动开通邮箱异常：%{1}',
                     [$e->getMessage()]
                 );
             }
         }
 
         return $this->respondFormResult(200, $message);
+    }
+
+    /**
+     * 后台改绑域名默认 Smtp 提交账号（全部默认中继跟此指针）。
+     */
+    public function postSetDefaultSmtpAccount(): string
+    {
+        $domainId = (int)$this->request->getParam('domain_id', 0);
+        $accountId = (int)$this->request->getParam('account_id', 0);
+        /** @var \Weline\Mail\Service\MailAccountEnsureService $ensure */
+        $ensure = ObjectManager::getInstance(\Weline\Mail\Service\MailAccountEnsureService::class);
+        $result = $ensure->setDefaultSmtpAccount($domainId, $accountId);
+        $code = !empty($result['success']) ? 200 : (int)($result['code'] ?? 422);
+        if ($code < 400 && empty($result['success'])) {
+            $code = 422;
+        }
+
+        return $this->respondFormResult(
+            $code,
+            (string)($result['message'] ?? __('保存默认 Smtp 账号失败'))
+        );
     }
 
     /**
@@ -342,6 +383,9 @@ class Index extends BackendController
                 'engine' => (string)$domain->getData(MailDomain::schema_fields_ENGINE),
                 'status' => (string)$domain->getData(MailDomain::schema_fields_STATUS),
                 'default_quota_mb' => (int)$domain->getData(MailDomain::schema_fields_DEFAULT_QUOTA_MB),
+                'default_smtp_account_id' => (int)$domain->getData(
+                    MailDomain::schema_fields_DEFAULT_SMTP_ACCOUNT_ID
+                ),
             ];
         }
         return $lookup;
@@ -933,7 +977,9 @@ class Index extends BackendController
      *   source_id:int,
      *   account_id:int,
      *   account_locked:bool,
-     *   can_pick_account:bool
+     *   can_pick_account:bool,
+     *   customer_id:string,
+     *   customer_display:string
      * }
      */
     private function resolveComposeContext(int $selectedAccountId, array $mailboxAccounts): array
@@ -946,13 +992,16 @@ class Index extends BackendController
             $accountId = $ownAccountId;
         }
 
+        $to = trim((string)$this->request->getParam('to', ''));
         $open = (string)$this->request->getParam('compose', '') === '1'
-            || trim((string)$this->request->getParam('to', '')) !== ''
+            || $to !== ''
             || trim((string)$this->request->getParam('source', '')) !== '';
+
+        $customerPick = $this->resolveComposeCustomerPick($to);
 
         return [
             'open' => $open,
-            'to' => trim((string)$this->request->getParam('to', '')),
+            'to' => $customerPick['email'] !== '' ? $customerPick['email'] : $to,
             'subject' => trim((string)$this->request->getParam('subject', '')),
             'body' => (string)$this->request->getParam('body', ''),
             'source' => preg_replace('/[^a-z0-9_]/', '', strtolower(trim((string)$this->request->getParam('source', '')))) ?: '',
@@ -960,7 +1009,65 @@ class Index extends BackendController
             'account_id' => $accountId,
             'account_locked' => $accountLocked,
             'can_pick_account' => $canPick,
+            'customer_id' => $customerPick['customer_id'],
+            'customer_display' => $customerPick['customer_display'],
         ];
+    }
+
+    /**
+     * Prefer an existing Customer match when compose deeplink carries an email
+     * (or a bare customer id), so the mailbox compose UI can prefill
+     * {@see \Weline\Customer\Taglib\AdminCustomerSelect}.
+     *
+     * @return array{customer_id:string,customer_display:string,email:string}
+     */
+    private function resolveComposeCustomerPick(string $toHint): array
+    {
+        $empty = ['customer_id' => '', 'customer_display' => '', 'email' => ''];
+        $toHint = trim($toHint);
+        if ($toHint === '') {
+            return $empty;
+        }
+
+        try {
+            $picker = ObjectManager::getInstance(
+                \Weline\Customer\Service\CustomerAdminPickerService::class
+            );
+            if (ctype_digit($toHint)) {
+                $item = $picker->resolve((int)$toHint);
+            } else {
+                $found = $picker->search($toHint, 1, 5);
+                $item = null;
+                foreach (($found['items'] ?? []) as $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $email = strtolower(trim((string)($row['email'] ?? '')));
+                    if ($email !== '' && strcasecmp($email, $toHint) === 0) {
+                        $item = $row;
+                        break;
+                    }
+                }
+                if ($item === null && isset($found['items'][0]) && is_array($found['items'][0])) {
+                    $item = $found['items'][0];
+                }
+            }
+            if (!is_array($item)) {
+                return $empty;
+            }
+            $customerId = (int)($item['customer_id'] ?? $item['value'] ?? 0);
+            if ($customerId <= 0) {
+                return $empty;
+            }
+
+            return [
+                'customer_id' => (string)$customerId,
+                'customer_display' => trim((string)($item['label'] ?? '')),
+                'email' => strtolower(trim((string)($item['email'] ?? ''))),
+            ];
+        } catch (\Throwable) {
+            return $empty;
+        }
     }
 
     private function canPickAnyLocalMailbox(): bool
