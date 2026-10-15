@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\B2B\View\Backend;
+namespace Weline\B2B\Presenter;
 
 /**
  * Present B2B migration/rollout diagnostics in operator-readable Chinese.

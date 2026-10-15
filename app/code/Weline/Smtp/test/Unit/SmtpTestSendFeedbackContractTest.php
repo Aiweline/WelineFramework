@@ -15,7 +15,7 @@ final class SmtpTestSendFeedbackContractTest extends TestCase
     {
         $moduleRoot = dirname(__DIR__, 2);
         $controller = (string)file_get_contents($moduleRoot . '/Controller/Backend/Config.php');
-        $template = (string)file_get_contents($moduleRoot . '/view/Backend/Config.phtml');
+        $template = (string)file_get_contents($moduleRoot . '/view/backend/Config.phtml');
 
         self::assertStringContainsString('wantsJsonResponse', $controller);
         self::assertStringContainsString('jsonSuccess', $controller);

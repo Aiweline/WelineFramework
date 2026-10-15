@@ -14,7 +14,7 @@ final class SmtpConfigTabsContractTest extends TestCase
     public function testConfigTemplateUsesThemeTabsInsteadOfPagination(): void
     {
         $moduleRoot = dirname(__DIR__, 2);
-        $template = (string)file_get_contents($moduleRoot . '/view/Backend/Config.phtml');
+        $template = (string)file_get_contents($moduleRoot . '/view/backend/Config.phtml');
 
         self::assertStringContainsString('data-w-component="tabs"', $template);
         self::assertStringContainsString('data-testid="smtp-config-tabs"', $template);

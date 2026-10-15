@@ -421,7 +421,7 @@ class Accounts extends FrontendController
      */
     public function worker()
     {
-        $workerPath = __DIR__ . '/../../view/statics/Frontend/Accounts/totp-worker.js';
+        $workerPath = __DIR__ . '/../../view/statics/frontend/Accounts/totp-worker.js';
         
         if (file_exists($workerPath)) {
             $content = file_get_contents($workerPath);

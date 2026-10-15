@@ -98,7 +98,7 @@ final class MailTemplateShellContractTest extends TestCase
         self::assertStringContainsString('->wrap(', $provider);
         $seeder = (string)file_get_contents($smtp . '/Service/MailTemplateSeeder.php');
         self::assertStringContainsString('extractBodyFragment', $seeder);
-        $edit = (string)file_get_contents($smtp . '/view/Backend/Template/edit.phtml');
+        $edit = (string)file_get_contents($smtp . '/view/backend/Template/edit.phtml');
         self::assertStringContainsString('smtp-template-shell-hint', $edit);
         $composerSrc = (string)file_get_contents($smtp . '/Service/MailTemplateShellComposer.php');
         self::assertStringContainsString('TranslationResolverInterface', $composerSrc);

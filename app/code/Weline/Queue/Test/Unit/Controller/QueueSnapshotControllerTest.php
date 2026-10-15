@@ -36,7 +36,7 @@ final class QueueSnapshotControllerTest extends TestCase
         $source = $this->readListingViewSource();
 
         self::assertStringContainsString("'pagination' =>", $source);
-        self::assertStringContainsString("unset(\$queueListing->pagination['html']);", $source);
+        self::assertStringContainsString('$pagination = $queueListing->getPaginationState();', $source);
         self::assertStringContainsString("'module' => \$module", $source);
         self::assertStringContainsString("'status' => \$status", $source);
         self::assertStringContainsString("'q' => \$search", $source);
@@ -46,10 +46,7 @@ final class QueueSnapshotControllerTest extends TestCase
             '->pagination($page, self::PAGE_SIZE, $paginationParams)',
             $source
         );
-        self::assertMatchesRegularExpression(
-            '~\$queueListing->getPagination\(\s*\'pagination-rounded\',\s*\'queue/backend/queue\',\s*true,?\s*\)~',
-            $source
-        );
+        self::assertStringContainsString("'pagination' => \$pagination,", $source);
         self::assertStringNotContainsString("'*/backend/queue'", $source);
 
         $statsSource = $this->readStatsPartialSource();
@@ -178,7 +175,7 @@ final class QueueSnapshotControllerTest extends TestCase
     private function readListingViewSource(): string
     {
         $source = \file_get_contents(
-            \dirname(__DIR__, 3) . '/View/Backend/QueueAdminListingView.php'
+            \dirname(__DIR__, 3) . '/Service/QueueAdminListingView.php'
         );
         self::assertIsString($source);
 

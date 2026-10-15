@@ -42,7 +42,7 @@ final class SmtpWebsiteScopeSettingsContractTest extends TestCase
     {
         $moduleRoot = dirname(__DIR__, 2);
         $controller = (string)file_get_contents($moduleRoot . '/Controller/Backend/Config.php');
-        $template = (string)file_get_contents($moduleRoot . '/view/Backend/Config.phtml');
+        $template = (string)file_get_contents($moduleRoot . '/view/backend/Config.phtml');
         $menuXml = (string)file_get_contents($moduleRoot . '/etc/backend/menu.xml');
         $data = (string)file_get_contents($moduleRoot . '/Helper/Data.php');
         $provider = (string)file_get_contents(

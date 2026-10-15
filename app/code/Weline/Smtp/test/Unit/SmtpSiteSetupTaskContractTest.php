@@ -28,7 +28,7 @@ final class SmtpSiteSetupTaskContractTest extends TestCase
         $provisioner = (string)file_get_contents($smtpRoot . '/Service/MailAccountTransportProvisioner.php');
         $bootstrap = (string)file_get_contents($smtpRoot . '/Service/MailSmtpBootstrapService.php');
         $config = (string)file_get_contents($smtpRoot . '/Controller/Backend/Config.php');
-        $view = (string)file_get_contents($smtpRoot . '/view/Backend/Config.phtml');
+        $view = (string)file_get_contents($smtpRoot . '/view/backend/Config.phtml');
         $mailQuery = (string)file_get_contents(
             dirname($smtpRoot) . '/Mail/extends/module/Weline_Framework/Query/MailQueryProvider.php'
         );

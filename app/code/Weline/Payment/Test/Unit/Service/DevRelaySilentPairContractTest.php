@@ -84,8 +84,8 @@ final class DevRelaySilentPairContractTest extends TestCase
 
     public function testDemoTemplateExists(): void
     {
-        self::assertFileExists(dirname(__DIR__, 3) . '/view/Frontend/dev-relay/demo.phtml');
-        $src = file_get_contents(dirname(__DIR__, 3) . '/view/Frontend/dev-relay/demo.phtml');
+        self::assertFileExists(dirname(__DIR__, 3) . '/view/frontend/dev-relay/demo.phtml');
+        $src = file_get_contents(dirname(__DIR__, 3) . '/view/frontend/dev-relay/demo.phtml');
         self::assertIsString($src);
         self::assertStringContainsString('DevRelay 探针演示', $src);
         self::assertStringContainsString('probePath', $src);
@@ -106,8 +106,8 @@ final class DevRelaySilentPairContractTest extends TestCase
         self::assertStringContainsString('data-testid="payment-dev-relay-local-actions"', $src);
         self::assertStringContainsString('dev-relay-token-hint', $src);
         self::assertStringContainsString('payment-dev-relay-worker-summary', $src);
+        self::assertStringContainsString('payment-dev-relay-worker-summary-badge', $src);
         self::assertStringContainsString('技术详情（JSON）', $src);
-        self::assertStringContainsString('当前状态', $src);
         self::assertStringNotContainsString(
             "data-role=\"relay-actions\"\n            class=\"w-stack <?= \$feature_enabled ? '' : 'is-disabled' ?>\"\n            style=\"--w-gap:var(--weline-space-4);<?= \$feature_enabled ? '' : 'opacity:0.55;pointer-events:none;' ?>\"",
             $src

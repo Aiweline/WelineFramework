@@ -23,7 +23,7 @@ final class SmtpMailConfigPageContractTest extends TestCase
         self::assertStringContainsString('Weline_Smtp::system_smtp_mail_config', $controller);
         self::assertStringContainsString('smtp/backend/mail-config', $controller);
 
-        $view = (string)file_get_contents($root . '/view/Backend/MailConfig.phtml');
+        $view = (string)file_get_contents($root . '/view/backend/MailConfig.phtml');
         self::assertStringContainsString('data-testid="smtp-mail-config"', $view);
         self::assertStringContainsString('w-backend-page', $view);
         self::assertStringContainsString('w-card__body', $view);

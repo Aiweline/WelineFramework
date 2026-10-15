@@ -17,8 +17,8 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertFileExists($root . '/Controller/Backend/Template.php');
         self::assertFileExists($root . '/view/templates/backend/Template/listing.phtml');
         self::assertFileExists($root . '/view/templates/backend/Template/edit.phtml');
-        self::assertFileExists($root . '/view/Backend/Template/listing.phtml');
-        self::assertFileExists($root . '/view/Backend/Template/edit.phtml');
+        self::assertFileExists($root . '/view/backend/Template/listing.phtml');
+        self::assertFileExists($root . '/view/backend/Template/edit.phtml');
 
         $menu = (string)file_get_contents($root . '/etc/backend/menu.xml');
         self::assertStringContainsString('system_smtp_template', $menu);
@@ -58,10 +58,10 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('website_code', $controller);
 
         $listingStub = (string)file_get_contents($root . '/view/templates/backend/Template/listing.phtml');
-        self::assertStringContainsString('view/Backend/Template/listing.phtml', $listingStub);
+        self::assertStringContainsString('view/backend/Template/listing.phtml', $listingStub);
         self::assertStringNotContainsString('data-testid="smtp-channel-listing"', $listingStub);
 
-        $listing = (string)file_get_contents($root . '/view/Backend/Template/listing.phtml');
+        $listing = (string)file_get_contents($root . '/view/backend/Template/listing.phtml');
         self::assertStringContainsString('data-testid="smtp-channel-listing"', $listing);
         self::assertStringContainsString('data-testid="smtp-channel-listing-header"', $listing);
         self::assertStringContainsString('渠道管理', $listing);
@@ -94,10 +94,10 @@ final class MailTemplateUiSendContractTest extends TestCase
         self::assertStringContainsString('resolveWebsiteDefaultLanguage', $resolver);
 
         $editStub = (string)file_get_contents($root . '/view/templates/backend/Template/edit.phtml');
-        self::assertStringContainsString('view/Backend/Template/edit.phtml', $editStub);
+        self::assertStringContainsString('view/backend/Template/edit.phtml', $editStub);
         self::assertStringNotContainsString('w:editor-manager', $editStub);
 
-        $edit = (string)file_get_contents($root . '/view/Backend/Template/edit.phtml');
+        $edit = (string)file_get_contents($root . '/view/backend/Template/edit.phtml');
         // 自研可视化：禁止再挂 CKEditor / editor-manager
         self::assertStringNotContainsString('w:editor-manager', $edit);
         self::assertStringNotContainsString('ckeditorInstance', $edit);

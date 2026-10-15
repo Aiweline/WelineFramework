@@ -220,7 +220,7 @@ final class AccountSidebarHookHostTest extends TestCase
         $moduleRoot = dirname(__DIR__, 4);
         $sidebarFile = $moduleRoot . '/TwoFactorAuth/view/hooks/account.sidebar.group.security.phtml';
         $contentFile = $moduleRoot . '/TwoFactorAuth/view/hooks/account.sidebar.content.phtml';
-        $scriptFile = $moduleRoot . '/TwoFactorAuth/view/statics/Frontend/js/account-two-factor-inline-v2.js';
+        $scriptFile = $moduleRoot . '/TwoFactorAuth/view/statics/frontend/js/account-two-factor-inline-v2.js';
 
         $this->assertFileExists($sidebarFile);
         $this->assertFileExists($contentFile);
@@ -248,7 +248,7 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString("action=\"@url{'two-factor-auth/frontend/setup/enable'}\"", $content);
         $this->assertStringContainsString("action=\"@url{'two-factor-auth/frontend/setup/disable'}\"", $content);
         $this->assertStringContainsString("action=\"@url{'two-factor-auth/frontend/setup/regenerate-backup-codes'}\"", $content);
-        $modulesFile = $moduleRoot . '/TwoFactorAuth/view/statics/Frontend/weline.modules.js';
+        $modulesFile = $moduleRoot . '/TwoFactorAuth/view/statics/frontend/weline.modules.js';
         $this->assertFileExists($modulesFile);
         $modules = (string) file_get_contents($modulesFile);
         $this->assertStringContainsString('accountTwoFactor', $modules);
