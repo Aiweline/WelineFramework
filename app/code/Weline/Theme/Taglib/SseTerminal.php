@@ -9,7 +9,8 @@ use Weline\Framework\Taglib\TaglibInterface;
  * SSE 终端组件
  * 
  * 提供类似命令行终端的 SSE 流式输出显示界面
- * 支持实时显示进度、日志、错误等信息
+ * 支持实时显示进度、日志、错误等信息。
+ * 含 @lang / 动态属性时走 renderRuntimeTag；必须提供 runtimeCallback。
  */
 class SseTerminal implements TaglibInterface
 {
@@ -59,188 +60,252 @@ class SseTerminal implements TaglibInterface
 
     public static function callback(): callable
     {
-        return function ($tag_key, $config, $tag_data, $attributes) {
-            $id = $attributes['id'] ?? 'sse-terminal-' . uniqid();
-            $url = $attributes['url'] ?? '';
-            $title = $attributes['title'] ?? __('终端输出');
-            $height = $attributes['height'] ?? '300px';
-            $eventsAttr = \trim((string) ($attributes['events'] ?? ''));
-            $eventsList = $eventsAttr !== ''
-                ? \array_map('trim', \array_filter(\explode(',', $eventsAttr)))
-                : ['start', 'progress', 'chunk', 'total', 'done', 'failed', 'error', 'close', 'info', 'warning', 'success', 'debug', 'thinking', 'reasoning'];
-            // 用户显式传 events 时也强制确保终止事件和 thinking/reasoning 在列表内，保证清理和面板开关一致工作。
-            if ($eventsAttr !== '') {
-                foreach (['done', 'failed', 'error', 'close', 'thinking', 'reasoning'] as $reqEvent) {
-                    if (!\in_array($reqEvent, $eventsList, true)) {
-                        $eventsList[] = $reqEvent;
-                    }
-                }
-            }
-            $autoScroll = !isset($attributes['auto-scroll']) || $attributes['auto-scroll'] !== 'false';
-            $showTimestamp = !isset($attributes['show-timestamp']) || $attributes['show-timestamp'] !== 'false';
-            $showToolbar = !isset($attributes['show-toolbar']) || $attributes['show-toolbar'] !== 'false';
-            $showStartToggle = !isset($attributes['show-start-toggle']) || $attributes['show-start-toggle'] !== 'false';
-            $allowHtml = isset($attributes['allow-html']) && \in_array(\strtolower((string) $attributes['allow-html']), ['true', '1', 'yes'], true);
-            $class = $attributes['class'] ?? '';
-            $style = $attributes['style'] ?? '';
-            $maxStreamChars = isset($attributes['max-stream-chars']) ? (int) $attributes['max-stream-chars'] : 400000;
-            if ($maxStreamChars < 0) {
-                $maxStreamChars = 0;
-            }
-            $maxDomLines = isset($attributes['max-dom-lines']) ? (int) $attributes['max-dom-lines'] : 200;
-            if ($maxDomLines < 0) {
-                $maxDomLines = 0;
-            }
-            $showThinkingToggle = !isset($attributes['show-thinking-toggle']) || $attributes['show-thinking-toggle'] !== 'false';
-            $thinkingDefault = isset($attributes['thinking-default'])
-                ? \strtolower((string)$attributes['thinking-default'])
-                : 'on';
-            if (!\in_array($thinkingDefault, ['on', 'off'], true)) {
-                $thinkingDefault = 'on';
-            }
-            $thinkingStorageKey = isset($attributes['thinking-storage-key']) && (string)$attributes['thinking-storage-key'] !== ''
-                ? (string)$attributes['thinking-storage-key']
-                : 'weline_sse_terminal_thinking_' . $id;
-
-            // 翻译文本
-            $t_connecting = addslashes(__('正在连接...'));
-            $t_connected = addslashes(__('已连接'));
-            $t_disconnected = addslashes(__('已断开'));
-            $t_error = addslashes(__('连接错误'));
-            $t_connection_failed = addslashes(__('连接失败（可能为网络问题或服务端异常），请查看下方日志或服务器终端。'));
-            $t_clear = addslashes(__('清空'));
-            $t_copy = addslashes(__('复制'));
-            $t_stop = addslashes(__('停止'));
-            $t_start = addslashes(__('开始'));
-            $t_copied = addslashes(__('已复制'));
-            $t_dns_response = addslashes(__('【DNS 供应商返回】'));
-            $t_thinking_on = addslashes(__('思考输出：开（点击关闭）'));
-            $t_thinking_off = addslashes(__('思考输出：关（点击开启）'));
-            $t_thinking_label_on = addslashes(__('思考'));
-
-            // 解析属性
-            $t_reconnecting = addslashes(__('连接重试中...'));
-            $t_url_not_configured = 'URL not configured';
+        return static function ($tag_key, $config, $tag_data, $attributes) {
+            unset($tag_key, $config, $tag_data);
+            $attributes = is_array($attributes) ? $attributes : [];
+            $fallbackId = (string)($attributes['id'] ?? ('sse-terminal-' . uniqid('', true)));
             $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
-            // path 优先：若提供 path 则用 getBackendUrl 解析为完整 URL
             $code .= "\nif (!empty(\$Taglib__path ?? '')) { \$Taglib__url = (string)\$this->getBackendUrl(\$Taglib__path); }";
+            $phpOpen = '<' . '?php ';
+            $phpClose = '?' . '>';
+            $echoOpen = '<' . '?= ';
 
-            $html = [];
-            $html[] = '<?php ' . $code . ' ?>';
+            return $phpOpen . $code . ' ' . $phpClose . "\n"
+                . $echoOpen . '\\' . self::class . '::renderHtml(['
+                . "'id' => (string)(\$Taglib__id ?? " . var_export($fallbackId, true) . "),"
+                . "'url' => (string)(\$Taglib__url ?? ''),"
+                . "'path' => (string)(\$Taglib__path ?? ''),"
+                . "'title' => (string)(\$Taglib__title ?? ''),"
+                . "'height' => (string)(\$Taglib__height ?? '300px'),"
+                . "'events' => (string)(\$Taglib__events ?? ''),"
+                . "'auto-scroll' => (string)(\$Taglib__auto_scroll ?? 'true'),"
+                . "'show-timestamp' => (string)(\$Taglib__show_timestamp ?? 'true'),"
+                . "'show-toolbar' => (string)(\$Taglib__show_toolbar ?? 'true'),"
+                . "'show-start-toggle' => (string)(\$Taglib__show_start_toggle ?? 'true'),"
+                . "'allow-html' => (string)(\$Taglib__allow_html ?? ''),"
+                . "'class' => (string)(\$Taglib__class ?? ''),"
+                . "'style' => (string)(\$Taglib__style ?? ''),"
+                . "'max-stream-chars' => (string)(\$Taglib__max_stream_chars ?? ''),"
+                . "'max-dom-lines' => (string)(\$Taglib__max_dom_lines ?? ''),"
+                . "'show-thinking-toggle' => (string)(\$Taglib__show_thinking_toggle ?? 'true'),"
+                . "'thinking-default' => (string)(\$Taglib__thinking_default ?? 'on'),"
+                . "'thinking-storage-key' => (string)(\$Taglib__thinking_storage_key ?? ''),"
+                . ']) ' . $phpClose;
+        };
+    }
 
-            // 组件容器
-            $html[] = '<div class="weline-sse-terminal ' . htmlspecialchars($class) . '" id="' . htmlspecialchars($id) . '" style="' . htmlspecialchars($style) . '" data-component="sse-terminal">';
-            
-            // 标题栏
-            if ($showToolbar) {
-                $html[] = '  <div class="weline-sse-terminal-header">';
-                $html[] = '    <div class="weline-sse-terminal-title">';
-                $html[] = '      <span class="weline-sse-terminal-icon"><w-icon name="terminal" size="sm"></w-icon></span>';
-                $html[] = '      <span class="weline-sse-terminal-title-text">' . htmlspecialchars($title) . '</span>';
-                $html[] = '    </div>';
-                $html[] = '    <div class="weline-sse-terminal-status">';
-                $html[] = '      <span class="weline-sse-terminal-status-dot"></span>';
-                $html[] = '      <span class="weline-sse-terminal-status-text" id="' . htmlspecialchars($id) . '_status">' . $t_disconnected . '</span>';
-                $html[] = '    </div>';
-                $html[] = '    <div class="weline-sse-terminal-actions">';
-                if ($showThinkingToggle) {
-                    // 思考输出按钮：高亮表示开启；点击切换；状态写 localStorage 按 key 记忆。
-                    $html[] = '      <button type="button" class="weline-sse-terminal-btn weline-sse-terminal-btn-thinking" id="' . htmlspecialchars($id) . '_btn_thinking" title="' . $t_thinking_on . '" aria-pressed="true">';
-                    $html[] = '        <w-icon name="circle" size="sm"></w-icon>';
-                    $html[] = '      </button>';
-                }
-                if ($showStartToggle) {
-                    $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_toggle" title="' . $t_start . '">';
-                    $html[] = '        <w-icon name="play" size="sm"></w-icon>';
-                    $html[] = '      </button>';
-                }
-                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_copy" title="' . $t_copy . '">';
-                $html[] = '        <w-icon name="copy" size="sm"></w-icon>';
-                $html[] = '      </button>';
-                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_clear" title="' . $t_clear . '">';
-                $html[] = '        <w-icon name="trash" size="sm"></w-icon>';
-                $html[] = '      </button>';
-                $html[] = '    </div>';
-                $html[] = '  </div>';
+    public static function runtimeCallback(): callable
+    {
+        return static function (
+            \Weline\Framework\View\Template $template,
+            string $tagKey,
+            array $attributes,
+            string $content,
+        ): string {
+            unset($content);
+            if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs') {
+                return '';
             }
-            
-            // 输出区域
-            $html[] = '  <div class="weline-sse-terminal-body" id="' . htmlspecialchars($id) . '_body" style="height: ' . htmlspecialchars($height) . '">';
-            $html[] = '    <div class="weline-sse-terminal-content" id="' . htmlspecialchars($id) . '_content"></div>';
+            $attrs = self::resolveDeclarativeAttrs(
+                $template,
+                is_array($attributes) ? $attributes : [],
+                ['url', 'path', 'title', 'height', 'events', 'class', 'style', 'thinking-storage-key']
+            );
+            $path = trim((string)($attrs['path'] ?? ''));
+            if ($path !== '' && method_exists($template, 'getBackendUrl')) {
+                $attrs['__resolved_url'] = (string)$template->getBackendUrl($path);
+            }
+
+            return self::renderHtml($attrs);
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    public static function renderHtml(array $attributes): string
+    {
+
+        $id = $attributes['id'] ?? 'sse-terminal-' . uniqid();
+        $url = $attributes['url'] ?? '';
+        $title = $attributes['title'] ?? __('终端输出');
+        $height = $attributes['height'] ?? '300px';
+        $eventsAttr = \trim((string) ($attributes['events'] ?? ''));
+        $eventsList = $eventsAttr !== ''
+            ? \array_map('trim', \array_filter(\explode(',', $eventsAttr)))
+            : ['start', 'progress', 'chunk', 'total', 'done', 'failed', 'error', 'close', 'info', 'warning', 'success', 'debug', 'thinking', 'reasoning'];
+        // 用户显式传 events 时也强制确保终止事件和 thinking/reasoning 在列表内，保证清理和面板开关一致工作。
+        if ($eventsAttr !== '') {
+            foreach (['done', 'failed', 'error', 'close', 'thinking', 'reasoning'] as $reqEvent) {
+                if (!\in_array($reqEvent, $eventsList, true)) {
+                    $eventsList[] = $reqEvent;
+                }
+            }
+        }
+        $autoScroll = !isset($attributes['auto-scroll']) || $attributes['auto-scroll'] !== 'false';
+        $showTimestamp = !isset($attributes['show-timestamp']) || $attributes['show-timestamp'] !== 'false';
+        $showToolbar = !isset($attributes['show-toolbar']) || $attributes['show-toolbar'] !== 'false';
+        $showStartToggle = !isset($attributes['show-start-toggle']) || $attributes['show-start-toggle'] !== 'false';
+        $allowHtml = isset($attributes['allow-html']) && \in_array(\strtolower((string) $attributes['allow-html']), ['true', '1', 'yes'], true);
+        $class = $attributes['class'] ?? '';
+        $style = $attributes['style'] ?? '';
+        $maxStreamChars = isset($attributes['max-stream-chars']) ? (int) $attributes['max-stream-chars'] : 400000;
+        if ($maxStreamChars < 0) {
+            $maxStreamChars = 0;
+        }
+        $maxDomLines = isset($attributes['max-dom-lines']) ? (int) $attributes['max-dom-lines'] : 200;
+        if ($maxDomLines < 0) {
+            $maxDomLines = 0;
+        }
+        $showThinkingToggle = !isset($attributes['show-thinking-toggle']) || $attributes['show-thinking-toggle'] !== 'false';
+        $thinkingDefault = isset($attributes['thinking-default'])
+            ? \strtolower((string)$attributes['thinking-default'])
+            : 'on';
+        if (!\in_array($thinkingDefault, ['on', 'off'], true)) {
+            $thinkingDefault = 'on';
+        }
+        $thinkingStorageKey = isset($attributes['thinking-storage-key']) && (string)$attributes['thinking-storage-key'] !== ''
+            ? (string)$attributes['thinking-storage-key']
+            : 'weline_sse_terminal_thinking_' . $id;
+
+        // 翻译文本
+        $t_connecting = addslashes(__('正在连接...'));
+        $t_connected = addslashes(__('已连接'));
+        $t_disconnected = addslashes(__('已断开'));
+        $t_error = addslashes(__('连接错误'));
+        $t_connection_failed = addslashes(__('连接失败（可能为网络问题或服务端异常），请查看下方日志或服务器终端。'));
+        $t_clear = addslashes(__('清空'));
+        $t_copy = addslashes(__('复制'));
+        $t_stop = addslashes(__('停止'));
+        $t_start = addslashes(__('开始'));
+        $t_copied = addslashes(__('已复制'));
+        $t_dns_response = addslashes(__('【DNS 供应商返回】'));
+        $t_thinking_on = addslashes(__('思考输出：开（点击关闭）'));
+        $t_thinking_off = addslashes(__('思考输出：关（点击开启）'));
+        $t_thinking_label_on = addslashes(__('思考'));
+
+        // 解析属性
+        $t_reconnecting = addslashes(__('连接重试中...'));
+        $t_url_not_configured = 'URL not configured';
+        if (isset($attributes['__resolved_url']) && (string)$attributes['__resolved_url'] !== '') {
+            $url = (string)$attributes['__resolved_url'];
+        }
+
+        $html = [];
+
+        // 组件容器
+        $html[] = '<div class="weline-sse-terminal ' . htmlspecialchars($class) . '" id="' . htmlspecialchars($id) . '" style="' . htmlspecialchars($style) . '" data-component="sse-terminal">';
+        
+        // 标题栏
+        if ($showToolbar) {
+            $html[] = '  <div class="weline-sse-terminal-header">';
+            $html[] = '    <div class="weline-sse-terminal-title">';
+            $html[] = '      <span class="weline-sse-terminal-icon"><w-icon name="terminal" size="sm"></w-icon></span>';
+            $html[] = '      <span class="weline-sse-terminal-title-text">' . htmlspecialchars($title) . '</span>';
+            $html[] = '    </div>';
+            $html[] = '    <div class="weline-sse-terminal-status">';
+            $html[] = '      <span class="weline-sse-terminal-status-dot"></span>';
+            $html[] = '      <span class="weline-sse-terminal-status-text" id="' . htmlspecialchars($id) . '_status">' . $t_disconnected . '</span>';
+            $html[] = '    </div>';
+            $html[] = '    <div class="weline-sse-terminal-actions">';
+            if ($showThinkingToggle) {
+                // 思考输出按钮：高亮表示开启；点击切换；状态写 localStorage 按 key 记忆。
+                $html[] = '      <button type="button" class="weline-sse-terminal-btn weline-sse-terminal-btn-thinking" id="' . htmlspecialchars($id) . '_btn_thinking" title="' . $t_thinking_on . '" aria-pressed="true">';
+                $html[] = '        <w-icon name="circle" size="sm"></w-icon>';
+                $html[] = '      </button>';
+            }
+            if ($showStartToggle) {
+                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_toggle" title="' . $t_start . '">';
+                $html[] = '        <w-icon name="play" size="sm"></w-icon>';
+                $html[] = '      </button>';
+            }
+            $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_copy" title="' . $t_copy . '">';
+            $html[] = '        <w-icon name="copy" size="sm"></w-icon>';
+            $html[] = '      </button>';
+            $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_clear" title="' . $t_clear . '">';
+            $html[] = '        <w-icon name="trash" size="sm"></w-icon>';
+            $html[] = '      </button>';
+            $html[] = '    </div>';
             $html[] = '  </div>';
-            
-            // 进度条（可选）
-            $html[] = '  <div class="weline-sse-terminal-progress" id="' . htmlspecialchars($id) . '_progress" style="display:none;">';
-            $html[] = '    <div class="weline-sse-terminal-progress-bar" id="' . htmlspecialchars($id) . '_progress_bar"></div>';
-            $html[] = '  </div>';
-            
-            $html[] = '</div>';
+        }
+        
+        // 输出区域
+        $html[] = '  <div class="weline-sse-terminal-body" id="' . htmlspecialchars($id) . '_body" style="height: ' . htmlspecialchars($height) . '">';
+        $html[] = '    <div class="weline-sse-terminal-content" id="' . htmlspecialchars($id) . '_content"></div>';
+        $html[] = '  </div>';
+        
+        // 进度条（可选）
+        $html[] = '  <div class="weline-sse-terminal-progress" id="' . htmlspecialchars($id) . '_progress" style="display:none;">';
+        $html[] = '    <div class="weline-sse-terminal-progress-bar" id="' . htmlspecialchars($id) . '_progress_bar"></div>';
+        $html[] = '  </div>';
+        
+        $html[] = '</div>';
 
-            // 样式（使用主题变量）
-            $html[] = '<style>';
-            $html[] = '.weline-sse-terminal { border-radius: 8px; overflow: hidden; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 13px; background: var(--backend-color-card-bg, #1e1e2e); border: 1px solid var(--backend-color-border-default, #313244); box-shadow: var(--backend-shadow-md); }';
-            $html[] = '.weline-sse-terminal-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--backend-color-sidebar-bg, #181825); border-bottom: 1px solid var(--backend-color-border-default, #313244); gap: 12px; }';
-            $html[] = '.weline-sse-terminal-title { display: flex; align-items: center; gap: 8px; color: var(--backend-color-text-secondary, #a6adc8); font-weight: 500; }';
-            $html[] = '.weline-sse-terminal-icon { color: var(--backend-color-primary, #89b4fa); }';
-            $html[] = '.weline-sse-terminal-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--backend-color-text-muted, #6c7086); }';
-            $html[] = '.weline-sse-terminal-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--backend-color-text-muted, #6c7086); transition: background 0.3s; }';
-            $html[] = '.weline-sse-terminal.connected .weline-sse-terminal-status-dot { background: var(--backend-color-success, #a6e3a1); box-shadow: 0 0 6px var(--backend-color-success, #a6e3a1); }';
-            $html[] = '.weline-sse-terminal.connecting .weline-sse-terminal-status-dot { background: var(--backend-color-info, #89dceb); box-shadow: 0 0 6px var(--backend-color-info, #89dceb); }';
-            $html[] = '.weline-sse-terminal.error .weline-sse-terminal-status-dot { background: var(--backend-color-danger, #f38ba8); }';
-            $html[] = '.weline-sse-terminal-actions { display: flex; gap: 4px; }';
-            $html[] = '.weline-sse-terminal-btn { width: 28px; height: 28px; border: none; border-radius: 4px; background: transparent; color: var(--backend-color-text-muted, #6c7086); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }';
-            $html[] = '.weline-sse-terminal-btn:hover { background: var(--backend-color-hover-bg, #313244); color: var(--backend-color-text-primary, #cdd6f4); }';
-            $html[] = '.weline-sse-terminal-btn.active { color: var(--backend-color-danger, #f38ba8); }';
-            $html[] = '.weline-sse-terminal-btn-thinking { color: var(--backend-color-info, #89dceb); }';
-            $html[] = '.weline-sse-terminal-btn-thinking[aria-pressed="false"] { color: var(--backend-color-text-muted, #6c7086); opacity: 0.55; }';
-            $html[] = '.weline-sse-terminal-line.thinking { color: var(--backend-color-info, #89dceb); opacity: 0.85; font-style: italic; }';
-            $html[] = '.weline-sse-terminal-body { overflow-y: auto; padding: 12px; background: var(--backend-color-card-bg, #1e1e2e); }';
-            $html[] = '.weline-sse-terminal-content { min-height: 100%; }';
-            $html[] = '.weline-sse-terminal-line { padding: 2px 0; line-height: 1.5; word-break: break-all; display: flex; gap: 8px; }';
-            $html[] = '.weline-sse-terminal-time { color: var(--backend-color-text-muted, #6c7086); flex-shrink: 0; font-size: 11px; }';
-            $html[] = '.weline-sse-terminal-text { flex: 1; white-space: pre-wrap; word-break: break-word; }';
-            $html[] = '.weline-sse-terminal-line.info { color: var(--backend-color-text-primary, #cdd6f4); }';
-            $html[] = '.weline-sse-terminal-line.success { color: var(--backend-color-success, #a6e3a1); }';
-            $html[] = '.weline-sse-terminal-line.warning { color: var(--backend-color-warning, #f9e2af); }';
-            $html[] = '.weline-sse-terminal-line.error { color: var(--backend-color-danger, #f38ba8); }';
-            $html[] = '.weline-sse-terminal-line.progress { color: var(--backend-color-info, #89dceb); height: auto !important; }';
-            $html[] = '.weline-sse-terminal-line.debug { color: var(--backend-color-text-muted, #6c7086); font-style: italic; }';
-            $html[] = '.weline-sse-terminal-line.start { color: var(--backend-color-primary, #89b4fa); font-weight: 500; }';
-            $html[] = '.weline-sse-terminal-line.total { color: var(--backend-color-success, #a6e3a1); font-weight: 500; }';
-            $html[] = '.weline-sse-terminal-line.done { color: var(--backend-color-success, #a6e3a1); font-weight: 500; }';
-            $html[] = '.weline-sse-terminal-line.weline-sse-terminal-streaming .weline-sse-terminal-text { white-space: pre-wrap; word-break: break-word; }';
-            $html[] = '.weline-sse-terminal-progress { height: 3px; background: var(--backend-color-border-default, #313244); }';
-            $html[] = '.weline-sse-terminal-progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--backend-color-primary, #89b4fa), var(--backend-color-info, #89dceb)); transition: width 0.3s; }';
-            $html[] = '.weline-sse-terminal::-webkit-scrollbar { width: 6px; }';
-            $html[] = '.weline-sse-terminal::-webkit-scrollbar-track { background: transparent; }';
-            $html[] = '.weline-sse-terminal::-webkit-scrollbar-thumb { background: var(--backend-color-border-default, #313244); border-radius: 3px; }';
-            $html[] = '.weline-sse-terminal-body::-webkit-scrollbar { width: 6px; }';
-            $html[] = '.weline-sse-terminal-body::-webkit-scrollbar-track { background: transparent; }';
-            $html[] = '.weline-sse-terminal-body::-webkit-scrollbar-thumb { background: var(--backend-color-border-default, #313244); border-radius: 3px; }';
-            $html[] = '</style>';
+        // 样式（使用主题变量）
+        $html[] = '<style>';
+        $html[] = '.weline-sse-terminal { border-radius: 8px; overflow: hidden; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 13px; background: var(--backend-color-card-bg, #1e1e2e); border: 1px solid var(--backend-color-border-default, #313244); box-shadow: var(--backend-shadow-md); }';
+        $html[] = '.weline-sse-terminal-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--backend-color-sidebar-bg, #181825); border-bottom: 1px solid var(--backend-color-border-default, #313244); gap: 12px; }';
+        $html[] = '.weline-sse-terminal-title { display: flex; align-items: center; gap: 8px; color: var(--backend-color-text-secondary, #a6adc8); font-weight: 500; }';
+        $html[] = '.weline-sse-terminal-icon { color: var(--backend-color-primary, #89b4fa); }';
+        $html[] = '.weline-sse-terminal-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--backend-color-text-muted, #6c7086); }';
+        $html[] = '.weline-sse-terminal-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--backend-color-text-muted, #6c7086); transition: background 0.3s; }';
+        $html[] = '.weline-sse-terminal.connected .weline-sse-terminal-status-dot { background: var(--backend-color-success, #a6e3a1); box-shadow: 0 0 6px var(--backend-color-success, #a6e3a1); }';
+        $html[] = '.weline-sse-terminal.connecting .weline-sse-terminal-status-dot { background: var(--backend-color-info, #89dceb); box-shadow: 0 0 6px var(--backend-color-info, #89dceb); }';
+        $html[] = '.weline-sse-terminal.error .weline-sse-terminal-status-dot { background: var(--backend-color-danger, #f38ba8); }';
+        $html[] = '.weline-sse-terminal-actions { display: flex; gap: 4px; }';
+        $html[] = '.weline-sse-terminal-btn { width: 28px; height: 28px; border: none; border-radius: 4px; background: transparent; color: var(--backend-color-text-muted, #6c7086); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }';
+        $html[] = '.weline-sse-terminal-btn:hover { background: var(--backend-color-hover-bg, #313244); color: var(--backend-color-text-primary, #cdd6f4); }';
+        $html[] = '.weline-sse-terminal-btn.active { color: var(--backend-color-danger, #f38ba8); }';
+        $html[] = '.weline-sse-terminal-btn-thinking { color: var(--backend-color-info, #89dceb); }';
+        $html[] = '.weline-sse-terminal-btn-thinking[aria-pressed="false"] { color: var(--backend-color-text-muted, #6c7086); opacity: 0.55; }';
+        $html[] = '.weline-sse-terminal-line.thinking { color: var(--backend-color-info, #89dceb); opacity: 0.85; font-style: italic; }';
+        $html[] = '.weline-sse-terminal-body { overflow-y: auto; padding: 12px; background: var(--backend-color-card-bg, #1e1e2e); }';
+        $html[] = '.weline-sse-terminal-content { min-height: 100%; }';
+        $html[] = '.weline-sse-terminal-line { padding: 2px 0; line-height: 1.5; word-break: break-all; display: flex; gap: 8px; }';
+        $html[] = '.weline-sse-terminal-time { color: var(--backend-color-text-muted, #6c7086); flex-shrink: 0; font-size: 11px; }';
+        $html[] = '.weline-sse-terminal-text { flex: 1; white-space: pre-wrap; word-break: break-word; }';
+        $html[] = '.weline-sse-terminal-line.info { color: var(--backend-color-text-primary, #cdd6f4); }';
+        $html[] = '.weline-sse-terminal-line.success { color: var(--backend-color-success, #a6e3a1); }';
+        $html[] = '.weline-sse-terminal-line.warning { color: var(--backend-color-warning, #f9e2af); }';
+        $html[] = '.weline-sse-terminal-line.error { color: var(--backend-color-danger, #f38ba8); }';
+        $html[] = '.weline-sse-terminal-line.progress { color: var(--backend-color-info, #89dceb); height: auto !important; }';
+        $html[] = '.weline-sse-terminal-line.debug { color: var(--backend-color-text-muted, #6c7086); font-style: italic; }';
+        $html[] = '.weline-sse-terminal-line.start { color: var(--backend-color-primary, #89b4fa); font-weight: 500; }';
+        $html[] = '.weline-sse-terminal-line.total { color: var(--backend-color-success, #a6e3a1); font-weight: 500; }';
+        $html[] = '.weline-sse-terminal-line.done { color: var(--backend-color-success, #a6e3a1); font-weight: 500; }';
+        $html[] = '.weline-sse-terminal-line.weline-sse-terminal-streaming .weline-sse-terminal-text { white-space: pre-wrap; word-break: break-word; }';
+        $html[] = '.weline-sse-terminal-progress { height: 3px; background: var(--backend-color-border-default, #313244); }';
+        $html[] = '.weline-sse-terminal-progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--backend-color-primary, #89b4fa), var(--backend-color-info, #89dceb)); transition: width 0.3s; }';
+        $html[] = '.weline-sse-terminal::-webkit-scrollbar { width: 6px; }';
+        $html[] = '.weline-sse-terminal::-webkit-scrollbar-track { background: transparent; }';
+        $html[] = '.weline-sse-terminal::-webkit-scrollbar-thumb { background: var(--backend-color-border-default, #313244); border-radius: 3px; }';
+        $html[] = '.weline-sse-terminal-body::-webkit-scrollbar { width: 6px; }';
+        $html[] = '.weline-sse-terminal-body::-webkit-scrollbar-track { background: transparent; }';
+        $html[] = '.weline-sse-terminal-body::-webkit-scrollbar-thumb { background: var(--backend-color-border-default, #313244); border-radius: 3px; }';
+        $html[] = '</style>';
 
-            // JavaScript
-            $html[] = '<script>(function(){';
-            $html[] = '"use strict";';
-            $html[] = 'var id = ' . json_encode($id) . ';';
-            $html[] = 'var initialUrl = <?= json_encode($Taglib__url ?? \'\') ?>;';
-            $html[] = 'var commonEvents = ' . \json_encode($eventsList) . ';';
-            $html[] = 'var autoScroll = ' . ($autoScroll ? 'true' : 'false') . ';';
-            $html[] = 'var showTimestamp = ' . ($showTimestamp ? 'true' : 'false') . ';';
-            $html[] = 'var allowHtml = ' . ($allowHtml ? 'true' : 'false') . ';';
-            $html[] = 'var maxStreamChars = ' . $maxStreamChars . ';';
-            $html[] = 'var maxDomLines = ' . $maxDomLines . ';';
-            $html[] = 'var urlNotConfiguredText = ' . json_encode($t_url_not_configured, JSON_UNESCAPED_UNICODE) . ';';
-            $html[] = 'var thinkingShowToggle = ' . ($showThinkingToggle ? 'true' : 'false') . ';';
-            $html[] = 'var thinkingDefaultEnabled = ' . ($thinkingDefault === 'on' ? 'true' : 'false') . ';';
-            $html[] = 'var thinkingStorageKey = ' . json_encode($thinkingStorageKey, JSON_UNESCAPED_UNICODE) . ';';
-            $html[] = 'var thinkingTitleOn = ' . json_encode($t_thinking_on, JSON_UNESCAPED_UNICODE) . ';';
-            $html[] = 'var thinkingTitleOff = ' . json_encode($t_thinking_off, JSON_UNESCAPED_UNICODE) . ';';
-            $html[] = 'var thinkingLabel = ' . json_encode($t_thinking_label_on, JSON_UNESCAPED_UNICODE) . ';';
-            $tStreamTrunc = addslashes(__('【输出过长，已省略前部】'));
-            $html[] = 'var streamTruncMsg = ' . json_encode($tStreamTrunc . "\n", JSON_UNESCAPED_UNICODE) . ';';
+        // JavaScript
+        $html[] = '<script>(function(){';
+        $html[] = '"use strict";';
+        $html[] = 'var id = ' . json_encode($id) . ';';
+        $html[] = 'var initialUrl = ' . json_encode((string)$url, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+        $html[] = 'var commonEvents = ' . \json_encode($eventsList) . ';';
+        $html[] = 'var autoScroll = ' . ($autoScroll ? 'true' : 'false') . ';';
+        $html[] = 'var showTimestamp = ' . ($showTimestamp ? 'true' : 'false') . ';';
+        $html[] = 'var allowHtml = ' . ($allowHtml ? 'true' : 'false') . ';';
+        $html[] = 'var maxStreamChars = ' . $maxStreamChars . ';';
+        $html[] = 'var maxDomLines = ' . $maxDomLines . ';';
+        $html[] = 'var urlNotConfiguredText = ' . json_encode($t_url_not_configured, JSON_UNESCAPED_UNICODE) . ';';
+        $html[] = 'var thinkingShowToggle = ' . ($showThinkingToggle ? 'true' : 'false') . ';';
+        $html[] = 'var thinkingDefaultEnabled = ' . ($thinkingDefault === 'on' ? 'true' : 'false') . ';';
+        $html[] = 'var thinkingStorageKey = ' . json_encode($thinkingStorageKey, JSON_UNESCAPED_UNICODE) . ';';
+        $html[] = 'var thinkingTitleOn = ' . json_encode($t_thinking_on, JSON_UNESCAPED_UNICODE) . ';';
+        $html[] = 'var thinkingTitleOff = ' . json_encode($t_thinking_off, JSON_UNESCAPED_UNICODE) . ';';
+        $html[] = 'var thinkingLabel = ' . json_encode($t_thinking_label_on, JSON_UNESCAPED_UNICODE) . ';';
+        $tStreamTrunc = addslashes(__('【输出过长，已省略前部】'));
+        $html[] = 'var streamTruncMsg = ' . json_encode($tStreamTrunc . "\n", JSON_UNESCAPED_UNICODE) . ';';
 
-            $html[] = <<<JS
+        $html[] = <<<JS
 
 var container = document.getElementById(id);
 var content = document.getElementById(id + '_content');
@@ -266,7 +331,7 @@ try {
 function persistThinkingState() {
     try {
         if (thinkingShowToggle && thinkingStorageKey && typeof window.localStorage !== 'undefined') {
-            window.localStorage.setItem(thinkingStorageKey, thinkingEnabled ? 'on' : 'off');
+        window.localStorage.setItem(thinkingStorageKey, thinkingEnabled ? 'on' : 'off');
         }
     } catch (e) {}
 }
@@ -337,13 +402,13 @@ function pruneTerminalLines() {
     while (content.children.length > maxDomLines) {
         var first = content.firstElementChild;
         if (!first) {
-            break;
+        break;
         }
         if (first === streamingLine) {
-            streamingLine = null;
+        streamingLine = null;
         }
         if (first === thinkingStreamingLine) {
-            thinkingStreamingLine = null;
+        thinkingStreamingLine = null;
         }
         content.removeChild(first);
     }
@@ -373,18 +438,18 @@ function sanitizeTerminalHtml(html) {
     });
     template.content.querySelectorAll('*').forEach(function(el) {
         Array.prototype.slice.call(el.attributes).forEach(function(attr) {
-            var name = attr.name.toLowerCase();
-            if (name.indexOf('on') === 0 || name === 'srcdoc') {
-                el.removeAttribute(attr.name);
-                return;
-            }
-            if (['href', 'src', 'xlink:href', 'action', 'formaction', 'poster'].indexOf(name) >= 0 && isDangerousUri(attr.value)) {
-                el.removeAttribute(attr.name);
-                return;
-            }
-            if (name === 'style' && isDangerousStyle(attr.value)) {
-                el.removeAttribute(attr.name);
-            }
+        var name = attr.name.toLowerCase();
+        if (name.indexOf('on') === 0 || name === 'srcdoc') {
+            el.removeAttribute(attr.name);
+            return;
+        }
+        if (['href', 'src', 'xlink:href', 'action', 'formaction', 'poster'].indexOf(name) >= 0 && isDangerousUri(attr.value)) {
+            el.removeAttribute(attr.name);
+            return;
+        }
+        if (name === 'style' && isDangerousStyle(attr.value)) {
+            el.removeAttribute(attr.name);
+        }
         });
     });
     return template.innerHTML;
@@ -407,18 +472,18 @@ function log(text, type) {
         line.className = 'weline-sse-terminal-line ' + type;
         
         if (showTimestamp) {
-            var time = document.createElement('span');
-            time.className = 'weline-sse-terminal-time';
-            time.textContent = '[' + formatTime() + ']';
-            line.appendChild(time);
+        var time = document.createElement('span');
+        time.className = 'weline-sse-terminal-time';
+        time.textContent = '[' + formatTime() + ']';
+        line.appendChild(time);
         }
         
         var textEl = document.createElement('span');
         textEl.className = 'weline-sse-terminal-text';
         if (allowHtml && typeof lineText === 'string' && lineText.indexOf('<') >= 0) {
-            textEl.innerHTML = sanitizeTerminalHtml(lineText);
+        textEl.innerHTML = sanitizeTerminalHtml(lineText);
         } else {
-            textEl.textContent = lineText;
+        textEl.textContent = lineText;
         }
         line.appendChild(textEl);
         
@@ -439,10 +504,10 @@ function appendThinkingChunkDom(s) {
         thinkingStreamingLine = document.createElement('div');
         thinkingStreamingLine.className = 'weline-sse-terminal-line weline-sse-terminal-streaming thinking';
         if (showTimestamp) {
-            var time = document.createElement('span');
-            time.className = 'weline-sse-terminal-time';
-            time.textContent = '[' + formatTime() + ']';
-            thinkingStreamingLine.appendChild(time);
+        var time = document.createElement('span');
+        time.className = 'weline-sse-terminal-time';
+        time.textContent = '[' + formatTime() + ']';
+        thinkingStreamingLine.appendChild(time);
         }
         var labelEl = document.createElement('span');
         labelEl.className = 'weline-sse-terminal-text weline-sse-terminal-thinking-label';
@@ -461,8 +526,8 @@ function appendThinkingChunkDom(s) {
     if (textEl) {
         textEl.textContent += s;
         if (maxStreamChars > 0 && textEl.textContent.length > maxStreamChars) {
-            var keep = Math.floor(maxStreamChars * 0.85);
-            textEl.textContent = streamTruncMsg + textEl.textContent.slice(-keep);
+        var keep = Math.floor(maxStreamChars * 0.85);
+        textEl.textContent = streamTruncMsg + textEl.textContent.slice(-keep);
         }
     }
     if (autoScroll) body.scrollTop = body.scrollHeight;
@@ -487,10 +552,10 @@ function appendChunkDom(s) {
         streamingLine = document.createElement('div');
         streamingLine.className = 'weline-sse-terminal-line weline-sse-terminal-streaming chunk';
         if (showTimestamp) {
-            var time = document.createElement('span');
-            time.className = 'weline-sse-terminal-time';
-            time.textContent = '[' + formatTime() + ']';
-            streamingLine.appendChild(time);
+        var time = document.createElement('span');
+        time.className = 'weline-sse-terminal-time';
+        time.textContent = '[' + formatTime() + ']';
+        streamingLine.appendChild(time);
         }
         var textEl0 = document.createElement('span');
         textEl0.className = 'weline-sse-terminal-text';
@@ -502,8 +567,8 @@ function appendChunkDom(s) {
     if (textEl) {
         textEl.textContent += s;
         if (maxStreamChars > 0 && textEl.textContent.length > maxStreamChars) {
-            var keep = Math.floor(maxStreamChars * 0.85);
-            textEl.textContent = streamTruncMsg + textEl.textContent.slice(-keep);
+        var keep = Math.floor(maxStreamChars * 0.85);
+        textEl.textContent = streamTruncMsg + textEl.textContent.slice(-keep);
         }
     }
     if (autoScroll) body.scrollTop = body.scrollHeight;
@@ -526,7 +591,7 @@ function appendChunk(text) {
         chunkRafScheduled = true;
         var generation = chunkRafGeneration;
         chunkRafId = requestAnimationFrame(function() {
-            flushChunkRaf(generation);
+        flushChunkRaf(generation);
         });
     }
 }
@@ -538,8 +603,8 @@ function setProgress(percent) {
     }
     if (percent >= 100 || percent < 0) {
         setTimeout(function() {
-            progressContainer.style.display = 'none';
-            progressBar.style.width = '0%';
+        progressContainer.style.display = 'none';
+        progressBar.style.width = '0%';
         }, 500);
     }
 }
@@ -567,50 +632,50 @@ function dispatchSseEvent(eventName, data, rawEvent) {
     try {
         var callbackEvent = rawEvent || { data: JSON.stringify(data) };
         if (eventName === 'chunk' && data.content !== undefined) {
-            var chunkContent = typeof data.content === 'string' ? data.content : '';
-            if (eventCallbacks.chunk) {
-                eventCallbacks.chunk(callbackEvent);
-            } else {
-                appendChunk(chunkContent);
-            }
-            if (data.progress !== undefined) setProgress(data.progress);
-            return;
+        var chunkContent = typeof data.content === 'string' ? data.content : '';
+        if (eventCallbacks.chunk) {
+            eventCallbacks.chunk(callbackEvent);
+        } else {
+            appendChunk(chunkContent);
+        }
+        if (data.progress !== undefined) setProgress(data.progress);
+        return;
         }
         // 思考输出（thinking/reasoning）：受 thinkingEnabled 控制是否渲染。
         // callback 不受开关影响，业务侧仍可观察事件。
         if (eventName === 'thinking' || eventName === 'reasoning') {
-            if (eventCallbacks[eventName]) {
-                try { eventCallbacks[eventName](callbackEvent); } catch (e) {}
-            }
-            if (!thinkingEnabled) {
-                return;
-            }
-            var thinkText = (data && typeof data.content === 'string') ? data.content
-                : ((data && typeof data.message === 'string') ? data.message : '');
-            if (thinkText !== '') {
-                appendThinkingChunkDom(thinkText);
-            }
+        if (eventCallbacks[eventName]) {
+            try { eventCallbacks[eventName](callbackEvent); } catch (e) {}
+        }
+        if (!thinkingEnabled) {
             return;
+        }
+        var thinkText = (data && typeof data.content === 'string') ? data.content
+            : ((data && typeof data.message === 'string') ? data.message : '');
+        if (thinkText !== '') {
+            appendThinkingChunkDom(thinkText);
+        }
+        return;
         }
         var msg = data.message || data.result || data.keyword || data.msg;
         if (!msg) msg = (Object.keys(data).length > 0 ? JSON.stringify(data) : eventName);
         var type = (eventName === 'failed' || eventName === 'error') ? 'error' : eventName;
         var hasCallback = !!eventCallbacks[eventName];
         if (eventName === 'error') {
-            setStatus('error', String(msg || '$t_error'));
+        setStatus('error', String(msg || '$t_error'));
         }
         if (hasCallback) {
-            eventCallbacks[eventName](callbackEvent);
+        eventCallbacks[eventName](callbackEvent);
         } else {
-            log(msg, type);
+        log(msg, type);
         }
         if (data.dns_response) {
-            var dr = data.dns_response;
-            var drStr = typeof dr === 'string' ? dr : JSON.stringify(dr, null, 2);
-            log('$t_dns_response ' + drStr, 'debug');
+        var dr = data.dns_response;
+        var drStr = typeof dr === 'string' ? dr : JSON.stringify(dr, null, 2);
+        log('$t_dns_response ' + drStr, 'debug');
         }
         if (data.progress !== undefined) {
-            setProgress(data.progress);
+        setProgress(data.progress);
         }
         // Stream finalization is handled in finally so callbacks cannot skip close().
         // done 表示服务端流已结束：必须关闭原生 EventSource，否则 TCP 关闭后浏览器会
@@ -622,7 +687,7 @@ function dispatchSseEvent(eventName, data, rawEvent) {
     } finally {
         // done is terminal. Always close EventSource, even if consumer callbacks throw.
         if (shouldFinalizeStream) {
-            stop({ internal: true, keepStatus: eventName === 'failed' || eventName === 'error' });
+        stop({ internal: true, keepStatus: eventName === 'failed' || eventName === 'error' });
         }
     }
 }
@@ -641,22 +706,22 @@ function buildEventSourceUrl(baseUrl, options) {
     var body = opts.body;
     try {
         if (typeof FormData !== 'undefined' && body instanceof FormData) {
-            body.forEach(function(v, k) {
-                if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
-                    resolved = appendQueryParam(resolved, String(k), String(v));
-                }
-            });
-            return resolved;
+        body.forEach(function(v, k) {
+            if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                resolved = appendQueryParam(resolved, String(k), String(v));
+            }
+        });
+        return resolved;
         }
         if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
-            body.forEach(function(v, k) {
-                resolved = appendQueryParam(resolved, String(k), String(v));
-            });
-            return resolved;
+        body.forEach(function(v, k) {
+            resolved = appendQueryParam(resolved, String(k), String(v));
+        });
+        return resolved;
         }
         if (typeof body === 'string' && body.trim() !== '') {
-            var trimmed = body.replace(/^\?/, '');
-            return resolved + (resolved.indexOf('?') >= 0 ? '&' : '?') + trimmed;
+        var trimmed = body.replace(/^\?/, '');
+        return resolved + (resolved.indexOf('?') >= 0 ? '&' : '?') + trimmed;
         }
     } catch (e) {
     }
@@ -696,7 +761,7 @@ function start(url, options) {
     
     source.onopen = function() {
         if (eventSource !== source || sourceSeq !== eventSourceSeq) {
-            return;
+        return;
         }
         setStatus('connected', '$t_connected');
         log('$t_connected', 'success');
@@ -705,88 +770,88 @@ function start(url, options) {
     
     source.onerror = function(e) {
         if (eventSource !== source || sourceSeq !== eventSourceSeq) {
-            return;
+        return;
         }
         if (terminalCompleted) {
-            stop({ keepStatus: true, internal: true });
-            return;
+        stop({ keepStatus: true, internal: true });
+        return;
         }
         if (e && typeof e.data === 'string' && e.data !== '') {
-            // SSE business error events carry data and are handled by the registered error listener below.
-            return;
+        // SSE business error events carry data and are handled by the registered error listener below.
+        return;
         }
         if (noReconnect) {
-            stop({ keepStatus: true, internal: true });
-            setStatus('error', '$t_error');
-            if (eventCallbacks.error) {
-                eventCallbacks.error(e);
-            }
-            return;
+        stop({ keepStatus: true, internal: true });
+        setStatus('error', '$t_error');
+        if (eventCallbacks.error) {
+            eventCallbacks.error(e);
+        }
+        return;
         }
         var isBenignTransition = false;
         if (source.readyState === EventSource.CLOSED) {
-            if (manualStopRequested) {
-                stop({ keepStatus: true, internal: true });
-                setStatus('disconnected', '$t_disconnected');
-                isBenignTransition = true;
-            } else {
-                setStatus('connecting', '$t_reconnecting');
-                isBenignTransition = true;
-            }
-        } else if (source.readyState === EventSource.CONNECTING) {
-            // 完全遵循原生 EventSource：CONNECTING 由浏览器自动重连管理
-            setStatus('connecting', '$t_reconnecting');
+        if (manualStopRequested) {
+            stop({ keepStatus: true, internal: true });
+            setStatus('disconnected', '$t_disconnected');
             isBenignTransition = true;
         } else {
-            setStatus('error', '$t_error');
-            log('$t_error', 'error');
-            log('$t_connection_failed', 'error');
-            isBenignTransition = false;
+            setStatus('connecting', '$t_reconnecting');
+            isBenignTransition = true;
+        }
+        } else if (source.readyState === EventSource.CONNECTING) {
+        // 完全遵循原生 EventSource：CONNECTING 由浏览器自动重连管理
+        setStatus('connecting', '$t_reconnecting');
+        isBenignTransition = true;
+        } else {
+        setStatus('error', '$t_error');
+        log('$t_error', 'error');
+        log('$t_connection_failed', 'error');
+        isBenignTransition = false;
         }
         // CONNECTING/CLOSED 多数是浏览器自动重连或流结束过程，不应向上层冒泡为业务错误。
         if (!isBenignTransition && eventCallbacks.error) {
-            eventCallbacks.error(e);
+        eventCallbacks.error(e);
         }
     };
     
     source.onmessage = function(e) {
         if (eventSource !== source || sourceSeq !== eventSourceSeq) {
-            return;
+        return;
         }
         try {
-            var data = JSON.parse(e.data);
-            if (data.message) {
-                log(data.message, data.type || 'info');
-            }
-            if (data.progress !== undefined) {
-                setProgress(data.progress);
-            }
+        var data = JSON.parse(e.data);
+        if (data.message) {
+            log(data.message, data.type || 'info');
+        }
+        if (data.progress !== undefined) {
+            setProgress(data.progress);
+        }
         } catch (err) {
-            log(e.data, 'info');
+        log(e.data, 'info');
         }
         if (eventCallbacks.message) eventCallbacks.message(e);
     };
     
     commonEvents.forEach(function(eventName) {
         source.addEventListener(eventName, function(e) {
-            if (eventSource !== source || sourceSeq !== eventSourceSeq) {
-                return;
+        if (eventSource !== source || sourceSeq !== eventSourceSeq) {
+            return;
+        }
+        if (eventName === 'error' && (typeof e.data !== 'string' || e.data === '')) {
+            return;
+        }
+        try {
+            var data = JSON.parse(e.data || '{}');
+            dispatchSseEvent(eventName, data, e);
+        } catch (err) {
+            log(e.data || eventName, eventName);
+            if (eventCallbacks[eventName]) eventCallbacks[eventName](e);
+        } finally {
+            if ((eventName === 'done' || eventName === 'failed' || eventName === 'error' || eventName === 'close') && eventSource === source && sourceSeq === eventSourceSeq) {
+                terminalCompleted = true;
+                stop({ internal: true, keepStatus: eventName === 'failed' || eventName === 'error' });
             }
-            if (eventName === 'error' && (typeof e.data !== 'string' || e.data === '')) {
-                return;
-            }
-            try {
-                var data = JSON.parse(e.data || '{}');
-                dispatchSseEvent(eventName, data, e);
-            } catch (err) {
-                log(e.data || eventName, eventName);
-                if (eventCallbacks[eventName]) eventCallbacks[eventName](e);
-            } finally {
-                if ((eventName === 'done' || eventName === 'failed' || eventName === 'error' || eventName === 'close') && eventSource === source && sourceSeq === eventSourceSeq) {
-                    terminalCompleted = true;
-                    stop({ internal: true, keepStatus: eventName === 'failed' || eventName === 'error' });
-                }
-            }
+        }
         });
     });
 }
@@ -837,9 +902,9 @@ function clear() {
 if (btnToggle) {
     btnToggle.addEventListener('click', function() {
         if (isRunning) {
-            stop();
+        stop();
         } else {
-            start();
+        start();
         }
     });
 }
@@ -854,41 +919,41 @@ if (btnCopy) {
     btnCopy.addEventListener('click', function() {
         var text = [];
         content.querySelectorAll('.weline-sse-terminal-line').forEach(function(line) {
-            text.push(line.textContent);
+        text.push(line.textContent);
         });
         var copyText = text.join('\\n');
         var notifyCopied = function() {
-            if (typeof Weline.UI.toast !== 'undefined') {
-                Weline.UI.toast.success('$t_copied');
-            }
+        if (typeof Weline.UI.toast !== 'undefined') {
+            Weline.UI.toast.success('$t_copied');
+        }
         };
         var fallbackCopy = function(value) {
-            var textarea = document.createElement('textarea');
-            textarea.value = value;
-            textarea.setAttribute('readonly', 'readonly');
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            textarea.style.pointerEvents = 'none';
-            document.body.appendChild(textarea);
-            textarea.focus();
-            textarea.select();
-            try {
-                var copied = document.execCommand('copy');
-                if (copied) {
-                    notifyCopied();
-                }
-            } catch (e) {
-            } finally {
-                document.body.removeChild(textarea);
+        var textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.setAttribute('readonly', 'readonly');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+            var copied = document.execCommand('copy');
+            if (copied) {
+                notifyCopied();
             }
+        } catch (e) {
+        } finally {
+            document.body.removeChild(textarea);
+        }
         };
         if (navigator.clipboard && window.isSecureContext && typeof navigator.clipboard.writeText === 'function') {
-            navigator.clipboard.writeText(copyText).then(function() {
-                notifyCopied();
-            }).catch(function() {
-                fallbackCopy(copyText);
-            });
-            return;
+        navigator.clipboard.writeText(copyText).then(function() {
+            notifyCopied();
+        }).catch(function() {
+            fallbackCopy(copyText);
+        });
+        return;
         }
         fallbackCopy(copyText);
     });
@@ -906,10 +971,45 @@ if (initialUrl && container.hasAttribute('data-auto-start')) {
 }
 
 JS;
-            $html[] = '})();</script>';
+        $html[] = '})();</script>';
 
-            return implode("\n", $html);
-        };
+
+        return implode("\n", $html);
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     * @param list<string> $keys
+     * @return array<string, mixed>
+     */
+    private static function resolveDeclarativeAttrs(\Weline\Framework\View\Template $template, array $attributes, array $keys): array
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $attributes) || !is_string($attributes[$key])) {
+                continue;
+            }
+            $raw = trim($attributes[$key]);
+            if ($raw === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $raw) !== 1) {
+                continue;
+            }
+            $data = $template->getData($raw);
+            if ($data === null && function_exists('w_env')) {
+                $wenv = w_env('template.' . $raw);
+                if ($wenv !== null) {
+                    $data = $wenv;
+                }
+            }
+            if ($data === null) {
+                continue;
+            }
+            if (is_array($data)) {
+                $attributes[$key] = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+            } elseif (is_scalar($data)) {
+                $attributes[$key] = (string)$data;
+            }
+        }
+
+        return $attributes;
     }
 
     public static function tag_self_close(): bool

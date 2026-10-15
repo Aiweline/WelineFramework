@@ -4,18 +4,20 @@ declare(strict_types=1);
 namespace Weline\Theme\Taglib;
 
 use Weline\Framework\Taglib\TaglibInterface;
+use Weline\Framework\View\Template;
 
 /**
  * SSE 进度组件（带步骤指示器和日志终端）
- * 
+ *
  * 提供步骤进度条 + 日志终端的组合界面
- * 适用于多步骤任务的可视化进度展示 *
- * ⚠️ 能力状态（2026-10-02 审查）：标签 <w:theme:sse-progress> 已完成实现但**当前全仓无调用方**，
- * 属预留能力，非死代码。若长期不采用，请先确认无模块计划使用后再考虑移除。
-
+ * 适用于多步骤任务的可视化进度展示。
+ * 含 @lang / 动态属性时走 renderRuntimeTag；必须提供 runtimeCallback。
  */
 class SseProgress implements TaglibInterface
 {
+    /** @var list<string> */
+    private const DECLARATIVE_ATTRS = ['url', 'steps', 'title', 'height'];
+
     public static function name(): string
     {
         return 'theme:sse-progress';
@@ -51,84 +53,159 @@ class SseProgress implements TaglibInterface
 
     public static function callback(): callable
     {
-        return function ($tag_key, $config, $tag_data, $attributes) {
-            $id = $attributes['id'] ?? 'sse-progress-' . uniqid();
-            $url = $attributes['url'] ?? '';
-            $steps = $attributes['steps'] ?? '[]';
-            $title = $attributes['title'] ?? __('任务进度');
-            $height = $attributes['height'] ?? '250px';
-            $class = $attributes['class'] ?? '';
-            $style = $attributes['style'] ?? '';
-
-            // 翻译文本
-            $t_waiting = addslashes((string)__('等待中'));
-            $t_running = addslashes((string)__('执行中'));
-            $t_success = addslashes((string)__('成功'));
-            $t_failed = addslashes((string)__('失败'));
-            $t_skipped = addslashes((string)__('已跳过'));
-            $t_connecting = addslashes((string)__('正在连接...'));
-            $t_connected = addslashes((string)__('已连接'));
-            $t_disconnected = addslashes((string)__('已断开'));
-            $t_ready = addslashes((string)__('就绪'));
-            $t_copy = addslashes((string)__('复制'));
-            $t_clear = addslashes((string)__('清空'));
-            $t_copied = addslashes((string)__('已复制'));
-
+        return static function ($tag_key, $config, $tag_data, $attributes) {
+            unset($tag_key, $config, $tag_data);
+            $attributes = \is_array($attributes) ? $attributes : [];
+            $id = (string)($attributes['id'] ?? ('sse-progress-' . uniqid('', true)));
             $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
+            $phpOpen = '<' . '?php ';
+            $phpClose = '?' . '>';
+            $echoOpen = '<' . '?= ';
 
-            $html = [];
-            $html[] = '<?php ' . $code . ' ?>';
-
-            // 主容器
-            $html[] = '<div class="weline-sse-progress ' . htmlspecialchars($class) . '" id="<?= htmlspecialchars($Taglib__id) ?>" style="' . htmlspecialchars($style) . '" data-component="sse-progress">';
-            
-            // 步骤指示器区域
-            $html[] = '  <div class="weline-sse-progress-steps" id="<?= htmlspecialchars($Taglib__id) ?>_steps">';
-            $html[] = '  </div>';
-            
-            // 日志终端区域
-            $html[] = '  <div class="weline-sse-progress-terminal">';
-            $html[] = '    <div class="weline-sse-progress-terminal-header">';
-            $html[] = '      <div class="weline-sse-progress-terminal-title">';
-            $html[] = '        <w-icon name="terminal" size="sm"></w-icon>';
-            $html[] = '        <span><?= htmlspecialchars($Taglib__title ?? \'' . addslashes($title) . '\') ?></span>';
-            $html[] = '      </div>';
-            $html[] = '      <div class="weline-sse-progress-terminal-status">';
-            $html[] = '        <span class="weline-sse-progress-status-dot"></span>';
-            $html[] = '        <span class="weline-sse-progress-status-text" id="<?= htmlspecialchars($Taglib__id) ?>_status">' . $t_ready . '</span>';
-            $html[] = '      </div>';
-            $html[] = '      <div class="weline-sse-progress-terminal-actions">';
-            $html[] = '        <button type="button" class="weline-sse-progress-btn" id="<?= htmlspecialchars($Taglib__id) ?>_btn_copy" title="' . $t_copy . '">';
-            $html[] = '          <w-icon name="copy" size="sm"></w-icon>';
-            $html[] = '        </button>';
-            $html[] = '        <button type="button" class="weline-sse-progress-btn" id="<?= htmlspecialchars($Taglib__id) ?>_btn_clear" title="' . $t_clear . '">';
-            $html[] = '          <w-icon name="trash" size="sm"></w-icon>';
-            $html[] = '        </button>';
-            $html[] = '      </div>';
-            $html[] = '    </div>';
-            $html[] = '    <div class="weline-sse-progress-terminal-body" id="<?= htmlspecialchars($Taglib__id) ?>_body" style="height: <?= htmlspecialchars($Taglib__height ?? \'' . $height . '\') ?>">';
-            $html[] = '      <div class="weline-sse-progress-terminal-content" id="<?= htmlspecialchars($Taglib__id) ?>_content"></div>';
-            $html[] = '    </div>';
-            $html[] = '  </div>';
-            
-            $html[] = '</div>';
-
-            // 样式
-            $html[] = '<style>';
-            $html[] = self::getStyles();
-            $html[] = '</style>';
-
-            // JavaScript
-            $html[] = '<script>(function(){';
-            $html[] = '"use strict";';
-            $html[] = 'var id = <?= json_encode($Taglib__id) ?>;';
-            $html[] = 'var initialUrl = <?= json_encode($Taglib__url ?? \'\') ?>;';
-            $html[] = 'var stepsData = <?= $Taglib__steps ?? \'[]\' ?>;';
-            $html[] = self::getJavaScript($t_waiting, $t_running, $t_success, $t_failed, $t_skipped, $t_connecting, $t_connected, $t_disconnected, $t_ready, $t_copied);
-            $html[] = '})();</script>';
-
-            return implode("\n", $html);
+            return $phpOpen . $code . ' ' . $phpClose . "\n"
+                . $echoOpen . '\\' . self::class . '::buildMarkup(['
+                . "'id' => (string)(\$Taglib__id ?? " . \var_export($id, true) . '),'
+                . "'url' => (string)(\$Taglib__url ?? ''),"
+                . "'steps' => (string)(\$Taglib__steps ?? '[]'),"
+                . "'title' => (string)(\$Taglib__title ?? ''),"
+                . "'height' => (string)(\$Taglib__height ?? '250px'),"
+                . "'class' => (string)(\$Taglib__class ?? ''),"
+                . "'style' => (string)(\$Taglib__style ?? ''),"
+                . ']) ' . $phpClose;
         };
+    }
+
+    public static function runtimeCallback(): callable
+    {
+        return static function (
+            Template $template,
+            string $tagKey,
+            array $attributes,
+            string $content,
+        ): string {
+            unset($content);
+            if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs') {
+                return '';
+            }
+
+            return self::buildMarkup(self::resolveDeclarativeAttrs(
+                $template,
+                \is_array($attributes) ? $attributes : [],
+                self::DECLARATIVE_ATTRS
+            ));
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    public static function buildMarkup(array $attributes): string
+    {
+        $id = trim((string)($attributes['id'] ?? '')) ?: ('sse-progress-' . uniqid('', true));
+        $url = (string)($attributes['url'] ?? '');
+        $steps = trim((string)($attributes['steps'] ?? ''));
+        if ($steps === '') {
+            $steps = '[]';
+        }
+        $title = trim((string)($attributes['title'] ?? ''));
+        if ($title === '') {
+            $title = (string)__('任务进度');
+        }
+        $height = trim((string)($attributes['height'] ?? '')) ?: '250px';
+        $class = (string)($attributes['class'] ?? '');
+        $style = (string)($attributes['style'] ?? '');
+
+        $t_waiting = addslashes((string)__('等待中'));
+        $t_running = addslashes((string)__('执行中'));
+        $t_success = addslashes((string)__('成功'));
+        $t_failed = addslashes((string)__('失败'));
+        $t_skipped = addslashes((string)__('已跳过'));
+        $t_connecting = addslashes((string)__('正在连接...'));
+        $t_connected = addslashes((string)__('已连接'));
+        $t_disconnected = addslashes((string)__('已断开'));
+        $t_ready = addslashes((string)__('就绪'));
+        $t_copy = addslashes((string)__('复制'));
+        $t_clear = addslashes((string)__('清空'));
+        $t_copied = addslashes((string)__('已复制'));
+
+        $e = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+        $idJson = \json_encode($id, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $urlJson = \json_encode($url, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $stepsJson = \json_encode($steps, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $html = [];
+        $html[] = '<div class="weline-sse-progress ' . $e($class) . '" id="' . $e($id) . '" style="' . $e($style) . '" data-component="sse-progress">';
+        $html[] = '  <div class="weline-sse-progress-steps" id="' . $e($id) . '_steps"></div>';
+        $html[] = '  <div class="weline-sse-progress-terminal">';
+        $html[] = '    <div class="weline-sse-progress-terminal-header">';
+        $html[] = '      <div class="weline-sse-progress-terminal-title">';
+        $html[] = '        <w-icon name="terminal" size="sm"></w-icon>';
+        $html[] = '        <span>' . $e($title) . '</span>';
+        $html[] = '      </div>';
+        $html[] = '      <div class="weline-sse-progress-terminal-status">';
+        $html[] = '        <span class="weline-sse-progress-status-dot"></span>';
+        $html[] = '        <span class="weline-sse-progress-status-text" id="' . $e($id) . '_status">' . $t_ready . '</span>';
+        $html[] = '      </div>';
+        $html[] = '      <div class="weline-sse-progress-terminal-actions">';
+        $html[] = '        <button type="button" class="weline-sse-progress-btn" id="' . $e($id) . '_btn_copy" title="' . $t_copy . '">';
+        $html[] = '          <w-icon name="copy" size="sm"></w-icon>';
+        $html[] = '        </button>';
+        $html[] = '        <button type="button" class="weline-sse-progress-btn" id="' . $e($id) . '_btn_clear" title="' . $t_clear . '">';
+        $html[] = '          <w-icon name="trash" size="sm"></w-icon>';
+        $html[] = '        </button>';
+        $html[] = '      </div>';
+        $html[] = '    </div>';
+        $html[] = '    <div class="weline-sse-progress-terminal-body" id="' . $e($id) . '_body" style="height: ' . $e($height) . '">';
+        $html[] = '      <div class="weline-sse-progress-terminal-content" id="' . $e($id) . '_content"></div>';
+        $html[] = '    </div>';
+        $html[] = '  </div>';
+        $html[] = '</div>';
+        $html[] = '<style>' . self::getStyles() . '</style>';
+        $html[] = '<script>(function(){';
+        $html[] = '"use strict";';
+        $html[] = 'var id = ' . $idJson . ';';
+        $html[] = 'var initialUrl = ' . $urlJson . ';';
+        $html[] = 'var stepsData = ' . $stepsJson . ';';
+        $html[] = 'try { if (typeof stepsData === "string") { stepsData = JSON.parse(stepsData || "[]"); } } catch (e) { stepsData = []; }';
+        $html[] = self::getJavaScript($t_waiting, $t_running, $t_success, $t_failed, $t_skipped, $t_connecting, $t_connected, $t_disconnected, $t_ready, $t_copied);
+        $html[] = '})();</script>';
+
+        return implode("\n", $html);
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     * @param list<string> $keys
+     * @return array<string, mixed>
+     */
+    private static function resolveDeclarativeAttrs(Template $template, array $attributes, array $keys): array
+    {
+        foreach ($keys as $key) {
+            if (!\array_key_exists($key, $attributes) || !\is_string($attributes[$key])) {
+                continue;
+            }
+            $raw = \trim($attributes[$key]);
+            if ($raw === '' || \preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $raw) !== 1) {
+                continue;
+            }
+            $data = $template->getData($raw);
+            if ($data === null && \function_exists('w_env')) {
+                $wenv = \w_env('template.' . $raw);
+                if ($wenv !== null) {
+                    $data = $wenv;
+                }
+            }
+            if ($data === null) {
+                continue;
+            }
+            if (\is_array($data)) {
+                $attributes[$key] = \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+            } elseif (\is_scalar($data)) {
+                $attributes[$key] = (string)$data;
+            }
+        }
+
+        return $attributes;
     }
 
     private static function getStyles(): string

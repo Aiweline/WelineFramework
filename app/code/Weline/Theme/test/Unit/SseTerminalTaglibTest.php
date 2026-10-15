@@ -9,11 +9,11 @@ use Weline\Theme\Taglib\SseTerminal;
 
 class SseTerminalTaglibTest extends TestCore
 {
-    public function testSseTerminalMarkupIncludesReconnectAwareTransportStateHandling(): void
+    public function testCallbackEmitsRenderHtmlWrapperNotRawMarkup(): void
     {
         $callback = SseTerminal::callback();
 
-        $html = $callback(
+        $php = $callback(
             'single',
             [],
             [''],
@@ -23,6 +23,44 @@ class SseTerminalTaglibTest extends TestCore
                 'show-start-toggle' => 'false',
             ]
         );
+
+        $this->assertIsString($php);
+        $this->assertStringContainsString('SseTerminal::renderHtml([', $php);
+        $this->assertStringContainsString('$Taglib__id', $php);
+        $this->assertStringNotContainsString('getTransportState', $php);
+        $this->assertTrue(\method_exists(SseTerminal::class, 'runtimeCallback'));
+        $this->assertTrue(\method_exists(SseTerminal::class, 'renderHtml'));
+    }
+
+    public function testRuntimeCallbackReturnsHtmlNotPhpSource(): void
+    {
+        $template = $this->createStub(\Weline\Framework\View\Template::class);
+        $template->method('getData')->willReturn(null);
+
+        $html = (SseTerminal::runtimeCallback())(
+            $template,
+            'tag-self-close-with-attrs',
+            [
+                'id' => 'demo-terminal',
+                'title' => 'Demo',
+                'show-start-toggle' => 'false',
+            ],
+            ''
+        );
+
+        $this->assertStringContainsString('data-component="sse-terminal"', $html);
+        $this->assertStringContainsString('getTransportState', $html);
+        $this->assertStringNotContainsString('$Taglib__', $html);
+        $this->assertDoesNotMatchRegularExpression('/<\?php\b/', $html);
+    }
+
+    public function testSseTerminalMarkupIncludesReconnectAwareTransportStateHandling(): void
+    {
+        $html = SseTerminal::renderHtml([
+            'id' => 'demo-terminal',
+            'title' => 'Demo',
+            'show-start-toggle' => 'false',
+        ]);
 
         $this->assertIsString($html);
         $this->assertStringContainsString('getTransportState', $html);
@@ -42,18 +80,11 @@ class SseTerminalTaglibTest extends TestCore
 
     public function testSseTerminalMarkupRoutesEventsThroughSingleDispatchPath(): void
     {
-        $callback = SseTerminal::callback();
-
-        $html = $callback(
-            'single',
-            [],
-            [''],
-            [
-                'id' => 'demo-terminal',
-                'title' => 'Demo',
-                'show-start-toggle' => 'false',
-            ]
-        );
+        $html = SseTerminal::renderHtml([
+            'id' => 'demo-terminal',
+            'title' => 'Demo',
+            'show-start-toggle' => 'false',
+        ]);
 
         $this->assertIsString($html);
         $this->assertStringContainsString('function dispatchSseEvent(eventName, data, rawEvent)', $html);
@@ -75,18 +106,11 @@ class SseTerminalTaglibTest extends TestCore
 
     public function testSseTerminalMarkupIncludesChunkRafCleanupAndDefaultDomLineLimit(): void
     {
-        $callback = SseTerminal::callback();
-
-        $html = $callback(
-            'single',
-            [],
-            [''],
-            [
-                'id' => 'demo-terminal',
-                'title' => 'Demo',
-                'show-start-toggle' => 'false',
-            ]
-        );
+        $html = SseTerminal::renderHtml([
+            'id' => 'demo-terminal',
+            'title' => 'Demo',
+            'show-start-toggle' => 'false',
+        ]);
 
         $this->assertIsString($html);
         $this->assertStringContainsString('var maxDomLines = 200;', $html);
@@ -103,20 +127,13 @@ class SseTerminalTaglibTest extends TestCore
 
     public function testSseTerminalMarkupAllowsExplicitDomLineLimitOverride(): void
     {
-        $callback = SseTerminal::callback();
-
-        $html = $callback(
-            'single',
-            [],
-            [''],
-            [
-                'id' => 'demo-terminal',
-                'title' => 'Demo',
-                'max-dom-lines' => '60',
-                'events' => 'chunk',
-                'show-start-toggle' => 'false',
-            ]
-        );
+        $html = SseTerminal::renderHtml([
+            'id' => 'demo-terminal',
+            'title' => 'Demo',
+            'max-dom-lines' => '60',
+            'events' => 'chunk',
+            'show-start-toggle' => 'false',
+        ]);
 
         $this->assertIsString($html);
         $this->assertStringContainsString('var maxDomLines = 60;', $html);

@@ -8,15 +8,23 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Taglib\AttributeCodeCompiler;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Taglib\Support\FloatingDropdownEmitter;
+use Weline\Framework\View\Template;
 
 /**
  * Public Scope tag.
  *
  * Without legacy persistence attributes it renders the canonical system Scope
  * selector. Existing container-id/url/event usage remains supported unchanged.
+ *
+ * 含 @lang / <?= ?> 等动态属性时 AST 会走 renderRuntimeTag；必须提供
+ * runtimeCallback 直接返回 HTML，不可再吐一层 PHP 源码（否则后台页会把
+ * AttributeCodeCompiler / 选择器逻辑当纯文本泄漏）。
  */
 class Scope implements TaglibInterface
 {
+    /** @var list<string> */
+    private const DECLARATIVE_ATTRS = ['value', 'options'];
+
     public static function name(): string
     {
         return 'scope';
@@ -75,6 +83,32 @@ class Scope implements TaglibInterface
         };
     }
 
+    /**
+     * 动态属性路径：renderRuntimeTag 必须直接返回 HTML。
+     */
+    public static function runtimeCallback(): callable
+    {
+        return static function (
+            Template $template,
+            string $tagKey,
+            array $attributes,
+            string $content,
+        ): string {
+            unset($content);
+            if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs') {
+                return '';
+            }
+
+            $attrs = self::resolveDeclarativeAttrs(
+                $template,
+                \is_array($attributes) ? $attributes : [],
+                self::DECLARATIVE_ATTRS
+            );
+
+            return self::buildMarkup($attrs);
+        };
+    }
+
     /** @param array<string,mixed> $attributes */
     private static function renderPersistence(array $attributes): string
     {
@@ -126,182 +160,211 @@ class Scope implements TaglibInterface
         $runtimeAttributes['id'] = $id;
         $code = AttributeCodeCompiler::attributes($runtimeAttributes);
 
-        $html = [];
-        $html[] = '<?php ' . $code . ' ?>';
-        $html[] = '<?php $__wscope_id = ' . var_export($id, true)
-            . '; $__wscope_name = ' . var_export($name, true)
-            . '; $__wscope_class = ' . var_export($class, true)
-            . '; $__wscope_style = ' . var_export($style, true)
-            . '; $__wscope_form = ' . var_export($form, true) . '; ?>';
-        $html[] = <<<'PHP'
-<?php
-$__wscope_truthy = static function ($value, bool $default = false): bool {
-    if ($value === null || $value === '') {
-        return $default;
-    }
-    if ($value === true || $value === 1) {
-        return true;
+        $phpOpen = '<' . '?php ';
+        $phpClose = '?' . '>';
+        $echoOpen = '<' . '?= ';
+
+        // 静态属性路径：编译期解析 Taglib__*，再调用 buildMarkup 直出 HTML。
+        return $phpOpen . $code . ' ' . $phpClose . "\n"
+            . $echoOpen . '\\' . self::class . '::buildMarkup(['
+            . "'id' => " . var_export($id, true) . ','
+            . "'name' => " . var_export($name, true) . ','
+            . "'class' => " . var_export($class, true) . ','
+            . "'style' => " . var_export($style, true) . ','
+            . "'form' => " . var_export($form, true) . ','
+            . "'value' => \$Taglib__value ?? 'default.default.default',"
+            . "'placeholder' => (string)(\$Taglib__placeholder ?? ''),"
+            . "'search-placeholder' => (string)(\$Taglib__search_placeholder ?? ''),"
+            . "'aria-label' => (string)(\$Taglib__aria_label ?? ''),"
+            . "'searchable' => \$Taglib__searchable ?? null,"
+            . "'default-expand-all' => \$Taglib__default_expand_all ?? null,"
+            . "'disabled' => \$Taglib__disabled ?? null,"
+            . "'required' => \$Taglib__required ?? null,"
+            . "'options' => \$Taglib__options ?? null,"
+            . ']) ' . $phpClose;
     }
 
-    return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'on', 'disabled', 'required'], true);
-};
-$__wscope_value = \trim((string)($Taglib__value ?? 'default.default.default'));
-if ($__wscope_value === '') {
-    $__wscope_value = 'default.default.default';
-}
-$__wscope_placeholder = \trim((string)($Taglib__placeholder ?? ''));
-if ($__wscope_placeholder === '') {
-    $__wscope_placeholder = (string)__('选择作用范围');
-}
-$__wscope_search_placeholder = \trim((string)($Taglib__search_placeholder ?? ''));
-if ($__wscope_search_placeholder === '') {
-    $__wscope_search_placeholder = (string)__('搜索作用范围');
-}
-$__wscope_aria_label = \trim((string)($Taglib__aria_label ?? ''));
-if ($__wscope_aria_label === '') {
-    $__wscope_aria_label = $__wscope_placeholder;
-}
-$__wscope_searchable = $__wscope_truthy($Taglib__searchable ?? null, true);
-$__wscope_expand_all = $__wscope_truthy($Taglib__default_expand_all ?? null, true);
-$__wscope_disabled = $__wscope_truthy($Taglib__disabled ?? null, false);
-$__wscope_required = $__wscope_truthy($Taglib__required ?? null, true);
-$__wscope_options_raw = $Taglib__options ?? null;
-$__wscope_options = [];
-if (\is_string($__wscope_options_raw) && \trim($__wscope_options_raw) !== '') {
-    $__wscope_decoded = \json_decode($__wscope_options_raw, true);
-    if (\is_array($__wscope_decoded)) {
-        $__wscope_options = $__wscope_decoded;
-    }
-} elseif (\is_array($__wscope_options_raw)) {
-    $__wscope_options = $__wscope_options_raw;
-}
-$__wscope_display = '';
-$__wscope_title = '';
-if ($__wscope_options === []) {
-    $__wscope_payload = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\SystemConfig\Api\Scope\ScopeSelectorCatalogInterface::class
-    )->build($__wscope_value);
-    $__wscope_options = (array)($__wscope_payload['tree_options'] ?? []);
-    $__wscope_value = (string)($__wscope_payload['selected_scope'] ?? $__wscope_value);
-    $__wscope_display = (string)($__wscope_payload['selected_label'] ?? '');
-    $__wscope_title = (string)($__wscope_payload['selected_title'] ?? $__wscope_display);
-}
-$__wscope_normalize = static function (array $nodes) use (&$__wscope_normalize): array {
-    $normalized = [];
-    foreach ($nodes as $node) {
-        if (!\is_array($node)) {
-            continue;
-        }
-        $value = \trim((string)($node['value'] ?? ''));
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    public static function buildMarkup(array $attributes): string
+    {
+        $id = trim((string)($attributes['id'] ?? 'scope')) ?: 'scope';
+        $name = trim((string)($attributes['name'] ?? 'scope')) ?: 'scope';
+        $class = trim((string)($attributes['class'] ?? ''));
+        $style = trim((string)($attributes['style'] ?? ''));
+        $form = trim((string)($attributes['form'] ?? ''));
+
+        $truthy = static function (mixed $value, bool $default = false): bool {
+            if ($value === null || $value === '') {
+                return $default;
+            }
+            if ($value === true || $value === 1) {
+                return true;
+            }
+
+            return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'on', 'disabled', 'required'], true);
+        };
+
+        $value = \trim((string)($attributes['value'] ?? 'default.default.default'));
         if ($value === '') {
-            continue;
+            $value = 'default.default.default';
         }
-        $label = \trim((string)($node['label'] ?? $node['name'] ?? $value)) ?: $value;
-        $display = \trim((string)($node['display_label'] ?? $node['displayLabel'] ?? $label)) ?: $label;
-        $title = \trim((string)($node['title_label'] ?? $node['titleLabel'] ?? $node['title'] ?? $display)) ?: $display;
-        $normalized[] = [
-            'value' => $value,
-            'label' => $label,
-            'display_label' => $display,
-            'title_label' => $title,
-            'kind' => \trim((string)($node['kind'] ?? '')),
-            'children' => $__wscope_normalize((array)($node['children'] ?? [])),
-        ];
-    }
+        $placeholder = \trim((string)($attributes['placeholder'] ?? ''));
+        if ($placeholder === '') {
+            $placeholder = (string)__('选择作用范围');
+        }
+        $searchPlaceholder = \trim((string)($attributes['search-placeholder'] ?? ''));
+        if ($searchPlaceholder === '') {
+            $searchPlaceholder = (string)__('搜索作用范围');
+        }
+        $ariaLabel = \trim((string)($attributes['aria-label'] ?? ''));
+        if ($ariaLabel === '') {
+            $ariaLabel = $placeholder;
+        }
+        $searchable = $truthy($attributes['searchable'] ?? null, true);
+        $expandAll = $truthy($attributes['default-expand-all'] ?? null, true);
+        $disabled = $truthy($attributes['disabled'] ?? null, false);
+        $required = $truthy($attributes['required'] ?? null, true);
+        $optionsRaw = $attributes['options'] ?? null;
+        $options = [];
+        if (\is_string($optionsRaw) && \trim($optionsRaw) !== '') {
+            $decoded = \json_decode($optionsRaw, true);
+            if (\is_array($decoded)) {
+                $options = $decoded;
+            }
+        } elseif (\is_array($optionsRaw)) {
+            $options = $optionsRaw;
+        }
+        $display = '';
+        $title = '';
+        if ($options === []) {
+            $payload = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\SystemConfig\Api\Scope\ScopeSelectorCatalogInterface::class
+            )->build($value);
+            $options = (array)($payload['tree_options'] ?? []);
+            $value = (string)($payload['selected_scope'] ?? $value);
+            $display = (string)($payload['selected_label'] ?? '');
+            $title = (string)($payload['selected_title'] ?? $display);
+        }
+        $normalize = static function (array $nodes) use (&$normalize): array {
+            $normalized = [];
+            foreach ($nodes as $node) {
+                if (!\is_array($node)) {
+                    continue;
+                }
+                $nodeValue = \trim((string)($node['value'] ?? ''));
+                if ($nodeValue === '') {
+                    continue;
+                }
+                $label = \trim((string)($node['label'] ?? $node['name'] ?? $nodeValue)) ?: $nodeValue;
+                $nodeDisplay = \trim((string)($node['display_label'] ?? $node['displayLabel'] ?? $label)) ?: $label;
+                $nodeTitle = \trim((string)($node['title_label'] ?? $node['titleLabel'] ?? $node['title'] ?? $nodeDisplay)) ?: $nodeDisplay;
+                $normalized[] = [
+                    'value' => $nodeValue,
+                    'label' => $label,
+                    'display_label' => $nodeDisplay,
+                    'title_label' => $nodeTitle,
+                    'kind' => \trim((string)($node['kind'] ?? '')),
+                    'children' => $normalize((array)($node['children'] ?? [])),
+                ];
+            }
 
-    return $normalized;
-};
-$__wscope_options = $__wscope_normalize($__wscope_options);
-$__wscope_find_label = static function (array $nodes, string $value) use (&$__wscope_find_label): string {
-    foreach ($nodes as $node) {
-        if (\hash_equals((string)$node['value'], $value)) {
-            return (string)$node['display_label'];
-        }
-        $child = $__wscope_find_label((array)$node['children'], $value);
-        if ($child !== '') {
-            return $child;
-        }
-    }
+            return $normalized;
+        };
+        $options = $normalize($options);
+        $findLabel = static function (array $nodes, string $needle) use (&$findLabel): string {
+            foreach ($nodes as $node) {
+                if (\hash_equals((string)$node['value'], $needle)) {
+                    return (string)$node['display_label'];
+                }
+                $child = $findLabel((array)$node['children'], $needle);
+                if ($child !== '') {
+                    return $child;
+                }
+            }
 
-    return '';
-};
-$__wscope_find_title = static function (array $nodes, string $value) use (&$__wscope_find_title): string {
-    foreach ($nodes as $node) {
-        if (\hash_equals((string)$node['value'], $value)) {
-            return (string)($node['title_label'] ?? $node['display_label'] ?? '');
-        }
-        $child = $__wscope_find_title((array)$node['children'], $value);
-        if ($child !== '') {
-            return $child;
-        }
-    }
+            return '';
+        };
+        $findTitle = static function (array $nodes, string $needle) use (&$findTitle): string {
+            foreach ($nodes as $node) {
+                if (\hash_equals((string)$node['value'], $needle)) {
+                    return (string)($node['title_label'] ?? $node['display_label'] ?? '');
+                }
+                $child = $findTitle((array)$node['children'], $needle);
+                if ($child !== '') {
+                    return $child;
+                }
+            }
 
-    return '';
-};
-if ($__wscope_display === '') {
-    $__wscope_display = $__wscope_find_label($__wscope_options, $__wscope_value);
-}
-if ($__wscope_title === '') {
-    $__wscope_title = $__wscope_find_title($__wscope_options, $__wscope_value);
-}
-if ($__wscope_title === '') {
-    $__wscope_title = $__wscope_display;
-}
-if ($__wscope_display === '') {
-    $__wscope_display = $__wscope_placeholder;
-}
-$__wscope_escape = static fn(string $value): string => \htmlspecialchars($value, \ENT_QUOTES, 'UTF-8');
-$__wscope_render_nodes = static function (array $nodes, int $level = 1) use (
-    &$__wscope_render_nodes,
-    $__wscope_escape,
-    $__wscope_value,
-    $__wscope_expand_all
-): string {
-    $out = '';
-    foreach ($nodes as $node) {
-        $value = (string)$node['value'];
-        $label = (string)$node['label'];
-        $display = (string)$node['display_label'];
-        $title = (string)($node['title_label'] ?? $display);
-        $kind = (string)$node['kind'];
-        $children = (array)$node['children'];
-        $hasChildren = $children !== [];
-        $selected = \hash_equals($__wscope_value, $value);
-        $expanded = $hasChildren && $__wscope_expand_all;
-        $classes = 'w-tree-select-node'
-            . ($selected ? ' selected' : '')
-            . ($expanded ? ' expanded' : '');
-        $out .= '<div class="' . $classes . '" role="treeitem" tabindex="-1" aria-level="' . $level . '"'
-            . ' aria-selected="' . ($selected ? 'true' : 'false') . '"'
-            . ($hasChildren ? ' aria-expanded="' . ($expanded ? 'true' : 'false') . '"' : '')
-            . ' data-w-scope-node data-value="' . $__wscope_escape($value) . '"'
-            . ' data-label="' . $__wscope_escape($label) . '"'
-            . ' data-display-label="' . $__wscope_escape($display) . '"'
-            . ' data-title-label="' . $__wscope_escape($title) . '"'
-            . ' data-kind="' . $__wscope_escape($kind) . '"'
-            . ' data-has-children="' . ($hasChildren ? 'true' : 'false') . '">';
-        $out .= '<div class="w-tree-select-node-content" data-w-scope-option title="' . $__wscope_escape($title) . '">';
-        if ($hasChildren) {
-            $out .= '<button type="button" class="w-tree-select-node-expand" data-w-scope-expand tabindex="-1"'
-                . ' aria-expanded="' . ($expanded ? 'true' : 'false') . '"'
-                . ' aria-label="' . $__wscope_escape((string)($expanded ? __('折叠') : __('展开'))) . '">&#9656;</button>';
-        } else {
-            $out .= '<span class="w-tree-select-node-expand" aria-hidden="true"></span>';
+            return '';
+        };
+        if ($display === '') {
+            $display = $findLabel($options, $value);
         }
-        $out .= '<span class="w-tree-select-node-label">' . $__wscope_escape($label) . '</span></div>';
-        if ($hasChildren) {
-            $out .= '<div class="w-tree-select-node-children" role="group">'
-                . $__wscope_render_nodes($children, $level + 1)
-                . '</div>';
+        if ($title === '') {
+            $title = $findTitle($options, $value);
         }
-        $out .= '</div>';
-    }
+        if ($title === '') {
+            $title = $display;
+        }
+        if ($display === '') {
+            $display = $placeholder;
+        }
 
-    return $out;
-};
-?>
-PHP;
-        $html[] = <<<'PHP'
+        $escape = static fn(string $s): string => \htmlspecialchars($s, \ENT_QUOTES, 'UTF-8');
+        $renderNodes = static function (array $nodes, int $level = 1) use (
+            &$renderNodes,
+            $escape,
+            $value,
+            $expandAll
+        ): string {
+            $out = '';
+            foreach ($nodes as $node) {
+                $nodeValue = (string)$node['value'];
+                $label = (string)$node['label'];
+                $nodeDisplay = (string)$node['display_label'];
+                $nodeTitle = (string)($node['title_label'] ?? $nodeDisplay);
+                $kind = (string)$node['kind'];
+                $children = (array)$node['children'];
+                $hasChildren = $children !== [];
+                $selected = \hash_equals($value, $nodeValue);
+                $expanded = $hasChildren && $expandAll;
+                $classes = 'w-tree-select-node'
+                    . ($selected ? ' selected' : '')
+                    . ($expanded ? ' expanded' : '');
+                $out .= '<div class="' . $classes . '" role="treeitem" tabindex="-1" aria-level="' . $level . '"'
+                    . ' aria-selected="' . ($selected ? 'true' : 'false') . '"'
+                    . ($hasChildren ? ' aria-expanded="' . ($expanded ? 'true' : 'false') . '"' : '')
+                    . ' data-w-scope-node data-value="' . $escape($nodeValue) . '"'
+                    . ' data-label="' . $escape($label) . '"'
+                    . ' data-display-label="' . $escape($nodeDisplay) . '"'
+                    . ' data-title-label="' . $escape($nodeTitle) . '"'
+                    . ' data-kind="' . $escape($kind) . '"'
+                    . ' data-has-children="' . ($hasChildren ? 'true' : 'false') . '">';
+                $out .= '<div class="w-tree-select-node-content" data-w-scope-option title="' . $escape($nodeTitle) . '">';
+                if ($hasChildren) {
+                    $out .= '<button type="button" class="w-tree-select-node-expand" data-w-scope-expand tabindex="-1"'
+                        . ' aria-expanded="' . ($expanded ? 'true' : 'false') . '"'
+                        . ' aria-label="' . $escape((string)($expanded ? __('折叠') : __('展开'))) . '">&#9656;</button>';
+                } else {
+                    $out .= '<span class="w-tree-select-node-expand" aria-hidden="true"></span>';
+                }
+                $out .= '<span class="w-tree-select-node-label">' . $escape($label) . '</span></div>';
+                if ($hasChildren) {
+                    $out .= '<div class="w-tree-select-node-children" role="group">'
+                        . $renderNodes($children, $level + 1)
+                        . '</div>';
+                }
+                $out .= '</div>';
+            }
+
+            return $out;
+        };
+
+        $shellTitle = $title !== '' ? $title : $display;
+        $html = [];
+        $html[] = <<<'CSS'
 <style>
 .w-scope-select{position:relative;display:inline-block;inline-size:100%;min-inline-size:0;font-family:inherit}
 .w-scope-select .w-tree-select-trigger{display:flex;align-items:center;justify-content:space-between;gap:.5rem;inline-size:100%;min-block-size:2.25rem;padding:.4rem .65rem;border:1px solid var(--weline-theme-border,var(--backend-color-border-default,#475569));border-radius:.45rem;background:var(--weline-theme-surface,var(--backend-color-card-bg,#fff));color:var(--weline-theme-text,var(--backend-color-text-primary,#162033));cursor:pointer;text-align:start}
@@ -326,59 +389,66 @@ PHP;
 /* Disabled <button> drops pointer events; route hover to the titled shell. */
 .w-scope-select[data-disabled="true"] .w-tree-select-trigger{cursor:help;pointer-events:none}
 </style>
-<div class="<?= $__wscope_escape(\trim('w-scope-select w-tree-select ' . $__wscope_class)) ?>"
-     id="<?= $__wscope_escape($__wscope_id) ?>_container"
-     style="<?= $__wscope_escape($__wscope_style) ?>"
-     data-component="scope-select"
-     data-disabled="<?= $__wscope_disabled ? 'true' : 'false' ?>"
-     data-value="<?= $__wscope_escape($__wscope_value) ?>"
-     title="<?= $__wscope_escape($__wscope_title !== '' ? $__wscope_title : $__wscope_display) ?>">
-    <input type="hidden"
-           id="<?= $__wscope_escape($__wscope_id) ?>"
-           name="<?= $__wscope_escape($__wscope_name) ?>"
-           value="<?= $__wscope_escape($__wscope_value) ?>"
-           <?= $__wscope_form !== '' ? 'form="' . $__wscope_escape($__wscope_form) . '"' : '' ?>
-           <?= $__wscope_disabled ? 'disabled' : '' ?>
-           <?= $__wscope_required ? 'data-required="true"' : '' ?>>
-    <button type="button"
-            class="w-tree-select-trigger"
-            id="<?= $__wscope_escape($__wscope_id) ?>_trigger"
-            role="combobox"
-            aria-haspopup="tree"
-            aria-expanded="false"
-            aria-controls="<?= $__wscope_escape($__wscope_id) ?>_dropdown"
-            aria-label="<?= $__wscope_escape($__wscope_aria_label) ?>"
-            title="<?= $__wscope_escape($__wscope_title !== '' ? $__wscope_title : $__wscope_display) ?>"
-            aria-required="<?= $__wscope_required ? 'true' : 'false' ?>"
-            <?= $__wscope_disabled ? 'disabled' : '' ?>>
-        <span class="w-tree-select-display" id="<?= $__wscope_escape($__wscope_id) ?>_display" title="<?= $__wscope_escape($__wscope_title !== '' ? $__wscope_title : $__wscope_display) ?>"><?= $__wscope_escape($__wscope_display) ?></span>
-        <span class="w-tree-select-arrow" aria-hidden="true">&#9662;</span>
-    </button>
-    <div class="w-tree-select-dropdown w-scope-select-dropdown"
-         id="<?= $__wscope_escape($__wscope_id) ?>_dropdown"
-         role="presentation"
-         hidden>
-        <?php if ($__wscope_searchable): ?>
-            <input type="search"
-                   class="w-tree-select-search"
-                   id="<?= $__wscope_escape($__wscope_id) ?>_search"
-                   placeholder="<?= $__wscope_escape($__wscope_search_placeholder) ?>"
-                   aria-label="<?= $__wscope_escape($__wscope_search_placeholder) ?>"
-                   autocomplete="off">
-        <?php endif; ?>
-        <div class="w-tree-select-tree"
-             id="<?= $__wscope_escape($__wscope_id) ?>_tree"
-             role="tree"
-             aria-label="<?= $__wscope_escape($__wscope_aria_label) ?>"><?= $__wscope_render_nodes($__wscope_options) ?></div>
-        <div class="w-tree-select-empty" id="<?= $__wscope_escape($__wscope_id) ?>_empty" hidden><?= $__wscope_escape((string)__('未找到匹配作用范围')) ?></div>
-    </div>
-</div>
-PHP;
+CSS;
+
+        $html[] = '<div class="' . $escape(\trim('w-scope-select w-tree-select ' . $class)) . '"'
+            . ' id="' . $escape($id) . '_container"'
+            . ' style="' . $escape($style) . '"'
+            . ' data-component="scope-select"'
+            . ' data-disabled="' . ($disabled ? 'true' : 'false') . '"'
+            . ' data-value="' . $escape($value) . '"'
+            . ' title="' . $escape($shellTitle) . '">'
+            . '<input type="hidden"'
+            . ' id="' . $escape($id) . '"'
+            . ' name="' . $escape($name) . '"'
+            . ' value="' . $escape($value) . '"'
+            . ($form !== '' ? ' form="' . $escape($form) . '"' : '')
+            . ($disabled ? ' disabled' : '')
+            . ($required ? ' data-required="true"' : '')
+            . '>'
+            . '<button type="button"'
+            . ' class="w-tree-select-trigger"'
+            . ' id="' . $escape($id) . '_trigger"'
+            . ' role="combobox"'
+            . ' aria-haspopup="tree"'
+            . ' aria-expanded="false"'
+            . ' aria-controls="' . $escape($id) . '_dropdown"'
+            . ' aria-label="' . $escape($ariaLabel) . '"'
+            . ' title="' . $escape($shellTitle) . '"'
+            . ' aria-required="' . ($required ? 'true' : 'false') . '"'
+            . ($disabled ? ' disabled' : '')
+            . '>'
+            . '<span class="w-tree-select-display" id="' . $escape($id) . '_display" title="'
+            . $escape($shellTitle) . '">' . $escape($display) . '</span>'
+            . '<span class="w-tree-select-arrow" aria-hidden="true">&#9662;</span>'
+            . '</button>'
+            . '<div class="w-tree-select-dropdown w-scope-select-dropdown"'
+            . ' id="' . $escape($id) . '_dropdown"'
+            . ' role="presentation"'
+            . ' hidden>';
+        if ($searchable) {
+            $html[] = '<input type="search"'
+                . ' class="w-tree-select-search"'
+                . ' id="' . $escape($id) . '_search"'
+                . ' placeholder="' . $escape($searchPlaceholder) . '"'
+                . ' aria-label="' . $escape($searchPlaceholder) . '"'
+                . ' autocomplete="off">';
+        }
+        $html[] = '<div class="w-tree-select-tree"'
+            . ' id="' . $escape($id) . '_tree"'
+            . ' role="tree"'
+            . ' aria-label="' . $escape($ariaLabel) . '">' . $renderNodes($options) . '</div>'
+            . '<div class="w-tree-select-empty" id="' . $escape($id) . '_empty" hidden>'
+            . $escape((string)__('未找到匹配作用范围')) . '</div>'
+            . '</div></div>';
+
         $html[] = FloatingDropdownEmitter::script();
-        $html[] = <<<'PHP'
+
+        $idJson = \json_encode($id, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
+        $html[] = <<<JS
 <script>(function(){
 'use strict';
-var id = <?= \json_encode($__wscope_id, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+var id = {$idJson};
 var root = document.getElementById(id + '_container');
 var hidden = document.getElementById(id);
 var trigger = document.getElementById(id + '_trigger');
@@ -624,9 +694,46 @@ window.WelineScopeSelect[id] = {
 setDisabled(disabled);
 syncSelection(String(hidden.value || ''));
 })();</script>
-PHP;
+JS;
 
         return implode("\n", $html);
+    }
+
+    /**
+     * renderRuntimeTag 下静态声明式属性（value="selected_scope"）需从 Template::getData 解析。
+     *
+     * @param array<string, mixed> $attributes
+     * @param list<string> $keys
+     * @return array<string, mixed>
+     */
+    private static function resolveDeclarativeAttrs(Template $template, array $attributes, array $keys): array
+    {
+        foreach ($keys as $key) {
+            if (!\array_key_exists($key, $attributes) || !\is_string($attributes[$key])) {
+                continue;
+            }
+            $raw = \trim($attributes[$key]);
+            if ($raw === '' || \preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $raw) !== 1) {
+                continue;
+            }
+            $data = $template->getData($raw);
+            if ($data === null && \function_exists('w_env')) {
+                $wenv = \w_env('template.' . $raw);
+                if ($wenv !== null) {
+                    $data = $wenv;
+                }
+            }
+            if ($data === null) {
+                continue;
+            }
+            if (\is_array($data)) {
+                $attributes[$key] = \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+            } elseif (\is_scalar($data)) {
+                $attributes[$key] = (string)$data;
+            }
+        }
+
+        return $attributes;
     }
 
     public static function tag_self_close(): bool
@@ -649,6 +756,7 @@ PHP;
         return <<<'DOC'
 <h3><code>&lt;w:scope&gt;</code></h3>
 <p>默认渲染系统 Scope 树形选择器；SystemConfig 提供 Global 与规范身份，Websites 等身份所有者通过公共目录贡献 Website / Store / Channel。</p>
+<p>含 <code>@lang</code> / 动态属性时走 <code>runtimeCallback</code> 直接出 HTML。</p>
 <pre>&lt;w:scope id="scopeSelect" name="scope" value="selected_scope" searchable="true" /&gt;</pre>
 <p>兼容旧持久化用法：</p>
 <pre>&lt;w:scope url="@backend-url('backend/user-data')" container-id="product-container" event="change click" /&gt;</pre>

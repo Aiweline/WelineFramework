@@ -41,7 +41,7 @@ final class ScopeTagContractTest extends TestCase
         self::assertFalse((new \ReflectionClass(Scope::class))->isFinal());
     }
 
-    public function testDefaultModeEmitsThePublicSystemTreeSelector(): void
+    public function testDefaultModeEmitsBuildMarkupCallNotRawSelectorPhp(): void
     {
         $html = (Scope::callback())('scope', [], [], [
             'id' => 'scopeSelect',
@@ -49,18 +49,61 @@ final class ScopeTagContractTest extends TestCase
             'value' => 'selected_scope',
         ]);
 
-        self::assertStringContainsString('ScopeSelectorCatalogInterface::class', $html);
-        self::assertStringContainsString('\\Weline\\Framework\\Manager\\ObjectManager::getInstance(', $html);
+        self::assertStringContainsString('Scope::buildMarkup([', $html);
+        self::assertStringContainsString("\$Taglib__value ?? 'default.default.default'", $html);
+        self::assertStringContainsString('Weline_Taglib_resolve', $html);
+        self::assertStringNotContainsString('w-scope-select-dropdown', $html);
         self::assertStringNotContainsString('\\Weline\\Framework\\ObjectManager\\ObjectManager', $html);
+        self::assertStringNotContainsString('Weline\\Websites\\', $html);
+        $source = (string)\file_get_contents(BP . '/app/code/Weline/Taglib/Taglib/Scope.php');
+        self::assertStringContainsString('FloatingDropdownEmitter::script()', $source);
+        self::assertStringContainsString('ScopeSelectorCatalogInterface::class', $source);
+        self::assertTrue(\method_exists(Scope::class, 'runtimeCallback'));
+        self::assertTrue(\method_exists(Scope::class, 'buildMarkup'));
+    }
+
+    public function testRuntimeCallbackReturnsHtmlNotPhpSource(): void
+    {
+        $template = $this->createStub(\Weline\Framework\View\Template::class);
+        $template->method('getData')->willReturnMap([
+            ['selected_scope', 'default.default.default'],
+        ]);
+
+        $html = (Scope::runtimeCallback())(
+            $template,
+            'tag-self-close-with-attrs',
+            [
+                'id' => 'shipping-work-scope',
+                'name' => 'target_scope',
+                'value' => 'selected_scope',
+                'placeholder' => '选择作用范围',
+                'search-placeholder' => '搜索作用范围',
+                'aria-label' => '选择作用范围',
+                'searchable' => 'true',
+                'default-expand-all' => 'true',
+                'required' => 'true',
+                'options' => \json_encode([
+                    [
+                        'value' => 'default.default.default',
+                        'label' => 'Global',
+                        'display_label' => 'Global',
+                        'title_label' => 'Global',
+                        'kind' => 'global',
+                        'children' => [],
+                    ],
+                ], JSON_UNESCAPED_UNICODE),
+            ],
+            ''
+        );
+
+        self::assertStringContainsString('data-component="scope-select"', $html);
         self::assertStringContainsString('w-scope-select-dropdown', $html);
-        self::assertStringContainsString('FloatingDropdownEmitter::script()', file_get_contents(
-            BP . '/app/code/Weline/Taglib/Taglib/Scope.php'
-        ));
-        self::assertStringContainsString('id="<?= $__wscope_escape($__wscope_id) ?>"', $html);
         self::assertStringContainsString('role="tree"', $html);
         self::assertStringContainsString('data-w-scope-node', $html);
-        self::assertStringContainsString("event.key === 'ArrowDown'", $html);
         self::assertStringContainsString('window.WelineScopeSelect', $html);
-        self::assertStringNotContainsString('Weline\\Websites\\', $html);
+        self::assertStringContainsString("event.key === 'ArrowDown'", $html);
+        self::assertStringNotContainsString('Weline_Taglib_resolve', $html);
+        self::assertStringNotContainsString('$Taglib__required', $html);
+        self::assertDoesNotMatchRegularExpression('/<\?php\b/', $html);
     }
 }
