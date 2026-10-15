@@ -87,13 +87,20 @@ final class ToolService
             self::tool(
                 'resolve_task_context',
                 'Resolve indexed task context',
-                'Return a token-bounded guidance-bundle.v1 with exact code/document locations, hashes, symbol relations, index revision, freshness, validated learning, workflow_contract.v1, framework_candidates.v1 (recommended mechanisms/reuse/anti-patterns), and pinned workflow fragments. Complete extension-point selection before code changes. Prefer this before AI-side repository scans.',
+                'Return a token-bounded guidance-bundle.v1 with exact code/document locations, hashes, symbol relations, index revision, freshness, validated learning, workflow_contract.v1, framework_candidates.v1 (recommended mechanisms/reuse/anti-patterns), and pinned workflow fragments. Complete extension-point selection before code changes. Prefer this before AI-side repository scans. Optional hard_constraint_ids expands HC-SL cold-path full summaries from HardConstraintsCatalog (≤20/call); do NOT use get_indexed_document for hard-rule bodies.',
                 self::objectSchema($project + [
                     'task' => self::stringSchema('The implementation, diagnosis, review, or documentation task.'),
                     'paths' => self::stringsSchema('Known repository-relative paths.'),
                     'symbols' => self::stringsSchema('Known symbol names or UIDs.'),
                     'module' => self::stringSchema('Optional Vendor_Module scope.'),
                     'kinds' => self::stringsSchema('Optional code, doc, config, or rule kinds.'),
+                    'hard_constraint_ids' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                        'minItems' => 1,
+                        'maxItems' => 20,
+                        'description' => 'HC-SL expand: hard constraint rule ids to return full summary bodies (resolve_task_context.hard_constraint_ids).',
+                    ],
                     'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50],
                     'token_budget' => ['type' => 'integer', 'minimum' => 256, 'maximum' => 32000],
                     'learning_limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 10],

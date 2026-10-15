@@ -17,24 +17,99 @@ final class HardConstraintsCatalog
     public const AUTHORITATIVE_WORKFLOW_DOC = 'app/code/Weline/Ai/doc/AI工程交付流程.md';
 
     /**
-     * Full package returned by prepare_project.agent_guidance.hard_constraints.
+     * Package returned by prepare_project.agent_guidance.hard_constraints.
+     * Default form=symbol (HC-SL hot path). Pass form=full for prose bodies (tests/debug).
      *
+     * @param array{form?: string}|null $options
      * @return array<string, mixed>
      */
-    public static function package(): array
+    public static function package(?array $options = null): array
     {
-        return [
+        $form = strtolower(trim((string) ($options['form'] ?? 'symbol')));
+        if ($form === 'full') {
+            return self::packageFull();
+        }
+
+        $rules = HardConstraintsSymbolDsl::symbolRules();
+        // Operational ids are already merged into symbolRules via fullRuleIndex;
+        // keep a dedicated symbol list for mcp_operational slot (same compile).
+        $operational = HardConstraintsSymbolDsl::symbolOperational();
+        $ruleIds = array_column($rules, 'id');
+        $operationalIds = array_column($operational, 'id');
+        // symbolRules includes operational ids — split for package shape parity.
+        $operationalSet = array_fill_keys($operationalIds, true);
+        $domainRules = array_values(array_filter(
+            $rules,
+            static fn (array $row): bool => !isset($operationalSet[$row['id']]),
+        ));
+
+        $package = [
             'schema' => self::SCHEMA,
+            'form' => 'symbol',
             'must_obey' => true,
             'authoritative_doc' => self::AUTHORITATIVE_DOC,
             'authoritative_workflow_doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
             'host_guidance_role' => 'pointer_only',
             'session_startup_notices_role' => 'pointer_only',
+            'expand_via' => HardConstraintsSymbolDsl::EXPAND_VIA,
+            'language_schema' => HardConstraintsSymbolDsl::LANGUAGE_SCHEMA,
+            'language_schema_path' => HardConstraintsSymbolDsl::LANGUAGE_SCHEMA_PATH,
+            'legend' => HardConstraintsSymbolDsl::legend(),
+            'preamble' => self::preambleSymbol(),
+            'rules' => $domainRules,
+            'mcp_operational' => $operational,
+            // Full Codex delegation body stays in packageFull(); hot path is pointer-only.
+            'host_codex_delegation' => [
+                'schema_version' => 'host-codex-delegation.v1',
+                'form' => 'symbol_pointer',
+                'policy_id' => 'host_delegate_explore_plan_review_to_codex_cli',
+                'expand_via' => HardConstraintsSymbolDsl::EXPAND_VIA,
+                'note' => 'OPT-IN only when user mentions Codex; full policy via expand id host_delegate_explore_plan_review_to_codex_cli or packageFull().',
+            ],
+            'token_budget' => HardConstraintsSymbolDsl::PACKAGE_TOKEN_BUDGET,
+        ];
+        $estimated = HardConstraintsSymbolDsl::estimateTokens($package);
+        $package['token_usage'] = [
+            'estimated' => $estimated,
+            'budget' => HardConstraintsSymbolDsl::PACKAGE_TOKEN_BUDGET,
+            'budget_exceeded' => $estimated > HardConstraintsSymbolDsl::PACKAGE_TOKEN_BUDGET,
+            'estimate_method' => 'serialized_unicode_characters_div_4',
+        ];
+
+        return $package;
+    }
+
+    /**
+     * Full prose package (rules[].summary). For contracts/tests/debug — not prepare hot path.
+     *
+     * @return array<string, mixed>
+     */
+    public static function packageFull(): array
+    {
+        return [
+            'schema' => self::SCHEMA,
+            'form' => 'full',
+            'must_obey' => true,
+            'authoritative_doc' => self::AUTHORITATIVE_DOC,
+            'authoritative_workflow_doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
+            'host_guidance_role' => 'pointer_only',
+            'session_startup_notices_role' => 'pointer_only',
+            'expand_via' => HardConstraintsSymbolDsl::EXPAND_VIA,
             'preamble' => self::preamble(),
             'rules' => self::rules(),
             'mcp_operational' => self::mcpOperationalRules(),
             'host_codex_delegation' => self::hostCodexDelegation(),
         ];
+    }
+
+    public static function preambleSymbol(): string
+    {
+        return 'HARD CONSTRAINTS HC-SL (hard-constraints.v1 form=symbol): obey formula∧gloss_zh∧legend. '
+            . 'Expand full summary ONLY via ' . HardConstraintsSymbolDsl::EXPAND_VIA . ' (≤'
+            . HardConstraintsSymbolDsl::EXPAND_IDS_MAX . '/call). '
+            . 'Authority ' . self::AUTHORITATIVE_DOC . '. '
+            . 'Eng→□Prep; COps→¬Prep; Eng∧Write→□Arch; WebTouch→□WBOP; PlanRev→□(LensE∧LensA∧LensI). '
+            . '【硬约束·符号】热路径仅公式+短义；全文用 resolve_task_context.hard_constraint_ids 展开；禁止把 get_indexed_document 当硬规则展开。';
     }
 
     /**
@@ -219,82 +294,34 @@ SH;
     }
 
     /**
-     * Compact MCP instructions: engineering MUST prepare_project when attached; coding stays host-native.
-     * Framework Theme/Taglib/i18n bodies live in package()/workflowHardRules(), not here as prose dumps.
+     * HC-SL spine for MCP tool instructions (same form as prepare package; no prose dump).
+     * Must stay under ToolService instruction length budget while retaining contract id tokens.
      */
     public static function mcpInstructions(): string
     {
-        return 'MCP ROLE: HARD CONSTRAINTS (hard-constraints.v1). Indexes knowledge/rules/skills; host editors. '
-            . 'Engineering: ensure → prepare_project → obey hard_constraints → resolve_task_context/get_skill. '
-            . 'Content-ops/chat skip MCP (content_ops_skills_skip_mcp). LOCAL-FIRST. preserve_dirty_workspace: never git checkout/restore/clean/stash; dirty-load; no other-session overwrite. '
-            . 'machine_shared_side_effects_require_workspace_scope: SERIOUS—keychain+mcp.json bound/aoci --repo ONLY current workspace; forbid sibling CA/MCP rebind. '
-            . 'aoci_complements_weline_mcp: COMPLEMENT+AUTO-INSTALL+DEFAULT USE—after prepare MUST aoci_rules (+overview if unreliable); content-ops/chat EXEMPT; AOCI≠prepare. '
-            . 'module_doc_forbids_ephemeral_work_artifacts: no ephemeral in module doc/; use session|team|tmp. '
-            . 'Task-scoped: intent_lane_router, requirement_engineering_grade_gate, requirement_scan_architecture_smell_gate, engineering_team_for_new_requirements (Team:项目经理:, one_seat_one_agent, peer_talk_via_channel, 监工), host_plan_mode_for_planning + plan_complete_self_review_then_implement + requirement_acceptance_always + requirement_use_case_closed_loop_acceptance, host_codex_delegation (no nested codex; knowledge.codex.enabled), plan_content_focus_only(背景+方案+细节)+plan_implementability_checklist, plan_review_three_lenses(engineering+architecture+impact/AOCI) binding plan_review_requires_code_evidence + scheme_requires_architecture_review + plan_review_requires_impact_surface, user_facing_verdict_last, user_facing_brief_plain_report, global_rules_dual_write_mcp_and_host, module_i18n_chinese_source_default, active_locale_must_show_target_language, user_mentions_translation_all_default_website_locales. '
-            . 'architecture_grade_change_only: SERIOUS—mechanism+owning_module; re-prepare if lost. '
-            . 'website_concept_seed_not_in_modules(+code_review_for_module_boundary): no site openers in app/code→design. '
-            . 'framework_demos_live_in_weline_demo: demos ONLY Weline_Demo. '
-            . 'business_forbids_sql_dialect: SERIOUS—ORM Adapter only. '
-            . 'Bodies: AI硬规则索引.md + surfaces.';
-
-        return 'MCP ROLE (knowledge plane + mandatory hard-rule gate): indexes skills/code maps/hard rules. '
-            . 'Coding uses host-native editors—MCP has no write tools. '
-            . 'CALL SCOPE: engineering when MCP attachable → ensure→prepare_project→OBEY hard_constraints; then resolve_task_context/resolve_skill/get_skill. '
-            . 'Skip MCP for chat/content-ops (content_ops_skills_skip_mcp)—Read ai-command+doc/ai/skills; no prepare. '
-            . 'aoci_complements_weline_mcp: AOCI-CODE (`aoci`) COMPLEMENT Weline—Weline=rules/skills/prepare; AOCI=cognition index/drift; HARD AUTO-INSTALL when binary missing; HARD DEFAULT USE (engineering): after prepare_project MUST aoci_rules (+ aoci_overview when cognition unreliable); content-ops/chat EXEMPT; never let AOCI replace prepare_project/hard_constraints. '
-            . 'Obey hard-constraints.v1 from agent_guidance or ' . self::AUTHORITATIVE_DOC . '. '
-            . 'If MCP cannot attach: host Read ' . self::AUTHORITATIVE_DOC . '; do not invent rules. '
-            . 'Scrutinize+architecture-first+decoupled; prefer framework_candidates; report 耦合提示/需求纠偏. '
-            . 'preserve_dirty_workspace: never git checkout/restore/clean/stash to wipe dirty work; dirty-load current disk before edit; forbid other-session/old-baseline overwrite of live dirty files. no_legacy_code_accumulation_on_change NEVER authorizes deleting other-session/user dirty work or business data in the name of cleanup. '
-            . 'machine_shared_side_effects_require_workspace_scope: SERIOUS—keychain Local CA + mcp.json bound/aoci --repo ONLY for current workspace; forbid sibling-repo CA trust or MCP rebind. '
-            . 'module_doc_forbids_ephemeral_work_artifacts: one-off SESSION/team/scratch/ops/investigation/plan notes MUST go under repo-root dev/ (dev/session, dev/team, dev/tmp)—FORBID writing them into app/code/*/doc/ (incl. doc/开发/plan.md, doc/开发/task.md, *排查*, one-off *修复* notes, disposable checklists). '
-            . 'LOCAL-FIRST runtime queries; production SSH only when user says 线上/生产/ssh weline/aiweline.com. '
-            . 'i18n: module_i18n_chinese_source_default(source=简中); official-framework module CSV git-slim zh+en only (NOT ban non-framework extra locale CSV); '
-            . 'frontend_ui_requires_zh_en_csv(前端开发语言默认中文+中英CSV必译+i18n:collect); '
-            . 'active_locale_must_show_target_language; '
-            . 'user_mentions_translation_all_default_website_locales→默认站全语种进词典. '
-            . 'Self-verify UT/RT/WB; feature e2e chapter+suite (formal headless); strip automation flags (browser_strip_automation_flags); never ask user to test/credentials. '
-            . 'local_verify_before_change_and_after_deploy: every code/logic change MUST pass LOCAL verification before it ships (commit/push/release/deploy); production release (线上/生产, user-authorized only) = local PASS → deploy → verify production AGAIN on the same pathway (deployed ≠ verified; unverified → 已上线，线上复验未完成). Content-ops exempt. '
-            . 'no_legacy_code_accumulation_on_change: a code change REPLACES—remove the old implementation/dead branches/orphaned templates·hooks·events·routes·columns/commented-out blocks/unused imports/duplicate paths in the SAME change set with zero dangling refs; kept legacy paths need @deprecated + reason + planned removal and MUST appear in the unfinished list + doc/开发日志; never hide leftovers under 无; never use this to wipe other-session dirty work or business data (preserve_dirty_workspace). '
-            . 'Requirement start: intent_lane_router then requirement_engineering_grade_gate then work_kind + fe_be_scope + clarify/UC (EARS) → host_plan_mode_for_planning '
-            . '+ plan_content_focus_only(背景+方案+细节)+plan_implementability_checklist unless simple skip. '
-            . 'host_codex_delegation: OPT-IN only—forbid `codex` unless user mentions Codex this turn; '
-            . 'when opted-in + CLI→Codex explore/plan/review (no -m; ≠knowledge.codex.enabled); '
-            . 'MUST announce Codex 正在工作 before/while CLI runs (forbid silent); '
-            . 'Cursor codes only after Codex plan; Codex host no nested codex; see agent_guidance.host_codex_delegation. '
-            . 'Mode: simple→监工:; complex→engineering_team_for_new_requirements Team:项目经理: '
-            . '+ one_seat_one_agent (real subagent/seat; forbid parent roleplay) '
-            . '+ peer_talk_via_channel (channel+resume) + team_flow_on_contracts (对齐冻结 UC+contracts+deps→依赖唤醒; '
-            . '禁开发完才补主路径用例). Load engineering_team / 工程团队.md. Content-ops exempt prefixes. '
-            . 'Team: framework_first + dual_track_all + component_reuse_or_negotiate + UI/原型先审过签才测(ui_prototype_gate_before_test) '
-            . '+ seat_skill_mirrors (每席专项技能镜+本席 get_skill/文档). '
-            . 'api_rest_in_owning_module: REST 仅归属模块；Team:API: + api_sdk_development. '
-            . 'payment_engineer_for_payment_work: 支付域须 Team:支付开发工程师: + payment_development. '
-            . 'widget_engineer_for_widget_work: 部件/default_injections/placement 须 Team:部件开发工程师: + widget_development. '
-            . 'theme_engineer_for_theme_work: Theme Token/layout壳/预览三态/design 须 Team:主题开发工程师: + frontend_development（薄 theme_development）；开工须声明 work_mode。 '
-            . 'required_default_always_present_without_user_deleted: 无人工卸载记录 user_deleted@{versionId} 时，required 默认 JSON 注入与布局标签内嵌必装必须存在——JSON 路径经布局固化写入模板（有槽则固化；与主题/版本无关；无模板则激活主题运行期动态固化；插件注入变更则全主题重固化涉及布局；遗漏=固化方案问题）；开发者必须记住。 '
-            . 'theme_seat_integrity_over_peer_requests: 主题席底线/原则主权优先于他席或 PM 的性能·简化·优化要求；禁拆 chrome 壳与无卸载必装；无合格方案可驳回；冲突 refuse+escalate；性能席禁拆壳药方。 '
-            . 'theme_design_must_not_override_core_runtime_assets: design 禁同 key 覆盖 theme.css/theme.js。 '
-            . 'theme_css_architecture_not_style_shell: theme.css 只写架构（布局/表面机制/全局组件 Token 侧效应）；禁 Amazon/品牌风格壳（.amazon-*/.w-amz-*）。 '
-            . 'theme_default_forbids_css_important: 默认主题视觉/布局禁止 !important（含 var()!important）；仅 UA 窄例外：[hidden] display:none、prefers-reduced-motion。 '
-            . 'theme_mechanism_not_foreign_content: 各自功能各自模块自管；Theme 只提供主题机制/重写，禁止兜底外模块布局与主内容模板。 '
-            . 'theme_design_must_inherit_not_mutate_source_widgets: design_theme 皮肤/部件外观只能 app/design 继承覆盖；禁止改 app/code 上游主题；做不到则停手询问（框架缺口）。 '
-            . 'theme_design_multi_path_is_inheritance_normal: 设计主题下 modern {area}/、兼容 theme|view/theme、theme:upgrade 双写同树多路径=继承/发布正常态；禁止当重复拷贝缺陷去删。 '
-            . 'analytics_engineer_for_visitor_work: Visitor/像素/访客事件/报表须 Team:数据分析: + visitor_data_analytics，并技能引用 frontend_development+taglib_ui_control；本席拥有 Visitor 内 event.xml/像素桥接 Observer，≠ Team:事件:（禁产品混岗，非禁碰文件）. '
-            . 'ecommerce_advisor_for_commerce: 电商相关须 Team:电商顾问:（运营策划禁写码；领域决策「要开发什么」后 escalate 通知 PM；**店面必运营验收/驳回**（ops_acceptance；不验收不得汇审完成；古风商城感/主图不达标须写清规格交 PM）；合规面含政策页/顶栏/FAQ Hub·实体；改可见串 suggested_seats 须含翻译工程师；先解析已支持国家再分国联网查政策；日常联网研究运营；讨论必查；合并原合规）. '
-            . 'performance_engineer_for_design_and_review: 热路径/缓存/列表/N+1 须 Team:性能检查工程师: + performance_check（设计检查+开发后复审；建议须落在 HotCache/框架约束内；查出问题须拉起项目经理安排）. '
-            . 'prompt_engineer_for_skill_prompt_work: 技能引用/提示词骨架/seat_skill_mirrors/MCP skill·surface 文案须 Team:提示词优化工程师: + prompt_optimization（仅重复才压；禁丢义；禁乱加；引用指针化+语义复审）. '
-            . 'translation_engineer_for_i18n_work: 新文案/漏译/i18n in_scope/改用户可见文案 须 Team:翻译工程师:（别名 i18n）+ translation_engineer；collect→对比；官方框架模块 CSV Git瘦身仅 zh+en（非框架模块可自备其它 locale CSV）；其它已选 locale→系统词典/实体；禁「其它语种默认不做」误导. '
-            . 'documentation_engineer_for_docs_work: 行为/契约变更复杂 team 须 Team:文档工程师:（别名 文档）+ documentation_engineer；测试 pass 后 documentation_review_pass；实现变→耐久文档描述同变；无 meetings/文档-review.md=pass 禁汇审；耐久文档统一由文档工程师执笔，其它开发席只交 doc_debt 安排上场、禁私改 app/code/*/doc/. '
-            . 'requirement_issuer_owns_acceptance: escalate/dev_ask 发起席须 waiting_acceptance 盯验收（读 PM 进度写 issuer_acceptance；禁甩手；缺签收禁汇审）. '
-            . 'ui_skill_decision; 有图(web_ui)→视觉UI+原型必上(prototype+frontend-design+weline-theme-development; complex team seats 原型+UI+前端+主题). '
-            . 'requirement_acceptance_always + requirement_use_case_closed_loop_acceptance; closeout 汇审; TDD; delivery URLs. '
-            . 'generated_images_prefer_webp: AI/host 生图默认落盘 WebP（output_format=webp；返回 png/jpg 须转码后再交付）；仅用户明示/确需非 WebP alpha/favicon·ico 才留 PNG. '
-            . 'After MCP use prefix Weline：; content[0] is the call receipt. '
-            . 'session_learning_knowledge_conflict_gate: classify durable user rules as knowledge vs one-off requirements; '
-            . 'obey validated learning; on conflict STOP+report FOR USER DECISION—must explain each conflict in plain language '
-            . '(topic, side A vs B claims, why conflict / near-dup?, impact, ≥2 options + recommendation); '
-            . 'FORBID ID-only /「有冲突」without substance.';
+        return 'MCP ROLE: HARD CONSTRAINTS HC-SL (hard-constraints.v1 form=symbol). Indexes knowledge/rules/skills; host-native editors. '
+            . 'Engineering: ensure → prepare_project → obey hard_constraints (formula∧gloss_zh∧legend) → expand via '
+            . HardConstraintsSymbolDsl::EXPAND_VIA . ' → resolve_skill/get_skill. '
+            . 'Content-ops/chat skip MCP (content_ops_skills_skip_mcp). LOCAL-FIRST. '
+            . 'preserve_dirty_workspace: never git checkout/restore/clean/stash; dirty-load; no other-session overwrite. '
+            . 'machine_shared_side_effects_require_workspace_scope: SERIOUS—keychain+mcp.json/aoci --repo ONLY current workspace. '
+            . 'aoci_complements_weline_mcp: Eng→□Aoci; AOCI≠prepare; content-ops EXEMPT. '
+            . 'module_doc_forbids_ephemeral_work_artifacts: ephemeral→dev/session|team|tmp; ¬module doc/. '
+            . 'intent_lane_router; requirement_engineering_grade_gate; requirement_scan_architecture_smell_gate; '
+            . 'architecture_grade_change_only; '
+            . 'engineering_team_for_new_requirements Team:项目经理: + one_seat_one_agent + peer_talk_via_channel + 监工; '
+            . 'host_plan_mode_for_planning; plan_complete_self_review_then_implement; '
+            . 'plan_content_focus_only(背景+方案+细节); plan_implementability_checklist; '
+            . 'plan_review_three_lenses + plan_review_requires_code_evidence + plan_review_requires_impact_surface + scheme_requires_architecture_review; '
+            . 'requirement_acceptance_always + requirement_use_case_closed_loop_acceptance; '
+            . 'real_machine_usecases_not_unit_tests; browser_operator_self_test; '
+            . 'user_facing_brief_plain_report; user_facing_verdict_last; '
+            . 'host_codex_delegation OPT-IN (Codex 正在工作; no nested codex; ≠knowledge.codex.enabled); '
+            . 'business_forbids_sql_dialect; website_concept_seed_not_in_modules; framework_demos_live_in_weline_demo; '
+            . 'global_rules_dual_write_mcp_and_host; module_i18n_chinese_source_default; '
+            . 'active_locale_must_show_target_language; user_mentions_translation_all_default_website_locales. '
+            . 'hc_sl_rule_lifecycle_gate: RuleCRUD→□get_skill(hc_sl_rule_lifecycle)+language table; forbid prose-only dirty symbols. '
+            . 'FORBID expand via get_indexed_document. Bodies: expand_via + ' . self::AUTHORITATIVE_DOC . '.';
     }
 
     /**
@@ -991,7 +1018,7 @@ SH;
 
     /**
      * Index-only hard_rules for workflow_contract.v1 — no summary prose dump.
-     * Full rule bodies live in prepare_project.agent_guidance.hard_constraints (package()).
+     * prepare hot path is HC-SL (formula+gloss); full summaries via expand_via.
      *
      * @return array<string, mixed>
      */
@@ -1017,14 +1044,16 @@ SH;
             'must_obey' => true,
             'source' => 'prepare_project.agent_guidance.hard_constraints',
             'authoritative_doc' => self::AUTHORITATIVE_DOC,
+            'form' => 'symbol',
             'rule_ids' => $ruleIds,
             'operational_ids' => $operationalIds,
+            'expand_via' => HardConstraintsSymbolDsl::EXPAND_VIA,
             'detail_via' => [
-                'prepare_project.agent_guidance.hard_constraints.rules',
-                'prepare_project.agent_guidance.hard_constraints.mcp_operational',
+                HardConstraintsSymbolDsl::EXPAND_VIA,
+                'HardConstraintsCatalog::packageFull()',
                 self::AUTHORITATIVE_DOC,
             ],
-            'note' => 'workflow_contract ships rule ids only; read full summaries from prepare_project.agent_guidance.hard_constraints (already in session) or the authoritative doc. Surfaces still add task-scoped norms.',
+            'note' => 'workflow_contract ships rule ids only. prepare_project hard_constraints is HC-SL (formula+gloss_zh+legend)—NOT full summaries in session. Expand prose via resolve_task_context.hard_constraint_ids or packageFull()/authoritative doc. Surfaces still add task-scoped norms.',
         ];
     }
 
@@ -1164,6 +1193,11 @@ SH;
             [
                 'id' => 'host_editor_rules_mcp_generated_only',
                 'summary' => 'MANDATORY: Engineering/product rules are owned only by MCP hard-constraints.v1 and authoritative repo docs (Ai/Framework/module doc/). Project-scoped Cursor/Codex/Claude/VS Code host editor rule files (.cursor/rules/*.mdc inside the repo, .cursorrules, CLAUDE.md, .codex/*, .github/copilot-instructions.md, editor-private AGENTS forks, etc.) MUST NOT be hand-authored or directly edited by the Agent as the rule source—switching projects makes those files disappear or diverge. Host editor rule artifacts (including .cursor/rules/weline-mcp-coldstart.mdc and .cursor/hooks.json for learning collection) MUST be generated only by MCP ensure/guidance HostEditorRulesGenerator / HostCursorHooksGenerator; AGENTS.md remains pointer-only for MCP attach. Never treat editor-private rule files as authoritative over prepare_project hard_constraints. EXCEPTION / COMPLEMENT: user-global alwaysApply mirrors under `~/.cursor/rules/*.mdc` (outside the repo) follow global_rules_dual_write_mcp_and_host—they are NOT a substitute authority, but MUST stay in sync when a global AI rule is added/changed.',
+            ],
+            [
+                'id' => 'hc_sl_rule_lifecycle_gate',
+                'summary' => 'MANDATORY HARD when adding, updating, or deleting MCP hard constraints / HC-SL symbols (HardConstraintsCatalog rules|mcp_operational, HardConstraintsSymbolDsl legend|overrides|formula|gloss, hc-sl.language.v1, or user asks 硬规则入库/新增硬规则/改硬规则/删硬规则/HC-SL/符号规则): (1) BEFORE edits MUST get_skill(hc_sl_rule_lifecycle|weline-hc-sl-rule-lifecycle) and Read `dev/ai-command/ai/HC-SL硬规则生命周期.md` + `app/code/Weline/Ai/Mcp/schemas/hc-sl.language.v1.json` (or HardConstraintsSymbolDsl::languageTable()). (2) ADD: write full summary in Catalog AND formula+gloss_zh (overrides or derive) AND register any NEW atoms in legend() with rule_ids; FORBID summary-only inserts. (3) UPDATE: change summary∧formula∧gloss_zh in the SAME change set; if atoms rename/change meaning, update legend mapping AND every formula/override/mcpInstructions/index/host-mdc reference in the SAME set—FORBID editing prose while leaving stale formulas (脏改). (4) DELETE: remove Catalog entry AND overrides entry AND either delete legend atoms whose rule_ids only pointed at the deleted id OR drop that id from shared atoms’ rule_ids; scrub references; FORBID deleting description/summary while leaving logic symbols or orphan legend rows. (5) After edits MUST run HardConstraintsSymbolDsl::validateCatalogConsistency() (ok) + `php app/code/Weline/Ai/Mcp/tests/hard-constraints-symbol-dsl.php`. Complements global_rules_dual_write_mcp_and_host (global rules still dual-write host mdc) and prompt_engineer_for_skill_prompt_work (prompt wording ≠ hard-rule lifecycle).',
+                'doc' => 'dev/ai-command/ai/HC-SL硬规则生命周期.md',
             ],
             [
                 'id' => 'global_rules_dual_write_mcp_and_host',

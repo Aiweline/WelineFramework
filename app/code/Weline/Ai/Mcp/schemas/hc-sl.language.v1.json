@@ -1,0 +1,106 @@
+{
+  "schema": "hc-sl.language.v1",
+  "title": "Hard-Constraints Symbol Logic language table",
+  "authority": {
+    "dsl": "app/code/Weline/Ai/Mcp/src/HardConstraintsSymbolDsl.php",
+    "catalog": "app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php",
+    "skill": "hc_sl_rule_lifecycle",
+    "instruction": "dev/ai-command/ai/HC-SL硬规则生命周期.md",
+    "expand_via": "resolve_task_context.hard_constraint_ids"
+  },
+  "operators": {
+    "□": { "gloss_zh": "必须", "ascii": "MUST" },
+    "◇": { "gloss_zh": "允许", "ascii": "MAY" },
+    "¬": { "gloss_zh": "非/禁止该动作", "ascii": "NOT" },
+    "∧": { "gloss_zh": "且", "ascii": "AND" },
+    "∨": { "gloss_zh": "或", "ascii": "OR" },
+    "→": { "gloss_zh": "蕴含/若则", "ascii": "IMPLIES" },
+    "↔": { "gloss_zh": "当且仅当", "ascii": "IFF" },
+    "∀": { "gloss_zh": "全称", "ascii": "FORALL" },
+    "∃": { "gloss_zh": "存在", "ascii": "EXISTS" },
+    "⊥": { "gloss_zh": "禁入结局(禁Write/禁宣称PASS)", "ascii": "BOTTOM" },
+    "|": { "gloss_zh": "并列条款分隔", "ascii": "SEP" }
+  },
+  "caps": {
+    "formula_max": 80,
+    "gloss_zh_max": 64,
+    "package_token_budget": 8000,
+    "expand_ids_max": 20
+  },
+  "atom": {
+    "fields": ["sym", "gloss_zh", "rule_ids"],
+    "rules": [
+      "sym 为谓词名(PascalCase 短标识)",
+      "gloss_zh ≤64 可执行短义",
+      "rule_ids 列出绑定的硬规则 id(可多条)",
+      "新谓词入库必须写入 legend()；禁止公式用了未登记原子却不更新映射表"
+    ]
+  },
+  "rule_entry": {
+    "full_authority": {
+      "id": "snake_case 稳定 id",
+      "summary": "英文/中英长散文(Catalog::rules 唯一全文权威)",
+      "doc": "权威文档相对路径"
+    },
+    "hot_path": {
+      "id": "同 full id",
+      "formula": "≤80 HC-SL 公式",
+      "gloss_zh": "≤64 可执行短义",
+      "cluster": "§L|§G|§A|§P|§Π|§✓|§U|§Θ|§D|§I|§Ω|§S|§E"
+    },
+    "optional_override": "HardConstraintsSymbolDsl::overrides()[id] 手写脊柱公式；无则 derive()"
+  },
+  "lifecycle": {
+    "add": {
+      "must": [
+        "Catalog::rules()|mcpOperationalRules() 增加 {id,summary,doc}",
+        "overrides 或可 derive 的 formula+gloss_zh",
+        "公式新原子 → legend() 登记 + rule_ids 绑定",
+        "AI硬规则索引.md / 规则/*.md 指针或正文",
+        "若全局规则 → dual-write ~/.cursor/rules",
+        "契约测按需；跑 validateCatalogConsistency + hard-constraints-symbol-dsl"
+      ],
+      "forbid": [
+        "只写 summary 无 formula/gloss",
+        "公式引用未登记原子",
+        "超长度帽"
+      ]
+    },
+    "update": {
+      "must": [
+        "summary 与 formula 与 gloss_zh 同波改",
+        "原子改名/语义变 → legend + 所有引用该原子的 formula/overrides 同波改",
+        "Grep 旧 id/旧原子于 Catalog、mcpInstructions、索引、host mdc、契约测",
+        "全局规则 → dual-write 宿主镜"
+      ],
+      "forbid": [
+        "只改 summary 留下旧 formula(脏改)",
+        "只改 formula 不改引用面/映射表",
+        "削弱强制/否决却标 pass"
+      ]
+    },
+    "delete": {
+      "must": [
+        "从 rules()/mcpOperational 删除条目",
+        "从 overrides() 删除",
+        "legend：仅绑定已删 id 的原子删除或改绑；共享原子更新 rule_ids",
+        "mcpInstructions / 索引 / 契约测 / host mdc 去掉引用",
+        "跑 validateCatalogConsistency 确认无孤儿"
+      ],
+      "forbid": [
+        "只删 summary/文档留下 overrides 或 legend 孤儿",
+        "只删散文留下公式引用(脏改)"
+      ]
+    }
+  },
+  "sync_surfaces": [
+    "app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php",
+    "app/code/Weline/Ai/Mcp/src/HardConstraintsSymbolDsl.php",
+    "app/code/Weline/Ai/doc/AI硬规则索引.md",
+    "app/code/Weline/Ai/doc/规则/*.md",
+    "dev/ai-command/ai/** (若指令触发)",
+    "~/.cursor/rules/*.mdc (仅 global_rules_dual_write)",
+    "app/code/Weline/Ai/Mcp/tests/guidance-workflow-contract.php",
+    "app/code/Weline/Ai/Mcp/tests/hard-constraints-symbol-dsl.php"
+  ]
+}

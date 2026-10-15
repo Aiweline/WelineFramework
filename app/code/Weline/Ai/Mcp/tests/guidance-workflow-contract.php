@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use LearningMcp\GuidanceWorkflowCatalog;
 use LearningMcp\HardConstraintsCatalog;
+use LearningMcp\HardConstraintsSymbolDsl;
 use LearningMcp\HostEditorRulesGenerator;
 use LearningMcp\McpSkillCatalog;
 use LearningMcp\ToolService;
@@ -11,7 +12,10 @@ use LearningMcp\ToolService;
 require dirname(__DIR__) . '/src/bootstrap.php';
 
 $contract = GuidanceWorkflowCatalog::contract();
-$hardConstraintsPackage = HardConstraintsCatalog::package();
+// prepare hot path (HC-SL); keep symbol package for form/formula/expand_via assertions
+$hardConstraintsSymbolPackage = HardConstraintsCatalog::package();
+// Existing summary prose assertions continue against full bodies
+$hardConstraintsPackage = HardConstraintsCatalog::packageFull();
 $hardRulesFlat = HardConstraintsCatalog::workflowHardRules();
 $frontend = is_array($contract['frontend_development'] ?? null)
     ? $contract['frontend_development']
@@ -175,6 +179,22 @@ $checks = [
         && count($hardConstraintsPackage['rules']) >= 10
         && is_string($hardConstraintsPackage['preamble'] ?? null)
         && str_contains((string) $hardConstraintsPackage['preamble'], 'hard-constraints.v1'),
+    'hard_constraints prepare package is HC-SL symbol form' => is_array($hardConstraintsSymbolPackage)
+        && ($hardConstraintsSymbolPackage['form'] ?? '') === 'symbol'
+        && ($hardConstraintsSymbolPackage['expand_via'] ?? '') === HardConstraintsSymbolDsl::EXPAND_VIA
+        && is_array($hardConstraintsSymbolPackage['legend'] ?? null)
+        && is_array($hardConstraintsSymbolPackage['rules'] ?? null)
+        && count($hardConstraintsSymbolPackage['rules']) >= 10
+        && !isset($hardConstraintsSymbolPackage['rules'][0]['summary'])
+        && isset($hardConstraintsSymbolPackage['rules'][0]['formula'], $hardConstraintsSymbolPackage['rules'][0]['gloss_zh'])
+        && (int) ($hardConstraintsSymbolPackage['token_usage']['estimated'] ?? PHP_INT_MAX)
+            < HardConstraintsSymbolDsl::PACKAGE_TOKEN_BUDGET
+        && ($hardConstraintsSymbolPackage['token_usage']['budget_exceeded'] ?? true) === false,
+    'workflow hard_rules_ref points to HC-SL expand_via' => is_array($hardRulesRef)
+        && ($hardRulesRef['expand_via'] ?? '') === HardConstraintsSymbolDsl::EXPAND_VIA
+        && ($hardRulesRef['form'] ?? '') === 'symbol'
+        && str_contains((string) ($hardRulesRef['note'] ?? ''), 'HC-SL')
+        && !str_contains((string) ($hardRulesRef['note'] ?? ''), 'already in session'),
     'workflow_contract hard_constraints is pointer' => is_array($contract['hard_constraints'] ?? null)
         && ($contract['hard_constraints']['schema'] ?? '') === HardConstraintsCatalog::SCHEMA
         && ($contract['hard_constraints']['must_obey'] ?? false) === true

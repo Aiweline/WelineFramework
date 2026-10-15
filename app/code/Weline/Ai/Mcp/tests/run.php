@@ -785,7 +785,9 @@ try {
     check(str_contains(ToolService::instructions(), 'resolve_skill'), 'instructions mention resolve_skill');
     $instructions = ToolService::instructions();
     check(
-        (str_contains($instructions, 'mandatory hard-rule gate') || str_contains($instructions, 'MANDATORY ensure'))
+        (str_contains($instructions, 'mandatory hard-rule gate')
+            || str_contains($instructions, 'MANDATORY ensure')
+            || str_contains($instructions, 'HC-SL'))
             && str_contains($instructions, 'host-native')
             && str_contains($instructions, 'hard_constraints'),
         'instructions require prepare_project hard_constraints gate with host-native coding',
@@ -849,13 +851,18 @@ try {
         'mcp instructions mention host Codex CLI delegation opt-in and native recursion guard',
     );
     $hostDelegation = HardConstraintsCatalog::hostCodexDelegation();
+    $symbolDelegation = HardConstraintsCatalog::package()['host_codex_delegation'] ?? null;
+    $fullDelegation = HardConstraintsCatalog::packageFull()['host_codex_delegation'] ?? null;
     check(
         ($hostDelegation['policy_id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli'
             && ($hostDelegation['enabled_when'] ?? '') === 'user_explicitly_mentions_codex_and_codex_cli_available_and_host_is_not_codex'
             && ($hostDelegation['opt_in']['required'] ?? false) === true
             && ($hostDelegation['opt_in']['forbid_auto_delegate_on_cli_presence_alone'] ?? false) === true
             && ($hostDelegation['independent_of_nested_planner'] ?? false) === true
-            && is_array(HardConstraintsCatalog::package()['host_codex_delegation'] ?? null),
+            && is_array($symbolDelegation)
+            && ($symbolDelegation['form'] ?? '') === 'symbol_pointer'
+            && is_array($fullDelegation)
+            && isset($fullDelegation['plan_command_template']),
         'package exposes host_codex_delegation structured policy with user opt-in gate',
     );
     check(

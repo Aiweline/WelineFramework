@@ -308,6 +308,13 @@ final class IntelligenceService
             }
             $sessionId = trim((string) ($input['client_session_id'] ?? ''));
             $workflowContract = GuidanceWorkflowCatalog::forTask($task);
+            $hardConstraintIds = array_values(array_filter(
+                array_map('trim', self::strings($input['hard_constraint_ids'] ?? [])),
+                static fn (string $id): bool => $id !== '',
+            ));
+            $hardConstraintBodies = $hardConstraintIds === []
+                ? []
+                : HardConstraintsSymbolDsl::expandBodies($hardConstraintIds);
 
             return ContextResponseBudget::fit([
                 'schema_version' => 'guidance-bundle.v1',
@@ -324,6 +331,8 @@ final class IntelligenceService
                 'freshness' => $index->status()['freshness'] ?? 'unknown',
                 'task' => $task,
                 'rules' => $ruleSummaries,
+                'hard_constraint_bodies' => $hardConstraintBodies,
+                'hard_constraint_expand_via' => HardConstraintsSymbolDsl::EXPAND_VIA,
                 'fragments' => GuidanceWorkflowCatalog::mergeFragments($fragments, []),
                 'query' => [
                     'query_id' => (string) ($context['query_id'] ?? ''),
@@ -340,7 +349,8 @@ final class IntelligenceService
                     'scan_fallback' => false,
                     'extension_point_selection_required' => true,
                     'workflow_doc' => HardConstraintsCatalog::AUTHORITATIVE_WORKFLOW_DOC,
-                    'note' => 'Use indexed fragments, hashes, search_project_knowledge, and get_indexed_document/get_indexed_files for code-map reads. Prefer resolve_skill/get_skill for engineering skills. Implement with host-native editors.',
+                    'hard_constraint_expand_via' => HardConstraintsSymbolDsl::EXPAND_VIA,
+                    'note' => 'Use indexed fragments, hashes, search_project_knowledge, and get_indexed_document/get_indexed_files for code-map reads. Prefer resolve_skill/get_skill for engineering skills. Expand HC-SL hard-constraint full summaries via hard_constraint_ids (not get_indexed_document). Implement with host-native editors.',
                 ],
             ], $tokenBudget);
         });

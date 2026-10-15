@@ -14,6 +14,22 @@ MCP 是**知识面**（技能索引 / 代码地图 / 领域硬规则下发），
 | 指令「提取技能」 | 同上 | 同上 |
 | **编码/工程** | **强制** | ensure（若需）→ `prepare_project` → **读并遵守** `agent_guidance.hard_constraints` → 宿主原生编辑；按需 `resolve_task_context` / `search_project_knowledge` / `get_skill` |
 
+### HC-SL 三层硬规则面（`form=symbol`）
+
+| 层 | 内容 | 通道 |
+|----|------|------|
+| 热路径 | `formula` ∧ `gloss_zh` ∧ `legend` | `prepare_project` → `hard_constraints`（默认；无长 `summary`） |
+| 冷路径 Expand | 全文 `summary` | **仅** `resolve_task_context` 入参 `hard_constraint_ids[]` → `hard_constraint_bodies` |
+| 全文权威 | Catalog `rules()` / `mcpOperationalRules()` | `packageFull()` / 本索引与分册；**禁止** `get_indexed_document` 冒充 Expand |
+
+符号约定：`□`必须 / `◇`允许 / `¬∧∨→∀∃` / `⊥`禁入结局。Agent 凭公式+短义执行强制/否决；不解时再 expand。
+
+**规则增删改（`hc_sl_rule_lifecycle_gate`）**：语言结构表 `app/code/Weline/Ai/Mcp/schemas/hc-sl.language.v1.json`；技能 `hc_sl_rule_lifecycle`；指令 `dev/ai-command/ai/HC-SL硬规则生命周期.md`。  
+- **add**：summary + formula/gloss + 新原子入 legend  
+- **update**：summary∧formula∧gloss 同波；原子变 → 映射表+全部引用同波  
+- **delete**：Catalog + overrides + legend 孤儿 + 引用面齐清  
+禁止只删/改描述而留下逻辑符号（脏改）。改后 `validateCatalogConsistency()` + `hard-constraints-symbol-dsl` 测。
+
 **上下文丢失**：长对话压缩后若看不到 `hard_constraints`，**必须重新** `prepare_project`；不得凭记忆编造规则。
 
 **MCP 挂不上**：宿主 Read [AI硬规则索引.md](../AI硬规则索引.md) + 对应分册继续开发；不得假装已遵守 MCP，不得借此绕过 `blocked`、`dev` 分支、文档/响应式/真实运行验收或部署权限门禁。

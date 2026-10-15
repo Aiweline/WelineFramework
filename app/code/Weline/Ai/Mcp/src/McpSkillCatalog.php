@@ -35,6 +35,8 @@ final class McpSkillCatalog
         'weline-visitor-analytics' => GuidanceWorkflowCatalog::SURFACE_VISITOR_DATA_ANALYTICS,
         'weline-performance-check' => GuidanceWorkflowCatalog::SURFACE_PERFORMANCE_CHECK,
         'weline-prompt-optimization' => GuidanceWorkflowCatalog::SURFACE_PROMPT_OPTIMIZATION,
+        'weline-hc-sl-rule-lifecycle' => GuidanceWorkflowCatalog::SURFACE_HC_SL_RULE_LIFECYCLE,
+        'hc_sl_rule_lifecycle' => GuidanceWorkflowCatalog::SURFACE_HC_SL_RULE_LIFECYCLE,
         'weline-translation-engineer' => GuidanceWorkflowCatalog::SURFACE_TRANSLATION_ENGINEER,
         'weline-documentation-engineer' => GuidanceWorkflowCatalog::SURFACE_DOCUMENTATION_ENGINEER,
         'weline-code-review' => GuidanceWorkflowCatalog::SURFACE_CODE_REVIEW,

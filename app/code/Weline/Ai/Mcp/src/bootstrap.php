@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/Support.php';
 require_once __DIR__ . '/ContextResponseBudget.php';
 require_once __DIR__ . '/HardConstraintsCatalog.php';
+require_once __DIR__ . '/HardConstraintsSymbolDsl.php';
 require_once __DIR__ . '/HostEditorRulesGenerator.php';
 require_once __DIR__ . '/HostCursorHooksGenerator.php';
 require_once __DIR__ . '/CursorLearningHookAdapter.php';

@@ -48,6 +48,8 @@ final class GuidanceWorkflowCatalog
 
     public const SURFACE_PROMPT_OPTIMIZATION = 'prompt_optimization';
 
+    public const SURFACE_HC_SL_RULE_LIFECYCLE = 'hc_sl_rule_lifecycle';
+
     public const SURFACE_TRANSLATION_ENGINEER = 'translation_engineer';
 
     public const SURFACE_DOCUMENTATION_ENGINEER = 'documentation_engineer';
@@ -84,6 +86,7 @@ final class GuidanceWorkflowCatalog
             'dev/ai-command/ai/电商顾问.md',
             'dev/ai-command/ai/性能检查.md',
             'dev/ai-command/ai/提示词优化.md',
+            'dev/ai-command/ai/HC-SL硬规则生命周期.md',
             'dev/ai-command/ai/翻译工程师.md',
             'dev/ai-command/ai/文档工程师.md',
         ];
@@ -862,6 +865,7 @@ final class GuidanceWorkflowCatalog
             self::SURFACE_ECOMMERCE_ADVISOR => self::ecommerceAdvisorSurface(),
             self::SURFACE_PERFORMANCE_CHECK => self::performanceCheckSurface(),
             self::SURFACE_PROMPT_OPTIMIZATION => self::promptOptimizationSurface(),
+            self::SURFACE_HC_SL_RULE_LIFECYCLE => self::hcSlRuleLifecycleSurface(),
             self::SURFACE_TRANSLATION_ENGINEER => self::translationEngineerSurface(),
             self::SURFACE_DOCUMENTATION_ENGINEER => self::documentationEngineerSurface(),
             self::SURFACE_CODE_REVIEW => self::codeReviewSurface(),
@@ -2060,6 +2064,58 @@ final class GuidanceWorkflowCatalog
                     'On findings/fail: result=escalate + @项目经理：请立刻组队解决—PM same-turn staffs construction; forbid Issue backlog and self-arranging construction waves',
                     'Keep suggestions inside Framework HotCache/scope/batch/invalidation rules; rework to owning seats',
                     'FORBID strip-shell prescriptions (theme_seat_integrity_over_peer_requests); only HotCache/batch Query/prefetch/FPC-legal directions',
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function hcSlRuleLifecycleSurface(): array
+    {
+        return [
+            'id' => self::SURFACE_HC_SL_RULE_LIFECYCLE,
+            'label' => 'HC-SL 硬规则生命周期（增/改/删 + 语言表）',
+            'description' => '新增/修改/删除 MCP 硬规则时必须按 HC-SL：先读语言结构表，summary 与 formula/gloss/legend 同波维护；禁止只改散文留下脏逻辑符号或孤儿映射。删规则必须清 overrides+legend 孤儿+引用面。',
+            'triggers' => [
+                '硬规则入库', '新增硬规则', '添加硬规则', '改硬规则', '删硬规则', '删除硬规则',
+                'HC-SL', '符号规则', '逻辑符号规则', '硬规则生命周期',
+                'HardConstraintsCatalog', 'HardConstraintsSymbolDsl', 'hc-sl.language',
+                'hc_sl_rule_lifecycle',
+            ],
+            'authoritative_skill' => 'weline-hc-sl-rule-lifecycle',
+            'authoritative_doc' => 'dev/ai-command/ai/HC-SL硬规则生命周期.md',
+            'authoritative_docs' => [
+                'dev/ai-command/ai/HC-SL硬规则生命周期.md',
+                'app/code/Weline/Ai/Mcp/schemas/hc-sl.language.v1.json',
+                'app/code/Weline/Ai/doc/ai/skills/hc-sl-rule-lifecycle/SKILL.md',
+                'app/code/Weline/Ai/doc/AI硬规则索引.md',
+                'app/code/Weline/Ai/doc/规则/00-MCP调用与会话.md',
+            ],
+            'norms' => [
+                ['id' => 'hc_sl_must_load_skill', 'summary' => '硬规则增删改前必须 get_skill(hc_sl_rule_lifecycle) 并 Read 语言表+指令'],
+                ['id' => 'hc_sl_add_full_row', 'summary' => '新增须 summary+formula+gloss；新原子登记 legend'],
+                ['id' => 'hc_sl_update_sync', 'summary' => '修改须 summary∧formula∧gloss 同波；原子变则映射表+全部引用同波'],
+                ['id' => 'hc_sl_delete_no_orphan', 'summary' => '删除须清 Catalog+overrides+legend 孤儿+引用面'],
+                ['id' => 'hc_sl_forbid_prose_only_dirty', 'summary' => '禁止只改/删散文留下逻辑符号或孤儿映射（脏改）'],
+                ['id' => 'hc_sl_validate_after', 'summary' => '改后 validateCatalogConsistency 绿 + hard-constraints-symbol-dsl 测'],
+            ],
+            'verification_commands' => [
+                'test -f app/code/Weline/Ai/Mcp/schemas/hc-sl.language.v1.json',
+                'test -f dev/ai-command/ai/HC-SL硬规则生命周期.md',
+                'php app/code/Weline/Ai/Mcp/tests/hard-constraints-symbol-dsl.php',
+                'rg -n "hc_sl_rule_lifecycle_gate" app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php',
+            ],
+            'template_surface_rules' => [
+                'forbidden' => [
+                    'Editing hard-rule summary without updating formula/gloss/legend in the same change set',
+                    'Deleting a hard-rule description while leaving overrides or orphan legend atoms',
+                    'Introducing formula atoms without registering them in legend()',
+                    'Skipping get_skill(hc_sl_rule_lifecycle) when changing HardConstraintsCatalog/SymbolDsl',
+                ],
+                'required' => [
+                    'get_skill(hc_sl_rule_lifecycle|weline-hc-sl-rule-lifecycle) and Read language table + HC-SL硬规则生命周期.md before rule CRUD',
+                    'Keep summary, formula, gloss_zh, legend, and references synchronized per lifecycle op',
+                    'Run HardConstraintsSymbolDsl::validateCatalogConsistency() and hard-constraints-symbol-dsl tests after edits',
                 ],
             ],
         ];

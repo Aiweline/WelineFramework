@@ -21,6 +21,10 @@
 
 **MCP 编译落点**：`hard-constraints.v1` 由本文与各分册编译；**权威常量** `HardConstraintsCatalog::AUTHORITATIVE_DOC`（本文）与 `AUTHORITATIVE_WORKFLOW_DOC`（交付流程）。改本文、分册或交付流程后，必须跑 `php app/code/Weline/Ai/Mcp/tests/guidance-workflow-contract.php` 与 `mcp-skills-catalog.php`。
 
+**HC-SL 热路径（`form=symbol`）**：`prepare_project.agent_guidance.hard_constraints` 默认只下发逻辑公式 + `gloss_zh` + `legend`（无长英文 `summary`）。全文展开唯一通道：`resolve_task_context.hard_constraint_ids`（≤20/次）→ `hard_constraint_bodies`。禁止用 `get_indexed_document` 当硬规则展开。调试/契约可用 `HardConstraintsCatalog::packageFull()`。细则见 [规则/00 §1](./规则/00-MCP调用与会话.md)。
+
+**HC-SL 规则入库/改删（`hc_sl_rule_lifecycle_gate`）**：新增/修改/删除硬规则前必须 `get_skill(hc_sl_rule_lifecycle)` 并 Read 语言结构表 [`hc-sl.language.v1.json`](../Mcp/schemas/hc-sl.language.v1.json) + [HC-SL硬规则生命周期.md](../../../dev/ai-command/ai/HC-SL硬规则生命周期.md)。**禁止**只改散文留下脏逻辑符号或孤儿 legend；原子变更须同步映射表与全部引用；删除须清 overrides+legend+引用面。
+
 ## MCP 调用范围（`mcp_call_scope`）
 
 | 类别 | 示例 | 是否调用 MCP |
