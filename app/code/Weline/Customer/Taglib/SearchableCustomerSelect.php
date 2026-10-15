@@ -105,11 +105,12 @@ PHP;
 
         $html[] = <<<'HTML'
 <div
-    class="w-language-select<?= $__scs_classes ? ' ' . htmlspecialchars(implode(' ', $__scs_classes), ENT_QUOTES) : '' ?>"
+    class="w-language-select<?= $__scs_value !== '' ? ' has-value' : '' ?><?= $__scs_classes ? ' ' . htmlspecialchars(implode(' ', $__scs_classes), ENT_QUOTES) : '' ?>"
     style="<?= $__scs_style !== '' ? htmlspecialchars($__scs_style, ENT_QUOTES) : '' ?>"
     id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>_wrapper"
     data-w-component="customer-select"
     data-w-component-id="<?= htmlspecialchars($__scs_id, ENT_QUOTES) ?>"
+    data-has-value="<?= $__scs_value !== '' ? 'true' : 'false' ?>"
     data-w-display-only="<?= $__scs_disabled ? 'true' : 'false' ?>"
     data-w-allow-empty="<?= $__scs_allow_empty ? 'true' : 'false' ?>"
     data-w-empty-text="<?= htmlspecialchars($__scs_empty_label, ENT_QUOTES) ?>"

@@ -59,10 +59,12 @@
     }
 
     function normalizeOption(row) {
+        const email = String(row.email || '').trim().toLowerCase();
         return {
             value: String(row.value != null ? row.value : row.customer_id || ''),
             label: String(row.label || row.username || row.email || row.value || ''),
-            meta: String(row.meta || (row.email && row.email !== row.label ? row.email : '') || ''),
+            meta: String(row.meta || (email && email !== String(row.label || '').toLowerCase() ? email : '') || ''),
+            email,
             search: String(row.search || `${row.label || ''} ${row.email || ''} ${row.value || row.customer_id || ''}`).toLocaleLowerCase(),
         };
     }
@@ -84,6 +86,7 @@
             const initialDisplay = String(element.dataset.wInitialDisplay || '');
             let selectedValue = '';
             let selectedLabel = '';
+            let selectedEmail = '';
             let open = false;
             let pointerReference = null;
             let requestToken = 0;
@@ -109,6 +112,7 @@
                 fieldId: field.id,
                 value: selectedValue,
                 label: selectedLabel,
+                email: selectedEmail,
             });
 
             const updateValidity = () => {
@@ -217,13 +221,26 @@
                 }
             };
 
-            const commit = (value, label, shouldNotify = true) => {
+            const syncHasValue = () => {
+                // Outlined floating label：胶囊/选中值视为有内容（与 language-select / currency-select 同契约）
+                const hasValue = selectedValue !== '';
+                element.classList.toggle('has-value', hasValue);
+                element.dataset.hasValue = hasValue ? 'true' : 'false';
+            };
+
+            const commit = (value, label, shouldNotify = true, email = '') => {
                 const nextValue = String(value || '');
                 const nextLabel = String(label || (nextValue !== '' ? nextValue : ''));
-                const changed = selectedValue !== nextValue || selectedLabel !== nextLabel;
+                const nextEmail = String(email || '').trim().toLowerCase();
+                const changed = selectedValue !== nextValue
+                    || selectedLabel !== nextLabel
+                    || selectedEmail !== nextEmail;
                 selectedValue = nextValue;
                 selectedLabel = nextLabel;
+                selectedEmail = nextEmail;
                 field.value = selectedValue;
+                field.dataset.wCustomerEmail = selectedEmail;
+                syncHasValue();
                 renderTags();
                 updateValidity();
                 if (changed && shouldNotify) notify();
@@ -334,10 +351,10 @@
                     event.preventDefault();
                     const value = option.dataset.wCustomerId || '';
                     if (value === '') {
-                        commit('', '', true);
+                        commit('', '', true, '');
                     } else {
                         const record = cachedOptions.find((item) => item.value === value);
-                        commit(value, record?.label || value, true);
+                        commit(value, record?.label || value, true, record?.email || '');
                     }
                     close('select');
                 });
@@ -361,16 +378,21 @@
 
             selectedValue = String(field.value || '');
             if (initialDisplay) {
-                commit(selectedValue, initialDisplay, false);
+                commit(selectedValue, initialDisplay, false, String(field.dataset.wCustomerEmail || ''));
             } else if (selectedValue !== '') {
                 resolveCustomer(Number.parseInt(selectedValue, 10)).then((payload) => {
                     const item = payload.item || null;
-                    commit(selectedValue, item ? String(item.label || selectedValue) : selectedValue, false);
+                    commit(
+                        selectedValue,
+                        item ? String(item.label || selectedValue) : selectedValue,
+                        false,
+                        item ? String(item.email || '') : '',
+                    );
                 }).catch(() => {
-                    commit(selectedValue, selectedValue, false);
+                    commit(selectedValue, selectedValue, false, '');
                 });
             } else {
-                commit('', '', false);
+                commit('', '', false, '');
             }
 
             queueMicrotask(() => emit('ready', detail(), false));
@@ -378,8 +400,9 @@
             return {
                 getValue: () => selectedValue,
                 getLabel: () => selectedLabel,
+                getEmail: () => selectedEmail,
                 getDetail: detail,
-                setValue: (value, label = '') => commit(String(value || ''), label),
+                setValue: (value, label = '', email = '') => commit(String(value || ''), label, true, email),
                 open: openPopover,
                 close,
                 element,

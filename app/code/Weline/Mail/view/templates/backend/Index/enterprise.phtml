@@ -38,6 +38,31 @@ $composeCustomerSelectValue = (string)($compose_customer_select_value ?? '');
 $composeCustomerSelectDisplay = (string)($compose_customer_select_display ?? '');
 $mailComposeCustomerPlaceholder = (string)__('搜索客户姓名或邮箱');
 $mailComposeCustomerEmptyLabel = (string)__('选择客户');
+$mailAccountSelectPlaceholder = (string)__('搜索邮箱或显示名');
+$mailAccountSelectEmptyLabel = (string)__('请选择邮箱');
+$mailboxAccountSelectOptions = [];
+$selectedMailboxDisplay = '';
+foreach ($mailboxAccounts as $__mailAccountOpt) {
+    $__optId = (int)$__mailAccountOpt->getId();
+    $__optEmail = strtolower(trim((string)$__mailAccountOpt->getData(MailAccount::schema_fields_EMAIL)));
+    $__optName = trim((string)$__mailAccountOpt->getData(MailAccount::schema_fields_DISPLAY_NAME));
+    $__optLabel = $__optName !== '' ? $__optEmail . ' · ' . $__optName : $__optEmail;
+    $mailboxAccountSelectOptions[] = [
+        'value' => (string)$__optId,
+        'label' => $__optLabel,
+        'email' => $__optEmail,
+        'meta' => $__optName,
+        'display_name' => $__optName,
+        'search' => strtolower($__optEmail . ' ' . $__optName . ' ' . $__optId),
+    ];
+    if ($__optId === $selectedAccountId) {
+        $selectedMailboxDisplay = $__optLabel;
+    }
+}
+$mailboxAccountSelectOptionsJson = json_encode(
+    $mailboxAccountSelectOptions,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '[]';
 $navItems = [
     'mailbox' => __('邮箱'),
     'accounts' => __('用户与账号'),
@@ -397,24 +422,23 @@ if ($oauthCfError === 'invalid_scope') {
         $folderLabel = $folder === 'sent' ? __('已发送') : __('收件箱');
         ?>
         <div class="w-toolbar" data-testid="mail-enterprise-mailbox-toolbar">
-            <form method="get" action="@backend-url{$basePath}" class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2);">
+            <form method="get" action="@backend-url{$basePath}" class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2);" data-testid="mail-enterprise-account-form" id="mail-enterprise-account-form">
                 <input type="hidden" name="view" value="mailbox">
                 <input type="hidden" name="folder" value="<?= $escape($folder) ?>">
-                <label class="w-field" style="--w-min-inline-size:min(100%,22rem);">
+                <label class="w-field" style="--w-min-inline-size:min(100%,22rem);" data-testid="mail-enterprise-current-mailbox">
                     <span class="w-field__label"><?= __('当前邮箱') ?></span>
                     <span class="w-field__control">
-                        <select class="w-select" name="account" onchange="this.form.submit()">
-                            <?php foreach ($mailboxAccounts as $account): ?>
-                                <?php
-                                $optEmail = (string)$account->getData(MailAccount::schema_fields_EMAIL);
-                                $optName = trim((string)$account->getData(MailAccount::schema_fields_DISPLAY_NAME));
-                                $optLabel = $optName !== '' ? $optEmail . ' · ' . $optName : $optEmail;
-                                ?>
-                                <option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $selectedAccountId ? 'selected' : '' ?>>
-                                    <?= $escape($optLabel) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <w:mail:account:select
+                            id="mail-enterprise-current-account"
+                            name="account"
+                            value="selectedAccountId"
+                            display="selectedMailboxDisplay"
+                            options="mailboxAccountSelectOptionsJson"
+                            auto-submit="true"
+                            form="mail-enterprise-account-form"
+                            placeholder="mailAccountSelectPlaceholder"
+                            empty-label="mailAccountSelectEmptyLabel"
+                        />
                     </span>
                 </label>
             </form>
@@ -490,13 +514,26 @@ if ($oauthCfError === 'invalid_scope') {
                                             echo $escape($lockedLabel);
                                         ?>" readonly>
                                     <?php else: ?>
-                                        <select class="w-select" name="account_id" required>
-                                            <?php foreach ($mailboxAccounts as $account): ?>
-                                                <option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $composeAccountId ? 'selected' : '' ?>>
-                                                    <?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
+                                        <?php
+                                        $composeMailboxDisplay = '';
+                                        foreach ($mailboxAccountSelectOptions as $__composeOpt) {
+                                            if ((string)$__composeOpt['value'] === (string)$composeAccountId) {
+                                                $composeMailboxDisplay = (string)$__composeOpt['label'];
+                                                break;
+                                            }
+                                        }
+                                        $composeAccountIdStr = (string)$composeAccountId;
+                                        ?>
+                                        <w:mail:account:select
+                                            id="mail-enterprise-compose-account"
+                                            name="account_id"
+                                            value="composeAccountIdStr"
+                                            display="composeMailboxDisplay"
+                                            options="mailboxAccountSelectOptionsJson"
+                                            required="true"
+                                            placeholder="mailAccountSelectPlaceholder"
+                                            empty-label="mailAccountSelectEmptyLabel"
+                                        />
                                     <?php endif; ?>
                                 </label>
                                 <div class="w-field" data-testid="mail-enterprise-compose-to">
