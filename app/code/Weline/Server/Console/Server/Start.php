@@ -6274,6 +6274,38 @@ class Start extends CommandAbstract
                 : (string)$capacityTier['fiber_max_active_cap'])
             . ' (' . $capacityTier['reason'] . ')'
         );
+        // H3: medium+/large + pin → Ready 底线 4，并写入 worker_count_requested（align-baseline 语义）。
+        // 显式 CLI -c 更大值仍优先；tiny/small survival 不抬。
+        if (!$cliWorkerCountExplicit) {
+            $wlsEnv = Env::getInstance()->getConfig('wls') ?? [];
+            $fiberEnv = \is_array($wlsEnv['fiber'] ?? null) ? $wlsEnv['fiber'] : [];
+            $pinMaxActive = \filter_var($fiberEnv['pin_max_active'] ?? false, \FILTER_VALIDATE_BOOLEAN);
+            $floor = \Weline\Server\Service\Capacity\HostCapacityTier::applyPinnedStorefrontWorkerFloor(
+                (int)$config['worker_count'],
+                $pinMaxActive,
+                $capacityTier
+            );
+            if ($floor['applied']) {
+                $config['worker_count'] = $floor['count'];
+                $requestedNow = $config['worker_count_requested'] ?? null;
+                $requestedInt = (\is_int($requestedNow) && $requestedNow > 0)
+                    ? $requestedNow
+                    : ((\is_string($requestedNow) && \ctype_digit($requestedNow))
+                        ? (int)$requestedNow
+                        : 0);
+                $config['worker_count_requested'] = \max($requestedInt, $floor['count']);
+                $config['_pinned_storefront_worker_floor_applied'] = true;
+                $prevReason = \trim((string)($config['worker_count_reason'] ?? ''));
+                $config['worker_count_reason'] = $prevReason === ''
+                    ? $floor['reason']
+                    : $prevReason . ';' . $floor['reason'];
+                $this->printer->note(
+                    'pinned_storefront_worker_floor applied: workers='
+                    . $floor['count']
+                    . ' (' . $floor['reason'] . ')'
+                );
+            }
+        }
         if ($cliWorkerCountExplicit
             && $limitMb > 0
             && $limitMb <= 2300

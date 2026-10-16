@@ -243,6 +243,46 @@ final class HostCapacityTier
         ];
     }
 
+    /** medium+/large + pin：店面 Ready 底线（keep pin；不压低显式更大 requested）。 */
+    public const PINNED_STOREFRONT_WORKER_FLOOR = 4;
+
+    /**
+     * When capacity tier is medium|large and fiber pin_max_active is on, raise
+     * worker_count to at least {@see PINNED_STOREFRONT_WORKER_FLOOR}.
+     * tiny/small survival path and explicit higher counts are left alone.
+     *
+     * @param array<string, mixed>|null $capacitySnap result of {@see resolve()}
+     * @return array{count:int, applied:bool, reason:string}
+     */
+    public static function applyPinnedStorefrontWorkerFloor(
+        int $workerCount,
+        bool $pinMaxActive,
+        ?array $capacitySnap = null,
+        ?int $hostLimitMb = null,
+        ?array $config = null,
+    ): array {
+        $snap = $capacitySnap ?? self::resolve($hostLimitMb, $config);
+        $tier = (string)($snap['tier'] ?? '');
+        $survival = (bool)($snap['survival_overrides_pin'] ?? false);
+        $count = \max(1, $workerCount);
+        if (!$pinMaxActive || $survival) {
+            return ['count' => $count, 'applied' => false, 'reason' => 'skip_pin_or_survival'];
+        }
+        if ($tier !== self::TIER_MEDIUM && $tier !== self::TIER_LARGE) {
+            return ['count' => $count, 'applied' => false, 'reason' => 'tier_not_medium_plus'];
+        }
+        $floor = self::PINNED_STOREFRONT_WORKER_FLOOR;
+        if ($count >= $floor) {
+            return ['count' => $count, 'applied' => false, 'reason' => 'already_ge_floor'];
+        }
+
+        return [
+            'count' => $floor,
+            'applied' => true,
+            'reason' => 'pinned_storefront_worker_floor=' . $floor . ';tier=' . $tier,
+        ];
+    }
+
     public static function clampNginxWorkerConnections(int $configured, ?int $hostLimitMb = null, ?array $config = null): int
     {
         $snap = self::resolve($hostLimitMb, $config);

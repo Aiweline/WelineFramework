@@ -349,7 +349,19 @@ final class WorkerReadinessState
             && $normalized['http_status'] < 400;
 
         self::$homepageFpcProof = $normalized;
-        self::$warmupState = $validProcessFpcProof ? 'hot' : 'warm';
+        // H4: warmup_state=warm 仅当 hit=true；fail-open / deferred 不得假装 warm。
+        if ($validProcessFpcProof) {
+            self::$warmupState = 'hot';
+        } elseif ($normalized['hit']) {
+            self::$warmupState = 'warm';
+        } elseif (
+            \str_contains($normalized['reason'], 'fail-open')
+            || \str_contains($normalized['reason'], 'deferred')
+        ) {
+            self::$warmupState = 'deferred';
+        } else {
+            self::$warmupState = 'cold';
+        }
     }
 
     /**

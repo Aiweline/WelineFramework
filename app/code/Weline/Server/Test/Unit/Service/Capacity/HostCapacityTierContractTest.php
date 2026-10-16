@@ -111,6 +111,33 @@ final class HostCapacityTierContractTest extends TestCase
         self::assertSame(HostCapacityTier::TIER_MEDIUM, $applied['capacity_tier']);
     }
 
+    public function testPinnedStorefrontWorkerFloorRaisesMediumPinBelowFour(): void
+    {
+        $snap = HostCapacityTier::resolve(4096);
+        $raised = HostCapacityTier::applyPinnedStorefrontWorkerFloor(2, true, $snap);
+        self::assertTrue($raised['applied']);
+        self::assertSame(4, $raised['count']);
+
+        $kept = HostCapacityTier::applyPinnedStorefrontWorkerFloor(8, true, $snap);
+        self::assertFalse($kept['applied']);
+        self::assertSame(8, $kept['count']);
+
+        $tiny = HostCapacityTier::resolve(1024);
+        $skip = HostCapacityTier::applyPinnedStorefrontWorkerFloor(2, true, $tiny);
+        self::assertFalse($skip['applied']);
+        self::assertSame(2, $skip['count']);
+    }
+
+    public function testStartWiresPinnedStorefrontWorkerFloor(): void
+    {
+        $src = (string)\file_get_contents(
+            BP . 'app/code/Weline/Server/Console/Server/Start.php'
+        );
+        self::assertStringContainsString('applyPinnedStorefrontWorkerFloor', $src);
+        self::assertStringContainsString('worker_count_requested', $src);
+        self::assertStringContainsString('_pinned_storefront_worker_floor_applied', $src);
+    }
+
     public function testNginxAndEdgeFragments(): void
     {
         self::assertSame(4096, HostCapacityTier::clampNginxWorkerConnections(32768, 1024));

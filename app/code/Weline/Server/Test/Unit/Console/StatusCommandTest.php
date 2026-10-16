@@ -834,4 +834,13 @@ final class StatusCommandTest extends TestCase
             'reason' => 'unit test runtime selection',
         ]);
     }
+
+    public function testSharedSidecarLiveProbeWiredInStatusCommand(): void
+    {
+        $src = (string)\file_get_contents(BP . 'app/code/Weline/Server/Console/Server/Status.php');
+        self::assertStringContainsString('resolveSharedSidecarLiveState', $src);
+        self::assertStringContainsString('SharedStateProtocolProbe::pingWithTokenBasename', $src);
+        self::assertStringContainsString('protocol_unhealthy', $src);
+        self::assertStringContainsString('infraDegraded', $src);
+    }
 }

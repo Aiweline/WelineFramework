@@ -2543,6 +2543,7 @@ pending,等待中
 workers,工人
 端口范围：,端口范围：
 服务：,服务：
+"infraDegraded：Workers 在跑但 Session/Memory 侧车非 running（以协议探活为准，勿信陈旧 PID）","infraDegraded：Workers 在跑但 Session/Memory 侧车非 running（以协议探活为准，勿信陈旧 PID）"
 "使用 server:status <name> 查看详细状态","使用 server:status <name> 查看详细状态"
 "使用 server:stop <name> 停止实例","使用 server:stop <name> 停止实例"
 "如有残留 endpoint 文件，可执行 server:clean 清理未运行记录","如有残留 endpoint 文件，可执行 server:clean 清理未运行记录"
@@ -2594,6 +2595,7 @@ Endpoint：,端点：
 首页预热：,首页预热：
 动态首渲染测量：,动态首渲染测量：
 未记录,未记录
+"◐ 协议异常","◐ 协议异常"
 "查看 Weline Server 运行状态","查看 Weline Server 运行状态"
 "查看服务器实例状态，树形展示所有 Worker 进程","查看服务器实例状态，树形展示所有 Worker 进程"
 实例名称（默认显示所有实例）,实例名称（默认显示所有实例）

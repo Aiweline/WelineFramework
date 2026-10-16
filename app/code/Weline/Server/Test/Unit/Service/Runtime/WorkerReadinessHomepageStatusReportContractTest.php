@@ -40,6 +40,23 @@ final class WorkerReadinessHomepageStatusReportContractTest extends TestCase
         self::assertSame('hot', $fields['warmup_state']);
     }
 
+    public function testFailOpenDeferredMustNotReportWarm(): void
+    {
+        WorkerReadinessState::markBusinessHomepageHot([
+            'hit' => false,
+            'fpc_status' => '',
+            'source' => '',
+            'full_uri' => '',
+            'reason' => 'homepage-fpc:deferred-after-ready:fail-open',
+            'http_status' => 0,
+        ]);
+
+        $fields = WorkerReadinessState::statusReportHomepageFields();
+        self::assertSame(0, $fields['homepage_fpc_hit']);
+        self::assertSame('deferred', $fields['warmup_state']);
+        self::assertNotSame('warm', $fields['warmup_state']);
+    }
+
     public function testOverlayPrefersLastStatusReportAdoptedProofOverFailOpenMeta(): void
     {
         $metadata = WorkerReadinessState::overlayHomepageFpcMetaFromLastStatusReport([

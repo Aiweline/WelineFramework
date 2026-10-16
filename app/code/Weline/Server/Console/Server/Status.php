@@ -29,6 +29,7 @@ use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Service\SharedStateProtocolProbe;
 
 /**
  * server:status - 查看服务器状态
@@ -211,14 +212,23 @@ class Status extends CommandAbstract
             $services = $this->filterVisibleServices($info->services);
             $serviceCount = \count($services);
             $svcIndex = 0;
+            $workersUp = false;
+            $sidecarDegraded = false;
             foreach ($services as $service) {
                 /** @var ServiceInfo $service */
                 $isLastSvc = ($svcIndex === $serviceCount - 1);
                 $svcPrefix = $isLastSvc ? '└─' : '├─';
-                
-                $isRunning = $this->isServiceRunning($service, $processInfoMap);
-                $svcStatus = $isRunning ? __('● 运行中') : __('○ 已停止');
-                $svcColor = $isRunning ? 'success' : 'error';
+
+                [$svcStatus, $svcColor] = $this->formatServiceLiveStatus($service, $processInfoMap);
+                if ($service->role === ControlMessage::ROLE_WORKER
+                    && $this->isServiceRunning($service, $processInfoMap)
+                ) {
+                    $workersUp = true;
+                }
+                $sidecarLive = $this->resolveSharedSidecarLiveState($service);
+                if ($sidecarLive !== null && $sidecarLive !== 'running') {
+                    $sidecarDegraded = true;
+                }
                 $portDisplay = $service->port !== null && $service->port > 0 ? ':' . $service->port : '';
                 $trackingPid = $service->getTrackingPid();
                 $pidDisplay = $trackingPid > 0 ? $trackingPid : $service->pid;
@@ -229,7 +239,12 @@ class Status extends CommandAbstract
                 $this->printer->$svcColor($childPrefix . '       ' . $svcPrefix . ' ' . $service->displayName . '#' . $service->instanceId . ' (PID:' . $pidDisplay . $pidSuffix . $portDisplay . ') ' . $svcStatus);
                 $svcIndex++;
             }
-            
+            if ($workersUp && $sidecarDegraded) {
+                $this->printer->warning(
+                    $childPrefix . '       ' . __('infraDegraded：Workers 在跑但 Session/Memory 侧车非 running（以协议探活为准，勿信陈旧 PID）')
+                );
+            }
+
             echo "\n";
             $index++;
         }
@@ -1072,12 +1087,10 @@ class Status extends CommandAbstract
      */
     protected function showServiceStatus(ServiceInfo $service, bool $isLast, array $processInfoMap = []): void
     {
+        [$statusWithIcon, $color] = $this->formatServiceLiveStatus($service, $processInfoMap);
         $isRunning = $this->isServiceRunning($service, $processInfoMap);
-        $icon = $isRunning ? '●' : '○';
-        $statusStr = $isRunning ? __('运行中') : __('已停止');
-        $color = $isRunning ? 'success' : 'error';
         $prefix = $isLast ? '└─' : '├─';
-        
+
         $details = [];
         $trackingPid = $service->getTrackingPid();
         if ($trackingPid > 0) {
@@ -1089,13 +1102,17 @@ class Status extends CommandAbstract
         if ($service->port !== null && $service->port > 0) {
             $details[] = __('端口：') . $service->port;
         }
+        $sidecarLive = $this->resolveSharedSidecarLiveState($service);
+        if ($sidecarLive !== null) {
+            $details[] = 'live=' . $sidecarLive;
+        }
 
         $detailStr = $details === [] ? '' : ' (' . \implode(', ', $details) . ')';
         $label = $service->displayName . ' #' . $service->instanceId . $detailStr;
-        
+
         $this->printer->$color("  │");
-        $this->printer->$color("  {$prefix} {$label} {$icon} {$statusStr}");
-        
+        $this->printer->$color("  {$prefix} {$label} {$statusWithIcon}");
+
         $runtimeDetails = [];
         if ($isRunning && $trackingPid > 0) {
             $memPrefix = $isLast ? '   ' : '│  ';
@@ -1116,13 +1133,25 @@ class Status extends CommandAbstract
             $warmupState = (string)($metadata['warmup_state'] ?? '');
             if ($homepageFpc !== [] || $warmupState !== '') {
                 $hit = !empty($homepageFpc['hit']);
+                $reason = (string)($homepageFpc['reason'] ?? '');
+                // H4 display honesty: never show warm+hit=false (legacy Worker meta).
+                if (
+                    !$hit
+                    && $warmupState === 'warm'
+                    && (
+                        \str_contains($reason, 'fail-open')
+                        || \str_contains($reason, 'deferred')
+                    )
+                ) {
+                    $warmupState = 'deferred';
+                }
                 $runtimeDetails[] = __('首页预热：')
                     . 'state=' . ($warmupState !== '' ? $warmupState : '-')
                     . ', hit=' . ($hit ? 'true' : 'false')
                     . ', source=' . (string)($homepageFpc['source'] ?? '-')
                     . ', status=' . (int)($homepageFpc['http_status'] ?? 0)
                     . ', fpc=' . (string)($homepageFpc['fpc_status'] ?? '-')
-                    . ', reason=' . (string)($homepageFpc['reason'] ?? '-');
+                    . ', reason=' . ($reason !== '' ? $reason : '-');
             }
 
             $proof = \is_array($service->metadata['dynamic_first_render'] ?? null)
@@ -1272,10 +1301,69 @@ class Status extends CommandAbstract
     }
 
     /**
+     * Session/Memory：协议活探活三态（running / protocol_unhealthy / absent）。
+     * 禁止仅凭陈旧 metadata PID / healthy 判「已停止」。
+     *
+     * @return 'running'|'protocol_unhealthy'|'absent'|null null = 非共享侧车
+     */
+    protected function resolveSharedSidecarLiveState(ServiceInfo $service): ?string
+    {
+        if (!$this->isSharedDependencyService($service)) {
+            return null;
+        }
+        $port = (int)($service->port ?? 0);
+        $token = \trim((string)($service->metadata['token_file_name'] ?? ''));
+        if ($port <= 0 || $token === '') {
+            return 'absent';
+        }
+        // Do not pass shared sidecar process instance_name as tokenAuthority —
+        // SharedStateTokenStore rejects that binder and false-negatives healthy peers.
+        // Match server:shared:status: host+port+token(+role) only.
+        $ok = SharedStateProtocolProbe::pingWithTokenBasename(
+            '127.0.0.1',
+            $port,
+            $token,
+            $service->role,
+            null,
+        );
+
+        return $ok ? 'running' : 'protocol_unhealthy';
+    }
+
+    /**
+     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
+     * @return array{0: string, 1: string} [label, printerColor]
+     */
+    protected function formatServiceLiveStatus(ServiceInfo $service, array $processInfoMap): array
+    {
+        $live = $this->resolveSharedSidecarLiveState($service);
+        if ($live === 'running') {
+            return [__('● 运行中'), 'success'];
+        }
+        if ($live === 'protocol_unhealthy') {
+            return [__('◐ 协议异常'), 'warning'];
+        }
+        if ($live === 'absent') {
+            return [__('○ 已停止'), 'error'];
+        }
+
+        $isRunning = $this->isServiceRunning($service, $processInfoMap);
+
+        return $isRunning
+            ? [__('● 运行中'), 'success']
+            : [__('○ 已停止'), 'error'];
+    }
+
+    /**
      * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
      */
     protected function isServiceRunning(ServiceInfo $service, array $processInfoMap): bool
     {
+        $live = $this->resolveSharedSidecarLiveState($service);
+        if ($live !== null) {
+            return $live === 'running';
+        }
+
         $trackingPid = $service->getTrackingPid();
         if ($trackingPid > 0) {
             if ($processInfoMap === []) {
