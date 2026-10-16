@@ -36,25 +36,10 @@ class MailSmtpBootstrapService
     }
 
     /**
-     * 是否具备一键入口（有 active 域或已有邮局账号）。
+     * 邮局⊥Smtp：一键绑邮局已废止；永不因「邮局已启域」返回 true。
      */
     public function canEnsure(): bool
     {
-        try {
-            $domain = w_query('mail', 'resolveActiveMailDomain', []);
-            if (is_array($domain) && !empty($domain['success'])) {
-                return true;
-            }
-        } catch (\Throwable) {
-        }
-        try {
-            $accounts = w_query('mail', 'getSmtpAccounts', ['limit' => 1]);
-            if (is_array($accounts) && !empty($accounts['success']) && !empty($accounts['items'])) {
-                return true;
-            }
-        } catch (\Throwable) {
-        }
-
         return false;
     }
 

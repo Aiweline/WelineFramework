@@ -8,7 +8,8 @@ use Weline\Mail\Model\MailAccount;
 use Weline\Mail\Model\MailDomain;
 
 /**
- * 按企业邮箱外投开关全量重建 Stalwart outbound route 表达式（sender 匹配）。
+ * 按邮箱账号外投 smarthost 全量重建 Stalwart outbound route（sender 匹配）。
+ * 主机/端口/凭据落在 MailAccount；域级字段仅作无数据回退。
  * fake / 无管理凭据：只返回拟写载荷，不调远端。
  */
 final class MailOutboundRelaySyncService
@@ -80,30 +81,76 @@ final class MailOutboundRelaySyncService
         /** @var MailOutboundRelaySecretService $secrets */
         $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
 
-        $domains = $domainModel->clear()
-            ->where(MailDomain::schema_fields_STATUS, 'active')
+        $domainLookup = [];
+        foreach ($domainModel->clear()->select()->fetch() as $domain) {
+            if ($domain instanceof MailDomain && (int)$domain->getId() > 0) {
+                $domainLookup[(int)$domain->getId()] = $domain;
+            }
+        }
+
+        $accounts = $accountModel->clear()
+            ->where(MailAccount::schema_fields_STATUS, 'active')
+            ->where(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED, 1)
             ->select()
             ->fetch();
-        $routes = [];
+
+        /** @var array<string, array{route_name: string, relay: array<string, mixed>}> $routeByKey */
+        $routeByKey = [];
         $match = [];
         $selfRef = false;
 
-        foreach ($domains as $domain) {
-            if (!$domain instanceof MailDomain) {
+        foreach ($accounts as $acct) {
+            if (!$acct instanceof MailAccount) {
                 continue;
             }
-            $domainId = (int)$domain->getId();
-            $host = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_HOST)));
-            if ($host === '' || $domainId <= 0) {
+            $accountId = (int)$acct->getId();
+            $email = strtolower(trim((string)$acct->getData(MailAccount::schema_fields_EMAIL)));
+            if ($accountId <= 0 || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 continue;
             }
-            $port = (int)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_PORT);
+            $domainId = (int)$acct->getData(MailAccount::schema_fields_DOMAIN_ID);
+            $domain = $domainLookup[$domainId] ?? null;
+            if (!$domain instanceof MailDomain
+                || (string)$domain->getData(MailDomain::schema_fields_STATUS) !== 'active'
+            ) {
+                continue;
+            }
+
+            $host = strtolower(trim((string)$acct->getData(MailAccount::schema_fields_OUTBOUND_RELAY_HOST)));
+            $port = (int)$acct->getData(MailAccount::schema_fields_OUTBOUND_RELAY_PORT);
+            $user = trim((string)$acct->getData(MailAccount::schema_fields_OUTBOUND_RELAY_USERNAME));
+            $tls = strtolower(trim((string)$acct->getData(MailAccount::schema_fields_OUTBOUND_RELAY_TLS))) ?: 'starttls';
+            $sealed = trim((string)$acct->getData(MailAccount::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED));
+
+            // 旧域级 smarthost 回退（仅当账号未填主机）
+            if ($host === '') {
+                $host = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_HOST)));
+                if ($port <= 0) {
+                    $port = (int)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_PORT);
+                }
+                if ($user === '') {
+                    $user = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_USERNAME));
+                }
+                if ($sealed === '') {
+                    $sealed = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED));
+                }
+                if ($tls === 'starttls') {
+                    $domainTls = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_TLS)));
+                    if ($domainTls !== '') {
+                        $tls = $domainTls;
+                    }
+                }
+            }
+            if ($host === '') {
+                continue;
+            }
             if ($port <= 0) {
                 $port = 587;
             }
-            $user = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_USERNAME));
-            $tls = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_TLS))) ?: 'starttls';
-            $sealed = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED));
+            if (!in_array($tls, ['starttls', 'smtps', 'none'], true)) {
+                $tls = 'starttls';
+            }
+
             $password = '';
             if ($sealed !== '') {
                 try {
@@ -112,51 +159,48 @@ final class MailOutboundRelaySyncService
                     $password = '';
                 }
             }
+
             $mailHost = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_HOSTNAME)));
             $domainName = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_DOMAIN_NAME)));
             if ($this->looksSelfRef($host, $mailHost, $domainName)) {
                 $selfRef = true;
             }
 
-            $routeName = 'weline-outbound-' . $domainId;
-            $routes[] = [
-                '@type' => 'Relay',
-                'name' => $routeName,
-                'address' => $host,
-                'port' => $port,
-                'protocol' => 'smtp',
-                'implicitTls' => $tls === 'smtps',
-                'authUsername' => $user,
-                'authSecret' => $password !== ''
-                    ? ['@type' => 'Value', 'secret' => $password]
-                    : ['@type' => 'None'],
-            ];
-
-            $accounts = $accountModel->clear()
-                ->where(MailAccount::schema_fields_DOMAIN_ID, $domainId)
-                ->where(MailAccount::schema_fields_STATUS, 'active')
-                ->where(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED, 1)
-                ->select()
-                ->fetch();
-            foreach ($accounts as $acct) {
-                if (!$acct instanceof MailAccount) {
-                    continue;
-                }
-                $email = strtolower(trim((string)$acct->getData(MailAccount::schema_fields_EMAIL)));
-                if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    continue;
-                }
-                $match[] = [
-                    'if' => "sender == '" . addcslashes($email, "'\\") . "'",
-                    'then' => "'" . $routeName . "'",
+            $routeKey = strtolower($host) . '|' . $port . '|' . $user . '|' . $tls;
+            if (!isset($routeByKey[$routeKey])) {
+                $routeName = 'weline-outbound-acct-' . substr(sha1($routeKey), 0, 12);
+                $routeByKey[$routeKey] = [
+                    'route_name' => $routeName,
+                    'relay' => [
+                        '@type' => 'Relay',
+                        'name' => $routeName,
+                        'address' => $host,
+                        'port' => $port,
+                        'protocol' => 'smtp',
+                        'implicitTls' => $tls === 'smtps',
+                        'authUsername' => $user,
+                        'authSecret' => $password !== ''
+                            ? ['@type' => 'Value', 'secret' => $password]
+                            : ['@type' => 'None'],
+                    ],
                 ];
             }
+            $routeName = $routeByKey[$routeKey]['route_name'];
+            $match[] = [
+                'if' => "sender == '" . addcslashes($email, "'\\") . "'",
+                'then' => "'" . $routeName . "'",
+            ];
         }
 
         $match[] = [
             'if' => "is_local_domain('', rcpt_domain)",
             'then' => "'local'",
         ];
+
+        $routes = [];
+        foreach ($routeByKey as $entry) {
+            $routes[] = $entry['relay'];
+        }
 
         return [
             'routes' => $routes,

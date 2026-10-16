@@ -2,13 +2,14 @@
 
 return [
     "name" => 'Weline_Mail',
-    "version" => '0.2.23',
+    "version" => '0.2.24',
     "requires" => [
         'Weline_Admin' => '*',
         'Weline_Cron' => '*',
         'Weline_Cdn' => '*',
         'Weline_Customer' => '*',
         'Weline_Queue' => '*',
+        'Weline_Smtp' => '*',
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [

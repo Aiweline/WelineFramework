@@ -39,8 +39,23 @@ class MailAccount extends Model
     #[Col('varchar', 32, default: 'pending', comment: '账号状态')]
     public const schema_fields_STATUS = 'status';
 
-    #[Col('tinyint', default: 0, comment: '企业邮箱外投是否走域级 smarthost')]
+    #[Col('tinyint', default: 0, comment: '该邮箱是否走外投 smarthost')]
     public const schema_fields_OUTBOUND_RELAY_ENABLED = 'outbound_relay_enabled';
+
+    #[Col('varchar', 255, nullable: true, comment: '外投 smarthost 主机')]
+    public const schema_fields_OUTBOUND_RELAY_HOST = 'outbound_relay_host';
+
+    #[Col('int', nullable: true, comment: '外投 smarthost 端口')]
+    public const schema_fields_OUTBOUND_RELAY_PORT = 'outbound_relay_port';
+
+    #[Col('varchar', 255, nullable: true, comment: '外投 smarthost 用户名')]
+    public const schema_fields_OUTBOUND_RELAY_USERNAME = 'outbound_relay_username';
+
+    #[Col('text', nullable: true, comment: '外投 smarthost 密码密封')]
+    public const schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED = 'outbound_relay_password_sealed';
+
+    #[Col('varchar', 16, default: 'starttls', comment: '外投 TLS：starttls|smtps|none')]
+    public const schema_fields_OUTBOUND_RELAY_TLS = 'outbound_relay_tls';
 
     #[Col('varchar', 255, nullable: true, comment: '本地登录密码哈希')]
     public const schema_fields_PASSWORD_HASH = 'password_hash';

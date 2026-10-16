@@ -9,6 +9,8 @@
  */
 use Weline\Mail\Model\MailAccount;
 use Weline\Mail\Model\MailDomain;
+use Weline\Smtp\Model\SmtpAccount;
+use Weline\Smtp\Model\SmtpService;
 
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $view = $mail_view ?? 'mailbox';
@@ -66,8 +68,12 @@ $mailboxAccountSelectOptionsJson = json_encode(
 $navItems = [
     'mailbox' => __('邮箱'),
     'accounts' => __('用户与账号'),
+    'smtp' => __('Smtp'),
     'domains' => __('域名与 DNS'),
 ];
+$smtpServices = $smtp_services ?? [];
+$smtpAccountsByService = $smtp_accounts_by_service ?? [];
+$smtpPoolDomains = $smtp_pool_domains ?? [];
 $dnsLiveChecks = $dns_live_checks ?? [];
 $detectedOriginIp = trim((string)($detected_origin_ip ?? ''));
 $cloudflareTokenReady = (bool)($cloudflare_token_ready ?? false);
@@ -900,11 +906,21 @@ if ($oauthCfError === 'invalid_scope') {
                                 </td>
                             </tr>
                         <?php else: ?>
-                            <?php foreach ($accounts as $account): ?>
+                            <?php foreach ($accounts as $account):
+                                $acctId = (int)$account->getId();
+                                $obOn = (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED) === 1;
+                                $obHost = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_HOST));
+                                $obPort = (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_PORT);
+                                $obUser = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_USERNAME));
+                                $obTls = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_TLS)) ?: 'starttls';
+                                ?>
                                 <tr>
                                     <td>
                                         <strong><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></strong><br>
                                         <span class="w-text" data-tone="muted" data-size="sm"><?= $escape($account->getData(MailAccount::schema_fields_DISPLAY_NAME)) ?></span>
+                                        <?php if ($obOn && $obHost !== ''): ?>
+                                            <br><span class="w-badge" data-tone="info" data-size="sm"><?= __('外投') ?> · <?= $escape($obHost) ?></span>
+                                        <?php endif; ?>
                                     </td>
                                     <td>#<?= (int)$account->getData(MailAccount::schema_fields_CUSTOMER_ID) ?></td>
                                     <td><span class="w-badge" data-tone="neutral"><?= $escape($account->getData(MailAccount::schema_fields_STATUS)) ?></span></td>
@@ -912,10 +928,10 @@ if ($oauthCfError === 'invalid_scope') {
                                     <td>
                                         <div class="mail-enterprise__actions">
                                             <a class="w-button" data-variant="outline" data-size="sm"
-                                               href="@backend-url{$basePath|['view' => 'mailbox', 'account' => (int)$account->getId()]}"><?= __('查看邮件') ?></a>
+                                               href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $acctId]}"><?= __('查看邮件') ?></a>
                                             <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-account-status'}">
                                                 <input type="hidden" name="return_view" value="accounts">
-                                                <input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>">
+                                                <input type="hidden" name="account_id" value="<?= $acctId ?>">
                                                 <input type="hidden" name="status" value="<?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? 'active' : 'suspended' ?>">
                                                 <button class="w-button" data-variant="outline" data-size="sm" type="submit">
                                                     <?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? __('恢复') : __('暂停') ?>
@@ -926,12 +942,53 @@ if ($oauthCfError === 'invalid_scope') {
                                             <summary class="w-text" data-size="sm"><?= __('开通/重置密码') ?></summary>
                                             <w:form method="post" action="@backend-url{'weline_mail/backend/index/reset-account-password'}">
                                                 <input type="hidden" name="return_view" value="accounts">
-                                                <input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>">
+                                                <input type="hidden" name="account_id" value="<?= $acctId ?>">
                                                 <label class="w-field">
                                                     <span class="w-field__label"><?= __('新密码') ?></span>
                                                     <input class="w-input" type="password" name="password" minlength="12" required autocomplete="new-password">
                                                 </label>
                                                 <button class="w-button" data-tone="primary" data-size="sm" type="submit"><?= __('确认更新') ?></button>
+                                            </w:form>
+                                        </details>
+                                        <details data-testid="mail-account-outbound-<?= $acctId ?>">
+                                            <summary class="w-text" data-size="sm"><?= __('外投 smarthost') ?></summary>
+                                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0; --w-mb:var(--weline-space-2);">
+                                                <?= __('未勾选则走本域 MX:25。可填外部 SMTP，或从 Smtp Tab 拷贝本机/外部服务凭据。') ?>
+                                            </p>
+                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-account-outbound-relay'}">
+                                                <input type="hidden" name="return_view" value="accounts">
+                                                <input type="hidden" name="account_id" value="<?= $acctId ?>">
+                                                <label class="w-text" data-size="sm" style="display:block; --w-mb:var(--weline-space-2);">
+                                                    <input type="checkbox" name="outbound_relay_enabled" value="1" <?= $obOn ? 'checked' : '' ?>>
+                                                    <?= __('该邮箱走外投中继') ?>
+                                                </label>
+                                                <div class="mail-enterprise__form-grid">
+                                                    <label class="w-field">
+                                                        <span class="w-field__label"><?= __('主机') ?></span>
+                                                        <input class="w-input" type="text" name="outbound_relay_host" value="<?= $escape($obHost) ?>" placeholder="smtp.example.com">
+                                                    </label>
+                                                    <label class="w-field">
+                                                        <span class="w-field__label"><?= __('端口') ?></span>
+                                                        <input class="w-input" type="number" name="outbound_relay_port" value="<?= $obPort > 0 ? $obPort : 587 ?>" min="1" max="65535">
+                                                    </label>
+                                                    <label class="w-field">
+                                                        <span class="w-field__label"><?= __('用户名') ?></span>
+                                                        <input class="w-input" type="text" name="outbound_relay_username" value="<?= $escape($obUser) ?>">
+                                                    </label>
+                                                    <label class="w-field">
+                                                        <span class="w-field__label"><?= __('密码（留空不改）') ?></span>
+                                                        <input class="w-input" type="password" name="outbound_relay_password" value="" autocomplete="new-password">
+                                                    </label>
+                                                    <label class="w-field">
+                                                        <span class="w-field__label"><?= __('TLS') ?></span>
+                                                        <select class="w-select" name="outbound_relay_tls">
+                                                            <option value="starttls" <?= $obTls === 'starttls' ? 'selected' : '' ?>>STARTTLS</option>
+                                                            <option value="smtps" <?= $obTls === 'smtps' ? 'selected' : '' ?>>SMTPS</option>
+                                                            <option value="none" <?= $obTls === 'none' ? 'selected' : '' ?>><?= __('无') ?></option>
+                                                        </select>
+                                                    </label>
+                                                </div>
+                                                <button class="w-button" data-tone="primary" data-size="sm" type="submit" style="--w-mt:var(--weline-space-2);"><?= __('保存外投') ?></button>
                                             </w:form>
                                         </details>
                                     </td>
@@ -941,6 +998,219 @@ if ($oauthCfError === 'invalid_scope') {
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </section>
+
+    <?php elseif ($view === 'smtp'): ?>
+        <section class="w-card" data-testid="mail-smtp-catalog">
+            <div class="w-card__header">
+                <h2 class="w-card__title" style="--w-m:0;"><?= __('Smtp 服务') ?></h2>
+            </div>
+            <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-3);">
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                    <?= __('可建多个 Smtp 服务。本机启用：DNS→入池→出证，再建提交/中继账户。外部填入：只登记第三方主机凭据，不入本机域名池。邮局域名启停与此无关。') ?>
+                </p>
+                <div class="mail-enterprise__domains" style="grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));">
+                    <article class="w-card" data-testid="mail-smtp-create-self">
+                        <div class="w-card__header"><h3 class="w-card__title" style="--w-m:0;"><?= __('本机启用') ?></h3></div>
+                        <div class="w-card__body">
+                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-self'}">
+                                <input type="hidden" name="return_view" value="smtp">
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('显示名称') ?></span>
+                                    <input class="w-input" type="text" name="name" placeholder="<?= $escape(__('本机 Smtp')) ?>">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('域名来源') ?></span>
+                                    <select class="w-select" name="domain_mode" id="mail-smtp-domain-mode">
+                                        <option value="type"><?= __('自填域名') ?></option>
+                                        <option value="pool"><?= __('从域名池选择') ?></option>
+                                    </select>
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('自填根域或 smtp.主机') ?></span>
+                                    <input class="w-input" type="text" name="typed_domain" placeholder="example.com">
+                                </label>
+                                <?php if ($smtpPoolDomains !== []): ?>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('域名池') ?></span>
+                                        <select class="w-select" name="pool_domain">
+                                            <option value=""><?= __('选择…') ?></option>
+                                            <?php foreach ($smtpPoolDomains as $poolRow):
+                                                $pd = is_array($poolRow)
+                                                    ? (string)($poolRow['domain'] ?? $poolRow['domain_name'] ?? $poolRow['name'] ?? '')
+                                                    : '';
+                                                if ($pd === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <option value="<?= $escape($pd) ?>"><?= $escape($pd) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                <?php endif; ?>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('预期解析 IP（可选）') ?></span>
+                                    <input class="w-input" type="text" name="expected_ip" placeholder="1.2.3.4">
+                                </label>
+                                <label class="w-text" data-size="sm" style="display:block; --w-mb:var(--weline-space-2);">
+                                    <input type="checkbox" name="relay_service" value="1">
+                                    <?= __('开启中继服务（可建 relay 角色账户）') ?>
+                                </label>
+                                <button class="w-button" data-tone="primary" type="submit"><?= __('启用并入池出证') ?></button>
+                            </w:form>
+                        </div>
+                    </article>
+                    <article class="w-card" data-testid="mail-smtp-create-external">
+                        <div class="w-card__header"><h3 class="w-card__title" style="--w-m:0;"><?= __('外部填入') ?></h3></div>
+                        <div class="w-card__body">
+                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-external'}">
+                                <input type="hidden" name="return_view" value="smtp">
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('显示名称') ?></span>
+                                    <input class="w-input" type="text" name="name" placeholder="<?= $escape(__('QQ / 企业微信 SMTP')) ?>">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('SMTP 主机') ?></span>
+                                    <input class="w-input" type="text" name="smtp_hostname" required placeholder="smtp.example.com">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('端口') ?></span>
+                                    <input class="w-input" type="number" name="port" value="587" min="1" max="65535">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('用户名') ?></span>
+                                    <input class="w-input" type="text" name="username">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('密码') ?></span>
+                                    <input class="w-input" type="password" name="password" autocomplete="new-password">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('TLS') ?></span>
+                                    <select class="w-select" name="tls_mode">
+                                        <option value="starttls">STARTTLS</option>
+                                        <option value="smtps">SMTPS</option>
+                                        <option value="none"><?= __('无') ?></option>
+                                    </select>
+                                </label>
+                                <button class="w-button" data-tone="primary" type="submit"><?= __('登记外部 Smtp') ?></button>
+                            </w:form>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="w-card" data-testid="mail-smtp-service-list">
+            <div class="w-card__body">
+                <?php if ($smtpServices === []): ?>
+                    <div class="w-empty" style="--w-min-block-size:8rem;">
+                        <w:icon name="mail" size="sm"></w:icon>
+                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('暂无 Smtp 服务。请上方本机启用或外部填入。') ?></p>
+                    </div>
+                <?php else: ?>
+                    <div class="w-stack" style="--w-gap:var(--weline-space-4);">
+                        <?php foreach ($smtpServices as $svc):
+                            if (!$svc instanceof SmtpService) {
+                                continue;
+                            }
+                            $sid = (int)$svc->getId();
+                            $mode = (string)$svc->getData(SmtpService::schema_fields_MODE);
+                            $status = (string)$svc->getData(SmtpService::schema_fields_STATUS);
+                            $svcAccounts = $smtpAccountsByService[$sid] ?? [];
+                            ?>
+                            <article class="w-card" data-testid="mail-smtp-service-<?= $sid ?>">
+                                <div class="w-card__header w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                                    <div>
+                                        <h3 class="w-card__title" style="--w-m:0;"><?= $escape($svc->getData(SmtpService::schema_fields_NAME)) ?></h3>
+                                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                                            <span class="w-badge" data-tone="<?= $mode === SmtpService::MODE_SELF ? 'success' : 'info' ?>">
+                                                <?= $mode === SmtpService::MODE_SELF ? __('本机启用') : __('外部填入') ?>
+                                            </span>
+                                            <span class="w-badge" data-tone="neutral"><?= $escape($status) ?></span>
+                                            <?php if ((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME) !== ''): ?>
+                                                · <code><?= $escape($svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)) ?></code>
+                                                :<?= (int)$svc->getData(SmtpService::schema_fields_PORT) ?>
+                                            <?php endif; ?>
+                                        </p>
+                                    </div>
+                                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-smtp-service-status'}">
+                                        <input type="hidden" name="return_view" value="smtp">
+                                        <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
+                                        <input type="hidden" name="status" value="<?= $status === 'active' ? 'disabled' : 'active' ?>">
+                                        <button class="w-button" data-variant="outline" data-size="sm" type="submit">
+                                            <?= $status === 'active' ? __('停用') : __('启用') ?>
+                                        </button>
+                                    </w:form>
+                                </div>
+                                <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-3);">
+                                    <?php if ($mode === SmtpService::MODE_EXTERNAL): ?>
+                                        <p class="w-text" data-size="sm" style="--w-m:0;">
+                                            <?= __('拷贝主机/用户名到「用户与账号 → 外投 smarthost」即可给邮箱外投使用。外部服务不建本机账户。') ?>
+                                        </p>
+                                        <p class="w-text" data-size="sm" style="--w-m:0;">
+                                            <?= __('用户名') ?>：<code><?= $escape((string)$svc->getData(SmtpService::schema_fields_USERNAME)) ?></code>
+                                            · TLS：<?= $escape((string)$svc->getData(SmtpService::schema_fields_TLS)) ?>
+                                        </p>
+                                    <?php else: ?>
+                                        <details open>
+                                            <summary class="w-text" data-size="sm"><?= __('新建本机账户') ?></summary>
+                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-account'}">
+                                                <input type="hidden" name="return_view" value="smtp">
+                                                <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
+                                                <div class="mail-enterprise__form-grid">
+                                                    <label class="w-field">
+                                                        <span class="w-field__label"><?= __('账号前缀') ?></span>
+                                                        <input class="w-input" type="text" name="local_part" pattern="[a-z0-9._-]+" required>
+                                                    </label>
+                                                    <label class="w-field">
+                                                        <span class="w-field__label"><?= __('角色') ?></span>
+                                                        <select class="w-select" name="account_role">
+                                                            <option value="<?= SmtpAccount::ROLE_SUBMIT ?>"><?= __('提交 submit') ?></option>
+                                                            <?php if ((int)$svc->getData(SmtpService::schema_fields_RELAY_SERVICE) === 1): ?>
+                                                                <option value="<?= SmtpAccount::ROLE_RELAY ?>"><?= __('中继 relay') ?></option>
+                                                            <?php endif; ?>
+                                                        </select>
+                                                    </label>
+                                                </div>
+                                                <button class="w-button" data-tone="primary" data-size="sm" type="submit" style="--w-mt:var(--weline-space-2);"><?= __('创建账户') ?></button>
+                                            </w:form>
+                                        </details>
+                                        <?php if ($svcAccounts === []): ?>
+                                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><?= __('尚无账户。') ?></p>
+                                        <?php else: ?>
+                                            <div class="w-table-wrap">
+                                                <table class="w-table">
+                                                    <thead>
+                                                    <tr>
+                                                        <th><?= __('邮箱') ?></th>
+                                                        <th><?= __('角色') ?></th>
+                                                        <th><?= __('状态') ?></th>
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    <?php foreach ($svcAccounts as $sa):
+                                                        if (!$sa instanceof SmtpAccount) {
+                                                            continue;
+                                                        }
+                                                        ?>
+                                                        <tr>
+                                                            <td><code><?= $escape($sa->getData(SmtpAccount::schema_fields_EMAIL)) ?></code></td>
+                                                            <td><?= $escape($sa->getData(SmtpAccount::schema_fields_ROLE)) ?></td>
+                                                            <td><?= $escape($sa->getData(SmtpAccount::schema_fields_STATUS)) ?></td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </div>
         </section>
 
@@ -1171,20 +1441,6 @@ if ($oauthCfError === 'invalid_scope') {
                 ];
                 $requiredOk = is_array($live) ? !empty($live['ok']) : false;
                 $formOriginIp = $originIp;
-                $outboundHost = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_HOST));
-                $outboundPort = (int)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_PORT);
-                $outboundUser = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_USERNAME));
-                $outboundTls = trim((string)$domain->getData(MailDomain::schema_fields_OUTBOUND_RELAY_TLS)) ?: 'starttls';
-                $domainActiveAccounts = [];
-                foreach ($accounts as $acct) {
-                    if ((int)$acct->getData(MailAccount::schema_fields_DOMAIN_ID) !== $domainId) {
-                        continue;
-                    }
-                    if ((string)$acct->getData(MailAccount::schema_fields_STATUS) !== 'active') {
-                        continue;
-                    }
-                    $domainActiveAccounts[] = $acct;
-                }
                 ?>
                 <article class="w-card" data-testid="mail-domain-card-<?= $domainId ?>">
                     <header class="w-card__header">
@@ -1327,7 +1583,7 @@ if ($oauthCfError === 'invalid_scope') {
                         </details>
                         <div class="mail-enterprise__domain-lifecycle">
                             <p class="w-text" data-tone="muted" data-size="sm">
-                                <?= __('启用域名时自动开通 contact@（企业邮箱人收）。Smtp 中继请在「Smtp 配置」独立启用（可选池内域名或自填外接域名，DNS 解析通过后入域名池出证）。') ?>
+                                <?= __('启用域名时自动开通 contact@（企业邮箱人收）。Smtp 多服务请在「Smtp」Tab（本机启用 / 外部填入）；邮箱外投请在「用户与账号」编辑。') ?>
                             </p>
                             <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}">
                                 <input type="hidden" name="return_view" value="domains">
@@ -1337,66 +1593,6 @@ if ($oauthCfError === 'invalid_scope') {
                                     <?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? __('暂停域名') : __('启用域名') ?>
                                 </button>
                             </w:form>
-                            <?php if ((string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active'): ?>
-                                <div class="mail-enterprise__outbound" data-testid="mail-domain-outbound-<?= $domainId ?>" style="--w-mt:var(--weline-space-3);">
-                                    <h3 class="w-text" data-size="sm" style="--w-m:0; --w-mb:var(--weline-space-2);"><?= __('企业邮箱外投 smarthost') ?></h3>
-                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0; --w-mb:var(--weline-space-2);">
-                                        <?= __('未勾选外投的邮箱仍走 MX:25。可填外部 SMTP，或粘贴 Smtp 模块账户凭据。本机自指且云厂商禁 25 时外投仍会失败。') ?>
-                                    </p>
-                                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/save-outbound-relay'}">
-                                        <input type="hidden" name="return_view" value="domains">
-                                        <input type="hidden" name="domain_id" value="<?= $domainId ?>">
-                                        <div style="display:grid; gap:var(--weline-space-2); grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));">
-                                            <label class="w-field">
-                                                <span class="w-field__label"><?= __('主机') ?></span>
-                                                <input class="w-input" type="text" name="outbound_relay_host" value="<?= $escape($outboundHost) ?>" placeholder="smtp.example.com">
-                                            </label>
-                                            <label class="w-field">
-                                                <span class="w-field__label"><?= __('端口') ?></span>
-                                                <input class="w-input" type="number" name="outbound_relay_port" value="<?= $outboundPort > 0 ? $outboundPort : 587 ?>" min="1" max="65535">
-                                            </label>
-                                            <label class="w-field">
-                                                <span class="w-field__label"><?= __('用户名') ?></span>
-                                                <input class="w-input" type="text" name="outbound_relay_username" value="<?= $escape($outboundUser) ?>">
-                                            </label>
-                                            <label class="w-field">
-                                                <span class="w-field__label"><?= __('密码（留空不改）') ?></span>
-                                                <input class="w-input" type="password" name="outbound_relay_password" value="" autocomplete="new-password">
-                                            </label>
-                                            <label class="w-field">
-                                                <span class="w-field__label"><?= __('TLS') ?></span>
-                                                <select class="w-select" name="outbound_relay_tls">
-                                                    <option value="starttls" <?= $outboundTls === 'starttls' ? 'selected' : '' ?>>STARTTLS</option>
-                                                    <option value="smtps" <?= $outboundTls === 'smtps' ? 'selected' : '' ?>>SMTPS</option>
-                                                    <option value="none" <?= $outboundTls === 'none' ? 'selected' : '' ?>><?= __('无') ?></option>
-                                                </select>
-                                            </label>
-                                        </div>
-                                        <button class="w-button" data-variant="primary" data-size="sm" type="submit" style="--w-mt:var(--weline-space-2);"><?= __('保存外投 smarthost') ?></button>
-                                    </w:form>
-                                    <?php if ($domainActiveAccounts !== []): ?>
-                                        <div style="--w-mt:var(--weline-space-3);">
-                                            <p class="w-text" data-size="sm" style="--w-m:0; --w-mb:var(--weline-space-2);"><?= __('账号外投开关') ?></p>
-                                            <?php foreach ($domainActiveAccounts as $acct):
-                                                $aid = (int)$acct->getId();
-                                                $aemail = (string)$acct->getData(MailAccount::schema_fields_EMAIL);
-                                                $on = (int)$acct->getData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED) === 1;
-                                                ?>
-                                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-account-outbound-relay'}" style="display:flex; gap:var(--weline-space-2); align-items:center; flex-wrap:wrap; --w-mb:var(--weline-space-1);">
-                                                    <input type="hidden" name="return_view" value="domains">
-                                                    <input type="hidden" name="account_id" value="<?= $aid ?>">
-                                                    <span class="w-text" data-size="sm"><?= $escape($aemail) ?></span>
-                                                    <label class="w-text" data-size="sm">
-                                                        <input type="checkbox" name="outbound_relay_enabled" value="1" <?= $on ? 'checked' : '' ?>>
-                                                        <?= __('外投走中继') ?>
-                                                    </label>
-                                                    <button class="w-button" data-variant="outline" data-size="sm" type="submit"><?= __('保存') ?></button>
-                                                </w:form>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </article>

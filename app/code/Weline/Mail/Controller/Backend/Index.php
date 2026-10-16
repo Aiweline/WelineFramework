@@ -33,6 +33,7 @@ class Index extends BackendController
         $mailView = match ($requestedView) {
             'config', 'domains' => 'domains',
             'accounts' => 'accounts',
+            'smtp' => 'smtp',
             default => 'mailbox',
         };
         $folder = strtolower(trim((string)$this->request->getParam('folder', 'inbox')));
@@ -170,6 +171,31 @@ class Index extends BackendController
             ? $this->buildLiveDnsChecks($domains, $detectedOriginIp)
             : []
         );
+
+        $smtpServices = [];
+        $smtpAccountsByService = [];
+        $smtpPoolDomains = [];
+        if ($mailView === 'smtp') {
+            /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+            $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+            $smtpServices = $catalog->listServices();
+            foreach ($smtpServices as $svc) {
+                $sid = (int)$svc->getId();
+                if ($sid > 0) {
+                    $smtpAccountsByService[$sid] = $catalog->listAccountsForService($sid);
+                }
+            }
+            try {
+                $poolRes = w_query('websites', 'getDomainPoolList', ['limit' => 200]);
+                if (is_array($poolRes) && is_array($poolRes['items'] ?? null)) {
+                    $smtpPoolDomains = $poolRes['items'];
+                }
+            } catch (\Throwable) {
+            }
+        }
+        $this->assign('smtp_services', $smtpServices);
+        $this->assign('smtp_accounts_by_service', $smtpAccountsByService);
+        $this->assign('smtp_pool_domains', $smtpPoolDomains);
 
         $compose = $this->resolveComposeContext($selectedAccountId, $mailboxAccounts);
         $this->assign('compose_open', $compose['open']);
@@ -335,14 +361,21 @@ class Index extends BackendController
         );
     }
 
+    /**
+     * @deprecated 外投已迁至账号编辑；保留入口避免旧书签 404。
+     */
     public function postSaveOutboundRelay(): string
     {
-        $domainId = (int)$this->request->getParam('domain_id', 0);
-        /** @var MailDomain $domain */
-        $domain = ObjectManager::getInstance(MailDomain::class)->clear()->load($domainId);
-        if (!$domain->getId()) {
-            return $this->respondFormResult(404, __('邮箱域名不存在'));
-        }
+        return $this->respondFormResult(
+            410,
+            (string)__('外投 smarthost 已迁至「用户与账号」编辑；域名与 DNS 不再配置外投。')
+        );
+    }
+
+    public function postSetAccountOutboundRelay(): string
+    {
+        $accountId = (int)$this->request->getParam('account_id', 0);
+        $enabled = (int)$this->request->getParam('outbound_relay_enabled', 0) === 1 ? 1 : 0;
         $host = strtolower(trim((string)$this->request->getParam('outbound_relay_host', '')));
         $port = (int)$this->request->getParam('outbound_relay_port', 587);
         $user = trim((string)$this->request->getParam('outbound_relay_username', ''));
@@ -354,17 +387,26 @@ class Index extends BackendController
         if ($port < 1 || $port > 65535) {
             $port = 587;
         }
-        $domain->setData(MailDomain::schema_fields_OUTBOUND_RELAY_HOST, $host !== '' ? $host : null)
-            ->setData(MailDomain::schema_fields_OUTBOUND_RELAY_PORT, $host !== '' ? $port : null)
-            ->setData(MailDomain::schema_fields_OUTBOUND_RELAY_USERNAME, $user !== '' ? $user : null)
-            ->setData(MailDomain::schema_fields_OUTBOUND_RELAY_TLS, $tls)
-            ->setData(MailDomain::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+        /** @var MailAccount $account */
+        $account = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);
+        if (!$account->getId()) {
+            return $this->respondFormResult(404, __('邮箱账号不存在'));
+        }
+        if ($enabled === 1 && $host === '') {
+            return $this->respondFormResult(400, __('开启外投时请填写 smarthost 主机'));
+        }
+        $account->setData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED, $enabled)
+            ->setData(MailAccount::schema_fields_OUTBOUND_RELAY_HOST, $host !== '' ? $host : null)
+            ->setData(MailAccount::schema_fields_OUTBOUND_RELAY_PORT, $host !== '' ? $port : null)
+            ->setData(MailAccount::schema_fields_OUTBOUND_RELAY_USERNAME, $user !== '' ? $user : null)
+            ->setData(MailAccount::schema_fields_OUTBOUND_RELAY_TLS, $tls)
+            ->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
         if (trim($password) !== '') {
             try {
                 /** @var \Weline\Mail\Service\MailOutboundRelaySecretService $secrets */
                 $secrets = ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySecretService::class);
-                $domain->setData(
-                    MailDomain::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED,
+                $account->setData(
+                    MailAccount::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED,
                     $secrets->seal($password)
                 );
             } catch (\Throwable $e) {
@@ -372,13 +414,15 @@ class Index extends BackendController
             }
         }
         if ($host === '') {
-            $domain->setData(MailDomain::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED, null);
+            $account->setData(MailAccount::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED, null);
         }
-        $domain->save();
+        $account->save();
         /** @var \Weline\Mail\Service\MailOutboundRelaySyncService $sync */
         $sync = ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySyncService::class);
         $result = $sync->syncAll();
-        $msg = (string)__('外投 smarthost 已保存');
+        $msg = $enabled
+            ? (string)__('已保存该账号外投 smarthost')
+            : (string)__('已关闭该账号外投');
         if (!empty($result['message'])) {
             $msg .= '；' . (string)$result['message'];
         }
@@ -386,29 +430,73 @@ class Index extends BackendController
         return $this->respondFormResult(!empty($result['success']) ? 200 : 500, $msg);
     }
 
-    public function postSetAccountOutboundRelay(): string
+    public function postCreateSmtpServiceSelf(): string
     {
-        $accountId = (int)$this->request->getParam('account_id', 0);
-        $enabled = (int)$this->request->getParam('outbound_relay_enabled', 0) === 1 ? 1 : 0;
-        /** @var MailAccount $account */
-        $account = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);
-        if (!$account->getId()) {
-            return $this->respondFormResult(404, __('邮箱账号不存在'));
-        }
-        $account->setData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED, $enabled)
-            ->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
-            ->save();
-        /** @var \Weline\Mail\Service\MailOutboundRelaySyncService $sync */
-        $sync = ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySyncService::class);
-        $result = $sync->syncAll();
-        $msg = $enabled
-            ? (string)__('已开启该账号外投中继')
-            : (string)__('已关闭该账号外投中继');
-        if (!empty($result['message'])) {
-            $msg .= '；' . (string)$result['message'];
+        $name = trim((string)$this->request->getParam('name', ''));
+        $mode = trim((string)$this->request->getParam('domain_mode', 'type'));
+        $domain = $mode === 'pool'
+            ? trim((string)$this->request->getParam('pool_domain', ''))
+            : trim((string)$this->request->getParam('typed_domain', ''));
+        $expectedIp = trim((string)$this->request->getParam('expected_ip', ''));
+        $relay = (int)$this->request->getParam('relay_service', 0) === 1;
+        /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+        $result = $catalog->createSelfService($name, $domain, $expectedIp, $relay);
+
+        return $this->respondFormResult(
+            !empty($result['success']) ? 200 : 400,
+            (string)($result['message'] ?? __('失败'))
+        );
+    }
+
+    public function postCreateSmtpServiceExternal(): string
+    {
+        /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+        $result = $catalog->createExternalService(
+            trim((string)$this->request->getParam('name', '')),
+            trim((string)$this->request->getParam('smtp_hostname', '')),
+            (int)$this->request->getParam('port', 587),
+            trim((string)$this->request->getParam('username', '')),
+            (string)$this->request->getParam('password', ''),
+            strtolower(trim((string)$this->request->getParam('tls_mode', 'starttls')))
+        );
+
+        return $this->respondFormResult(
+            !empty($result['success']) ? 200 : 400,
+            (string)($result['message'] ?? __('失败'))
+        );
+    }
+
+    public function postCreateSmtpServiceAccount(): string
+    {
+        $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
+        $local = trim((string)$this->request->getParam('local_part', ''));
+        $role = trim((string)$this->request->getParam('account_role', 'submit'));
+        /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+        $result = $catalog->createAccountOnService($serviceId, $local, $role);
+        $msg = (string)($result['message'] ?? __('失败'));
+        $once = (string)($result['password_once'] ?? '');
+        if (!empty($result['success']) && $once !== '') {
+            $msg .= ' ' . (string)__('密码（仅一次）：%{1}', [$once]);
         }
 
-        return $this->respondFormResult(!empty($result['success']) ? 200 : 500, $msg);
+        return $this->respondFormResult(!empty($result['success']) ? 200 : 400, $msg);
+    }
+
+    public function postSetSmtpServiceStatus(): string
+    {
+        $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
+        $status = trim((string)$this->request->getParam('status', 'disabled'));
+        /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+        $result = $catalog->setStatus($serviceId, $status);
+
+        return $this->respondFormResult(
+            !empty($result['success']) ? 200 : 400,
+            (string)($result['message'] ?? __('失败'))
+        );
     }
 
     /**
@@ -855,7 +943,7 @@ class Index extends BackendController
         }
 
         $view = strtolower(trim((string)$this->request->getParam('return_view', 'accounts')));
-        if (!in_array($view, ['mailbox', 'accounts', 'domains'], true)) {
+        if (!in_array($view, ['mailbox', 'accounts', 'domains', 'smtp'], true)) {
             $view = 'accounts';
         }
         $query = ['view' => $view];

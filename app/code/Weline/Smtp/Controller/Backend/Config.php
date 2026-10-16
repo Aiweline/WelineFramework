@@ -46,15 +46,7 @@ class Config extends BackendController
         $storageScope = (string)$workScope['storage_scope'];
         $module = 'Weline_Smtp';
 
-        if (trim((string)$this->request->getGet('ensure_mail', '')) === '1') {
-            $this->runEnsureMailAccountTransport($storageScope, $workScope);
-            $this->redirect($this->scopedConfigUrl($workScope));
-
-            return '';
-        }
-
         $senders = $this->data->getSenders($module, $storageScope);
-        $mailAccounts = $this->loadMailSmtpAccounts();
         $contacts = [];
         foreach ($senders as $s) {
             $code = $s['code'] ?? '';
@@ -67,18 +59,17 @@ class Config extends BackendController
         $channelCollector = ObjectManager::getInstance(MailChannelCollector::class);
         /** @var MailAccountTransportProvisioner $provisioner */
         $provisioner = ObjectManager::getInstance(MailAccountTransportProvisioner::class);
-        /** @var MailSmtpBootstrapService $bootstrap */
-        $bootstrap = ObjectManager::getInstance(MailSmtpBootstrapService::class);
         $this->assign('senders', $senders);
-        $this->assign('mail_accounts', $mailAccounts);
+        // 邮局⊥Smtp：不再向配置页注入邮局账号/一键启域状态。
+        $this->assign('mail_accounts', []);
         $this->assign('sender_contacts', $contacts);
         $this->assign('legacy', $legacy);
         $this->assign('mail_channels', $channelCollector->collect());
         $this->assign('channel_bindings', $this->data->getChannelBindings($module, $storageScope));
         $this->assign('smtp_send_path', $provisioner->detectSendPath($storageScope));
         $this->assign('smtp_unbound_channels', $provisioner->unboundChannels($storageScope));
-        $this->assign('mail_bootstrap_ready', $bootstrap->canEnsure());
-        $this->assign('mail_has_routing', $bootstrap->hasMailboxRouting($storageScope));
+        $this->assign('mail_bootstrap_ready', false);
+        $this->assign('mail_has_routing', false);
         $serviceState = $this->data->getServiceState($storageScope);
         $this->assign('smtp_service', $serviceState);
         /** @var SmtpAccountManageService $smtpAcctSvc */
@@ -98,20 +89,6 @@ class Config extends BackendController
         } catch (\Throwable) {
         }
         $this->assign('smtp_pool_domains', $poolDomains);
-        $configUrl = $this->scopedConfigUrl($workScope);
-        $this->assign(
-            'ensure_mail_url',
-            $configUrl . (str_contains($configUrl, '?') ? '&' : '?') . 'ensure_mail=1'
-        );
-        $this->assign(
-            'route_mailbox_url',
-            $this->_url->getBackendUrl('smtp/backend/config/routeMailbox', [
-                'target_scope' => $storageScope,
-                'website_code' => (string)($workScope['website_code'] ?? ''),
-                'store_code' => (string)($workScope['store_code'] ?? ''),
-                'channel_code' => (string)($workScope['channel_code'] ?? ''),
-            ])
-        );
         $scopeQs = [
             'target_scope' => $storageScope,
             'website_code' => (string)($workScope['website_code'] ?? ''),
@@ -242,56 +219,35 @@ class Config extends BackendController
         return '';
     }
 
+    /**
+     * @deprecated 邮局⊥Smtp：旧一键绑邮局入口已废止。
+     */
     #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
     public function postEnsureMail(): string
     {
         $workScope = $this->resolveWorkScope(false);
-        $storageScope = (string)$workScope['storage_scope'];
-        $result = $this->runEnsureMailAccountTransport($storageScope, $workScope, false);
+        $msg = (string)__('已废止：Smtp 不依赖邮局启域。请启用上方 Smtp 服务并填写外部 SMTP 传输。');
         if ($this->wantsJsonResponse()) {
-            return !empty($result['success'])
-                ? $this->jsonSuccess((string)($result['message'] ?? __('完成')))
-                : $this->jsonError((string)($result['message'] ?? __('失败')));
+            return $this->jsonError($msg);
         }
+        $this->getMessageManager()->addError($msg);
         $this->redirect($this->scopedConfigUrl($workScope));
 
         return '';
     }
 
+    /**
+     * @deprecated 邮局⊥Smtp：分流建箱不属于 Smtp 配置。
+     */
     #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
     public function postRouteMailbox(): string
     {
         $workScope = $this->resolveWorkScope(false);
-        $storageScope = (string)$workScope['storage_scope'];
-        $localPart = trim((string)$this->request->getPost('local_part', ''));
-        $displayName = trim((string)$this->request->getPost('display_name', ''));
-        $domainId = (int)$this->request->getPost('domain_id', 0);
-        $rawChannels = $this->request->getPost('channel_codes', []);
-        if (is_string($rawChannels)) {
-            $rawChannels = preg_split('/[\s,]+/', $rawChannels) ?: [];
-        }
-        if (!is_array($rawChannels)) {
-            $rawChannels = [];
-        }
-        /** @var MailSmtpBootstrapService $bootstrap */
-        $bootstrap = ObjectManager::getInstance(MailSmtpBootstrapService::class);
-        $result = $bootstrap->routeMailboxToChannels(
-            $storageScope,
-            $localPart,
-            array_values(array_map('strval', $rawChannels)),
-            $domainId,
-            $displayName
-        );
+        $msg = (string)__('已废止：请在企业邮局模块管理邮箱；Smtp 配置不创建邮局账号。');
         if ($this->wantsJsonResponse()) {
-            return !empty($result['success'])
-                ? $this->jsonSuccess((string)($result['message'] ?? __('完成')))
-                : $this->jsonError((string)($result['message'] ?? __('失败')));
+            return $this->jsonError($msg);
         }
-        if (!empty($result['success'])) {
-            $this->getMessageManager()->addSuccess((string)($result['message'] ?? __('分流邮箱已挂接')));
-        } else {
-            $this->getMessageManager()->addError((string)($result['message'] ?? __('分流挂接失败')));
-        }
+        $this->getMessageManager()->addError($msg);
         $this->redirect($this->scopedConfigUrl($workScope));
 
         return '';
