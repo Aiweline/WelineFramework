@@ -299,6 +299,9 @@ app/code/Weline/Ai/Test/Http/Backend/batch-test-results.json
 # local private notes / secrets (never commit)
 .local/
 
+# 根目录本地资料柜（密钥/运维摘录；永不入库）
+/资料/
+
 # Per-website local ops vault (credentials / brand assets; never commit)
 # 例：websites/changanhanfu.com/
 /websites/
