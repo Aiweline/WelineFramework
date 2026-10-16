@@ -34,9 +34,26 @@ final class ThemeLayoutEntityRequestSolidifyGateContractTest extends TestCase
         $a = ThemeLayoutEntitySolidifySerialKey::fromParts(7, 'frontend', 'default.default.default', 'normal', 'homepage', 'default', 1, 1);
         $b = ThemeLayoutEntitySolidifySerialKey::fromParts(7, 'frontend', 'default.default.default', 'normal', 'homepage', 'default', 1, 1);
         $c = ThemeLayoutEntitySolidifySerialKey::fromParts(7, 'frontend', 'default.default.default', 'normal', 'mini-cart', 'default', 1, 1);
+        $d = ThemeLayoutEntitySolidifySerialKey::fromParts(7, 'frontend', 'default.default.default', 'normal', 'homepage', 'default', 9, 9);
         self::assertSame($a->toString(), $b->toString());
         self::assertSame($a->hash(), $b->hash());
+        self::assertSame($a->slotHash(), $d->slotHash());
+        self::assertSame($a->hash(), $d->hash());
+        self::assertNotSame($a->toString(), $d->toString());
         self::assertNotSame($a->layoutDimension(), $c->layoutDimension());
+    }
+
+    public function testLeaseSameSlotAcrossVersionSharesFile(): void
+    {
+        $paths = new ThemeLayoutEntityPaths($this->root . DIRECTORY_SEPARATOR);
+        $leases = new ThemeLayoutEntitySolidifyLeaseStore($paths);
+        $v1 = ThemeLayoutEntitySolidifySerialKey::fromParts(7, 'frontend', 'g.default.default', 'normal', 'homepage', 'default', 1, 1);
+        $v2 = ThemeLayoutEntitySolidifySerialKey::fromParts(7, 'frontend', 'g.default.default', 'normal', 'homepage', 'default', 2, 2);
+        self::assertTrue($leases->tryAcquire($v1));
+        self::assertFalse($leases->tryAcquire($v2));
+        $leases->release($v1);
+        self::assertTrue($leases->tryAcquire($v2));
+        $leases->release($v2);
     }
 
     public function testLeaseSameKeyCoalescesSecondAcquire(): void

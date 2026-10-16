@@ -12,6 +12,9 @@ use Weline\Theme\Service\ThemeScopeVersionService;
 /**
  * Durable solidify queue: gate persists jobs; Cron drains them (FPM-safe).
  * On WLS, PostResponseTaskQueue remains an optional eager fast-path for the same job file.
+ *
+ * Slot contract: one pending file per layout dimension; unconsumed updates overwrite;
+ * drain re-reads payload before delete so last-write-wins is not lost mid-bake.
  */
 final class ThemeLayoutEntitySolidifyQueue
 {
@@ -28,27 +31,30 @@ final class ThemeLayoutEntitySolidifyQueue
     }
 
     /**
-     * @return array{enqueued:bool,coalesced:bool,pending:bool}
+     * @return array{enqueued:bool,coalesced:bool,pending:bool,overwritten:bool}
      */
     public function enqueue(ThemeLayoutEntitySolidifySerialKey $key, string $expectedFingerprint): array
     {
-        $queueKey = 'theme-layout-solidify:' . $key->hash();
+        $queueKey = 'theme-layout-solidify:' . $key->slotHash();
         if (isset(self::$requestEnqueued[$queueKey])) {
-            return ['enqueued' => false, 'coalesced' => true, 'pending' => $this->isPending($key)];
+            // Same HTTP request already touched this slot — still refresh payload.
+            $put = $this->jobs->put($key, $expectedFingerprint);
+
+            return [
+                'enqueued' => false,
+                'coalesced' => true,
+                'pending' => true,
+                'overwritten' => (bool)($put['overwritten'] ?? true),
+            ];
         }
 
-        if ($this->leases->isPending($key) || $this->jobs->has($key)) {
-            self::$requestEnqueued[$queueKey] = true;
-
-            return ['enqueued' => false, 'coalesced' => true, 'pending' => true];
-        }
-
+        $leaseHeld = $this->leases->isPending($key);
         $put = $this->jobs->put($key, $expectedFingerprint);
         self::$requestEnqueued[$queueKey] = true;
 
-        // WLS only: try to drain this job after the response (same durable job file).
-        // FPM must wait for Cron — in-memory PostResponseTaskQueue is never drained there.
-        if (!empty($put['enqueued']) && Runtime::isPersistent()) {
+        // WLS only: eager-drain new slots after response. Overwrite while lease held
+        // relies on drain re-read; Cron picks leftover dirty slots.
+        if (!empty($put['enqueued']) && !$leaseHeld && Runtime::isPersistent()) {
             PostResponseTaskQueue::enqueue($queueKey, function () use ($key): void {
                 $this->drainOne($key);
             });
@@ -58,6 +64,7 @@ final class ThemeLayoutEntitySolidifyQueue
             'enqueued' => (bool)($put['enqueued'] ?? false),
             'coalesced' => (bool)($put['coalesced'] ?? false),
             'pending' => true,
+            'overwritten' => (bool)($put['overwritten'] ?? false),
         ];
     }
 
@@ -69,10 +76,11 @@ final class ThemeLayoutEntitySolidifyQueue
     /**
      * Cron / tests: drain up to $limit durable jobs.
      *
-     * @return array{processed:int,skipped:int,failed:int}
+     * @return array{processed:int,skipped:int,failed:int,folded?:array{folded:int,removed:int,slots:int}}
      */
     public function drainPendingJobs(int $limit = 16): array
     {
+        $fold = $this->jobs->foldLegacyMultiVersionJobs();
         $processed = 0;
         $skipped = 0;
         $failed = 0;
@@ -88,11 +96,17 @@ final class ThemeLayoutEntitySolidifyQueue
             }
         }
 
-        return ['processed' => $processed, 'skipped' => $skipped, 'failed' => $failed];
+        return [
+            'processed' => $processed,
+            'skipped' => $skipped,
+            'failed' => $failed,
+            'folded' => $fold,
+        ];
     }
 
     /**
-     * Run one job if lease acquired. Removes durable job file only on success (failed jobs retry via Cron).
+     * Run one job if lease acquired. Removes durable job file only on success when payload
+     * is unchanged after bake (re-read). Dirty leftover stays for next drain.
      *
      * @return 'ok'|'skip'|'fail'
      */
@@ -106,33 +120,70 @@ final class ThemeLayoutEntitySolidifyQueue
         }
         $ok = false;
         $failed = false;
+        $dirty = false;
         $failReason = '';
         try {
-            if ($expectedFp === '') {
-                foreach ($this->jobs->listPending(64) as $job) {
-                    if ($job['key']->hash() === $key->hash()) {
-                        $expectedFp = (string)$job['expected_fp'];
-                        break;
-                    }
-                }
+            $snap = $this->jobs->read($key);
+            if ($snap === null) {
+                return 'skip';
             }
-            $this->executeBake($key, $expectedFp);
-            $ok = true;
+            $bakeKey = $snap['key'];
+            $fp = (string)$snap['expected_fp'];
+            if ($fp === '') {
+                $fp = $expectedFp;
+            }
+            $this->executeBake($bakeKey, $fp);
+
+            $after = $this->jobs->read($key);
+            if ($after === null) {
+                $ok = true;
+            } elseif ($this->payloadChanged($snap, $after)) {
+                // Gate overwrote during bake — bake latest once more.
+                $this->executeBake($after['key'], (string)$after['expected_fp']);
+                $after2 = $this->jobs->read($key);
+                if ($after2 !== null && $this->payloadChanged($after, $after2)) {
+                    $dirty = true;
+                } else {
+                    $ok = true;
+                }
+            } else {
+                $ok = true;
+            }
         } catch (\Throwable $e) {
             $failed = true;
             $failReason = $e->getMessage();
             Env::log_error('theme/layout_solidify_queue', $failReason . ' key=' . $key->toString());
         } finally {
             $this->leases->release($key);
-            if ($ok) {
+            if ($ok && !$dirty) {
                 $this->jobs->delete($key);
             } elseif ($failed) {
-                // Dead-letter: leave pending forever is forbidden; Cron can retry via failed/ inspection.
                 $this->jobs->moveToFailed($key, $failReason !== '' ? $failReason : 'drain_fail');
             }
+            // dirty: leave slot file for next Cron tick
+        }
+
+        if ($dirty) {
+            return 'skip';
         }
 
         return $ok ? 'ok' : ($failed ? 'fail' : 'skip');
+    }
+
+    /**
+     * @param array{key:ThemeLayoutEntitySolidifySerialKey,expected_fp:string,path:string,queued_at:string} $a
+     * @param array{key:ThemeLayoutEntitySolidifySerialKey,expected_fp:string,path:string,queued_at:string} $b
+     */
+    private function payloadChanged(array $a, array $b): bool
+    {
+        if (!hash_equals((string)$a['expected_fp'], (string)$b['expected_fp'])) {
+            return true;
+        }
+        $ka = $a['key'];
+        $kb = $b['key'];
+
+        return $ka->themeVersionId !== $kb->themeVersionId
+            || $ka->contentRevision !== $kb->contentRevision;
     }
 
     /**
@@ -171,7 +222,6 @@ final class ThemeLayoutEntitySolidifyQueue
         }
         if (count($byLayout) === 1) {
             $only = array_values($byLayout)[0];
-            // Ensure job file exists for drainOne when called from tests with raw keys.
             $this->jobs->put($only['key'], (string)($only['expected_fp'] ?? ''));
             $this->drainOne($only['key'], (string)($only['expected_fp'] ?? ''));
 
@@ -279,6 +329,7 @@ final class ThemeLayoutEntitySolidifyQueue
             $versionId,
             max(1, (int)$version->getContentRevision()),
         );
+        // Slot-scoped stamp path: survives V bump with same fingerprint.
         $this->stamps->write($stampKey, $expectedFp);
         $this->stamps->write($key, $expectedFp);
     }

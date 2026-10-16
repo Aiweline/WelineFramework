@@ -6,6 +6,9 @@ namespace Weline\Theme\Service\LayoutEntity;
 /**
  * Durable solidify job intents under generated/theme-layout-entities/{theme}/.solidify-jobs/.
  * Cron (and optional WLS post-response) drain these; FPM cannot rely on in-memory queues.
+ *
+ * Contract: one pending JSON per layout slot (hash without V/R). Unconsumed updates
+ * overwrite that file; consumed delete empties the slot so gate may enqueue again.
  */
 final class ThemeLayoutEntitySolidifyJobStore
 {
@@ -22,20 +25,21 @@ final class ThemeLayoutEntitySolidifyJobStore
     }
 
     /**
-     * @return array{enqueued:bool,coalesced:bool}
+     * Upsert the slot file. Unconsumed → overwrite payload (last-write-wins).
+     *
+     * @return array{enqueued:bool,coalesced:bool,overwritten:bool}
      */
     public function put(ThemeLayoutEntitySolidifySerialKey $key, string $expectedFingerprint): array
     {
         $path = $this->pathFor($key);
-        if (is_file($path)) {
-            return ['enqueued' => false, 'coalesced' => true];
-        }
+        $existed = is_file($path);
         $dir = dirname($path);
         if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
             throw new \RuntimeException('theme_layout_solidify_job_dir_failed');
         }
         $payload = json_encode([
             'serial' => $key->toString(),
+            'slot' => $key->slotString(),
             'theme_id' => $key->themeId,
             'area' => $key->area,
             'scope' => $key->canonicalScope,
@@ -52,15 +56,27 @@ final class ThemeLayoutEntitySolidifyJobStore
             throw new \RuntimeException('theme_layout_solidify_job_write_failed');
         }
         if (!@rename($tmp, $path)) {
-            // Lost the race — another writer created the job.
             @unlink($tmp);
-            if (is_file($path)) {
-                return ['enqueued' => false, 'coalesced' => true];
+            // Lost the race — retry once by reading winner then rewriting (still single file).
+            if (is_file($path) && @file_put_contents($path, $payload, LOCK_EX) !== false) {
+                return ['enqueued' => false, 'coalesced' => true, 'overwritten' => true];
             }
             throw new \RuntimeException('theme_layout_solidify_job_rename_failed');
         }
 
-        return ['enqueued' => true, 'coalesced' => false];
+        return [
+            'enqueued' => !$existed,
+            'coalesced' => $existed,
+            'overwritten' => $existed,
+        ];
+    }
+
+    /**
+     * @return null|array{key:ThemeLayoutEntitySolidifySerialKey,expected_fp:string,path:string,queued_at:string}
+     */
+    public function read(ThemeLayoutEntitySolidifySerialKey $key): ?array
+    {
+        return $this->readJobFile($this->pathFor($key));
     }
 
     public function delete(ThemeLayoutEntitySolidifySerialKey $key): void
@@ -99,6 +115,78 @@ final class ThemeLayoutEntitySolidifyJobStore
         @unlink($path);
 
         return true;
+    }
+
+    /**
+     * Fold legacy multi-V job files (old path = hash(full serial incl V/R)) into one slot file.
+     *
+     * @return array{folded:int,removed:int,slots:int}
+     */
+    public function foldLegacyMultiVersionJobs(): array
+    {
+        $root = rtrim($this->paths->root(), '/\\');
+        if (!is_dir($root)) {
+            return ['folded' => 0, 'removed' => 0, 'slots' => 0];
+        }
+        $folded = 0;
+        $removed = 0;
+        $slotCount = 0;
+        $themeDirs = @scandir($root) ?: [];
+        foreach ($themeDirs as $themeName) {
+            if ($themeName === '.' || $themeName === '..' || !ctype_digit($themeName)) {
+                continue;
+            }
+            $jobDir = $root . DIRECTORY_SEPARATOR . $themeName . DIRECTORY_SEPARATOR . '.solidify-jobs';
+            if (!is_dir($jobDir)) {
+                continue;
+            }
+            /** @var array<string, list<array{key:ThemeLayoutEntitySolidifySerialKey,expected_fp:string,path:string,queued_at:string}>> $bySlot */
+            $bySlot = [];
+            $files = @scandir($jobDir) ?: [];
+            foreach ($files as $file) {
+                if ($file === '.' || $file === '..' || !str_ends_with($file, '.json')) {
+                    continue;
+                }
+                $path = $jobDir . DIRECTORY_SEPARATOR . $file;
+                if (!is_file($path)) {
+                    continue;
+                }
+                $parsed = $this->readJobFile($path);
+                if ($parsed === null) {
+                    continue;
+                }
+                $slotPath = $this->pathFor($parsed['key']);
+                $bySlot[$slotPath][] = $parsed;
+            }
+            foreach ($bySlot as $slotPath => $jobs) {
+                $slotCount++;
+                usort(
+                    $jobs,
+                    static function (array $a, array $b): int {
+                        return strcmp((string)$b['queued_at'], (string)$a['queued_at']);
+                    },
+                );
+                $winner = $jobs[0];
+                /** @var ThemeLayoutEntitySolidifySerialKey $winnerKey */
+                $winnerKey = $winner['key'];
+                // Rewrite winner onto stable slot path (may already be there).
+                $this->put($winnerKey, (string)$winner['expected_fp']);
+                $folded++;
+                foreach ($jobs as $job) {
+                    $jobPath = (string)$job['path'];
+                    if (!is_file($jobPath)) {
+                        continue;
+                    }
+                    if (hash_equals($slotPath, $jobPath)) {
+                        continue;
+                    }
+                    $this->archiveSuperseded($jobPath, 'superseded_multi_v');
+                    $removed++;
+                }
+            }
+        }
+
+        return ['folded' => $folded, 'removed' => $removed, 'slots' => $slotCount];
     }
 
     /**
@@ -250,6 +338,9 @@ final class ThemeLayoutEntitySolidifyJobStore
      */
     private function readJobFile(string $path): ?array
     {
+        if (!is_file($path)) {
+            return null;
+        }
         $raw = @file_get_contents($path);
         if (!is_string($raw) || $raw === '') {
             return null;
@@ -280,11 +371,43 @@ final class ThemeLayoutEntitySolidifyJobStore
         ];
     }
 
+    private function archiveSuperseded(string $path, string $reason): void
+    {
+        if (!is_file($path)) {
+            return;
+        }
+        $failedDir = dirname($path) . DIRECTORY_SEPARATOR . 'failed';
+        if (!is_dir($failedDir) && !@mkdir($failedDir, 0775, true) && !is_dir($failedDir)) {
+            @unlink($path);
+
+            return;
+        }
+        $raw = @file_get_contents($path);
+        $data = is_string($raw) && $raw !== '' ? json_decode($raw, true) : null;
+        if (!is_array($data)) {
+            $data = [];
+        }
+        $data['failed_at'] = gmdate('c');
+        $data['fail_reason'] = $reason;
+        $dest = $failedDir . DIRECTORY_SEPARATOR . basename($path);
+        if ($dest === $path) {
+            @unlink($path);
+
+            return;
+        }
+        @file_put_contents(
+            $dest,
+            json_encode($data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+            LOCK_EX,
+        );
+        @unlink($path);
+    }
+
     private function pathFor(ThemeLayoutEntitySolidifySerialKey $key): string
     {
         return rtrim($this->paths->root(), '/\\')
             . DIRECTORY_SEPARATOR . (string)$key->themeId
             . DIRECTORY_SEPARATOR . '.solidify-jobs'
-            . DIRECTORY_SEPARATOR . $key->hash() . '.json';
+            . DIRECTORY_SEPARATOR . $key->slotHash() . '.json';
     }
 }

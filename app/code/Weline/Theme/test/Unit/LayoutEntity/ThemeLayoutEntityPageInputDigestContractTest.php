@@ -67,6 +67,7 @@ final class ThemeLayoutEntityPageInputDigestContractTest extends TestCase
         self::assertStringContainsString('ThemeLayoutEntityPageInputDigest::planDigest', $bake);
         self::assertStringContainsString('chromePartialDiskStaleOrRaw', $bake);
         self::assertStringContainsString('rematerializeChromeIfStale', $bake);
+        self::assertStringContainsString('discoverStaleChromePartialPairs', $bake);
         self::assertStringContainsString('ThemeLayoutEntityPageInputDigest::matchesStored', $gate);
         self::assertStringContainsString('design_origin_stale_fallback_original', $gate);
         self::assertStringContainsString('design_chrome_origin_stale_fallback_original', $gate);

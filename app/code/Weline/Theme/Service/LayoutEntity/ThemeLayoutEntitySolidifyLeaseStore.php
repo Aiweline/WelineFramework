@@ -92,6 +92,6 @@ final class ThemeLayoutEntitySolidifyLeaseStore
         return rtrim($this->paths->root(), '/\\')
             . DIRECTORY_SEPARATOR . (string)$key->themeId
             . DIRECTORY_SEPARATOR . '.solidify-leases'
-            . DIRECTORY_SEPARATOR . $key->hash() . '.lease';
+            . DIRECTORY_SEPARATOR . $key->slotHash() . '.lease';
     }
 }

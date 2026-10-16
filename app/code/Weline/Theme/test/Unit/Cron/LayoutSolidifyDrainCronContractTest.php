@@ -40,19 +40,92 @@ final class LayoutSolidifyDrainCronContractTest extends TestCase
                 2,
             );
             $fp = str_repeat('b', 64);
+            $fp2 = str_repeat('c', 64);
             $a = $store->put($key, $fp);
-            $b = $store->put($key, $fp);
+            $b = $store->put($key, $fp2);
             self::assertTrue($a['enqueued']);
             self::assertFalse($a['coalesced']);
             self::assertFalse($b['enqueued']);
             self::assertTrue($b['coalesced']);
+            self::assertTrue($b['overwritten']);
             self::assertTrue($store->has($key));
             $list = $store->listPending(8);
             self::assertCount(1, $list);
             self::assertSame($key->toString(), $list[0]['key']->toString());
-            self::assertSame($fp, $list[0]['expected_fp']);
+            self::assertSame($fp2, $list[0]['expected_fp']);
             $store->delete($key);
             self::assertFalse($store->has($key));
+        } finally {
+            $this->purge($root);
+        }
+    }
+
+    public function testJobStoreSingleSlotAcrossVersionBump(): void
+    {
+        $root = sys_get_temp_dir() . '/weline-solidify-slot-' . bin2hex(random_bytes(4));
+        @mkdir($root, 0775, true);
+        try {
+            $paths = new ThemeLayoutEntityPaths($root . DIRECTORY_SEPARATOR);
+            $store = new ThemeLayoutEntitySolidifyJobStore($paths);
+            $v1 = ThemeLayoutEntitySolidifySerialKey::fromParts(
+                7, 'frontend', 'grocery.__store__.__channel__', 'normal', 'homepage', 'default', 10, 1,
+            );
+            $v2 = ThemeLayoutEntitySolidifySerialKey::fromParts(
+                7, 'frontend', 'grocery.__store__.__channel__', 'normal', 'homepage', 'default', 11, 2,
+            );
+            self::assertSame($v1->slotHash(), $v2->slotHash());
+            self::assertNotSame($v1->toString(), $v2->toString());
+            $store->put($v1, str_repeat('a', 64));
+            $store->put($v2, str_repeat('b', 64));
+            $list = $store->listPending(8);
+            self::assertCount(1, $list);
+            self::assertSame(11, $list[0]['key']->themeVersionId);
+            self::assertSame(str_repeat('b', 64), $list[0]['expected_fp']);
+            self::assertFileExists($root . '/7/.solidify-jobs/' . $v1->slotHash() . '.json');
+        } finally {
+            $this->purge($root);
+        }
+    }
+
+    public function testFoldLegacyMultiVersionJobsCollapsesOldHashFiles(): void
+    {
+        $root = sys_get_temp_dir() . '/weline-solidify-fold-' . bin2hex(random_bytes(4));
+        $jobDir = $root . '/7/.solidify-jobs';
+        @mkdir($jobDir, 0775, true);
+        try {
+            $paths = new ThemeLayoutEntityPaths($root . DIRECTORY_SEPARATOR);
+            $store = new ThemeLayoutEntitySolidifyJobStore($paths);
+            $older = ThemeLayoutEntitySolidifySerialKey::fromParts(
+                7, 'frontend', 's.default.default', 'normal', 'homepage', 'default', 1, 1,
+            );
+            $newer = ThemeLayoutEntitySolidifySerialKey::fromParts(
+                7, 'frontend', 's.default.default', 'normal', 'homepage', 'default', 2, 2,
+            );
+            // Simulate legacy filenames: sha256 of full toString (pre-slot era).
+            $legacyOlder = $jobDir . '/' . hash('sha256', $older->toString()) . '.json';
+            $legacyNewer = $jobDir . '/' . hash('sha256', $newer->toString()) . '.json';
+            foreach ([[$legacyOlder, $older, '2026-10-15T10:00:00+00:00', 'a'], [$legacyNewer, $newer, '2026-10-15T11:00:00+00:00', 'b']] as [$path, $key, $queued, $fpChar]) {
+                file_put_contents($path, json_encode([
+                    'serial' => $key->toString(),
+                    'theme_id' => $key->themeId,
+                    'area' => $key->area,
+                    'scope' => $key->canonicalScope,
+                    'store_mode' => $key->storeMode,
+                    'layout_type' => $key->layoutType,
+                    'layout_option' => $key->layoutOption,
+                    'theme_version_id' => $key->themeVersionId,
+                    'content_revision' => $key->contentRevision,
+                    'expected_fp' => str_repeat($fpChar, 64),
+                    'queued_at' => $queued,
+                ], JSON_THROW_ON_ERROR));
+            }
+            $report = $store->foldLegacyMultiVersionJobs();
+            self::assertGreaterThanOrEqual(1, $report['slots']);
+            $list = $store->listPending(8);
+            self::assertCount(1, $list);
+            self::assertSame(2, $list[0]['key']->themeVersionId);
+            self::assertSame(str_repeat('b', 64), $list[0]['expected_fp']);
+            self::assertFileExists($jobDir . '/' . $newer->slotHash() . '.json');
         } finally {
             $this->purge($root);
         }
@@ -106,7 +179,7 @@ final class LayoutSolidifyDrainCronContractTest extends TestCase
             $store->put($key, str_repeat('c', 64));
             self::assertTrue($store->moveToFailed($key, 'unit_fail'));
             self::assertFalse($store->has($key));
-            self::assertFileExists($root . '/9/.solidify-jobs/failed/' . $key->hash() . '.json');
+            self::assertFileExists($root . '/9/.solidify-jobs/failed/' . $key->slotHash() . '.json');
         } finally {
             $this->purge($root);
         }

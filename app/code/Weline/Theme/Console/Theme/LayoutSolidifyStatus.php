@@ -203,6 +203,9 @@ class LayoutSolidifyStatus implements CommandInterface
             $total['missing_digest'],
             $total['raw_no_meta'],
         ));
+        $this->printing->note(__(
+            'Note: chrome sample walks all version dirs under the theme; historical formal trees keep mismatch counts high after current-identity heal — judge converge on published identity / after drain, not all-time totals alone.'
+        ));
     }
 
     public function tip(): string

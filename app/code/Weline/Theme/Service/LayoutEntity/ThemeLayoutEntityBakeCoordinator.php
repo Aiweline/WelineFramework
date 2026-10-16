@@ -1150,34 +1150,105 @@ final class ThemeLayoutEntityBakeCoordinator
             // Keep lifecycle mode (draft → draft/ path; sealed → vN/).
             $identity = $version->toVersionIdentity();
         }
-        $options = ['header' => 'default', 'footer' => 'default', 'sidebar' => 'default'];
-        $needs = false;
-        foreach ($options as $type => $option) {
-            if ($this->chromePartialDiskStaleOrRaw($this->paths()->partialPhtml($identity, $type, $option))) {
-                $needs = true;
-                break;
-            }
-        }
-        // Design themes often bake into header/storefront-shell while header/default stays
-        // digest-fresh — rematerialize must also heal that dependency partial.
-        if (!$needs) {
-            $headerDefault = $this->paths()->partialPhtml($identity, 'header', 'default');
-            $shell = \dirname($headerDefault) . '/storefront-shell.phtml';
-            if ($this->chromePartialDiskStaleOrRaw($shell)) {
-                $needs = true;
-            }
-        }
-        if (!$needs) {
+        $stalePairs = $this->discoverStaleChromePartialPairs($identity);
+        if ($stalePairs === []) {
             return false;
         }
-        return ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $options): bool {
+        $staleBefore = \count($stalePairs);
+
+        return ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $stalePairs, $staleBefore): bool {
             $version = $this->loadVersion($identity);
-            $candidates = $this->materializer->candidateChrome($version, [], $options, []);
-            (new ThemeLayoutEntityBatchPublisher())->publish($identity, $candidates, ['compile' => false]);
+            $allCandidates = [];
+            foreach ($stalePairs as [$type, $option]) {
+                // storefront-shell is a header dependency — rematerialize via header/default.
+                $partialOptions = ($option === 'storefront-shell')
+                    ? ['header' => 'default']
+                    : [$type => $option];
+                try {
+                    $allCandidates += $this->materializer->candidateChrome($version, [], $partialOptions, []);
+                } catch (\Throwable $e) {
+                    w_log_warning(
+                        'Theme chrome rematerialize skip ' . $type . '/' . $option . ': ' . $e->getMessage()
+                    );
+                }
+            }
+            if ($allCandidates === []) {
+                return false;
+            }
+            (new ThemeLayoutEntityBatchPublisher())->publish($identity, $allCandidates, ['compile' => false]);
             $this->persistChromePayload($identity);
+            $staleAfter = \count($this->discoverStaleChromePartialPairs($identity));
+            if ($staleAfter >= $staleBefore) {
+                w_log_warning(
+                    'Theme chrome rematerialize did not reduce stale count theme='
+                    . $identity->themeId
+                    . ' before=' . $staleBefore
+                    . ' after=' . $staleAfter
+                );
+            } else {
+                w_log_info(
+                    'Theme chrome rematerialize converged theme='
+                    . $identity->themeId
+                    . ' before=' . $staleBefore
+                    . ' after=' . $staleAfter
+                );
+            }
 
             return true;
         });
+    }
+
+    /**
+     * All stale header/footer (and related) derived partials under this identity.
+     *
+     * @return list<array{0:string,1:string}>
+     */
+    private function discoverStaleChromePartialPairs(ThemeVersionIdentity $identity): array
+    {
+        $pairs = [];
+        $seen = [];
+        $seed = [
+            ['header', 'default'],
+            ['footer', 'default'],
+            ['sidebar', 'default'],
+        ];
+        foreach ($seed as [$type, $option]) {
+            $path = $this->paths()->partialPhtml($identity, $type, $option);
+            if ($this->chromePartialDiskStaleOrRaw($path)) {
+                $key = $type . '/' . $option;
+                if (!isset($seen[$key])) {
+                    $seen[$key] = true;
+                    $pairs[] = [$type, $option];
+                }
+            }
+        }
+        foreach (['header', 'footer'] as $type) {
+            $dir = \dirname($this->paths()->partialPhtml($identity, $type, 'default'));
+            if (!\is_dir($dir)) {
+                continue;
+            }
+            foreach (\scandir($dir) ?: [] as $file) {
+                if ($file === '.' || $file === '..' || !\str_ends_with($file, '.phtml')) {
+                    continue;
+                }
+                $option = \basename($file, '.phtml');
+                if ($option === '') {
+                    continue;
+                }
+                $path = $dir . \DIRECTORY_SEPARATOR . $file;
+                if (!$this->chromePartialDiskStaleOrRaw($path)) {
+                    continue;
+                }
+                $key = $type . '/' . $option;
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $pairs[] = [$type, $option];
+            }
+        }
+
+        return $pairs;
     }
 
     public function bootstrapMissingChromeScopes(?int $themeId = null): int { return 0; }

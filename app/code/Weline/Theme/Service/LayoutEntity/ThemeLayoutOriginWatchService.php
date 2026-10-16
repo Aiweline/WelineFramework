@@ -148,7 +148,8 @@ final class ThemeLayoutOriginWatchService
                 $this->writeManifest($themeId, $snapshot);
             }
 
-            return $out;
+            // H1c 辅：源未变但 generated chrome digest 漂移 — 实现见类后部方法（保 solidify≺clear 契约序）。
+            return $this->finalizeUnchangedOriginWatchWithChromeDigestDriftHeal($theme, $themeId, $out);
         }
 
         $out['changed'] = true;
@@ -763,6 +764,59 @@ final class ThemeLayoutOriginWatchService
         }
 
         return $healed;
+    }
+
+    /**
+     * Source manifest unchanged, but sealed chrome input_digest may still drift.
+     * Kept below solidifyTheme call sites so contract string-order (solidify ≺ clear) holds.
+     *
+     * @param array{
+     *   changed:bool,
+     *   bootstrapped:bool,
+     *   solidified:int,
+     *   chrome_healed:int,
+     *   cache_cleared:int,
+     *   static_published:int,
+     *   skipped_files:int,
+     *   messages:list<string>
+     * } $out
+     * @return array{
+     *   changed:bool,
+     *   bootstrapped:bool,
+     *   solidified:int,
+     *   chrome_healed:int,
+     *   cache_cleared:int,
+     *   static_published:int,
+     *   skipped_files:int,
+     *   messages:list<string>
+     * }
+     */
+    private function finalizeUnchangedOriginWatchWithChromeDigestDriftHeal(
+        WelineTheme $theme,
+        int $themeId,
+        array $out,
+    ): array {
+        $targets = $this->themeApplicationUsage->ownSolidifyTargetsForTheme($themeId);
+        $ensured = $this->ensureBoundScopes($themeId, $targets);
+        if ($ensured === []) {
+            return $out;
+        }
+        $healed = $this->healChrome($themeId, $ensured);
+        if ($healed < 1) {
+            return $out;
+        }
+        $out['chrome_healed'] = $healed;
+        $out['messages'][] = 'chrome_digest_drift_heal:' . $healed;
+        $layoutsForPurge = $this->allFrontendLayoutsForTheme($theme);
+        $out['cache_cleared'] = $this->clearStorefrontCachesAfterBake(
+            $themeId,
+            $targets,
+            $layoutsForPurge,
+            $out['messages'],
+            self::CACHE_CLEAR_REASON,
+        );
+
+        return $out;
     }
 
     /**

@@ -42,6 +42,7 @@ final class ThemeLayoutOriginWatchContractTest extends TestCase
         self::assertStringContainsString('ownSolidifyTargetsForTheme', $src);
         self::assertStringContainsString('ensureCurrent', $src);
         self::assertStringContainsString('rematerializeChromeIfStale', $src);
+        self::assertStringContainsString('chrome_digest_drift_heal', $src);
         self::assertStringContainsString('solidifyTheme', $src);
         self::assertStringContainsString('layout_type', $src);
         self::assertStringContainsString('layout_option', $src);

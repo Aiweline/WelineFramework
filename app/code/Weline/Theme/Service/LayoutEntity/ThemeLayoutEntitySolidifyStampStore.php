@@ -61,6 +61,6 @@ final class ThemeLayoutEntitySolidifyStampStore
         return rtrim($this->paths->root(), '/\\')
             . DIRECTORY_SEPARATOR . (string)$key->themeId
             . DIRECTORY_SEPARATOR . '.solidify-stamps'
-            . DIRECTORY_SEPARATOR . $key->hash() . '.json';
+            . DIRECTORY_SEPARATOR . $key->slotHash() . '.json';
     }
 }

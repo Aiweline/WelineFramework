@@ -5,7 +5,12 @@ namespace Weline\Theme\Service\LayoutEntity;
 
 /**
  * Serial identity for async layout solidify jobs.
- * Same key must never bake concurrently; distinct layoutType/option may Fiber-parallel.
+ *
+ * Durable job/lease/stamp file identity is the layout slot (no V/R): one pending
+ * file per theme|area|scope|storeMode|layout|option. Version/revision ride in
+ * payload only so gate thrash cannot accumulate multi-V queues.
+ *
+ * Same slot must never bake concurrently; distinct layoutType/option may Fiber-parallel.
  */
 final class ThemeLayoutEntitySolidifySerialKey
 {
@@ -43,6 +48,32 @@ final class ThemeLayoutEntitySolidifySerialKey
         );
     }
 
+    /**
+     * Layout-slot identity for durable paths (jobs / leases / stamps).
+     * Excludes themeVersionId and contentRevision.
+     */
+    public function slotString(): string
+    {
+        return implode('|', [
+            (string)$this->themeId,
+            $this->area,
+            $this->canonicalScope,
+            $this->storeMode,
+            $this->layoutType,
+            $this->layoutOption,
+        ]);
+    }
+
+    /** @see slotString() */
+    public function slotHash(): string
+    {
+        return hash('sha256', $this->slotString());
+    }
+
+    /**
+     * Full identity including V/R — for logs / payload serial only.
+     * Not used as durable filename.
+     */
     public function toString(): string
     {
         return implode('|', [
@@ -57,14 +88,31 @@ final class ThemeLayoutEntitySolidifySerialKey
         ]);
     }
 
+    /**
+     * Durable file identity (= slotHash). Different V/R on the same layout share one file.
+     */
     public function hash(): string
     {
-        return hash('sha256', $this->toString());
+        return $this->slotHash();
     }
 
     /** Layout dimension used for Fiber concurrency grouping. */
     public function layoutDimension(): string
     {
         return $this->layoutType . "\0" . $this->layoutOption;
+    }
+
+    public function withVersion(int $themeVersionId, int $contentRevision): self
+    {
+        return self::fromParts(
+            $this->themeId,
+            $this->area,
+            $this->canonicalScope,
+            $this->storeMode,
+            $this->layoutType,
+            $this->layoutOption,
+            $themeVersionId,
+            $contentRevision,
+        );
     }
 }
