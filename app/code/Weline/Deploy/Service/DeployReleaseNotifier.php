@@ -93,6 +93,11 @@ class DeployReleaseNotifier
                 return;
             }
 
+            $deployRoot = $this->resolveDeployRoot($ctx);
+            if ($deployRoot !== '') {
+                $ctx['deploy_root'] = $deployRoot;
+            }
+
             $type = self::PHASE_TYPES[$phase];
             $title = $this->buildTitle($phase, $ctx);
             $content = $this->buildContent($phase, $ctx);
@@ -111,6 +116,8 @@ class DeployReleaseNotifier
                         'job_id' => $jobId,
                         'ref' => (string)($ctx['ref'] ?? ''),
                         'deploy_version' => (string)($ctx['deploy_version'] ?? ''),
+                        'deploy_root' => $deployRoot,
+                        'project_root' => $deployRoot,
                     ],
                 ]
             );
@@ -129,7 +136,9 @@ class DeployReleaseNotifier
     {
         $ver = trim((string)($ctx['deploy_version'] ?? ''));
         $ref = trim((string)($ctx['ref'] ?? ''));
-        $hint = $ver !== '' ? $ver : ($ref !== '' ? $ref : '');
+        $rootHint = $this->titleRootHint((string)($ctx['deploy_root'] ?? ''));
+        $hintParts = array_values(array_filter([$rootHint, $ver !== '' ? $ver : ($ref !== '' ? $ref : '')], static fn (string $p): bool => $p !== ''));
+        $hint = $hintParts !== [] ? implode(' · ', $hintParts) : '';
 
         return match ($phase) {
             self::PHASE_QUEUED => (string)__('Deploy：Webhook 已入队%{1}', [$hint !== '' ? ' · ' . $hint : '']),
@@ -137,20 +146,20 @@ class DeployReleaseNotifier
             self::PHASE_ABANDONED => (string)__('Deploy：旧发布任务已作废%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_DRAIN_START => (string)__('Deploy：开始消费队列%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_STARTED => (string)__('Deploy：开始发布%{1}', [$hint !== '' ? ' · ' . $hint : '']),
-            self::PHASE_BACKUP => (string)__('Deploy：备份中'),
+            self::PHASE_BACKUP => (string)__('Deploy：备份中%{1}', [$rootHint !== '' ? ' · ' . $rootHint : '']),
             self::PHASE_GIT_DONE => (string)__('Deploy：Git 更新完成%{1}', [$hint !== '' ? ' · ' . $hint : '']),
-            self::PHASE_POST_DEPLOY_START => (string)__('Deploy：后置命令开始'),
-            self::PHASE_POST_DEPLOY_DONE => (string)__('Deploy：后置命令完成'),
+            self::PHASE_POST_DEPLOY_START => (string)__('Deploy：后置命令开始%{1}', [$rootHint !== '' ? ' · ' . $rootHint : '']),
+            self::PHASE_POST_DEPLOY_DONE => (string)__('Deploy：后置命令完成%{1}', [$rootHint !== '' ? ' · ' . $rootHint : '']),
             self::PHASE_STAMP_WRITTEN => (string)__('Deploy：版本戳已写入%{1}', [$hint !== '' ? ' · ' . $hint : '']),
-            self::PHASE_RELOAD => (string)__('Deploy：服务重载'),
+            self::PHASE_RELOAD => (string)__('Deploy：服务重载%{1}', [$rootHint !== '' ? ' · ' . $rootHint : '']),
             self::PHASE_SUCCESS => (string)__('Deploy：发布成功%{1}', [$hint !== '' ? ' · ' . $hint : '']),
             self::PHASE_FAILED => (string)__('Deploy：发布失败%{1}', [$hint !== '' ? ' · ' . $hint : '']),
-            self::PHASE_DRAIN_SKIPPED => (string)__('Deploy：队列任务跳过'),
+            self::PHASE_DRAIN_SKIPPED => (string)__('Deploy：队列任务跳过%{1}', [$rootHint !== '' ? ' · ' . $rootHint : '']),
             self::PHASE_WEBHOOK_MISS => (string)__('Deploy：远程 ref 超时未见 Webhook%{1}', [$hint !== '' ? ' · ' . $hint : '']),
-            self::PHASE_WORKDIR_BLOCKED => (string)__('Deploy：工作树含 skip-worktree，已中止'),
-            self::PHASE_ROLLBACK_STARTED => (string)__('Deploy：回滚开始'),
-            self::PHASE_ROLLBACK_SUCCESS => (string)__('Deploy：回滚成功'),
-            self::PHASE_ROLLBACK_FAILED => (string)__('Deploy：回滚失败'),
+            self::PHASE_WORKDIR_BLOCKED => (string)__('Deploy：工作树含 skip-worktree，已中止%{1}', [$rootHint !== '' ? ' · ' . $rootHint : '']),
+            self::PHASE_ROLLBACK_STARTED => (string)__('Deploy：回滚开始%{1}', [$rootHint !== '' ? ' · ' . $rootHint : '']),
+            self::PHASE_ROLLBACK_SUCCESS => (string)__('Deploy：回滚成功%{1}', [$rootHint !== '' ? ' · ' . $rootHint : '']),
+            self::PHASE_ROLLBACK_FAILED => (string)__('Deploy：回滚失败%{1}', [$rootHint !== '' ? ' · ' . $rootHint : '']),
             default => (string)__('Deploy：%{1}', [$phase]),
         };
     }
@@ -162,6 +171,7 @@ class DeployReleaseNotifier
     {
         $lines = [];
         $map = [
+            'deploy_root' => (string)($ctx['deploy_root'] ?? ''),
             'phase' => $phase,
             'trigger' => (string)($ctx['trigger'] ?? ''),
             'ref' => (string)($ctx['ref'] ?? ''),
@@ -169,7 +179,6 @@ class DeployReleaseNotifier
             'job_id' => (string)($ctx['job_id'] ?? ''),
             'deploy_version' => (string)($ctx['deploy_version'] ?? ''),
             'git_commit' => (string)($ctx['git_commit'] ?? ''),
-            'deploy_root' => (string)($ctx['deploy_root'] ?? ''),
             'command' => (string)($ctx['command'] ?? ''),
             'log_path' => (string)($ctx['log_path'] ?? ''),
             'waited_s' => (string)($ctx['waited_s'] ?? ''),
@@ -198,6 +207,36 @@ class DeployReleaseNotifier
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Prefer explicit ctx deploy_root; else configured DEPLOY_ROOT; else BP.
+     *
+     * @param array<string, mixed> $ctx
+     */
+    private function resolveDeployRoot(array $ctx): string
+    {
+        $root = trim((string)($ctx['deploy_root'] ?? ''));
+        if ($root !== '') {
+            return rtrim($root, "/\\");
+        }
+        if (\defined('BP')) {
+            return rtrim((string)BP, "/\\");
+        }
+
+        return '';
+    }
+
+    /** Basename of deploy_root for title glance (full path stays in body/origin). */
+    private function titleRootHint(string $deployRoot): string
+    {
+        $deployRoot = trim($deployRoot);
+        if ($deployRoot === '') {
+            return '';
+        }
+        $base = basename(str_replace('\\', '/', $deployRoot));
+
+        return $base !== '' && $base !== '.' && $base !== '/' ? $base : $deployRoot;
     }
 
     private function clip(string $text, int $max): string

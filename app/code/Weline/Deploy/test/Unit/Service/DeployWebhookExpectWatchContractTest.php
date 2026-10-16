@@ -37,6 +37,8 @@ final class DeployWebhookExpectWatchContractTest extends TestCase
         self::assertStringContainsString('bootstrap_tip_sha', $watch);
         self::assertStringContainsString('PHASE_WEBHOOK_MISS', $watch);
         self::assertStringContainsString('branch_tip_webhook_miss_after_grace', $watch);
+        self::assertStringContainsString('resolveNotifyDeployRoot', $watch);
+        self::assertStringContainsString("'deploy_root' => \$this->resolveNotifyDeployRoot(\$config)", $watch);
         // Must not auto-deploy on miss.
         self::assertStringNotContainsString('deploy:release', $watch);
         self::assertStringNotContainsString('orchestrator->release', $watch);

@@ -205,6 +205,7 @@ class DeployWebhookExpectWatchService
                     'ref' => $ref,
                     'deploy_version' => $hint,
                     'git_commit' => $kind === self::KIND_BRANCH_TIP ? (string)($entry['sha'] ?? '') : '',
+                    'deploy_root' => $this->resolveNotifyDeployRoot($config),
                     'trigger' => 'expect_watch',
                     'waited_s' => (string)($now - $firstSeen),
                     'reason' => $kind === self::KIND_BRANCH_TIP
@@ -253,6 +254,29 @@ class DeployWebhookExpectWatchService
     public function normalizeGrace(int $graceSec): int
     {
         return max(self::MIN_GRACE_SEC, min(self::MAX_GRACE_SEC, $graceSec));
+    }
+
+    /**
+     * Identity for webhook_miss notifications: configured deploy_root, else BP.
+     *
+     * @param array<string,mixed> $config
+     */
+    private function resolveNotifyDeployRoot(array $config): string
+    {
+        $root = trim((string)($config['deploy_root'] ?? $config['DEPLOY_ROOT'] ?? ''));
+        if ($root === '') {
+            try {
+                $settings = $this->configService->getSettings();
+                $root = trim((string)($settings['deploy_root'] ?? ''));
+            } catch (\Throwable) {
+                $root = '';
+            }
+        }
+        if ($root === '' && \defined('BP')) {
+            $root = (string)BP;
+        }
+
+        return $root !== '' ? rtrim($root, "/\\") : '';
     }
 
     /**

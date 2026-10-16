@@ -29,6 +29,10 @@ final class DeployReleaseNotifierContractTest extends TestCase
         self::assertStringContainsString('alreadyEmitted', $notifier);
         self::assertStringContainsString('TERMINAL_PHASES', $notifier);
         self::assertStringContainsString('dedupe_salt', $notifier);
+        self::assertStringContainsString('resolveDeployRoot', $notifier);
+        self::assertStringContainsString('titleRootHint', $notifier);
+        self::assertStringContainsString("'deploy_root' => \$deployRoot", $notifier);
+        self::assertStringContainsString("'project_root' => \$deployRoot", $notifier);
 
         foreach ([
             'queued',

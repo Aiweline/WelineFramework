@@ -51,6 +51,7 @@ final class NotificationOriginContext
      *   scope: string,
      *   request_host: string,
      *   process_host: string,
+     *   project_root: string,
      *   sapi: string,
      *   request_id: string
      * }
@@ -95,6 +96,14 @@ final class NotificationOriginContext
             $processHost = '';
         }
 
+        $projectRoot = '';
+        if (isset($data['metadata']) && \is_array($data['metadata'])) {
+            $projectRoot = \trim((string) ($data['metadata']['deploy_root'] ?? $data['metadata']['project_root'] ?? ''));
+        }
+        if ($projectRoot === '' && \defined('BP')) {
+            $projectRoot = \rtrim((string) BP, "/\\");
+        }
+
         return [
             'runtime_mode' => $runtimeMode,
             'area' => $area,
@@ -103,6 +112,7 @@ final class NotificationOriginContext
             'scope' => $scope,
             'request_host' => $requestHost,
             'process_host' => $processHost,
+            'project_root' => $projectRoot,
             'sapi' => \PHP_SAPI,
             'request_id' => $requestId,
         ];
@@ -122,6 +132,7 @@ final class NotificationOriginContext
             (string) __('站点URL') . ': ' . $this->labelOrDash($origin['website_url'] ?? ''),
             (string) __('请求Host') . ': ' . $this->labelOrDash($origin['request_host'] ?? ''),
             (string) __('进程主机') . ': ' . $this->labelOrDash($origin['process_host'] ?? ''),
+            (string) __('项目路径') . ': ' . $this->labelOrDash($origin['project_root'] ?? ''),
             'SAPI: ' . $this->labelOrDash($origin['sapi'] ?? ''),
         ];
         if (\trim((string) ($origin['request_id'] ?? '')) !== '') {

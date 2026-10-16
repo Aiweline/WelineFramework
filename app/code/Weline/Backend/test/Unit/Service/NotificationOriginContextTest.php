@@ -23,6 +23,8 @@ class NotificationOriginContextTest extends TestCase
         $this->assertTrue($first['metadata']['origin']['enriched'] ?? false);
         $this->assertStringContainsString(NotificationOriginContext::FOOTER_MARKER, $first['content']);
         $this->assertStringContainsString('运行模式', $first['content']);
+        $this->assertStringContainsString('项目路径', $first['content']);
+        $this->assertNotSame('', trim((string)($first['metadata']['origin']['project_root'] ?? '')));
         $this->assertSame(Runtime::getMode(), $first['metadata']['origin']['runtime_mode']);
         $this->assertContains(
             $first['metadata']['origin']['area'],

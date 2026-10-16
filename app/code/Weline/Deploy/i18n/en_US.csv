@@ -565,20 +565,20 @@ Deploy：已排队等待进行中发布%{1},Deploy：已排队等待进行中发
 Deploy：旧发布任务已作废%{1},Deploy：旧发布任务已作废%{1}
 Deploy：开始消费队列%{1},Deploy：开始消费队列%{1}
 Deploy：开始发布%{1},Deploy：开始发布%{1}
-Deploy：备份中,Deploy：备份中
+Deploy：备份中%{1},Deploy：备份中%{1}
 "Deploy：Git 更新完成%{1}","Deploy：Git 更新完成%{1}"
-Deploy：后置命令开始,Deploy：后置命令开始
-Deploy：后置命令完成,Deploy：后置命令完成
+Deploy：后置命令开始%{1},Deploy：后置命令开始%{1}
+Deploy：后置命令完成%{1},Deploy：后置命令完成%{1}
 Deploy：版本戳已写入%{1},Deploy：版本戳已写入%{1}
-Deploy：服务重载,Deploy：服务重载
+Deploy：服务重载%{1},Deploy：服务重载%{1}
 Deploy：发布成功%{1},Deploy：发布成功%{1}
 Deploy：发布失败%{1},Deploy：发布失败%{1}
-Deploy：队列任务跳过,Deploy：队列任务跳过
+Deploy：队列任务跳过%{1},Deploy：队列任务跳过%{1}
 "Deploy：远程 ref 超时未见 Webhook%{1}","Deploy：远程 ref 超时未见 Webhook%{1}"
-"Deploy：工作树含 skip-worktree，已中止","Deploy：工作树含 skip-worktree，已中止"
-Deploy：回滚开始,Deploy：回滚开始
-Deploy：回滚成功,Deploy：回滚成功
-Deploy：回滚失败,Deploy：回滚失败
+"Deploy：工作树含 skip-worktree，已中止%{1}","Deploy：工作树含 skip-worktree，已中止%{1}"
+Deploy：回滚开始%{1},Deploy：回滚开始%{1}
+Deploy：回滚成功%{1},Deploy：回滚成功%{1}
+Deploy：回滚失败%{1},Deploy：回滚失败%{1}
 Deploy：%{1},Deploy：%{1}
 "Profile 来源","Profile Source"
 "当前发布会优先读取该项目的独立 Profile。","The release will prefer this project's dedicated profile."
@@ -884,6 +884,15 @@ tag：%{1},"Tag: %{1}"
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","Full release: Git update + post commands + stamp + reload"
 "发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。","发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。"
 生成不执行发布的机器可读部署计划,"Generate a machine-readable deployment plan without executing the deployment."
+Deploy：备份中,Deploy：备份中
+Deploy：后置命令开始,Deploy：后置命令开始
+Deploy：后置命令完成,Deploy：后置命令完成
+Deploy：服务重载,Deploy：服务重载
+Deploy：队列任务跳过,Deploy：队列任务跳过
+"Deploy：工作树含 skip-worktree，已中止","Deploy：工作树含 skip-worktree，已中止"
+Deploy：回滚开始,Deploy：回滚开始
+Deploy：回滚成功,Deploy：回滚成功
+Deploy：回滚失败,Deploy：回滚失败
 "Deploy：远程 tag 超时未见 Webhook%{1}","Deploy：远程 tag 超时未见 Webhook%{1}"
 "消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）","消费 Deploy Webhook 发布队列（不依赖 sudo/systemd-run）"
 "消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）","消费 Deploy Webhook 发布队列（CLI/cron；不依赖 sudo）"
