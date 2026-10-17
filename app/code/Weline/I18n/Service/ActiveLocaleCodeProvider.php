@@ -6,19 +6,19 @@ namespace Weline\I18n\Service;
 
 use Weline\I18n\Model\Locale;
 use Weline\Framework\Phrase\DictionaryCacheNamespace;
-use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Model\Locals;
 
 /**
  * Backend platform language set: merge Locals (translation rows) with Locale (install registry).
  * Reading Locals alone drops installed locales that have no Locals row yet.
+ *
+ * Authority lives in the Worker process bag only — do not mirror the code list into the request bag.
  */
 class ActiveLocaleCodeProvider
 {
     private const FIELD_IS_INSTALL = 'is_install';
     private const FIELD_IS_ACTIVE = 'is_active';
     private const FIELD_CODE = 'code';
-    private const REQUEST_CONTEXT_KEY = 'i18n.installed_active_codes.v1';
 
     /** @var array<string, list<string>> 进程级 installed+active 列表 */
     private static array $processInstalledActiveCodes = [];
@@ -55,9 +55,6 @@ class ActiveLocaleCodeProvider
     public static function clearProcessCache(): void
     {
         self::$processInstalledActiveCodes = [];
-        if (RequestContext::has(self::REQUEST_CONTEXT_KEY)) {
-            RequestContext::remove(self::REQUEST_CONTEXT_KEY);
-        }
     }
 
     /**
@@ -65,27 +62,14 @@ class ActiveLocaleCodeProvider
      */
     public function getInstalledActiveCodes(): array
     {
-        if (RequestContext::has(self::REQUEST_CONTEXT_KEY)) {
-            $fromRequest = RequestContext::get(self::REQUEST_CONTEXT_KEY, null);
-            if (\is_array($fromRequest)) {
-                /** @var list<string> $fromRequest */
-                return $fromRequest;
-            }
-        }
-
         $cacheKey = DictionaryCacheNamespace::cacheKey('installed-active-locales');
         if (isset(DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey])) {
-            $cached = DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey];
-            RequestContext::set(self::REQUEST_CONTEXT_KEY, $cached);
-
-            return $cached;
+            return DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey];
         }
 
         $codes = $this->loadInstalledActiveCodesFromDb();
-        $codes = DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey] = $codes;
-        RequestContext::set(self::REQUEST_CONTEXT_KEY, $codes);
 
-        return $codes;
+        return DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey] = $codes;
     }
 
     /**

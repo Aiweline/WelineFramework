@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Api\Localization;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\BatchGlobalDictionaryProviderInterface;
 use Weline\Framework\Phrase\GlobalDictionaryModuleBagCache;
@@ -98,25 +97,10 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
         if ($locale === '') {
             return [];
         }
-        // Same-request memo: avoid N× full-table NULL source_module scans on cold paths.
-        $memoKey = 'i18n.global_dictionary.null_source.v1.' . $locale;
-        try {
-            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)
-                && \Weline\Framework\Runtime\RequestContext::isInitialized()
-            ) {
-                $memo = \Weline\Framework\Runtime\RequestContext::get($memoKey);
-                if (\is_array($memo)) {
-                    return $memo;
-                }
-            }
-        } catch (\Throwable) {
-        }
 
-        // Worker process bag only (never Shared Memory whole-locale bags).
+        // Worker process bag only (never Shared Memory / RequestContext whole-locale bags).
         $process = GlobalDictionaryModuleBagCache::getNullSource($locale);
         if (\is_array($process)) {
-            $this->rememberNullSourceMemo($memoKey, $process);
-
             return $process;
         }
 
@@ -124,8 +108,6 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
         // generated/language/{locale}.php is 8–11MiB; full PDO NULL scans are the same cliff.
         // Storefront misses use exactWords / template prefetchTemplateWords (com bake).
         if (Runtime::isPersistent()) {
-            $this->rememberNullSourceMemo($memoKey, []);
-
             return [];
         }
 
@@ -133,7 +115,6 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
         $fromFile = $this->loadLocaleFileWords($locale);
         if ($fromFile !== null) {
             GlobalDictionaryModuleBagCache::putNullSource($locale, $fromFile);
-            $this->rememberNullSourceMemo($memoKey, $fromFile);
 
             return $fromFile;
         }
@@ -167,7 +148,6 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
 
         // Process bag only — never phrase Shared Memory (frame_too_large on 8–11MiB locales).
         GlobalDictionaryModuleBagCache::putNullSource($locale, $pdoWords);
-        $this->rememberNullSourceMemo($memoKey, $pdoWords);
 
         return $pdoWords;
     }
@@ -184,19 +164,6 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
         }
 
         return $words === [] ? null : $words;
-    }
-
-    /** @param array<string, string> $words */
-    private function rememberNullSourceMemo(string $memoKey, array $words): void
-    {
-        try {
-            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)
-                && \Weline\Framework\Runtime\RequestContext::isInitialized()
-            ) {
-                \Weline\Framework\Runtime\RequestContext::set($memoKey, $words);
-            }
-        } catch (\Throwable) {
-        }
     }
 
     public function wordsByModule(string $locale, array $modules): array

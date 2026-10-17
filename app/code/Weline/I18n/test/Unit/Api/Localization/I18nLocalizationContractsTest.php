@@ -38,10 +38,10 @@ final class I18nLocalizationContractsTest extends TestCase
     private function contractChecks(): array
     {
         return [
-            'GlobalDictionaryProviderSharedBag::testNullSourceBagUsesRequestMemoWithoutSecondSql' => function () {
+            'GlobalDictionaryProviderSharedBag::testNullSourceBagUsesProcessBagWithoutSecondSql' => function () {
             $this->setUp_GlobalDictionaryProviderSharedBag();
             try {
-                $this->assert_GlobalDictionaryProviderSharedBag_testNullSourceBagUsesRequestMemoWithoutSecondSql();
+                $this->assert_GlobalDictionaryProviderSharedBag_testNullSourceBagUsesProcessBagWithoutSecondSql();
             } finally {
                 $this->tearDown_GlobalDictionaryProviderSharedBag();
             }
@@ -108,7 +108,7 @@ private function setUp_GlobalDictionaryProviderSharedBag(): void
         }
         public function getConnection(): object
         {
-            $db = $this->db_GlobalDictionaryProviderSharedBag;
+            $db = $this->db;
             return new class($db)
             {
                 public function __construct(private readonly object $db)
@@ -116,7 +116,7 @@ private function setUp_GlobalDictionaryProviderSharedBag(): void
                 }
                 public function getConnector(): object
                 {
-                    $db = $this->db_GlobalDictionaryProviderSharedBag;
+                    $db = $this->db;
                     return new class($db)
                     {
                         public function __construct(private readonly object $db)
@@ -124,7 +124,7 @@ private function setUp_GlobalDictionaryProviderSharedBag(): void
                         }
                         public function query(string $sql): object
                         {
-                            $db = $this->db_GlobalDictionaryProviderSharedBag;
+                            $db = $this->db;
                             return new class($db, $sql)
                             {
                                 public function __construct(private readonly object $db, private readonly string $sql)
@@ -132,8 +132,8 @@ private function setUp_GlobalDictionaryProviderSharedBag(): void
                                 }
                                 public function fetchIterator(): \Generator
                                 {
-                                    $rows = $this->db_GlobalDictionaryProviderSharedBag->pdo->query($this->sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
-                                    $this->db_GlobalDictionaryProviderSharedBag->reads[] = ['sql' => $this->sql, 'rows' => count($rows), 'global' => true];
+                                    $rows = $this->db->pdo->query($this->sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                                    $this->db->reads[] = ['sql' => $this->sql, 'rows' => count($rows), 'global' => true];
                                     yield from $rows;
                                 }
                             };
@@ -158,7 +158,7 @@ private function tearDown_GlobalDictionaryProviderSharedBag(): void
     GlobalDictionaryModuleBagCache::resetProcessPoolHandle();
 }
 
-private function assert_GlobalDictionaryProviderSharedBag_testNullSourceBagUsesRequestMemoWithoutSecondSql(): void
+private function assert_GlobalDictionaryProviderSharedBag_testNullSourceBagUsesProcessBagWithoutSecondSql(): void
 {
     $provider = new GlobalDictionaryProvider();
     $key = ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY;
@@ -166,6 +166,7 @@ private function assert_GlobalDictionaryProviderSharedBag_testNullSourceBagUsesR
     self::assertSame(['Duty' => 'Shipping excludes duties and taxes'], $first);
     $globalReads = \count(\array_filter($this->db_GlobalDictionaryProviderSharedBag->reads, static fn(array $r): bool => !empty($r['global'])));
     self::assertSame(1, $globalReads);
+    self::assertSame($first, GlobalDictionaryModuleBagCache::getNullSource('zz_UT'));
     $second = $provider->wordsByModule('zz_UT', [$key])[$key];
     self::assertSame($first, $second);
     $globalReadsAfter = \count(\array_filter($this->db_GlobalDictionaryProviderSharedBag->reads, static fn(array $r): bool => !empty($r['global'])));
@@ -179,7 +180,10 @@ private function assert_GlobalDictionaryProviderSharedBag_testProviderBindsSameN
     self::assertStringContainsString('GlobalDictionaryModuleBagCache::getNullSource', $source);
     self::assertStringContainsString('GlobalDictionaryModuleBagCache::putNullSource', $source);
     self::assertStringContainsString('loadLocaleFileWords', $source);
-    self::assertStringContainsString('path_TRANSLATE_FILES_PATH', $source);
+    self::assertStringContainsString('LocaleAreaDictionaryLoader::loadMerged', $source);
+    self::assertStringNotContainsString('i18n.global_dictionary.null_source', $source);
+    self::assertStringNotContainsString('rememberNullSourceMemo', $source);
+    self::assertStringNotContainsString('RequestContext::set', $source);
     self::assertSame(GlobalDictionaryModuleBagCache::sharedKey('lt_LT', ModuleGlobalDictionaryProviderInterface::NULL_SOURCE_MODULE_KEY), GlobalDictionaryModuleBagCache::nullSourceSharedKey('lt_LT'));
 }
 

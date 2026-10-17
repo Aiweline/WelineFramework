@@ -656,22 +656,15 @@ class LanguageSwitcher implements TaglibInterface
             . '|' . $displayLocale
             . '|' . $orderKey;
         $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
-        $languages = $hotCache->rememberForRequest(
-            self::CATALOG_CACHE_RESOURCE,
+        // Process/HotCache catalog only — path-bound HTML stays on $htmlCache (request shell).
+        $languages = $hotCache->rememberPolicy(
+            self::catalogCachePolicy(),
             $logicalKey,
-            static function () use ($hotCache, $logicalKey, $scope, $displayLocale): array {
-                $cached = $hotCache->rememberPolicy(
-                    self::catalogCachePolicy(),
-                    $logicalKey,
-                    static fn (): array => self::buildLanguagesFromCodes(
-                        $scope->codes,
-                        $displayLocale,
-                        $scope->preserveExplicitOrder,
-                    ),
-                );
-
-                return \is_array($cached) ? $cached : [];
-            },
+            static fn (): array => self::buildLanguagesFromCodes(
+                $scope->codes,
+                $displayLocale,
+                $scope->preserveExplicitOrder,
+            ),
         );
 
         return \is_array($languages) ? $languages : [];

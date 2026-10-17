@@ -371,7 +371,7 @@ private function assert_LanguageSwitcherCatalogHotCache_testCatalogUsesStorefron
     self::assertSame('website', LanguageSwitcher::catalogCachePolicy()->scope);
     self::assertContains('global/i18n', LanguageSwitcher::catalogCachePolicy()->dependencies);
     self::assertStringContainsString('StorefrontScopeHotCache', $taglib);
-    self::assertStringContainsString('rememberForRequest', $taglib);
+    self::assertStringNotContainsString('rememberForRequest', $taglib);
     self::assertStringContainsString('rememberPolicy', $taglib);
     self::assertStringContainsString('CATALOG_CACHE_RESOURCE', $taglib);
     self::assertStringContainsString('catalogCachePolicy()', $taglib);
