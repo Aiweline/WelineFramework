@@ -221,8 +221,12 @@ foreach (array_chunk($ids, 50) as $chunk) {
 try {
     /** @var ProductStorefrontCacheInvalidator $inv */
     $inv = ObjectManager::getInstance(ProductStorefrontCacheInvalidator::class);
-    $inv->clearForCatalogChange('hanfu_detail_i18n_sync:' . count($touched));
-    echo "cache clearForCatalogChange OK\n";
+    if (method_exists($inv, 'purgeForUrls')) {
+        $inv->purgeForUrls([], 'hanfu_detail_i18n_sync:' . count($touched));
+    } else {
+        $inv->clearForCatalogChange('hanfu_detail_i18n_sync:' . count($touched));
+    }
+    echo "cache purgeForUrls OK\n";
 } catch (Throwable $e) {
     echo 'cache soft-fail: ' . $e->getMessage() . "\n";
 }
