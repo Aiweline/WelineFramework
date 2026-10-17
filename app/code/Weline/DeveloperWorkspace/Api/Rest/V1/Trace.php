@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\DeveloperWorkspace\Api\DevToolRestController;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\DeveloperWorkspace\Service\PanelAccessService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Trace extends DevToolRestController
 {
@@ -34,11 +35,11 @@ class Trace extends DevToolRestController
         }
 
         $enabled = $this->resolvePanelEnabledFlag();
-        RequestLifecycleTrace::issuePanelTraceCookie($this->request->getResponse(), $enabled);
+        TraceGate::issuePanelTraceCookie($this->request->getResponse(), $enabled);
 
         return $this->success($enabled ? 'request trace armed' : 'request trace disarmed', [
             'enabled' => $enabled,
-            'cookie' => RequestLifecycleTrace::panelTraceCookieName(),
+            'cookie' => TraceGate::panelTraceCookieName(),
         ]);
     }
 
@@ -54,14 +55,14 @@ class Trace extends DevToolRestController
         }
 
         $enabled = $this->resolvePanelEnabledFlag();
-        RequestLifecycleTrace::issuePanelTplPerfCookie($this->request->getResponse(), $enabled);
+        TraceGate::issuePanelTplPerfCookie($this->request->getResponse(), $enabled);
         if ($enabled) {
-            RequestLifecycleTrace::armTemplatePerfOverlayIfRequested();
+            TraceGate::armTemplatePerfOverlayIfRequested();
         }
 
         return $this->success($enabled ? 'template perf overlay armed' : 'template perf overlay disarmed', [
             'enabled' => $enabled,
-            'cookie' => RequestLifecycleTrace::panelTplPerfCookieName(),
+            'cookie' => TraceGate::panelTplPerfCookieName(),
             'query' => 'wls_tpl_perf',
         ]);
     }

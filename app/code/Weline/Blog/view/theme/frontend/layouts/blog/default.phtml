@@ -65,20 +65,7 @@ $this->assign('meta', $meta);
             border-radius: 8px;
             padding: 1rem 1.25rem 1.5rem;
         }
-        .amazon-blog-article__breadcrumb {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.35rem;
-            align-items: center;
-            margin: 0 0 0.75rem;
-            color: #565959;
-            font-size: 12px;
-        }
-        .amazon-blog-article__breadcrumb a {
-            color: var(--color-link);
-            text-decoration: none;
-        }
-        .amazon-blog-article__breadcrumb a:hover { text-decoration: underline; color: var(--color-link-hover); }
+        /* 正文内面包屑已撤；只保留 layout Theme breadcrumb block */
         .amazon-blog-article__title-row {
             display: flex;
             flex-wrap: wrap;
@@ -463,6 +450,7 @@ $this->assign('meta', $meta);
 
     <w:hook>Weline_Theme::frontend::layouts::blog::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end-dynamic</w:hook>
     <w:hook>seo::footer</w:hook>
 </body>
 </html>

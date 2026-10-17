@@ -54,6 +54,11 @@ class SetupTaskCollector
             ], $providers);
             foreach ($tasks as $task) {
                 $code = (string)$task['code'];
+                $meta = is_array($task['meta'] ?? null) ? $task['meta'] : [];
+                // Install-scoped tips (e.g. FPC) must not multiply across every website.
+                if (($meta['scope_kind'] ?? '') === 'install' && $websiteId !== Website::ID_DEFAULT) {
+                    continue;
+                }
                 if (!isset($byCode[$code])) {
                     $byCode[$code] = [
                         'code' => $code,
@@ -62,11 +67,12 @@ class SetupTaskCollector
                         'status' => 'todo',
                         'href' => (string)($task['href'] ?? ''),
                         'category' => (string)($task['category'] ?? ''),
+                        'group' => (string)($task['group'] ?? SetupTaskProviderInterface::GROUP_SETUP),
                         'module' => (string)($task['module'] ?? ''),
                         'scenarios' => $task['scenarios'] ?? ['new', 'migrate'],
                         'parent_code' => (string)($task['parent_code'] ?? ''),
                         'sort' => (int)($task['sort'] ?? 100),
-                        'meta' => [],
+                        'meta' => $meta,
                         'dimension' => 'global',
                         'site_coverage' => [],
                     ];
@@ -76,8 +82,8 @@ class SetupTaskCollector
                     'label' => $label,
                     'status' => (string)$task['status'],
                     'tip' => (string)($task['tip'] ?? ''),
-                    'inherited' => !empty($task['meta']['inherited']),
-                    'from_default' => !empty($task['meta']['from_default']),
+                    'inherited' => !empty($meta['inherited']),
+                    'from_default' => !empty($meta['from_default']),
                 ];
             }
         }
@@ -246,6 +252,13 @@ class SetupTaskCollector
                 if (!is_array($scenarios) || $scenarios === []) {
                     $scenarios = ['new', 'migrate'];
                 }
+                $group = (string)($row['group'] ?? SetupTaskProviderInterface::GROUP_SETUP);
+                if (!in_array($group, [
+                    SetupTaskProviderInterface::GROUP_SETUP,
+                    SetupTaskProviderInterface::GROUP_PERFORMANCE,
+                ], true)) {
+                    $group = SetupTaskProviderInterface::GROUP_SETUP;
+                }
                 $byCode[$code] = [
                     'code' => $code,
                     'title' => $title,
@@ -253,6 +266,7 @@ class SetupTaskCollector
                     'status' => $status,
                     'href' => (string)($row['href'] ?? ''),
                     'category' => (string)($row['category'] ?? ''),
+                    'group' => $group,
                     'module' => (string)($row['module'] ?? ''),
                     'scenarios' => array_values(array_filter(
                         $scenarios,

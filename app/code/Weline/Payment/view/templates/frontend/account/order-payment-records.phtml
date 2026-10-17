@@ -6,6 +6,7 @@
  */
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Payment\Helper\OutcomeChipMarkup;
 use Weline\Payment\Service\BackendOrderPaymentRecordsService;
 use Weline\Payment\Service\BackendPaymentOutcomeChip;
 
@@ -78,10 +79,7 @@ $payments = $recordsService->listForPayable('order', $orderUuid);
                     </span>
                     <span role="cell" data-label="<?= __('金额') ?>" data-testid="account-order-payment-amount"><?= $esc($currency . ' ' . $amount) ?></span>
                     <span role="cell" data-label="<?= __('状态') ?>" data-testid="account-order-payment-status">
-                        <?= $this->fetch('Weline_Payment::templates/backend/partials/outcome-chip.phtml', [
-                            'chip' => $statusChip,
-                            'testid' => 'account-order-payment-status-chip',
-                        ]) ?>
+                        <?= OutcomeChipMarkup::render($statusChip, 'account-order-payment-status-chip') ?>
                     </span>
                     <span role="cell" data-label="<?= __('时间') ?>" data-testid="account-order-payment-time"><?= $esc($paidAt !== '' ? $paidAt : '—') ?></span>
                 </div>

@@ -104,7 +104,7 @@ class Log extends BackendController
     private function respondEmbedDocument(): never
     {
         $this->layoutType = null;
-        $html = (string)$this->getTemplate()->fetch('Weline_Smtp::backend/Log/embed');
+        $html = (string)$this->getTemplate()->fetchHtml('Weline_Smtp::backend/Log/embed');
         $response = $this->request->getResponse();
         $response->setHeader('Content-Type', 'text/html; charset=UTF-8');
         $response->setBody($html);

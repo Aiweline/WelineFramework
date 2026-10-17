@@ -8,7 +8,7 @@ use Weline\Framework\View\Template;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Service\AccountI18nModuleRegistry;
 use Weline\Customer\Service\AccountSidebarContentGate;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\RequestContext;
 
 /**
@@ -107,7 +107,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
                 'lang' => (string)($this->request->getServer('WELINE_USER_LANG') ?? ''),
             ], 'account_sidebar');
         }
-        RequestLifecycleTrace::recordSpan('customer::account::sidebarPrepared', $sidebarMs, 'controller', null, [
+        TraceGate::recordSpan('customer::account::sidebarPrepared', $sidebarMs, 'controller', null, [
             'sidebar_len' => $sidebarLength,
             'template_id' => \spl_object_id(Template::getInstance()),
         ]);
@@ -142,7 +142,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             'bytes' => $htmlBytes,
         ]);
 
-        RequestLifecycleTrace::recordSpan('customer::account::controllerTotal', $totalMs, 'controller', null, [
+        TraceGate::recordSpan('customer::account::controllerTotal', $totalMs, 'controller', null, [
             'login_ms' => round($loginMs, 3),
             'user_ms' => round($userMs, 3),
             'assign_ms' => round($assignMs, 3),
@@ -256,7 +256,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             ], 'account_sidebar');
         }
 
-        RequestLifecycleTrace::recordSpan('customer::account::sidebarContentLazy', $durationMs, 'controller', null, [
+        TraceGate::recordSpan('customer::account::sidebarContentLazy', $durationMs, 'controller', null, [
             'html_bytes' => $htmlBytes,
         ]);
 

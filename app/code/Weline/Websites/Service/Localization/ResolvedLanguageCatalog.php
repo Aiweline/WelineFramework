@@ -16,26 +16,65 @@ use Weline\Websites\Service\WebsiteCacheInvalidationService;
  */
 final class ResolvedLanguageCatalog implements ResolvedLanguageCatalogInterface
 {
+    private const PROCESS_CACHE_MAX = 256;
+
+    /** @var array<string, list<string>> */
+    private static array $processResolvedByScope = [];
+
     public function getResolvedLanguageCodes(
         int $websiteId,
         ?int $storeId = null,
         ?int $channelId = null,
     ): array {
         $websiteId = \max(0, $websiteId);
+        $cacheKey = $websiteId . '|' . ($storeId ?? '') . '|' . ($channelId ?? '');
+        if (isset(self::$processResolvedByScope[$cacheKey])) {
+            return self::$processResolvedByScope[$cacheKey];
+        }
 
         if ($storeId !== null && $channelId !== null && $channelId >= 0) {
             if ($this->hasOverride($websiteId, $storeId, $channelId)) {
-                return $this->loadOverrideCodes($websiteId, $storeId, $channelId);
+                return $this->rememberProcessResolved(
+                    $cacheKey,
+                    $this->loadOverrideCodes($websiteId, $storeId, $channelId),
+                );
             }
         }
 
         if ($storeId !== null) {
             if ($this->hasOverride($websiteId, $storeId, null)) {
-                return $this->loadOverrideCodes($websiteId, $storeId, null);
+                return $this->rememberProcessResolved(
+                    $cacheKey,
+                    $this->loadOverrideCodes($websiteId, $storeId, null),
+                );
             }
         }
 
-        return $this->loadWebsiteCodesOrdered($websiteId);
+        return $this->rememberProcessResolved(
+            $cacheKey,
+            $this->loadWebsiteCodesOrdered($websiteId),
+        );
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processResolvedByScope = [];
+    }
+
+    /** @param list<string> $codes @return list<string> */
+    private function rememberProcessResolved(string $cacheKey, array $codes): array
+    {
+        if (\count(self::$processResolvedByScope) >= self::PROCESS_CACHE_MAX
+            && !isset(self::$processResolvedByScope[$cacheKey])
+        ) {
+            $oldest = \array_key_first(self::$processResolvedByScope);
+            if ($oldest !== null) {
+                unset(self::$processResolvedByScope[$oldest]);
+            }
+        }
+        self::$processResolvedByScope[$cacheKey] = $codes;
+
+        return $codes;
     }
 
     public function hasOverride(int $websiteId, int $storeId, ?int $channelId): bool
@@ -234,6 +273,7 @@ final class ResolvedLanguageCatalog implements ResolvedLanguageCatalogInterface
 
     private function invalidateWebsite(int $websiteId): void
     {
+        self::clearProcessCache();
         try {
             ObjectManager::getInstance(WebsiteCacheInvalidationService::class)->invalidateWebsite(
                 ObjectManager::getInstance(WebsiteLanguage::class)->getConnection(),

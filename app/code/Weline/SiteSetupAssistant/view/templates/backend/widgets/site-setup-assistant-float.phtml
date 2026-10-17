@@ -48,18 +48,28 @@ try {
     $siteCapsules = [];
 }
 
-$total = count($tips);
-$done = count(array_filter($tips, static fn(array $t): bool => ($t['status'] ?? '') === 'done'));
-$todo = count(array_filter($tips, static fn(array $t): bool => ($t['status'] ?? '') === 'todo'));
-$doing = count(array_filter($tips, static fn(array $t): bool => ($t['status'] ?? '') === 'doing'));
+$groupOf = static fn(array $t): string => (string)($t['group'] ?? 'setup');
+$setupTips = array_values(array_filter(
+    $tips,
+    static fn(array $t): bool => $groupOf($t) !== 'performance'
+));
+$perfTipsOpen = array_values(array_filter(
+    $tips,
+    static fn(array $t): bool => $groupOf($t) === 'performance' && ($t['status'] ?? '') !== 'done'
+));
+$total = count($setupTips);
+$done = count(array_filter($setupTips, static fn(array $t): bool => ($t['status'] ?? '') === 'done'));
+$todo = count(array_filter($setupTips, static fn(array $t): bool => ($t['status'] ?? '') === 'todo'));
+$doing = count(array_filter($setupTips, static fn(array $t): bool => ($t['status'] ?? '') === 'doing'));
 $pct = $total > 0 ? (int)round(($done / $total) * 100) : 0;
 $remaining = $todo + $doing;
+$perfRemaining = count($perfTipsOpen);
 $capsuleRemainingSum = 0;
 foreach ($siteCapsules as $cap) {
     $capsuleRemainingSum += (int)($cap['remaining'] ?? 0);
 }
-$fabRemaining = max($remaining, $capsuleRemainingSum);
-$allDone = $capsuleRemainingSum <= 0 && $remaining <= 0;
+$fabRemaining = max($remaining + $perfRemaining, $capsuleRemainingSum + $perfRemaining);
+$allDone = $capsuleRemainingSum <= 0 && $remaining <= 0 && $perfRemaining <= 0;
 
 $statusLabel = static function (string $s): string {
     return match ($s) {
@@ -138,59 +148,120 @@ if ($allDone) {
             <button type="button" data-ssa-scene="migrate"><?= $h(__('迁站核对')) ?></button>
         </div>
 
+        <?php
+        $renderTaskB = static function (array $tip) use ($h, $statusLabel): void {
+            ?>
+            <div class="ssa-float-b__task"
+                 data-status="<?= $h($tip['status']) ?>"
+                 data-group="<?= $h((string)($tip['group'] ?? 'setup')) ?>"
+                 data-scenes="<?= $h(implode(',', $tip['scenarios'] ?? ['new', 'migrate'])) ?>">
+                <label>
+                    <input type="checkbox" <?= ($tip['status'] ?? '') === 'done' ? 'checked' : '' ?> disabled>
+                    <span><?= $h($statusLabel((string)($tip['status'] ?? 'todo'))) ?></span>
+                </label>
+                <div>
+                    <p class="ssa-float-b__name"><?= $h($tip['title'] ?? '') ?></p>
+                    <p class="ssa-float-b__tip"><?= $h($tip['tip'] ?? '') ?></p>
+                    <small><?= $h(($tip['module'] ?? '') . (($tip['category'] ?? '') !== '' ? ' · ' . $tip['category'] : '')) ?></small>
+                </div>
+                <?php if (($tip['href'] ?? '') !== ''): ?>
+                    <a class="w-button" data-variant="outline" data-size="sm" href="<?= $h($tip['href']) ?>"><?= $h(__('深度链接')) ?></a>
+                <?php endif; ?>
+            </div>
+            <?php
+        };
+        ?>
+
         <?php if ($variant === 'A'): ?>
-            <ul class="ssa-float-a">
-                <?php foreach ($tips as $tip): ?>
-                    <?php if ($tip['status'] === 'done') { continue; } ?>
-                    <li data-scenes="<?= $h(implode(',', $tip['scenarios'])) ?>">
-                        <div>
-                            <strong><?= $h($tip['title']) ?></strong>
-                            <span><?= $h($tip['tip']) ?></span>
-                        </div>
-                        <a href="<?= $h($tip['href']) ?>"><?= $h(__('去配置')) ?></a>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
+            <?php if ($perfTipsOpen !== []): ?>
+                <div class="ssa-float__group" data-ssa-group="performance">
+                    <p class="ssa-float__group-title"><?= $h(__('性能优化')) ?></p>
+                    <ul class="ssa-float-a">
+                        <?php foreach ($perfTipsOpen as $tip): ?>
+                            <li data-scenes="<?= $h(implode(',', $tip['scenarios'])) ?>" data-group="performance">
+                                <div>
+                                    <strong><?= $h($tip['title']) ?></strong>
+                                    <span><?= $h($tip['tip']) ?></span>
+                                </div>
+                                <a href="<?= $h($tip['href']) ?>"><?= $h(__('去处理')) ?></a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+            <div class="ssa-float__group" data-ssa-group="setup">
+                <p class="ssa-float__group-title"><?= $h(__('建站任务')) ?></p>
+                <ul class="ssa-float-a">
+                    <?php foreach ($setupTips as $tip): ?>
+                        <?php if ($tip['status'] === 'done') { continue; } ?>
+                        <li data-scenes="<?= $h(implode(',', $tip['scenarios'])) ?>" data-group="setup">
+                            <div>
+                                <strong><?= $h($tip['title']) ?></strong>
+                                <span><?= $h($tip['tip']) ?></span>
+                            </div>
+                            <a href="<?= $h($tip['href']) ?>"><?= $h(__('去配置')) ?></a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
         <?php elseif ($variant === 'C'): ?>
-            <div class="ssa-float-c">
-                <?php
-                $columns = [
-                    'todo' => (string)__('待办'),
-                    'doing' => (string)__('进行中'),
-                    'done' => (string)__('已完成'),
-                ];
-                foreach ($columns as $key => $label):
-                    $colTips = array_values(array_filter($tips, static fn(array $t): bool => $t['status'] === $key));
-                    ?>
-                    <div class="ssa-float-c__col" data-status="<?= $h($key) ?>">
-                        <div class="ssa-float-c__col-head"><strong><?= $h($label) ?></strong><em><?= $h((string)count($colTips)) ?></em></div>
-                        <?php foreach ($colTips as $tip): ?>
-                            <div class="ssa-float-c__card" data-scenes="<?= $h(implode(',', $tip['scenarios'])) ?>">
+            <?php if ($perfTipsOpen !== []): ?>
+                <div class="ssa-float__group" data-ssa-group="performance">
+                    <p class="ssa-float__group-title"><?= $h(__('性能优化')) ?></p>
+                    <div class="ssa-float-c">
+                        <?php foreach ($perfTipsOpen as $tip): ?>
+                            <div class="ssa-float-c__card" data-scenes="<?= $h(implode(',', $tip['scenarios'])) ?>" data-group="performance">
                                 <strong><?= $h($tip['title']) ?></strong>
                                 <a href="<?= $h($tip['href']) ?>"><?= $h(__('打开')) ?></a>
                             </div>
                         <?php endforeach; ?>
                     </div>
-                <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            <div class="ssa-float__group" data-ssa-group="setup">
+                <p class="ssa-float__group-title"><?= $h(__('建站任务')) ?></p>
+                <div class="ssa-float-c">
+                    <?php
+                    $columns = [
+                        'todo' => (string)__('待办'),
+                        'doing' => (string)__('进行中'),
+                        'done' => (string)__('已完成'),
+                    ];
+                    foreach ($columns as $key => $label):
+                        $colTips = array_values(array_filter($setupTips, static fn(array $t): bool => $t['status'] === $key));
+                        ?>
+                        <div class="ssa-float-c__col" data-status="<?= $h($key) ?>">
+                            <div class="ssa-float-c__col-head"><strong><?= $h($label) ?></strong><em><?= $h((string)count($colTips)) ?></em></div>
+                            <?php foreach ($colTips as $tip): ?>
+                                <div class="ssa-float-c__card" data-scenes="<?= $h(implode(',', $tip['scenarios'])) ?>" data-group="setup">
+                                    <strong><?= $h($tip['title']) ?></strong>
+                                    <a href="<?= $h($tip['href']) ?>"><?= $h(__('打开')) ?></a>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
         <?php else: ?>
-            <div class="ssa-float-b">
-                <?php foreach ($tips as $tip): ?>
-                    <div class="ssa-float-b__task"
-                         data-status="<?= $h($tip['status']) ?>"
-                         data-scenes="<?= $h(implode(',', $tip['scenarios'])) ?>">
-                        <label>
-                            <input type="checkbox" <?= $tip['status'] === 'done' ? 'checked' : '' ?> disabled>
-                            <span><?= $h($statusLabel($tip['status'])) ?></span>
-                        </label>
-                        <div>
-                            <p class="ssa-float-b__name"><?= $h($tip['title']) ?></p>
-                            <p class="ssa-float-b__tip"><?= $h($tip['tip']) ?></p>
-                            <small><?= $h($tip['module']) ?> · <?= $h($tip['category']) ?></small>
-                        </div>
-                        <a class="w-button" data-variant="outline" data-size="sm" href="<?= $h($tip['href']) ?>"><?= $h(__('深度链接')) ?></a>
+            <?php if ($perfTipsOpen !== []): ?>
+                <div class="ssa-float__group" data-ssa-group="performance" data-testid="ssa-float-perf-group">
+                    <p class="ssa-float__group-title"><?= $h(__('性能优化')) ?>
+                        <em><?= $h((string)$perfRemaining) ?></em>
+                    </p>
+                    <div class="ssa-float-b">
+                        <?php foreach ($perfTipsOpen as $tip): ?>
+                            <?php $renderTaskB($tip); ?>
+                        <?php endforeach; ?>
                     </div>
-                <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            <div class="ssa-float__group" data-ssa-group="setup" data-testid="ssa-float-setup-group">
+                <p class="ssa-float__group-title"><?= $h(__('建站任务')) ?></p>
+                <div class="ssa-float-b">
+                    <?php foreach ($setupTips as $tip): ?>
+                        <?php $renderTaskB($tip); ?>
+                    <?php endforeach; ?>
+                </div>
             </div>
         <?php endif; ?>
 

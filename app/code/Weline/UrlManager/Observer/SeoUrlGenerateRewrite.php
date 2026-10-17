@@ -9,7 +9,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\UrlManager\Model\UrlRewrite;
 
 class SeoUrlGenerateRewrite implements ObserverInterface
@@ -29,18 +29,46 @@ class SeoUrlGenerateRewrite implements ObserverInterface
         // 保留 ProcessCacheResetter 兼容入口；跨请求缓存由框架缓存池管理。
     }
 
-    /** rewrite 行变更：当前请求结果 + 共享池一并清掉。 */
-    public static function invalidateCaches(): void
+    /**
+     * rewrite 行变更失效。
+     *
+     * - 无参：全量清（ProcessCacheResetter / 紧急）
+     * - website+rewrite：键级删池与 RouterRewrite L1；decode 进程 L1 因键为哈希仍整袋清（小）
+     * - 仅 website：清该站 RouterRewrite L1 前缀 + 整池不再无差别 clear
+     */
+    public static function invalidateCaches(?int $websiteId = null, ?string $rewrite = null): void
     {
         foreach (array_keys(RequestContext::all()) as $key) {
             if (str_starts_with($key, self::REQUEST_CACHE_PREFIX)) {
                 RequestContext::remove($key);
             }
         }
+
+        $rewrite = $rewrite !== null ? trim($rewrite) : null;
+        $keyed = $websiteId !== null && $websiteId >= 0 && $rewrite !== null && $rewrite !== '';
+
         try {
-            w_cache('url_rewrite')->clear();
+            $pool = w_cache('url_rewrite');
+            if ($keyed) {
+                foreach (RouterRewrite::cacheKeysForRewrite($websiteId, $rewrite) as $cacheKey) {
+                    $pool->delete($cacheKey);
+                }
+                RouterRewrite::forgetProcessCacheKeys(RouterRewrite::cacheKeysForRewrite($websiteId, $rewrite));
+                RouterRewrite::forgetProcessCacheForWebsite($websiteId);
+            } elseif ($websiteId !== null && $websiteId >= 0) {
+                RouterRewrite::forgetProcessCacheForWebsite($websiteId);
+                // No reliable pool prefix delete across adapters — fall back to full pool.
+                $pool->clear();
+            } else {
+                $pool->clear();
+                RouterRewrite::clearProcessCache();
+            }
         } catch (\Throwable) {
+            RouterRewrite::clearProcessCache();
         }
+
+        // Opaque hashed process-decode keys cannot be rewritten by slug; L1 only.
+        Url::clearProcessDecodeCache();
     }
 
     /**
@@ -512,17 +540,17 @@ class SeoUrlGenerateRewrite implements ObserverInterface
 
     private function traceSection(string $name, callable $callback): mixed
     {
-        if (!RequestLifecycleTrace::isEnabled()) {
+        if (!TraceGate::isArmed()) {
             return $callback();
         }
 
         $start = \microtime(true);
-        RequestLifecycleTrace::pushCurrentParent($name);
+        TraceGate::pushCurrentParent($name);
         try {
             return $callback();
         } finally {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan($name, (\microtime(true) - $start) * 1000, 'observer');
+            TraceGate::popCurrentParent();
+            TraceGate::recordSpan($name, (\microtime(true) - $start) * 1000, 'observer');
         }
     }
 }

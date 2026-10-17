@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_SiteSetupAssistant',
-    'version' => '0.3.8',
+    'version' => '0.3.9',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Dashboard' => '*',

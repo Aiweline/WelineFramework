@@ -54,20 +54,12 @@ if ($keywordsRaw !== '') {
 $keywordsLabelEsc = $escape((string)__('关键词'));
 ?>
 <article class="amazon-blog-article" data-testid="blog-post-detail">
-    <nav class="amazon-blog-article__breadcrumb" aria-label="<?= $escape((string)__('面包屑')) ?>">
-        <a href="@url{'blog'}"><lang>博客</lang></a>
-        <?php if ($categoryLabel !== ''): ?>
-            <span aria-hidden="true">›</span>
-            <?php if ($categoryHref !== ''): ?>
-                <a href="<?= $escape($categoryHref) ?>"><?= $escape($categoryLabel) ?></a>
-            <?php else: ?>
-                <span><?= $escape($categoryLabel) ?></span>
-            <?php endif; ?>
-        <?php endif; ?>
-        <span aria-hidden="true">›</span>
-        <span aria-current="page"><?= $escape($title !== '' ? $title : (string)__('文章')) ?></span>
-    </nav>
-
+    <?php
+    /*
+     * 面包屑只挂 layout（blog/default · Theme breadcrumb block + showBreadcrumb）。
+     * 禁止在正文再画一条 amazon-blog-article__breadcrumb，否则双轨并存。
+     */
+    ?>
     <div class="amazon-blog-article__header">
         <div class="amazon-blog-article__title-row">
             <?php /* Use div (not <header>): SEO inspector excludes headings inside <header>, which zeroed H1. */ ?>

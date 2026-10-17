@@ -5,7 +5,7 @@
     <menu source="Weline_Api::integration"
          name="api_integration"
          title="API集成"
-         action="api/backend/integration/index"
+         action="api/backend/integration"
          parent="Weline_Backend::system_service_group"
          icon="code"
          order="30550">

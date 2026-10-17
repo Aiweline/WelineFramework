@@ -21,7 +21,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\View\Template;
 
@@ -76,7 +76,7 @@ class DevToolPanelObserver implements ObserverInterface
             return;
         }
 
-        if (RequestLifecycleTrace::shouldSkipForCurrentRequest()) {
+        if (TraceGate::shouldSkipForCurrentRequest()) {
             return;
         }
 
@@ -86,7 +86,7 @@ class DevToolPanelObserver implements ObserverInterface
                 return;
             }
 
-            $requestId = RequestLifecycleTrace::ensureRequestId();
+            $requestId = TraceGate::ensureRequestId();
             $this->setRequestIdHeader($requestId);
 
             if (!$this->isHtmlResponse($result)) {
@@ -101,9 +101,9 @@ class DevToolPanelObserver implements ObserverInterface
             $panelAlreadyInjected = stripos($result, 'id="dev-tool-panel"') !== false
                 || stripos($result, 'data-weline-panel-bootstrap') !== false;
             if (!$panelAlreadyInjected) {
-                $panelTraceStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+                $panelTraceStart = TraceGate::isArmed() ? microtime(true) : 0.0;
                 if ($panelTraceStart > 0) {
-                    RequestLifecycleTrace::pushCurrentParent('dev_tool_panel');
+                    TraceGate::pushCurrentParent('dev_tool_panel');
                 }
 
                 try {
@@ -133,8 +133,8 @@ class DevToolPanelObserver implements ObserverInterface
                     }
                 } finally {
                     if ($panelTraceStart > 0) {
-                        RequestLifecycleTrace::popCurrentParent();
-                        RequestLifecycleTrace::recordSpan(
+                        TraceGate::popCurrentParent();
+                        TraceGate::recordSpan(
                             'dev_tool_panel',
                             (microtime(true) - $panelTraceStart) * 1000,
                             'developer'
@@ -216,7 +216,7 @@ class DevToolPanelObserver implements ObserverInterface
         }
 
         try {
-            $payload = RequestLifecycleTrace::exportCompactPayload();
+            $payload = TraceGate::exportCompactPayload();
             if ((int)($payload['summary']['span_count'] ?? 0) <= 0) {
                 return;
             }
@@ -442,7 +442,7 @@ class DevToolPanelObserver implements ObserverInterface
         $sessionUrl = \htmlspecialchars('/' . $this->resolveApiBase() . '/panel/session', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $loaderSrc = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20260926-tpl-perf-armed');
         // HttpOnly cookie 武装徽标时前端读不到 cookie；把服务端真实状态注入 bootstrap，避免开关显示「开启」却仍渲染 timing。
-        $tplPerfArmed = RequestLifecycleTrace::isTemplatePerfOverlayRequested() ? '1' : '0';
+        $tplPerfArmed = TraceGate::isTemplatePerfOverlayRequested() ? '1' : '0';
 
         return <<<HTML
 <script data-weline-panel-bootstrap="1" data-api-base="{$apiBase}" data-request-id="{$requestId}" data-token-required="{$tokenRequired}" data-session-url="{$sessionUrl}" data-tpl-perf-armed="{$tplPerfArmed}" data-src="{$loaderSrc}">(function(d,w){if(w.__WELINE_PANEL_BOOT__)return;w.__WELINE_PANEL_BOOT__=1;var s=d.currentScript;function l(){if(d.getElementById('weline-panel-loader-js'))return;var x=d.createElement('script');x.id='weline-panel-loader-js';x.src=s.getAttribute('data-src');x.async=false;x.setAttribute('data-api-base',s.getAttribute('data-api-base')||'');x.setAttribute('data-request-id',s.getAttribute('data-request-id')||'');x.setAttribute('data-token-required',s.getAttribute('data-token-required')||'0');x.setAttribute('data-session-url',s.getAttribute('data-session-url')||'');x.setAttribute('data-tpl-perf-armed',s.getAttribute('data-tpl-perf-armed')||'0');(d.body||d.documentElement).appendChild(x)}if(d.body||d.documentElement){l()}else{d.addEventListener('DOMContentLoaded',l,{once:true})}})(document,window);
@@ -456,7 +456,7 @@ HTML;
      */
     private function resolveCurrentTraceSpans(array $payload): array
     {
-        $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
+        $traceSpans = TraceGate::getSpansWithDbSummary();
         if (!empty($traceSpans)) {
             return $this->normalizeTraceSpansForPayload(
                 $this->filterTraceSpansForPayload($traceSpans)
@@ -475,13 +475,13 @@ HTML;
 
     private function measureTraceStage(string $spanName, callable $callback): mixed
     {
-        $spanStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+        $spanStart = TraceGate::isArmed() ? microtime(true) : 0.0;
 
         try {
             return $callback();
         } finally {
             if ($spanStart > 0) {
-                RequestLifecycleTrace::recordSpan(
+                TraceGate::recordSpan(
                     $spanName,
                     (microtime(true) - $spanStart) * 1000,
                     'developer'

@@ -1450,7 +1450,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'title' => (string) __('收货地址'),
                 'saved_heading' => (string) __('选择收货地址'),
             ]);
-            $inner = trim((string)$template->fetch(
+            $inner = trim((string)$template->fetchHtml(
                 'Weline_Shipping::templates/frontend/widgets/checkout-shipping-address.phtml'
             ));
         } catch (\Throwable $e) {

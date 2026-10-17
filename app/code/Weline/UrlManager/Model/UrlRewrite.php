@@ -64,23 +64,92 @@ class UrlRewrite extends Model
     public function save_after()
     {
         parent::save_after();
-        self::invalidateSeoRewriteCaches();
+        self::invalidateSeoRewriteCaches(
+            (int)$this->getData(self::schema_fields_WEBSITE_ID),
+            (string)$this->getData(self::schema_fields_REWRITE)
+        );
     }
 
     public function delete_after(): void
     {
+        $websiteId = (int)$this->getData(self::schema_fields_WEBSITE_ID);
+        $rewrite = (string)$this->getData(self::schema_fields_REWRITE);
         parent::delete_after();
-        self::invalidateSeoRewriteCaches();
+        self::invalidateSeoRewriteCaches($websiteId, $rewrite);
     }
 
-    public static function invalidateSeoRewriteCaches(): void
+    public static function invalidateSeoRewriteCaches(?int $websiteId = null, ?string $rewrite = null): void
     {
-        \Weline\UrlManager\Observer\SeoUrlGenerateRewrite::invalidateCaches();
+        \Weline\UrlManager\Observer\SeoUrlGenerateRewrite::invalidateCaches($websiteId, $rewrite);
     }
 
     public static function pathFingerprint(string $path): string
     {
         return \hash('sha256', $path);
+    }
+
+    /**
+     * Resolve the newest rewrite row for an ordered candidate list (decode path).
+     *
+     * Candidates are tried in call order (normalized pretty path first, then
+     * leading-slash variants). Within each candidate the highest rewrite_id wins.
+     * Uses idx_website_rewrite_latest via website_id + rewrite IN (...).
+     *
+     * @param list<string> $rewrites
+     * @return array<string, mixed>|null
+     */
+    public function findLatestByWebsiteAndRewrites(int $websiteId, array $rewrites): ?array
+    {
+        $ordered = [];
+        foreach ($rewrites as $rewrite) {
+            if (!\is_string($rewrite) || $rewrite === '') {
+                continue;
+            }
+            if (!\in_array($rewrite, $ordered, true)) {
+                $ordered[] = $rewrite;
+            }
+        }
+        if ($ordered === []) {
+            return null;
+        }
+
+        // Soft cap: newest-first; PHP still picks by candidate priority.
+        // Avoid unbounded history scans when many rewrite_id versions share a slug.
+        $limit = \max(8, \count($ordered) * 4);
+        $rows = $this->newQuery()
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_REWRITE, $ordered, 'IN')
+            ->order(self::schema_fields_ID, 'DESC')
+            ->limit($limit)
+            ->select()
+            ->fetchArray();
+
+        if (!\is_array($rows)) {
+            return null;
+        }
+        if (\array_key_exists(self::schema_fields_ID, $rows)) {
+            $rows = [$rows];
+        }
+
+        $newestByRewrite = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $key = $row[self::schema_fields_REWRITE] ?? null;
+            if (!\is_string($key) || $key === '' || \array_key_exists($key, $newestByRewrite)) {
+                continue;
+            }
+            $newestByRewrite[$key] = $row;
+        }
+
+        foreach ($ordered as $candidate) {
+            if (\array_key_exists($candidate, $newestByRewrite)) {
+                return $newestByRewrite[$candidate];
+            }
+        }
+
+        return null;
     }
 
     /**

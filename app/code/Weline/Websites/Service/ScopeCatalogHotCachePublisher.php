@@ -8,9 +8,11 @@ use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Cache\StorefrontCacheKeyContextResolver;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\StorefrontRenderContext;
 use Weline\Websites\Api\Catalog\Data\SalesChannelSummary;
 use Weline\Websites\Api\Catalog\Data\StoreSummary;
 use Weline\Websites\Api\Catalog\SalesChannelCatalogInterface;
+use Weline\Websites\Api\Localization\ResolvedLanguageCatalogInterface;
 
 /**
  * After Scope identity is installed, freeze the storefront cache key context and
@@ -52,6 +54,9 @@ final class ScopeCatalogHotCachePublisher
             if (!$context->cacheable || !$context->hasCompleteFrozenScope()) {
                 return 0;
             }
+            // Project locale catalog before App StorefrontRenderContextInstaller
+            // so installOnce skips a cold getResolvedLanguageCodes round-trip.
+            $this->projectLocaleCatalogBag($store, $channel);
         } catch (\Throwable) {
             return 0;
         }
@@ -140,5 +145,28 @@ final class ScopeCatalogHotCachePublisher
         }
 
         return $this->cacheKeyContextResolver;
+    }
+
+    private function projectLocaleCatalogBag(StoreSummary $store, SalesChannelSummary $channel): void
+    {
+        try {
+            /** @var ResolvedLanguageCatalogInterface $catalog */
+            $catalog = ObjectManager::getInstance(ResolvedLanguageCatalogInterface::class);
+            $codes = $catalog->getResolvedLanguageCodes(
+                $store->websiteId,
+                $store->id,
+                $channel->id,
+            );
+            if (!\is_array($codes)) {
+                return;
+            }
+            $normalized = \array_values(\array_map('strval', $codes));
+            StorefrontRenderContext::projectLocaleCatalog([
+                'active' => $normalized,
+                'installed' => $normalized,
+            ]);
+        } catch (\Throwable) {
+            // Fail-open: Installer falls back to Query / LocalizationProviderRegistry.
+        }
     }
 }

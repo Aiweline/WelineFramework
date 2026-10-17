@@ -150,7 +150,7 @@ class Mapping extends BackendRestController
             $template = ObjectManager::getInstance(Template::class)->init();
             $template->assign('host', $host);
             $template->assign('mapping', $mapping);
-            $html = $template->fetch('Weline_Async::templates/backend/mapping/form_offcanvas.phtml');
+            $html = $template->fetchHtml('Weline_Async::templates/backend/mapping/form_offcanvas.phtml');
             
             return $this->success('获取成功', ['html' => $html]);
             

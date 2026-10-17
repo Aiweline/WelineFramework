@@ -7,6 +7,7 @@ namespace Weline\SiteSetupAssistant\Controller\Backend;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
 use Weline\SiteSetupAssistant\Service\SetupTaskCollector;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Service\WebsiteSelectOptions;
@@ -74,10 +75,21 @@ class Progress extends BackendController
             $siteCapsules = $this->collector->summarizeIncompleteSites();
         }
 
-        $total = count($tasks);
-        $done = count(array_filter($tasks, static fn(array $t): bool => ($t['status'] ?? '') === 'done'));
-        $todo = count(array_filter($tasks, static fn(array $t): bool => ($t['status'] ?? '') === 'todo'));
-        $doing = count(array_filter($tasks, static fn(array $t): bool => ($t['status'] ?? '') === 'doing'));
+        $setupTasks = array_values(array_filter(
+            $tasks,
+            static fn(array $t): bool => (string)($t['group'] ?? SetupTaskProviderInterface::GROUP_SETUP)
+                !== SetupTaskProviderInterface::GROUP_PERFORMANCE
+        ));
+        $perfTasksOpen = array_values(array_filter(
+            $tasks,
+            static fn(array $t): bool => (string)($t['group'] ?? '') === SetupTaskProviderInterface::GROUP_PERFORMANCE
+                && ($t['status'] ?? '') !== 'done'
+        ));
+
+        $total = count($setupTasks);
+        $done = count(array_filter($setupTasks, static fn(array $t): bool => ($t['status'] ?? '') === 'done'));
+        $todo = count(array_filter($setupTasks, static fn(array $t): bool => ($t['status'] ?? '') === 'todo'));
+        $doing = count(array_filter($setupTasks, static fn(array $t): bool => ($t['status'] ?? '') === 'doing'));
         $remaining = $todo + $doing;
         $pct = $total > 0 ? (int)round(($done / $total) * 100) : 0;
 
@@ -89,7 +101,8 @@ class Progress extends BackendController
         $this->assign('websiteId', $websiteSelectValue);
         $this->assign('websiteDisplay', $websiteDisplay !== '' ? $websiteDisplay : (string)__('全站'));
         $this->assign('websiteSelectOptionsJson', json_encode($websiteOptions, JSON_UNESCAPED_UNICODE));
-        $this->assign('tasks', $tasks);
+        $this->assign('tasks', $setupTasks);
+        $this->assign('perf_tasks', $perfTasksOpen);
         $this->assign('site_capsules', $siteCapsules);
         $this->assign('stats', [
             'total' => $total,
@@ -98,6 +111,7 @@ class Progress extends BackendController
             'doing' => $doing,
             'remaining' => $remaining,
             'pct' => $pct,
+            'perf_remaining' => count($perfTasksOpen),
         ]);
 
         return $this->fetch('index');

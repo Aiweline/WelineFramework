@@ -24,13 +24,13 @@
     </menu>
     
     <!-- 调试工具 - 归入开发者 > 调试工具 -->
-    <menu source="Weline_DeveloperWorkspace::sandbox_config" name="sandbox_config" title="沙盒配置" action="dev/backend/sandbox-config"
+    <menu source="Weline_DeveloperWorkspace::sandbox_config" name="sandbox_config" title="沙盒配置" action="dev/tool/backend/sandbox-config"
          parent="Weline_Backend::debug_tools" icon="beaker" order="10"/>
     
-    <menu source="Weline_DeveloperWorkspace::debug_config" name="debug_config" title="Debug配置" action="dev/backend/debug-config"
+    <menu source="Weline_DeveloperWorkspace::debug_config" name="debug_config" title="Debug配置" action="dev/tool/backend/debug-config"
          parent="Weline_Backend::debug_tools" icon="circle" order="20"/>
     
-    <menu source="Weline_DeveloperWorkspace::panel_config" name="panel_config" title="面板配置" action="dev/backend/panel-config"
+    <menu source="Weline_DeveloperWorkspace::panel_config" name="panel_config" title="面板配置" action="dev/tool/backend/panel-config"
          parent="Weline_Backend::debug_tools" icon="grid" order="30"/>
 
     <menu source="Weline_DeveloperWorkspace::dev-sandbox-manager" name="async_event_probe" title="异步资源变更验收台"

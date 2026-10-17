@@ -163,6 +163,32 @@
     height: 100%;
     background: var(--ssa-primary);
 }
+#ssa-float-root .ssa-float__group {
+    margin-bottom: var(--weline-space-3);
+}
+#ssa-float-root .ssa-float__group-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-2);
+    margin: 0 0 var(--spacing-0_45);
+    font-size: var(--spacing-3_5);
+    font-weight: 700;
+    color: var(--ssa-text);
+}
+#ssa-float-root .ssa-float__group-title em {
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+    color: var(--ssa-primary);
+    background: color-mix(in srgb, var(--ssa-primary) 12%, transparent);
+    border-radius: var(--token-size-999px);
+    padding: 0 var(--spacing-0_45);
+    font-size: var(--weline-space-3);
+}
+#ssa-float-root .ssa-float__group[data-ssa-group="performance"] .ssa-float-b__task {
+    border-color: color-mix(in srgb, var(--ssa-primary) 35%, var(--ssa-border));
+    background: color-mix(in srgb, var(--ssa-primary) 6%, var(--ssa-surface));
+}
 #ssa-float-root .ssa-float__scenes {
     display: flex;
     gap: var(--spacing-0_4);

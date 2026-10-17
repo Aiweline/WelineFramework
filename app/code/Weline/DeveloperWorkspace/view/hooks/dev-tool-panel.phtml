@@ -1786,6 +1786,14 @@ $apiDocsUrl = '/dev/tool/docs/api';
         white-space: nowrap;
     }
 
+    #dev-tool-panel .dev-tool-performance-total-caption {
+        color: var(--dev-panel-muted, #6b7280);
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
     #dev-tool-panel .dev-tool-performance-status {
         display: inline-flex;
         align-items: center;
@@ -5142,10 +5150,15 @@ const DevToolPanel = (function() {
             dns: navigation.domainLookupEnd - navigation.domainLookupStart,
             // TCP连接耗时
             tcp: navigation.connectEnd - navigation.connectStart,
-            // 请求耗时
+            // 请求耗时（发出请求 → 收到首包 / TTFB）
             request: navigation.responseStart - navigation.requestStart,
-            // 响应耗时
+            // 响应耗时（首包 → 文档体收完）
             response: navigation.responseEnd - navigation.responseStart,
+            /*
+             * 文档返回：从发起文档抓取到 HTML 文档收完（真实 doc 可达）。
+             * = fetchStart → responseEnd，含 DNS/TCP/TLS/排队/首包/body，不含 DOM/资源/load。
+             */
+            docReturn: navigation.responseEnd - navigation.fetchStart,
             // DOM解析耗时
             domParsing: navigation.domInteractive - navigation.responseEnd,
             // DOMContentLoaded耗时
@@ -6515,7 +6528,9 @@ const DevToolPanel = (function() {
                 return null;
             })();
 
+            const docReturn = safeMs(timing.docReturn);
             const stageItems = [
+                { label: '文档返回', value: docReturn, desc: '访问到 HTML 文档收完', fast: 200, slow: 800 },
                 { label: 'DNS 查询', value: safeMs(timing.dns), desc: '域名解析', fast: 40, slow: 120 },
                 { label: 'TCP 连接', value: safeMs(timing.tcp), desc: '连接建立', fast: 80, slow: 250 },
                 { label: '请求发送', value: safeMs(timing.request), desc: '请求到首包', fast: 120, slow: 500 },
@@ -6535,6 +6550,7 @@ const DevToolPanel = (function() {
             const pageTotal = Math.max(safeMs(timing.loadComplete), safeMs(timing.domContentLoaded), safeMs(timing.firstContentfulPaint), safeMs(timing.firstPaint));
             const networkTotal = safeMs(timing.dns) + safeMs(timing.tcp) + safeMs(timing.request) + safeMs(timing.response);
             const fcpValue = timing.firstContentfulPaint > 0 ? safeMs(timing.firstContentfulPaint) : (timing.firstPaint > 0 ? safeMs(timing.firstPaint) : null);
+            const docClass = getTimeClass(docReturn, 200, 800);
             const pageClass = getTimeClass(pageTotal, 1500, 3000);
             const maxStage = Math.max.apply(null, stageItems.map(function(item) { return item.value; }).concat([1]));
 
@@ -6542,16 +6558,18 @@ const DevToolPanel = (function() {
             html += '<div>';
             html += '<div class="dev-tool-performance-kicker"><w:icon name="home" size="sm"></w:icon> 实时性能</div>';
             html += '<div class="dev-tool-performance-title">页面加载性能</div>';
-            html += '<div class="dev-tool-performance-subtitle">按浏览器 Performance Timing 拆分网络、DOM 和渲染阶段，阶段条越长越值得优先查看。</div>';
+            html += '<div class="dev-tool-performance-subtitle">首位为文档返回（访问→HTML 收完）；完全加载含 DOM/资源/load。阶段条越长越值得优先查看。</div>';
             html += buildTplPerfSwitchHtml();
             html += '</div>';
             html += '<div class="dev-tool-performance-total">';
-            html += '<div class="dev-tool-performance-total-value">' + escapeHtml(formatTime(pageTotal)) + '</div>';
-            html += '<span class="dev-tool-performance-status ' + pageClass + '">' + statusText(pageClass) + '</span>';
+            html += '<div class="dev-tool-performance-total-value">' + escapeHtml(formatTime(docReturn)) + '</div>';
+            html += '<div class="dev-tool-performance-total-caption">文档返回</div>';
+            html += '<span class="dev-tool-performance-status ' + docClass + '">' + statusText(docClass) + '</span>';
             html += '</div>';
             html += '</div>';
 
             html += '<div class="dev-tool-performance-summary">';
+            html += metricCard('文档返回', formatTime(docReturn), docClass);
             html += metricCard('页面完全加载', formatTime(pageTotal), pageClass);
             html += metricCard('网络链路', formatTime(networkTotal), getTimeClass(networkTotal, 200, 700));
             html += metricCard('DOM Ready', formatTime(safeMs(timing.domContentLoaded)), getTimeClass(safeMs(timing.domContentLoaded), 1000, 2500));

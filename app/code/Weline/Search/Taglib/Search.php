@@ -101,7 +101,12 @@ final class Search implements TaglibInterface
             $typeMenuId = ($panelId !== '' ? $panelId : 'header-search-panel') . '-type-menu';
             $typeDropdown = '';
             if ($showType) {
-                $typeDropdown = ObjectManager::getInstance(Template::class)->fetch(
+                // Must use fetchHtml (always nested-capture-safe). Plain fetch() streams
+                // into the active FiberOutputBuffer frame and returns '' — when <w:search>
+                // runs inside backend top-bar (already capturing), the type dropdown leaks
+                // as a sibling before .w-search-root and backend CSS
+                // `.w-backend-topbar-search .search-type-trigger` never matches (UA button).
+                $typeDropdown = ObjectManager::getInstance(Template::class)->fetchHtml(
                     'Weline_Theme::theme/frontend/partials/search/type-dropdown.phtml',
                     [
                         'search_types' => $types,

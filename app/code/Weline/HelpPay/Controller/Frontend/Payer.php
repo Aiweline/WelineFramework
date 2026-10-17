@@ -164,7 +164,7 @@ final class Payer extends FrontendController
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
 
-            return trim((string) $template->fetch(
+            return trim((string) $template->fetchHtml(
                 'Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml',
                 [
                     'mode' => 'helppay',
@@ -195,7 +195,7 @@ final class Payer extends FrontendController
         try {
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
-            $inner = trim((string) $template->fetch(
+            $inner = trim((string) $template->fetchHtml(
                 'Weline_Shipping::templates/frontend/widgets/checkout-shipping-address.phtml',
                 [
                     'title' => (string) __('付款账单地址'),

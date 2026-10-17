@@ -1,8 +1,24 @@
 <?php
 /**
+ * SEO footer slot — developer inspector bootstrap only.
+ * Guest/public traffic: no-op (do not enter <w:seo> / SlotProvider).
+ *
  * @hook-priority 100
  * @hook-sort-order 0
  * @hook-solo false
  */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\DeveloperAccessPolicy;
+
+$inject = false;
+try {
+    $inject = ObjectManager::getInstance(DeveloperAccessPolicy::class)->shouldInjectBootstrap();
+} catch (\Throwable) {
+    $inject = false;
+}
+if (!$inject) {
+    return;
+}
 ?>
 <w:seo slot="footer"/>

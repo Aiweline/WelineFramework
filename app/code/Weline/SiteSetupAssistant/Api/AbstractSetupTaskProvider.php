@@ -23,6 +23,7 @@ abstract class AbstractSetupTaskProvider implements SetupTaskProviderInterface
      *   status?: 'todo'|'doing'|'done',
      *   href?: string,
      *   category?: string,
+     *   group?: 'setup'|'performance',
      *   module?: string,
      *   scenarios?: list<'new'|'migrate'>,
      *   parent_code?: string,
@@ -36,6 +37,7 @@ abstract class AbstractSetupTaskProvider implements SetupTaskProviderInterface
      *   status: 'todo'|'doing'|'done',
      *   href: string,
      *   category: string,
+     *   group: 'setup'|'performance',
      *   module: string,
      *   scenarios: list<'new'|'migrate'>,
      *   parent_code: string,
@@ -53,6 +55,10 @@ abstract class AbstractSetupTaskProvider implements SetupTaskProviderInterface
         $status = (string)($task['status'] ?? 'todo');
         if (!in_array($status, ['todo', 'doing', 'done'], true)) {
             $status = 'todo';
+        }
+        $group = (string)($task['group'] ?? self::GROUP_SETUP);
+        if (!in_array($group, [self::GROUP_SETUP, self::GROUP_PERFORMANCE], true)) {
+            $group = self::GROUP_SETUP;
         }
         $scenarios = $task['scenarios'] ?? ['new', 'migrate'];
         if (!is_array($scenarios) || $scenarios === []) {
@@ -73,6 +79,7 @@ abstract class AbstractSetupTaskProvider implements SetupTaskProviderInterface
             'status' => $status,
             'href' => (string)($task['href'] ?? ''),
             'category' => (string)($task['category'] ?? ''),
+            'group' => $group,
             'module' => (string)($task['module'] ?? ''),
             'scenarios' => $scenarios,
             'parent_code' => trim((string)($task['parent_code'] ?? '')),

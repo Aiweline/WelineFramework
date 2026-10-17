@@ -13,13 +13,12 @@ class Index extends FrontendController
     public function index(): string
     {
         if ($this->shouldUseThemeHomepageLayout()) {
+            // Theme layouts/homepage owns the slot tree; no controller content template.
             $this->layoutType = 'homepage';
             $this->request->setGet('page_type', 'homepage');
             $title = (string)__('首页');
             $this->request->setGet('theme_page_title', $title);
             $this->assign('page_title', $title);
-
-            return (string)$this->fetch('Weline_Index::templates/homepage-shell.phtml');
         }
 
         return (string)$this->fetch('Weline_Index::templates/Index.phtml');

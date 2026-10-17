@@ -239,24 +239,20 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
             return [];
         }
 
-        $out = [];
         try {
             /** @var \Weline\Product\Repository\ProductRepository $products */
             $products = ObjectManager::getInstance(\Weline\Product\Repository\ProductRepository::class);
-            foreach ($normalized as $uuid) {
-                // Never fall back to website 0 — that re-links grocery/other scopes
-                // to default-site (汉服) PDP ids when Review rows somehow cross-bind.
-                $product = $products->findByGlobalUuid($websiteId, $uuid);
-                if ($product === null) {
-                    continue;
-                }
-                $out[$uuid] = max(0, (int)$product->getId());
+            // Never fall back to website 0 — that re-links grocery/other scopes
+            // to default-site (汉服) PDP ids when Review rows somehow cross-bind.
+            // Batch only: do not resurrect per-uuid findByGlobalUuid N+1 on cold miss.
+            if (!\method_exists($products, 'mapIdsByGlobalUuids')) {
+                return [];
             }
+
+            return $products->mapIdsByGlobalUuids($websiteId, \array_values($normalized));
         } catch (\Throwable) {
             return [];
         }
-
-        return $out;
     }
 
     private function hotCache(): StorefrontScopeHotCache

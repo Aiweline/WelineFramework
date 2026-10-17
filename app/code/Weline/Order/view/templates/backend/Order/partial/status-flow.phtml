@@ -4,6 +4,7 @@
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Order\Helper\OutcomeChipMarkup;
 use Weline\Order\Service\BackendOrderOutcomeChip;
 
 $flow = is_array($this->getData('status_flow') ?? null) ? $this->getData('status_flow') : [];
@@ -60,10 +61,10 @@ $escape = static fn (mixed $value): string => htmlspecialchars((string)$value, E
             <?php if ($refunds === []): ?>
                 <div class="w-cluster" data-align="baseline" style="--w-gap:var(--weline-space-2);">
                     <span class="w-text" data-tone="muted" data-size="sm"><lang>退款</lang></span>
-                    <?= $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
-                        'chip' => BackendOrderOutcomeChip::present((string)($flow['current_code'] ?? 'refunded')),
-                        'testid' => 'order-status-flow-refund-chip',
-                    ]) ?>
+                    <?= OutcomeChipMarkup::render(
+                        BackendOrderOutcomeChip::present((string)($flow['current_code'] ?? 'refunded')),
+                        'order-status-flow-refund-chip'
+                    ) ?>
                 </div>
             <?php else: ?>
                 <?php foreach ($refunds as $refund):
@@ -80,10 +81,7 @@ $escape = static fn (mixed $value): string => htmlspecialchars((string)$value, E
                             (string)($refund['status'] ?? ''),
                             (string)($refund['channel_status'] ?? ''),
                         ) as $outcomeChip): ?>
-                            <?= $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
-                                'chip' => $outcomeChip,
-                                'testid' => 'order-status-flow-refund-chip',
-                            ]) ?>
+                            <?= OutcomeChipMarkup::render($outcomeChip, 'order-status-flow-refund-chip') ?>
                         <?php endforeach; ?>
                         <?php if (trim((string)($refund['provider_refund_id'] ?? '')) !== ''): ?>
                             <span class="w-text" data-tone="muted" data-size="sm"><lang>渠道退款号</lang></span>

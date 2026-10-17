@@ -21,6 +21,7 @@
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Model\Order;
+use Weline\Payment\Helper\OutcomeChipMarkup;
 use Weline\Payment\Service\BackendOrderPaymentRecordsService;
 use Weline\Payment\Service\BackendPaymentOutcomeChip;
 use Weline\Theme\Helper\WidgetUiScope;
@@ -106,10 +107,7 @@ $payments = $recordsService->listForOrderId($orderId);
                                 <td><?= $esc((string)($payment['currency'] ?? 'CNY')) ?> <?= number_format((float)($payment['amount'] ?? 0), 2) ?></td>
                                 <td><?= $esc((string)($payment['transaction_id'] ?? '')) ?></td>
                                 <td data-testid="payment-record-status">
-                                    <?= $this->fetch('Weline_Payment::templates/backend/partials/outcome-chip.phtml', [
-                                        'chip' => $statusChip,
-                                        'testid' => 'payment-record-status-chip',
-                                    ]) ?>
+                                    <?= OutcomeChipMarkup::render($statusChip, 'payment-record-status-chip') ?>
                                 </td>
                                 <td><?= $esc((string)($payment['paid_at'] ?? '')) ?></td>
                             </tr>

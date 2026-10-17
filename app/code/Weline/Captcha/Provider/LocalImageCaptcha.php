@@ -51,7 +51,7 @@ final class LocalImageCaptcha implements VerificationProviderInterface
         /** @var Template $template */
         $template = ObjectManager::getInstance(Template::class);
 
-        return (string)$template->fetch('Weline_Captcha::templates/frontend/local-image-challenge.phtml', [
+        return (string)$template->fetchHtml('Weline_Captcha::templates/frontend/local-image-challenge.phtml', [
             'token' => $token,
             'image_html' => $image,
             'input_id' => $inputId,

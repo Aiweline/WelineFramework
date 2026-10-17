@@ -2,6 +2,7 @@
 /** @var list<array<string,mixed>> $candidates */
 /** @var list<array<string,mixed>> $cases */
 /** @var string $returnUrl */
+use Weline\Order\Helper\OutcomeChipMarkup;
 use Weline\Order\Service\BackendOrderOutcomeChip;
 
 $candidates = is_array($candidates ?? null) ? $candidates : [];
@@ -83,21 +84,15 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                     (string)($row['status'] ?? ''),
                     (string)($row['channel_status'] ?? ''),
                 ) as $outcomeChip): ?>
-                  <?= $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
-                      'chip' => $outcomeChip,
-                      'testid' => 'order-edit-refund-status-chip',
-                  ]) ?>
+                  <?= OutcomeChipMarkup::render($outcomeChip, 'order-edit-refund-status-chip') ?>
                 <?php endforeach; ?>
               </div>
             </td>
             <td data-testid="order-edit-refund-customer-view">
-              <?php
-              $customerChip = BackendOrderOutcomeChip::present((string)($row['customer_view'] ?? ''));
-              echo $this->fetch('Weline_Order::templates/backend/Order/partial/outcome-chip.phtml', [
-                  'chip' => $customerChip,
-                  'testid' => 'order-edit-refund-customer-view-chip',
-              ]);
-              ?>
+              <?= OutcomeChipMarkup::render(
+                  BackendOrderOutcomeChip::present((string)($row['customer_view'] ?? '')),
+                  'order-edit-refund-customer-view-chip'
+              ) ?>
             </td>
           </tr>
         <?php endforeach; ?>

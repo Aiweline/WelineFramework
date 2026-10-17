@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace Weline\Taglib;
 
 use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
+use Weline\Framework\View\Taglib;
 
 /**
  * 标签库注册表管理
@@ -128,6 +129,7 @@ class TaglibRegistry
 
         $this->cachedRegistry = $registry;
         $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        Taglib::invalidateProcessCaches();
         return true;
     }
 

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Hook;
 
+use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Module\Service\ModuleScanService;
 use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\Registry\Service\RegistryProgress;
@@ -1033,6 +1034,7 @@ class HookRegistry
         $this->cachedRegistry = $registry;
         $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
         HookData::clearCache();
+        HookReader::invalidateProcessCaches();
         RegistryProgress::log('Hook save registry finished');
         return true;
     }

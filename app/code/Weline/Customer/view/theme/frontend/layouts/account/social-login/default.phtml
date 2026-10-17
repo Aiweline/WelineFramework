@@ -51,7 +51,6 @@ layoutType=account/social-login，option=default → layouts/account/social-logi
         || $layoutOption === 'login'
         || !empty($meta['__force_login_stage'])
         || str_contains($normalizedContentTemplate, '/account/login.phtml')
-        || str_contains($normalizedContentTemplate, '/account/login-shell.phtml')
         || str_contains($normalizedContentTemplate, '/customer/login.phtml');
     $isRegisterAuthPage = $layoutTypePath === 'account/register'
         || $layoutOption === 'register'
@@ -382,5 +381,6 @@ layoutType=account/social-login，option=default → layouts/account/social-logi
     <w:hook>seo::footer</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end-dynamic</w:hook>
 </body>
 </html>

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Promotion\Service;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Api\ProductAdminReadInterface;
 use Weline\Promotion\Model\PromotionActivityTheme;
@@ -550,7 +552,7 @@ final class PromotionThemeProductService
     {
         // Selection is a base-product read. Re-entering the priced storefront
         // catalog here recurses back through active-deal resolution.
-        $reader = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        $reader = \Weline\Framework\Runtime\TraceGate::measurePhase(
             'promotion.selection.reader',
             fn() => $this->productReader(),
         );
@@ -561,7 +563,7 @@ final class PromotionThemeProductService
         $ids = [];
         try {
             $readerFilters = $this->readerFilters($scope, $filters);
-            $rows = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            $rows = \Weline\Framework\Runtime\TraceGate::measurePhase(
                 'promotion.selection.search',
                 fn() => $reader instanceof \Weline\Product\Api\ProductSelectionReadInterface
                     ? $reader->searchSelectionRows((int)$scope['website_id'], $readerFilters)

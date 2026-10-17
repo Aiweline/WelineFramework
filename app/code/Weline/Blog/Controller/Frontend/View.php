@@ -60,6 +60,8 @@ final class View extends FrontendController
         $canonical = (string)$this->getUrl('blog/' . $slug);
         $this->assign('seo', $this->seoFacts->buildDetailProfile($article, $canonical));
         RequestContext::set('blog.seo.canonical.v1', $canonical);
+        // Theme storefront blog layout HTML bag keys on this slug (see StorefrontBlogLayoutHtmlBag).
+        RequestContext::set('blog.post.slug.v1', $slug);
         $this->assign('blog_rss_url', BlogNamespace::rssPublicPath());
         $this->assign('blog_rss_label', WidgetI18n::label('订阅博客 RSS'));
 

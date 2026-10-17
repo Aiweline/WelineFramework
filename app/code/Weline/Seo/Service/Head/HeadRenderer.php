@@ -41,6 +41,14 @@ class HeadRenderer
             return $this->renderSeoPanelTabBootstrap($template, 'inspector-slot');
         }
 
+        // footer slot: panel bootstrap only — never pay full PageSeoContextResolver
+        // up front. Custom footer providers (if any) resolve lazily below.
+        if ($slot === 'footer') {
+            $bootstrap = $this->renderSeoPanelTabBootstrap($template);
+            $custom = $this->renderCustomSlotLazy($slot, $template, $options);
+            return implode("\n", array_filter([$bootstrap, $custom]));
+        }
+
         $context = $this->resolver->resolve($template, $options);
         $context['_template'] = $template;
         $frontendTitle = $this->readTemplateData($template, '__weline_frontend_final_title');
@@ -69,7 +77,6 @@ class HeadRenderer
                 $slot === 'head' ? $this->renderSocial($context) : '',
                 $slot === 'head' ? $this->renderStructuredData($context) : '',
                 $slot !== 'head' ? $this->renderCustomSlot($slot, $template, $context, $options) : '',
-                $slot === 'footer' ? $this->renderSeoPanelTabBootstrap($template) : '',
             ])),
         };
     }
@@ -349,6 +356,35 @@ class HeadRenderer
         return '<script type="application/ld+json">' . "\n"
             . json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
             . "\n" . '</script>';
+    }
+
+    /**
+     * Footer path: resolve SEO context only when a slot provider actually supports the slot.
+     *
+     * @param mixed $template
+     * @param array<string, mixed> $options
+     */
+    private function renderCustomSlotLazy(string $slot, $template, array $options): string
+    {
+        $probeContext = ['_slot' => $slot, '_options' => $options, '_template' => $template];
+        $needsResolve = false;
+        foreach ($this->slotProviderRegistry()->getProviders() as $provider) {
+            try {
+                if ($provider->supports($slot, $template, $probeContext, $options)) {
+                    $needsResolve = true;
+                    break;
+                }
+            } catch (\Throwable) {
+            }
+        }
+        if (!$needsResolve) {
+            return '';
+        }
+
+        $context = $this->resolver->resolve($template, $options + ['slot' => $slot]);
+        $context['_template'] = $template;
+
+        return $this->renderCustomSlot($slot, $template, $context, $options);
     }
 
     /**

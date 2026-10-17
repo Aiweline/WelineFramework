@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Filters\Service;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Eav\Service\AttributeFilterService;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Http\Url;
@@ -185,7 +187,7 @@ final class StorefrontFilterPanelService
         $builder = fn(): array => $this->hotCache->rememberForRequest(
             $cacheNamespace,
             $logicalKey,
-            fn(): array => \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            fn(): array => \Weline\Framework\Runtime\TraceGate::measurePhase(
                 $cacheNamespace,
                 fn(): array => $this->buildPanelData(
                     $offers,
@@ -703,7 +705,7 @@ final class StorefrontFilterPanelService
         }
         $productIds = array_values(array_unique($productIds));
 
-        $departments = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.departments',
+        $departments = \Weline\Framework\Runtime\TraceGate::measurePhase('storefront.filters.departments',
             fn(): array => $this->buildDepartmentNav(max(0, $websiteId), $listingUrl),
         );
 
@@ -740,7 +742,7 @@ final class StorefrontFilterPanelService
         $attributeGroups = [];
         $codeNames = [];
         try {
-            foreach (\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.metadata',
+            foreach (\Weline\Framework\Runtime\TraceGate::measurePhase('storefront.filters.metadata',
                 fn(): array => $this->attributes->getFilterableAttributeMetadata('product', [], null, false),
             ) as $code => $row) {
                 if (!is_array($row)) {
@@ -792,7 +794,7 @@ final class StorefrontFilterPanelService
         // Product attributes live on the Website shard. Prefer the catalog
         if ($productIds !== []) {
             try {
-                $catalogCounts = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                $catalogCounts = \Weline\Framework\Runtime\TraceGate::measurePhase(
                     'storefront.filters.catalog_counts',
                     fn(): array => $this->catalog->facetCountsForProductIds(
                         $productIds,
@@ -831,7 +833,7 @@ final class StorefrontFilterPanelService
         // attribute rows twice.
         if ($countsByCode === [] && $productIds !== []) {
             try {
-                $facetData = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                $facetData = \Weline\Framework\Runtime\TraceGate::measurePhase(
                     'storefront.filters.eav_counts',
                     fn(): array => $this->attributes->getFilterableAttributes('product', $productIds, [], false),
                 );
@@ -864,7 +866,7 @@ final class StorefrontFilterPanelService
         }
 
         // Product 店面快照常把可筛属性投影到 offer（brand/specifications），而经典 EAV 值表可能为空。
-        foreach (\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.offer_counts',
+        foreach (\Weline\Framework\Runtime\TraceGate::measurePhase('storefront.filters.offer_counts',
             fn(): array => $this->attributeListing->countOfferAttributeValues($offers, $candidateCodeNames),
         ) as $code => $derived) {
             if (isset($countsByCode[$code])) {
@@ -941,7 +943,7 @@ final class StorefrontFilterPanelService
             $candidateCodeNames,
             $selectedAttrs,
         );
-        $attributeGroups = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.options',
+        $attributeGroups = \Weline\Framework\Runtime\TraceGate::measurePhase('storefront.filters.options',
             function () use ($curatedCounts, $selectedAttrs, $baseExtra, $activePrice, $listingUrl, $refinementCounts): array {
                 $attributeGroups = [];
                 foreach ($curatedCounts as $code => $facet) {

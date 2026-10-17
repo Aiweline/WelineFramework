@@ -17,7 +17,7 @@ $title = (string)($meta['title'] ?? __('促销活动'));
 $rawContent = (string)($this->getData('meta.content') ?: $this->getData('content') ?: ($meta['content'] ?? ''));
 $contentTemplate = (string)($this->getData('meta.contentTemplate') ?: ($meta['contentTemplate'] ?? ''));
 $renderedTemplateContent = trim($rawContent) === '' && $contentTemplate !== ''
-    ? (string)$this->fetch($contentTemplate)
+    ? (string)$this->fetchHtml($contentTemplate)
     : '';
 ?>
 <!DOCTYPE html>
@@ -112,6 +112,7 @@ $renderedTemplateContent = trim($rawContent) === '' && $contentTemplate !== ''
     </div>
     <w:hook>Weline_Theme::frontend::layouts::promotion::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end-dynamic</w:hook>
     <w:hook>seo::footer</w:hook>
 </body>
 </html>

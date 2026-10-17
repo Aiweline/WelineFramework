@@ -104,6 +104,8 @@ final class BlogContentMutation
         );
         \w_changed($change);
         // The repository deduplicates the critical observer's bump in this transaction.
+        // Paths include global/storefront/blog — Theme storefrontBlogLayoutHtmlPolicy depends on it,
+        // so post publish/update/delete misses blog detail layout HTML bag keys (slug-scoped).
         $versions = $this->namespaces->bumpMany($paths);
         $key = 'blog-content:' . $change->eventId();
         $this->transactions->afterCommit($connection, $key, function () use ($versions): void {
