@@ -6,7 +6,7 @@ namespace Weline\Framework\Compilation;
 
 final class CompiledExtensionRegistry
 {
-    /** @var array<string, array> */
+    /** @var array<string, array> Thin mirror of CompiledPhpRegistry payloads (SoftSurvivor dual-register). */
     private static array $registries = [];
 
     public static function hooks(): array
@@ -42,10 +42,8 @@ final class CompiledExtensionRegistry
             return self::$registries[$file];
         }
         $path = BP . 'generated' . DIRECTORY_SEPARATOR . $file;
-        if (!is_file($path)) {
-            return self::$registries[$file] = [];
-        }
-        $registry = require $path;
-        return self::$registries[$file] = is_array($registry) ? $registry : [];
+        $registry = CompiledPhpRegistry::load($path) ?? [];
+
+        return self::$registries[$file] = $registry;
     }
 }

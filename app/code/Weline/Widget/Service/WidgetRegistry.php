@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace Weline\Widget\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Widget\Api\WidgetRegistryInterface;
 
 /**
@@ -45,48 +47,23 @@ class WidgetRegistry implements WidgetRegistryInterface
     /**
      * 获取注册表内容
      *
-     * @param bool $forceReload 强制重新加载
+     * @param bool $forceReload 强制重新加载（persistent / WLS 下为 no-op，禁止二次 include）
      * @return array
      */
     public function getRegistry(bool $forceReload = false): array
     {
-        // 使用静态缓存，跨实例共享，避免每次请求都读取文件
-        if (!$forceReload && self::$staticCachedRegistry !== null) {
-            if (!file_exists(self::REGISTRY_FILE)) {
-                return $this->mergeAiWidgets(self::$staticCachedRegistry);
-            }
-            $currentMtime = filemtime(self::REGISTRY_FILE);
-            $mtimeUnchanged = self::$staticCachedFileMtime !== null && $currentMtime === self::$staticCachedFileMtime;
-            // 缓存非空且 mtime 未变：直接返回
-            if (self::$staticCachedRegistry !== [] && $mtimeUnchanged) {
-                return $this->mergeAiWidgets(self::$staticCachedRegistry);
-            }
-            // 缓存为空：若文件可能已有内容（mtime 变了或文件较大）则重载，否则返回空
-            if (self::$staticCachedRegistry === []) {
-                if (!$mtimeUnchanged || filesize(self::REGISTRY_FILE) > 100) {
-                    // 重载
-                } else {
-                    return $this->mergeAiWidgets(self::$staticCachedRegistry);
-                }
-            } elseif ($mtimeUnchanged) {
-                return $this->mergeAiWidgets(self::$staticCachedRegistry);
-            }
+        // Process gate: once loaded under WLS/persistent, mtime / forceReload must not re-include.
+        if ($forceReload && !Runtime::isPersistent()) {
+            CompiledPhpRegistry::forgetForTests(self::REGISTRY_FILE);
+            self::$staticCachedRegistry = null;
+            self::$staticCachedFileMtime = null;
         }
 
-        if (!file_exists(self::REGISTRY_FILE)) {
-            self::$staticCachedRegistry = [];
-            self::$staticCachedFileMtime = 0;
-            return $this->mergeAiWidgets([]);
-        }
-
-        $registry = include self::REGISTRY_FILE;
-        if (!is_array($registry)) {
-            $registry = [];
-        }
-
-        // 更新静态缓存
+        $registry = CompiledPhpRegistry::load(self::REGISTRY_FILE) ?? [];
         self::$staticCachedRegistry = $registry;
-        self::$staticCachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        self::$staticCachedFileMtime = \is_file(self::REGISTRY_FILE)
+            ? (int) (@\filemtime(self::REGISTRY_FILE) ?: 0)
+            : 0;
 
         return $this->mergeAiWidgets($registry);
     }
@@ -95,6 +72,10 @@ class WidgetRegistry implements WidgetRegistryInterface
     {
         self::$staticCachedRegistry = null;
         self::$staticCachedFileMtime = null;
+        // Persistent Workers keep CompiledPhpRegistry bag (no second include).
+        if (!Runtime::isPersistent()) {
+            CompiledPhpRegistry::forgetForTests(self::REGISTRY_FILE);
+        }
         WidgetData::clearCache();
     }
 
