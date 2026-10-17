@@ -64,6 +64,7 @@ Worker 长驻进程内，多语言词典与业务散落 `static` 袋抬高 RSS �
 | FPC process L1 pointer-only（`fpc_body_file`）；读路径 hydrate | `processL1PointerOnlyPayload` + `getProcessCachedPayload` |
 | soft reclaim 必须能卸非 pinned FPC process 袋；`estimateBytes` 真实 | `FullPageCacheReclaimableAdapter` + `softCompactProcessCache` |
 | SoftSurvivor：整 FPC body/袋为 CONTENT，不得标 REGISTRY 挡 soft 卸货 | `SoftSurvivorCatalog` |
+| SoftSurvivor：`ROLE_REGISTRY` = soft **禁卸**且 **禁二次 include** 大编译表（对照 CONTENT）；编译表门闩见 [`process-resident-compiled-php.md`](./process-resident-compiled-php.md) | `SoftSurvivorCatalog` + `CompiledPhpRegistry` |
 
 ## 6. 框架映射
 

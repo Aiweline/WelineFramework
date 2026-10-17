@@ -65,16 +65,19 @@ class DriverRegistry
             return $this->cache;
         }
         
-        // 读取文件
+        // Process gate — never re-include once loaded (forceReload only forgets on CLI).
         try {
-            $drivers = include $driverFile;
-            if (!is_array($drivers)) {
+            if ($forceReload) {
+                \Weline\Framework\Compilation\CompiledPhpRegistry::forgetForTests($driverFile);
+            }
+            $drivers = \Weline\Framework\Compilation\CompiledPhpRegistry::load($driverFile) ?? [];
+            if (!\is_array($drivers)) {
                 $drivers = [];
             }
-            
+
             $this->cache = $drivers;
             $this->mtime = $currentMtime;
-            
+
             return $drivers;
         } catch (\Exception $e) {
             w_log_error("读取驱动映射文件失败: " . $e->getMessage());

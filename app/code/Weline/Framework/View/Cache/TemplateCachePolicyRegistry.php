@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\View\Cache;
 
+use Weline\Framework\Compilation\CompiledPhpRegistry;
+
 final class TemplateCachePolicyRegistry
 {
     private const DEFAULT_REGISTRY_FILE = BP . 'generated' . DS . 'framework' . DS . 'template_cache_policies.php';
@@ -94,7 +96,9 @@ final class TemplateCachePolicyRegistry
             return;
         }
         try {
-            $registry = require $file;
+            $registry = ($this->registryFile === null || $this->registryFile === self::DEFAULT_REGISTRY_FILE)
+                ? CompiledPhpRegistry::load($file)
+                : require $file;
         } catch (\Throwable) {
             $this->loaded = true;
             return;

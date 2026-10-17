@@ -610,7 +610,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         if (\defined('BP')) {
             $registryFile = \BP . 'generated' . DIRECTORY_SEPARATOR . 'events.php';
             if (is_file($registryFile)) {
-                $registry = include $registryFile;
+                $registry = \Weline\Framework\Compilation\CompiledPhpRegistry::load($registryFile);
                 if (is_array($registry)) {
                     foreach ((array)($registry['event_to_module'] ?? []) as $name => $module) {
                         if (is_string($name) && is_string($module) && $module !== '') {

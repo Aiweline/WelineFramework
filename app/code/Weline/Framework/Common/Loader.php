@@ -21,9 +21,9 @@ class Loader
         require __DIR__ . '/functions.php';
         require __DIR__ . '/func_debug.php';
         require dirname(__DIR__) . '/func_log.php';
-        # 加载模块自定义助手函数
+        # 加载模块自定义助手函数（可执行 PHP，非 return-array；进程内 require_once）
         if (is_file(Env::path_FUNCTIONS_FILE)) {
-            require Env::path_FUNCTIONS_FILE;
+            require_once Env::path_FUNCTIONS_FILE;
         }
     }
 }

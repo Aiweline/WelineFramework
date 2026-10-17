@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Event;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
@@ -78,7 +79,12 @@ class EventRegistry implements EventRegistryInterface
             return self::$runtimeRegistryCache;
         }
 
-        if (!file_exists(self::REGISTRY_FILE)) {
+        // Persistent: never re-include. CLI forceReload / mtime refresh may forget then load.
+        if ($forceReload && !$trustRuntimeCache) {
+            CompiledPhpRegistry::forgetForTests(self::REGISTRY_FILE);
+        }
+        $registry = CompiledPhpRegistry::load(self::REGISTRY_FILE);
+        if ($registry === null) {
             $this->cachedRegistry = ['events' => [], 'event_to_module' => []];
             $this->cachedFileMtime = 0;
             if ($trustRuntimeCache) {
@@ -87,8 +93,6 @@ class EventRegistry implements EventRegistryInterface
             }
             return $this->cachedRegistry;
         }
-
-        $registry = include self::REGISTRY_FILE;
         if (!is_array($registry)) {
             $registry = ['events' => [], 'event_to_module' => []];
         }
@@ -965,7 +969,13 @@ class EventRegistry implements EventRegistryInterface
 
         RegistryProgress::log('Event save registry: generated/events.php');
         $content = "<?php return " . var_export($registry, true) . ";\n";
-        (new GeneratedPhpArrayPublisher())->publishContent(self::REGISTRY_FILE, $content);
+        // publishContent puts into CompiledPhpRegistry — no forget+re-include.
+        // Wipe safety already enforced by assertRegistryReadyToPersist (no countEntries).
+        (new GeneratedPhpArrayPublisher())->publishContent(
+            self::REGISTRY_FILE,
+            $content,
+            $registry,
+        );
 
         $this->cachedRegistry = $registry;
         $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
@@ -1032,10 +1042,7 @@ class EventRegistry implements EventRegistryInterface
      */
     private function loadPersistedRegistrySnapshot(): ?array
     {
-        if (!is_file(self::REGISTRY_FILE)) {
-            return null;
-        }
-        $data = include self::REGISTRY_FILE;
+        $data = CompiledPhpRegistry::load(self::REGISTRY_FILE);
 
         return is_array($data) ? $data : null;
     }

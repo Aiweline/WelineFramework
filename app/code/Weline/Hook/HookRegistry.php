@@ -11,11 +11,13 @@ declare(strict_types=1);
 
 namespace Weline\Hook;
 
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Module\Service\ModuleScanService;
 use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\System\File\Scan;
 
 /**
@@ -90,21 +92,29 @@ class HookRegistry
      */
     public function getRegistry(bool $forceReload = false): array
     {
-        // 内存缓存机制
+        $persistent = Runtime::isPersistent()
+            || (\defined('WLS_MODE') && WLS_MODE);
+
         if (!$forceReload && $this->cachedRegistry !== null) {
+            if ($persistent) {
+                return $this->cachedRegistry;
+            }
             $currentMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
             if ($currentMtime === $this->cachedFileMtime) {
                 return $this->cachedRegistry;
             }
         }
 
-        if (!file_exists(self::REGISTRY_FILE)) {
+        if ($forceReload && !$persistent) {
+            CompiledPhpRegistry::forgetForTests(self::REGISTRY_FILE);
+        }
+
+        $registry = CompiledPhpRegistry::load(self::REGISTRY_FILE);
+        if ($registry === null) {
             $this->cachedRegistry = ['hooks' => [], 'hook_to_module' => []];
             $this->cachedFileMtime = 0;
             return $this->cachedRegistry;
         }
-
-        $registry = include self::REGISTRY_FILE;
         if (!is_array($registry)) {
             $registry = ['hooks' => [], 'hook_to_module' => []];
         }

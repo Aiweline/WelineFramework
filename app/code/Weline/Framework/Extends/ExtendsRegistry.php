@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Extends;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
@@ -53,13 +54,15 @@ class ExtendsRegistry
             }
         }
 
-        if (!file_exists(self::REGISTRY_FILE)) {
+        if ($forceReload && !\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            CompiledPhpRegistry::forgetForTests(self::REGISTRY_FILE);
+        }
+        $registry = CompiledPhpRegistry::load(self::REGISTRY_FILE);
+        if ($registry === null) {
             $this->cachedRegistry = [];
             $this->cachedFileMtime = 0;
             return [];
         }
-
-        $registry = include self::REGISTRY_FILE;
         if (!is_array($registry)) {
             $registry = [];
         }

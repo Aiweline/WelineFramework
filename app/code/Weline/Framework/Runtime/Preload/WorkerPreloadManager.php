@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime\Preload;
 
+use Weline\Framework\Runtime\Preload\Provider\CompiledRegistryWarmProvider;
 use Weline\Framework\Runtime\Preload\Provider\EventDescriptorPreloadProvider;
 use Weline\Framework\Runtime\Preload\Provider\ExtensionRegistryPreloadProvider;
 use Weline\Framework\Runtime\Preload\Provider\ObjectMetadataPreloadProvider;
@@ -22,6 +23,7 @@ final class WorkerPreloadManager
     public static function createDefault(): self
     {
         return new self([
+            new CompiledRegistryWarmProvider(),
             new ObjectMetadataPreloadProvider(),
             new RouteRegistryPreloadProvider(),
             new ExtensionRegistryPreloadProvider(),

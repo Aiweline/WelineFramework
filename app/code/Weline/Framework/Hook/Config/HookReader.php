@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Weline\Framework\Hook\Config;
 
 use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\System\ModuleFileReader;
 
@@ -27,7 +29,8 @@ class HookReader extends ModuleFileReader
     private static array $staticFileListCache = [];
 
     /**
-     * @var array|null generated/hooks.php registry cache (process-hot; mtime-checked).
+     * @var array|null generated/hooks.php registry cache (process-hot).
+     * Persistent/WLS: hydrate once via CompiledPhpRegistry; mtime does not re-include.
      */
     private static ?array $registryCache = null;
     private static ?int $registryCacheMtime = null;
@@ -269,20 +272,23 @@ class HookReader extends ModuleFileReader
     private static function getGeneratedHookRegistry(): array
     {
         $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
+        $persistent = Runtime::isPersistent()
+            || (\defined('WLS_MODE') && WLS_MODE);
+
+        if ($persistent && self::$registryCache !== null) {
+            return self::$registryCache;
+        }
+
         $registryMtime = self::getGeneratedHookRegistryMtime();
-
-        if (self::$registryCache !== null && self::$registryCacheMtime === $registryMtime) {
+        if (!$persistent
+            && self::$registryCache !== null
+            && self::$registryCacheMtime === $registryMtime
+        ) {
             return self::$registryCache;
         }
 
-        if (!is_file($registryFile)) {
-            self::$registryCache = [];
-            self::$registryCacheMtime = null;
-            return self::$registryCache;
-        }
-
-        $registry = include $registryFile;
-        self::$registryCache = is_array($registry) ? $registry : [];
+        $registry = CompiledPhpRegistry::load($registryFile);
+        self::$registryCache = \is_array($registry) ? $registry : [];
         self::$registryCacheMtime = $registryMtime;
 
         return self::$registryCache;

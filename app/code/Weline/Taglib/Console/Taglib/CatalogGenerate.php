@@ -78,7 +78,7 @@ class CatalogGenerate implements CommandInterface
         if (!file_exists($registryFile)) {
             $lines[] = '| _（注册表不存在，请先运行 setup:upgrade 或 taglib:collect）_ | | | |';
         } else {
-            $registry = include $registryFile;
+            $registry = \Weline\Framework\Compilation\CompiledPhpRegistry::load($registryFile);
             $tags = is_array($registry['tags'] ?? null) ? $registry['tags'] : [];
             ksort($tags);
             foreach ($tags as $name => $config) {

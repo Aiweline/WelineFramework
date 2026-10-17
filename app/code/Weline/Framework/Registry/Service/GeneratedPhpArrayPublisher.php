@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace Weline\Framework\Registry\Service;
 
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 
 /**
  * Atomically publish PHP array registry files under generated/.
  *
  * Never unlinks the live target first. Optional entry-count guard refuses to
  * replace a healthy file with an empty/wiped payload.
+ *
+ * After a successful publish, the process bag (CompiledPhpRegistry) is updated
+ * via put() when the array payload is known — subsequent load() must not
+ * re-include the same path in-process.
  */
 final class GeneratedPhpArrayPublisher
 {
@@ -22,7 +27,7 @@ final class GeneratedPhpArrayPublisher
     /**
      * Publish pre-built PHP source. Live file is replaced only after a complete temp write.
      *
-     * @param array<string, mixed>|null $incomingDataForGuard data used by $countEntries
+     * @param array<string, mixed>|null $incomingDataForGuard data used by $countEntries and bag put
      * @param (callable(array):int)|null $countEntries when set, refuse old>0 && new===0
      */
     public function publishContent(
@@ -50,6 +55,9 @@ final class GeneratedPhpArrayPublisher
         }
 
         $this->publisher->publish($target, $content);
+        if ($incomingDataForGuard !== null) {
+            CompiledPhpRegistry::put($target, $incomingDataForGuard);
+        }
     }
 
     /**
@@ -105,12 +113,20 @@ final class GeneratedPhpArrayPublisher
     }
 
     /**
+     * Read existing registry for wipe-guard: process bag first, else one gated load.
+     *
      * @return array<string, mixed>|null
      */
     private function includeArray(string $path): ?array
     {
-        $data = include $path;
+        if (CompiledPhpRegistry::isLoaded($path)) {
+            $peeked = CompiledPhpRegistry::peek($path);
 
-        return is_array($data) ? $data : null;
+            return \is_array($peeked) ? $peeked : null;
+        }
+
+        $data = CompiledPhpRegistry::load($path);
+
+        return \is_array($data) ? $data : null;
     }
 }

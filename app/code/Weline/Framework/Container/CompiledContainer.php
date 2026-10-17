@@ -299,7 +299,17 @@ final class CompiledContainer implements ContainerInterface
         }
 
         try {
-            $registry = require $registryFile;
+            // Live default path: process-once gate. Staging/compile paths keep require
+            // so framework:compile does not poison the Worker bag.
+            $isDefaultLive = $registryFile === self::DEFAULT_REGISTRY_FILE
+                || (
+                    \is_string($real = \realpath($registryFile))
+                    && \is_string($defaultReal = \realpath(self::DEFAULT_REGISTRY_FILE))
+                    && $real === $defaultReal
+                );
+            $registry = $isDefaultLive
+                ? \Weline\Framework\Compilation\CompiledPhpRegistry::load($registryFile)
+                : require $registryFile;
         } catch (\Throwable $error) {
             if ($this->allowObjectManagerFallback) {
                 return;

@@ -17,6 +17,7 @@ use Weline\Framework\Cache\Contract\MemoryStoreInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Adapter\FileAdapter;
 use Weline\Framework\Cache\Pool\CachePool;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\Di\ReflectionArtifactContract;
 use Weline\Framework\Manager\FactoryObjectInterface;
@@ -1731,6 +1732,10 @@ class ObjectManager implements ManagerInterface
         if (self::$generatedPluginRegistryMtime !== null) {
             self::$parsedClasses = [];
             self::$classExistsCache = [];
+            // CLI / non-persistent only: allow re-include after plugins.php rewrite.
+            if (!Runtime::isPersistent()) {
+                CompiledPhpRegistry::forgetForTests($file);
+            }
         }
 
         self::$generatedPluginRegistryMtime = $mtime;
@@ -1740,7 +1745,7 @@ class ObjectManager implements ManagerInterface
             return;
         }
 
-        $registry = @include $file;
+        $registry = CompiledPhpRegistry::load($file);
         if (\is_array($registry)) {
             self::$generatedPluginRegistry = $registry;
         }
@@ -2075,11 +2080,9 @@ class ObjectManager implements ManagerInterface
 
         $safeClasses = [];
         $safeClassFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_safe_classes.php';
-        if (\is_file($safeClassFile)) {
-            $loaded = include $safeClassFile;
-            if (\is_array($loaded)) {
-                $safeClasses = $loaded;
-            }
+        $loaded = CompiledPhpRegistry::load($safeClassFile);
+        if (\is_array($loaded)) {
+            $safeClasses = $loaded;
         }
 
         $reflectionMetadataCount = \is_array(self::$precompiledMetadata) ? \count(self::$precompiledMetadata) : 0;
@@ -2137,12 +2140,12 @@ class ObjectManager implements ManagerInterface
         self::$precompiledMetadataRejectReason = null;
         self::$precompiledMetadataTrustedAfterPreload = false;
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_metadata.php';
-        if (!\is_file($file)) {
+        $payload = CompiledPhpRegistry::load($file);
+        if ($payload === null && !\is_file($file)) {
             self::$precompiledMetadataRejectReason = ReflectionArtifactContract::REJECT_MISSING;
             return;
         }
 
-        $payload = include $file;
         $accepted = ReflectionArtifactContract::acceptReflectionMetadataPayload($payload);
         if (!($accepted['ok'] ?? false)) {
             self::$precompiledMetadataRejectReason = (string)($accepted['reason'] ?? ReflectionArtifactContract::REJECT_INVALID_PAYLOAD);
@@ -2166,12 +2169,12 @@ class ObjectManager implements ManagerInterface
         self::$compiledFactoriesRejectReason = null;
         self::$compiledFactoriesTrustedAfterPreload = false;
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'compiled_factories.php';
-        if (!\is_file($file)) {
+        $payload = CompiledPhpRegistry::load($file);
+        if ($payload === null && !\is_file($file)) {
             self::$compiledFactoriesRejectReason = ReflectionArtifactContract::REJECT_MISSING;
             return;
         }
 
-        $payload = include $file;
         $accepted = ReflectionArtifactContract::acceptCompiledFactoriesPayload($payload);
         if (!($accepted['ok'] ?? false)) {
             self::$compiledFactoriesRejectReason = (string)($accepted['reason'] ?? ReflectionArtifactContract::REJECT_INVALID_PAYLOAD);

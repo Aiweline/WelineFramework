@@ -117,6 +117,105 @@ PHP);
         self::assertNull(CompiledPhpRegistry::load($phpFile));
     }
 
+    public function testWarmPathsMarksMustInPathsLoaded(): void
+    {
+        $paths = CompiledPhpRegistry::mustInRuntimePaths();
+        self::assertNotEmpty($paths);
+        self::assertStringContainsString('query_providers.php', $paths[0]);
+        $joined = \implode("\n", \array_map(static fn (string $p): string => \str_replace('\\', '/', $p), $paths));
+        self::assertStringContainsString('module_dependencies.php', $joined);
+        self::assertStringContainsString('database/driver.php', $joined);
+        foreach ($paths as $path) {
+            self::assertStringNotContainsString('language/', \str_replace('\\', '/', $path));
+            self::assertStringNotContainsString('compile_manifest.php', $path);
+        }
+
+        $stats = CompiledPhpRegistry::warmPaths($paths);
+        self::assertSame(\count($paths), $stats['warmed'] + $stats['missing'] + $stats['skipped']);
+        self::assertSame([], CompiledPhpRegistry::missingLoaded($paths));
+
+        $again = CompiledPhpRegistry::warmPaths($paths);
+        self::assertSame(0, $again['warmed']);
+        self::assertSame(\count($paths), $again['skipped']);
+    }
+
+    public function testWarmProviderEnabledOnlyForWlsWorker(): void
+    {
+        $provider = new \Weline\Framework\Runtime\Preload\Provider\CompiledRegistryWarmProvider();
+        $wls = new \Weline\Framework\Runtime\Preload\WorkerPreloadContext(
+            \Weline\Framework\Runtime\Preload\WorkerPreloadContext::PHASE_BOOTSTRAP,
+            'worker',
+            1,
+            'default',
+            1,
+            \Weline\Framework\Runtime\RuntimeInterface::MODE_WLS,
+        );
+        $fpm = new \Weline\Framework\Runtime\Preload\WorkerPreloadContext(
+            \Weline\Framework\Runtime\Preload\WorkerPreloadContext::PHASE_BOOTSTRAP,
+            'worker',
+            1,
+            'default',
+            1,
+            \Weline\Framework\Runtime\RuntimeInterface::MODE_FPM,
+        );
+        self::assertTrue($provider->isEnabled($wls));
+        self::assertFalse($provider->isEnabled($fpm));
+    }
+
+    public function testWorkerPreloadManagerRegistersWarmProviderFirst(): void
+    {
+        $manager = \Weline\Framework\Runtime\Preload\WorkerPreloadManager::createDefault();
+        $ref = new \ReflectionClass($manager);
+        $prop = $ref->getProperty('providers');
+        $prop->setAccessible(true);
+        /** @var list<object> $providers */
+        $providers = $prop->getValue($manager);
+        self::assertNotEmpty($providers);
+        self::assertInstanceOf(
+            \Weline\Framework\Runtime\Preload\Provider\CompiledRegistryWarmProvider::class,
+            $providers[0]
+        );
+        self::assertSame(5, $providers[0]->priority());
+    }
+
+    public function testPutWriteThroughPreventsReinclude(): void
+    {
+        $counterFile = $this->tempDir . DIRECTORY_SEPARATOR . 'put-include-count.txt';
+        $phpFile = $this->tempDir . DIRECTORY_SEPARATOR . 'modules-like.php';
+        file_put_contents($counterFile, '0');
+        file_put_contents($phpFile, <<<PHP
+<?php
+\$c = (int) file_get_contents({$this->export($counterFile)});
+file_put_contents({$this->export($counterFile)}, (string) (\$c + 1));
+return ['A' => ['version' => '1.0.0']];
+PHP);
+
+        CompiledPhpRegistry::forgetForTests($phpFile);
+        CompiledPhpRegistry::load($phpFile);
+        self::assertSame('1', file_get_contents($counterFile));
+
+        $updated = ['A' => ['version' => '2.0.0'], 'B' => ['version' => '1.0.0']];
+        CompiledPhpRegistry::put($phpFile, $updated);
+
+        $again = CompiledPhpRegistry::load($phpFile);
+        self::assertSame($updated, $again);
+        self::assertSame('1', file_get_contents($counterFile), 'put must not cause a second include');
+        self::assertSame($updated, CompiledPhpRegistry::peek($phpFile));
+    }
+
+    public function testCompiledPhpArrayWriterPutsIntoRegistry(): void
+    {
+        $phpFile = $this->tempDir . DIRECTORY_SEPARATOR . 'written-modules.php';
+        CompiledPhpRegistry::forgetForTests($phpFile);
+        $data = ['Weline_Framework' => ['version' => '1.0.0', 'status' => true]];
+        (new \Weline\Framework\Compilation\CompiledPhpArrayWriter())->write($phpFile, $data);
+
+        self::assertTrue(CompiledPhpRegistry::isLoaded($phpFile));
+        self::assertSame($data, CompiledPhpRegistry::peek($phpFile));
+        self::assertSame($data, CompiledPhpRegistry::load($phpFile));
+        self::assertFileExists($phpFile);
+    }
+
     private function export(string $value): string
     {
         return var_export($value, true);

@@ -15,6 +15,19 @@ Fiber **结束/回收**（Worker 仍可能握着 terminated Fiber 引用）必�
 - `ObjectManager::sweepTerminatedFiberScopes`（reset 扫尾）
 禁止只依赖 WeakMap+GC。
 
+## SoftSurvivor（soft 压力角色）
+
+权威：`Weline\Framework\Runtime\SoftSurvivorCatalog`。
+
+| 角色 | soft 压力 | 二次 include 大编译表 | 说明 |
+|------|-----------|----------------------|------|
+| `ROLE_CONTENT` | 可卸 | — | 可重建袋（词典、NodePool、TemplateCache、FPC process payload 等） |
+| `ROLE_REGISTRY` | **禁卸** | **禁二次 include**（WLS/persistent） | 大编译注册表；统一门闩见 [`../开发/spec/process-resident-compiled-php.md`](../开发/spec/process-resident-compiled-php.md) |
+
+**REGISTRY ≠ 仅「soft 不丢引用」**：领域 loader 仍须经 `CompiledPhpRegistry`（或等价 once 门闩），否则 mtime 再 include 仍会 OOM。
+
+**language 排除**：`generated/language/**` 整袋禁止进 REGISTRY / CompiledPhpRegistry 常驻编译表（Phrase/WLS 既有硬门禁）。
+
 ## ObjectManager
 
 - `ProcessSharedInterface` → 始终写入/读取进程 `$instances`（Fiber 内也如此）。

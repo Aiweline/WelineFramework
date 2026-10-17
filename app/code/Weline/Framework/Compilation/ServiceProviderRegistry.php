@@ -63,7 +63,11 @@ final class ServiceProviderRegistry implements ProcessSharedInterface
             $this->providers = [];
             return;
         }
-        $registry = require $file;
+        // Default live path goes through the process gate; staging/compile paths
+        // keep a one-shot require so framework:compile does not poison the bag.
+        $registry = ($this->registryFile === null || $this->registryFile === self::DEFAULT_REGISTRY_FILE)
+            ? CompiledPhpRegistry::load($file)
+            : require $file;
         if (!is_array($registry) || ($registry['format'] ?? null) !== ModuleRegistryCompiler::FORMAT_VERSION) {
             throw new \RuntimeException(
                 'Compiled module provider registry is invalid. Re-run: php bin/w framework:compile',

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Service\Query;
 
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Http\Request;
@@ -164,13 +165,9 @@ class QueryProviderRegistry implements ProcessSharedInterface
             return self::$processCompiledRegistry;
         }
 
-        if (!is_file(self::COMPILED_REGISTRY_FILE)) {
-            self::$processCompiledLoaded = true;
-            self::$processCompiledRegistry = null;
-            return null;
-        }
-        // Once per process — ObjectManager may spin multiple registry instances.
-        $registry = include self::COMPILED_REGISTRY_FILE;
+        // Once per process via CompiledPhpRegistry — ObjectManager may spin multiple
+        // registry instances; never re-include the multi-MB query_providers.php.
+        $registry = CompiledPhpRegistry::load(self::COMPILED_REGISTRY_FILE);
         $valid = is_array($registry)
             && ($registry['format'] ?? null) === QueryProviderCompiler::FORMAT_VERSION
             && is_array($registry['providers'] ?? null)

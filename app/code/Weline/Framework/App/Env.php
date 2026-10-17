@@ -1423,7 +1423,7 @@ class Env extends DataObject
             );
         }
         try {
-            $this->module_list = (array)require Env::path_MODULES_FILE;
+            $this->module_list = (array)(\Weline\Framework\Compilation\CompiledPhpRegistry::load(Env::path_MODULES_FILE) ?? []);
             foreach ($this->module_list as &$module) {
                 if (!is_array($module)) {
                     continue;
@@ -1515,14 +1515,27 @@ class Env extends DataObject
         if (!$reget && $this->dependencies) {
             return $this->dependencies;
         }
-        $this->dependencies = (array)require self::path_MODULE_DEPENDENCIES_FILE;
+        if (!\is_file(self::path_MODULE_DEPENDENCIES_FILE)) {
+            $this->dependencies = [];
+
+            return $this->dependencies;
+        }
+        $this->dependencies = (array)(\Weline\Framework\Compilation\CompiledPhpRegistry::load(
+            self::path_MODULE_DEPENDENCIES_FILE
+        ) ?? []);
 
         return $this->dependencies;
     }
 
     public function saveDependencies(array $dependencies): bool
     {
-        return file_put_contents(self::path_MODULE_DEPENDENCIES_FILE, '<?php  return ' . w_var_export($dependencies, true) . ';');
+        (new \Weline\Framework\Compilation\CompiledPhpArrayWriter())->write(
+            self::path_MODULE_DEPENDENCIES_FILE,
+            $dependencies
+        );
+        $this->dependencies = $dependencies;
+
+        return true;
     }
 
     public function getActiveModules(bool $reget = false): array
@@ -1579,7 +1592,9 @@ class Env extends DataObject
     {
         $commands = [];
         if (file_exists(Env::path_COMMANDS_FILE)) {
-            $commands = (array)require self::path_COMMANDS_FILE;
+            // Process-once via CompiledPhpRegistry — CLI may call getCommands() many times.
+            $loaded = \Weline\Framework\Compilation\CompiledPhpRegistry::load(self::path_COMMANDS_FILE);
+            $commands = \is_array($loaded) ? $loaded : [];
         }
         if (isset($commands[0]) && $commands[0] === 1) {
             return [];

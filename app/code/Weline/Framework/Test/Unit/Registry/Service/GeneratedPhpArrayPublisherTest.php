@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Registry\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 
 if (!defined('BP')) {
@@ -43,12 +44,44 @@ final class GeneratedPhpArrayPublisherTest extends TestCase
     public function testAtomicReplaceKeepsPreviousUntilComplete(): void
     {
         $target = $this->dir . '/sample.php';
+        CompiledPhpRegistry::forgetForTests($target);
         $publisher = new GeneratedPhpArrayPublisher();
         $publisher->publishArray($target, ['a' => 1], GeneratedPhpArrayPublisher::countTopLevel(...));
-        self::assertSame(['a' => 1], include $target);
+        self::assertSame(['a' => 1], CompiledPhpRegistry::peek($target));
+        self::assertSame(['a' => 1], CompiledPhpRegistry::load($target));
 
         $publisher->publishArray($target, ['a' => 1, 'b' => 2], GeneratedPhpArrayPublisher::countTopLevel(...));
-        self::assertSame(['a' => 1, 'b' => 2], include $target);
+        self::assertSame(['a' => 1, 'b' => 2], CompiledPhpRegistry::peek($target));
+        self::assertSame(['a' => 1, 'b' => 2], CompiledPhpRegistry::load($target));
+    }
+
+    public function testPublishPutsIntoProcessBagWithoutReinclude(): void
+    {
+        $counter = $this->dir . '/count.txt';
+        $target = $this->dir . '/counted.php';
+        file_put_contents($counter, '0');
+        // Seed via publisher (put), then overwrite disk by hand and put again —
+        // load must still return put payload and never bump counter from include.
+        $publisher = new GeneratedPhpArrayPublisher();
+        CompiledPhpRegistry::forgetForTests($target);
+        $publisher->publishArray($target, ['seed' => 1], GeneratedPhpArrayPublisher::countTopLevel(...));
+        self::assertTrue(CompiledPhpRegistry::isLoaded($target));
+
+        // Corrupt the mental model: rewrite file with include counter; put wins.
+        file_put_contents($target, <<<PHP
+<?php
+\$c = (int) file_get_contents({$this->export($counter)});
+file_put_contents({$this->export($counter)}, (string) (\$c + 1));
+return ['from_disk' => true];
+PHP);
+        CompiledPhpRegistry::put($target, ['from_put' => true]);
+        self::assertSame(['from_put' => true], CompiledPhpRegistry::load($target));
+        self::assertSame('0', file_get_contents($counter));
+    }
+
+    private function export(string $value): string
+    {
+        return var_export($value, true);
     }
 
     public function testRefuseWipeWhenExistingHasEntries(): void
