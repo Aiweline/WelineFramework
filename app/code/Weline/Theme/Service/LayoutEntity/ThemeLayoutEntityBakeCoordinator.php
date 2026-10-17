@@ -131,17 +131,23 @@ final class ThemeLayoutEntityBakeCoordinator
      * injections (honouring frozen omissions), then chrome filter + theme-configured placements.
      *
      * @param array<int|string, mixed> $changes
+     * @param array<string, mixed>|null $chromeSeed Mutable working copy when provided (avoids a
+     *        second getChromePayload). Caller must not reuse $chromeSeed after merge.
      * @return array<string, array<string, mixed>>
      */
-    private function resolveChromeNodesForBake(ThemeScopeVersion $version, array $changes = [], string $headerOption = 'default'): array
-    {
+    private function resolveChromeNodesForBake(
+        ThemeScopeVersion $version,
+        array $changes = [],
+        string $headerOption = 'default',
+        ?array $chromeSeed = null,
+    ): array {
         $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
         $identity = $version->toVersionIdentity();
         // Homepage owns root chrome; mini-cart drawer footer-extras (coupon/留言) is a nested
         // chrome extension declared layout_type=mini-cart. Homepage merge alone never seeds it,
         // and runtime SlotFiller is a no-op under pure-PHTML bake — so chrome must merge both.
         $nodes = $merger->mergeIntoNodes(
-            $version->getChromePayload(),
+            $chromeSeed ?? $version->getChromePayload(),
             $version->getThemeId(),
             'homepage',
             $version->getVersionId(),
@@ -164,14 +170,21 @@ final class ThemeLayoutEntityBakeCoordinator
 
     private function chromeCandidates(ThemeScopeVersion $version, array $locales = [], array $options = [], array $changes = [], array $partialParams = []): array
     {
-        $original = $version->getChromePayload();
+        // One defensive copy: empty-check uses a flag because mergeIntoNodes mutates the seed.
+        $chromeSeed = $version->getChromePayload();
+        $originalWasEmpty = $chromeSeed === [];
         $options = $options ?: ['header' => 'default', 'footer' => 'default', 'sidebar' => 'default'];
-        $nodes = $this->resolveChromeNodesForBake($version, $changes, (string)($options['header'] ?? 'default'));
+        $nodes = $this->resolveChromeNodesForBake(
+            $version,
+            $changes,
+            (string)($options['header'] ?? 'default'),
+            $chromeSeed,
+        );
         $version = clone $version;
         $version->setChromePayload($nodes);
         $partialLocaleKeys = array_fill_keys(array_map(static fn(string $type): string => 'partials.' . $type, array_keys($options)), true);
         $hasLocaleParams = array_filter($locales, static fn(array $values): bool => array_intersect_key($values, $partialLocaleKeys) !== []) !== [];
-        if ($original === [] && $nodes === [] && !array_filter($partialParams) && !$hasLocaleParams && !array_filter($options, static fn($option): bool => $option !== 'default')) {
+        if ($originalWasEmpty && $nodes === [] && !array_filter($partialParams) && !$hasLocaleParams && !array_filter($options, static fn($option): bool => $option !== 'default')) {
             $identity = $version->toVersionIdentity();
             // RAW / missing input_digest / origin drift → force materializeChrome (with digest).
             // Do not leave dirty copies, and do not null-delete fresh digest-bearing partials.

@@ -85,48 +85,25 @@ final class ThemeRuntimeCacheCleaner
     }
 
     /**
-     * Full theme-related invalidation for publish / resource_changed.
+     * Full theme-related invalidation for publish / resource_changed / compile / upgrade.
      * Clears theme namespace generations (all recorded theme scopes), WLS FPC,
      * optional CDN full-page purge, plus the shared non-global theme runtime pools.
+     *
+     * Storefront generation identity === Scope-published ThemeScopeVersion id.
+     * That id changes ONLY when ops clicks Publish in the theme editor for that Scope.
+     * This method NEVER rotates / invents published versions — compile, solidify, theme:upgrade -f,
+     * and cache clear only rewarm artifacts bound to the current published version.
      *
      * @return array{reason:string,theme_id:int|null,steps:array<string,bool>,failures:array<string,string>}
      */
     public function clearAllThemeRelatedCaches(?int $themeId = null, string $reason = 'theme_changed'): array
     {
-        // Storefront generation = Scope-published ThemeScopeVersion id (not system deploy).
-        // Advance published identity BEFORE purge/rewarm so Cookie / HTML bake / handshake share
-        // the same new id after staging→warm→promote.
         $result = [
             'reason' => $reason,
             'theme_id' => $themeId,
             'steps' => [],
             'failures' => [],
-            'advanced_published_version_ids' => [],
         ];
-        $this->runStep($result, 'advance_scope_published_storefront_generation', function () use ($themeId, $reason, &$result): void {
-            $actor = $reason !== '' ? $reason : 'theme_upgrade_storefront_generation';
-            /** @var ThemeScopeVersionService $versions */
-            $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
-            $ids = [];
-            if ($themeId !== null && $themeId > 0) {
-                $ids = $versions->advancePublishedStorefrontGenerationsForTheme($themeId, $actor);
-            } else {
-                try {
-                    /** @var ThemeApplicationUsageService $usage */
-                    $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
-                    foreach ($usage->frontendBoundThemeIds() as $boundId) {
-                        if ($boundId < 1) {
-                            continue;
-                        }
-                        foreach ($versions->advancePublishedStorefrontGenerationsForTheme($boundId, $actor) as $vid) {
-                            $ids[] = $vid;
-                        }
-                    }
-                } catch (\Throwable) {
-                }
-            }
-            $result['advanced_published_version_ids'] = $ids;
-        });
 
         // Skip nested staging warm — Shared/process purge below would wipe it.
         // Atomic closure: purge pointers first, then one final staging→warm→promote.
@@ -596,7 +573,12 @@ final class ThemeRuntimeCacheCleaner
         }
     }
 
-    /** Drop layout-entity published chrome/page projection HotCache (wave6-6s). */
+    /**
+     * Drop layout-entity published chrome/page projection HotCache (wave6-6s).
+     * Also clears homepage/blog layout HTML bags
+     * ({@see StorefrontThemeCacheCoordinator::storefrontHomepageLayoutHtmlPolicy()},
+     * {@see StorefrontThemeCacheCoordinator::storefrontBlogLayoutHtmlPolicy()}) which share this pool.
+     */
     private static function purgeLayoutEntityPublishedProjectionHotCachePool(): void
     {
         if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {

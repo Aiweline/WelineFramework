@@ -364,6 +364,8 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         }
         self::$postWarmClearedThemeIds[$themeId] = true;
         try {
+            // Compile+warm flushes chrome/FPC only — never rotates themePublishedVersionId
+            // (generation === Scope published version; only editor Publish may change it).
             $result = $this->cacheCleaner->clearAllThemeRelatedCaches(
                 $themeId,
                 'theme_layout_formal_compile_warm',

@@ -181,7 +181,7 @@ id属性不能为空,id属性不能为空
 复制失败,复制失败
 关闭,关闭
 页脚上方扩展,页脚上方扩展
-"footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。","footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。"
+"footer-above 槽默认内容；默认空（避免与首页信任条叠双），供其它模块覆盖或追加。","footer-above 槽默认内容；默认空（避免与首页信任条叠双），供其它模块覆盖或追加。"
 页脚之前,页脚之前
 在渲染页脚组件之前触发，允许其他模块在页脚开始处注入内容。,在渲染页脚组件之前触发，允许其他模块在页脚开始处注入内容。
 页脚内容之前,页脚内容之前
@@ -271,7 +271,9 @@ id属性不能为空,id属性不能为空
 "基础布局 Body 开始","基础布局 Body 开始"
 "在渲染基础布局的 <body> 标签开始处触发，允许其他模块在 body 开始处注入内容。此 hook 适用于所有使用基础布局的页面。","在渲染基础布局的 <body> 标签开始处触发，允许其他模块在 body 开始处注入内容。此 hook 适用于所有使用基础布局的页面。"
 "基础布局 Body 结束","基础布局 Body 结束"
-"在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。","在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。"
+"空壳兼容点；游客中性尾 chrome 已迁 storefront-tail-chrome；浮层在 footer partial。","空壳兼容点；游客中性尾 chrome 已迁 storefront-tail-chrome；浮层在 footer partial。"
+"基础布局 Body 结束（动态）","基础布局 Body 结束（动态）"
+"会话/路径敏感注入（I18n / Visitor）；禁止进入游客静态 chrome 袋。","会话/路径敏感注入（I18n / Visitor）；禁止进入游客静态 chrome 袋。"
 "后台基础布局 Body 结束","后台基础布局 Body 结束"
 "在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局；主题编辑器壳 theme-editor 不引用本 hook。","在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局；主题编辑器壳 theme-editor 不引用本 hook。"
 主题编辑器壳头部之前,主题编辑器壳头部之前
@@ -887,20 +889,11 @@ FAQ/常见问题,FAQ/常见问题
 参数配置,参数配置
 参数保存成功,参数保存成功
 参数保存失败,参数保存失败
-特价,特价
-DEMO,演示
-热销,热销
-包邮,包邮
-NEW,新品
 收起悬浮,收起悬浮
 展开悬浮,展开悬浮
-加入收藏,加入收藏
-加入对比,加入对比
-快速查看,快速查看
 分类,分类
 分类展示图,分类展示图
 查看全部,查看全部
-"寻衣 · 形制 · 织绣","寻衣 · 形制 · 织绣"
 视频,视频
 您的浏览器不支持视频标签。,您的浏览器不支持视频标签。
 查看更多,查看更多
@@ -975,6 +968,11 @@ NEW,新品
 拖入弹窗内容,拖入弹窗内容
 弹窗底部,弹窗底部
 拖入按钮,拖入按钮
+特价,特价
+DEMO,演示
+热销,热销
+包邮,包邮
+NEW,新品
 "您的订单已支付成功，预计 2 个工作日内发货。","您的订单已支付成功，预计 2 个工作日内发货。"
 订单已确认,订单已确认
 清晰表达你的页面主张,清晰表达你的页面主张
@@ -1029,7 +1027,6 @@ ERROR,ERROR
 退出登录,退出登录
 语言,语言
 货币,货币
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 Weline,韦林
 网站Logo,网站标志
 搜索商品...,搜索商品...
@@ -1907,6 +1904,9 @@ AI目录加载失败,AI目录加载失败
 "未检测到闭包根类 .%{1}","未检测到闭包根类 .%{1}"
 "部件根结构疑似被拆散（缺少 .%{1}）","部件根结构疑似被拆散（缺少 .%{1}）"
 示例商品名称,示例商品名称
+加入收藏,加入收藏
+加入对比,加入对比
+快速查看,快速查看
 官方商城帮助与客户服务,官方商城帮助与客户服务
 精选优质商品与可靠服务，覆盖日常选购与礼赠场景。,精选优质商品与可靠服务，覆盖日常选购与礼赠场景。
 保留所有权利,保留所有权利
@@ -2330,16 +2330,23 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 静态文件：weline.modules.js编译文件！,静态文件：weline.modules.js编译文件！
 "编译 Weline UI 2.0 静态资源包！","编译 Weline UI 2.0 静态资源包！"
 编译主题资源（less、weline.modules.js等）,编译主题资源（less、weline.modules.js等）
+Pagination,分页
+Previous,以前的
+"Page %{1} of %{2}","第 %{1} 页（共 %{2}）"
+Next,下一个
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+搜索筛选,搜索筛选
+"footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。","footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。"
+登录,登录
+登录页工具,登录页工具
+"在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。","在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
+"寻衣 · 形制 · 织绣","寻衣 · 形制 · 织绣"
 "Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
 "Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
 "更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿）"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
-Pagination,分页
-Previous,以前的
-"Page %{1} of %{2}","第 %{1} 页（共 %{2}）"
-Next,下一个
 展开搜索,展开搜索
 我的菜单,我的菜单
 关闭菜单,关闭菜单
@@ -2347,7 +2354,6 @@ Next,下一个
 个人中心,个人中心
 "开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径...","开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径..."
 "设计 area→Theme 模块路径：","设计 area→Theme 模块路径："
-搜索筛选,搜索筛选
 选择作用范围,选择作用范围
 搜索作用范围,搜索作用范围
 未找到匹配作用范围,未找到匹配作用范围
@@ -2359,8 +2365,6 @@ Next,下一个
 "店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。"
 各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。
 所选主题版本不属于当前网站范围,所选主题版本不属于当前网站范围
-登录,登录
-登录页工具,登录页工具
 主题布局预固化,主题布局预固化
 "未找到激活主题，请用 -t/--theme 指定主题名。","未找到激活主题，请用 -t/--theme 指定主题名。"
 "更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）"
@@ -4871,3 +4875,12 @@ cookie政策,cookie政策
 "合并布局 bake 的部件 source JS（前 N 个阻塞合包、其后再合包→/widget-assets/）。自动与开启均始终合包；关闭可显式关掉。","合并布局 bake 的部件 source JS（前 N 个阻塞合包、其后再合包→/widget-assets/）。自动与开启均始终合包；关闭可显式关掉。"
 按品类浏览明制、宋制、唐制与马面裙，或直接进入全部商品列表。,按品类浏览明制、宋制、唐制与马面裙，或直接进入全部商品列表。
 语言与货币,语言与货币
+"浏览器不支持Geolocation API","浏览器不支持Geolocation API"
+定位失败,定位失败
+用户拒绝了定位权限,用户拒绝了定位权限
+位置信息不可用,位置信息不可用
+定位请求超时,定位请求超时
+IP定位服务响应错误,IP定位服务响应错误
+IP定位失败,IP定位失败
+"IP定位服务不可用: %{1}","IP定位服务不可用: %{1}"
+"Weline API is not available","Weline API is not available"

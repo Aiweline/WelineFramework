@@ -609,8 +609,13 @@ final class RequiredDefaultInjectionContract
         if (in_array($slotId, ['header', 'footer', 'delivery'], true)) {
             return false;
         }
-        // Global float destinations live under footer chrome but omit the footer- prefix.
-        if (str_starts_with($slotId, 'storefront-float-') || str_starts_with($slotId, 'storefront_float_')) {
+        // Global float / tail chrome destinations live under footer chrome but omit the footer- prefix.
+        if (
+            str_starts_with($slotId, 'storefront-float-')
+            || str_starts_with($slotId, 'storefront_float_')
+            || str_starts_with($slotId, 'storefront-tail-')
+            || str_starts_with($slotId, 'storefront_tail_')
+        ) {
             return true;
         }
         foreach (['header', 'footer'] as $root) {

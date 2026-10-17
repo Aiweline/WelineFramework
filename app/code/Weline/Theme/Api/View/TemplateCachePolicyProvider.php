@@ -25,7 +25,18 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
                 'header-account' => ['context' => 'static'],
                 'header-account-links' => ['context' => 'static'],
                 'header-orders' => ['context' => 'header_action'],
-                'Weline_Theme::frontend::layouts::base::body-end' => ['context' => 'body_end'],
+                // Empty compatibility stubs share one bag (context=body_end).
+                // Guest-neutral Compare/Consent/B2B/Geo live in footer storefront-tail-chrome;
+                // session/path-sensitive I18n/Visitor live on body-end-dynamic (no aggregate).
+                'Weline_Theme::frontend::layouts::base::body-end' => [
+                    'context' => 'body_end',
+                    'require_all_outputs_cacheable' => true,
+                ],
+            ],
+            'output_files' => [
+                'Weline_Theme::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => [
+                    'context' => 'body_end',
+                ],
             ],
         ];
     }

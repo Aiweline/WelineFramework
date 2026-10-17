@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\App\State;
@@ -1037,19 +1039,19 @@ class ThemeData
      */
     public static function getFileParams(string $identify, string $scope = 'default', ?string $locale = null): array
     {
-        $traceEnabled = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled();
+        $traceEnabled = \Weline\Framework\Runtime\TraceGate::isArmed();
         $traceName = 'theme_data::getFileParams::' . $identify;
         $traceStart = $traceEnabled ? microtime(true) : 0.0;
         if ($traceEnabled) {
-            \Weline\Framework\Runtime\RequestLifecycleTrace::pushCurrentParent($traceName);
+            \Weline\Framework\Runtime\TraceGate::pushCurrentParent($traceName);
         }
 
         try {
             return self::getParamValues($identify, $scope, $locale);
         } finally {
             if ($traceEnabled) {
-                \Weline\Framework\Runtime\RequestLifecycleTrace::popCurrentParent();
-                \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+                \Weline\Framework\Runtime\TraceGate::popCurrentParent();
+                \Weline\Framework\Runtime\TraceGate::recordSpan(
                     $traceName,
                     (microtime(true) - $traceStart) * 1000,
                     'theme'

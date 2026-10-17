@@ -36,8 +36,10 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
 {
     private const REQUEST_LOAD_CACHE_PREFIX = 'theme.scoped.workspace.load.v1.';
     private const REQUEST_LOAD_CACHE_KEYS = 'theme.scoped.workspace.load.v1.keys';
-    private const REQUEST_WORKSPACE_CACHE_PREFIX = 'theme.scoped.workspace.row.v1.';
-    private const REQUEST_WORKSPACE_CACHE_KEYS = 'theme.scoped.workspace.row.v1.keys';
+    /** v2: memo stores readonly row snapshots (arrays), not live ORM clones. */
+    private const REQUEST_WORKSPACE_CACHE_PREFIX = 'theme.scoped.workspace.row.v2.';
+    private const REQUEST_WORKSPACE_CACHE_KEYS = 'theme.scoped.workspace.row.v2.keys';
+    private const REQUEST_WORKSPACE_SNAPSHOT_MISS = '__theme_workspace_snapshot_miss__';
 
     private readonly ThemeScopeReleaseBatch $releaseBatches;
 
@@ -1961,7 +1963,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $workspace = clone $this->workspaces;
         $workspace->clearData()->clearQuery()->setData([
             ThemeScopeWorkspace::schema_fields_IDENTITY_HASH => $context->identityHash(),
-            ThemeScopeWorkspace::schema_fields_THEME_VERSION_ID => $this->selectedWorkspaceVersion($context)?->getVersionId() ?? 0,
+            ThemeScopeWorkspace::schema_fields_THEME_VERSION_ID => $this->selectedWorkspaceVersionId($context),
             ThemeScopeWorkspace::schema_fields_SCOPE => $context->scope->storageScope,
             ThemeScopeWorkspace::schema_fields_SCOPE_KIND => 'external',
             ThemeScopeWorkspace::schema_fields_WEBSITE_ID => null,
@@ -2005,16 +2007,15 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         // read result, but never reuse it for a locking read: write paths must
         // still obtain a fresh row under FOR UPDATE after the request cache is
         // flushed.
-        $version = $this->selectedWorkspaceVersion($context);
-        $versionId = $version?->getVersionId() ?? 0;
+        // Cache-key / FK only need the version id — avoid hydrating a model on every slot.
+        $versionId = $this->selectedWorkspaceVersionId($context);
         $requestCacheKey = self::REQUEST_WORKSPACE_CACHE_PREFIX . $context->identityHash() . '|v' . $versionId;
         if (!$allowRequestCache && RequestContext::isInitialized()) {
             RequestContext::remove($requestCacheKey);
         }
         if ($allowRequestCache && !$lockingRead && RequestContext::isInitialized() && $context->identityHash() !== '') {
             if (RequestContext::has($requestCacheKey)) {
-                $cached = RequestContext::get($requestCacheKey);
-                return $cached instanceof ThemeScopeWorkspace ? clone $cached : null;
+                return $this->hydrateWorkspaceFromRequestCache(RequestContext::get($requestCacheKey));
             }
         }
 
@@ -2027,34 +2028,43 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         }
         $workspace->find()->fetch();
 
-        if ($workspace->getId() < 1 && $version !== null) {
+        if ($workspace->getId() < 1 && $versionId > 0) {
             // A new editable version may intentionally reference its source's
             // immutable revision. Follow that recorded reference, never another
-            // version's mutable workspace cursor.
-            $snapshots = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
-            foreach ($snapshots->resources($version->toVersionIdentity()) as $snapshot) {
-                if (($snapshot['resource_identity_hash'] ?? '') !== $context->identityHash()) { continue; }
-                $revisionId = (int)($snapshot['intent_revision_id'] ?? 0);
-                $releaseId = (int)($snapshot['release_id'] ?? 0);
-                $ref = $revisionId > 0
-                    ? (clone $this->revisions)->clearData()->clearQuery()->load($revisionId)
-                    : ($releaseId > 0 ? $this->loadRelease($releaseId) : null);
-                $sourceId = (int)($ref?->getData('workspace_id') ?? 0);
-                if ($sourceId > 0) {
-                    $workspace = (clone $this->workspaces)->clearData()->clearQuery()->load($sourceId);
-                    if ($revisionId > 0) { $workspace->setData('draft_revision_id', $revisionId)->setData('revision', (int)$ref->getData('revision_no')); }
-                    if ($releaseId > 0) { $workspace->setData('published_release_id', $releaseId); }
+            // version's mutable workspace cursor. Hydrate the version model only
+            // on this miss path (hot path uses versionId alone).
+            $version = $this->selectedWorkspaceVersion($context);
+            if ($version !== null) {
+                $snapshots = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
+                foreach ($snapshots->resources($version->toVersionIdentity()) as $snapshot) {
+                    if (($snapshot['resource_identity_hash'] ?? '') !== $context->identityHash()) { continue; }
+                    $revisionId = (int)($snapshot['intent_revision_id'] ?? 0);
+                    $releaseId = (int)($snapshot['release_id'] ?? 0);
+                    $ref = $revisionId > 0
+                        ? (clone $this->revisions)->clearData()->clearQuery()->load($revisionId)
+                        : ($releaseId > 0 ? $this->loadRelease($releaseId) : null);
+                    $sourceId = (int)($ref?->getData('workspace_id') ?? 0);
+                    if ($sourceId > 0) {
+                        $workspace = (clone $this->workspaces)->clearData()->clearQuery()->load($sourceId);
+                        if ($revisionId > 0) { $workspace->setData('draft_revision_id', $revisionId)->setData('revision', (int)$ref->getData('revision_no')); }
+                        if ($releaseId > 0) { $workspace->setData('published_release_id', $releaseId); }
+                    }
+                    break;
                 }
-                break;
-            }
-            if ($workspace->getId() < 1 && $snapshots->head($version->toVersionIdentity()) === null) {
-                $workspace = (clone $this->workspaces)->clearData()->clearQuery()
-                    ->where('identity_hash', $context->identityHash())->where('theme_version_id', 0)->find()->fetch();
+                if ($workspace->getId() < 1 && $snapshots->head($version->toVersionIdentity()) === null) {
+                    $workspace = (clone $this->workspaces)->clearData()->clearQuery()
+                        ->where('identity_hash', $context->identityHash())->where('theme_version_id', 0)->find()->fetch();
+                }
             }
         }
         $resolved = $workspace->getId() > 0 ? $workspace : null;
         if ($allowRequestCache && !$lockingRead && RequestContext::isInitialized() && $context->identityHash() !== '') {
-            RequestContext::set($requestCacheKey, $resolved);
+            RequestContext::set(
+                $requestCacheKey,
+                $resolved === null
+                    ? self::REQUEST_WORKSPACE_SNAPSHOT_MISS
+                    : $this->workspaceRowSnapshot($resolved)
+            );
             $keys = RequestContext::get(self::REQUEST_WORKSPACE_CACHE_KEYS, []);
             if (!is_array($keys)) {
                 $keys = [];
@@ -2066,13 +2076,80 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         return $resolved;
     }
 
+    /**
+     * Non-locking request memo: hydrate a fresh model from a frozen row bag.
+     * Never return a shared/cloned live ORM from RequestContext.
+     */
+    private function hydrateWorkspaceFromRequestCache(mixed $cached): ?ThemeScopeWorkspace
+    {
+        if ($cached === self::REQUEST_WORKSPACE_SNAPSHOT_MISS || $cached === null) {
+            return null;
+        }
+        if (!\is_array($cached) || $cached === []) {
+            return null;
+        }
+
+        return $this->hydrateWorkspaceFromSnapshot($cached);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function workspaceRowSnapshot(ThemeScopeWorkspace $workspace): array
+    {
+        $data = $workspace->getData();
+        if (!\is_array($data) || $data === []) {
+            return [];
+        }
+        // Drop non-scalar bags that are not durable row columns.
+        $snapshot = [];
+        foreach ($data as $key => $value) {
+            if (!\is_string($key) && !\is_int($key)) {
+                continue;
+            }
+            if (\is_object($value)) {
+                continue;
+            }
+            $snapshot[$key] = $value;
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function hydrateWorkspaceFromSnapshot(array $data): ThemeScopeWorkspace
+    {
+        $workspace = clone $this->workspaces;
+        $workspace->clearData()->clearQuery()->setData($data);
+
+        return $workspace;
+    }
+
+    private function selectedWorkspaceVersionId(ThemeEditorContext $context): int
+    {
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING) {
+            return 0;
+        }
+
+        return ObjectManager::getInstance(\Weline\Theme\Service\ThemeScopeVersionService::class)
+            ->getCurrentVersionId(
+                $context->themeId,
+                $context->scope->storageScope,
+                $context->scope->storeMode,
+                $context->area,
+            );
+    }
+
     private function selectedWorkspaceVersion(ThemeEditorContext $context): ?\Weline\Theme\Model\ThemeScopeVersion
     {
         if ($context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING) { return null; }
         $version = ObjectManager::getInstance(\Weline\Theme\Service\ThemeScopeVersionService::class)
             ->getCurrent($context->themeId, $context->scope->storageScope, $context->scope->storeMode, $context->area);
         if ($version === null || $version->getScope() !== $context->scope->storageScope) { return null; }
-        return (clone $version)->clearData()->clearQuery()->load($version->getVersionId());
+        // getCurrent is request-memoized (resolved id + identity row hydrate).
+        return $version;
     }
 
     /** The editor and its patch baseline must address the same V/R as the canvas. */

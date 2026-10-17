@@ -1,0 +1,54 @@
+<?php
+/**
+ * Theme storefront tail chrome: image placeholder + idle JS + Geo/Location declare.
+ * Lives in footer chrome bag (storefront-tail-chrome), not body-end.
+ *
+ * @widget.code {theme-storefront-tail}
+ * @widget.cache {3600}
+ * @widget.share {true}
+ * @widget.name {店面尾 Chrome}
+ * @widget.description {占位图 + Theme idle 模块 + Geo/Location 声明；默认注入 storefront-tail-chrome。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {storefront-tail-chrome}
+ * @widget.supports {["theme-storefront-tail","layout-storefront-tail-chrome","content"]}
+ * @widget.default_injections {[{"layout_type":"*","slot":"storefront-tail-chrome","area":"footer","sort_order":10,"required":true,"reason":"店面任意布局默认尾 chrome idle/占位；主题重写布局仍注入","config":[]}]}
+ */
+
+$isBackend = str_contains(strtolower((string)($_SERVER['REQUEST_URI'] ?? '')), '/admin');
+if ($isBackend) {
+    return;
+}
+
+$placeholderSrc = \Weline\Theme\Helper\StorefrontImagePlaceholder::url();
+$placeholderSrcJson = json_encode($placeholderSrc, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+?>
+<script>
+window.Weline = window.Weline || {};
+window.Weline.Theme = window.Weline.Theme || {};
+window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?>;
+</script>
+<?php
+// Marker: storefront-float-load-on-layer-v1 (float JS on #w-storefront-float-layer).
+// Image fallback + Theme chrome: idle (no natural visible host).
+?>
+<div hidden
+     data-weline-load="storefrontImageFallback"
+     data-weline-load-when="idle"
+     data-testid="theme-storefront-tail-image-fallback"
+     aria-hidden="true"></div>
+<div hidden
+     data-weline-load="themePrepaint,welineUi"
+     data-weline-load-when="idle"
+     data-weline-theme-chrome="1"
+     data-testid="theme-storefront-tail-chrome-js"
+     aria-hidden="true"></div>
+<script>
+(function () {
+  if (typeof Weline === 'undefined' || !Weline.declare) return;
+  try { Weline.declare('geo'); } catch (e) {}
+  try { Weline.declare('location'); } catch (e) {}
+})();
+</script>

@@ -8,9 +8,10 @@ use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\Runtime\TemplateRenderRouteTrace;
 use Weline\Framework\View\Template;
 use Weline\Theme\Exception\SlotBoundaryRequiredException;
 use Weline\Theme\Api\Layout\LayoutIdentity;
@@ -150,7 +151,7 @@ class SlotRendererService
         string $area = 'frontend'
     ): string
     {
-        return RequestLifecycleTrace::measurePhase(
+        return TraceGate::measurePhase(
             ThemeLayoutBudgetPhases::L3_SLOTS,
             fn() => $this->traceCall(
                 'slot_renderer::processSlots',
@@ -380,7 +381,7 @@ class SlotRendererService
 
         $modules = \array_keys($modules);
         \sort($modules, \SORT_STRING);
-        RequestLifecycleTrace::measurePhase(
+        TraceGate::measurePhase(
             'theme.slots.dictionary_prefetch',
             static function () use ($modules): void {
                 \Weline\Framework\Phrase\Parser::prefetchGlobalDictionaryModules($modules);
@@ -627,12 +628,12 @@ class SlotRendererService
             return [];
         }
 
-        $slotIds = RequestLifecycleTrace::measurePhase(
+        $slotIds = TraceGate::measurePhase(
             'theme.slots.html_slot_ids',
             fn(): array => $this->extractSlotIdsFromHtml($html),
             ['bytes' => \strlen($html)],
         );
-        $slotIds = RequestLifecycleTrace::measurePhase(
+        $slotIds = TraceGate::measurePhase(
             'theme.slots.expand_child_ids',
             fn(): array => $this->expandSlotIdsWithContainerChildSlots($slotWidgets, $slotIds),
             ['slots' => \count($slotIds), 'widget_slots' => \count($slotWidgets)],
@@ -956,14 +957,36 @@ class SlotRendererService
                 return [];
             }
 
+            $memoKey = ThemeScopeVersionService::SHARED_CHROME_BY_SLOT_PREFIX
+                . $themeId . '|' . $area . '|' . $scope;
+            if (RequestContext::isInitialized() && RequestContext::has($memoKey)) {
+                $cached = RequestContext::get($memoKey);
+                if (\is_array($cached)) {
+                    // Copy-on-read: merge/fill must not mutate the request memo bag.
+                    return ThemeScopeVersionService::copyArrayTree($cached);
+                }
+            }
+
             $version = $scopeVersions->getPublished($themeId, $scope)
                 ?? $scopeVersions->getCurrent($themeId, $scope);
             if ($version === null || $version->getVersionId() < 1) {
+                if (RequestContext::isInitialized()) {
+                    RequestContext::set($memoKey, []);
+                    ThemeScopeVersionService::rememberSharedChromeBySlotKey($memoKey);
+                }
+
                 return [];
             }
 
-            $nodes = $version->getChromePayload();
+            // Borrow memo for bySlot materialization (nodesToAreaLayout / organize do not
+            // write nested chrome nodes in place). Caller-facing return still copy-on-read.
+            $nodes = $version->peekChromePayload();
             if ($nodes === []) {
+                if (RequestContext::isInitialized()) {
+                    RequestContext::set($memoKey, []);
+                    ThemeScopeVersionService::rememberSharedChromeBySlotKey($memoKey);
+                }
+
                 return [];
             }
 
@@ -979,7 +1002,12 @@ class SlotRendererService
                 ));
             }
 
-            return $bySlot;
+            if (RequestContext::isInitialized()) {
+                RequestContext::set($memoKey, $bySlot);
+                ThemeScopeVersionService::rememberSharedChromeBySlotKey($memoKey);
+            }
+
+            return ThemeScopeVersionService::copyArrayTree($bySlot);
         } catch (\Throwable) {
             return [];
         }
@@ -1178,7 +1206,21 @@ class SlotRendererService
         $nestedChromeSlots = array_values(array_unique(array_merge(
             SharedChromeService::FOOTER_NESTED_CHROME_SLOTS,
             SharedChromeService::MINI_CART_NESTED_CHROME_SLOTS,
+            SharedChromeService::HEADER_NESTED_CHROME_SLOTS,
         )));
+        // Homepage-inherited carriers (footer-*-links / header-nav-extensions / …)
+        // live in chrome_payload but were previously left to safety_net late inject.
+        foreach (array_keys($chrome) as $chromeSlotId) {
+            $chromeSlotId = trim((string)$chromeSlotId);
+            if ($chromeSlotId === '') {
+                continue;
+            }
+            if (!\Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::isInheritedChromeCarrierSlot($chromeSlotId)) {
+                continue;
+            }
+            $nestedChromeSlots[] = $chromeSlotId;
+        }
+        $nestedChromeSlots = array_values(array_unique($nestedChromeSlots));
         foreach ($nestedChromeSlots as $slotId) {
             $widgets = $chrome[$slotId] ?? [];
             if ($widgets === [] || $this->htmlSlotInnerHasWidgetCode($html, $slotId)) {
@@ -1285,7 +1327,7 @@ class SlotRendererService
 
         $parker = $this->boundaryParker();
         $scanner = $this->boundaryScanner();
-        $html = RequestLifecycleTrace::measurePhase(
+        $html = TraceGate::measurePhase(
             'theme.slots.opaque_park',
             fn(): string => $parker->park($html),
             ['bytes' => \strlen($html)],
@@ -1303,7 +1345,7 @@ class SlotRendererService
             if ($pendingSlotIds === []) {
                 break;
             }
-            $regions = RequestLifecycleTrace::measurePhase(
+            $regions = TraceGate::measurePhase(
                 'theme.slots.boundary_scan',
                 static fn() => $scanner->enumerateRegions($html, null, $pendingSlotIds),
                 ['iteration' => $iteration, 'targets' => \count($pendingSlotIds)],
@@ -1329,7 +1371,7 @@ class SlotRendererService
                         continue;
                     }
 
-                    $replacement = RequestLifecycleTrace::measurePhase(
+                    $replacement = TraceGate::measurePhase(
                         'theme.slots.region_fill',
                         fn(): ?array => $this->buildSlotRegionReplacement($html, $region, $slotWidgets[$slotId]),
                         [
@@ -1349,7 +1391,7 @@ class SlotRendererService
                 if ($batchReplacements !== []) {
                     $html = \count($batchReplacements) === 1
                         ? $this->boundaryScanner()->replaceWrapperInner($html, $batchReplacements[0], $batchReplacements[0]['new_inner'])
-                        : RequestLifecycleTrace::measurePhase(
+                        : TraceGate::measurePhase(
                             'theme.slots.region_batch_replace',
                             fn(): string => $this->boundaryScanner()->replaceWrapperInners($html, $batchReplacements),
                             [
@@ -1376,18 +1418,18 @@ class SlotRendererService
         // Template widget-wrappers (e.g. mini-cart-icon) are opaque-parked for the
         // boundary pass, which also hides nested layout-scoped slots such as
         // footer-extras. Restore first so fillRemaining can see those markers.
-        $html = RequestLifecycleTrace::measurePhase(
+        $html = TraceGate::measurePhase(
             'theme.slots.opaque_restore',
             fn(): string => $parker->restore($html),
             ['bytes' => \strlen($html)],
         );
-        $html = RequestLifecycleTrace::measurePhase(
+        $html = TraceGate::measurePhase(
             'theme.slots.fill_unmarked',
             fn(): string => $this->fillRemainingUnmarkedSlotWidgets($html, $slotWidgets),
             ['slots' => \count($slotWidgets)],
         );
 
-        RequestLifecycleTrace::measurePhase(
+        TraceGate::measurePhase(
             'theme.slots.orphan_scan',
             function () use ($slotWidgets, $existingSlotIds, $html, $pageType): void {
                 // 布局源码已声明、但被 meta 门控（如 showRelatedProducts=false）未写入 HTML
@@ -1514,7 +1556,7 @@ class SlotRendererService
                 'wrapper_open_end' => $bounds['open_end'],
             ];
 
-            $nextHtml = RequestLifecycleTrace::measurePhase(
+            $nextHtml = TraceGate::measurePhase(
                 'theme.slots.region_fill',
                 fn(): string => $this->fillSlotRegionString($html, $region, $widgets),
                 [
@@ -1628,7 +1670,7 @@ class SlotRendererService
                 if ($hasPureLayoutAddition && !$this->slotInnerContainsNestedSlots($inner)) {
                     $newInner = $this->traceCall(
                         'slot_renderer::renderCowMergedMultipleSlot::' . \substr($slotId, 0, 80),
-                        fn() => RequestLifecycleTrace::measurePhase(
+                        fn() => TraceGate::measurePhase(
                             'theme.slots.widgets.cow',
                             fn() => $this->renderCowMergedSlotHtml($plan),
                             ['branch' => 'multiple-rebuild', 'widgets' => \count($layoutWidgets)],
@@ -1650,7 +1692,7 @@ class SlotRendererService
                     ];
                 }
 
-                $newInner = RequestLifecycleTrace::measurePhase(
+                $newInner = TraceGate::measurePhase(
                     'theme.slots.widgets.cow',
                     fn() => $this->spliceCowMergedMultipleSlotInner($inner, $templateWidgets, $plan, $layoutWidgets),
                     ['branch' => 'multiple', 'widgets' => \count($layoutWidgets)],
@@ -1668,7 +1710,7 @@ class SlotRendererService
 
             $widgetsHtml = $this->traceCall(
                 'slot_renderer::renderCowMergedSlot::' . \substr($slotId, 0, 80),
-                fn() => RequestLifecycleTrace::measurePhase(
+                fn() => TraceGate::measurePhase(
                     'theme.slots.widgets.cow',
                     fn() => $this->renderCowMergedSlotHtml($plan),
                     ['branch' => 'single', 'widgets' => \count($layoutWidgets)],
@@ -3067,7 +3109,7 @@ class SlotRendererService
     private function renderSlotWidgets(array $widgets, string $slotId = ''): string
     {
         $render = function () use ($widgets, $slotId): string {
-            return (string)RequestLifecycleTrace::measurePhase(
+            return (string)TraceGate::measurePhase(
                 'theme.slots.widgets.regular',
                 function () use ($widgets): string {
                     $html = '';
@@ -3089,7 +3131,7 @@ class SlotRendererService
             return $render();
         }
 
-        return (string)RequestLifecycleTrace::measurePhase(
+        return (string)TraceGate::measurePhase(
             $phase,
             $render,
             ['slot_id' => $slotId, 'widgets' => \count($widgets)],
@@ -3127,6 +3169,14 @@ class SlotRendererService
         $widgetModule = (string)($widget['widget_module'] ?? '');
         $widgetCode = (string)($widget['widget_code'] ?? '');
         $widgetType = (string)($widget['widget_type'] ?? '');
+        $slotId = (string)($widget['slot_id'] ?? '');
+        if ($widgetModule !== '' && $widgetCode !== '') {
+            TemplateRenderRouteTrace::mark(
+                'widget',
+                $widgetModule . '/' . $widgetCode . '@' . ($slotId !== '' ? $slotId : '-'),
+                ['type' => $widgetType]
+            );
+        }
 
         return $this->traceCall(
             'slot_renderer::renderWidget::' . substr($widgetModule . '::' . $widgetCode, 0, 120),
@@ -3137,7 +3187,7 @@ class SlotRendererService
                 'module' => $widgetModule,
                 'code' => $widgetCode,
                 'type' => $widgetType,
-                'slot_id' => (string)($widget['slot_id'] ?? ''),
+                'slot_id' => $slotId,
             ]
         );
     }
@@ -3203,7 +3253,7 @@ class SlotRendererService
                     'code' => (string)$widgetCode,
                     'type' => (string)$widgetType,
                 ];
-                $html = RequestLifecycleTrace::measurePhase(
+                $html = TraceGate::measurePhase(
                     'theme.slots.widget.component_render',
                     fn(): string => (string)$this->componentRenderer->render($definition, $renderConfig, $this->pass()->renderTheme, [
                         'area' => $renderArea,
@@ -3214,7 +3264,7 @@ class SlotRendererService
                     ]),
                     $widgetTimingMeta,
                 );
-                $html = RequestLifecycleTrace::measurePhase(
+                $html = TraceGate::measurePhase(
                     'theme.slots.widget.wrapper',
                     fn(): string => $this->maybeWrapWidgetHtml(
                         $html,
@@ -3286,7 +3336,7 @@ class SlotRendererService
 
         try {
             // 渲染部件模板 - 使用 fetch() 方法，它接受2个参数：fileName 和 data
-            $html = $this->template->fetch($templatePath, $finalConfig);
+            $html = $this->template->fetchHtml($templatePath, $finalConfig);
             $html = is_string($html) ? $html : '';
             // 为编辑器模式包装部件，添加识别属性；DEV/预览下附加 HTML 健康检测结果
             $html = $this->maybeWrapWidgetHtml(
@@ -4869,7 +4919,8 @@ HTML;
 
     private function traceCall(string $name, callable $callback, array $meta = []): mixed
     {
-        if (!RequestLifecycleTrace::isEnabled()) {
+        // Closed: skip all trace parent/span work (isEnabled is O(1) when hotArmed=false).
+        if (!TraceGate::isArmed()) {
             self::cooperativeRenderYield();
             try {
                 return $callback();
@@ -4880,12 +4931,12 @@ HTML;
 
         self::cooperativeRenderYield();
         $start = microtime(true);
-        RequestLifecycleTrace::pushCurrentParent($name);
+        TraceGate::pushCurrentParent($name);
         try {
             return $callback();
         } finally {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan($name, (microtime(true) - $start) * 1000, 'theme', null, $meta);
+            TraceGate::popCurrentParent();
+            TraceGate::recordSpan($name, (microtime(true) - $start) * 1000, 'theme', null, $meta);
             self::cooperativeRenderYield();
         }
     }
@@ -4922,9 +4973,21 @@ HTML;
         }
 
         self::$fiberRenderYieldAt[$fiber] = $now;
-        RequestLifecycleTrace::measurePhase(
+        // Closed: bare yield. Open: record only if already hot-armed (no Cookie resolve on yield).
+        if (!TraceGate::isHotArmed()) {
+            SchedulerSystem::yield();
+
+            return;
+        }
+        $yieldStarted = \hrtime(true);
+        SchedulerSystem::yield();
+        $yieldMs = (\hrtime(true) - $yieldStarted) / 1e6;
+        TraceGate::recordSpan(
             'theme.slots.cooperative_yield',
-            static fn() => SchedulerSystem::yield()
+            $yieldMs,
+            'theme',
+            null,
+            ['kind' => 'cooperative_yield']
         );
     }
     

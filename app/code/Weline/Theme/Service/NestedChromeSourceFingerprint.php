@@ -10,6 +10,9 @@ namespace Weline\Theme\Service;
  * 键消费方：Partials frontend header → storefront_chrome。
  * 算法：每文件内容 sha256；mtime|size 仅作进程内 memo 门控（stat 变才重 hash）。
  * 禁止无条件每请求整文件 hash；禁止 Worker 生命周期一次算死不刷新。
+ *
+ * Theme 模块相对路径 + 迷你车 footer-extras 嵌套部件（Marketing coupon / Order notice）
+ * 绝对路径一并打进键，改壳源即 bust chrome 袋。
  */
 final class NestedChromeSourceFingerprint
 {
@@ -30,14 +33,31 @@ final class NestedChromeSourceFingerprint
     }
 
     /**
+     * Cross-module nested chrome widget sources (repo-relative from BP when defined).
+     *
+     * @return list<string>
+     */
+    public static function nestedWidgetRepoRelativePaths(): array
+    {
+        return [
+            'app/code/Weline/Marketing/view/templates/frontend/widgets/checkout-coupon.phtml',
+            'app/code/Weline/Order/view/templates/frontend/widgets/order-notice.phtml',
+        ];
+    }
+
+    /**
      * @return list<string>
      */
     public static function sourceAbsolutePaths(): array
     {
-        $root = \dirname(__DIR__);
+        $themeRoot = \dirname(__DIR__);
         $out = [];
         foreach (self::sourceRelativePaths() as $rel) {
-            $out[] = $root . '/' . $rel;
+            $out[] = $themeRoot . '/' . $rel;
+        }
+        $bp = \defined('BP') ? \rtrim((string)BP, '/\\') : \dirname($themeRoot, 3);
+        foreach (self::nestedWidgetRepoRelativePaths() as $rel) {
+            $out[] = $bp . '/' . \ltrim(\str_replace('\\', '/', $rel), '/');
         }
 
         return $out;

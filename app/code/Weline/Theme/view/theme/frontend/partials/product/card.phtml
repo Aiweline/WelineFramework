@@ -18,6 +18,8 @@
  */
 
 use Weline\Theme\Helper\ProductCardAddToCartParams;
+use Weline\Theme\Helper\ProductCardShopperActionMarkup;
+use Weline\Theme\Helper\ProductLabelMarkup;
 use Weline\Theme\Helper\WidgetI18n;
 
 $metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.product.card');
@@ -75,12 +77,11 @@ $uniqueId = 'product-card-' . uniqid();
                 <?php endif; ?>
 
                 <?php if ($isDemo || $isNew || $isSale): ?>
-                    <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
+                    <?= ProductLabelMarkup::renderBadges([
                         'is_demo' => $isDemo,
                         'is_new' => $isNew,
                         'is_sale' => $isSale,
-                        'class' => 'product-card-partial__badges',
-                    ]) ?>
+                    ], 'product-card-partial__badges') ?>
                 <?php endif; ?>
 
                 <?php if (!$isInStock): ?>
@@ -88,8 +89,7 @@ $uniqueId = 'product-card-' . uniqid();
                 <?php endif; ?>
             </div>
             </a>
-            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
-                'product_id' => $productId,
+            <?= ProductCardShopperActionMarkup::render($productId, [
                 'show_wishlist' => $showWishlist,
                 'show_compare' => $showCompare,
                 'show_quickview' => $showQuickview,
@@ -144,12 +144,10 @@ $uniqueId = 'product-card-' . uniqid();
 
             <?php if ($showAddToCart): ?>
                 <div class="product-card-partial__actions">
-                    <?= $this->fetch(
-                        'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
-                        ProductCardAddToCartParams::fetchDictionary(
-                            array_merge($product, ['id' => $productId, 'product_id' => $productId, 'in_stock' => $isInStock]),
-                            ['enabled' => $isInStock]
-                        )
+                    <?= ProductCardAddToCartParams::renderSlot(
+                        $this,
+                        array_merge($product, ['id' => $productId, 'product_id' => $productId, 'in_stock' => $isInStock]),
+                        ['enabled' => $isInStock]
                     ) ?>
                 </div>
             <?php endif; ?>

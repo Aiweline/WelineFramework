@@ -319,18 +319,21 @@ final class ThemeRuntimeLayoutResolver
     }
 
     /**
+     * Scoped workspace layout release identity (ThemeScopeRelease PK) for a pageType+identity.
+     * Not storefront generation — that wire axis is {@see ThemePublishedVersionRuntimeResolver}.
+     *
      * @param array<string,mixed> $identity
-     * @return array{themePublishedVersionId:string,themePublishedVersion:string}
+     * @return array{publishedReleaseId:string,publishedReleaseLabel:string}
      */
-    public function resolvePublishedVersionInfo(
+    public function resolvePublishedReleaseInfo(
         ?int $themeId = null,
         string $pageType = 'homepage',
         array $identity = [],
         string $area = 'frontend',
     ): array {
         $empty = [
-            'themePublishedVersionId' => '',
-            'themePublishedVersion' => '',
+            'publishedReleaseId' => '',
+            'publishedReleaseLabel' => '',
         ];
         if ($themeId === null || $themeId <= 0) {
             return $empty;
@@ -347,8 +350,8 @@ final class ThemeRuntimeLayoutResolver
                 $label = $this->releaseLabel($releaseId);
 
                 return [
-                    'themePublishedVersionId' => (string)$releaseId,
-                    'themePublishedVersion' => $label,
+                    'publishedReleaseId' => (string)$releaseId,
+                    'publishedReleaseLabel' => $label,
                 ];
             } catch (\Throwable) {
                 continue;

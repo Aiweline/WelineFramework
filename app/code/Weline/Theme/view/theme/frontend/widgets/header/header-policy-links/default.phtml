@@ -22,8 +22,8 @@
  * @param menu_label {default="购物政策",type="string",label="政策菜单标题"}
  * @param aria_label {default="政策与关于",type="string",label="无障碍标题"}
  *
- * @widget.default_injections {[]}
- * @widget.placement {layout}
+ * @widget.default_injections {[{"layout_type":"homepage","slot":"header-policy-links","area":"header","sort_order":20,"required":true,"reason":"Header 分类后政策/关于槽空置；XOR 走拥有模块 JSON 注入，禁止 partial Hook else 内嵌与 entity 并排","config":[]}]}
+ * @widget.placement {injection}
  */
 
 use Weline\Theme\Helper\FooterDefaultLinksHelper;

@@ -21,7 +21,8 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
+use Weline\Framework\Runtime\TemplateRenderRouteTrace;
 use Weline\Framework\View\Template;
 use Weline\Theme\Api\DefaultThemeInterface;
 use Weline\Theme\Helper\LayoutPathResolver;
@@ -302,12 +303,12 @@ class ControllerFetchFileBefore implements ObserverInterface
         $allowPreviewTheme = !$isBackendRequest
             || $editorArea === 'frontend'
             || ($editorArea === 'backend' && $isThemeEditorPreviewRoute);
-        $theme = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        $theme = \Weline\Framework\Runtime\TraceGate::measurePhase(
             \Weline\Theme\Service\ThemeLayoutBudgetPhases::L0_CONTEXT,
             function () use ($area, $allowPreviewTheme) {
                 \Weline\Theme\Service\ThemePdpBudgetPhases::reserveTraceBuckets();
 
-                return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                return \Weline\Framework\Runtime\TraceGate::measurePhase(
                     'theme.layout.context',
                     fn() => $this->resolveThemeForLayout($area, $allowPreviewTheme),
                 );
@@ -364,7 +365,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             } else {
                 ThemeData::setCurrentTheme($theme);
                 ThemeData::setCurrentArea($area);
-                \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.performance_load', fn() => ThemeData::performanceLoad(scope: $scope));
+                \Weline\Framework\Runtime\TraceGate::measurePhase('theme.layout.performance_load', fn() => ThemeData::performanceLoad(scope: $scope));
                 $didPerformanceLoad = true;
                 $layoutConfig = ThemeData::getLayoutConfig($area, $scope);
                 $requestCache->layoutConfigCache[$configCacheKey] = $layoutConfig;
@@ -538,7 +539,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             if ($usedSolidifiedControllerTemplate && \is_string($solidifiedExecutablePath)) {
                 $resolvedLayoutPath = $solidifiedExecutablePath;
             } else {
-                $virtualLayout = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.virtual', fn() => $this->resolveVirtualLayoutForRequest($request, $themeId, $area, $scope, (string)$layoutType, (string)$layoutOption));
+                $virtualLayout = \Weline\Framework\Runtime\TraceGate::measurePhase('theme.layout.virtual', fn() => $this->resolveVirtualLayoutForRequest($request, $themeId, $area, $scope, (string)$layoutType, (string)$layoutOption));
                 if (is_array($virtualLayout)) {
                     $resolvedLayoutPath = (string)$virtualLayout['module_path'];
                     $virtualLayoutFilePath = (string)$virtualLayout['file_path'];
@@ -648,6 +649,11 @@ class ControllerFetchFileBefore implements ObserverInterface
                     }
                     $this->publishLayoutSeoFallback($template->getData('meta') ?: $cachedLayoutParams);
                     $this->publishPageTitleToSeoBag($template, is_array($template->getData('meta')) ? (array)$template->getData('meta') : $cachedLayoutParams, $request);
+                    $this->applyHomepageLayoutSkipContentFetch(
+                        $eventData,
+                        (string)$layoutType,
+                        (string)$resolvedLayoutPath
+                    );
                     $this->logThemeLayoutResolved($eventData, (string)$fileName, (string)$resolvedLayoutPath, (string)$fileName, $controller);
                     return;
                 }
@@ -655,7 +661,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 ThemeData::setCurrentTheme($theme);
                 ThemeData::setCurrentArea($area);
                 if (!$didPerformanceLoad) {
-                    \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.performance_load', fn() => ThemeData::performanceLoad(scope: $scope));
+                    \Weline\Framework\Runtime\TraceGate::measurePhase('theme.layout.performance_load', fn() => ThemeData::performanceLoad(scope: $scope));
                 }
 
                 // 将原模板路径保存为变量，供布局模板使用
@@ -688,8 +694,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // 注意：getFileParams 内部会处理 identify 格式，但需要确保 ThemeData 已正确初始化
                 $layoutFilePath = $virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
                 $layoutMetaIdentity = $this->extractLayoutMetaIdentity($layoutFilePath, $resolvedLayoutPath, $area);
-                $layoutDefinitions = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.definitions', fn() => ThemeData::getParamDefinitions($metaIdentify));
-                $layoutParams = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.params', fn() => ThemeData::getFileParams($metaIdentify, $scope));
+                $layoutDefinitions = \Weline\Framework\Runtime\TraceGate::measurePhase('theme.layout.definitions', fn() => ThemeData::getParamDefinitions($metaIdentify));
+                $layoutParams = \Weline\Framework\Runtime\TraceGate::measurePhase('theme.layout.params', fn() => ThemeData::getFileParams($metaIdentify, $scope));
 
                 // 模板头 @param.showHeader {default=true} 等：DB/缓存可能只有部分键。
                 // 缺键必须用布局文件 meta 区 default 补齐（不仅 empty($layoutParams) 时才解析）。
@@ -807,6 +813,11 @@ class ControllerFetchFileBefore implements ObserverInterface
                 if ($this->shouldUseMetaTitle($template, $request) && !empty($metaData['title'])) {
                     $template->assign('title', $metaData['title']);
                 }
+                $this->applyHomepageLayoutSkipContentFetch(
+                    $eventData,
+                    (string)$layoutType,
+                    (string)$resolvedLayoutPath
+                );
                 $this->logThemeLayoutResolved(
                     $eventData,
                     (string)$contentTemplateFileName,
@@ -1456,7 +1467,7 @@ class ControllerFetchFileBefore implements ObserverInterface
         int $displayThemeId,
         string $layoutType,
     ): void {
-        if (!RequestLifecycleTrace::isEnabled()) {
+        if (!TraceGate::isArmed()) {
             return;
         }
         $fallbackReason = '';
@@ -1469,7 +1480,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $fallbackReason = 'unknown';
             }
         }
-        RequestLifecycleTrace::recordSpan(
+        TraceGate::recordSpan(
             'theme.layout.solidified_selection',
             0.0,
             'theme',
@@ -1483,6 +1494,57 @@ class ControllerFetchFileBefore implements ObserverInterface
                 'fallback_reason' => $fallbackReason,
             ],
         );
+    }
+
+    /**
+     * Layout-owned pages: controller content template is unused — skip include.
+     * - homepage → layouts/homepage slots
+     * - product.default → layouts/product/default embeds product-info
+     * (product.custom / festival may still echo meta.content — do not skip.)
+     */
+    private function applyHomepageLayoutSkipContentFetch(
+        DataObject $eventData,
+        string $layoutType,
+        string $layoutTemplate
+    ): void {
+        $layoutType = \strtolower(\trim($layoutType));
+        $layout = \str_replace('\\', '/', $layoutTemplate);
+
+        $isHomepage = $layoutType === 'homepage'
+            || \str_starts_with($layoutType, 'homepage/')
+            || \str_starts_with($layoutType, 'homepage.');
+        $homepageLayout = $layout !== ''
+            && (\str_contains($layout, '/layouts/homepage/')
+                || \str_ends_with($layout, '/layouts/homepage.phtml')
+                || \str_contains($layout, '::theme/frontend/layouts/homepage'));
+
+        $isProductDefault = $layoutType === 'product' || $layoutType === 'product.default';
+        $productDefaultLayout = $layout !== ''
+            && (\str_contains($layout, '/layouts/product/default')
+                || \str_ends_with($layout, '/layouts/product.phtml')
+                || \str_contains($layout, '::theme/frontend/layouts/product/default'));
+
+        if ($isHomepage && $homepageLayout) {
+            $eventData->setData('skipTemplateFetch', true);
+            $eventData->setData('content', '');
+            $eventData->setData('homepage_content_skip', true);
+            TemplateRenderRouteTrace::mark('controller_fetch', 'homepage_content_skip_armed', [
+                'layout' => $layoutTemplate,
+                'layout_type' => $layoutType,
+            ]);
+
+            return;
+        }
+
+        if ($isProductDefault && $productDefaultLayout) {
+            $eventData->setData('skipTemplateFetch', true);
+            $eventData->setData('content', '');
+            $eventData->setData('product_content_skip', true);
+            TemplateRenderRouteTrace::mark('controller_fetch', 'product_content_skip_armed', [
+                'layout' => $layoutTemplate,
+                'layout_type' => $layoutType,
+            ]);
+        }
     }
 
     private function logThemeLayoutResolved(

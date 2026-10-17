@@ -263,7 +263,7 @@ final class RequiredDefaultInjectionBakeMerger
             /** @var ThemePublishedVersionRuntimeResolver $versions */
             if ($versionId === null) {
                 $versions = ObjectManager::getInstance(ThemePublishedVersionRuntimeResolver::class);
-                $versionId = (int)($versions->resolve($themeId, $pageType)['themePublishedVersionId'] ?? 0);
+                $versionId = $versions->resolvePublishedNumericVersionId($themeId, $pageType);
             }
             /** @var WidgetDefaultInjectionService $injections */
             $injections = ObjectManager::getInstance(WidgetDefaultInjectionService::class);

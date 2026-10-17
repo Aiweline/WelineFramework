@@ -11,7 +11,7 @@ return [
     // ==================== Theme Frontend Partials - Footer ====================
     'Weline_Theme::frontend::partials::footer::above' => [
         'name' => __('页脚上方扩展'),
-        'description' => __('footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。'),
+        'description' => __('footer-above 槽默认内容；默认空（避免与首页信任条叠双），供其它模块覆盖或追加。'),
         'doc' => 'frontend/partials/footer/above.md',
     ],
     'Weline_Theme::frontend::partials::footer::before' => [
@@ -246,8 +246,13 @@ return [
     ],
     'Weline_Theme::frontend::layouts::base::body-end' => [
         'name' => __('基础布局 Body 结束'),
-        'description' => __('在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。'),
+        'description' => __('空壳兼容点；游客中性尾 chrome 已迁 storefront-tail-chrome；浮层在 footer partial。'),
         'doc' => 'frontend/layouts/base/body-end.md',
+    ],
+    'Weline_Theme::frontend::layouts::base::body-end-dynamic' => [
+        'name' => __('基础布局 Body 结束（动态）'),
+        'description' => __('会话/路径敏感注入（I18n / Visitor）；禁止进入游客静态 chrome 袋。'),
+        'doc' => 'frontend/layouts/base/body-end-dynamic.md',
     ],
     'Weline_Theme::backend::layouts::base::body-end' => [
         'name' => __('后台基础布局 Body 结束'),

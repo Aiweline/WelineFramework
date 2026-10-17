@@ -2,6 +2,8 @@
 /**
  * 片段：商品卡片购买操作槽（Cart 加购 + Checkout 立即购买）
  *
+ * 热路径请直接调用 ProductCardAddToCartParams::renderSlot()，避免列表循环内再 fetch 本文件。
+ *
  * @param storefront_offer {type=array,description="Storefront offer 快照；也可由 product 数组推导"}
  * @param card_add_to_cart_enabled {default=true,type=bool}
  * @param card_buy_now_enabled {default=true,type=bool}
@@ -16,45 +18,20 @@
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 
 /** @var \Weline\Framework\View\Template $this */
-$addToCartEnabled = ProductCardAddToCartParams::resolveEnabled($this);
-$buyNowEnabled = ProductCardAddToCartParams::resolveBuyNowEnabled($this);
-if (!$addToCartEnabled && !$buyNowEnabled) {
-    return;
-}
-
 $offer = $this->getData('storefront_offer');
-$offer = is_array($offer) ? ProductCardAddToCartParams::normalizeOffer($offer) : [];
-if ($offer === [] || max(0, (int)($offer['product_id'] ?? 0)) <= 0) {
-    return;
-}
-
-$this->setData('storefront_offer', $offer);
-
-$variant = trim((string)($this->getData('card_add_to_cart_variant') ?? 'cta'));
-$wrapperClass = trim((string)($this->getData('card_add_to_cart_wrapper_class') ?? ''));
-$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-?>
-<div class="product-card-purchase-actions-slot product-card-purchase-actions-slot--<?= $escape($variant) ?><?= $wrapperClass !== '' ? ' ' . $escape($wrapperClass) : '' ?>"
-     data-weline-load="cart,storefrontShopperToast"
-     data-card-purchase-variant="<?= $escape($variant) ?>">
-    <div class="product-card-purchase-actions product-card-purchase-actions--<?= $escape($variant) ?>">
-        <?php
-        if ($addToCartEnabled) {
-            echo $this->getHook('Weline_Theme::frontend::partials::product-card::add-to-cart');
-        }
-        if ($buyNowEnabled) {
-            echo $this->getHook('Weline_Theme::frontend::partials::product-card::buy-now');
-        }
-        ?>
-    </div>
-    <?php
-    // 已在 canonical 商品卡内：CTA 色/间距由 product-card.css 拥有，禁止再注入第二套 purchase-actions CSS。
-    $cssOwnedByProductCard = (bool)($this->getData('card_css_owned_by_product_card') ?? false);
-    if (!$cssOwnedByProductCard) {
-        ProductCardAddToCartParams::emitPurchaseActionsAssetsOnce(static function (): void {
-            echo ProductCardAddToCartParams::buildPurchaseActionsStyleTag();
-            // cart JS：本槽 data-weline-load="cart"；toast CSS：storefront-shopper-toast.js ensure；toast JS：storefrontShopperToast
-        });
-    }
-    ?>
-</div>
+$offer = is_array($offer) ? $offer : [];
+$product = $offer !== [] ? $offer : [
+    'id' => (int)($this->getData('product_id') ?? 0),
+    'product_id' => (int)($this->getData('product_id') ?? 0),
+];
+echo ProductCardAddToCartParams::renderSlot($this, is_array($product) ? $product : [], [
+    'enabled' => ProductCardAddToCartParams::resolveEnabled($this),
+    'buy_now_enabled' => ProductCardAddToCartParams::resolveBuyNowEnabled($this),
+    'variant' => trim((string)($this->getData('card_add_to_cart_variant') ?? 'cta')),
+    'button_class' => trim((string)($this->getData('card_add_to_cart_button_class') ?? '')),
+    'buy_now_button_class' => trim((string)($this->getData('card_buy_now_button_class') ?? '')),
+    'wrapper_class' => trim((string)($this->getData('card_add_to_cart_wrapper_class') ?? '')),
+    'label' => trim((string)($this->getData('card_add_to_cart_label') ?? '')),
+    'buy_now_label' => trim((string)($this->getData('card_buy_now_label') ?? '')),
+    'css_owned_by_card' => (bool)($this->getData('card_css_owned_by_product_card') ?? false),
+]);

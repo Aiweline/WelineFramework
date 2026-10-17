@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 
@@ -71,8 +71,8 @@ final class ThemeLayoutEntityOwnerLock
             // Timing dig: theme.source.capture often = owner lock wait, not disk I/O.
             if ($waitMs >= 5.0) {
                 try {
-                    if (RequestLifecycleTrace::isEnabled()) {
-                        RequestLifecycleTrace::recordPhase(
+                    if (TraceGate::isArmed()) {
+                        TraceGate::recordPhase(
                             'theme.layout.owner_lock_wait',
                             $waitMs,
                             [

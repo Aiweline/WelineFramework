@@ -11,10 +11,15 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\StorefrontWidgetRuntimeSchedule;
+use Weline\Framework\Runtime\TemplateRenderRouteTrace;
 use Weline\Framework\View\PreparedContentStore;
 use Weline\Framework\View\Template;
+use Weline\Theme\Service\StorefrontBlogLayoutHtmlBag;
+use Weline\Theme\Service\StorefrontHomepageLayoutHtmlBag;
+use Weline\Theme\Service\StorefrontLayoutHtmlFinalizer;
 
 /**
  * Keep layout rendering lifecycle unified for controller template fetch.
@@ -51,6 +56,13 @@ class ControllerFetchFileAfter implements ObserverInterface
             return;
         }
 
+        TemplateRenderRouteTrace::armIfRequested();
+        TemplateRenderRouteTrace::mark('controller_fetch', 'enter', [
+            'layout_type' => $layoutType,
+            'content' => $contentTemplate,
+            'layout' => $layoutTemplate,
+        ]);
+
         $template = $this->getTemplateInstance();
         $fallbackContent = (string)$eventData->getData('content');
 
@@ -72,6 +84,10 @@ class ControllerFetchFileAfter implements ObserverInterface
         // FetchBefore 仍会把同一路径写成 contentTemplate+layoutTemplate；
         // 若再 wrap，meta.content 会嵌进第二份 <html>/<head>/header。
         if ($this->isSameFrontendLayoutDocument($contentTemplate, $layoutTemplate)) {
+            TemplateRenderRouteTrace::mark('controller_fetch', 'layout_document_skip_wrap', [
+                'content' => $contentTemplate,
+                'layout' => $layoutTemplate,
+            ]);
             $this->primeWidgetRuntimeSchedule($template, $layoutTemplate, $contentTemplate);
             $html = $fallbackContent !== ''
                 ? $fallbackContent
@@ -80,6 +96,7 @@ class ControllerFetchFileAfter implements ObserverInterface
                 $eventData->setData('content', $html);
                 $eventData->setData('fileName', $layoutTemplate);
                 $memoryProbe('layout_document_skip_wrap', $html);
+                TemplateRenderRouteTrace::mark('controller_fetch', 'return_skip_wrap');
 
                 return;
             }
@@ -87,8 +104,25 @@ class ControllerFetchFileAfter implements ObserverInterface
 
         try {
             $this->primeWidgetRuntimeSchedule($template, $layoutTemplate, $contentTemplate);
-            $contentHtml = $this->renderContentTemplate($template, $contentTemplate, $fallbackContent);
-            $memoryProbe('after_content_template', $contentHtml);
+            // Homepage content is layouts/homepage slots; controller template is unused.
+            $skipLayoutOwnedContent = (bool)$eventData->getData('homepage_content_skip')
+                || (bool)$eventData->getData('product_content_skip')
+                || (bool)$eventData->getData('skipTemplateFetch')
+                || $this->isHomepageLayoutContentSkipped($layoutType, $layoutTemplate)
+                || $this->isProductDefaultLayoutContentSkipped($layoutType, $layoutTemplate);
+            if ($skipLayoutOwnedContent) {
+                TemplateRenderRouteTrace::mark('controller_fetch', 'layout_owned_content_skipped', [
+                    'content' => $contentTemplate,
+                    'layout' => $layoutTemplate,
+                    'layout_type' => $layoutType,
+                ]);
+                $contentHtml = '';
+                $memoryProbe('layout_owned_content_skipped', $contentHtml);
+            } else {
+                TemplateRenderRouteTrace::mark('controller_fetch', 'content_render', ['content' => $contentTemplate]);
+                $contentHtml = $this->renderContentTemplate($template, $contentTemplate, $fallbackContent);
+                $memoryProbe('after_content_template', $contentHtml);
+            }
             $fastAuthHtml = $this->renderFastAccountAuthLayout($template, $layoutTemplate, $contentHtml);
             if ($fastAuthHtml !== null) {
                 $eventData->setData('content', $fastAuthHtml);
@@ -96,13 +130,157 @@ class ControllerFetchFileAfter implements ObserverInterface
                 return;
             }
 
+            /** @var StorefrontHomepageLayoutHtmlBag $homepageLayoutBag */
+            $homepageLayoutBag = ObjectManager::getInstance(StorefrontHomepageLayoutHtmlBag::class);
+            $homepageBagEligible = $homepageLayoutBag->isEligible($contentTemplate, $layoutTemplate);
+            /** @var StorefrontBlogLayoutHtmlBag $blogLayoutBag */
+            $blogLayoutBag = ObjectManager::getInstance(StorefrontBlogLayoutHtmlBag::class);
+            $blogBagEligible = !$homepageBagEligible
+                && $blogLayoutBag->isEligible($contentTemplate, $layoutTemplate);
+            if ($homepageBagEligible) {
+                $bagHit = $homepageLayoutBag->peekHtml($contentTemplate, $layoutTemplate);
+                if (\is_string($bagHit) && $bagHit !== '') {
+                    TemplateRenderRouteTrace::mark('controller_fetch', 'homepage_bag_hit', [
+                        'content' => $contentTemplate,
+                        'layout' => $layoutTemplate,
+                    ]);
+                    $eventData->setData('content', $bagHit);
+                    $eventData->setData('fileName', $layoutTemplate);
+                    $this->markStorefrontHtmlPreFinalized();
+                    $memoryProbe('homepage_layout_html_bag_hit', $bagHit);
+                    try {
+                        ObjectManager::getInstance(Request::class)->getResponse()
+                            ->setHeader('X-Weline-Homepage-Layout-Bag', 'HIT');
+                    } catch (\Throwable) {
+                    }
+
+                    return;
+                }
+                try {
+                    ObjectManager::getInstance(Request::class)->getResponse()
+                        ->setHeader('X-Weline-Homepage-Layout-Bag', 'MISS');
+                } catch (\Throwable) {
+                }
+            } elseif ($blogBagEligible) {
+                $bagHit = $blogLayoutBag->peekHtml($contentTemplate, $layoutTemplate);
+                if (\is_string($bagHit) && $bagHit !== '') {
+                    TemplateRenderRouteTrace::mark('controller_fetch', 'blog_bag_hit', [
+                        'content' => $contentTemplate,
+                        'layout' => $layoutTemplate,
+                    ]);
+                    $eventData->setData('content', $bagHit);
+                    $eventData->setData('fileName', $layoutTemplate);
+                    $this->markStorefrontHtmlPreFinalized();
+                    $memoryProbe('blog_layout_html_bag_hit', $bagHit);
+                    try {
+                        ObjectManager::getInstance(Request::class)->getResponse()
+                            ->setHeader('X-Weline-Blog-Layout-Bag', 'HIT');
+                    } catch (\Throwable) {
+                    }
+
+                    return;
+                }
+                try {
+                    ObjectManager::getInstance(Request::class)->getResponse()
+                        ->setHeader('X-Weline-Blog-Layout-Bag', 'MISS');
+                } catch (\Throwable) {
+                }
+            }
+
             $this->restoreAccountRenderSnapshot($template, $eventData, $layoutTemplate, $contentTemplate);
-            [$renderedHtml, $finalLayoutTemplate] = $this->renderLayoutChain(
-                $template,
-                $layoutTemplate,
-                $contentTemplate,
-                $contentHtml
-            );
+            $finalLayoutTemplate = $layoutTemplate;
+            if ($homepageBagEligible) {
+                $renderedHtml = $homepageLayoutBag->rememberHtml(
+                    $contentTemplate,
+                    $layoutTemplate,
+                    function () use (
+                        $template,
+                        $layoutTemplate,
+                        $contentTemplate,
+                        $contentHtml,
+                        &$finalLayoutTemplate
+                    ): string {
+                        [$html, $final] = $this->renderLayoutChain(
+                            $template,
+                            $layoutTemplate,
+                            $contentTemplate,
+                            $contentHtml
+                        );
+                        $finalLayoutTemplate = $final;
+                        $html = \is_string($html) ? $html : '';
+                        if ($html === '') {
+                            return '';
+                        }
+                        /** @var StorefrontLayoutHtmlFinalizer $finalizer */
+                        $finalizer = ObjectManager::getInstance(StorefrontLayoutHtmlFinalizer::class);
+
+                        // Bag payload must be post hard-cut (safety_net complete).
+                        return $finalizer->finalizeHardCut($html, 'frontend', [
+                            'skip_dev_diagnostics' => true,
+                        ]);
+                    }
+                );
+                $this->markStorefrontHtmlPreFinalized();
+                try {
+                    ObjectManager::getInstance(Request::class)->getResponse()
+                        ->setHeader(
+                            'X-Weline-Homepage-Layout-Bag',
+                            'MISS-FILL;' . \strlen(\is_string($renderedHtml) ? $renderedHtml : '')
+                        );
+                } catch (\Throwable) {
+                }
+            } elseif ($blogBagEligible) {
+                $renderedHtml = $blogLayoutBag->rememberHtml(
+                    $contentTemplate,
+                    $layoutTemplate,
+                    function () use (
+                        $template,
+                        $layoutTemplate,
+                        $contentTemplate,
+                        $contentHtml,
+                        &$finalLayoutTemplate
+                    ): string {
+                        [$html, $final] = $this->renderLayoutChain(
+                            $template,
+                            $layoutTemplate,
+                            $contentTemplate,
+                            $contentHtml
+                        );
+                        $finalLayoutTemplate = $final;
+                        $html = \is_string($html) ? $html : '';
+                        if ($html === '') {
+                            return '';
+                        }
+                        /** @var StorefrontLayoutHtmlFinalizer $finalizer */
+                        $finalizer = ObjectManager::getInstance(StorefrontLayoutHtmlFinalizer::class);
+
+                        // Bag payload must be post hard-cut (safety_net complete).
+                        return $finalizer->finalizeHardCut($html, 'frontend', [
+                            'skip_dev_diagnostics' => true,
+                        ]);
+                    }
+                );
+                $this->markStorefrontHtmlPreFinalized();
+                try {
+                    ObjectManager::getInstance(Request::class)->getResponse()
+                        ->setHeader(
+                            'X-Weline-Blog-Layout-Bag',
+                            'MISS-FILL;' . \strlen(\is_string($renderedHtml) ? $renderedHtml : '')
+                        );
+                } catch (\Throwable) {
+                }
+            } else {
+                [$renderedHtml, $finalLayoutTemplate] = $this->renderLayoutChain(
+                    $template,
+                    $layoutTemplate,
+                    $contentTemplate,
+                    $contentHtml
+                );
+            }
+            TemplateRenderRouteTrace::mark('controller_fetch', 'layout_chain', [
+                'layout' => $finalLayoutTemplate,
+                'content' => $contentTemplate,
+            ]);
             $memoryProbe('after_layout_chain', $renderedHtml);
             if ($this->isAccountLayoutTemplate($finalLayoutTemplate, $contentTemplate)
                 && !$this->htmlHasAccountSidebar($renderedHtml)
@@ -129,6 +307,9 @@ class ControllerFetchFileAfter implements ObserverInterface
             ]);
             $eventData->setData('content', $renderedHtml);
             $eventData->setData('fileName', $finalLayoutTemplate);
+            TemplateRenderRouteTrace::mark('controller_fetch', 'return', [
+                'layout' => $finalLayoutTemplate,
+            ]);
             $memoryProbe('before_return', $renderedHtml);
         } catch (\Throwable $e) {
             $this->reportLayoutWrapFailure(
@@ -286,7 +467,7 @@ class ControllerFetchFileAfter implements ObserverInterface
 
     private function renderContentTemplate(Template $template, string $contentTemplate, string $fallbackContent): string
     {
-        return (string)RequestLifecycleTrace::measurePhase(
+        return (string)TraceGate::measurePhase(
             \Weline\Theme\Service\ThemeLayoutBudgetPhases::L4_PAGE_BODY,
             function () use ($template, $contentTemplate, $fallbackContent): string {
                 if ($fallbackContent !== '') {
@@ -294,7 +475,7 @@ class ControllerFetchFileAfter implements ObserverInterface
                 }
 
                 try {
-                    $rendered = (string)$template->fetch($contentTemplate);
+                    $rendered = (string)$template->fetchHtml($contentTemplate);
                     if ($rendered !== '') {
                         return $rendered;
                     }
@@ -305,6 +486,51 @@ class ControllerFetchFileAfter implements ObserverInterface
             },
             ['content_template' => $contentTemplate],
         );
+    }
+
+    /**
+     * Homepage slot tree owns content; controller content template is never echoed.
+     */
+    private function isHomepageLayoutContentSkipped(string $layoutType, string $layoutTemplate): bool
+    {
+        $layoutType = \strtolower(\trim($layoutType));
+        if ($layoutType !== 'homepage'
+            && !\str_starts_with($layoutType, 'homepage/')
+            && !\str_starts_with($layoutType, 'homepage.')
+        ) {
+            return false;
+        }
+        $layout = \str_replace('\\', '/', $layoutTemplate);
+
+        return \str_contains($layout, '/layouts/homepage/')
+            || \str_ends_with($layout, '/layouts/homepage.phtml')
+            || \str_contains($layout, '::theme/frontend/layouts/homepage');
+    }
+
+    /**
+     * Product default layout embeds product-info; controller content is unused.
+     */
+    private function isProductDefaultLayoutContentSkipped(string $layoutType, string $layoutTemplate): bool
+    {
+        $layoutType = \strtolower(\trim($layoutType));
+        if ($layoutType !== 'product' && $layoutType !== 'product.default') {
+            return false;
+        }
+        $layout = \str_replace('\\', '/', $layoutTemplate);
+
+        return \str_contains($layout, '/layouts/product/default')
+            || \str_ends_with($layout, '/layouts/product.phtml')
+            || \str_contains($layout, '::theme/frontend/layouts/product/default');
+    }
+
+    private function markStorefrontHtmlPreFinalized(): void
+    {
+        try {
+            if (RequestContext::isInitialized()) {
+                RequestContext::set('theme.storefront_html_pre_finalized', true);
+            }
+        } catch (\Throwable) {
+        }
     }
 
     /**
@@ -359,7 +585,7 @@ class ControllerFetchFileAfter implements ObserverInterface
             return null;
         }
 
-        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $traceEnabled = TraceGate::isArmed();
         $traceStart = $traceEnabled ? \microtime(true) : 0.0;
 
         try {
@@ -481,7 +707,7 @@ class ControllerFetchFileAfter implements ObserverInterface
 HTML;
         } finally {
             if ($traceEnabled) {
-                RequestLifecycleTrace::recordSpan(
+                TraceGate::recordSpan(
                     'theme::ControllerFetchFileAfter::fastAccountAuthLayout',
                     (\microtime(true) - $traceStart) * 1000,
                     'theme'
@@ -727,11 +953,11 @@ HTML;
         string $contentTemplate,
         string $contentHtml
     ): array {
-        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $traceEnabled = TraceGate::isArmed();
         $traceName = 'theme::ControllerFetchFileAfter::renderLayoutChain';
         $traceStart = $traceEnabled ? microtime(true) : 0.0;
         if ($traceEnabled) {
-            RequestLifecycleTrace::pushCurrentParent($traceName);
+            TraceGate::pushCurrentParent($traceName);
         }
 
         $currentLayoutTemplate = $layoutTemplate;
@@ -763,11 +989,11 @@ HTML;
                     . "::depth_{$depth}";
                 $layoutFetchStart = $traceEnabled ? microtime(true) : 0.0;
                 if ($traceEnabled) {
-                    RequestLifecycleTrace::pushCurrentParent($layoutFetchSpan);
+                    TraceGate::pushCurrentParent($layoutFetchSpan);
                 }
                 $layoutFetchWallStart = \microtime(true);
                 try {
-                    $renderedHtml = (string)$template->fetch(
+                    $renderedHtml = (string)$template->fetchHtml(
                         $currentLayoutTemplate,
                         $this->buildLayoutFetchData($currentLayoutTemplate, $currentContentHtml, $contentRenderKey)
                     );
@@ -784,7 +1010,7 @@ HTML;
                         $metaSidebar = \is_array($meta) ? ($meta['sidebar'] ?? null) : null;
                         $rootSidebar = $template->getData('sidebar');
                         $hasAccountSidebar = $this->htmlHasAccountSidebar($renderedHtml);
-                        RequestLifecycleTrace::recordSpan(
+                        TraceGate::recordSpan(
                             'theme::accountLayout::afterFetch',
                             0.0,
                             'theme',
@@ -821,8 +1047,8 @@ HTML;
                     }
                 } finally {
                     if ($traceEnabled) {
-                        RequestLifecycleTrace::popCurrentParent();
-                        RequestLifecycleTrace::recordSpan(
+                        TraceGate::popCurrentParent();
+                        TraceGate::recordSpan(
                             $layoutFetchSpan,
                             (microtime(true) - $layoutFetchStart) * 1000,
                             'theme'
@@ -852,8 +1078,8 @@ HTML;
             return [$renderedHtml, $currentLayoutTemplate];
         } finally {
             if ($traceEnabled) {
-                RequestLifecycleTrace::popCurrentParent();
-                RequestLifecycleTrace::recordSpan(
+                TraceGate::popCurrentParent();
+                TraceGate::recordSpan(
                     $traceName,
                     (microtime(true) - $traceStart) * 1000,
                     'theme'
@@ -929,7 +1155,7 @@ HTML;
         $layoutType = strtolower(trim((string)($template->getData('layoutType') ?? '')));
         // Homepage (and any layout with nested homepage-* slots) must not echo meta.content
         // in place of the slot tree. WLS workers can leak prior-request content into meta;
-        // empty homepage-shell wrap residue must not suppress hero/featured/videos.
+        // unused controller content must not suppress hero/featured/videos.
         $forbidMetaContentDump = $isEditorPreviewTemplate
             || $layoutType === 'homepage'
             || str_starts_with($layoutType, 'homepage/')
@@ -1002,7 +1228,7 @@ HTML;
             $metaSidebarLength = $rootSidebarLength;
         }
 
-        RequestLifecycleTrace::recordSpan('theme::accountLayout::primeSidebar', 0.0, 'theme', null, [
+        TraceGate::recordSpan('theme::accountLayout::primeSidebar', 0.0, 'theme', null, [
             'meta_sidebar_len' => $metaSidebarLength,
             'root_sidebar_len' => $rootSidebarLength,
             'content_len' => \strlen($contentHtml),

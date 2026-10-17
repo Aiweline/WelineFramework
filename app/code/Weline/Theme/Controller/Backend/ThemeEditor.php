@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Controller\Backend;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
@@ -451,7 +453,7 @@ class ThemeEditor extends BackendController
                     /** @var ThemeScopedWorkspaceInterface $scopedWorkspace */
                     $scopedWorkspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
                     // Draft authority is theme_scope_workspace only (parent release merge on load).
-                    $scopedLayoutState = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                    $scopedLayoutState = \Weline\Framework\Runtime\TraceGate::measurePhase(
                         'theme.editor.workspace_load', fn() => $scopedWorkspace->load($typedLayoutContext, true),
                     );
                     $layoutIdentity = $this->layoutIdentityFromEditorContext($typedLayoutContext);
@@ -464,7 +466,7 @@ class ThemeEditor extends BackendController
             } else {
                 $hasDraft = $this->layoutService->hasDraft($currentThemeId, $pageType, $layoutIdentity);
             }
-            $layout = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            $layout = \Weline\Framework\Runtime\TraceGate::measurePhase(
                 'theme.editor.draft_layout', fn() => $this->layoutService->getFullDraftLayout($currentThemeId, $pageType, $layoutIdentity),
             );
             // 打开/刷新编辑器不得按 default_injections 自动回填空 slot。
@@ -518,7 +520,7 @@ class ThemeEditor extends BackendController
         $scopeIdentityForLocales = is_array($scopeCatalog['selected_identity'] ?? null)
             ? (array)$scopeCatalog['selected_identity']
             : null;
-        $installedLocales = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        $installedLocales = \Weline\Framework\Runtime\TraceGate::measurePhase(
             'theme.editor.locales', fn() => $this->getInstalledLocalesPayload($scopeIdentityForLocales),
         );
         $websiteDefaultLocale = $this->resolveEditorWebsiteDefaultLocale($scopeIdentityForLocales);
@@ -590,7 +592,7 @@ class ThemeEditor extends BackendController
         // as a fake canvas shell.
         $this->assign('initial_preview_token', '');
 
-        return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        return \Weline\Framework\Runtime\TraceGate::measurePhase(
             'theme.editor.shell_template', fn() => $this->fetch('Weline_Theme::templates/backend/ThemeEditor/index.phtml'),
         );
     }

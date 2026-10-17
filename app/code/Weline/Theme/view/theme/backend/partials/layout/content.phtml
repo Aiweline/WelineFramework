@@ -14,5 +14,5 @@ echo PreparedContentStore::resolveLayoutContent(
     $meta ?? $this->getData('meta'),
     $child_html ?? $this->getData('child_html'),
     $this->getData('contentTemplate'),
-    fn(string $contentTemplate): string => (string)$this->fetch($contentTemplate)
+    fn(string $contentTemplate): string => (string)$this->fetchHtml($contentTemplate)
 );

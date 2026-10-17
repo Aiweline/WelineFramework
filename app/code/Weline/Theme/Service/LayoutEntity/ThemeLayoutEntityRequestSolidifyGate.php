@@ -19,6 +19,7 @@ final class ThemeLayoutEntityRequestSolidifyGate
 {
     public const CTX_FORCE_ORIGINAL = 'theme.layout_entity.request_solidify.force_original.v1';
     public const CTX_DECISION = 'theme.layout_entity.request_solidify.decision.v1';
+    public const CTX_DERIVED_PAGE_PATH_MEMO = 'theme.layout_entity.request_solidify.derived_page_path.v1';
 
     /** Critical public chrome partials checked for design-origin drift (WS-A). */
     private const CRITICAL_CHROME_PARTIALS = ['header', 'footer'];
@@ -56,6 +57,21 @@ final class ThemeLayoutEntityRequestSolidifyGate
         $storeMode = trim($storeMode) !== '' ? trim($storeMode) : 'normal';
         $layoutType = trim($layoutType) !== '' ? trim($layoutType) : 'homepage';
         $layoutOption = trim($layoutOption) !== '' ? trim($layoutOption) : 'default';
+
+        $cached = RequestContext::get(self::CTX_DECISION);
+        if (\is_array($cached)
+            && isset($cached['serial_key'], $cached['use_original_template'], $cached['reason'])
+            && ($cached['_eval_key'] ?? null) === self::evaluateRequestKey(
+                $themeId,
+                $area,
+                $scope,
+                $storeMode,
+                $layoutType,
+                $layoutOption,
+            )
+        ) {
+            return $cached;
+        }
 
         $versionId = 0;
         $revision = 0;
@@ -171,6 +187,14 @@ final class ThemeLayoutEntityRequestSolidifyGate
             'expected_fp' => $expectedFp,
             'serial_key' => $key->toString(),
             'chrome_origin_stale' => $chromeOriginStale,
+            '_eval_key' => self::evaluateRequestKey(
+                $themeId,
+                $area,
+                $scope,
+                $storeMode,
+                $layoutType,
+                $layoutOption,
+            ),
         ];
         RequestContext::set(self::CTX_DECISION, $decision);
         // Always expose fallback reason on the wire so BYPASS/no-store is not
@@ -392,6 +416,24 @@ final class ThemeLayoutEntityRequestSolidifyGate
         Env::log('theme/request_solidify_decision', $payload);
     }
 
+    private static function evaluateRequestKey(
+        int $themeId,
+        string $area,
+        string $scope,
+        string $storeMode,
+        string $layoutType,
+        string $layoutOption,
+    ): string {
+        return \implode('|', [
+            (string)$themeId,
+            $area,
+            $scope,
+            $storeMode,
+            $layoutType,
+            $layoutOption,
+        ]);
+    }
+
     private function derivedPagePath(
         int $themeId,
         string $scope,
@@ -405,6 +447,23 @@ final class ThemeLayoutEntityRequestSolidifyGate
         if ($versionId < 1) {
             return null;
         }
+        $memoKey = \implode('|', [
+            (string)$themeId,
+            $scope,
+            $storeMode,
+            $area,
+            $layoutType,
+            $layoutOption,
+            (string)$versionId,
+            (string)$revision,
+        ]);
+        $memo = RequestContext::get(self::CTX_DERIVED_PAGE_PATH_MEMO);
+        if (\is_array($memo) && \array_key_exists($memoKey, $memo)) {
+            $cached = $memo[$memoKey];
+
+            return \is_string($cached) && $cached !== '' ? $cached : null;
+        }
+        $resolved = null;
         try {
             $identity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
                 $themeId,
@@ -416,11 +475,17 @@ final class ThemeLayoutEntityRequestSolidifyGate
                 max(1, $revision),
             );
             $path = $this->paths->pageLayoutPhtml($identity, $layoutType, $layoutOption);
-
-            return is_file($path) ? $path : null;
+            $resolved = is_file($path) ? $path : null;
         } catch (\Throwable) {
-            return null;
+            $resolved = null;
         }
+        if (!\is_array($memo)) {
+            $memo = [];
+        }
+        $memo[$memoKey] = $resolved ?? '';
+        RequestContext::set(self::CTX_DERIVED_PAGE_PATH_MEMO, $memo);
+
+        return $resolved;
     }
 
     private function chromeFooterExtrasEmpty(

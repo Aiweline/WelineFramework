@@ -156,19 +156,11 @@ class ThemeComponentRenderer
         int $ttl,
         array $context = [],
     ): string {
-        $productId = 0;
-        $offerId = 0;
-        if (\class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
-            try {
-                $offer = \Weline\Product\Helper\StorefrontOfferResolver::currentOffer();
-                $productId = max(0, (int)($offer['product_id'] ?? 0));
-                $offerId = max(0, (int)($offer['offer_id'] ?? $offer['product_offer_id'] ?? 0));
-            } catch (\Throwable) {
-            }
-        }
-        if ($productId <= 0) {
-            $productId = max(0, (int)($dictionary['card_product_id'] ?? $dictionary['product_id'] ?? 0));
-        }
+        // Only attach product dims when the instance dictionary explicitly carries them.
+        // Chrome shells (coupon/notice/mini-cart) must not inherit PDP currentOffer and
+        // shard guest-safe bags per product URL.
+        $productId = max(0, (int)($dictionary['card_product_id'] ?? $dictionary['product_id'] ?? 0));
+        $offerId = max(0, (int)($dictionary['offer_id'] ?? $dictionary['product_offer_id'] ?? 0));
 
         $share = WidgetOutputCache::resolveShare(
             ['share' => $context['share'] ?? null],

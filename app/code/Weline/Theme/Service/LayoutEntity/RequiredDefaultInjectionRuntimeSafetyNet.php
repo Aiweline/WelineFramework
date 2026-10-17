@@ -6,6 +6,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\TemplateRenderRouteTrace;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\ThemeLayout;
@@ -33,10 +34,13 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
         if ($html === '') {
             return $html;
         }
+        TemplateRenderRouteTrace::armIfRequested();
+        TemplateRenderRouteTrace::mark('safety_net', 'ensure_enter');
         // Theme-switch solidify gate: editor canvas still needs Filters XOR when
         // source layouts show declaration placeholders. Full required Overlay stays
         // storefront-only so edit chrome is not flooded with every injection.
         if ($this->isEditorCanvas()) {
+            TemplateRenderRouteTrace::mark('safety_net', 'editor_canvas_filters_xor');
             return $this->finishFiltersXor($html);
         }
 
@@ -83,6 +87,10 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
             }
             // Per declared slot — mini-cart coupon must not suppress checkout/cart summary slots.
             if (RequiredDefaultInjectionContract::slotHasWidgetPresent($html, $slotId, $module, $code)) {
+                TemplateRenderRouteTrace::mark(
+                    'safety_net_skip_present',
+                    $module . '/' . $code . '@' . $slotId
+                );
                 continue;
             }
             if (!$this->htmlMentionsSlot($html, $slotId)
@@ -92,7 +100,7 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
                 continue;
             }
             if (!$this->htmlMentionsSlot($html, $slotId)
-                && in_array($slotId, ['storefront-float-start', 'storefront-float-end'], true)
+                && in_array($slotId, ['storefront-float-start', 'storefront-float-end', 'storefront-tail-chrome'], true)
             ) {
                 $html = StorefrontFloatLayerHost::ensureInHtml($html);
             }
@@ -101,6 +109,10 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
             }
 
             $node = is_array($item['node'] ?? null) ? $item['node'] : [];
+            TemplateRenderRouteTrace::mark(
+                'safety_net_inject',
+                $module . '/' . $code . '@' . $slotId
+            );
             $widgetHtml = $this->renderWidget($module, $code, $slotId, $node, $themeId);
             if ($widgetHtml === '') {
                 continue;
@@ -251,7 +263,7 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
         try {
             /** @var ThemePublishedVersionRuntimeResolver $versions */
             $versions = ObjectManager::getInstance(ThemePublishedVersionRuntimeResolver::class);
-            $versionId = (int)($versions->resolve($themeId, $pageType)['themePublishedVersionId'] ?? 0);
+            $versionId = $versions->resolvePublishedNumericVersionId($themeId, $pageType);
             /** @var WidgetDefaultInjectionService $injections */
             $injections = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
 

@@ -17,10 +17,12 @@
  * @param items {default=[],type="site_gallery_items",label="展示项目"}
  */
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteBlockConfig as Block;
-use Weline\Theme\Helper\StorefrontImagePlaceholder;
 use Weline\Theme\Helper\WidgetUiScope;
 use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Service\ImageGalleryLooksAssembler;
+use Weline\Theme\Service\StorefrontStaticWidgetSectionFragmentCache;
 
 $scope = WidgetUiScope::forWidget('image-gallery');
 $esc = [Block::class, 'escape'];
@@ -34,6 +36,8 @@ $ctaLink = Block::link($this->getData('cta_link') ?? '');
 $isLooks = $variant === 'looks';
 $usingLooksPlaceholders = false;
 $looksSource = 'config';
+$looksCtaHref = $ctaLink;
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 // 买家秀默认一行 6 格（WO-HP-P3-MALL-05）；未显式配置 columns 时抬到 6
 if ($isLooks && trim((string)($this->getData('columns') ?? '')) === '') {
     $columns = '6';
@@ -42,121 +46,6 @@ if ($isLooks && trim((string)($this->getData('columns') ?? '')) === '') {
 $currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
 $normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
 $isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
-$translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {
-    $translated = trim((string)WidgetI18n::label($source));
-    if ($translated !== '' && $translated !== $source) {
-        return $translated;
-    }
-
-    return $isChineseLocale ? $source : $english;
-};
-
-/**
- * Resolve looks website: theme-editor canvas prefers typed editor_context
- * scope identity (作用范围), then DetectWebsite RequestContext.
- * Prevents default-Host canvas (/ without /~site/{code}) from showing another
- * site's Review/config wall while the editor chrome shows grocery/etc.
- */
-$resolveLooksWebsiteId = static function (): int {
-    try {
-        /** @var \Weline\Framework\Http\Request $request */
-        $request = \Weline\Framework\Manager\ObjectManager::getInstance(
-            \Weline\Framework\Http\Request::class
-        );
-        $editorMode = \strtolower(\trim((string)$request->getParam('editor_mode', '')));
-        $shell = \strtolower(\trim((string)$request->getParam('shell', '')));
-        $isEditorCanvas = $editorMode === '1' || $editorMode === 'true'
-            || $shell === 'theme-editor';
-        if ($isEditorCanvas) {
-            $raw = $request->getParam('editor_context', null);
-            $decoded = null;
-            if (\is_string($raw) && $raw !== '') {
-                $decoded = \json_decode($raw, true);
-            } elseif (\is_array($raw)) {
-                $decoded = $raw;
-            }
-            if (\is_array($decoded)) {
-                $identity = $decoded['scope']['identity'] ?? null;
-                if (\is_array($identity) && \array_key_exists('website_id', $identity)
-                    && \is_numeric($identity['website_id'])
-                ) {
-                    return \max(0, (int)$identity['website_id']);
-                }
-            }
-        }
-    } catch (\Throwable) {
-    }
-    try {
-        return \max(0, \Weline\Framework\Runtime\RequestContext::getWelineWebsiteId());
-    } catch (\Throwable) {
-        return 0;
-    }
-};
-
-/**
- * Drop looks config rows that are not verifiably on the current website.
- * Requires /product/{id} + findById — linkless / other-site seed never bleeds.
- *
- * @param list<array<string,mixed>> $rows
- * @return list<array<string,mixed>>
- */
-$filterLooksItemsForWebsite = static function (array $rows, int $websiteId): array {
-    if ($rows === []) {
-        return [];
-    }
-    if (!\class_exists(\Weline\Product\Repository\ProductRepository::class)) {
-        return [];
-    }
-    try {
-        /** @var \Weline\Product\Repository\ProductRepository $products */
-        $products = \Weline\Framework\Manager\ObjectManager::getInstance(
-            \Weline\Product\Repository\ProductRepository::class
-        );
-    } catch (\Throwable) {
-        return [];
-    }
-
-    $out = [];
-    foreach ($rows as $cfg) {
-        if (!\is_array($cfg)) {
-            continue;
-        }
-        $link = trim((string)($cfg['link'] ?? ''));
-        if ($link === '' || preg_match('#/product/(\d+)#', $link, $m) !== 1) {
-            // Unverifiable looks row — never pass through as cross-site seed.
-            continue;
-        }
-        $productId = (int)$m[1];
-        if ($productId <= 0) {
-            continue;
-        }
-        try {
-            if ($products->findById($websiteId, $productId) === null) {
-                continue;
-            }
-        } catch (\Throwable) {
-            continue;
-        }
-        // Catalog visibility (e.g. display_type=b2b wholesale-only): drop retail PDP links.
-        if (\class_exists(\Weline\Product\Service\StorefrontCatalogProductVisibility::class)) {
-            try {
-                /** @var \Weline\Product\Service\StorefrontCatalogProductVisibility $gate */
-                $gate = \Weline\Framework\Manager\ObjectManager::getInstance(
-                    \Weline\Product\Service\StorefrontCatalogProductVisibility::class
-                );
-                if (!$gate->isProductSellable($productId)) {
-                    continue;
-                }
-            } catch (\Throwable) {
-                // Fail closed for looks PDP links when the catalog gate cannot run.
-                continue;
-            }
-        }
-        $out[] = $cfg;
-    }
-
-    return $out;
-};
 
 if ($isLooks) {
     if ($title === '' || $title === '图片相册') {
@@ -167,137 +56,39 @@ if ($isLooks) {
         $subtitle = '晒出你的穿搭';
     }
 
-    $looksWebsiteId = $resolveLooksWebsiteId();
-
-    // WO-BUYER-SHOW-03：运行时优先已审含图评论；静态 items 仅聚合为空时兜底（且须属本站）
-    $configuredItems = $filterLooksItemsForWebsite($items, $looksWebsiteId);
-    $liveItems = [];
-    $looksGallery = null;
-    if (interface_exists(\Weline\Review\Api\BuyerLooksGalleryInterface::class)) {
-        try {
-            /** @var \Weline\Review\Api\BuyerLooksGalleryInterface $looksGallery */
-            $looksGallery = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Review\Api\BuyerLooksGalleryInterface::class
-            );
-        } catch (\Throwable) {
-            $looksGallery = null;
-        }
-    }
-    // DI 兜底：provides 未进 Worker 时直接用具体服务（避免 catch 吞错后整墙回落占位）
-    if ($looksGallery === null && class_exists(\Weline\Review\Service\BuyerLooksGalleryService::class)) {
-        try {
-            $looksGallery = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Review\Service\BuyerLooksGalleryService::class
-            );
-        } catch (\Throwable) {
-            $looksGallery = null;
-        }
-    }
-    if ($looksGallery !== null && method_exists($looksGallery, 'galleryItems')) {
-        try {
-            // Always pass resolved website — do not rely solely on RequestContext
-            // (editor canvas may lack /~site/{code} while editor_context has scope).
-            $liveRaw = $looksGallery->galleryItems(max(1, (int)$columns), $looksWebsiteId);
-            if (is_array($liveRaw)) {
-                foreach ($liveRaw as $liveRow) {
-                    if (!is_array($liveRow)) {
-                        continue;
-                    }
-                    $liveImage = trim((string)($liveRow['image'] ?? ''));
-                    if ($liveImage === '') {
-                        continue;
-                    }
-                    $liveItems[] = [
-                        'image' => $liveImage,
-                        'title' => (string)($liveRow['title'] ?? ''),
-                        'text' => (string)($liveRow['text'] ?? ''),
-                        'link' => (string)($liveRow['link'] ?? ''),
-                        'link_label' => (string)($liveRow['link_label'] ?? '查看商品'),
-                    ];
-                }
-            }
-        } catch (\Throwable) {
-            $liveItems = [];
-        }
-    }
-    if ($liveItems !== []) {
-        $items = $liveItems;
-        $looksSource = 'review';
-        // 实况不足一排时，用配置项补齐（跳过无图/重复图），避免半空墙
-        $want = max(1, (int)$columns);
-        if (count($items) < $want && $configuredItems !== []) {
-            $seen = [];
-            $seenProducts = [];
-            foreach ($items as $row) {
-                $img = trim((string)($row['image'] ?? ''));
-                if ($img !== '') {
-                    $seen[$img] = true;
-                }
-                $link = trim((string)($row['link'] ?? ''));
-                if ($link !== '' && preg_match('#/product/(\d+)#', $link, $m) === 1) {
-                    $seenProducts[(int)$m[1]] = true;
-                }
-            }
-            foreach ($configuredItems as $cfg) {
-                if (count($items) >= $want) {
-                    break;
-                }
-                if (!is_array($cfg)) {
-                    continue;
-                }
-                $img = trim((string)($cfg['image'] ?? ''));
-                if ($img === '' || isset($seen[$img])) {
-                    continue;
-                }
-                $link = trim((string)($cfg['link'] ?? ''));
-                if ($link !== '' && preg_match('#/product/(\d+)#', $link, $m) === 1 && isset($seenProducts[(int)$m[1]])) {
-                    continue;
-                }
-                $seen[$img] = true;
-                if ($link !== '' && preg_match('#/product/(\d+)#', $link, $m) === 1) {
-                    $seenProducts[(int)$m[1]] = true;
-                }
-                $items[] = [
-                    'image' => $img,
-                    'title' => (string)($cfg['title'] ?? ''),
-                    'text' => (string)($cfg['text'] ?? ''),
-                    'link' => $link,
-                    'link_label' => (string)($cfg['link_label'] ?? '查看商品'),
-                ];
-            }
-            if (count($items) > count($liveItems)) {
-                $looksSource = 'review+config';
-            }
-        }
-    } elseif ($configuredItems !== []) {
-        $items = $configuredItems;
-        $looksSource = 'config';
-    } else {
-        // 买家秀空配置：6 格占位图墙（无星级、无证言短评，禁止回退成评价三卡）
-        // Must replace $items — filtered-away cross-site seed must not remain and append.
-        $usingLooksPlaceholders = true;
-        $looksSource = 'placeholder';
-        $placeholder = StorefrontImagePlaceholder::url();
-        $lookScenes = [
-            ['title' => '礼宴试穿', 'title_en' => 'Formal try-on'],
-            ['title' => '日常通勤', 'title_en' => 'Everyday commute'],
-            ['title' => '旅拍街景', 'title_en' => 'Travel street look'],
-            ['title' => '节日聚会', 'title_en' => 'Festival gathering'],
-            ['title' => '校园问候', 'title_en' => 'Campus greeting'],
-            ['title' => '雅集留影', 'title_en' => 'Gathering snapshot'],
-        ];
-        $items = [];
-        foreach ($lookScenes as $scene) {
-            $items[] = [
-                'image' => $placeholder,
-                'title' => $translateDefaultCopy($scene['title'], $scene['title_en']),
-                'text' => '',
-                'link' => '',
-            ];
-        }
-    }
+    /** @var ImageGalleryLooksAssembler $looksAssembler */
+    $looksAssembler = ObjectManager::getInstance(ImageGalleryLooksAssembler::class);
+    $looksWebsiteId = $looksAssembler->resolveWebsiteId();
+    // WO-BUYER-SHOW-03：运行时优先已审含图评论；静态 items 仅聚合为空/不足时再做本站过滤
+    $assembled = $looksAssembler->assemble(
+        $looksWebsiteId,
+        max(1, (int)$columns),
+        $items,
+        $isChineseLocale,
+    );
+    $items = $assembled['items'];
+    $looksSource = (string)$assembled['looks_source'];
+    $usingLooksPlaceholders = (bool)$assembled['using_placeholders'];
+    // WO-BUYER-SHOW-02：有本站 cta_link 则可点；禁止回退到其它站的硬编码 PDP
+    $looksCtaHref = $looksAssembler->resolveCtaHref($ctaLink, $looksWebsiteId);
 }
-?>
+
+$renderImageGallerySection = static function () use (
+    $scope,
+    $esc,
+    $t,
+    $title,
+    $subtitle,
+    $columns,
+    $variant,
+    $isLooks,
+    $items,
+    $looksSource,
+    $looksCtaHref,
+    $usingLooksPlaceholders,
+): string {
+    ob_start();
+    ?>
 <section class="<?= $esc($scope->cssClass) ?> weline-site-block<?= $isLooks ? ' is-looks' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
@@ -352,37 +143,6 @@ if ($isLooks) {
     <?php if ($items === [] && !$isLooks): ?>
         <p class="sb-empty"><lang>请在部件配置中添加真实内容</lang></p>
     <?php elseif ($isLooks):
-        // WO-BUYER-SHOW-02：有本站 cta_link 则可点；禁止回退到其它站的硬编码 PDP
-        $looksCtaHref = $ctaLink;
-        if ($looksCtaHref !== '' && preg_match('#/product/(\d+)#', $looksCtaHref, $ctaMatch) === 1) {
-            $ctaProductId = (int)$ctaMatch[1];
-            $ctaOk = false;
-            if ($ctaProductId > 0 && \class_exists(\Weline\Product\Repository\ProductRepository::class)) {
-                try {
-                    /** @var \Weline\Product\Repository\ProductRepository $ctaProducts */
-                    $ctaProducts = \Weline\Framework\Manager\ObjectManager::getInstance(
-                        \Weline\Product\Repository\ProductRepository::class
-                    );
-                    $ctaOk = $ctaProducts->findById($looksWebsiteId ?? 0, $ctaProductId) !== null;
-                } catch (\Throwable) {
-                    $ctaOk = false;
-                }
-            }
-            if ($ctaOk && \class_exists(\Weline\Product\Service\StorefrontCatalogProductVisibility::class)) {
-                try {
-                    /** @var \Weline\Product\Service\StorefrontCatalogProductVisibility $ctaGate */
-                    $ctaGate = \Weline\Framework\Manager\ObjectManager::getInstance(
-                        \Weline\Product\Service\StorefrontCatalogProductVisibility::class
-                    );
-                    $ctaOk = $ctaGate->isProductSellable($ctaProductId);
-                } catch (\Throwable) {
-                    // keep prior $ctaOk
-                }
-            }
-            if (!$ctaOk) {
-                $looksCtaHref = '';
-            }
-        }
         $looksCtaLabel = $subtitle !== '' ? $subtitle : '晒出你的穿搭';
         if ($looksCtaHref !== ''): ?>
         <a class="sb-empty sb-looks-cta" href="<?= $esc($looksCtaHref) ?>"><?= $t($looksCtaLabel) ?></a>
@@ -391,3 +151,38 @@ if ($isLooks) {
         <?php endif; ?>
     <?php endif; ?>
 </section>
+<?php
+    return (string)ob_get_clean();
+};
+
+if ($isPreviewMode) {
+    echo $renderImageGallerySection();
+    return;
+}
+
+try {
+    /** @var StorefrontStaticWidgetSectionFragmentCache $sectionCache */
+    $sectionCache = ObjectManager::getInstance(StorefrontStaticWidgetSectionFragmentCache::class);
+    // looks: fingerprint includes assembled items so Review refresh rotates the HTML key.
+    $configHash = $sectionCache->configFingerprint([
+        'variant' => $variant,
+        'title' => $title,
+        'subtitle' => $subtitle,
+        'columns' => $columns,
+        'items' => $items,
+        'cta' => $looksCtaHref,
+        'looks_source' => $looksSource,
+        'uid' => $scope->uid,
+    ]);
+    // looks → short TTL profile (mirrors Review buyer_looks); gallery → static long bag
+    echo $sectionCache->rememberSectionHtml(
+        'image-gallery',
+        $configHash,
+        $renderImageGallerySection,
+        $isLooks
+            ? StorefrontStaticWidgetSectionFragmentCache::PROFILE_LOOKS
+            : StorefrontStaticWidgetSectionFragmentCache::PROFILE_STATIC,
+    );
+} catch (\Throwable) {
+    echo $renderImageGallerySection();
+}

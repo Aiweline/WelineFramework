@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\View\Template;
 use Weline\Theme\Service\AllMenu\MenuTreeNormalizer;
 use Weline\Theme\Service\StorefrontHeaderNavFragmentCache;
@@ -41,9 +41,9 @@ final class HeaderNavFragment
         $selectedCategoryId = (int)($params['selected_category_id'] ?? 0);
 
         $renderStable = static function () use ($template, $types, $menuId): string {
-            return (string)RequestLifecycleTrace::measurePhase(
+            return (string)TraceGate::measurePhase(
                 'theme.header.search_types.render',
-                static fn(): string => (string)$template->fetch(self::SEARCH_TYPE_DROPDOWN_TEMPLATE, [
+                static fn(): string => (string)$template->fetchHtml(self::SEARCH_TYPE_DROPDOWN_TEMPLATE, [
                     'search_types' => $types,
                     'selected_type' => 'all',
                     'selected_category_id' => 0,
@@ -59,7 +59,7 @@ final class HeaderNavFragment
         };
 
         if ($types === [] || self::shouldBypass($template)) {
-            $html = (string)RequestLifecycleTrace::measurePhase(
+            $html = (string)TraceGate::measurePhase(
                 'theme.header.search_types',
                 static fn(): string => $renderStable(),
                 ['cache' => 'bypass', 'menu_id' => $menuId],
@@ -73,9 +73,9 @@ final class HeaderNavFragment
         // N2: search-types Policy MGET before remember (residual shared_read).
         $cache->prefetchSearchTypeDropdown($menuId, $types);
 
-        $html = (string)RequestLifecycleTrace::measurePhase(
+        $html = (string)TraceGate::measurePhase(
             'theme.header.search_types',
-            static fn(): string => (string)RequestLifecycleTrace::measurePhase(
+            static fn(): string => (string)TraceGate::measurePhase(
                 'theme.header.search_types.cache',
                 static fn(): string => $cache->rememberSearchTypeDropdown(
                     $menuId,
@@ -338,9 +338,9 @@ final class HeaderNavFragment
         HeaderCommerceData::prefetchNavItemLabels($items);
         $showBannerWithChildren = self::coerceBool($params['show_banner_with_children'] ?? true, true);
         if ($items === [] || self::shouldBypass($template)) {
-            return (string)RequestLifecycleTrace::measurePhase(
+            return (string)TraceGate::measurePhase(
                 'theme.header.horizontal.render',
-                static fn(): string => (string)$template->fetch(self::HORIZONTAL_NAV_TEMPLATE, $params),
+                static fn(): string => (string)$template->fetchHtml(self::HORIZONTAL_NAV_TEMPLATE, $params),
                 [
                     'items' => \count($items),
                     'cache' => 'bypass',
@@ -353,14 +353,14 @@ final class HeaderNavFragment
         // Collapse residual per-panel shared_read into one shared_read_batch.
         $cache->prefetchCategoryNavFragments($items, $showBannerWithChildren);
 
-        return (string)RequestLifecycleTrace::measurePhase(
+        return (string)TraceGate::measurePhase(
             'theme.header.horizontal.cache',
             static fn(): string => $cache->rememberCategoriesHorizontalNav(
                 $items,
                 $showBannerWithChildren,
-                static fn(): string => (string)RequestLifecycleTrace::measurePhase(
+                static fn(): string => (string)TraceGate::measurePhase(
                     'theme.header.horizontal.render',
-                    static fn(): string => (string)$template->fetch(self::HORIZONTAL_NAV_TEMPLATE, $params),
+                    static fn(): string => (string)$template->fetchHtml(self::HORIZONTAL_NAV_TEMPLATE, $params),
                     [
                         'items' => \count($items),
                         'cache' => 'miss',
@@ -386,9 +386,9 @@ final class HeaderNavFragment
         $panelId = \trim((string)($params['panel_id'] ?? ''));
         $drawerFlyout = !empty($params['drawer_flyout']);
         if ($item === [] || self::shouldBypass($template)) {
-            return (string)RequestLifecycleTrace::measurePhase(
+            return (string)TraceGate::measurePhase(
                 'theme.header.mega_panel.render',
-                static fn(): string => (string)$template->fetch(self::MEGA_PANEL_TEMPLATE, $params),
+                static fn(): string => (string)$template->fetchHtml(self::MEGA_PANEL_TEMPLATE, $params),
                 [
                     'panel_id' => $panelId,
                     'drawer' => $drawerFlyout,
@@ -404,15 +404,15 @@ final class HeaderNavFragment
         // N2: standalone mega (drawer/flyout) still collapses into one MGET.
         $cache->prefetchCategoryNavFragments([$item], $showBannerWithChildren);
 
-        return (string)RequestLifecycleTrace::measurePhase(
+        return (string)TraceGate::measurePhase(
             'theme.header.mega_panel.cache',
             static fn(): string => $cache->rememberMegaMenuPanel(
                 $panelId,
                 $drawerFlyout,
                 $item,
-                static fn(): string => (string)RequestLifecycleTrace::measurePhase(
+                static fn(): string => (string)TraceGate::measurePhase(
                     'theme.header.mega_panel.render',
-                    static fn(): string => (string)$template->fetch(self::MEGA_PANEL_TEMPLATE, $params),
+                    static fn(): string => (string)$template->fetchHtml(self::MEGA_PANEL_TEMPLATE, $params),
                     [
                         'panel_id' => $panelId,
                         'drawer' => $drawerFlyout,
@@ -437,9 +437,9 @@ final class HeaderNavFragment
         $items = \is_array($params['items'] ?? null) ? $params['items'] : [];
         HeaderCommerceData::prefetchNavItemLabels($items);
         if ($items === [] || self::shouldBypass($template)) {
-            return (string)RequestLifecycleTrace::measurePhase(
+            return (string)TraceGate::measurePhase(
                 'theme.header.sidebar.render',
-                static fn(): string => (string)$template->fetch(self::SIDEBAR_NAV_TEMPLATE, $params),
+                static fn(): string => (string)$template->fetchHtml(self::SIDEBAR_NAV_TEMPLATE, $params),
                 [
                     'items' => \count($items),
                     'cache' => 'bypass',
@@ -454,13 +454,13 @@ final class HeaderNavFragment
         $showBanner = self::coerceBool($params['show_banner_with_children'] ?? true, true);
         $cache->prefetchCategoryNavFragments($items, $showBanner);
 
-        return (string)RequestLifecycleTrace::measurePhase(
+        return (string)TraceGate::measurePhase(
             'theme.header.sidebar.cache',
             static fn(): string => $cache->rememberCategoriesSidebarNav(
                 $items,
-                static fn(): string => (string)RequestLifecycleTrace::measurePhase(
+                static fn(): string => (string)TraceGate::measurePhase(
                     'theme.header.sidebar.render',
-                    static fn(): string => (string)$template->fetch(self::SIDEBAR_NAV_TEMPLATE, $params),
+                    static fn(): string => (string)$template->fetchHtml(self::SIDEBAR_NAV_TEMPLATE, $params),
                     [
                         'items' => \count($items),
                         'cache' => 'miss',

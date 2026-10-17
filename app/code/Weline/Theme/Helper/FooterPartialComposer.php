@@ -40,7 +40,7 @@ final class FooterPartialComposer
     private static function renderWidget(Template $template, string $path): string
     {
         try {
-            $html = trim((string)$template->fetch($path));
+            $html = trim((string)$template->fetchHtml($path));
 
             return $html;
         } catch (\Throwable) {

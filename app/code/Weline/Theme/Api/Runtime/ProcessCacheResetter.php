@@ -52,15 +52,27 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
             Template::clearProcessViewFileCache();
             TemplateFragmentOutputCache::resetProcessCaches();
+            try {
+                \Weline\Framework\Runtime\StorefrontProcessL1HydrateCoordinator::requestAfterReclaim('hard_reclaim');
+            } catch (\Throwable) {
+            }
 
             return 9;
         }
 
-        // Soft pressure: reclaim chrome HTML + HotCache process bag; keep lighter meta.
-        Partials::clearOutputCache();
+        // Soft pressure: prefer meta clear + budget trim (Partials contract).
+        // Do NOT clearOutputCache() — that undoes Layer B chrome peeks every shed.
         Partials::clearMetaCache();
-        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::trimProcessCacheToBudget(1_048_576);
+        $partialFreed = Partials::trimOutputCacheToBudget(1_048_576);
+        $hotFreed = \Weline\Framework\Cache\Service\StorefrontScopeHotCache::trimProcessCacheToBudget(1_048_576);
         TemplateFragmentOutputCache::resetProcessCaches();
+        // Layer B: only queue hydrate when soft trim actually dropped process bags.
+        if ($partialFreed > 0 || $hotFreed > 0) {
+            try {
+                \Weline\Framework\Runtime\StorefrontProcessL1HydrateCoordinator::requestAfterReclaim('soft_reclaim');
+            } catch (\Throwable) {
+            }
+        }
 
         return 4;
     }

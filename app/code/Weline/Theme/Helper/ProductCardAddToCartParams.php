@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\View\Template;
 use Weline\Framework\View\Data\DataInterface;
+use Weline\Framework\View\Engine\RenderContext;
+use Weline\Framework\View\Template;
 
 /**
  * 商品卡片购买操作参数（Cart 加购 + Checkout 立即购买）。
@@ -200,5 +202,124 @@ final class ProductCardAddToCartParams
             'provider_code' => trim((string)($offer['provider_code'] ?? 'product')) ?: 'product',
             'message' => trim((string)($offer['message'] ?? '')),
         ];
+    }
+
+    /**
+     * Hot-path purchase slot without nested Template::fetch of add-to-cart.phtml.
+     *
+     * @param array<string, mixed> $product
+     * @param array{
+     *     enabled?: bool,
+     *     buy_now_enabled?: bool,
+     *     variant?: string,
+     *     button_class?: string,
+     *     buy_now_button_class?: string,
+     *     wrapper_class?: string,
+     *     label?: string,
+     *     buy_now_label?: string,
+     *     css_owned_by_card?: bool
+     * } $options
+     */
+    public static function renderSlot(Template $template, array $product, array $options = []): string
+    {
+        $dict = self::fetchDictionary($product, $options);
+        $offer = $dict['storefront_offer'] ?? [];
+        $offer = \is_array($offer) ? self::normalizeOffer($offer) : [];
+        $addToCartEnabled = (bool)($dict['card_add_to_cart_enabled'] ?? true);
+        $buyNowEnabled = (bool)($dict['card_buy_now_enabled'] ?? true);
+        if ((!$addToCartEnabled && !$buyNowEnabled)
+            || $offer === []
+            || max(0, (int)($offer['product_id'] ?? 0)) <= 0
+        ) {
+            return '';
+        }
+
+        $dict['storefront_offer'] = $offer;
+        $restore = [];
+        $remove = [];
+        foreach ($dict as $key => $value) {
+            if (!\is_string($key)) {
+                continue;
+            }
+            if ($template->hasData($key)) {
+                $restore[$key] = $template->getData($key);
+            } else {
+                $remove[] = $key;
+            }
+            $template->setData($key, $value);
+        }
+        try {
+            $variant = \trim((string)($dict['card_add_to_cart_variant'] ?? 'cta'));
+            $wrapperClass = \trim((string)($dict['card_add_to_cart_wrapper_class'] ?? ''));
+            $escape = static fn (mixed $value): string => \htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $open = '<div class="product-card-purchase-actions-slot product-card-purchase-actions-slot--'
+                . $escape($variant)
+                . ($wrapperClass !== '' ? ' ' . $escape($wrapperClass) : '')
+                . '" data-weline-load="cart,storefrontShopperToast"'
+                . ' data-card-purchase-variant="' . $escape($variant) . '">'
+                . '<div class="product-card-purchase-actions product-card-purchase-actions--'
+                . $escape($variant) . '">';
+            $cssOwnedByProductCard = (bool)($dict['card_css_owned_by_product_card'] ?? false);
+
+            // Under an open page/batch capture: stream shell + hooks into the frame
+            // (getHook defaults to stream). Avoid require_string + string concat.
+            if (FiberOutputBuffer::hasActiveCapture()
+                && !RequestContext::get(RenderContext::REQUIRE_STRING_HOOK)
+            ) {
+                echo $open;
+                if ($addToCartEnabled) {
+                    $template->getHook('Weline_Theme::frontend::partials::product-card::add-to-cart');
+                }
+                if ($buyNowEnabled) {
+                    $template->getHook('Weline_Theme::frontend::partials::product-card::buy-now');
+                }
+                echo '</div>';
+                if (!$cssOwnedByProductCard) {
+                    self::emitPurchaseActionsAssetsOnce(static function (): void {
+                        echo self::buildPurchaseActionsStyleTag();
+                    });
+                }
+                echo '</div>';
+
+                return '';
+            }
+
+            // String consumers (no active capture, or explicit require_string): capture hooks.
+            $html = $open;
+            $requireStringKey = RenderContext::REQUIRE_STRING_HOOK;
+            $hadRequireString = RequestContext::has($requireStringKey);
+            $previousRequireString = RequestContext::get($requireStringKey);
+            RequestContext::set($requireStringKey, true);
+            try {
+                if ($addToCartEnabled) {
+                    $html .= (string)$template->getHook('Weline_Theme::frontend::partials::product-card::add-to-cart');
+                }
+                if ($buyNowEnabled) {
+                    $html .= (string)$template->getHook('Weline_Theme::frontend::partials::product-card::buy-now');
+                }
+            } finally {
+                if ($hadRequireString) {
+                    RequestContext::set($requireStringKey, $previousRequireString);
+                } else {
+                    RequestContext::remove($requireStringKey);
+                }
+            }
+            $html .= '</div>';
+            if (!$cssOwnedByProductCard) {
+                self::emitPurchaseActionsAssetsOnce(static function () use (&$html): void {
+                    $html .= self::buildPurchaseActionsStyleTag();
+                });
+            }
+            $html .= '</div>';
+
+            return $html;
+        } finally {
+            if ($remove !== []) {
+                $template->unsetData($remove);
+            }
+            foreach ($restore as $key => $value) {
+                $template->setData($key, $value);
+            }
+        }
     }
 }

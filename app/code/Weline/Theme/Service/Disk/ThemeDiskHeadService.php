@@ -6,7 +6,7 @@ namespace Weline\Theme\Service\Disk;
 
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
@@ -46,7 +46,7 @@ class ThemeDiskHeadService
         // Only drop process L1 — never clearNamespace(weline_site_runtime) on the
         // storefront head hot path (each SharedState IPC ≈200ms under pool pressure).
         if ($this->shouldRefreshProcessCache($area)) {
-            RequestLifecycleTrace::measurePhase(
+            TraceGate::measurePhase(
                 'theme.head.disk_override.reset',
                 static function (): void {
                     ThemeData::clearProcessMemoryCache();
@@ -57,7 +57,7 @@ class ThemeDiskHeadService
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
 
-        $bundleMap = RequestLifecycleTrace::measurePhase(
+        $bundleMap = TraceGate::measurePhase(
             'theme.head.disk_override.config',
             static fn(): array => ThemeData::getConfigList($area, 'disk_bundle', $scope),
             ['area' => $area, 'scope' => $scope],
@@ -67,7 +67,7 @@ class ThemeDiskHeadService
             return $this->rememberHeadHref($cacheKey, '');
         }
 
-        $filePath = RequestLifecycleTrace::measurePhase(
+        $filePath = TraceGate::measurePhase(
             'theme.head.disk_override.resolve',
             fn(): string => $this->compileService->resolveBundlePath((int)$theme->getId(), $area, $scope, $hash),
             ['area' => $area, 'scope' => $scope],

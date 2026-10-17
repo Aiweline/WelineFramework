@@ -19,7 +19,7 @@ $layoutMainClasses = array_values(array_filter(
 if ($layoutMainClasses === []) $layoutMainClasses = ['w-backend-page'];
 $showPageHeader = $asBool($layoutShowPageHeader ?? ($meta['showPageHeader'] ?? true), true);
 $showMessages = $asBool($layoutShowMessages ?? ($meta['showMessages'] ?? true), true);
-$contentHtml = $layoutContentHtml ?? (string)$this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml');
+$contentHtml = $layoutContentHtml ?? (string)$this->fetchHtml('Weline_Theme::theme/backend/partials/layout/content.phtml');
 $fallbackTitle = '';
 // Prefer explicit page/controller titles over a bare extracted $title that may still
 // hold BackendPageController's default "WelineFramework Admin".

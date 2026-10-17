@@ -7,11 +7,17 @@ namespace Weline\Theme\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\ThemeApplicationContext;
+use Weline\Framework\View\Template;
 use Weline\Theme\Block\Partials;
 use Weline\Theme\Helper\HeaderCommerceData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityChrome;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller;
+use Weline\Websites\Model\SalesChannel;
+use Weline\Websites\Model\Store;
+use Weline\Websites\Model\Website;
+use Weline\Websites\Service\ThemeApplicationContextProducer;
 
 /**
  * wave8-8c / 8c3 / P5-O1: Theme-owned compliant HotCache bag priming for deferred warmup.
@@ -32,6 +38,93 @@ use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller;
  */
 final class StorefrontHotCacheBagSeeder
 {
+    /**
+     * Layer B: peek Shared chrome HTML into Process L1 only (no render / no seed).
+     *
+     * @return array{
+     *   seeded:int,
+     *   peeked:int,
+     *   bags:list<string>,
+     *   errors:list<string>
+     * }
+     */
+    public function hydrate(): array
+    {
+        $peeked = 0;
+        $bags = [];
+        $errors = [];
+
+        // Layer A warmer seeds under acceptance Host + ThemeApplication + snapshot
+        // + freeze. Peer bag providers / Worker bind alone can leave a key fork —
+        // re-pin the shared chrome identity before Shared→Process peek.
+        try {
+            /** @var StorefrontChromeCacheKeyIdentityInstaller $identity */
+            $identity = ObjectManager::getInstance(StorefrontChromeCacheKeyIdentityInstaller::class);
+            foreach ($identity->installForSharedChromePeek() as $note) {
+                $note = \trim((string)$note);
+                if ($note === '') {
+                    continue;
+                }
+                if (\str_contains($note, 'unresolved')
+                    || \str_starts_with($note, 'theme=none')
+                    || \str_starts_with($note, 'snapshot=')
+                    || \str_starts_with($note, 'freeze_fail')
+                    || \str_contains($note, 'cacheable=0')
+                ) {
+                    $errors[] = 'identity:' . $note;
+                }
+            }
+        } catch (\Throwable $e) {
+            $errors[] = 'identity:' . $e->getMessage();
+        }
+
+        try {
+            /** @var Partials $partials */
+            $partials = ObjectManager::getInstance(Partials::class);
+            foreach (['header', 'footer'] as $type) {
+                $result = $partials->hydrateStorefrontChromeProcessFromShared('frontend', $type);
+                $peeked += (int)($result['peeked'] ?? 0);
+                foreach (\is_array($result['bags'] ?? null) ? $result['bags'] : [] as $bag) {
+                    $bag = \trim((string)$bag);
+                    if ($bag !== '') {
+                        $bags[] = $bag;
+                    }
+                }
+                foreach (\is_array($result['errors'] ?? null) ? $result['errors'] : [] as $error) {
+                    $errors[] = (string)$error;
+                }
+            }
+        } catch (\Throwable $e) {
+            $errors[] = 'partials.hydrate:' . $e->getMessage();
+        }
+
+        // Formal homepage layout HTML: Shared → Process peek only (no renderLayoutChain / seed).
+        try {
+            /** @var StorefrontHomepageLayoutHtmlBag $homepageLayoutBag */
+            $homepageLayoutBag = ObjectManager::getInstance(StorefrontHomepageLayoutHtmlBag::class);
+            $homepageResult = $homepageLayoutBag->hydrateProcessFromShared('default');
+            $peeked += (int)($homepageResult['peeked'] ?? 0);
+            foreach (\is_array($homepageResult['bags'] ?? null) ? $homepageResult['bags'] : [] as $bag) {
+                $bag = \trim((string)$bag);
+                if ($bag !== '') {
+                    $bags[] = $bag;
+                }
+            }
+            foreach (\is_array($homepageResult['errors'] ?? null) ? $homepageResult['errors'] : [] as $error) {
+                $errors[] = (string)$error;
+            }
+        } catch (\Throwable $e) {
+            $errors[] = 'homepage_layout_html.hydrate:' . $e->getMessage();
+        }
+
+        return [
+            'seeded' => 0,
+            'peeked' => $peeked,
+            'bags' => \array_values(\array_unique($bags)),
+            'errors' => \array_slice($errors, 0, 8),
+        ];
+    }
+
     /**
      * @return array{
      *   seeded:int,
@@ -202,25 +295,69 @@ final class StorefrontHotCacheBagSeeder
     private function ensureFrontendThemeAssignedToTemplate(): void
     {
         try {
-            $template = \Weline\Framework\View\Template::getInstance();
+            // Published site theme lives on ThemeApplicationContext; without it
+            // resolveTheme falls back to module default (theme_id=1) while Layer A
+            // / HTTP use the live site theme → chrome Shared logical-key miss.
+            $this->installDefaultWebsiteThemeApplication();
+            $template = Template::getInstance();
             $existing = $template->getData('theme');
-            if (\is_array($existing) && isset($existing['theme']) && \is_object($existing['theme'])) {
-                return;
+            /** @var ThemeContextService $context */
+            $context = ObjectManager::getInstance(ThemeContextService::class);
+            $theme = $context->resolveTheme('frontend', null, false);
+            if (!$theme instanceof WelineTheme) {
+                $theme = $context->resolveRegisteredDefaultTheme('frontend');
             }
-            $themeId = $this->resolveFrontendThemeId();
-            if ($themeId <= 0) {
-                return;
-            }
-            /** @var WelineTheme $theme */
-            $theme = ObjectManager::getInstance(WelineTheme::class);
-            $theme->clearData()->clearQuery()->load($themeId);
-            if ((int)$theme->getId() <= 0) {
+            if (!$theme instanceof WelineTheme || (int)$theme->getId() <= 0) {
                 return;
             }
             $base = \is_array($existing) ? $existing : [];
             $base['theme'] = $theme;
-            $base['area'] = $base['area'] ?? 'frontend';
+            $base['area'] = 'frontend';
+            $base['layoutType'] = $base['layoutType'] ?? 'homepage';
+            $base['layoutOption'] = $base['layoutOption'] ?? 'default';
+            if (!isset($base['colorMode']) || (string)$base['colorMode'] === '') {
+                $base['colorMode'] = 'default';
+            }
             $template->assign('theme', $base);
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * Mirror StorefrontChromeLocaleCacheWarmer: pin Website ThemeApplicationContext
+     * so hydrate peeks the same theme_id as Layer A Shared inventory.
+     */
+    private function installDefaultWebsiteThemeApplication(): void
+    {
+        try {
+            $identity = RequestContext::scopeIdentity();
+            if (!$identity instanceof ScopeIdentity) {
+                $identity = ScopeIdentity::channel(
+                    Website::ID_DEFAULT,
+                    Website::CODE_DEFAULT,
+                    Store::CODE_DEFAULT,
+                    SalesChannel::CODE_DEFAULT,
+                    Store::MODE_NORMAL,
+                );
+            }
+            /** @var Website $website */
+            $website = ObjectManager::getInstance(Website::class);
+            $website = (clone $website)->load(Website::ID_DEFAULT, null, true);
+            $locale = \trim((string)$website->getDefaultLanguage());
+            if ($locale === '') {
+                $locale = 'zh_Hans_CN';
+            }
+            /** @var ThemeApplicationContextProducer $producer */
+            $producer = ObjectManager::getInstance(ThemeApplicationContextProducer::class);
+            $application = $producer->build(
+                identity: $identity,
+                storeMode: (string)($identity->storeMode ?? Store::MODE_NORMAL),
+                defaultLocale: $locale,
+                displayName: (string)$website->getName(),
+                purpose: 'runtime',
+            );
+            RequestContext::remove(ThemeApplicationContext::REQUEST_KEY_PREFIX . 'frontend.runtime');
+            $application->install();
         } catch (\Throwable) {
         }
     }
@@ -228,6 +365,7 @@ final class StorefrontHotCacheBagSeeder
     private function resolveFrontendThemeId(): int
     {
         try {
+            $this->installDefaultWebsiteThemeApplication();
             /** @var ThemeContextService $context */
             $context = ObjectManager::getInstance(ThemeContextService::class);
             $theme = $context->resolveTheme('frontend', null, false);

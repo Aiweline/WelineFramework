@@ -6,7 +6,7 @@ namespace Weline\Theme\Helper;
 
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Search\Service\SearchProviderRegistry;
 use Weline\Theme\Service\AllMenu\AllMenuTreeRegistry;
 use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
@@ -800,7 +800,7 @@ final class HeaderCommerceData
                         return $cache->rememberPolicy(
                             $policy,
                             $sharedLogicalKey ?? $logicalKey,
-                            static fn(): mixed => RequestLifecycleTrace::measurePhase($resource, $builder),
+                            static fn(): mixed => TraceGate::measurePhase($resource, $builder),
                         );
                     } catch (\Throwable) {
                         // Shared metadata is an optimization boundary; preserve the
@@ -808,7 +808,7 @@ final class HeaderCommerceData
                     }
                 }
 
-                return RequestLifecycleTrace::measurePhase($resource, $builder);
+                return TraceGate::measurePhase($resource, $builder);
             },
         );
     }

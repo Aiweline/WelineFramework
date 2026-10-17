@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 
 /**
  * UC-pdp-cold phase names for wls_tpl_perf / RequestLifecycleTrace.
@@ -67,10 +67,10 @@ final class ThemePdpBudgetPhases
      */
     public static function reserveTraceBuckets(): void
     {
-        if (!RequestLifecycleTrace::isEnabled()) {
+        if (!TraceGate::isArmed()) {
             return;
         }
-        RequestLifecycleTrace::reserveSummaryPhases([
+        TraceGate::reserveSummaryPhases([
             ...ThemeLayoutBudgetPhases::all(),
             ...self::all(),
             'theme.layout_slot.zero_runtime_fill',
@@ -148,6 +148,6 @@ final class ThemePdpBudgetPhases
             return $operation();
         }
 
-        return RequestLifecycleTrace::measurePhase($phase, $operation, $meta);
+        return TraceGate::measurePhase($phase, $operation, $meta);
     }
 }

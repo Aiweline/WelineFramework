@@ -16,8 +16,10 @@ $localize = static fn (mixed $value, string $default = ''): string => WidgetI18n
     trim((string)$value),
     $default,
 );
+// stable_fragment: bag-safe snapshot (empty q, type=all) — request selection stamped after HIT.
+$stableFragment = (bool)($stable_fragment ?? false);
 $placeholder = $localize($placeholder ?? '', '搜索商品...');
-$query = trim((string)($query ?? ''));
+$query = $stableFragment ? '' : trim((string)($query ?? ''));
 $showHotWords = (bool)($show_hot_words ?? true);
 $panelId = trim((string)($panel_id ?? 'header-search-panel'));
 $configuredType = trim((string)($search_type ?? 'all'));
@@ -25,26 +27,31 @@ $showTypeSelect = $configuredType === '' || $configuredType === 'all';
 
 $requestType = '';
 $requestCategoryId = 0;
-try {
-    if (isset($this) && isset($this->request) && is_object($this->request)) {
-        $requestType = trim((string)($this->request->getParam('type') ?? ''));
-        $requestCategoryId = (int)($this->request->getParam('category_id') ?? 0);
+if (!$stableFragment) {
+    try {
+        if (isset($this) && isset($this->request) && is_object($this->request)) {
+            $requestType = trim((string)($this->request->getParam('type') ?? ''));
+            $requestCategoryId = (int)($this->request->getParam('category_id') ?? 0);
+        }
+    } catch (\Throwable) {
+        // fall through to $_GET
     }
-} catch (\Throwable) {
-    // fall through to $_GET
-}
-if ($requestType === '' && isset($_GET['type'])) {
-    $requestType = trim((string)$_GET['type']);
-}
-if ($requestCategoryId <= 0 && isset($_GET['category_id'])) {
-    $requestCategoryId = (int)$_GET['category_id'];
+    if ($requestType === '' && isset($_GET['type'])) {
+        $requestType = trim((string)$_GET['type']);
+    }
+    if ($requestCategoryId <= 0 && isset($_GET['category_id'])) {
+        $requestCategoryId = (int)$_GET['category_id'];
+    }
 }
 
 // Live request / $_GET wins. Stale Template assigns must not pin the facade.
-$assignedCategoryId = (int)($search_category_id ?? 0);
+$assignedCategoryId = $stableFragment ? 0 : (int)($search_category_id ?? 0);
 $searchCategoryId = $requestCategoryId > 0 ? $requestCategoryId : $assignedCategoryId;
 
-if ($showTypeSelect) {
+if ($stableFragment) {
+    $searchType = 'all';
+    $searchCategoryId = 0;
+} elseif ($showTypeSelect) {
     $explicitSelected = trim((string)($selected_type ?? ''));
     if ($requestType !== '') {
         $searchType = $requestType;
@@ -134,7 +141,7 @@ if ($showTypeSelect && $searchType === 'all' && $searchCategoryId > 0) {
                     'menu_id' => $typeMenuId,
                 ]);
             } catch (\Throwable) {
-                $typeDropdownHtml = (string)$this->fetch('Weline_Theme::theme/frontend/partials/search/type-dropdown.phtml', [
+                $typeDropdownHtml = (string)$this->fetchHtml('Weline_Theme::theme/frontend/partials/search/type-dropdown.phtml', [
                     'search_types' => $searchTypes,
                     'selected_type' => $selectedTypeForDropdown,
                     'selected_category_id' => $searchCategoryId,

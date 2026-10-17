@@ -29,7 +29,7 @@ final class StorefrontFloatLayerHost
         }
         // Both nested float slots must exist. A leftover CSS marker
         // (data-storefront-float-layer-css) must NOT count as a destination.
-        foreach (SharedChromeService::FOOTER_NESTED_CHROME_SLOTS as $slotId) {
+        foreach (SharedChromeService::FOOTER_FLOAT_LAYER_SLOTS as $slotId) {
             if (!self::htmlMentionsSlot($html, $slotId)) {
                 return false;
             }
@@ -53,13 +53,26 @@ final class StorefrontFloatLayerHost
      * Also self-heal: baked footers may lack data-weline-load on an existing layer
      * (hidden-host IO never fired → × chrome missing). Marker: storefront-float-load-on-layer-v1
      * Marker: storefront-float-edge-label-heal-v1
+     * Marker: storefront-float-single-layer-v1 — mid-render chrome fill may synth a host
+     * before footer emits the real layer; collapse so default_injection lands once (DEV XOR).
      */
     public static function ensureInHtml(string $html): string
     {
         if ($html === '') {
             return $html;
         }
+
+        // Always collapse first: destinations may already exist twice (synth + footer).
+        $html = self::collapseDuplicateFloatLayers($html);
+
         if (self::htmlHasFloatDestinations($html)) {
+            $html = self::ensureFloatLayerModuleLoadAttr($html);
+
+            return self::healBakedChineseFloatEdgeLabels($html);
+        }
+
+        // Shell present without slots: never add a second id= layer (would dual-inject).
+        if (self::htmlHasFloatLayerShell($html)) {
             $html = self::ensureFloatLayerModuleLoadAttr($html);
 
             return self::healBakedChineseFloatEdgeLabels($html);
@@ -72,7 +85,204 @@ final class StorefrontFloatLayerHost
             $html .= $layer;
         }
 
-        return self::healBakedChineseFloatEdgeLabels($html);
+        return self::healBakedChineseFloatEdgeLabels(self::collapseDuplicateFloatLayers($html));
+    }
+
+    /**
+     * True when #w-storefront-float-layer open tag exists (slots optional).
+     */
+    public static function htmlHasFloatLayerShell(string $html): bool
+    {
+        return $html !== ''
+            && (
+                str_contains($html, 'id="w-storefront-float-layer"')
+                || str_contains($html, "id='w-storefront-float-layer'")
+            );
+    }
+
+    /**
+     * Keep exactly one #w-storefront-float-layer. Prefer footer (no synth host marker);
+     * migrate widgets from discarded synth into kept empty slots when needed.
+     * Marker: storefront-float-single-layer-v1
+     */
+    public static function collapseDuplicateFloatLayers(string $html): string
+    {
+        if ($html === '' || !self::htmlHasFloatLayerShell($html)) {
+            return $html;
+        }
+
+        $matched = preg_match_all(
+            '/<div\b[^>]*\bid\s*=\s*(["\'])w-storefront-float-layer\1[^>]*>/i',
+            $html,
+            $matches,
+            PREG_OFFSET_CAPTURE
+        );
+        if ($matched === false || $matched < 2) {
+            return $html;
+        }
+        $opens = $matches[0];
+
+        $blocks = [];
+        foreach ($opens as [$openTag, $offset]) {
+            $end = self::findBalancedDivEndExclusive($html, (int)$offset);
+            if ($end === null) {
+                continue;
+            }
+            $full = substr($html, (int)$offset, $end - (int)$offset);
+            $blocks[] = [
+                'start' => (int)$offset,
+                'end' => $end,
+                'open' => $openTag,
+                'full' => $full,
+                'is_synth' => str_contains($openTag, 'data-required-injection-host'),
+                'widget_score' => substr_count(strtolower($full), 'data-widget-code='),
+            ];
+        }
+        if (count($blocks) < 2) {
+            return $html;
+        }
+
+        $keepIdx = self::pickFloatLayerKeepIndex($blocks);
+        $keepFull = $blocks[$keepIdx]['full'];
+
+        // Migrate widgets from discarded into keep when keep is empty for that slot.
+        for ($i = 0, $n = count($blocks); $i < $n; $i++) {
+            if ($i === $keepIdx) {
+                continue;
+            }
+            $keepFull = self::migrateFloatSlotWidgets($keepFull, $blocks[$i]['full']);
+        }
+
+        // Preserve interstitial markup between layers; drop discarded shells (+ synth style).
+        $out = '';
+        $cursor = 0;
+        foreach ($blocks as $i => $block) {
+            $before = substr($html, $cursor, $block['start'] - $cursor);
+            if ($i !== $keepIdx && $block['is_synth']) {
+                $trimmed = preg_replace(
+                    '/<style\b[^>]*\bdata-required-injection-host\s*=\s*["\']float-layer["\'][^>]*>.*?<\/style>\s*$/is',
+                    '',
+                    $before
+                );
+                if (is_string($trimmed)) {
+                    $before = $trimmed;
+                }
+            }
+            $out .= $before;
+            if ($i === $keepIdx) {
+                $out .= $keepFull;
+            }
+            $cursor = $block['end'];
+        }
+        $out .= substr($html, $cursor);
+
+        return $out;
+    }
+
+    /**
+     * @param list<array{start:int,end:int,open:string,full:string,is_synth:bool,widget_score:int}> $blocks
+     */
+    private static function pickFloatLayerKeepIndex(array $blocks): int
+    {
+        $nonSynth = [];
+        foreach ($blocks as $i => $block) {
+            if (!$block['is_synth']) {
+                $nonSynth[] = $i;
+            }
+        }
+        if ($nonSynth !== []) {
+            // Footer is usually the last native layer.
+            return (int)end($nonSynth);
+        }
+
+        $best = 0;
+        $bestScore = -1;
+        foreach ($blocks as $i => $block) {
+            if ($block['widget_score'] >= $bestScore) {
+                $bestScore = $block['widget_score'];
+                $best = $i;
+            }
+        }
+
+        return $best;
+    }
+
+    private static function migrateFloatSlotWidgets(string $keepLayerHtml, string $fromLayerHtml): string
+    {
+        $pairs = [
+            'storefront-float-start' => ['Weline_StoreMusic', 'store-music'],
+            'storefront-float-end' => ['Weline_CustomerService', 'customer-service-float'],
+        ];
+        foreach ($pairs as $slotId => [$module, $code]) {
+            if (RequiredDefaultInjectionContract::slotHasWidgetPresent($keepLayerHtml, $slotId, $module, $code)) {
+                continue;
+            }
+            if (!RequiredDefaultInjectionContract::slotHasWidgetPresent($fromLayerHtml, $slotId, $module, $code)) {
+                continue;
+            }
+            if (preg_match(
+                '/(<div\b[^>]*\bdata-widget-code\s*=\s*(["\'])' . preg_quote($code, '/') . '\2[^>]*>)/i',
+                $fromLayerHtml,
+                $wm,
+                PREG_OFFSET_CAPTURE
+            ) !== 1) {
+                continue;
+            }
+            $wStart = (int)$wm[0][1];
+            $wEnd = self::findBalancedDivEndExclusive($fromLayerHtml, $wStart);
+            if ($wEnd === null) {
+                continue;
+            }
+            $widgetHtml = substr($fromLayerHtml, $wStart, $wEnd - $wStart);
+            $quoted = preg_quote($slotId, '/');
+            $injected = preg_replace(
+                '/(<div\b[^>]*\bdata-slot-id\s*=\s*(["\'])' . $quoted . '\2[^>]*>)/i',
+                '$1' . $widgetHtml,
+                $keepLayerHtml,
+                1
+            );
+            if (is_string($injected) && $injected !== $keepLayerHtml) {
+                $keepLayerHtml = $injected;
+            }
+        }
+
+        return $keepLayerHtml;
+    }
+
+    private static function findBalancedDivEndExclusive(string $html, int $openOffset): ?int
+    {
+        $gt = strpos($html, '>', $openOffset);
+        if ($gt === false) {
+            return null;
+        }
+        $i = $gt + 1;
+        $depth = 1;
+        $len = strlen($html);
+        while ($i < $len && $depth > 0) {
+            $nextOpen = stripos($html, '<div', $i);
+            $nextClose = stripos($html, '</div>', $i);
+            if ($nextClose === false) {
+                return null;
+            }
+            // Ignore `<div` that is not a real open tag (e.g. inside text) — require boundary.
+            if ($nextOpen !== false && $nextOpen < $nextClose) {
+                $after = $html[$nextOpen + 4] ?? '';
+                if ($after === '>' || $after === ' ' || $after === "\n" || $after === "\t" || $after === "\r") {
+                    $depth++;
+                    $i = $nextOpen + 4;
+                    continue;
+                }
+                $i = $nextOpen + 4;
+                continue;
+            }
+            $depth--;
+            $i = $nextClose + 6;
+            if ($depth === 0) {
+                return $i;
+            }
+        }
+
+        return null;
     }
 
     /**

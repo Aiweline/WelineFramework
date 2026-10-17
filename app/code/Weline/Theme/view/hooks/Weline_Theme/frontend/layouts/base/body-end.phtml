@@ -1,39 +1,15 @@
 <?php
 /**
- * Global storefront image placeholder + float-layer JS loader.
- * Float layer DOM + left/right w:slots live in partials/footer/default.phtml
- * so Theme Editor can select storefront-float-start/end.
+ * Aggregate bag marker — guest-neutral storefront tail chrome lives in footer
+ * slot storefront-tail-chrome (theme-storefront-tail + Compare/Consent/B2B).
+ * Session/path-sensitive work lives on body-end-dynamic (I18n / Visitor).
  *
+ * Non-empty marker keeps the complete body-end aggregate cacheable (HIT skips
+ * re-walking every empty contributor stub). Compiler strips HTML comments in
+ * echoed strings, so use a hidden testid node instead.
+ *
+ * Hook: Weline_Theme::frontend::layouts::base::body-end
  * @hook-priority 40
  * @hook-sort-order 40
  */
-$isBackend = str_contains(strtolower((string)($_SERVER['REQUEST_URI'] ?? '')), '/admin');
-if ($isBackend) {
-    return;
-}
-
-$placeholderSrc = \Weline\Theme\Helper\StorefrontImagePlaceholder::url();
-$placeholderSrcJson = json_encode($placeholderSrc, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-?>
-<script>
-window.Weline = window.Weline || {};
-window.Weline.Theme = window.Weline.Theme || {};
-window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?>;
-</script>
-<?php // mini-cart-drawer：由 mini-cart-icon 组件自带；shopper-toast CSS：架构部件，由 storefront-shopper-toast.js ensure——主题禁止硬 @static ?>
-<?php
-// Image fallback has no natural visible host → idle (not default IntersectionObserver).
-// Float-layer JS loads on #w-storefront-float-layer in footer (always intersects).
-// Marker: storefront-float-load-on-layer-v1
-?>
-<div hidden
-     data-weline-load="storefrontImageFallback"
-     data-weline-load-when="idle"
-     aria-hidden="true"></div>
-<?php // Theme 全局店面 JS：经 modules + data-weline-load，禁止 @static 直引 ?>
-<?php // Default Theme chrome (Amazon head-zero Theme JS): eager modules after weline.js ?>
-<div hidden
-     data-weline-load="themePrepaint,welineUi"
-     data-weline-load-when="idle"
-     data-weline-theme-chrome="1"
-     aria-hidden="true"></div>
+echo '<span hidden data-testid="weline-body-end-aggregate"></span>';

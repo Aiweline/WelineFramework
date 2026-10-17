@@ -100,7 +100,7 @@
                   shared="true"
                   sort="0"/>
     </event>
-    
+
     <!-- 
         控制器模板获取前事件 - 根据 layoutType 自动加载主题布局
         
@@ -118,17 +118,20 @@
                   sort="100"/>
     </event>
     
-    <!-- 
-        控制器模板获取后事件 - 处理布局插槽替换
-        
+    <!--
+        控制器模板获取后事件 — 布局链包装 + 店面硬切收尾（非店面 DB 插槽热填）
+
         功能：
-        1. 检测渲染后的 HTML 中的 data-wslot / widget-slot-area 元素
-        2. 从数据库获取该页面的部件布局配置
-        3. 渲染部件并填充到对应插槽
-        4. 返回最终的 HTML
-        
+        1. ControllerFetchFileAfter（sort=90）：布局链包装；首页/博客详情 layout HTML bag
+           可在 HotCache HIT 时短接 renderLayoutChain，并置 theme.storefront_html_pre_finalized
+        2. LayoutSlotRenderer（sort=100）店面路径：StorefrontLayoutHtmlFinalizer 硬切 finalize
+           （safety_net）；若已 pre_finalized 则跳过重复 finalize（仅可选 DEV 诊断）
+        3. LayoutSlotRenderer 编辑器/预览路径：才走插槽/部件填充（编辑意图），不是访客店面
+           热路径上的「从数据库取部件布局并填槽」
+        4. PlaceWidgetAssets（sort=120）：部件静态资源落位
+
         注意：使用 fetch_file_after 事件而非 after_render 事件
-        因为 after_render 事件在框架中未被触发，而 fetch_file_after 
+        因为 after_render 事件在框架中未被触发，而 fetch_file_after
         在控制器渲染完成后可靠触发
     -->
     <event name="Weline_Framework_Controller::fetch_file_after">

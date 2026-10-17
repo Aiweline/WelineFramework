@@ -209,10 +209,15 @@ final class ThemeLayoutEntityWidgetRenderer
 
     private function themeForRequest(int $themeId): ?WelineTheme
     {
-        $cacheKey = 'theme.layout_entity.theme.' . $themeId;
-        $cached = RequestContext::get($cacheKey);
-        if ($cached instanceof WelineTheme) {
-            return clone $cached;
+        $cacheKey = 'theme.layout_entity.theme.row.v2.' . $themeId;
+        if (RequestContext::isInitialized() && RequestContext::has($cacheKey)) {
+            $cached = RequestContext::get($cacheKey);
+            if ($cached === null || $cached === false) {
+                return null;
+            }
+            if (\is_array($cached) && $cached !== []) {
+                return $this->hydrateThemeFromSnapshot($cached);
+            }
         }
 
         /** @var WelineTheme $themeModel */
@@ -220,12 +225,55 @@ final class ThemeLayoutEntityWidgetRenderer
         $loaded = clone $themeModel;
         $loaded->load($themeId);
         if ((int)$loaded->getId() !== $themeId) {
+            if (RequestContext::isInitialized()) {
+                RequestContext::set($cacheKey, false);
+            }
+
             return null;
         }
 
-        RequestContext::set($cacheKey, $loaded);
+        $snapshot = $this->themeRowSnapshot($loaded);
+        if (RequestContext::isInitialized()) {
+            RequestContext::set($cacheKey, $snapshot);
+        }
 
-        return clone $loaded;
+        return $this->hydrateThemeFromSnapshot($snapshot);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function themeRowSnapshot(WelineTheme $theme): array
+    {
+        $data = $theme->getData();
+        if (!\is_array($data) || $data === []) {
+            return [];
+        }
+        $snapshot = [];
+        foreach ($data as $key => $value) {
+            if (!\is_string($key) && !\is_int($key)) {
+                continue;
+            }
+            if (\is_object($value)) {
+                continue;
+            }
+            $snapshot[$key] = $value;
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function hydrateThemeFromSnapshot(array $data): WelineTheme
+    {
+        /** @var WelineTheme $themeModel */
+        $themeModel = ObjectManager::getInstance(WelineTheme::class);
+        $theme = clone $themeModel;
+        $theme->clearData()->clearQuery()->setData($data);
+
+        return $theme;
     }
 
 }

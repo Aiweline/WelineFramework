@@ -4,41 +4,24 @@
 
 - **Hook 名称**：`Weline_Theme::frontend::layouts::base::body-end`
 - **显示名称**：基础布局 Body 结束
-- **功能说明**：在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。Theme 实现仅保留店面占位图与 float-layer JS 加载；可编辑悬浮槽 `storefront-float-start/end` 在 `partials/footer/default.phtml`。
+- **功能说明**：兼容空壳聚合点。游客中性尾 chrome（Compare / Consent / B2B / Geo / Location / Shipping / Theme boot）已迁 **footer** 槽 `storefront-tail-chrome`；可编辑悬浮槽 `storefront-float-start/end` 在 footer `#w-storefront-float-layer`。会话/路径敏感逻辑走 **`body-end-dynamic`**（I18n inline / Visitor pixel）。
+
+## 缓存
+
+本 Hook 仍走 `TemplateCachePolicy` **聚合袋**（`context=body_end`）：各模块若保留空壳实现文件，必须登记 `output_files`，`aggregate_manifests.complete` 须为 true。上下文分片含 auth / 账户区 / i18n-inline / theme id。
 
 ## 使用方法
 
-在模块的 `view/hooks/` 目录下创建文件：`view/hooks/Weline_Theme--frontend--layouts--base--body-end.phtml`
-
-## 使用场景
-
-- 在所有页面的 body 结束前注入全局 JavaScript
-- 在所有页面的 body 结束前注入全局统计代码
-- 在所有页面的 body 结束前注入全局分析代码
-- 在所有页面的 body 结束前注入其他全局资源
-
-## 示例代码
-
-```html
-<!-- 在模块的 view/hooks/Weline_Theme--frontend--layouts--base--body-end.phtml 文件中 -->
-<script>
-    // 全局统计代码
-    (function() {
-        // 统计代码
-    })();
-</script>
-```
+新的游客中性 chrome：**不要**再挂本 Hook——改用 `storefront-tail-chrome` 部件 `default_injections`。敏感逻辑挂 `body-end-dynamic`。
 
 ## 执行顺序
 
-1. 详细布局 hook（如 `homepage::body-end`）- 先执行
-2. `base::body-end` - 最后执行
-3. `</body>` 标签结束
+1. 详细布局 hook（如 `homepage::body-end`）  
+2. `base::body-end`（聚合空壳）  
+3. `base::body-end-dynamic`（敏感）  
+4. `</body>`
 
 ## 注意事项
 
-- 此 hook 会在所有前端布局页面中执行
-- 适合用于需要全局生效的功能
-- 如果需要为特定布局定制，请使用详细布局 hook
-- Theme 自身实现会输出 `#w-storefront-float-layer`，并嵌套调用 `float-slot-start` / `float-slot-end`；左侧音乐 / 右侧客服等悬浮应挂对应 float-slot Hook，不要再裸挂本 Hook 各自 `position:fixed` 同步 bottom
-
+- 主题绑定整页场景（如 daocharms-3d 古镇）挂 **design 布局 + 模块 Widget**，禁止再塞进全局 Hook 做全站目录 Query。  
+- 禁止把 Guest 静态 chrome 与 I18n/Visitor 敏感逻辑混进同一聚合袋。

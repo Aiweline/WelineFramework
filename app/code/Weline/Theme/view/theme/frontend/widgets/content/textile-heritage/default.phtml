@@ -22,9 +22,11 @@
  * @widget.placement {manual}
  */
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Service\StorefrontStaticWidgetSectionFragmentCache;
 use Weline\Theme\Service\TextileHeritageCatalog;
 use Weline\Theme\Service\TextileHeritageLabels;
 
@@ -72,6 +74,23 @@ foreach (TextileHeritageCatalog::items() as $catalogItem) {
 if ($brands === []) {
     $brands = TextileHeritageCatalog::items();
 }
+
+$renderTextileHeritageSection = static function () use (
+    $esc,
+    $wc,
+    $scope,
+    $title,
+    $brands,
+    $grayscale,
+    $layout,
+    $isPreviewMode,
+    $columns,
+    $catalogByName,
+    $currentLocale,
+    $sourceLabel,
+    $translateDefaultCopy,
+): string {
+    ob_start();
 ?>
 <section class="<?= $esc($wc) ?> weline-textile-heritage<?= $grayscale ? ' is-grayscale' : '' ?> layout-<?= $esc($layout) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
@@ -197,3 +216,27 @@ if ($brands === []) {
         </div>
     </div>
 </section>
+<?php
+    return (string)ob_get_clean();
+};
+
+if ($isPreviewMode) {
+    echo $renderTextileHeritageSection();
+    return;
+}
+
+try {
+    /** @var StorefrontStaticWidgetSectionFragmentCache $sectionCache */
+    $sectionCache = ObjectManager::getInstance(StorefrontStaticWidgetSectionFragmentCache::class);
+    $configHash = $sectionCache->configFingerprint([
+        'title' => $title,
+        'columns' => $columns,
+        'layout' => $layout,
+        'grayscale' => $grayscale,
+        'brands' => $brands,
+        'uid' => $scope->uid,
+    ]);
+    echo $sectionCache->rememberSectionHtml('textile-heritage', $configHash, $renderTextileHeritageSection);
+} catch (\Throwable) {
+    echo $renderTextileHeritageSection();
+}

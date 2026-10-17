@@ -67,6 +67,7 @@ return [
     'Weline_Theme::theme/frontend/widgets/form/account-challenge/default.phtml',
     'Weline_Theme::theme/frontend/widgets/footer/footer-links/default.phtml',
     'Weline_Theme::theme/frontend/widgets/footer/footer-faq-link/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/footer/theme-storefront-tail/default.phtml',
     'Weline_Theme::theme/frontend/widgets/social/footer-social/default.phtml',
     'Weline_Theme::theme/frontend/widgets/footer/footer-payment/default.phtml',
     'Weline_Theme::theme/frontend/widgets/footer/footer-copyright/default.phtml',

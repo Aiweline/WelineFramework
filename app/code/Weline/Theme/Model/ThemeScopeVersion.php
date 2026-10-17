@@ -8,8 +8,10 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Api\Version\ThemeVersionPublicationInterface;
+use Weline\Theme\Service\ThemeScopeVersionService;
 
 /**
  * Theme-scope version: full logical resource snapshot owner row.
@@ -85,6 +87,11 @@ final class ThemeScopeVersion extends Model
     public const schema_fields_CREATED_BY = 'created_by';
     #[Col(type: 'text', nullable: true, comment: '版本描述')]
     public const schema_fields_DESCRIPTION = 'description';
+
+    /** @var array<string, mixed>|null Non-persisted decode memo (longtext stays JSON string). */
+    private ?array $chromePayloadMemo = null;
+
+    private bool $chromePayloadMemoValid = false;
 
     public function getVersionId(): int
     {
@@ -283,23 +290,74 @@ final class ThemeScopeVersion extends Model
     }
 
     /**
+     * Copy-on-read chrome tree for public / mutating callers.
+     *
      * @return array<string, mixed>
      */
     public function getChromePayload(): array
     {
+        return ThemeScopeVersionService::copyArrayTree($this->peekChromePayload());
+    }
+
+    /**
+     * Borrow the instance/request chrome memo without copying.
+     *
+     * Trusted read-only builders only (e.g. SlotRenderer bySlot materialization).
+     * Nested writes poison the memo — use {@see getChromePayload()} when mutation is possible.
+     *
+     * @return array<string, mixed>
+     */
+    public function peekChromePayload(): array
+    {
+        $this->ensureChromePayloadMemo();
+
+        return $this->chromePayloadMemo ?? [];
+    }
+
+    /**
+     * Decode once into instance + request memo (no caller-facing copy).
+     */
+    private function ensureChromePayloadMemo(): void
+    {
+        if ($this->chromePayloadMemoValid) {
+            return;
+        }
+
+        $versionId = $this->getVersionId();
+        if ($versionId > 0 && RequestContext::isInitialized()) {
+            $cacheKey = ThemeScopeVersionService::CHROME_DECODE_CACHE_PREFIX . $versionId;
+            if (RequestContext::has($cacheKey)) {
+                $cached = RequestContext::get($cacheKey);
+                if (\is_array($cached)) {
+                    $this->chromePayloadMemo = $cached;
+                    $this->chromePayloadMemoValid = true;
+
+                    return;
+                }
+            }
+        }
+
         $data = $this->getData(self::schema_fields_CHROME_PAYLOAD_JSON);
         if ($data === null || $data === '') {
-            return [];
+            $decoded = [];
+        } elseif (\is_array($data)) {
+            // In-memory only; never persist arrays into longtext via save().
+            $decoded = $data;
+        } elseif (!\is_string($data)) {
+            $decoded = [];
+        } else {
+            $parsed = \json_decode($data, true);
+            $decoded = \is_array($parsed) ? $parsed : [];
         }
-        if (\is_array($data)) {
-            return $data;
-        }
-        if (!\is_string($data)) {
-            return [];
-        }
-        $decoded = \json_decode($data, true);
 
-        return \is_array($decoded) ? $decoded : [];
+        $this->chromePayloadMemo = $decoded;
+        $this->chromePayloadMemoValid = true;
+        if ($versionId > 0 && RequestContext::isInitialized()) {
+            RequestContext::set(
+                ThemeScopeVersionService::CHROME_DECODE_CACHE_PREFIX . $versionId,
+                $decoded,
+            );
+        }
     }
 
     /**
@@ -307,10 +365,47 @@ final class ThemeScopeVersion extends Model
      */
     public function setChromePayload(array $nodes): self
     {
-        return $this->setData(
-            self::schema_fields_CHROME_PAYLOAD_JSON,
-            \json_encode($nodes, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}'
-        );
+        $encoded = \json_encode($nodes, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        parent::setData(self::schema_fields_CHROME_PAYLOAD_JSON, $encoded);
+        $this->chromePayloadMemo = $nodes;
+        $this->chromePayloadMemoValid = true;
+        $versionId = $this->getVersionId();
+        if ($versionId > 0 && RequestContext::isInitialized()) {
+            RequestContext::set(
+                ThemeScopeVersionService::CHROME_DECODE_CACHE_PREFIX . $versionId,
+                $nodes,
+            );
+        }
+
+        return $this;
+    }
+
+    public function setData($key, $value = null, bool $is_unique = false): static
+    {
+        $touchesChrome = false;
+        if (\is_array($key)) {
+            $touchesChrome = \array_key_exists(self::schema_fields_CHROME_PAYLOAD_JSON, $key);
+        } elseif ($key === self::schema_fields_CHROME_PAYLOAD_JSON) {
+            $touchesChrome = true;
+        }
+        $result = parent::setData($key, $value, $is_unique);
+        if ($touchesChrome) {
+            // Bust instance memo only. Request-level decode memo is keyed by versionId
+            // and must survive hydrateFromSnapshot setData; writers call
+            // ThemeScopeVersionService::forgetChromeDecodeMemo / setChromePayload.
+            $this->chromePayloadMemo = null;
+            $this->chromePayloadMemoValid = false;
+        }
+
+        return $result;
+    }
+
+    public function clearData(bool $with_query = true): static
+    {
+        $this->chromePayloadMemo = null;
+        $this->chromePayloadMemoValid = false;
+
+        return parent::clearData($with_query);
     }
 
     public function getStructureKey(): string

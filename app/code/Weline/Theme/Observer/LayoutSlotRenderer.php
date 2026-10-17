@@ -10,8 +10,9 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\TemplateRenderRouteTrace;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Model\ThemeLayout;
@@ -126,7 +127,11 @@ class LayoutSlotRenderer implements ObserverInterface
 
         // Layout relationships are already ordinary PHTML. Runtime finalization
         // only delivers preview/editor assets; it never reloads or fills a layout tree.
-        $event->setData('content', $this->finalizeFrontendHtml($html, $area));
+        TemplateRenderRouteTrace::armIfRequested();
+        TemplateRenderRouteTrace::mark('layout_slot_renderer', 'finalize', ['area' => $area]);
+        $finalHtml = $this->finalizeFrontendHtml($html, $area);
+        $finalHtml = TemplateRenderRouteTrace::appendToHtml($finalHtml);
+        $event->setData('content', $finalHtml);
         $memoryProbe('before_return', $event->getData('content'));
     }
 
@@ -165,52 +170,53 @@ class LayoutSlotRenderer implements ObserverInterface
             }
         }
 
-        // Nested float chrome may arrive as empty reactive shells when Partials HotCache
-        // / module footer win over entity-baked renderResolved. Fill from chrome_payload
-        // before outbound strip (storefront hard-cut skips full processSlots).
-        try {
-            $themeId = $this->resolveThemeId('frontend');
-            if ($themeId > 0) {
-                $html = $this->slotRenderer->fillEmptyNestedChromeSlots($html, $themeId, 'frontend');
-            }
-        } catch (\Throwable) {
-            // keep strip path
-        }
+        // Budget bucket: hard-cut never runs processSlots — keep L3 visible as skipped.
+        TraceGate::measurePhase(
+            \Weline\Theme\Service\ThemeLayoutBudgetPhases::L3_SLOTS,
+            static function (): void {
+            },
+            [
+                'skipped' => true,
+                'reason' => 'storefront_hard_cut',
+            ],
+        );
 
-        // Promote data-wslot → data-slot-id before required-injection safety net
-        // (reactive shells only expose data-wslot until strip).
-        $html = SlotBoundaryMarkers::strip($html);
+        return (string)TraceGate::measurePhase(
+            'theme.layout.hard_cut_finalize',
+            function () use ($html): string {
+                TemplateRenderRouteTrace::mark('layout_slot_renderer', 'hard_cut');
+                $preFinalized = false;
+                try {
+                    $preFinalized = RequestContext::isInitialized()
+                        && (bool)RequestContext::get('theme.storefront_html_pre_finalized', false);
+                } catch (\Throwable) {
+                    $preFinalized = false;
+                }
+                if ($preFinalized) {
+                    // Storefront layout HTML bag already stored post-finalize HTML — do not re-SSR safety_net.
+                    TemplateRenderRouteTrace::mark('layout_slot_renderer', 'pre_finalized_skip');
+                    try {
+                        $html = $this->slotRenderer->appendDevStorefrontDiagnostics($html);
+                    } catch (\Throwable) {
+                    }
+                } else {
+                    /** @var \Weline\Theme\Service\StorefrontLayoutHtmlFinalizer $finalizer */
+                    $finalizer = ObjectManager::getInstance(
+                        \Weline\Theme\Service\StorefrontLayoutHtmlFinalizer::class
+                    );
+                    $html = $finalizer->finalizeHardCut($html, 'frontend');
+                }
 
-        // Required default_injections: always present unless user_deleted — even when
-        // solidify fell back or a design theme rewrote layouts / dropped destinations.
-        try {
-            /** @var \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionRuntimeSafetyNet $requiredNet */
-            $requiredNet = ObjectManager::getInstance(
-                \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionRuntimeSafetyNet::class
-            );
-            $html = $requiredNet->ensure($html);
-        } catch (\Throwable) {
-            // soft — never 500 the storefront for injection safety net
-        }
+                try {
+                    /** @var PreviewBootstrapAssetInjector $injector */
+                    $injector = ObjectManager::getInstance(PreviewBootstrapAssetInjector::class);
 
-        // Design themes (hanfu/daocharms) may omit data-pdp-budget-phase; stamp for armed samples.
-        $html = \Weline\Theme\Service\ThemePdpBudgetPhases::stampSectionAttributes($html);
-
-        // hard-cut skips processSlots health bridge — still mark same-slot duplicate widgets in DEV.
-        try {
-            $html = $this->slotRenderer->appendDevStorefrontDiagnostics($html);
-        } catch (\Throwable) {
-            // soft
-        }
-
-        try {
-            /** @var PreviewBootstrapAssetInjector $injector */
-            $injector = ObjectManager::getInstance(PreviewBootstrapAssetInjector::class);
-
-            return $injector->inject($html);
-        } catch (\Throwable) {
-            return $html;
-        }
+                    return $injector->inject($html);
+                } catch (\Throwable) {
+                    return $html;
+                }
+            },
+        );
     }
 
     /**

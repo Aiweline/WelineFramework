@@ -16,7 +16,8 @@ use Weline\Framework\Runtime\ProcessSharedInterface;
  * Resolve the published ThemeScopeVersion (theme version V) for storefront runtime tags.
  *
  * Authority is ThemeScopeVersion selection / is_published — not ThemeLayoutVersion page axis.
- * Storefront generation / Worker identity is this Scope-published version id — not system deploy_version.
+ * Storefront generation / Worker identity is {@see ThemeScopeGenerationCode} for the
+ * Scope-published row — not system deploy_version, not a cache-clear side effect.
  */
 class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
 {
@@ -31,6 +32,38 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
             'themePublishedVersionId' => $full['themePublishedVersionId'],
             'themePublishedVersion' => $full['themePublishedVersion'],
         ];
+    }
+
+    /**
+     * Numeric ThemeScopeVersion PK for internal Theme services (injections / bake).
+     * Not the storefront wire generation code — use {@see resolve()} / generation identity for FE.
+     */
+    public function resolvePublishedNumericVersionId(?int $themeId = null, string $pageType = 'homepage'): int
+    {
+        unset($pageType);
+        try {
+            if ($themeId === null || $themeId <= 0) {
+                $theme = Env::getInstance()->getTheme();
+                $themeId = (int)($theme['id'] ?? $theme['theme_id'] ?? 0);
+            }
+            if ($themeId <= 0) {
+                return 0;
+            }
+            /** @var ThemeScopeVersionService $versions */
+            $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
+            foreach ($this->themeIdChain($themeId) as $candidateThemeId) {
+                foreach ($this->scopeCandidates($candidateThemeId) as $scope) {
+                    $published = $versions->getPublished($candidateThemeId, $scope);
+                    if ($published instanceof ThemeScopeVersion && $published->getVersionId() > 0) {
+                        return $published->getVersionId();
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            return 0;
+        }
+
+        return 0;
     }
 
     /**
@@ -76,9 +109,13 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                     if ($name === '') {
                         $name = 'v' . $published->getVersionNumber();
                     }
+                    $code = ThemeScopeGenerationCode::fromVersion($published);
+                    if ($code === '') {
+                        continue;
+                    }
 
                     return [
-                        'themePublishedVersionId' => (string)$published->getVersionId(),
+                        'themePublishedVersionId' => $code,
                         'themePublishedVersion' => $name,
                         'themeId' => $candidateThemeId,
                         'canonicalScope' => (string)$scope,
@@ -120,8 +157,9 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
      * CLI without Channel RequestContext used to resolve only Global defaults while
      * html-disk Host pages bake Channel-published stamps — that false-failed promote
      * and caused FE「有新版本」reload loops (cookie/API Global ≠ page Channel).
-     * Accept any sealed published id reachable from Env theme + frontend-bound themes
-     * across storefront scope probes (Channel fallback chain included).
+     * Accept any sealed published generation code reachable from Env theme + frontend-bound
+     * themes across storefront scope probes (Channel fallback chain included).
+     * Also accepts legacy numeric version_id strings baked by pre-code FPC/html-disk.
      *
      * @return array<string, true> map of themePublishedVersionId => true
      */
@@ -171,7 +209,14 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                     if ($published->getLifecycle() !== ThemeScopeVersion::LIFECYCLE_SEALED) {
                         continue;
                     }
-                    $ids[(string)$published->getVersionId()] = true;
+                    $code = ThemeScopeGenerationCode::fromVersion($published);
+                    if ($code !== '') {
+                        $ids[$code] = true;
+                    }
+                    $legacy = ThemeScopeGenerationCode::legacyNumericId($published);
+                    if ($legacy !== '') {
+                        $ids[$legacy] = true;
+                    }
                 }
             }
         }

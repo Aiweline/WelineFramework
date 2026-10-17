@@ -5,6 +5,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\PostResponseCaptureMode;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Theme\Service\ThemeScopeVersionService;
@@ -55,9 +56,14 @@ final class ThemeLayoutEntitySolidifyQueue
         // WLS only: eager-drain new slots after response. Overwrite while lease held
         // relies on drain re-read; Cron picks leftover dirty slots.
         if (!empty($put['enqueued']) && !$leaseHeld && Runtime::isPersistent()) {
-            PostResponseTaskQueue::enqueue($queueKey, function () use ($key): void {
-                $this->drainOne($key);
-            });
+            PostResponseTaskQueue::enqueue(
+                $queueKey,
+                function () use ($key): void {
+                    $this->drainOne($key);
+                },
+                0.0,
+                PostResponseCaptureMode::None,
+            );
         }
 
         return [

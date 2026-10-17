@@ -20,12 +20,14 @@
  * @param subtitle {default="滑动浏览穿搭视频，查看关联商品",type="string",label="副标题"}
  */
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\VideoEmbedResolver;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Service\StorefrontStaticWidgetSectionFragmentCache;
 
 $scope = WidgetUiScope::forWidget('video-carousel');
 $wc = $scope->cssClass;
@@ -273,6 +275,30 @@ unset($slide);
 
 $itemCount = count($items);
 $showControls = $itemCount >= 2;
+
+$renderVideoCarouselSection = static function () use (
+    $esc,
+    $wc,
+    $scope,
+    $isPreviewMode,
+    $itemCount,
+    $sectionTitle,
+    $sectionSubtitle,
+    $items,
+    $showControls,
+    $ctaLabel,
+    $prevLabel,
+    $nextLabel,
+    $closeLabel,
+    $translateDefaultCopy,
+    $showPrice,
+    $showRating,
+    $showAddToCart,
+    $cardShowWishlist,
+    $cardShowCompare,
+    $cardShowQuickview,
+): string {
+    ob_start();
 ?>
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
@@ -448,4 +474,29 @@ $showControls = $itemCount >= 2;
         </dialog>
     <?php endforeach; ?>
 </section>
+<?php
+    return (string)ob_get_clean();
+};
+
+if ($isPreviewMode) {
+    echo $renderVideoCarouselSection();
+    return;
+}
+
+try {
+    /** @var StorefrontStaticWidgetSectionFragmentCache $sectionCache */
+    $sectionCache = ObjectManager::getInstance(StorefrontStaticWidgetSectionFragmentCache::class);
+    $configHash = $sectionCache->configFingerprint([
+        'title' => $sectionTitle,
+        'subtitle' => $sectionSubtitle,
+        'items' => $items,
+        'uid' => $scope->uid,
+        'wishlist' => $cardShowWishlist,
+        'compare' => $cardShowCompare,
+        'quickview' => $cardShowQuickview,
+    ]);
+    echo $sectionCache->rememberSectionHtml('video-carousel', $configHash, $renderVideoCarouselSection);
+} catch (\Throwable) {
+    echo $renderVideoCarouselSection();
+}
 

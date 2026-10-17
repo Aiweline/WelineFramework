@@ -13,9 +13,10 @@ use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\PostResponseCaptureMode;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Session\SessionFactory;
@@ -27,6 +28,7 @@ use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeDirectoryResolver;
+use Weline\Theme\Service\FooterNestedChromeSourceFingerprint;
 use Weline\Theme\Service\NestedChromeSourceFingerprint;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot;
@@ -76,6 +78,139 @@ class Partials extends Block
     {
         self::$partialOutputCache = [];
         self::$partialOutputCacheBytes = 0;
+    }
+
+    /**
+     * Soft memory-pressure trim: FIFO/LRU drop oldest partial HTML until under budget.
+     * Shared/MS chrome remains; Layer B may refill Process bags.
+     *
+     * @return int Bytes freed from the process output bag
+     */
+    public static function trimOutputCacheToBudget(int $maxBytes): int
+    {
+        $maxBytes = \max(0, $maxBytes);
+        $before = self::$partialOutputCacheBytes;
+        if ($before < 0) {
+            self::$partialOutputCacheBytes = self::recountPartialOutputCacheBytes();
+            $before = self::$partialOutputCacheBytes;
+        }
+        if ($before <= $maxBytes && \count(self::$partialOutputCache) <= self::PARTIAL_OUTPUT_CACHE_MAX) {
+            return 0;
+        }
+        while (
+            self::$partialOutputCache !== []
+            && (
+                self::$partialOutputCacheBytes > $maxBytes
+                || \count(self::$partialOutputCache) > self::PARTIAL_OUTPUT_CACHE_MAX
+            )
+        ) {
+            $oldestKey = \array_key_first(self::$partialOutputCache);
+            if (!\is_string($oldestKey)) {
+                break;
+            }
+            $entry = self::$partialOutputCache[$oldestKey] ?? null;
+            self::$partialOutputCacheBytes -= self::partialOutputEntryBytes(
+                \is_array($entry) ? $entry : null
+            );
+            unset(self::$partialOutputCache[$oldestKey]);
+        }
+        if (self::$partialOutputCacheBytes < 0) {
+            self::$partialOutputCacheBytes = self::recountPartialOutputCacheBytes();
+        }
+
+        return \max(0, $before - self::$partialOutputCacheBytes);
+    }
+
+    /**
+     * Layer B: peek Shared chrome HTML into HotCache Process L1 + Partials process bag.
+     * Miss must not render/seed — returns hit=false.
+     *
+     * @return array{hit:bool,peeked:int,bags:list<string>,errors:list<string>}
+     */
+    public function hydrateStorefrontChromeProcessFromShared(
+        string $area = 'frontend',
+        string $type = 'header',
+        array $data = [],
+        string $defaultOption = 'default',
+    ): array {
+        $typeLc = \strtolower(\trim($type));
+        $bag = 'theme.partials.fetch.' . ($typeLc !== '' ? $typeLc : 'header');
+        $out = ['hit' => false, 'peeked' => 0, 'bags' => [], 'errors' => []];
+        try {
+            $resolved = $this->resolveStorefrontSharedLogicalKeyAndPolicy(
+                $area,
+                $type,
+                $data,
+                $defaultOption,
+            );
+            if ($resolved === null) {
+                $out['errors'][] = $bag . ':key_unresolved';
+
+                return $out;
+            }
+            /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache */
+            $hotCache = ObjectManager::getInstance(
+                \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
+            );
+            $peeked = $hotCache->peekPolicy($resolved['policy'], $resolved['logical_key']);
+            if (!\is_string($peeked) || $this->isEmptyPartialHtml($peeked)) {
+                $out['errors'][] = $bag . ':shared_miss';
+
+                return $out;
+            }
+            // Fill Partials process bag so fetchCachedPartialHtml hits before Shared RTT.
+            $path = $this->getPartialsPath($area, $type, $defaultOption);
+            if (\is_string($path) && $path !== '') {
+                $template = Template::getInstance();
+                $dictionary = \array_merge([
+                    'theme' => $template->getData('theme') ?? [],
+                    'colors' => $template->getData('colors') ?? [],
+                    'meta' => $template->getData('meta') ?? [],
+                ], $data);
+                $policyMeta = $this->resolveChromeCachePolicy(
+                    $path,
+                    \is_array($dictionary['meta'] ?? null) ? (array)$dictionary['meta'] : [],
+                    $type,
+                );
+                if ($policyMeta !== null) {
+                    $snapshot = ThemeLayoutSourceSnapshot::current();
+                    $captured = $snapshot?->source($path);
+                    $sourceFile = $captured === null ? $this->resolveModulePath($path) : null;
+                    if ((!is_string($sourceFile) || $sourceFile === '' || !is_file($sourceFile)) && is_file($path)) {
+                        $sourceFile = $path;
+                    }
+                    $sourceStat = $captured === null && is_string($sourceFile) ? @stat($sourceFile) : false;
+                    $sourceFingerprint = $this->resolveStorefrontChromeSourceFingerprint(
+                        $type,
+                        $path,
+                        $snapshot,
+                        $captured,
+                        $sourceStat,
+                    );
+                    $cacheKey = $this->resolvePartialOutputCacheKey(
+                        $path,
+                        $sourceFingerprint,
+                        $area,
+                        $type,
+                        $defaultOption,
+                        $dictionary,
+                        $policyMeta,
+                    );
+                    if ($cacheKey !== null) {
+                        $this->rememberPartialOutput($cacheKey, $peeked, 'fresh', (int)$policyMeta['ttl']);
+                    }
+                }
+            }
+            $out['hit'] = true;
+            $out['peeked'] = 1;
+            $out['bags'][] = $bag;
+
+            return $out;
+        } catch (\Throwable $e) {
+            $out['errors'][] = $bag . ':' . $e->getMessage();
+
+            return $out;
+        }
     }
 
     /**
@@ -451,7 +586,7 @@ class Partials extends Block
                         return $this->finalizeStorefrontChromeHtml($type, $peeked);
                     }
                 }
-                $html = $hotCache->rememberPolicy(
+                    $html = $hotCache->rememberPolicy(
                     $sharedPolicy,
                     $logicalKey,
                     $typeLc === 'head'
@@ -464,6 +599,8 @@ class Partials extends Block
                         : fn(): string => $this->renderStorefrontChromeShellForSharedBag(
                             $fileName,
                             $dictionary,
+                            $area,
+                            $type,
                         ),
                 );
                 if (\is_string($html) && !$this->isEmptyPartialHtml($html)) {
@@ -480,7 +617,7 @@ class Partials extends Block
             }
         }
 
-        $html = $this->renderStorefrontChromeShellForSharedBag($fileName, $dictionary);
+        $html = $this->renderStorefrontChromeShellForSharedBag($fileName, $dictionary, $area, $type);
         if ($this->isEmptyPartialHtml($html)) {
             $this->logPartialCacheDiagnostic('skip_empty_partial_output_store', [
                 'file' => $fileName,
@@ -500,21 +637,84 @@ class Partials extends Block
      * header-search facade islands are stripped so the bag can be reused across
      * currencies and search tip keys (q/type/category).
      *
+     * Frontend header/footer: after strip, fill empty nested chrome carriers
+     * (mini-cart footer-extras, footer-*-links, header-nav-extensions, …)
+     * from chrome_payload so storefront_chrome HIT bodies already contain nested
+     * widgets — outbound fillEmptyNestedChromeSlots stays a safety net only.
+     *
      * @param array<string, mixed> $dictionary
      */
-    private function renderStorefrontChromeShellForSharedBag(string $fileName, array $dictionary): string
+    private function renderStorefrontChromeShellForSharedBag(
+        string $fileName,
+        array $dictionary,
+        string $area = 'frontend',
+        string $type = '',
+    ): string {
+        $shellFlag = false;
+        if (\class_exists(\Weline\Currency\Service\CurrencySwitcherIslandBuilder::class)) {
+            \Weline\Currency\Service\CurrencySwitcherIslandBuilder::beginChromeShellBuild();
+            $shellFlag = true;
+        }
+        try {
+            $html = $this->renderCompiledPartial($fileName, $dictionary);
+            // Search/currency facade islands are storefront-header chrome only.
+            // Backend topbar <w:search area=backend> must stay SSR — stripping it
+            // leaves a pending island that topbar finalize never hydrates, and any
+            // accidental hydrate would inject storefront header-bar (「全部」UA chrome).
+            if (\strtolower(\trim($area)) === 'frontend') {
+                $html = $this->stripChromeSearchFacadeIslands(
+                    $this->stripChromeCurrencyIslands($html),
+                );
+            }
+
+            return $this->fillNestedChromeCarriersForSharedBag($html, $area, $type);
+        } finally {
+            if ($shellFlag) {
+                \Weline\Currency\Service\CurrencySwitcherIslandBuilder::endChromeShellBuild();
+            }
+        }
+    }
+
+    /**
+     * Bake guest-safe nested chrome carriers into the shared header/footer bag once.
+     */
+    private function fillNestedChromeCarriersForSharedBag(string $html, string $area, string $type): string
     {
-        return $this->stripChromeSearchFacadeIslands(
-            $this->stripChromeCurrencyIslands(
-                $this->renderCompiledPartial($fileName, $dictionary),
-            ),
-        );
+        $typeLc = \strtolower(\trim($type));
+        if ($html === ''
+            || \strtolower(\trim($area)) !== 'frontend'
+            || ($typeLc !== 'header' && $typeLc !== 'footer')
+        ) {
+            return $html;
+        }
+        try {
+            $theme = $this->resolvePartialsTheme('frontend');
+            $themeId = \is_object($theme) && \method_exists($theme, 'getId') ? (int)$theme->getId() : 0;
+            if ($themeId < 1) {
+                return $html;
+            }
+            /** @var \Weline\Theme\Service\SlotRendererService $slots */
+            $slots = ObjectManager::getInstance(\Weline\Theme\Service\SlotRendererService::class);
+
+            return $slots->fillEmptyNestedChromeSlots($html, $themeId, 'frontend');
+        } catch (\Throwable $e) {
+            $this->logPartialCacheDiagnostic('chrome_nested_carriers_fill_failed', [
+                'type' => $typeLc,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $html;
+        }
     }
 
     /** Serve path: fill currency + search-facade islands from the active request. */
     private function finalizeStorefrontChromeHtml(string $type, string $html): string
     {
         $typeLc = \strtolower(\trim($type));
+        // Repair bags poisoned before backend topbar was exempt from search strip.
+        if ($typeLc === 'topbar') {
+            return $this->repairBackendTopbarSearchIslands($html);
+        }
         if ($typeLc !== 'header' && $typeLc !== 'footer') {
             return $html;
         }
@@ -525,6 +725,60 @@ class Partials extends Block
         }
 
         return $html;
+    }
+
+    /**
+     * Backend topbar must keep area=backend search SSR (w-backend-topbar-search).
+     * Replace any leftover storefront header-search pending/live island with a
+     * fresh backend search panel — never storefront header-bar.phtml.
+     */
+    private function repairBackendTopbarSearchIslands(string $html): string
+    {
+        if ($html === ''
+            || !\str_contains($html, 'w-backend-topbar')
+            || !\str_contains($html, 'data-weline-chrome-island="header-search"')
+        ) {
+            return $html;
+        }
+
+        try {
+            $live = $this->renderBackendTopbarSearchHtml();
+        } catch (\Throwable $e) {
+            $this->logPartialCacheDiagnostic('backend_topbar_search_repair_failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $html;
+        }
+
+        if ($live === '' || $this->isEmptyPartialHtml($live)) {
+            return $html;
+        }
+
+        $replaced = \preg_replace(
+            '#<weline-chrome-island\b[^>]*\bdata-weline-chrome-island="header-search"[^>]*>.*?</weline-chrome-island>#is',
+            $live,
+            $html,
+            1,
+        );
+
+        return \is_string($replaced) ? $replaced : $html;
+    }
+
+    /** SSR markup matching Admin top-bar.phtml &lt;w:search area=backend&gt;. */
+    private function renderBackendTopbarSearchHtml(): string
+    {
+        $callback = \Weline\Search\Taglib\Search::callback();
+
+        return (string)$callback('search', [], [], [
+            'area' => 'backend',
+            'placeholder' => '搜索配置…',
+            'show-hot-words' => 'false',
+            'navigate-hits' => 'true',
+            'auto-complete' => 'true',
+            'class' => 'w-backend-topbar-search',
+            'id' => 'w-backend-universal-search',
+        ]);
     }
 
     private function stripChromeCurrencyIslands(string $html): string
@@ -567,34 +821,43 @@ class Partials extends Block
             return $html;
         }
 
-        try {
-            $live = $this->renderCurrencySwitcherIslandHtml();
-        } catch (\Throwable $e) {
-            $this->logPartialCacheDiagnostic('chrome_currency_island_hydrate_failed', [
-                'error' => $e->getMessage(),
-            ]);
+        $unwrapLiveInner = function (): string {
+            try {
+                $live = $this->renderCurrencySwitcherIslandHtml();
+            } catch (\Throwable $e) {
+                $this->logPartialCacheDiagnostic('chrome_currency_island_hydrate_failed', [
+                    'error' => $e->getMessage(),
+                ]);
 
-            return $html;
-        }
+                return '';
+            }
+            if ($live === '') {
+                return '';
+            }
+            // Live builder wraps itself in the island; unwrap to avoid nested islands.
+            if (\preg_match(
+                '#^\\s*<weline-chrome-island\\b[^>]*\\bdata-weline-chrome-island="currency-switcher"[^>]*>(.*)</weline-chrome-island>\\s*$#is',
+                $live,
+                $unwrap,
+            )) {
+                return $unwrap[1];
+            }
 
-        if ($live === '') {
-            return $html;
-        }
-
-        // Live hook already wraps itself in the island; unwrap to avoid nested islands.
-        $liveInner = $live;
-        if (\preg_match(
-            '#^\\s*<weline-chrome-island\\b[^>]*\\bdata-weline-chrome-island="currency-switcher"[^>]*>(.*)</weline-chrome-island>\\s*$#is',
-            $live,
-            $unwrap,
-        )) {
-            $liveInner = $unwrap[1];
-        }
+            return $live;
+        };
 
         if (\str_contains($html, 'data-weline-chrome-island="currency-switcher"')) {
+            // Stamp a fresh SwitcherInstanceId per island mount (options bag is memoized).
             $replaced = \preg_replace_callback(
                 '#(<weline-chrome-island\b[^>]*\bdata-weline-chrome-island="currency-switcher"[^>]*>).*?(</weline-chrome-island>)#is',
-                static fn(array $m): string => $m[1] . $liveInner . $m[2],
+                static function (array $m) use ($unwrapLiveInner): string {
+                    $inner = $unwrapLiveInner();
+                    if ($inner === '') {
+                        return $m[0];
+                    }
+
+                    return $m[1] . $inner . $m[2];
+                },
                 $html,
             );
             $html = \is_string($replaced) ? $replaced : $html;
@@ -606,7 +869,10 @@ class Partials extends Block
             && !\str_contains($html, 'data-weline-chrome-island="currency-switcher"')
             && !\str_contains($html, '<!--weline-chrome-island-pending:currency-switcher-->')
         ) {
-            $html = $this->rewriteCurrencySwitcherRoots($html, $liveInner);
+            $inner = $unwrapLiveInner();
+            if ($inner !== '') {
+                $html = $this->rewriteCurrencySwitcherRoots($html, $inner);
+            }
         }
 
         return $html;
@@ -658,7 +924,9 @@ class Partials extends Block
         }
 
         try {
-            $live = $this->renderHeaderSearchFacadeIslandHtml();
+            $live = $this->renderHeaderSearchFacadeIslandHtml(
+                $this->resolveSearchFacadePlaceholderSource($html),
+            );
         } catch (\Throwable $e) {
             $this->logPartialCacheDiagnostic('chrome_search_facade_island_hydrate_failed', [
                 'error' => $e->getMessage(),
@@ -699,7 +967,29 @@ class Partials extends Block
         return $html;
     }
 
-    private function renderHeaderSearchFacadeIslandHtml(): string
+    /**
+     * Placeholder source from shell island attr (design themes may override).
+     */
+    private function resolveSearchFacadePlaceholderSource(string $shellHtml): string
+    {
+        if ($shellHtml !== ''
+            && \preg_match(
+                '/\\bdata-weline-search-placeholder="([^"]*)"/i',
+                $shellHtml,
+                $m,
+            )
+        ) {
+            $decoded = \html_entity_decode((string)$m[1], \ENT_QUOTES, 'UTF-8');
+            $decoded = \trim($decoded);
+            if ($decoded !== '') {
+                return $decoded;
+            }
+        }
+
+        return '搜索商品、分类与关键词...';
+    }
+
+    private function renderHeaderSearchFacadeIslandHtml(?string $placeholderSource = null): string
     {
         $q = '';
         try {
@@ -711,15 +1001,70 @@ class Partials extends Block
             $q = \trim((string)($_GET['q'] ?? $this->request->getParam('q', '') ?? ''));
         }
 
-        $live = (string)Template::getInstance()->fetch(
-            'Weline_Theme::theme/frontend/partials/search/header-bar.phtml',
-            [
-                'placeholder' => (string)__('搜索商品、分类与关键词...'),
-                'query' => $q,
-                'show_hot_words' => true,
-                'panel_id' => 'header-search-panel',
-            ],
-        );
+        $selectedType = '';
+        $selectedCategoryId = 0;
+        try {
+            $selectedType = \trim((string)($this->request->getParam('type') ?? ''));
+            $selectedCategoryId = (int)($this->request->getParam('category_id') ?? 0);
+        } catch (\Throwable) {
+        }
+        if ($selectedType === '' && isset($_GET['type'])) {
+            $selectedType = \trim((string)$_GET['type']);
+        }
+        if ($selectedCategoryId <= 0 && isset($_GET['category_id'])) {
+            $selectedCategoryId = (int)$_GET['category_id'];
+        }
+
+        $placeholderSource = \trim((string)($placeholderSource ?? ''));
+        if ($placeholderSource === '') {
+            $placeholderSource = '搜索商品、分类与关键词...';
+        }
+        $panelId = 'header-search-panel';
+        $showHotWords = true;
+        $live = '';
+
+        try {
+            /** @var \Weline\Theme\Service\StorefrontHeaderSearchFacadeFragmentCache $facadeCache */
+            $facadeCache = ObjectManager::getInstance(
+                \Weline\Theme\Service\StorefrontHeaderSearchFacadeFragmentCache::class
+            );
+            $stable = $facadeCache->rememberFacadeHtml(
+                $panelId,
+                $placeholderSource,
+                $showHotWords,
+                static function () use ($placeholderSource, $panelId, $showHotWords): string {
+                    return (string)Template::getInstance()->fetchHtml(
+                        'Weline_Theme::theme/frontend/partials/search/header-bar.phtml',
+                        [
+                            'placeholder' => (string)__($placeholderSource),
+                            'query' => '',
+                            'show_hot_words' => $showHotWords,
+                            'panel_id' => $panelId,
+                            'stable_fragment' => true,
+                        ],
+                    );
+                },
+            );
+            $live = $facadeCache->applyRequestLocalFacade(
+                $stable,
+                $q,
+                $selectedType !== '' ? $selectedType : 'all',
+                $selectedCategoryId,
+            );
+        } catch (\Throwable $e) {
+            $this->logPartialCacheDiagnostic('chrome_search_facade_fragment_fallback', [
+                'error' => $e->getMessage(),
+            ]);
+            $live = (string)Template::getInstance()->fetchHtml(
+                'Weline_Theme::theme/frontend/partials/search/header-bar.phtml',
+                [
+                    'placeholder' => (string)__($placeholderSource),
+                    'query' => $q,
+                    'show_hot_words' => $showHotWords,
+                    'panel_id' => $panelId,
+                ],
+            );
+        }
 
         if ($live === '' || $this->isEmptyPartialHtml($live)) {
             return '';
@@ -765,6 +1110,17 @@ class Partials extends Block
             }
 
             [$start, $end] = $range;
+            $openTagEnd = \strpos($html, '>', $openStart);
+            $openTag = $openTagEnd === false
+                ? ''
+                : \substr($html, $openStart, ($openTagEnd - $openStart) + 1);
+            // Backend universal search is not a storefront tip facade — leave SSR.
+            if ($this->isBackendTopbarSearchRootOpenTag($openTag)) {
+                $out .= \substr($html, $offset, ($pos + \strlen($needle)) - $offset);
+                $offset = $pos + \strlen($needle);
+                continue;
+            }
+
             $out .= \substr($html, $offset, $start - $offset);
             $out .= '<weline-chrome-island data-weline-chrome-island="header-search" style="display:contents">'
                 . $innerHtml
@@ -774,6 +1130,18 @@ class Partials extends Block
         $out .= \substr($html, $offset);
 
         return $out;
+    }
+
+    /** True when the data-w-search open tag is Admin topbar backend search. */
+    private function isBackendTopbarSearchRootOpenTag(string $openTag): bool
+    {
+        if ($openTag === '') {
+            return false;
+        }
+
+        return \str_contains($openTag, 'data-search-area="backend"')
+            || \str_contains($openTag, "data-search-area='backend'")
+            || \str_contains($openTag, 'w-backend-topbar-search');
     }
 
     /**
@@ -877,10 +1245,12 @@ class Partials extends Block
     private function renderCurrencySwitcherIslandHtml(): string
     {
         try {
-            /** @var \Weline\Framework\View\Template $template */
-            $template = ObjectManager::getInstance(\Weline\Framework\View\Template::class);
-            if (\method_exists($template, 'getHook')) {
-                $html = (string)$template->getHook('header-currency-switcher', true);
+            if (\class_exists(\Weline\Currency\Service\CurrencySwitcherIslandBuilder::class)) {
+                /** @var \Weline\Currency\Service\CurrencySwitcherIslandBuilder $builder */
+                $builder = ObjectManager::getInstance(
+                    \Weline\Currency\Service\CurrencySwitcherIslandBuilder::class,
+                );
+                $html = (string)$builder->renderLiveIslandHtml();
                 if (\trim($html) !== '') {
                     return $html;
                 }
@@ -1360,11 +1730,15 @@ class Partials extends Block
                 // v22：xscope A — frontend header/footer layout-agnostic（SharedChrome inherit）；
                 //     去 layout 分区 + 路径级源指纹，homepage warmer 与 search/plp 同键。
                 // v23：HTML 袋改 KeyBuilder::buildEnvironmentScoped，禁 sha1|environmentHash 自建。
+                // v24：建袋填实 footer-extras（coupon/留言）；指纹扩 Marketing/Order 嵌套源；拒空壳毒袋。
+                // v25：footer 浮层/尾 chrome 源指纹（FooterNestedChromeSourceFingerprint）入 nested_widgets。
                 // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v23-env-scoped-key',
+                'schema' => 'chrome-partial-v25-footer-tail-chrome-fp',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
-                    : '',
+                    : (($area === 'frontend' && $type === 'footer')
+                        ? $this->frontendFooterNestedChromeFingerprint()
+                        : ''),
                 'area' => $area,
                 'type' => $type,
                 'option' => $defaultOption,
@@ -1435,6 +1809,11 @@ class Partials extends Block
     private function frontendHeaderNestedChromeFingerprint(): string
     {
         return NestedChromeSourceFingerprint::compute();
+    }
+
+    private function frontendFooterNestedChromeFingerprint(): string
+    {
+        return FooterNestedChromeSourceFingerprint::compute();
     }
 
     /**
@@ -1817,23 +2196,32 @@ class Partials extends Block
      */
     private function queuePartialOutputRefresh(string $cacheKey, string $fileName, array $dictionary, ?int $ttl = null): void
     {
+        if (PostResponseTaskQueue::isDraining()) {
+            return;
+        }
         if (!$this->acquireLocalPartialRefreshLock($cacheKey)) {
             return;
         }
 
         $ttl ??= $this->partialOutputCacheTtl();
-        PostResponseTaskQueue::enqueue('theme-partial-output:' . $cacheKey, function () use ($cacheKey, $fileName, $dictionary, $ttl): void {
-            // Store lang-shell HTML only; currency islands hydrate on serve.
-            $html = $this->renderStorefrontChromeShellForSharedBag($fileName, $dictionary);
-            if (!\is_string($html) || $this->isEmptyPartialHtml($html)) {
-                $this->logPartialCacheDiagnostic('skip_empty_partial_output_refresh', [
-                    'cache_key' => $cacheKey,
-                    'file' => $fileName,
-                ]);
-                return;
-            }
-            $this->rememberPartialOutput($cacheKey, $html, 'fresh', $ttl);
-        });
+        // SCOPE: same family as StorefrontScopeHotCache SWR; dictionary closed over.
+        PostResponseTaskQueue::enqueue(
+            'theme-partial-output:' . $cacheKey,
+            function () use ($cacheKey, $fileName, $dictionary, $ttl): void {
+                // Store lang-shell HTML only; currency islands hydrate on serve.
+                $html = $this->renderStorefrontChromeShellForSharedBag($fileName, $dictionary);
+                if (!\is_string($html) || $this->isEmptyPartialHtml($html)) {
+                    $this->logPartialCacheDiagnostic('skip_empty_partial_output_refresh', [
+                        'cache_key' => $cacheKey,
+                        'file' => $fileName,
+                    ]);
+                    return;
+                }
+                $this->rememberPartialOutput($cacheKey, $html, 'fresh', $ttl);
+            },
+            0.0,
+            PostResponseCaptureMode::Scope,
+        );
     }
 
     private function acquireLocalPartialRefreshLock(string $cacheKey): bool
@@ -1932,7 +2320,44 @@ class Partials extends Block
 
         // Incomplete footer chrome (exclusive root blank, no footer-container) must not
         // poison shared HotCache / L1 — first hit would ship empty footer until refresh.
-        return $this->isIncompleteStorefrontFooterChrome($html);
+        // Header with empty footer-extras (no nested coupon/留言) likewise rejects HIT
+        // so bag rebuild fills nested chrome instead of relying on outbound SSR each request.
+        return $this->isIncompleteStorefrontFooterChrome($html)
+            || $this->isIncompleteStorefrontHeaderNestedChrome($html);
+    }
+
+    /**
+     * True when mini-cart footer-extras destination exists but has no rendered widgets.
+     */
+    private function isIncompleteStorefrontHeaderNestedChrome(string $html): bool
+    {
+        if ($html === '') {
+            return false;
+        }
+        $hasFooterExtras = \str_contains($html, 'data-slot-id="footer-extras"')
+            || \str_contains($html, "data-slot-id='footer-extras'")
+            || \str_contains($html, 'data-wslot="footer-extras"')
+            || \str_contains($html, "data-wslot='footer-extras'");
+        if (!$hasFooterExtras) {
+            return false;
+        }
+        // Slot present: require at least one widget-code inside a footer-extras wrapper.
+        if (\preg_match(
+            '/<(?:div|section|aside)\b[^>]*(?:data-slot-id|data-wslot)=(["\'])footer-extras\1[^>]*>(.*?)<\/(?:div|section|aside)>/is',
+            $html,
+            $m,
+        ) === 1) {
+            $inner = (string)($m[2] ?? '');
+
+            return $inner === '' || !\str_contains($inner, 'data-widget-code=');
+        }
+
+        // Fallback: destination marker present but no coupon/notice widget codes anywhere
+        // (published shells may flatten wrappers).
+        return !\str_contains($html, 'data-widget-code="checkout-coupon"')
+            && !\str_contains($html, "data-widget-code='checkout-coupon'")
+            && !\str_contains($html, 'data-widget-code="order-notice"')
+            && !\str_contains($html, "data-widget-code='order-notice'");
     }
 
     private function isIncompleteStorefrontFooterChrome(string $html): bool
@@ -2229,7 +2654,7 @@ class Partials extends Block
 
             return $this->traceCall(
                 $tracePrefix . '::fetch_html',
-                fn() => RequestLifecycleTrace::measurePhase(
+                fn() => TraceGate::measurePhase(
                     $type === 'header'
                         ? \Weline\Theme\Service\ThemeLayoutBudgetPhases::L2_HEADER
                         : ('theme.partials.fetch.' . match ($type) {
@@ -2238,9 +2663,9 @@ class Partials extends Block
                             default => 'other',
                         }),
                     fn() => $type === 'header'
-                        ? RequestLifecycleTrace::measurePhase(
+                        ? TraceGate::measurePhase(
                             'theme.header.bar',
-                            fn() => RequestLifecycleTrace::measurePhase(
+                            fn() => TraceGate::measurePhase(
                                 'theme.partials.fetch.header',
                                 fn() => $this->fetchCachedPartialHtml($path, $data, $area, $type, $defaultOption),
                                 ['partial_type' => $type],
@@ -2496,15 +2921,15 @@ class Partials extends Block
         if ($snapshot !== null) {
             return $snapshot->parseSourceMeta($captured);
         }
-        if (RequestLifecycleTrace::isEnabled()) {
-            return RequestLifecycleTrace::measurePhase('theme.source.meta_parse', static fn(): array => ComponentMetaParser::parseContent($captured['bytes'], $captured['origin']));
+        if (TraceGate::isArmed()) {
+            return TraceGate::measurePhase('theme.source.meta_parse', static fn(): array => ComponentMetaParser::parseContent($captured['bytes'], $captured['origin']));
         }
         return ComponentMetaParser::parseContent($captured['bytes'], $captured['origin']);
     }
 
     private function traceCall(string $name, callable $callback, string $category = 'theme'): mixed
     {
-        if (!RequestLifecycleTrace::isEnabled()) {
+        if (!TraceGate::isArmed()) {
             self::cooperativeRenderYield();
             try {
                 return $callback();
@@ -2515,12 +2940,12 @@ class Partials extends Block
 
         self::cooperativeRenderYield();
         $start = microtime(true);
-        RequestLifecycleTrace::pushCurrentParent($name);
+        TraceGate::pushCurrentParent($name);
         try {
             return $callback();
         } finally {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan($name, (microtime(true) - $start) * 1000, $category);
+            TraceGate::popCurrentParent();
+            TraceGate::recordSpan($name, (microtime(true) - $start) * 1000, $category);
             self::cooperativeRenderYield();
         }
     }

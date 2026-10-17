@@ -51,10 +51,14 @@ final class SharedChromeService
         'user-area',
         'all-menu',
         'category-menu',
+        // Short names (legacy chrome keys) + real slot ids used in partials.
         'policy-links',
+        'header-policy-links',
         'nav-extensions',
+        'header-nav-extensions',
         'navigation',
         'pixel-bootstrap',
+        'header-pixel-bootstrap',
     ];
 
     /**
@@ -63,15 +67,41 @@ final class SharedChromeService
      *
      * @var list<string>
      */
-    public const FOOTER_NESTED_CHROME_SLOTS = [
+    /**
+     * Float-layer destinations only (used by StorefrontFloatLayerHost safety net).
+     *
+     * @var list<string>
+     */
+    public const FOOTER_FLOAT_LAYER_SLOTS = [
         'storefront-float-start',
         'storefront-float-end',
     ];
 
+    public const FOOTER_NESTED_CHROME_SLOTS = [
+        'storefront-float-start',
+        'storefront-float-end',
+        // Guest-neutral tail chrome (Compare / Consent / B2B / Theme idle) — same bag as float.
+        'storefront-tail-chrome',
+    ];
+
+    /**
+     * Footer shell + tail chrome layout-pack CSS (one emit; modules must not scatter
+     * emitModuleLayoutCssHtml from former body-end hooks).
+     *
+     * @var list<string>
+     */
+    public const PARTIALS_FOOTER_SHELL_LAYOUT_CSS = [
+        'Weline_Theme::css/storefront-float-layer.css',
+        'Weline_Compare::css/product-shopper-chrome.css',
+        'Weline_Consent::css/consent-banner.css',
+        'Weline_B2B::css/b2b-storefront.css',
+    ];
+
     /**
      * Nested chrome extensions inside header mini-cart (not float-layer hosts).
-     * Pure-PHTML bake + stubbed SlotFiller: outbound fillEmptyNestedChromeSlots must
-     * refill these when the published shell arrives empty.
+     * Primary path: Partials storefront_chrome MISS builder fills these into the
+     * shared bag (schema v24+). Outbound fillEmptyNestedChromeSlots remains a
+     * safety net when a published/incomplete shell still arrives empty.
      *
      * @var list<string>
      */
@@ -89,6 +119,9 @@ final class SharedChromeService
     public const CHROME_HOST_NESTED_LAYOUT_CSS_PEERS = [
         'mini-cart-icon' => [
             'Weline_Checkout::css/widgets/storefront-money-summary.css',
+            'Weline_Marketing::css/widgets/checkout-coupon.css',
+            'Weline_Marketing::css/widgets/mini-cart-coupon.css',
+            'Weline_Order::css/widgets/order-notice.css',
         ],
     ];
 
@@ -164,6 +197,22 @@ final class SharedChromeService
     {
         $chunks = [];
         foreach (self::PARTIALS_HEADER_SHELL_LAYOUT_CSS as $modulePath) {
+            $html = self::emitModuleLayoutCssHtml($modulePath);
+            if ($html !== '') {
+                $chunks[] = $html;
+            }
+        }
+
+        return $chunks === [] ? '' : \implode("\n", $chunks) . "\n";
+    }
+
+    /**
+     * Emit footer float + tail chrome CSS as layout-pack markers (single bag wave).
+     */
+    public static function emitPartialsFooterShellLayoutCssHtml(): string
+    {
+        $chunks = [];
+        foreach (self::PARTIALS_FOOTER_SHELL_LAYOUT_CSS as $modulePath) {
             $html = self::emitModuleLayoutCssHtml($modulePath);
             if ($html !== '') {
                 $chunks[] = $html;

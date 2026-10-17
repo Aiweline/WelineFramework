@@ -140,6 +140,70 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
     }
 
     /**
+     * Header-bar search facade HTML (stable tree + hot words). Guest-neutral:
+     * website×lang only — request q/type/category stamped after HIT.
+     * Shares chrome pool so theme/i18n purge clears shell + facade together.
+     */
+    public static function headerSearchFacadePolicy(
+        int $freshTtlSeconds = 1800,
+        int $staleTtlSeconds = 86400,
+    ): CachePolicy {
+        return new CachePolicy(
+            resource: 'theme.header_search_facade',
+            pool: self::STOREFRONT_CHROME_POOL,
+            scope: 'website',
+            vary: ['lang'],
+            dependencies: ['catalog', 'config', 'global/i18n', 'theme'],
+            freshTtlSeconds: max(1, $freshTtlSeconds),
+            staleTtlSeconds: max(0, $staleTtlSeconds),
+            singleFlightWaitMs: 1500,
+        );
+    }
+
+    /**
+     * Static content widget sections (textile-heritage / video-carousel / image-gallery gallery).
+     * website scope; vary lang+currency because video dialogs embed priced product cards.
+     * Config fingerprint lives in the logical key. No session HTML.
+     */
+    public static function staticWidgetSectionHtmlPolicy(
+        int $freshTtlSeconds = 1800,
+        int $staleTtlSeconds = 86400,
+    ): CachePolicy {
+        return new CachePolicy(
+            resource: 'theme.static_widget_section_html',
+            pool: self::STOREFRONT_CHROME_POOL,
+            scope: 'website',
+            vary: ['lang', 'currency'],
+            dependencies: ['theme', 'global/i18n', 'config', 'catalog'],
+            freshTtlSeconds: max(1, $freshTtlSeconds),
+            staleTtlSeconds: max(0, $staleTtlSeconds),
+            singleFlightWaitMs: 1500,
+        );
+    }
+
+    /**
+     * Buyer-looks (image-gallery variant=looks) section HTML.
+     * Fresh/stale mirrors Review `review.buyer_looks` data bag (120/600) so HTML
+     * does not outlive the assembled gallery items. Fingerprint must include items.
+     * No session HTML. Do not reuse {@see staticWidgetSectionHtmlPolicy()} TTL here.
+     */
+    public static function looksWidgetSectionHtmlPolicy(
+        int $freshTtlSeconds = 120,
+        int $staleTtlSeconds = 600,
+    ): CachePolicy {
+        return new CachePolicy(
+            resource: 'theme.looks_widget_section_html',
+            pool: self::STOREFRONT_CHROME_POOL,
+            scope: 'website',
+            vary: ['lang', 'currency'],
+            dependencies: ['theme', 'global/i18n', 'config', 'catalog'],
+            freshTtlSeconds: max(1, $freshTtlSeconds),
+            staleTtlSeconds: max(0, $staleTtlSeconds),
+            singleFlightWaitMs: 1500,
+        );
+    }
+
+    /**
      * @param int $freshTtlSeconds Per-partial metadata may override the default.
      * @param int $staleTtlSeconds Shared stale window for SWR refreshes.
      */
@@ -237,6 +301,53 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
     }
 
     /**
+     * Formal storefront homepage layout HTML (ControllerFetchFileAfter wrap result).
+     * Speeds no-FPC cold SSR by skipping renderLayoutChain on HotCache HIT.
+     * Logical key carries theme identity + layout option; Policy vary injects lang+currency.
+     * Preview / draft / editor MUST NOT call this policy.
+     * Cleared with {@see LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL} on theme publish.
+     */
+    public static function storefrontHomepageLayoutHtmlPolicy(
+        int $freshTtlSeconds = 1800,
+        int $staleTtlSeconds = 86400,
+    ): CachePolicy {
+        return new CachePolicy(
+            resource: 'theme.storefront_homepage_layout_html',
+            pool: self::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL,
+            scope: 'website',
+            vary: ['lang', 'currency'],
+            dependencies: ['theme', 'global/i18n', 'config', 'catalog'],
+            freshTtlSeconds: max(1, $freshTtlSeconds),
+            staleTtlSeconds: max(0, $staleTtlSeconds),
+            singleFlightWaitMs: 2000,
+        );
+    }
+
+    /**
+     * Formal storefront blog post detail layout HTML (ControllerFetchFileAfter wrap result).
+     * Speeds no-FPC cold SSR by skipping renderLayoutChain on HotCache HIT.
+     * Logical key MUST include post slug hash (never layout-only); Policy vary injects lang+currency.
+     * Depends on global/storefront/blog so BlogContentMutation namespace bump misses keys.
+     * Preview / draft / editor MUST NOT call this policy. No warm hydrate-all-posts.
+     * Cleared with {@see LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL} on theme publish.
+     */
+    public static function storefrontBlogLayoutHtmlPolicy(
+        int $freshTtlSeconds = 1800,
+        int $staleTtlSeconds = 86400,
+    ): CachePolicy {
+        return new CachePolicy(
+            resource: 'theme.storefront_blog_layout_html',
+            pool: self::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL,
+            scope: 'website',
+            vary: ['lang', 'currency'],
+            dependencies: ['theme', 'global/i18n', 'config', 'global/storefront/blog'],
+            freshTtlSeconds: max(1, $freshTtlSeconds),
+            staleTtlSeconds: max(0, $staleTtlSeconds),
+            singleFlightWaitMs: 2000,
+        );
+    }
+
+    /**
      * W4: HotCache bag for published chrome.phtml include HTML (locale-aware).
      * Resource name kept for key compatibility; NOT chrome.rendered.{locale}.html disk
      * bake delivery. Logical key MUST include ThemeVersionIdentity::cacheKey()
@@ -292,6 +403,27 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             dependencies: ['theme'],
             freshTtlSeconds: 3600,
             staleTtlSeconds: 86400,
+        );
+    }
+
+    /**
+     * Formal published layout-entity source candidate bag (path => phtml bytes).
+     * Logical key MUST include ThemeVersionIdentity::cacheKey() plus layoutType|option|target.
+     * Skips RecursiveDirectoryIterator + owner-lock walk on warm HIT.
+     * Draft / preview / editor MUST NOT call this policy.
+     */
+    public static function publishedLayoutSourceCandidatesPolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'theme.layout_entity.source_candidates',
+            pool: self::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL,
+            scope: 'channel',
+            vary: [],
+            dependencies: ['theme'],
+            freshTtlSeconds: 3600,
+            staleTtlSeconds: 86400,
+            // Empty candidate maps are legitimate (source-template layouts with no derived tree).
+            allowEmptyResult: true,
         );
     }
 }

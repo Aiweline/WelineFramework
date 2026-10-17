@@ -421,14 +421,11 @@ $defaultNavItemsFactory = static function (): array {
                             exclusive="true"
                             position="header"
                             class="header-search-wrapper">
-                        <?php // Guest-neutral chrome bag: empty query in shell; Partials hydrates request q/type/category. ?>
-                        <weline-chrome-island data-weline-chrome-island="header-search" style="display:contents">
-                        <?= $this->fetch('Weline_Theme::theme/frontend/partials/search/header-bar.phtml', [
-                            'placeholder' => (string)__('搜索商品、分类与关键词...'),
-                            'query' => '',
-                            'show_hot_words' => true,
-                            'panel_id' => 'header-search-panel',
-                        ]) ?>
+                        <?php // Cold shell: pending island only — Partials hydrates from search-facade fragment bag. ?>
+                        <weline-chrome-island data-weline-chrome-island="header-search"
+                                              data-weline-search-placeholder="搜索商品、分类与关键词..."
+                                              style="display:contents">
+                        <!--weline-chrome-island-pending:header-search-->
                         </weline-chrome-island>
                     </w:slot>
                 <?php endif; ?>
@@ -571,7 +568,7 @@ $defaultNavItemsFactory = static function (): array {
                     class="header-nav-left-slot header-categories">
                 <w:widget type="navigation" name="category-menu" />
             </w:slot>
-            <!-- 分类后政策/关于链接：multiple+Hook else，对齐 footer-above 默认可注入模式 -->
+            <!-- 分类后政策/关于链接：multiple+空 else，对齐 footer-above（禁 layout 内嵌与 entity 并排叠双） -->
             <w:slot id="header-policy-links"
                     name="政策与关于链接"
                     accept="header-policy-links,layout-header-policy-links"
@@ -580,7 +577,7 @@ $defaultNavItemsFactory = static function (): array {
                     position="header"
                     class="header-policy-links-slot">
                 <w:hook>Weline_Theme::frontend::partials::header::policy-links<else/>
-                    <w:widget type="header" name="header-policy-links" />
+                    <?php /* 默认空：由 default_injections / 编辑器注入；禁止 Hook else 内嵌 w:widget 与 chrome entity 并排 */ ?>
                 </w:hook>
             </w:slot>
             <w:hook>Weline_Theme::frontend::partials::header::categories</w:hook>

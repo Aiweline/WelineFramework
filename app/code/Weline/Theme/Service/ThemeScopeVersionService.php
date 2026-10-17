@@ -11,9 +11,26 @@ use Weline\Theme\Model\ThemeScopeVersionSelection;
 
 /**
  * Theme-scope version CRUD for shared chrome authority (theme_id + scope, no page_type).
+ *
+ * Request read memos store identity row snapshots (not live ORM, not chrome longtext).
+ * Chrome lives only in CHROME_DECODE memo.
+ *
+ * Isolation contract (architecture):
+ * - Public mutators / unknown callers → {@see ThemeScopeVersion::getChromePayload()} (deep copy).
+ * - Trusted read-only builders → {@see ThemeScopeVersion::peekChromePayload()} (borrow memo; do not mutate).
+ * - Deep copy is recursive PHP, not JSON roundtrip ({@see copyArrayTree()}).
  */
 final class ThemeScopeVersionService
 {
+    /** Identity row bag without chrome_payload_json (v2). */
+    public const ROW_CACHE_PREFIX = 'theme.scope_version.row.v2.';
+    public const RESOLVED_CACHE_PREFIX = 'theme.scope_version.resolved.v1.';
+    public const CHROME_DECODE_CACHE_PREFIX = 'theme.scope_version.chrome.decoded.v1.';
+    public const SHARED_CHROME_BY_SLOT_PREFIX = 'theme.shared_chrome.by_slot.v1.';
+
+    private const SHARED_CHROME_BY_SLOT_KEYS = 'theme.shared_chrome.by_slot.v1.keys';
+    private const SNAPSHOT_MISS = '__theme_scope_version_snapshot_miss__';
+
     public function __construct(
         private readonly ThemeScopeVersion $versionModel,
     ) {
@@ -21,8 +38,89 @@ final class ThemeScopeVersionService
 
     public function invalidateOwner(int $themeId, string $scope, string $storeMode = 'normal', string $area = 'frontend'): void
     {
+        $scope = $this->normalizeScope($scope);
+        $storeMode = $storeMode !== '' ? $storeMode : 'normal';
+        $area = \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
+        $versionIds = $this->knownVersionIdsForOwner($themeId, $scope, $storeMode, $area);
         $this->forgetSelection($themeId, $scope, $storeMode, $area);
         $this->forgetFlagged($themeId, $scope, $storeMode, $area);
+        $this->forgetResolved($themeId, $scope, $storeMode, $area);
+        foreach ($versionIds as $versionId) {
+            $this->forgetVersionRow($versionId);
+            self::forgetChromeDecodeMemo($versionId);
+        }
+        self::forgetSharedChromeBySlot($themeId, $area, $scope);
+    }
+
+    /** Register a shared-chrome bySlot request memo key for owner invalidation. */
+    public static function rememberSharedChromeBySlotKey(string $key): void
+    {
+        if ($key === '' || !RequestContext::isInitialized()) {
+            return;
+        }
+        $keys = RequestContext::get(self::SHARED_CHROME_BY_SLOT_KEYS, []);
+        if (!\is_array($keys)) {
+            $keys = [];
+        }
+        $keys[] = $key;
+        RequestContext::set(self::SHARED_CHROME_BY_SLOT_KEYS, \array_values(\array_unique($keys)));
+    }
+
+    public static function forgetChromeDecodeMemo(int $versionId): void
+    {
+        if ($versionId < 1 || !RequestContext::isInitialized()) {
+            return;
+        }
+        RequestContext::remove(self::CHROME_DECODE_CACHE_PREFIX . $versionId);
+    }
+
+    /**
+     * Deep-copy array trees returned from request memos so callers cannot poison them.
+     *
+     * Recursive PHP copy (JSON roundtrip is forbidden here: CPU cost + depth/type edge cases).
+     * Nested arrays are fully separated; scalars/null are assigned by value.
+     *
+     * @param array<string|int, mixed> $data
+     * @return array<string|int, mixed>
+     */
+    public static function copyArrayTree(array $data): array
+    {
+        if ($data === []) {
+            return [];
+        }
+
+        $copied = [];
+        foreach ($data as $key => $value) {
+            $copied[$key] = \is_array($value) ? self::copyArrayTree($value) : $value;
+        }
+
+        return $copied;
+    }
+
+    public static function forgetSharedChromeBySlot(int $themeId, string $area, string $scope): void
+    {
+        if ($themeId < 1 || !RequestContext::isInitialized()) {
+            return;
+        }
+        $exact = self::SHARED_CHROME_BY_SLOT_PREFIX . $themeId . '|' . $area . '|' . $scope;
+        RequestContext::remove($exact);
+        $keys = RequestContext::get(self::SHARED_CHROME_BY_SLOT_KEYS, []);
+        if (!\is_array($keys)) {
+            return;
+        }
+        $ownerPrefix = self::SHARED_CHROME_BY_SLOT_PREFIX . $themeId . '|';
+        $kept = [];
+        foreach ($keys as $key) {
+            if (!\is_string($key) || !\str_starts_with($key, $ownerPrefix)) {
+                if (\is_string($key)) {
+                    $kept[] = $key;
+                }
+                continue;
+            }
+            // Drop all bySlot memos for this themeId (area/scope variants).
+            RequestContext::remove($key);
+        }
+        RequestContext::set(self::SHARED_CHROME_BY_SLOT_KEYS, $kept);
     }
 
     public function ensureCurrent(
@@ -141,26 +239,67 @@ final class ThemeScopeVersionService
         if ($themeId < 1 || $scope === '') {
             return null;
         }
+        $storeMode = $storeMode !== '' ? $storeMode : 'normal';
+        $area = \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
 
-        $selection = $this->loadSelection($themeId, $scope, $storeMode, $area);
-        foreach ([$selection['draft_version_id'] ?? null, $selection['published_version_id'] ?? null] as $candidateId) {
-            if ($candidateId === null || $candidateId === '' || (int)$candidateId < 1) {
-                continue;
-            }
-            $version = $this->loadVersionById((int)$candidateId, $themeId, $scope, $storeMode, $area);
-            if ($version instanceof ThemeScopeVersion) {
-                return $version;
-            }
+        $resolvedKey = $this->resolvedCacheKey('current', $themeId, $scope, $storeMode, $area);
+        if (RequestContext::isInitialized() && RequestContext::has($resolvedKey)) {
+            return $this->hydrateResolvedVersion(
+                RequestContext::get($resolvedKey),
+                $themeId,
+                $scope,
+                $storeMode,
+                $area,
+            );
         }
 
-        return $this->loadFlagged($themeId, $scope, ThemeScopeVersion::schema_fields_IS_CURRENT, $storeMode, $area);
+        $version = $this->resolveCurrentUncached($themeId, $scope, $storeMode, $area);
+        $this->rememberResolved($resolvedKey, $version);
+
+        return $version;
     }
 
     /**
-     * Resolve published chrome version for scope, walking ancestors by trimming
-     * the last dotted segment (a.b.c → a.b → a) until found or exhausted.
+     * Resolve current version id without hydrating a model when the request memo hits.
+     * Use for cache keys / FK filters that only need the integer.
+     */
+    public function getCurrentVersionId(
+        int $themeId,
+        string $scope,
+        string $storeMode = 'normal',
+        string $area = 'frontend',
+    ): int {
+        $scope = $this->normalizeScope($scope);
+        if ($themeId < 1 || $scope === '') {
+            return 0;
+        }
+        $storeMode = $storeMode !== '' ? $storeMode : 'normal';
+        $area = \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
+
+        $resolvedKey = $this->resolvedCacheKey('current', $themeId, $scope, $storeMode, $area);
+        if (RequestContext::isInitialized() && RequestContext::has($resolvedKey)) {
+            $cached = RequestContext::get($resolvedKey);
+            if ($cached === self::SNAPSHOT_MISS || $cached === null || $cached === false) {
+                return 0;
+            }
+
+            return (int)$cached > 0 ? (int)$cached : 0;
+        }
+
+        $version = $this->resolveCurrentUncached($themeId, $scope, $storeMode, $area);
+        $this->rememberResolved($resolvedKey, $version);
+
+        return $version instanceof ThemeScopeVersion ? $version->getVersionId() : 0;
+    }
+
+    /**
+     * Resolve published chrome version for this owner scope.
      *
-     * 每个祖先按「selection 权威优先、legacy 标志回落」解析。
+     * Owner-local only this wave: {@see scopeAncestorChain()} returns self.
+     * Ancestor inheritance remains ThemeVersionScopePropagator’s job; restoring a
+     * true walk here is a separate behavior change and must not ship with read memos.
+     *
+     * 每个 owner 按「selection 权威优先、legacy 标志回落」解析。
      * sealed selection 在无 is_published 旗标时仍可信（v3 selection-only）；
      * 若 selection 指向 sealed+未旗标、同 owner 另有 is_published=1 旗标行，则弃旧 selection。
      * draft 被写成 published 指针时忽略，回落旗标。
@@ -175,7 +314,52 @@ final class ThemeScopeVersionService
         if ($themeId < 1 || $scope === '') {
             return null;
         }
+        $storeMode = $storeMode !== '' ? $storeMode : 'normal';
+        $area = \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
 
+        $resolvedKey = $this->resolvedCacheKey('published', $themeId, $scope, $storeMode, $area);
+        if (RequestContext::isInitialized() && RequestContext::has($resolvedKey)) {
+            return $this->hydrateResolvedVersion(
+                RequestContext::get($resolvedKey),
+                $themeId,
+                $scope,
+                $storeMode,
+                $area,
+            );
+        }
+
+        $version = $this->resolvePublishedUncached($themeId, $scope, $storeMode, $area);
+        $this->rememberResolved($resolvedKey, $version);
+
+        return $version;
+    }
+
+    private function resolveCurrentUncached(
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+    ): ?ThemeScopeVersion {
+        $selection = $this->loadSelection($themeId, $scope, $storeMode, $area);
+        foreach ([$selection['draft_version_id'] ?? null, $selection['published_version_id'] ?? null] as $candidateId) {
+            if ($candidateId === null || $candidateId === '' || (int)$candidateId < 1) {
+                continue;
+            }
+            $version = $this->loadVersionById((int)$candidateId, $themeId, $scope, $storeMode, $area);
+            if ($version instanceof ThemeScopeVersion) {
+                return $version;
+            }
+        }
+
+        return $this->loadFlagged($themeId, $scope, ThemeScopeVersion::schema_fields_IS_CURRENT, $storeMode, $area);
+    }
+
+    private function resolvePublishedUncached(
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+    ): ?ThemeScopeVersion {
         foreach ($this->scopeAncestorChain($scope) as $candidate) {
             $selection = $this->loadSelection($themeId, $candidate, $storeMode, $area);
             $publishedId = (int)($selection['published_version_id'] ?? 0);
@@ -236,6 +420,9 @@ final class ThemeScopeVersionService
 
         $version->setIsPublished(true)->save();
         $this->forgetFlagged($themeId, $scope, $version->getStoreMode(), $version->getArea());
+        $this->forgetVersionRow($version->getVersionId());
+        self::forgetChromeDecodeMemo($version->getVersionId());
+        self::forgetSharedChromeBySlot($themeId, $version->getArea(), $scope);
 
         // selection 是唯一可变权威：同步已发布指针，否则读者仍会解析到旧版本。
         $this->persistSelectionPublished(
@@ -280,7 +467,15 @@ final class ThemeScopeVersionService
             ->setChromePayload($normalized)
             ->setStructureKey($this->hashStructure($normalized))
             ->save();
-        $this->forgetFlagged($version->getThemeId(), $this->normalizeScope((string)$version->getScope()), $version->getStoreMode(), $version->getArea());
+        $themeId = $version->getThemeId();
+        $scope = $this->normalizeScope((string)$version->getScope());
+        $storeMode = $version->getStoreMode();
+        $area = $version->getArea();
+        $this->forgetFlagged($themeId, $scope, $storeMode, $area);
+        $this->forgetResolved($themeId, $scope, $storeMode, $area);
+        $this->forgetVersionRow($version->getVersionId());
+        self::forgetChromeDecodeMemo($version->getVersionId());
+        self::forgetSharedChromeBySlot($themeId, $area, $scope);
     }
 
     public function createRevisionFrom(
@@ -296,6 +491,8 @@ final class ThemeScopeVersionService
 
         $nextNumber = $this->nextVersionNumber($themeId, $scope);
         $this->unsetCurrent($themeId, $scope, $source->getStoreMode(), $source->getArea());
+        // One defensive copy for both setChromePayload and hashStructure (avoid double getChromePayload).
+        $chromePayload = $source->getChromePayload();
 
         $revision = clone $this->versionModel;
         $revision->reset()
@@ -312,10 +509,10 @@ final class ThemeScopeVersionService
             ->setLifecycle(ThemeScopeVersion::LIFECYCLE_DRAFT)
             ->setContentRevision(0)
             ->setCreationSourceKind(\Weline\Theme\Api\Version\ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT)
-            ->setChromePayload($source->getChromePayload())
+            ->setChromePayload($chromePayload)
             ->setStructureKey($source->getStructureKey() !== ''
                 ? $source->getStructureKey()
-                : $this->hashStructure($source->getChromePayload()))
+                : $this->hashStructure($chromePayload))
             ->setParentVersionId($source->getVersionId())
             ->setIsCurrent(true)
             ->setIsPublished(false)
@@ -337,11 +534,14 @@ final class ThemeScopeVersionService
     }
 
     /**
-     * Advance the Scope-published storefront generation without stealing the editor draft.
+     * @deprecated Do not use for compile / upgrade / cache clear.
+     * Storefront generation === Scope-published ThemeScopeVersion. Ops change it only by
+     * clicking Publish in the theme editor. This helper invents a sealed published row and
+     * is retained only for rare recovery tooling — never call from clearAll / Formal compile /
+     * theme:upgrade / solidify cutover.
      *
      * Copies chrome from the current published ThemeScopeVersion into a new sealed row and
      * markPublished() it. Does NOT call createRevisionFrom() (that unsetCurrent + drafts).
-     * Identity for Cookie / HTML bake / handshake is the new version id.
      */
     public function advancePublishedStorefrontGeneration(
         int $themeId,
@@ -378,6 +578,7 @@ final class ThemeScopeVersionService
         // Capture editor draft before markPublished — some selection writes clear it.
         $selectionBefore = $this->loadSelection($themeId, $ownerScope, $ownerStoreMode, $ownerArea);
         $preservedDraftId = (int)($selectionBefore['draft_version_id'] ?? 0);
+        $chromePayload = $source->getChromePayload();
 
         $revision = clone $this->versionModel;
         $revision->reset()
@@ -394,10 +595,10 @@ final class ThemeScopeVersionService
             ->setLifecycle(ThemeScopeVersion::LIFECYCLE_SEALED)
             ->setContentRevision($contentRevision)
             ->setCreationSourceKind(\Weline\Theme\Api\Version\ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT)
-            ->setChromePayload($source->getChromePayload())
+            ->setChromePayload($chromePayload)
             ->setStructureKey($source->getStructureKey() !== ''
                 ? $source->getStructureKey()
-                : $this->hashStructure($source->getChromePayload()))
+                : $this->hashStructure($chromePayload))
             ->setParentVersionId($source->getVersionId())
             ->setIsCurrent(false)
             ->setIsPublished(false)
@@ -423,6 +624,8 @@ final class ThemeScopeVersionService
     }
 
     /**
+     * @deprecated See {@see advancePublishedStorefrontGeneration()} — not for routine paths.
+     *
      * Advance published storefront generation for every frontend Scope that currently
      * holds a published ThemeScopeVersion for this theme (application owners + selection
      * / is_published rows). Dedupes by resolved published owner so Channel/Store/Website
@@ -531,10 +734,16 @@ final class ThemeScopeVersionService
     {
         $cacheKey = $this->flaggedCacheKey($themeId, $scope, $flagField, $storeMode, $area);
         $cached = RequestContext::get($cacheKey);
-        if (\is_array($cached) && \array_key_exists('version', $cached)) {
-            $version = $cached['version'];
+        if (\is_array($cached) && \array_key_exists('snapshot', $cached)) {
+            $snapshot = $cached['snapshot'];
+            if ($snapshot === null || $snapshot === self::SNAPSHOT_MISS) {
+                return null;
+            }
+            if (\is_array($snapshot) && $snapshot !== []) {
+                return $this->hydrateVersionFromSnapshot($snapshot);
+            }
 
-            return $version instanceof ThemeScopeVersion ? $version : null;
+            return null;
         }
 
         $result = $this->versionModel->reset()
@@ -549,18 +758,29 @@ final class ThemeScopeVersionService
             ->fetchArray();
 
         if (!\is_array($result) || $result === []) {
-            RequestContext::set($cacheKey, ['version' => null]);
+            RequestContext::set($cacheKey, ['snapshot' => null]);
 
             return null;
         }
 
         $row = \is_array($result[0] ?? null) ? $result[0] : $result;
-        $version = clone $this->versionModel;
-        $version->setData($row);
-        $resolved = $version->getVersionId() > 0 ? $version : null;
-        RequestContext::set($cacheKey, ['version' => $resolved]);
+        if (!\is_array($row) || $row === []) {
+            RequestContext::set($cacheKey, ['snapshot' => null]);
 
-        return $resolved;
+            return null;
+        }
+        $versionId = (int)($row[ThemeScopeVersion::schema_fields_ID] ?? 0);
+        if ($versionId < 1) {
+            RequestContext::set($cacheKey, ['snapshot' => null]);
+
+            return null;
+        }
+        $this->rememberChromeFromRaw($versionId, $row[ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON] ?? null);
+        $snapshot = $this->versionRowSnapshotFromArray($row);
+        RequestContext::set($cacheKey, ['snapshot' => $snapshot]);
+        $this->rememberVersionRowSnapshot($versionId, $snapshot);
+
+        return $this->hydrateVersionFromSnapshot($snapshot);
     }
 
     private function flaggedCacheKey(int $themeId, string $scope, string $flagField, string $storeMode, string $area): string
@@ -576,6 +796,8 @@ final class ThemeScopeVersionService
         ] as $flagField) {
             RequestContext::set($this->flaggedCacheKey($themeId, $scope, $flagField, $storeMode, $area), null);
         }
+        // Flagged miss/hit feeds getCurrent/getPublished; drop resolved with the flag bag.
+        $this->forgetResolved($themeId, $scope, $storeMode, $area);
     }
 
     // ==================== selection 权威读取与维护 ====================
@@ -643,6 +865,7 @@ final class ThemeScopeVersionService
 
     /**
      * 按主键读取版本行，并校验其属于目标 owner（避免 selection 指向跨 owner 版本）。
+     * Request memo stores a scalar row snapshot; each hit hydrates a fresh model.
      */
     private function loadVersionById(
         int $versionId,
@@ -654,24 +877,60 @@ final class ThemeScopeVersionService
         if ($versionId < 1) {
             return null;
         }
+        $storeMode = $storeMode !== '' ? $storeMode : 'normal';
+        $area = \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
+        $rowKey = self::ROW_CACHE_PREFIX . $versionId;
+        if (RequestContext::isInitialized() && RequestContext::has($rowKey)) {
+            $cached = RequestContext::get($rowKey);
+            if ($cached === self::SNAPSHOT_MISS || $cached === null) {
+                return null;
+            }
+            if (\is_array($cached) && $cached !== []) {
+                $version = $this->hydrateVersionFromSnapshot($cached);
+
+                return $this->versionMatchesOwner($version, $themeId, $scope, $storeMode, $area)
+                    ? $version
+                    : null;
+            }
+        }
+
         try {
             $version = clone $this->versionModel;
             $version->reset()->clearData()->load($versionId);
         } catch (\Throwable) {
+            if (RequestContext::isInitialized()) {
+                RequestContext::set($rowKey, self::SNAPSHOT_MISS);
+            }
+
             return null;
         }
         if ($version->getVersionId() !== $versionId) {
-            return null;
-        }
-        if ($version->getThemeId() !== $themeId || $version->getScope() !== $scope) {
-            return null;
-        }
-        if ($version->getStoreMode() !== ($storeMode !== '' ? $storeMode : 'normal')) {
-            return null;
-        }
-        $expectedArea = \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
+            if (RequestContext::isInitialized()) {
+                RequestContext::set($rowKey, self::SNAPSHOT_MISS);
+            }
 
-        return $version->getArea() === $expectedArea ? $version : null;
+            return null;
+        }
+        if (!$this->versionMatchesOwner($version, $themeId, $scope, $storeMode, $area)) {
+            // Still memo identity+chrome for this versionId when the row exists;
+            // owner mismatch is a caller filter, not a missing row.
+            $this->rememberChromeFromRaw(
+                $versionId,
+                $version->getData(ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON),
+            );
+            $this->rememberVersionRowSnapshot($versionId, $this->versionRowSnapshot($version));
+
+            return null;
+        }
+        $this->rememberChromeFromRaw(
+            $versionId,
+            $version->getData(ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON),
+        );
+        $this->rememberVersionRowSnapshot($versionId, $this->versionRowSnapshot($version));
+        // Cold path: return the loaded model (chrome string may remain on this
+        // instance). Later hits hydrate identity-only bags + chrome decode memo.
+
+        return $version;
     }
 
     private function selectionCacheKey(int $themeId, string $scope, string $storeMode, string $area): string
@@ -682,6 +941,7 @@ final class ThemeScopeVersionService
     private function forgetSelection(int $themeId, string $scope, string $storeMode, string $area): void
     {
         RequestContext::set($this->selectionCacheKey($themeId, $scope, $storeMode, $area), null);
+        $this->forgetResolved($themeId, $scope, $storeMode, $area);
     }
 
     /**
@@ -842,12 +1102,222 @@ final class ThemeScopeVersionService
     }
 
     /**
+     * Owner-local chain only (self). Do not expand to Propagator ancestors here —
+     * that changes published resolution semantics and is a separate epic.
+     *
      * @return list<string>
      */
     private function scopeAncestorChain(string $scope): array
     {
         $scope = $this->normalizeScope($scope);
         return $scope === '' ? [] : [$scope];
+    }
+
+    private function resolvedCacheKey(
+        string $kind,
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+    ): string {
+        return self::RESOLVED_CACHE_PREFIX . $kind . '|' . $themeId . '|' . $scope . '|' . $storeMode . '|' . $area;
+    }
+
+    private function rememberResolved(string $resolvedKey, ?ThemeScopeVersion $version): void
+    {
+        if (!RequestContext::isInitialized()) {
+            return;
+        }
+        RequestContext::set(
+            $resolvedKey,
+            $version instanceof ThemeScopeVersion && $version->getVersionId() > 0
+                ? $version->getVersionId()
+                : self::SNAPSHOT_MISS,
+        );
+    }
+
+    private function hydrateResolvedVersion(
+        mixed $cached,
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+    ): ?ThemeScopeVersion {
+        if ($cached === self::SNAPSHOT_MISS || $cached === null || $cached === false) {
+            return null;
+        }
+        $versionId = (int)$cached;
+        if ($versionId < 1) {
+            return null;
+        }
+
+        return $this->loadVersionById($versionId, $themeId, $scope, $storeMode, $area);
+    }
+
+    private function forgetResolved(int $themeId, string $scope, string $storeMode, string $area): void
+    {
+        if (!RequestContext::isInitialized()) {
+            return;
+        }
+        foreach (['current', 'published'] as $kind) {
+            RequestContext::remove($this->resolvedCacheKey($kind, $themeId, $scope, $storeMode, $area));
+        }
+    }
+
+    private function forgetVersionRow(int $versionId): void
+    {
+        if ($versionId < 1 || !RequestContext::isInitialized()) {
+            return;
+        }
+        RequestContext::remove(self::ROW_CACHE_PREFIX . $versionId);
+    }
+
+    /**
+     * Version ids already present in request memos only — never hit the DB here.
+     *
+     * @return list<int>
+     */
+    private function knownVersionIdsForOwner(int $themeId, string $scope, string $storeMode, string $area): array
+    {
+        if (!RequestContext::isInitialized()) {
+            return [];
+        }
+        $ids = [];
+        $selectionKey = $this->selectionCacheKey($themeId, $scope, $storeMode, $area);
+        $cached = RequestContext::get($selectionKey);
+        if (\is_array($cached) && \array_key_exists('selection', $cached) && \is_array($cached['selection'])) {
+            foreach (['draft_version_id', 'published_version_id'] as $field) {
+                $id = (int)($cached['selection'][$field] ?? 0);
+                if ($id > 0) {
+                    $ids[] = $id;
+                }
+            }
+        }
+        foreach ([
+            ThemeScopeVersion::schema_fields_IS_CURRENT,
+            ThemeScopeVersion::schema_fields_IS_PUBLISHED,
+        ] as $flagField) {
+            $flagCached = RequestContext::get($this->flaggedCacheKey($themeId, $scope, $flagField, $storeMode, $area));
+            if (\is_array($flagCached) && \is_array($flagCached['snapshot'] ?? null)) {
+                $id = (int)($flagCached['snapshot'][ThemeScopeVersion::schema_fields_ID] ?? 0);
+                if ($id > 0) {
+                    $ids[] = $id;
+                }
+            }
+        }
+        foreach (['current', 'published'] as $kind) {
+            $resolved = RequestContext::get($this->resolvedCacheKey($kind, $themeId, $scope, $storeMode, $area));
+            if ($resolved !== self::SNAPSHOT_MISS && (int)$resolved > 0) {
+                $ids[] = (int)$resolved;
+            }
+        }
+
+        return \array_values(\array_unique($ids));
+    }
+
+    private function rememberVersionRowSnapshot(int $versionId, array $snapshot): void
+    {
+        if ($versionId < 1 || !RequestContext::isInitialized()) {
+            return;
+        }
+        RequestContext::set(self::ROW_CACHE_PREFIX . $versionId, $snapshot);
+    }
+
+    /**
+     * Decode chrome JSON into the request memo once (identity row bags never carry it).
+     */
+    private function rememberChromeFromRaw(int $versionId, mixed $raw): void
+    {
+        if ($versionId < 1 || !RequestContext::isInitialized()) {
+            return;
+        }
+        $cacheKey = self::CHROME_DECODE_CACHE_PREFIX . $versionId;
+        if (RequestContext::has($cacheKey)) {
+            return;
+        }
+        if ($raw === null || $raw === '') {
+            RequestContext::set($cacheKey, []);
+
+            return;
+        }
+        if (\is_array($raw)) {
+            RequestContext::set($cacheKey, $raw);
+
+            return;
+        }
+        if (!\is_string($raw)) {
+            RequestContext::set($cacheKey, []);
+
+            return;
+        }
+        $decoded = \json_decode($raw, true);
+        RequestContext::set($cacheKey, \is_array($decoded) ? $decoded : []);
+    }
+
+    private function versionMatchesOwner(
+        ThemeScopeVersion $version,
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+    ): bool {
+        if ($version->getVersionId() < 1) {
+            return false;
+        }
+        if ($version->getThemeId() !== $themeId || $version->getScope() !== $scope) {
+            return false;
+        }
+        if ($version->getStoreMode() !== $storeMode) {
+            return false;
+        }
+
+        return $version->getArea() === $area;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function versionRowSnapshot(ThemeScopeVersion $version): array
+    {
+        $data = $version->getData();
+
+        return \is_array($data) ? $this->versionRowSnapshotFromArray($data) : [];
+    }
+
+    /**
+     * Identity columns only — chrome_payload_json is excluded (lives in decode memo).
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function versionRowSnapshotFromArray(array $data): array
+    {
+        $snapshot = [];
+        foreach ($data as $key => $value) {
+            if (!\is_string($key) && !\is_int($key)) {
+                continue;
+            }
+            if ($key === ThemeScopeVersion::schema_fields_CHROME_PAYLOAD_JSON) {
+                continue;
+            }
+            if (\is_object($value)) {
+                continue;
+            }
+            $snapshot[$key] = $value;
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function hydrateVersionFromSnapshot(array $data): ThemeScopeVersion
+    {
+        $version = clone $this->versionModel;
+        $version->clearData()->clearQuery()->setData($data);
+
+        return $version;
     }
 
     /**
