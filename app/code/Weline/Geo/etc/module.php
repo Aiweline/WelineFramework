@@ -13,5 +13,7 @@ return [
     ],
     "optional" => [
     ],
-    "provides" => [],
+    "provides" => [
+        'template_cache_policy.Weline_Geo' => \Weline\Geo\Api\View\TemplateCachePolicyProvider::class,
+    ],
 ];

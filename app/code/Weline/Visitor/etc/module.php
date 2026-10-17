@@ -15,5 +15,7 @@ return [
         'Weline_Frontend' => '*',
         'Weline_Server' => '*',
     ],
-    "provides" => [],
+    "provides" => [
+        'template_cache_policy.Weline_Visitor' => \Weline\Visitor\Api\View\TemplateCachePolicyProvider::class,
+    ],
 ];

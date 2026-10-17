@@ -17,5 +17,6 @@ return [
             => \Weline\Consent\Service\SystemConfigConsentRecordingPolicy::class,
         \Weline\Consent\Api\ConsentVisitorIdentityInterface::class
             => \Weline\Consent\Service\ConsentVisitorIdentity::class,
+        'template_cache_policy.Weline_Consent' => \Weline\Consent\Api\View\TemplateCachePolicyProvider::class,
     ],
 ];

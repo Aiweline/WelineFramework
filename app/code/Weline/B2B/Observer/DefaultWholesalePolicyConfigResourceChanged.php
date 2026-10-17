@@ -48,7 +48,9 @@ final class DefaultWholesalePolicyConfigResourceChanged implements AsyncObserver
             $invalidator = ObjectManager::getInstance(
                 \Weline\Product\Service\ProductStorefrontCacheInvalidator::class,
             );
-            if (is_object($invalidator) && method_exists($invalidator, 'clearForCatalogChange')) {
+            if (is_object($invalidator) && method_exists($invalidator, 'purgeForUrls')) {
+                $invalidator->purgeForUrls([], 'b2b_default_wholesale_policy');
+            } elseif (is_object($invalidator) && method_exists($invalidator, 'clearForCatalogChange')) {
                 $invalidator->clearForCatalogChange('b2b_default_wholesale_policy');
             }
         } catch (\Throwable) {

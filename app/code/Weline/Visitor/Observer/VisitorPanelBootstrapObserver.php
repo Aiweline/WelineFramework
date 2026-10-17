@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\Observer;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Visitor\Service\VisitorPanelBootstrapHtmlService;
 
@@ -50,7 +51,7 @@ class VisitorPanelBootstrapObserver implements ObserverInterface
             return;
         }
 
-        if (RequestLifecycleTrace::shouldSkipForCurrentRequest()) {
+        if (TraceGate::shouldSkipForCurrentRequest()) {
             return;
         }
 

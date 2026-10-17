@@ -14,4 +14,7 @@ return [
         'Weline_Wishlist' => '*',
         'Weline_Cart' => '*',
     ],
+    'provides' => [
+        'template_cache_policy.Weline_Compare' => \Weline\Compare\Api\View\TemplateCachePolicyProvider::class,
+    ],
 ];

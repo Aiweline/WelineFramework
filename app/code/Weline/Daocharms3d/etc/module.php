@@ -1,7 +1,7 @@
 <?php
 return [
     'name' => 'Weline_Daocharms3d',
-    'version' => '1.0.0',
+    'version' => '1.0.1',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Frontend' => '*',

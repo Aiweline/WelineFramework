@@ -600,6 +600,21 @@ const CustomerServiceConsole = (function() {
      * 加载最新消息（首屏）
      * @returns {Promise<boolean>}
      */
+    
+    function refreshBackendMenuSignalsSafe() {
+        try {
+            if (typeof window.refreshBackendMenuSignals === 'function') {
+                window.refreshBackendMenuSignals().catch(function () {});
+                return;
+            }
+            if (window.Weline
+                && window.Weline.BackendMenuSignals
+                && typeof window.Weline.BackendMenuSignals.refresh === 'function') {
+                window.Weline.BackendMenuSignals.refresh().catch(function () {});
+            }
+        } catch (_e) { /* ignore */ }
+    }
+
     async function loadMessages(sessionId) {
         try {
             const data = await csAdmin(
@@ -613,6 +628,7 @@ const CustomerServiceConsole = (function() {
                 const hasMore = data.has_more === true || messages.length >= state.pageSize;
                 renderChatArea(sessionId, messages, { loading: false, hasMore: hasMore });
                 refreshSessions();
+                refreshBackendMenuSignalsSafe();
                 return true;
             }
 
@@ -1602,6 +1618,9 @@ const CustomerServiceConsole = (function() {
                     + (sinceId > 0 ? ('&since_id=' + sinceId) : '')
                     + '&mark_read=1';
                 const data = await csAdmin(url);
+                if (data && data.success) {
+                    refreshBackendMenuSignalsSafe();
+                }
                 const rows = data && data.success && Array.isArray(data.data) ? data.data : [];
                 if (rows.length === 0) {
                     return;

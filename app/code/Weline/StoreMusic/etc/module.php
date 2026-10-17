@@ -20,5 +20,6 @@ return [
     ],
     'provides' => [
         'deploy.flat_static.Weline_StoreMusic' => \Weline\StoreMusic\Api\Deploy\FlatStaticRuntimeFilesProvider::class,
+        'template_cache_policy.Weline_StoreMusic' => \Weline\StoreMusic\Api\View\TemplateCachePolicyProvider::class,
     ],
 ];

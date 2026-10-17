@@ -90,16 +90,8 @@ class Location extends FrontendRestController
             /** @var EventsManager $eventsManager */
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
             $eventsManager->dispatch('Weline_Location::location-to-address', $eventData);
-            
-            // 获取事件返回的地址数据
-            $event = $eventsManager->getEventData('Weline_Location::location-to-address');
-            if ($event) {
-                $eventAddress = $event->getData('address');
-                if (is_array($eventAddress) && !empty($eventAddress)) {
-                    $eventData['address'] = $eventAddress;
-                }
-            }
-            
+            // Observer mutations already land on $eventData (array ref envelope).
+
             // 如果没有地址数据，使用IP定位作为降级方案
             if (empty($eventData['address'])) {
                 /** @var LocationService $geoService */

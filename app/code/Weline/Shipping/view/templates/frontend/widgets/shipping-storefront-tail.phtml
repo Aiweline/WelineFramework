@@ -1,0 +1,33 @@
+<?php
+/**
+ * Shipping storefront tail scripts (address storage / location / price calculator).
+ *
+ * @widget.code {shipping-storefront-tail}
+ * @widget.cache {3600}
+ * @widget.share {true}
+ * @widget.name {配送尾 Chrome}
+ * @widget.description {店面配送相关脚本；默认注入 storefront-tail-chrome。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {storefront-tail-chrome}
+ * @widget.supports {["shipping-storefront-tail","layout-storefront-tail-chrome","content"]}
+ * @widget.default_injections {[{"layout_type":"*","slot":"storefront-tail-chrome","area":"footer","sort_order":70,"required":true,"reason":"店面任意布局默认配送尾脚本","config":[]}]}
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+$storageJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-storage.js') ?? '';
+$locationJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-location.js') ?? '';
+$priceCalculatorJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-price-calculator.js') ?? '';
+?>
+<span hidden data-testid="shipping-storefront-tail" aria-hidden="true"></span>
+<?php if ($storageJsUrl): ?>
+<script src="<?= htmlspecialchars($storageJsUrl) ?>" defer></script>
+<?php endif; ?>
+<?php if ($locationJsUrl): ?>
+<script src="<?= htmlspecialchars($locationJsUrl) ?>" defer></script>
+<?php endif; ?>
+<?php if ($priceCalculatorJsUrl): ?>
+<script src="<?= htmlspecialchars($priceCalculatorJsUrl) ?>" defer></script>
+<?php endif; ?>

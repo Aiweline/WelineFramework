@@ -9,5 +9,6 @@ declare(strict_types=1);
 return [
     'Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml',
     'Weline_B2B::templates/frontend/widgets/checkout-tob-deposit-note.phtml',
+    'Weline_B2B::templates/frontend/widgets/b2b-mini-cart-boot.phtml',
     'Weline_B2B::templates/backend/widgets/backend-order-chat.phtml',
 ];

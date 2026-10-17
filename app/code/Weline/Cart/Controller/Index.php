@@ -61,7 +61,7 @@ class Index extends FrontendController
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
 
-            return trim((string) $template->fetch(
+            return trim((string) $template->fetchHtml(
                 'Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml',
                 [
                     'mode' => 'cart',

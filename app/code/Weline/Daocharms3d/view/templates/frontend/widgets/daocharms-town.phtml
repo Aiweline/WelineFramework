@@ -1,28 +1,32 @@
 <?php
-/** @hook-priority 70 @hook-sort-order 70 */
-$townTheme = \Weline\Theme\Helper\ThemeData::getCurrentTheme();
-if (!$townTheme || (string)$townTheme->getData('name') !== 'daocharms-3d') { return; }
+/**
+ * DaoCharms 3D town scene — design daocharms-3d homepage empty slot + required injection XOR.
+ * Slot id only exists on daocharms-3d homepage, so other storefronts are not polluted.
+ *
+ * @widget.code {daocharms-town}
+ * @widget.cache {600}
+ * @widget.share {true}
+ * @widget.name {道韵古镇三维场景}
+ * @widget.description {daocharms-3d 主题首页三维市集；空槽 + required default_injections，禁止布局内嵌与全局 body-end。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.placement {injection}
+ * @widget.slot {daocharms-town}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage"]}
+ * @widget.supports {["daocharms-town","content","layout-homepage-bottom"]}
+ * @widget.default_injections {[{"layout_type":"homepage","layout_option":"default","slot":"daocharms-town","area":"content","sort_order":10,"required":true,"reason":"daocharms-3d 首页古镇槽空置；跨模块/design 禁止布局内嵌非 Theme 部件，走拥有模块 JSON 注入 XOR","config":[]}]}
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Daocharms3d\Service\TownCatalogProjector;
+use Weline\Framework\Manager\ObjectManager;
+
+/** @var TownCatalogProjector $projector */
+$projector = ObjectManager::getInstance(TownCatalogProjector::class);
+$cards = $projector->projectCards();
 $escapeTown = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$offers = [];
-$page = 1;
-do {
-    $catalog = w_query('product_storefront', 'searchPublishedOffers', ['page' => $page, 'page_size' => 48]);
-    foreach (($catalog['items'] ?? []) as $offer) { $offers[(int)$offer['product_id']] = $offer; }
-    $page++;
-} while ($page <= (int)($catalog['pagination']['pages'] ?? 1));
-$cards = [];
-foreach (array_chunk(array_keys($offers), 24) as $ids) {
-    foreach (w_query('product_storefront', 'cardsByProductIds', ['product_ids' => $ids, 'limit' => 24]) as $card) {
-        $id = (int)($card['id'] ?? 0);
-        if ($id > 0) {
-            $cards[$id] = $card + ($offers[$id] ?? []);
-            if (trim((string)($offers[$id]['image'] ?? '')) !== '') {
-                $cards[$id]['image'] = (string)($offers[$id]['image'] ?? '');
-            }
-            $cards[$id]['formatted_price'] = (string)($offers[$id]['formatted_price'] ?? '');
-        }
-    }
-}
 $checkoutTown = $this->getUrl('checkout');
 $accountTown = $this->getUrl('customer/account/index');
 $cartTown = $this->getUrl('cart');

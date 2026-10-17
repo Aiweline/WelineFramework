@@ -47,7 +47,9 @@ $presenceStub = static function (string $reason): void {
 // float-slot widget falls back to SystemConfig; keep real layout tracks /
 // explicit enable from editor config.
 $widgetConfig = StoreMusicSettings::hookOwnedWidgetConfig($widgetConfig);
-if (!$settings->isWidgetActive($widgetConfig)) {
+// Single frontendPayload call — avoid isWidgetActive + frontendPayload double tax.
+$payload = $settings->frontendPayload($widgetConfig);
+if (!$settings->isPayloadActive($payload)) {
     $presenceStub('inactive');
     return;
 }
@@ -55,8 +57,6 @@ if (!StoreMusicRenderGate::claim()) {
     $presenceStub('already-rendered');
     return;
 }
-
-$payload = $settings->frontendPayload($widgetConfig);
 $websiteId = '0';
 $storeId = '0';
 try {

@@ -21,7 +21,8 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
         \Weline\Currency\Helper\CurrencySymbol::clearProcessCache();
         \Weline\Currency\Helper\CurrencyDisplayName::clearProcessCache();
         \Weline\Currency\Service\CurrencyLocalDescriptionService::clearProcessCache();
-        $cleared = 6;
+        \Weline\Currency\Service\CurrencySwitcherIslandBuilder::invalidate();
+        $cleared = 7;
         try {
             ObjectManager::getInstance(CurrencyRateService::class)->invalidateCachedDefinitions();
             $cleared++;

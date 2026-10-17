@@ -42,5 +42,6 @@ return [
             => \Weline\B2B\Service\B2BStorefrontCatalogVisibilityFilter::class,
         \Weline\Checkout\Api\StorefrontMoneySummaryPolicyInterface::class
             => \Weline\B2B\Service\TobStorefrontMoneySummaryPolicy::class,
+        'template_cache_policy.Weline_B2B' => \Weline\B2B\Api\View\TemplateCachePolicyProvider::class,
     ],
 ];

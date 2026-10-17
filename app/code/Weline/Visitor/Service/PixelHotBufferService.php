@@ -6,6 +6,7 @@ namespace Weline\Visitor\Service;
 use Weline\Framework\Cache\Contract\SharedBufferStateFactoryInterface;
 use Weline\Framework\Cache\Contract\SharedBufferStateInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\PostResponseCaptureMode;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -89,15 +90,20 @@ class PixelHotBufferService
             return;
         }
 
-        PostResponseTaskQueue::enqueue('visitor-pixel-hot-buffer-flush', static function (): void {
-            try {
-                /** @var self $service */
-                $service = ObjectManager::getInstance(self::class);
-                $service->flushDue(false);
-            } catch (\Throwable $throwable) {
-                w_log_error('Visitor Pixel hot buffer post-response flush failed: ' . $throwable->getMessage());
-            }
-        });
+        PostResponseTaskQueue::enqueue(
+            'visitor-pixel-hot-buffer-flush',
+            static function (): void {
+                try {
+                    /** @var self $service */
+                    $service = ObjectManager::getInstance(self::class);
+                    $service->flushDue(false);
+                } catch (\Throwable $throwable) {
+                    w_log_error('Visitor Pixel hot buffer post-response flush failed: ' . $throwable->getMessage());
+                }
+            },
+            0.0,
+            PostResponseCaptureMode::None,
+        );
     }
 
     /**

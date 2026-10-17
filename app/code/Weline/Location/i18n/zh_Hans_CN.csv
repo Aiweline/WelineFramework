@@ -1,4 +1,4 @@
-"﻿""浏览器不支持Geolocation API""","浏览器不支持Geolocation API"
+﻿"浏览器不支持Geolocation API","浏览器不支持Geolocation API"
 定位失败,定位失败
 用户拒绝了定位权限,用户拒绝了定位权限
 位置信息不可用,位置信息不可用
@@ -52,4 +52,3 @@ geojs.io返回空数据,geojs.io返回空数据
 "ipinfo.io定位失败: %{1}","ipinfo.io定位失败: %{1}"
 没有可用的定位服务提供者,没有可用的定位服务提供者
 "所有定位服务提供者都失败，最后错误: %{1}","所有定位服务提供者都失败，最后错误: %{1}"
-"浏览器不支持Geolocation API","浏览器不支持Geolocation API"

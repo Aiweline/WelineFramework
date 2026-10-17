@@ -487,10 +487,11 @@ final class ProductSkuQtyTierAdminService
             $invalidator = ObjectManager::getInstance(
                 \Weline\Product\Service\ProductStorefrontCacheInvalidator::class,
             );
-            if (is_object($invalidator) && method_exists($invalidator, 'clearForCatalogChange')) {
-                $invalidator->clearForCatalogChange(
-                    'b2b_price_list_tiers:' . $websiteId . ':' . implode(',', array_slice($skus, 0, 8)),
-                );
+            $reason = 'b2b_price_list_tiers:' . $websiteId . ':' . implode(',', array_slice($skus, 0, 8));
+            if (is_object($invalidator) && method_exists($invalidator, 'purgeForUrls')) {
+                $invalidator->purgeForUrls([], $reason);
+            } elseif (is_object($invalidator) && method_exists($invalidator, 'clearForCatalogChange')) {
+                $invalidator->clearForCatalogChange($reason);
             }
         } catch (\Throwable) {
             // Optional Product module; never block price-list write.

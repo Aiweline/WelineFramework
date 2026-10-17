@@ -14,7 +14,7 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
         return [
             'output_files' => [
                 'Weline_Shipping::hooks/header-account-links.phtml' => ['context' => 'static'],
-                'Weline_Shipping::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => ['context' => 'static'],
+                'Weline_Shipping::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => ['context' => 'body_end'],
             ],
         ];
     }

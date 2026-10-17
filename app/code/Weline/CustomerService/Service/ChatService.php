@@ -516,6 +516,86 @@ class ChatService
         $session->setLastReadTime($at)->save();
     }
 
+    /**
+     * Aggregate unread customer messages for an agent's active sessions.
+     *
+     * Same read floor as enrichConsoleSessionRows:
+     * last_read_time ?? transferred_at ?? 1970-01-01 00:00:00;
+     * only sender_type=customer; only status=active for this agent_id;
+     * waiting pool is excluded.
+     *
+     * Uses two portable ORM queries (sessions then messages) instead of per-session COUNT.
+     */
+    public function countUnreadForAgent(int $agentId): int
+    {
+        $agentId = max(0, $agentId);
+        if ($agentId <= 0) {
+            return 0;
+        }
+
+        /** @var ChatSession $session */
+        $session = ObjectManager::getInstance(ChatSession::class);
+        $sessionRows = $session->reset()
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_ACTIVE)
+            ->select()
+            ->fetchArray();
+        if (!is_array($sessionRows) || $sessionRows === []) {
+            return 0;
+        }
+
+        $floors = [];
+        $sessionIds = [];
+        foreach ($sessionRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sessionId = (int)($row[ChatSession::schema_fields_ID] ?? $row['session_id'] ?? 0);
+            if ($sessionId <= 0) {
+                continue;
+            }
+            $readFloor = (string)($row[ChatSession::schema_fields_LAST_READ_TIME]
+                ?? $row[ChatSession::schema_fields_TRANSFERRED_AT]
+                ?? '1970-01-01 00:00:00');
+            if (trim($readFloor) === '') {
+                $readFloor = '1970-01-01 00:00:00';
+            }
+            $sessionIds[] = $sessionId;
+            $floors[$sessionId] = $readFloor;
+        }
+        if ($sessionIds === []) {
+            return 0;
+        }
+
+        /** @var ChatMessage $message */
+        $message = ObjectManager::getInstance(ChatMessage::class);
+        $messageRows = $message->reset()
+            ->where(ChatMessage::schema_fields_session_id, $sessionIds, 'in')
+            ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
+            ->select()
+            ->fetchArray();
+        if (!is_array($messageRows) || $messageRows === []) {
+            return 0;
+        }
+
+        $total = 0;
+        foreach ($messageRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sessionId = (int)($row[ChatMessage::schema_fields_session_id] ?? $row['session_id'] ?? 0);
+            if ($sessionId <= 0 || !isset($floors[$sessionId])) {
+                continue;
+            }
+            $createdAt = (string)($row[ChatMessage::schema_fields_created_at] ?? $row['created_at'] ?? '');
+            if ($createdAt !== '' && strcmp($createdAt, $floors[$sessionId]) > 0) {
+                ++$total;
+            }
+        }
+
+        return $total;
+    }
+
     public function getMessages(int $sessionId, int $limit = 50, int $offset = 0): array
     {
         /** @var ChatMessage $message */

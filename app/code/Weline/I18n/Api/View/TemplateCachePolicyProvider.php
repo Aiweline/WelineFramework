@@ -10,8 +10,13 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
 {
     public function policies(): array
     {
-        // Switcher Hook HTML contains instance-local DOM ids. Reusing a rendered
-        // fragment in header, sidebar, and footer would duplicate those ids.
-        return [];
+        // Switcher Hook HTML contains instance-local DOM ids — do not register
+        // language/currency switcher fragments here.
+        // body-end inline-edit shell is guest/operator-sharded via body_end context.
+        return [
+            'output_files' => [
+                'Weline_I18n::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => ['context' => 'body_end'],
+            ],
+        ];
     }
 }

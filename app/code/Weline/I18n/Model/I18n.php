@@ -1109,34 +1109,10 @@ class I18n
             ini_set('memory_limit', '512M');
         }
 
-        // This snapshot contains every locale: the no-locale namespace is
-        // CONTENT_NAMESPACE, while namespaceCache() above owns only the directory.
+        // 进程内缓存即可；不再读写 generated/language/words.php（无消费者）。
         $wordsCacheKey = DictionaryCacheNamespace::cacheKey($moduleName ?? '*');
         if ($cache && isset(DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey])) {
             return DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey];
-        }
-        $all_locals_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-
-        if ($cache) {
-            if (!file_exists($all_locals_words_file)) {
-                touch($all_locals_words_file);
-                $text = '<?php return ' . w_var_export([], true) . ';';
-                file_put_contents($all_locals_words_file, $text);
-            }
-            // 新代次首次读取时仅失效实际语言文件，兼容关闭时间戳校验的 OPcache。
-            if (function_exists('opcache_invalidate')) {
-                @opcache_invalidate($all_locals_words_file, true);
-            }
-            $all_locals_words = (array)(include $all_locals_words_file);
-            if (!empty($all_locals_words)) {
-                DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey] = $all_locals_words;
-                return $all_locals_words;
-            }
-        }
-        
-        $locals_names = $this->getLocaleNames();
-        if (!isset($locals_words)) {
-            $locals_words = [];
         }
 
         /** @var DictionaryCompiler $compiler */

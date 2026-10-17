@@ -3,9 +3,10 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
 
-    <!-- 访问信息 - 归入开发者 > 调试工具 -->
-    <menu source="Weline_Visitor::system_frontend" name="visitor_frontend" title="访问信息" action="frontend"
-          is_backend="1"
+    <!-- 访问信息：Frontend Analytics 面板（非后台路由；勿写 ThemeFancy 的 frontend 前缀） -->
+    <menu source="Weline_Visitor::system_frontend" name="visitor_frontend" title="访问信息"
+          action="visitor/analytics/panel"
+          is_backend="0"
           parent="Weline_Backend::debug_tools" icon="globe" order="40"/>
 
     <!-- 像素分析 - 归入应用与扩展 > 数据工具（与 Controller #[Acl] 同源） -->

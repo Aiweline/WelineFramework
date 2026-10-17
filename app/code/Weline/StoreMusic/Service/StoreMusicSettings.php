@@ -116,8 +116,14 @@ class StoreMusicSettings
 
     public function isWidgetActive(?array $widgetConfig = null): bool
     {
-        $payload = $this->frontendPayload($widgetConfig);
+        return $this->isPayloadActive($this->frontendPayload($widgetConfig));
+    }
 
+    /**
+     * @param array<string, mixed> $payload
+     */
+    public function isPayloadActive(array $payload): bool
+    {
         return !empty($payload['enabled']) && ($payload['tracks'] ?? []) !== [];
     }
 
@@ -177,6 +183,15 @@ class StoreMusicSettings
      */
     public function frontendPayload(?array $widgetConfig = null): array
     {
+        $memoKey = 'store_music.frontend_payload.' . \sha1(
+            \json_encode($widgetConfig ?? ['_null' => 1], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: ''
+        );
+        $cached = RequestContext::get($memoKey);
+        if (\is_array($cached)) {
+            /** @var array{enabled: bool, track: string, tracks: list<array{url:string,title:string,intro:string}>, delay_seconds: int, try_autoplay: bool, loop: bool, default_volume: int, waveform_default: bool, avatar_spin: bool} $cached */
+            return $cached;
+        }
+
         $systemTracks = $this->tracksForFrontend();
         $payload = [
             'enabled' => $this->isEnabled(),
@@ -191,6 +206,7 @@ class StoreMusicSettings
         ];
 
         if ($widgetConfig === null) {
+            RequestContext::set($memoKey, $payload);
             return $payload;
         }
 
@@ -225,6 +241,7 @@ class StoreMusicSettings
             $payload['track'] = $widgetTracks[0]['url'] ?? '';
         }
 
+        RequestContext::set($memoKey, $payload);
         return $payload;
     }
 

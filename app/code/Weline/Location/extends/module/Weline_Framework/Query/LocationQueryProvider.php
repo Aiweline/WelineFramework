@@ -61,8 +61,7 @@ class LocationQueryProvider implements QueryProviderInterface
                 'address' => null,
             ];
             $this->eventsManager->dispatch('Weline_Location::location-to-address', $eventData);
-            $event = $this->eventsManager->getEventData('Weline_Location::location-to-address');
-            $address = $event ? $event->getData('address') : null;
+            $address = $eventData['address'] ?? null;
 
             if (!\is_array($address) || $address === []) {
                 $ipLocation = $this->locationService->getLocationByIp();

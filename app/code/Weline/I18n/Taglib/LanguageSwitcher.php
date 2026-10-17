@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Taglib;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\CachePolicy;
@@ -138,7 +140,7 @@ class LanguageSwitcher implements TaglibInterface
      */
     public static function render(array $attributes = []): string
     {
-        return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('i18n.language_switcher.render', static function () use ($attributes): string {
+        return \Weline\Framework\Runtime\TraceGate::measurePhase('i18n.language_switcher.render', static function () use ($attributes): string {
             $websiteId = 0;
             $request = null;
             try {
@@ -239,7 +241,7 @@ class LanguageSwitcher implements TaglibInterface
                 $welineLanguages = self::buildLanguagesFromCodes($triggerCodes, $displayLocale);
                 $languageGroups = [];
             } else {
-                $welineLanguages = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                $welineLanguages = \Weline\Framework\Runtime\TraceGate::measurePhase(
                     'i18n.language_switcher.catalog',
                     static fn() => self::buildLanguagesFromScope($scope, $displayLocale),
                 );
@@ -1275,7 +1277,7 @@ class LanguageSwitcher implements TaglibInterface
      */
     public static function renderLazyPanelCatalog(array $params = []): array
     {
-        return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        return \Weline\Framework\Runtime\TraceGate::measurePhase(
             'i18n.language_switcher.lazy_panel',
             static function () use ($params): array {
                 $websiteId = self::normalizeOptionalInt($params['website_id'] ?? null);
@@ -1450,7 +1452,7 @@ class LanguageSwitcher implements TaglibInterface
      */
     private static function sanitizeInlineFlagMarkup(string $markup): string
     {
-        return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('i18n.language_switcher.flag', static function () use ($markup): string {
+        return \Weline\Framework\Runtime\TraceGate::measurePhase('i18n.language_switcher.flag', static function () use ($markup): string {
             if ($markup === '') {
                 return '';
             }

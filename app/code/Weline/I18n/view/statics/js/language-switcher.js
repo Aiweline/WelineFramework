@@ -237,6 +237,8 @@ function resolveLanguageNavigationHref(locale, optionHref, websiteMount = '') {
  */
 /** Shared in-flight / resolved panel catalogs keyed by website|display|current. */
 const panelCatalogPromises = new Map();
+/** Fail closed: a hung Worker/API must not poison the shared promise map forever. */
+const PANEL_CATALOG_TIMEOUT_MS = 8000;
 
 function panelCatalogCacheKey(root) {
     const websiteId = String(root?.dataset?.websiteId || '');
@@ -250,24 +252,42 @@ async function fetchLanguageSwitcherCatalogHtml(root) {
     if (panelCatalogPromises.has(key)) {
         return panelCatalogPromises.get(key);
     }
+    const errorText = root.dataset.i18nPanelErrorText || 'Unable to load languages.';
     const promise = (async () => {
-        if (typeof window.Weline?.load === 'function') {
-            await window.Weline.load('api');
-        }
-        const resource = await Promise.resolve(window.Weline?.Api?.resource?.('i18n'));
-        if (!resource?.getLanguageSwitcherCatalog) {
-            throw new Error('Weline.Api i18n catalog unavailable.');
-        }
-        const result = await resource.getLanguageSwitcherCatalog({
-            website_id: Number(root.dataset.websiteId || 0) || 0,
-            display_locale_code: String(root.dataset.i18nDisplayLocale || '').trim(),
-            current: String(root.dataset.i18nCurrentLocale || '').trim(),
+        let timer = 0;
+        const timeout = new Promise((_, reject) => {
+            timer = window.setTimeout(() => {
+                reject(new Error(errorText));
+            }, PANEL_CATALOG_TIMEOUT_MS);
         });
-        const html = String(result?.html || result?.data?.html || '');
-        if (!html.trim()) {
-            throw new Error(root.dataset.i18nPanelErrorText || 'Unable to load languages.');
+        try {
+            return await Promise.race([
+                (async () => {
+                    if (typeof window.Weline?.load === 'function') {
+                        await window.Weline.load('api');
+                    }
+                    const resource = await Promise.resolve(window.Weline?.Api?.resource?.('i18n'));
+                    if (!resource?.getLanguageSwitcherCatalog) {
+                        throw new Error('Weline.Api i18n catalog unavailable.');
+                    }
+                    const result = await resource.getLanguageSwitcherCatalog({
+                        website_id: Number(root.dataset.websiteId || 0) || 0,
+                        display_locale_code: String(root.dataset.i18nDisplayLocale || '').trim(),
+                        current: String(root.dataset.i18nCurrentLocale || '').trim(),
+                    });
+                    const html = String(result?.html || result?.data?.html || '');
+                    if (!html.trim()) {
+                        throw new Error(errorText);
+                    }
+                    return html;
+                })(),
+                timeout,
+            ]);
+        } finally {
+            if (timer) {
+                window.clearTimeout(timer);
+            }
         }
-        return html;
     })();
     panelCatalogPromises.set(key, promise);
     try {
@@ -1435,6 +1455,13 @@ export function register(UI) {
                 applySearchFilter('');
             }
         });
+
+        // Menu can open before this lazy component finishes mounting — catch up.
+        const openTrigger = root.querySelector('[data-w-menu-trigger]');
+        if (openTrigger?.getAttribute('aria-expanded') === 'true') {
+            panel = resolvePanel() || panel;
+            void loadPanelCatalog();
+        }
 
         return {
             element: root,

@@ -15,7 +15,6 @@ use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Cookie;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Debug\Printing;
 use Weline\I18n\Model\I18n;
@@ -92,49 +91,5 @@ class GetWordsFile implements \Weline\Framework\Event\ObserverInterface
             // 清除执行标志
             self::$isExecuting = false;
         }
-    }
-    
-    /**
-     * 检查是否需要重新生成翻译文件
-     * 在online模式下，如果CSV文件比生成的词典文件新，则需要重新生成
-     * 
-     * @return bool true表示需要重新生成，false表示不需要
-     */
-    private function needRegenerate(): bool
-    {
-        $words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-        
-        // 如果生成的词典文件不存在，需要生成
-        if (!file_exists($words_file)) {
-            return true;
-        }
-        
-        $words_file_mtime = filemtime($words_file);
-        
-        // 检查所有模块的i18n CSV文件
-        $activeModules = Env::getInstance()->getActiveModules();
-        foreach ($activeModules as $module) {
-            $i18n_dir = $module['base_path'] . '/i18n';
-            if (!is_dir($i18n_dir)) {
-                continue;
-            }
-            
-            // 扫描所有CSV文件
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($i18n_dir, \RecursiveDirectoryIterator::SKIP_DOTS)
-            );
-            
-            foreach ($iterator as $file) {
-                if ($file->isFile() && $file->getExtension() === 'csv') {
-                    $csv_mtime = $file->getMTime();
-                    // 如果CSV文件比生成的词典文件新，需要重新生成
-                    if ($csv_mtime > $words_file_mtime) {
-                        return true;
-                    }
-                }
-            }
-        }
-        
-        return false;
     }
 }

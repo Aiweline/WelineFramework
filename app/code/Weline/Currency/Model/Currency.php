@@ -314,9 +314,11 @@ class Currency extends Model
         try {
             \Weline\Currency\Data\CurrencyData::clearCache();
             \Weline\Currency\Helper\CurrencySymbol::clearProcessCache();
+            \Weline\Currency\Helper\CurrencyDisplayName::clearProcessCache();
             \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
             \Weline\Currency\Service\Repository\CurrencyCatalog::clearProcessCache();
             \Weline\Currency\Taglib\CurrencySelect::clearProcessCaches();
+            \Weline\Currency\Service\CurrencySwitcherIslandBuilder::invalidate();
         } catch (\Throwable) {
         }
         // Rate changes must drop catalog offer projections (vary=currency). Generation
