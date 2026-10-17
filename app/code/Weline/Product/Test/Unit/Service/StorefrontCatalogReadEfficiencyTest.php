@@ -49,26 +49,6 @@ final class StorefrontCatalogReadEfficiencyTest extends TestCase
     private ProductShardProvisioner $provisioner;
     private string $databasePath;
 
-    public function testSummaryReusesAnAlreadyBuiltListingInTheSameRequest(): void
-    {
-        $previous = Context::getCurrent();
-        Context::enter(new Context());
-        try {
-            \Weline\Framework\Runtime\RequestContext::set('product.catalog.full_rows.request', [
-                ['product_id' => 25, 'name' => 'Already resolved'], ['product_id' => 26, 'name' => 'Second'],
-            ]);
-            $catalog = (new \ReflectionClass(StorefrontCatalogViewService::class))->newInstanceWithoutConstructor();
-            try {
-                self::assertSame([['product_id' => 25, 'name' => 'Already resolved']], $catalog->publishedOfferSummaries(1));
-            } catch (\Throwable $error) {
-                self::fail('An existing request projection must not need another catalog dependency: ' . $error->getMessage());
-            }
-        } finally {
-            Context::leave();
-            if ($previous !== null) { Context::enter($previous); }
-        }
-    }
-
     public function testRepresentativeCursorDoesNotRepeatLaterVariantsOfPreviousProducts(): void
     {
         $pdo = $this->connection->getConnector()->getWrappedConnection()->getPdo();

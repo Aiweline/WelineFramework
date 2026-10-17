@@ -123,7 +123,7 @@ SESSION `chrome-warmer-l2-shelf-locale-warm` / 规格 `Theme/.../chrome-warmer-l
 
 | # | 项 | 冻结默认 |
 |---|-----|----------|
-| Q1 | 最低必验 locale/currency | search：`de_DE/USD`、`ja_JP/USD`、`fr_FR/EUR`；plp：`de_DE/USD`、`ja_JP/GBP`；可加抽 ar_SA/ko_KR 等，加抽错串仍按 OPS-S3 fail |
+| Q1 | 最低必验 locale/currency | search：`de_DE/USD`、`ja_JP/USD`、`fr_FR/EUR`；plp：**shopper 默认 `zh_Hans_CN/USD`**（soft-cold A）+ 兼容 `de_DE/USD`、`ja_JP/GBP`；可加抽 ar_SA/ko_KR 等，加抽错串仍按 OPS-S3 fail |
 | Q2 | PLP 通过线意图 | filter/facet/offers 族税降或 HIT；绝对阈值数字由对齐冻结会与性能席签发 |
 | Q3 | 非 home chrome 通过线 | quiet hit1：`chrome_n=0` 或无大 absent builder；禁 home-only |
 | Q4 | 卡片 HTML | P-card-html 次优先；归属冻结会定 |
@@ -161,7 +161,7 @@ SESSION `chrome-warmer-l2-shelf-locale-warm` / 规格 `Theme/.../chrome-warmer-l
 ### 四问裁定（摘要）
 
 1. **新鲜度/失效**：可接受 soft-clear 后 tip 搜索与 PLP 袋走正式 HotCache；禁止「实时库存必准」进 UC。  
-2. **最低必验集**：search `de_DE/USD` · `ja_JP/USD` · `fr_FR/EUR`；plp `de_DE/USD` · `ja_JP/GBP`。  
+2. **最低必验集**：search `de_DE/USD` · `ja_JP/USD` · `fr_FR/EUR`；plp **`zh_Hans_CN/USD`（shopper 默认）** · `de_DE/USD` · `ja_JP/GBP`。  
 3. **只做 HIT**：允许且偏好；改可见排序/筛选/相关性语义 → 停并 escalate 顾问。  
 4. **禁拆壳**：运营无简化壳要求；拆壳 → 否决。
 
@@ -257,14 +257,14 @@ so that **跨范围冷切不再把 chrome 空袋当成「全站已暖」的盲�
 | 字段 | 内容 |
 |------|------|
 | id | UC-plp-filter-offers |
-| 名称 | PLP filter/facet/offers 冷袋税降 |
+| 名称 | PLP filter/facet/offers 冷袋税降（含 soft 同键 tip） |
 | 角色 | 店面访客 |
-| 前置 | 同 UC-search；PLP 有可筛选商品数据 |
-| 主成功步骤 | 1) 安静窗：`/{locale}/products?currency=…` 最低必验 `de_DE/USD`、`ja_JP/GBP` 2) 至少一条分类 plp（可加抽 ar_SA） 3) 断言 filter_panel.v3 / facet / catalog_offers 税降或 HIT 4) 抽检正确性（OPS-S3）；筛选 UI 仍可用且语义未改（E-P3） |
-| 备选/异常 | 空分类：N/A+理由，另选有货分类 |
-| 期望结果 | 列表+筛选可逛；E-P1/E-P2/E-P4；壳完整 |
-| 映射 acceptance | `A-plp-filter-offers`（+ OPS-S1…S4） |
-| 冻结门禁 | **顾问阻塞已解除**；机制待 architect_joint |
+| 前置 | 同 UC-search；PLP 有可筛选商品数据；`product.plp_light` warmer 已对 tip seed `publishedListingCandidates(1000, true)`（同 soft 键 `candidates-facet-listing-v5-max1000`） |
+| 主成功步骤 | 1) soft-clear + warm `plp_light` 后：安静窗 / soft 通路最低必验 **shopper 默认 `zh_Hans_CN×USD`**（兼容 tip 可保留 `de_DE/USD`、`ja_JP/GBP`） 2) 至少一条分类 plp（可加抽 ar_SA；类目 tip 仍有界 max120，不冒充 soft 键） 3) 断言 filter_panel.v3 / facet / catalog_offers 税降或 HIT；soft 首次墙钟跟 **G-A1 ≤1500ms**、二次跟 **G-A2 ≤200ms**（plan `plp-filter-soft-cold`） 4) 抽检正确性（OPS-S3）；筛选 UI 仍可用且语义未改（E-P3）；无修前级 ~6s facet 袋冷建（**G-A3**） |
+| 备选/异常 | 空分类：N/A+理由，另选有货分类；预算 warm_partial 时 notes 须可见，不得只报 warmer N 冒充 soft HIT |
+| 期望结果 | 列表+筛选可逛；E-P1/E-P2/E-P4；壳完整；tip 矩阵含 zh×USD + facet true + N=1000 同 soft 键（**UC-tip-matrix**） |
+| 映射 acceptance | `A-plp-filter-offers`（+ OPS-S1…S4；soft-cold 方向 A 另绑 G-A1/G-A2/G-A3） |
+| 冻结门禁 | **顾问阻塞已解除**；机制待 architect_joint；soft-cold A tip/同键 已 contracts FROZEN（2026-10-17） |
 
 ### UC-xscope-chrome-hit
 
@@ -287,7 +287,7 @@ so that **跨范围冷切不再把 chrome 空袋当成「全站已暖」的盲�
 | acceptance id | 覆盖 UC | type（意图） | 通过要点 |
 |---------------|---------|--------------|----------|
 | A-search-query-result | UC-search-query-result | e2e / 冷切 dig（+ Browser 可见搜索结果） | quiet hit1 无主导 `search.query_result` 空袋；OPS-S1/S3；证据含 rid/builder |
-| A-plp-filter-offers | UC-plp-filter-offers | e2e / 冷切 dig（+ Browser 筛选/列表可见） | filter/facet/offers 税降或 HIT；OPS-S1/S3；语义未改 |
+| A-plp-filter-offers | UC-plp-filter-offers | e2e / 冷切 dig（+ Browser 筛选/列表可见）；soft-cold A：CLI soft 墙钟 | filter/facet/offers 税降或 HIT；OPS-S1/S3；语义未改；**必含** zh×USD tip + facet true/N=1000 同 soft 键；G-A1≤1500ms / G-A2≤200ms / G-A3 无~6s 冷建 |
 | A-xscope-chrome-hit | UC-xscope-chrome-hit | e2e / 冷切 dig | 非 home 请求侧 chrome HIT；禁只报 warmer N / 禁只验 home（OPS-S4） |
 | A-no-shell-strip | 全部 UC | 契约/复审 + dig 对照 + 顾问目视 | OPS-S2；无拆壳药方 |
 | A-ops-acceptance | 全部 UC（顾问签收） | ops_acceptance | 电商顾问施工后 `ops_acceptance=pass`；缺则禁汇审完成 |

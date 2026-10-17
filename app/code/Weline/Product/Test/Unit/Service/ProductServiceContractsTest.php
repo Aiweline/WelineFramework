@@ -148,6 +148,9 @@ final class ProductServiceContractsTest extends TestCase
             'PlpFilterOffersLightCacheWarmer::testWarmerUsesLightPathsOnly' => function () {
             $this->assert_PlpFilterOffersLightCacheWarmer_testWarmerUsesLightPathsOnly();
         },
+            'PlpFilterOffersLightCacheWarmer::testWarmerSeedsSoftSameFacetKeyAndShopperTipFirst' => function () {
+            $this->assert_PlpFilterOffersLightCacheWarmer_testWarmerSeedsSoftSameFacetKeyAndShopperTipFirst();
+        },
             'ProductAdminArchiveTransition::testCommandServiceChainsPublishedArchiveAndNoopsArchived' => function () {
             $this->assert_ProductAdminArchiveTransition_testCommandServiceChainsPublishedArchiveAndNoopsArchived();
         },
@@ -762,7 +765,7 @@ private function assert_PlpFilterOffersLightCacheWarmer_testModuleProvidesPlpLig
     $module = require '/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/etc/module.php';
     $provides = $module['provides'] ?? [];
     self::assertSame(PlpFilterOffersLightCacheWarmer::class, $provides['cache.warmer.product.plp_light'] ?? null);
-    self::assertSame('1.0.390', (string) ($module['version'] ?? ''));
+    self::assertSame('1.1.22', (string) ($module['version'] ?? ''));
 }
 
 private function assert_PlpFilterOffersLightCacheWarmer_testWarmerTargetsProductPoolAfterShelf(): void
@@ -791,11 +794,37 @@ private function assert_PlpFilterOffersLightCacheWarmer_testWarmerUsesLightPaths
     self::assertStringContainsString('StorefrontFilterPanelService', $src);
     self::assertStringContainsString('TIP_SCOPES', $src);
     self::assertStringContainsString('BUDGET_MS', $src);
+    self::assertStringContainsString('FACET_LISTING_LIMIT', $src);
     self::assertStringNotContainsString('publishedOffers(1000', $src);
     self::assertDoesNotMatchRegularExpression('/->publishedOffers\s*\(/', $src);
     self::assertStringNotContainsString('renderPartials', $src);
     self::assertStringNotContainsString("warmUp('weline_theme_storefront_chrome')", $src);
     self::assertStringNotContainsString('Partials::', $src);
+}
+
+/**
+ * contracts plp-filter-soft-cold A: zh×USD first; seed soft-same key max1000+facet true.
+ */
+private function assert_PlpFilterOffersLightCacheWarmer_testWarmerSeedsSoftSameFacetKeyAndShopperTipFirst(): void
+{
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/Service/PlpFilterOffersLightCacheWarmer.php');
+    self::assertMatchesRegularExpression(
+        "/TIP_SCOPES\s*=\s*\[\s*\[\s*'lang'\s*=>\s*'zh_Hans_CN'\s*,\s*'currency'\s*=>\s*'USD'\s*\]/s",
+        $src,
+    );
+    self::assertStringContainsString("'lang' => 'de_DE'", $src);
+    self::assertStringContainsString("'lang' => 'ja_JP'", $src);
+    self::assertMatchesRegularExpression('/FACET_LISTING_LIMIT\s*=\s*1000/', $src);
+    self::assertMatchesRegularExpression(
+        '/publishedListingCandidates\s*\(\s*self::FACET_LISTING_LIMIT\s*,\s*true\s*\)/',
+        $src,
+    );
+    self::assertDoesNotMatchRegularExpression(
+        '/publishedListingCandidates\s*\(\s*self::(?:LISTING_LIMIT|FACET_LISTING_LIMIT)\s*,\s*false\s*\)/',
+        $src,
+    );
+    self::assertStringNotContainsString('LISTING_LIMIT = 120', $src);
+    self::assertStringContainsString('facet_listing_details=1', $src);
 }
 
 private function assert_ProductAdminArchiveTransition_testCommandServiceChainsPublishedArchiveAndNoopsArchived(): void
@@ -1491,9 +1520,9 @@ private function assert_StorefrontCatalogFilteredOffers_testPublishedOffersForPr
     self::assertStringContainsString("'product.published_offers_by_slug'", $source);
     self::assertStringContainsString('projectMany(', $source);
     self::assertStringContainsString('product.catalog.projection.bulk', $source);
-    self::assertStringContainsString('product.catalog.full_rows.request', $source);
-    self::assertStringContainsString('product.catalog.filtered_offers.request', $source);
-    self::assertStringContainsString('product.catalog.offers.request', $source);
+    self::assertStringNotContainsString('product.catalog.full_rows.request', $source);
+    self::assertStringNotContainsString('product.catalog.filtered_offers.request', $source);
+    self::assertStringNotContainsString('product.catalog.offers.request', $source);
     self::assertStringContainsString('catalogTargetedOffersPolicy()', $source);
     self::assertStringContainsString('catalogTargetedOffersLogicalKey', $source);
     self::assertStringContainsString('buildTargetedPublishedOffers(', $source);
@@ -1501,10 +1530,11 @@ private function assert_StorefrontCatalogFilteredOffers_testPublishedOffersForPr
     self::assertStringContainsString('peekPolicy(', $source);
     self::assertStringContainsString('sliceTargetedOffersFromWarmCatalog(', $source);
     self::assertStringContainsString('public function facetCountsForProductIds(', $source);
-    self::assertStringContainsString('product.catalog.facet_counts.request', $source);
+    self::assertStringNotContainsString('product.catalog.facet_counts.request', $source);
     self::assertStringContainsString('product.catalog.facet_counts', $source);
     self::assertStringContainsString('product.catalog.attribute_rows.request', $source);
     self::assertStringContainsString('CatalogOverlayResolver', $source);
+    self::assertStringContainsString('rememberPolicy(', $source);
     self::assertStringContainsString('rememberForRequest(', $source);
     // Soft facet bags (!includeMedia) skip metadata prefetch — media+details only.
     self::assertStringContainsString('if ($includeListingDetails && $includeMedia && count($projectionProductIds) > 1)', $source);
@@ -1616,9 +1646,10 @@ private function assert_StorefrontCatalogSummaryBagReuse_testPublishedOfferSumma
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/Service/StorefrontCatalogViewService.php');
     self::assertStringContainsString('CANONICAL_SUMMARY_LIMIT = 48', $source);
-    self::assertStringContainsString("REQUEST_SUMMARY_BAG_KEY = 'product.catalog.summary.bag.request'", $source);
-    self::assertMatchesRegularExpression('/function publishedOfferSummaries[\s\S]*REQUEST_SUMMARY_BAG_KEY[\s\S]*\(int\)\(\$bag\[\'limit\'\][\s\S]*>= \$limit/', $source);
-    self::assertMatchesRegularExpression('/RequestContext::set\(self::REQUEST_SUMMARY_BAG_KEY[\s\S]*\'limit\' => \$buildLimit/', $source);
+    self::assertStringNotContainsString('REQUEST_SUMMARY_BAG_KEY', $source);
+    self::assertStringNotContainsString('product.catalog.summary.bag.request', $source);
+    self::assertStringNotContainsString('product.catalog.full_rows.request', $source);
+    self::assertMatchesRegularExpression('/function publishedOfferSummaries[\s\S]*rememberPolicy\(/', $source);
     self::assertMatchesRegularExpression('/\$buildLimit = \$limit <= self::CANONICAL_SUMMARY_LIMIT/', $source);
 }
 
@@ -1693,7 +1724,8 @@ private function assert_StorefrontCatalogVisibilityFilter_testViewServiceRoutesA
     self::assertMatchesRegularExpression('/function publishedListingCandidates[\s\S]*applyPostCacheOfferFilters\(/', $source);
     self::assertMatchesRegularExpression('/function livePublishedOffersForProductIds[\s\S]*applyPostCacheOfferFilters\(/', $source);
     self::assertMatchesRegularExpression('/function livePublishedOffersForProduct\([\s\S]*applyPostCacheOfferFilters\(/', $source);
-    self::assertMatchesRegularExpression('/function publishedOfferSummaries[\s\S]*REQUEST_FULL_ROWS_KEY[\s\S]*applyPostCacheOfferFilters\(/', $source, 'Summary short-circuit must still apply post-cache visibility filters');
+    self::assertMatchesRegularExpression('/function publishedOfferSummaries[\s\S]*applyPostCacheOfferFilters\(/', $source, 'Summaries must still apply post-cache visibility filters');
+    self::assertStringNotContainsString('REQUEST_FULL_ROWS_KEY', $source);
 }
 
 private function assert_StorefrontCategoryTreeIndexLocalizedName_testForWebsiteAppliesEavLocalizedNamesAfterCacheLoad(): void
@@ -1827,8 +1859,19 @@ private function assert_StorefrontListingShellPathOnly_testCatalogAndCategoryCon
     $category = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/Controller/Frontend/Category.php');
     self::assertStringContainsString('StorefrontListingShell', $catalog);
     self::assertStringContainsString('projectNeutral(', $catalog);
+    self::assertStringContainsString('projectFiltered(', $catalog);
+    self::assertStringContainsString('StorefrontListingFpcQueryKeys', $catalog);
     self::assertStringContainsString('StorefrontListingShell', $category);
     self::assertStringContainsString('projectNeutral(', $category);
+    self::assertStringContainsString('projectFiltered(', $category);
+    self::assertStringContainsString('StorefrontListingFpcQueryKeys', $category);
+    $csv = \Weline\Product\Service\StorefrontListingFpcQueryKeys::csv();
+    self::assertStringContainsString('query_keys=' . $csv, $catalog);
+    self::assertStringContainsString('query_keys=' . $csv, $category);
+    self::assertLessThanOrEqual(
+        \Weline\Framework\Extends\Module\Weline_Framework\Extra\Type\FpcExtraType::MAX_QUERY_KEYS,
+        \count(\Weline\Product\Service\StorefrontListingFpcQueryKeys::all()),
+    );
     self::assertStringNotContainsString("str_starts_with(\$queryKey, 'af_')", $catalog);
     self::assertStringNotContainsString("str_starts_with(\$queryKey, 'af_')", $category);
 }

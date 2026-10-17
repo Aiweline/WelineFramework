@@ -42,9 +42,7 @@ final class StorefrontCatalogViewService
     private const MAX_CATALOG_PRODUCTS = 2000;
     /** Warmup + homepage shelves share one HotCache summary window; callers slice. */
     public const CANONICAL_SUMMARY_LIMIT = 48;
-    private const REQUEST_FULL_ROWS_KEY = 'product.catalog.full_rows.request';
     /** Same-request largest summary bag so smaller limit callers slice instead of re-cold-building. */
-    private const REQUEST_SUMMARY_BAG_KEY = 'product.catalog.summary.bag.request';
     private const REQUEST_ATTRIBUTE_ROWS_PREFIX = 'product.catalog.attribute_rows.request';
 
     private ?StorefrontOfferPriceAssemblerInterface $priceAssembler = null;
@@ -226,99 +224,33 @@ final class StorefrontCatalogViewService
     public function publishedOfferSummaries(int $limit = 48): array
     {
         $limit = max(1, min(self::MAX_CATALOG_PRODUCTS, $limit));
-        if (Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
-            $rows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
-            if (is_array($rows)) {
-                /** @var list<array<string, mixed>> $rows */
-                $filtered = $this->applyPostCacheOfferFilters($rows);
-                $sliced = $this->materializeCampaignUrls(array_slice($filtered, 0, $limit));
-
-                return array_map(
-                    fn(array $row): array => $this->toCardSurfaceRow($row),
-                    $sliced,
-                );
-            }
-        }
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
-        $scopeFingerprint = serialize([
-            $websiteId,
-            $scope->canonicalKey(),
-            max(0, RequestContext::getWelineStoreId()),
-            strtoupper(trim(RequestContext::getWelineUserCurrency())),
-            trim((string)RequestContext::getWelineUserLang()),
-        ]);
-        // Same request already built a larger (or equal) summary bag → slice only.
-        // Avoids homepage shelf cold-building summaries(32) then summaries(24) as
-        // separate limit-keyed HotCache entries in one request.
-        if (Context::hasCurrent() && RequestContext::has(self::REQUEST_SUMMARY_BAG_KEY)) {
-            $bag = RequestContext::get(self::REQUEST_SUMMARY_BAG_KEY);
-            if (is_array($bag)
-                && ($bag['scope'] ?? null) === $scopeFingerprint
-                && is_array($bag['rows'] ?? null)
-                && (int)($bag['limit'] ?? 0) >= $limit
-            ) {
-                /** @var list<array<string, mixed>> $bagRows */
-                $bagRows = $bag['rows'];
-
-                return $this->materializeCampaignUrls(array_slice(
-                    $this->applyPostCacheOfferFilters($bagRows),
-                    0,
-                    $limit,
-                ));
-            }
-        }
         // Build/store the shared canonical window (48) for common shelf sizes so
         // warmup summaries(48) and homepage summaries(24|32) hit the same HotCache key.
         $buildLimit = $limit <= self::CANONICAL_SUMMARY_LIMIT
             ? self::CANONICAL_SUMMARY_LIMIT
             : $limit;
         $logicalKey = $this->catalogCache->catalogSummaryOffersLogicalKey($websiteId, $buildLimit);
-        $requestKey = serialize([
-            $websiteId,
-            $scope->canonicalKey(),
-            max(0, RequestContext::getWelineStoreId()),
-            strtoupper(trim(RequestContext::getWelineUserCurrency())),
-            trim((string)RequestContext::getWelineUserLang()),
-            $buildLimit,
-        ]);
 
         /** @var list<array<string, mixed>> $rows */
-        $rows = $this->hotCache->rememberForRequest(
-            'product.catalog.summary.request',
-            $requestKey,
-            fn(): array => TraceGate::measurePhase(
-                'product.catalog.resolve_summary',
-                fn(): array => $this->hotCache->rememberPolicy(
-                    StorefrontCatalogCacheCoordinator::catalogSummaryOffersPolicy(),
-                    $logicalKey,
-                    fn(): array => TraceGate::measurePhase(
-                        'product.catalog.build_summary',
-                        fn(): array => $this->buildPublishedOfferSummariesFromSkeleton(
-                            $websiteId,
-                            $scope,
-                            $buildLimit,
-                        ),
-                        ['website_id' => $websiteId, 'limit' => $buildLimit],
+        $rows = TraceGate::measurePhase(
+            'product.catalog.resolve_summary',
+            fn(): array => $this->hotCache->rememberPolicy(
+                StorefrontCatalogCacheCoordinator::catalogSummaryOffersPolicy(),
+                $logicalKey,
+                fn(): array => TraceGate::measurePhase(
+                    'product.catalog.build_summary',
+                    fn(): array => $this->buildPublishedOfferSummariesFromSkeleton(
+                        $websiteId,
+                        $scope,
+                        $buildLimit,
                     ),
+                    ['website_id' => $websiteId, 'limit' => $buildLimit],
                 ),
-                ['website_id' => $websiteId, 'limit' => $buildLimit],
             ),
+            ['website_id' => $websiteId, 'limit' => $buildLimit],
         );
-
-        if (Context::hasCurrent()) {
-            $existing = RequestContext::has(self::REQUEST_SUMMARY_BAG_KEY)
-                ? RequestContext::get(self::REQUEST_SUMMARY_BAG_KEY)
-                : null;
-            $existingLimit = is_array($existing) ? (int)($existing['limit'] ?? 0) : 0;
-            if ($existingLimit < $buildLimit) {
-                RequestContext::set(self::REQUEST_SUMMARY_BAG_KEY, [
-                    'scope' => $scopeFingerprint,
-                    'limit' => $buildLimit,
-                    'rows' => $rows,
-                ]);
-            }
-        }
 
         return $this->materializeCampaignUrls(array_slice(
             $this->applyPostCacheOfferFilters($rows),
@@ -489,10 +421,7 @@ final class StorefrontCatalogViewService
         ) . '.facet-listing-v5';
 
         /** @var list<array<string, mixed>> $rows */
-        $rows = $this->hotCache->rememberForRequest(
-            'product.catalog.facet_listing_offers.request',
-            $requestKey,
-            fn(): array => TraceGate::measurePhase(
+        $rows = TraceGate::measurePhase(
                 'product.catalog.resolve_facet_listing',
                 fn(): array => $this->hotCache->rememberPolicy(
                     StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
@@ -513,8 +442,7 @@ final class StorefrontCatalogViewService
                     ),
                 ),
                 ['website_id' => $websiteId, 'product_ids' => count($filterIds)],
-            ),
-        );
+            );
 
         $rows = $this->applyPostCacheOfferFilters($rows);
 
@@ -566,10 +494,7 @@ final class StorefrontCatalogViewService
                 $requestIds,
                 $includeListingDetails,
             );
-            $rows = $this->hotCache->rememberForRequest(
-                'product.catalog.filtered_offers.request',
-                $requestKey,
-                fn(): array => TraceGate::measurePhase(
+            $rows = TraceGate::measurePhase(
                     'product.catalog.resolve_filtered',
                     fn(): array => $this->hotCache->rememberPolicy(
                         StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
@@ -586,8 +511,7 @@ final class StorefrontCatalogViewService
                         ),
                     ),
                     ['website_id' => $websiteId, 'product_ids' => count($filterIds)],
-                ),
-            );
+                );
 
             $rows = $this->applyPostCacheOfferFilters($rows);
 
@@ -726,15 +650,11 @@ final class StorefrontCatalogViewService
         $result = $this->hotCache->rememberPolicy(
             StorefrontCatalogCacheCoordinator::catalogFacetCountsPolicy(),
             $logicalKey,
-            fn(): array => $this->hotCache->rememberForRequest(
-                'product.catalog.facet_counts.request',
-                $logicalKey,
-                fn(): array => TraceGate::measurePhase(
+            fn(): array => TraceGate::measurePhase(
                     'product.catalog.facet_counts',
                     $build,
                     ['website_id' => $websiteId, 'products' => count($productIds), 'codes' => count($codes)],
                 ),
-            ),
         );
 
         return is_array($result) ? $result : [];
@@ -748,21 +668,6 @@ final class StorefrontCatalogViewService
         bool $includeMedia = true,
         ?int $maxRows = null,
     ): array {
-        // A listing renders the full catalog before its recommendation slot.
-        // Reuse that immutable request result for summary cards instead of
-        // rebuilding the same 220-product snapshot under the summary policy.
-        if ($includeMedia && !$includeListingDetails && Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
-            $requestRows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
-            if (is_array($requestRows)) {
-                TraceGate::recordPhase(
-                    'product.catalog.summary_reuse',
-                    0.0,
-                    ['rows' => count($requestRows)],
-                );
-                /** @var list<array<string, mixed>> $requestRows */
-                return $this->materializeCampaignUrls($requestRows);
-            }
-        }
 
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
@@ -793,10 +698,7 @@ final class StorefrontCatalogViewService
         ]);
 
         /** @var list<array<string, mixed>> $rows */
-        $rows = $this->hotCache->rememberForRequest(
-            'product.catalog.offers.request',
-            $requestKey,
-            fn(): array => TraceGate::measurePhase(
+        $rows = TraceGate::measurePhase(
                 $includeMedia ? 'product.catalog.resolve' : 'product.catalog.resolve_candidates',
                 fn(): array => $this->hotCache->rememberPolicy(
                     StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
@@ -816,12 +718,7 @@ final class StorefrontCatalogViewService
                     ),
                 ),
                 ['website_id' => $websiteId, 'max_rows' => $boundMax],
-            ),
-        );
-
-        if ($includeMedia && $includeListingDetails && Context::hasCurrent()) {
-            RequestContext::set(self::REQUEST_FULL_ROWS_KEY, $rows);
-        }
+            );
 
         return $this->materializeCampaignUrls($rows);
     }
@@ -877,16 +774,6 @@ final class StorefrontCatalogViewService
     ): ?array {
         if ($filterIds === []) {
             return null;
-        }
-
-        if (Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
-            $requestRows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
-            if (is_array($requestRows)) {
-                $sliced = $this->sliceOffersByProductIds($requestRows, $filterIds);
-                if ($sliced !== null) {
-                    return $sliced;
-                }
-            }
         }
 
         $peekKeys = [];

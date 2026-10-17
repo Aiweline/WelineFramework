@@ -9,13 +9,16 @@ use Weline\Framework\Runtime\StorefrontPageContext;
 use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCategoryViewService;
+use Weline\Product\Service\StorefrontListingFpcQueryKeys;
 use Weline\Product\Service\StorefrontListingShell;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
 /**
  * 店面分类列表（/category/{path…}）。
  *
- * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/catalog public_path_patterns=/category/**
+ * query_keys CSV must match StorefrontListingFpcQueryKeys::csv().
+ *
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/catalog public_path_patterns=/category/** query_keys=af_available_colors,af_available_sizes,af_brand,af_color,af_hanfu_chao_dai,af_hanfu_feng_ge,af_hanfu_gong_yi,af_hanfu_han_fu_zhi_shi,af_hanfu_pin_pai,af_hanfu_shang_shi_nian_fen_ji_jie,af_hanfu_shi_he_ji_jie,af_hanfu_shi_yong_chang_he,af_hanfu_shi_yong_ji_jie,af_hanfu_shi_yong_xing_bie,af_hanfu_tu_an,af_hanfu_xing_zhi,af_hanfu_zao_xing_feng_ge,af_hanfu_zhi_wu,af_hanfu_zhi_wu_gong_yi,af_hanfu_zhi_wu_ming_cheng,af_hanfu_zhu_zhi_wu_cheng_fen,af_material,af_size,af_style_type,page,price,sort
  */
 final class Category extends FrontendController
 {
@@ -55,10 +58,11 @@ final class Category extends FrontendController
         $this->request->setGet('path', $routePath);
 
         $productIds = $page['product_ids'];
-        // Path-only FPC: SSR is always the neutral default listing (no af_/price/sort/page).
+        $listingQuery = StorefrontListingFpcQueryKeys::fromRequest($this->request);
+        $bindListingQuery = $listingQuery !== [];
         $offers = $productIds === []
             ? []
-            : $this->catalog->publishedOffersForProductIds($productIds, 120, false);
+            : $this->catalog->publishedOffersForProductIds($productIds, 120, $bindListingQuery);
         StorefrontPageContext::setListingOffers($offers);
 
         $categoryUrl = trim((string)($category['url'] ?? ''));
@@ -73,11 +77,20 @@ final class Category extends FrontendController
             $categoryUrl = $categoryPath;
         }
 
-        $projection = $this->listingShell->projectNeutral(
-            $offers,
-            $categoryUrl,
-            'category',
-        );
+        if ($bindListingQuery) {
+            $projection = $this->listingShell->projectFiltered(
+                $offers,
+                $listingQuery,
+                $categoryUrl,
+                'category',
+            );
+        } else {
+            $projection = $this->listingShell->projectNeutral(
+                $offers,
+                $categoryUrl,
+                'category',
+            );
+        }
 
         $pageTitle = $name !== '' ? $name : __('分类');
         $this->assign('page_title', $pageTitle);

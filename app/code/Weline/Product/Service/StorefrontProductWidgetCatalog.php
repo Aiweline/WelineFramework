@@ -765,10 +765,7 @@ final class StorefrontProductWidgetCatalog
         $offset = 0;
         do {
             /** @var array<int, string> $createdAtByProductId */
-            $createdAtByProductId = $hotCache->rememberForRequest(
-                'product.new_arrival.candidates.request',
-                serialize([$websiteId, $cutoff, $candidateLimit, $offset]),
-                fn(): array => $hotCache->rememberPolicy(
+            $createdAtByProductId = $hotCache->rememberPolicy(
                     StorefrontCatalogCacheCoordinator::newArrivalCandidatesPolicy(),
                     StorefrontCatalogCacheCoordinator::newArrivalCandidatesLogicalKey($websiteId, $cutoff, $candidateLimit, $offset),
                     fn(): array => $this->products->listRecentPublishedCreatedAt(
@@ -777,8 +774,7 @@ final class StorefrontProductWidgetCatalog
                         $candidateLimit,
                         $offset,
                     ),
-                ),
-            );
+                );
 
             if ($createdAtByProductId !== []) {
                 $offers = $this->catalog->publishedOffersForProductIds(

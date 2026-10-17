@@ -11,6 +11,7 @@ use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Service\StorefrontCatalogSurfaceResolver;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCategoryViewService;
+use Weline\Product\Service\StorefrontListingFpcQueryKeys;
 use Weline\Product\Service\StorefrontListingShell;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
@@ -20,7 +21,9 @@ use Weline\Product\Service\StorefrontSeoListingFacts;
  * IA：根 /category|/categories = 分类网格落地（非全量商品 PLP）；
  * 商品列表保留 /products；叶子 PLP 在 Category（/category/{path}）。
  *
- * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/catalog public_path_patterns=/products,/category,/categories
+ * query_keys CSV must match StorefrontListingFpcQueryKeys::csv().
+ *
+ * @Extra type=fpc enabled=true ttl=31536000 namespaces=website/default/catalog public_path_patterns=/products,/category,/categories query_keys=af_available_colors,af_available_sizes,af_brand,af_color,af_hanfu_chao_dai,af_hanfu_feng_ge,af_hanfu_gong_yi,af_hanfu_han_fu_zhi_shi,af_hanfu_pin_pai,af_hanfu_shang_shi_nian_fen_ji_jie,af_hanfu_shi_he_ji_jie,af_hanfu_shi_yong_chang_he,af_hanfu_shi_yong_ji_jie,af_hanfu_shi_yong_xing_bie,af_hanfu_tu_an,af_hanfu_xing_zhi,af_hanfu_zao_xing_feng_ge,af_hanfu_zhi_wu,af_hanfu_zhi_wu_gong_yi,af_hanfu_zhi_wu_ming_cheng,af_hanfu_zhu_zhi_wu_cheng_fen,af_material,af_size,af_style_type,page,price,sort
  */
 final class Catalog extends FrontendController
 {
@@ -127,9 +130,11 @@ final class Catalog extends FrontendController
         // Catalog template owns sort/count toolbar; hide layout slot placeholder.
         $this->assign('showToolbar', false);
 
-        // Path-only FPC: never expand listing details or bind af_/price/sort/page
-        // into the shared leaf. Interactive filters hydrate via BinQuery.
-        $offers = $this->catalog->publishedListingCandidates(1000, false);
+        // Empty query_keys hit → path-only neutral shell. Allowlisted price/sort/page/af_*
+        // → facet-listing bag + projectFiltered so Shared FPC body matches the key.
+        $listingQuery = StorefrontListingFpcQueryKeys::fromRequest($this->request);
+        $bindListingQuery = $listingQuery !== [];
+        $offers = $this->catalog->publishedListingCandidates(1000, $bindListingQuery);
         StorefrontPageContext::setListingOffers($offers);
 
         $productsUrl = (string)$this->getUrl($surface['public_route']);
@@ -142,12 +147,21 @@ final class Catalog extends FrontendController
         // warmup deliberately keeps the public page shape so it can safely
         // publish the rendered response for later anonymous hits.
         $isInternalStorefrontChainWarmup = (string)$this->request->getServer('WLS_INTERNAL_STOREFRONT_CHAIN_WARMUP') === '1';
-        $projection = $this->listingShell->projectNeutral(
-            $offers,
-            $productsUrl,
-            (string)$surface['code'],
-            $isInternalStorefrontChainWarmup ? 1 : null,
-        );
+        if ($bindListingQuery && !$isInternalStorefrontChainWarmup) {
+            $projection = $this->listingShell->projectFiltered(
+                $offers,
+                $listingQuery,
+                $productsUrl,
+                (string)$surface['code'],
+            );
+        } else {
+            $projection = $this->listingShell->projectNeutral(
+                $offers,
+                $productsUrl,
+                (string)$surface['code'],
+                $isInternalStorefrontChainWarmup ? 1 : null,
+            );
+        }
 
         $this->assign('page_title', $surface['title']);
         $this->assign('storefront_heading', $surface['heading']);

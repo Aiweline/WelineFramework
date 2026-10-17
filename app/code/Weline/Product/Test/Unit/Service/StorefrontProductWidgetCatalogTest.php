@@ -93,7 +93,6 @@ final class StorefrontProductWidgetCatalogTest extends TestCase
             RequestContext::setWelineUserCurrency('USD');
             StorefrontCacheKeyContext::install($cacheContext);
             StorefrontPageContext::clear();
-            RequestContext::remove('product.catalog.full_rows.request');
             StorefrontScopeHotCache::resetProcessCache();
             $this->cacheReads = [];
             [$widget, , $fullKey, $summaryKey] = $this->widget([], $fallback);

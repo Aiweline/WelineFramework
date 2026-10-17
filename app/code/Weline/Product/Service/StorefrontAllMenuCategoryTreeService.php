@@ -60,34 +60,23 @@ final class StorefrontAllMenuCategoryTreeService
         }
 
         $logicalKey = self::logicalCacheKey($websiteId, $locale);
-        // The public tree carries URLs; only its raw routes belong in the shared cache.
-        $requestKey = $logicalKey . '|' . KeyBuilder::environmentHash(
-            ['resource' => 'product.category_menu.urls', 'locale' => $locale],
-            ['area_route' => false],
+
+        // Structure lives in HotCache; URL materialization is request-local (no request bag).
+        try {
+            $this->hotCache->prefetchPolicy(
+                StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
+                [$logicalKey],
+            );
+        } catch (\Throwable) {
+            // Fail-open to rememberPolicy.
+        }
+        $tree = $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
+            $logicalKey,
+            fn(): array => $this->build($websiteId, $locale),
         );
 
-        return $this->hotCache->rememberForRequest(
-            'product.category_menu.urls',
-            $requestKey,
-            function () use ($websiteId, $locale, $logicalKey): array {
-                // Protocol MGET latch: same-request sidebar/header consumers share L1.
-                try {
-                    $this->hotCache->prefetchPolicy(
-                        StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
-                        [$logicalKey],
-                    );
-                } catch (\Throwable) {
-                    // Fail-open to rememberPolicy.
-                }
-                $tree = $this->hotCache->rememberPolicy(
-                    StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
-                    $logicalKey,
-                    fn(): array => $this->build($websiteId, $locale),
-                );
-
-                return $this->materializeUrls($tree);
-            },
-        );
+        return $this->materializeUrls($tree);
     }
 
     /**

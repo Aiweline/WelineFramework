@@ -280,6 +280,10 @@ private function assert_CategoryCatalogExtraFpc_testCategoryDeclaresNestedPathFp
     self::assertStringContainsString('website/default/catalog', $src);
     // 多级分类 path（/category/sets、/category/a/b）须用 **（* 仅单段）
     self::assertStringContainsString('/category/**', $src);
+    self::assertStringContainsString(
+        'query_keys=' . \Weline\Product\Service\StorefrontListingFpcQueryKeys::csv(),
+        $src,
+    );
 }
 
 private function assert_CategoryCatalogExtraFpc_testCatalogDeclaresListingFpc(): void
@@ -328,6 +332,8 @@ private function assert_ProductCategoryTemplate_testCategoryControllerAppliesLis
     $controller = (string) file_get_contents(BP . 'app/code/Weline/Product/Controller/Frontend/Category.php');
     self::assertStringContainsString('StorefrontListingShell', $controller);
     self::assertStringContainsString('projectNeutral(', $controller);
+    self::assertStringContainsString('projectFiltered(', $controller);
+    self::assertStringContainsString('StorefrontListingFpcQueryKeys', $controller);
     self::assertStringContainsString("assign('storefront_offers_unfiltered'", $controller);
     self::assertStringContainsString("assign('storefront_listing_sort_options'", $controller);
     self::assertStringContainsString("assign('storefront_category_siblings'", $controller);
@@ -337,9 +343,7 @@ private function assert_ProductCategoryTemplate_testCategoryControllerAppliesLis
     self::assertStringContainsString('$this->layoutType = \'category\'', $controller);
     self::assertStringContainsString("\$productIds = \$page['product_ids'];", $controller);
     self::assertStringContainsString('$productIds === []', $controller);
-    self::assertStringContainsString('publishedOffersForProductIds($productIds, 120, false)', $controller);
-    self::assertStringNotContainsString("getParam('price'", $controller);
-    self::assertStringNotContainsString("getParam('sort'", $controller);
+    self::assertStringContainsString('publishedOffersForProductIds($productIds, 120, $bindListingQuery)', $controller);
     self::assertStringNotContainsString('getQueryParams()', $controller);
     self::assertStringNotContainsString('ObjectManager', $controller);
 }
@@ -641,12 +645,11 @@ private function assert_ProductStorefrontTemplate_testProductControllerSelectsTh
     self::assertStringContainsString("assign('showToolbar', false)", $controller);
     self::assertStringContainsString('StorefrontListingShell', $controller);
     self::assertStringContainsString('projectNeutral(', $controller);
+    self::assertStringContainsString('projectFiltered(', $controller);
+    self::assertStringContainsString('StorefrontListingFpcQueryKeys', $controller);
     self::assertStringContainsString("assign('storefront_offers_unfiltered'", $controller);
     self::assertStringContainsString("assign('storefront_listing_sort_options'", $controller);
     self::assertStringContainsString("assign('storefront_listing_page_options'", $controller);
-    self::assertStringNotContainsString("getParam('price'", $controller);
-    self::assertStringNotContainsString("getParam('sort'", $controller);
-    self::assertStringNotContainsString("getParam('page'", $controller);
 }
 
 private function assert_ProductStorefrontTemplate_testCatalogAndCategoryTemplatesExposeListingPager(): void

@@ -19,9 +19,11 @@ use Weline\Websites\Model\Website;
  * Light PLP HotCache seed after cache:clear: filter_panel.v3 + facet_counts +
  * listing candidates / summary offers (and optional one category path).
  *
- * Uses summary / listing-candidates / targeted-sized slices — never the heavy
- * full-catalog publishedOffers path (thousand-row). Does not touch Theme chrome
- * bags. Fail-open; warm_partial on budget.
+ * Soft filter (`filteredListingPage`) consumes HotCache
+ * `candidates-facet-listing-v5-max1000` — warmer must seed the same key for the
+ * shopper tip (zh_Hans_CN×USD) via publishedListingCandidates(1000, true).
+ * Never the heavy full-catalog publishedOffers path. Does not touch Theme
+ * chrome bags. Fail-open; warm_partial on budget (shopper tip first).
  */
 final class PlpFilterOffersLightCacheWarmer implements CacheWarmerInterface
 {
@@ -29,16 +31,22 @@ final class PlpFilterOffersLightCacheWarmer implements CacheWarmerInterface
 
     private const MEMORY_FLOOR = '512M';
 
-    private const LISTING_LIMIT = 120;
+    /** Same bound as soft filteredListingPage → candidates-facet-listing-v5-max1000. */
+    private const FACET_LISTING_LIMIT = 1000;
+
+    /** Bounded category tip slice (not the soft facet bag key). */
+    private const CATEGORY_TIP_LIMIT = 120;
 
     private const SUMMARY_LIMIT = 48;
 
     /**
-     * Frozen PLP tip matrix (contracts A-plp-filter-offers).
+     * Frozen PLP tip matrix (contracts plp-filter-soft-cold A).
+     * Shopper default tip first so BUDGET_MS prefers zh×USD facet seed.
      *
      * @var list<array{lang:string,currency:string}>
      */
     private const TIP_SCOPES = [
+        ['lang' => 'zh_Hans_CN', 'currency' => 'USD'],
         ['lang' => 'de_DE', 'currency' => 'USD'],
         ['lang' => 'ja_JP', 'currency' => 'GBP'],
     ];
@@ -94,7 +102,8 @@ final class PlpFilterOffersLightCacheWarmer implements CacheWarmerInterface
         try {
             $this->installDefaultChannelIdentity();
             $notes[] = 'tip_scopes=' . \count(self::TIP_SCOPES);
-            $notes[] = 'listing_limit=' . self::LISTING_LIMIT;
+            $notes[] = 'facet_listing_limit=' . self::FACET_LISTING_LIMIT;
+            $notes[] = 'facet_listing_details=1';
             $notes[] = 'summary_limit=' . self::SUMMARY_LIMIT;
 
             /** @var StorefrontCacheKeyContextResolver $resolver */
@@ -137,13 +146,15 @@ final class PlpFilterOffersLightCacheWarmer implements CacheWarmerInterface
                         }
                     }
 
-                    $offers = $catalog->publishedListingCandidates(self::LISTING_LIMIT, false);
+                    // Soft-same key: candidates-facet-listing-v5-max1000 (not summary/max120).
+                    $offers = $catalog->publishedListingCandidates(self::FACET_LISTING_LIMIT, true);
                     if (!\is_array($offers) || $offers === []) {
                         ++$skipped;
-                        $notes[] = 'empty_listing:' . $lang;
+                        $notes[] = 'empty_facet_listing:' . $lang;
                         continue;
                     }
                     ++$seedOk;
+                    $notes[] = 'facet_seeded:' . $lang . ':' . $currency;
 
                     $summaries = $catalog->publishedOfferSummaries(self::SUMMARY_LIMIT);
                     if (\is_array($summaries) && $summaries !== []) {
@@ -177,7 +188,7 @@ final class PlpFilterOffersLightCacheWarmer implements CacheWarmerInterface
                     if ($categoryTip !== null && $panelService instanceof StorefrontFilterPanelService) {
                         $catOffers = $catalog->publishedOffersForProductIds(
                             $categoryTip['product_ids'],
-                            self::LISTING_LIMIT,
+                            self::CATEGORY_TIP_LIMIT,
                             false,
                         );
                         if (\is_array($catOffers) && $catOffers !== []) {
@@ -271,7 +282,7 @@ final class PlpFilterOffersLightCacheWarmer implements CacheWarmerInterface
 
                 return [
                     'listing_url' => '/category/' . $path,
-                    'product_ids' => \array_slice($productIds, 0, self::LISTING_LIMIT),
+                    'product_ids' => \array_slice($productIds, 0, self::CATEGORY_TIP_LIMIT),
                 ];
             }
         } catch (\Throwable) {

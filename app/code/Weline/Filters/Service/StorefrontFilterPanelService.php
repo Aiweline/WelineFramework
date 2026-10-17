@@ -184,29 +184,28 @@ final class StorefrontFilterPanelService
             ? 'storefront.filters.panel.refinement'
             : 'storefront.filters.panel';
 
-        $builder = fn(): array => $this->hotCache->rememberForRequest(
+        $builder = fn(): array => \Weline\Framework\Runtime\TraceGate::measurePhase(
             $cacheNamespace,
-            $logicalKey,
-            fn(): array => \Weline\Framework\Runtime\TraceGate::measurePhase(
-                $cacheNamespace,
-                fn(): array => $this->buildPanelData(
-                    $offers,
-                    $listingUrl,
-                    $query,
-                    $websiteId,
-                    $rootCurrent,
-                    $refinementCounts,
-                ),
-                ['website_id' => $websiteId, 'offers' => count($offers), 'refinement' => $refinementCounts],
+            fn(): array => $this->buildPanelData(
+                $offers,
+                $listingUrl,
+                $query,
+                $websiteId,
+                $rootCurrent,
+                $refinementCounts,
             ),
+            ['website_id' => $websiteId, 'offers' => count($offers), 'refinement' => $refinementCounts],
         );
-        // URL generation carries the current editor identity. Keep that result
-        // in this request rather than publishing it as a public facet snapshot.
+        // URL generation carries the current editor identity — preview stays request-local.
         $preview = isset($this->previewRequest)
             && ($this->previewRequest->isEditorMode() || $this->previewRequest->shouldUseStoredPreviewContext());
-        $panel = $preview ? $builder() : $this->hotCache->rememberPolicy(
-            StorefrontCatalogCacheCoordinator::filterPanelPolicy(), $logicalKey, $builder,
-        );
+        $panel = $preview
+            ? $this->hotCache->rememberForRequest($cacheNamespace, $logicalKey, $builder)
+            : $this->hotCache->rememberPolicy(
+                StorefrontCatalogCacheCoordinator::filterPanelPolicy(),
+                $logicalKey,
+                $builder,
+            );
 
         if (!is_array($panel)) {
             return [];
