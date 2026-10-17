@@ -62,7 +62,7 @@ final class MenuResourceService implements MenuResourceServiceInterface
         /** @var Acl $menu */
         $menu = ObjectManager::getInstance(Acl::class, [], false);
         if ($sourceId !== '') {
-            $menu->load($sourceId, Acl::schema_fields_SOURCE_ID);
+            $menu->load(Acl::schema_fields_SOURCE_ID, $sourceId);
         }
         $menu->addData($mapped);
         $menu->setType(Acl::type_MENUS)->save();

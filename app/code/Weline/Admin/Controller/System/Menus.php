@@ -13,6 +13,7 @@ namespace Weline\Admin\Controller\System;
 
 use Weline\Admin\Controller\BaseController;
 use Weline\Admin\Helper\MenuUrlValidator;
+use Weline\Admin\Service\MenuManagementPresenter;
 use Weline\Acl\Api\Resource\MenuResourceServiceInterface;
 use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\App\Exception;
@@ -21,6 +22,7 @@ use Weline\Framework\Manager\ObjectManager;
 class Menus extends BaseController
 {
     private ?MenuResourceServiceInterface $resourceTreeService = null;
+    private ?MenuManagementPresenter $menuPresenter = null;
 
     /**
      * 获取资源树服务
@@ -31,6 +33,14 @@ class Menus extends BaseController
             $this->resourceTreeService = ObjectManager::getInstance(MenuResourceServiceInterface::class);
         }
         return $this->resourceTreeService;
+    }
+
+    private function getMenuPresenter(): MenuManagementPresenter
+    {
+        if ($this->menuPresenter === null) {
+            $this->menuPresenter = ObjectManager::getInstance(MenuManagementPresenter::class);
+        }
+        return $this->menuPresenter;
     }
 
     public function index()
@@ -54,8 +64,9 @@ class Menus extends BaseController
         }
         
         $menuTree = $this->getResourceTreeService()->buildManagementTree($allMenus);
+        $presentedTree = $this->getMenuPresenter()->presentTree($menuTree);
         
-        $this->assign('menuTree', $menuTree);
+        $this->assign('menuTree', $presentedTree);
         $this->assign('allMenus', $allMenus);
         $this->assign('search', $search);
         
@@ -72,13 +83,14 @@ class Menus extends BaseController
             }
             
             // 加载 ACL 菜单资源
-            $menu = $this->getResourceTreeService()->loadMenuResource($id);
-            if (!$menu || empty($menu['source_id'])) {
+            $menu = $this->getResourceTreeService()->findMenuResource($id);
+            $sourceId = (string)($menu['source_id'] ?? '');
+            if ($sourceId === '') {
                 return $this->fetchJson(['code' => 403, 'msg' => __('菜单不存在！'), 'data' => []]);
             }
             
             // 检查是否有子菜单
-            if ($this->getResourceTreeService()->hasMenuChildren((string)$menu['source_id'])) {
+            if ($this->getResourceTreeService()->hasMenuChildren($sourceId)) {
                 return $this->fetchJson(['code' => 403, 'msg' => __('该菜单下有子菜单，请先删除子菜单！'), 'data' => []]);
             }
             
@@ -168,9 +180,11 @@ class Menus extends BaseController
             $mapped['is_backend'] = (int)$data['is_backend'];
         }
         
-        // acl_id (如果存在)
+        // acl_id / menu_id（管理台表单沿用 menu_id）
         if (isset($data['acl_id'])) {
-            $mapped['acl_id'] = $data['acl_id'];
+            $mapped['acl_id'] = (int)$data['acl_id'];
+        } elseif (isset($data['menu_id']) && (int)$data['menu_id'] > 0) {
+            $mapped['acl_id'] = (int)$data['menu_id'];
         }
         
         return $mapped;
@@ -213,7 +227,7 @@ class Menus extends BaseController
                 throw new Exception(__('参数错误：缺少菜单ID'));
             }
 
-            $menu = $this->getResourceTreeService()->loadMenuResource($id);
+            $menu = $this->getResourceTreeService()->findMenuResource($id);
             if (!$menu || empty($menu['source_id'])) {
                 throw new Exception(__('菜单不存在'));
             }
@@ -221,7 +235,7 @@ class Menus extends BaseController
             return $this->fetchJson([
                 'code' => 200,
                 'msg' => 'success',
-                'data' => $menu
+                'data' => $this->getMenuPresenter()->presentDetail($menu),
             ]);
         } catch (\Exception $exception) {
             return $this->fetchJson(['code' => 403, 'msg' => $exception->getMessage(), 'data' => []]);

@@ -1,0 +1,93 @@
+/**
+ * Backend sidebar menu signal badge (distinct from access_count .w-badge).
+ * Tokens only — no SSR counts.
+ * Visible badges are clickable (deep-link panel); hidden badges stay non-interactive.
+ */
+.w-backend-nav__signal-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-inline-size: 1.15rem;
+    min-block-size: 1.15rem;
+    padding: 0.05rem 0.35rem;
+    margin-inline-start: auto;
+    border-radius: var(--weline-radius-round, 999px);
+    background: var(--backend-color-danger, var(--weline-theme-danger));
+    color: var(--backend-color-on-danger, var(--weline-theme-on-danger, #fff));
+    font-size: var(--weline-font-size-xs, 0.75rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.w-backend-nav__signal-badge.is-clickable:not([hidden]) {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.w-backend-nav__signal-badge.is-clickable:not([hidden]):focus-visible {
+    outline: 2px solid var(--weline-theme-focus-ring, var(--weline-theme-primary));
+    outline-offset: 2px;
+}
+
+.w-backend-nav__item > .w-backend-nav__signal-badge,
+.w-backend-nav__group > .w-backend-nav__signal-badge {
+    margin-inline-start: auto;
+}
+
+/* Keep chevron after the signal when both sit on summary/item. */
+.w-backend-nav__item > .w-backend-nav__signal-badge + .w-icon {
+    margin-inline-start: var(--weline-space-1, 0.25rem);
+}
+
+.w-backend-nav__signal-badge[hidden] {
+    display: none !important;
+}
+
+.w-backend-nav__signal-menu {
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0;
+    inline-size: 0;
+    block-size: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.w-backend-nav__signal-menu > [data-w-menu-trigger] {
+    pointer-events: none;
+}
+
+.w-backend-nav__signal-menu > [data-w-menu-trigger][data-backend-menu-signal-trigger-anchored] {
+    /* Fixed box pinned over the clicked badge for floating place(). */
+    clip: auto;
+    clip-path: none;
+    white-space: nowrap;
+}
+
+.w-backend-nav__signal-panel {
+    pointer-events: auto;
+    min-inline-size: min(16rem, calc(100dvw - 1rem));
+}
+
+.w-backend-nav__signal-panel-item {
+    justify-content: space-between;
+    gap: var(--weline-space-3, 0.75rem);
+}
+
+.w-backend-nav__signal-panel-item-title {
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.w-backend-nav__signal-badge--panel {
+    margin-inline-start: 0;
+    pointer-events: none;
+}

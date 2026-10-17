@@ -28,7 +28,7 @@ use Weline\Framework\Http\PublicApiAuthRouteMatcher;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -270,8 +270,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 
         $t0 = microtime(true);
         $white_lists = $this->getBackendWhiteList();
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::recordSpan('acl::RouteBefore::whiteList', (microtime(true) - $t0) * 1000, 'observer', $parent);
+        if (TraceGate::isArmed()) {
+            TraceGate::recordSpan('acl::RouteBefore::whiteList', (microtime(true) - $t0) * 1000, 'observer', $parent);
         }
 
         // 不在白名单内
@@ -303,8 +303,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 
         $t0 = microtime(true);
         $routeProtected = $this->aclService->isRouteProtected($uri);
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::recordSpan('acl::RouteBefore::isRouteProtected', (microtime(true) - $t0) * 1000, 'observer', $parent);
+        if (TraceGate::isArmed()) {
+            TraceGate::recordSpan('acl::RouteBefore::isRouteProtected', (microtime(true) - $t0) * 1000, 'observer', $parent);
         }
         // 未定义 ACL 的后台路由按白色 ACL 处理，不做登录/角色/权限校验
         if (!$routeProtected) {
@@ -361,16 +361,16 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     'roleId' => $roleId,
                     '_user_not_found' => (bool)($sessionAclContext['_user_not_found'] ?? false),
                 ]);
-                if (RequestLifecycleTrace::isEnabled()) {
-                    RequestLifecycleTrace::recordSpan('acl::RouteBefore::warmupAclContext', (microtime(true) - $tAcl) * 1000, 'observer', $parent);
+                if (TraceGate::isArmed()) {
+                    TraceGate::recordSpan('acl::RouteBefore::warmupAclContext', (microtime(true) - $tAcl) * 1000, 'observer', $parent);
                 }
             } else {
                 // Session 分支：精确定位耗时。读 var/session 小文件本身不会几百毫秒；若仍慢，多为：
                 // - WLS 下 getBackendSession() 首次创建 WlsSharedStorage 并 sessionClient->connect() 建连 Session Server（TCP）
                 // - 或 getAclContext() 的 2 次 DB
                 $backendSession = $this->getBackendSession();
-                if (RequestLifecycleTrace::isEnabled()) {
-                    RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionCreate', (microtime(true) - $t0) * 1000, 'observer', $parent);
+                if (TraceGate::isArmed()) {
+                    TraceGate::recordSpan('acl::RouteBefore::sessionCreate', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 $userId = $backendSession->getUserId();
                 if (($userId === null || $userId === '') && $request->isBackend()) {
@@ -387,8 +387,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                         $userId = $restoredAclContext['user_id'] ?? $backendSession->getUserId();
                     }
                 }
-                if (RequestLifecycleTrace::isEnabled()) {
-                    RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionGetUserId', (microtime(true) - $t0) * 1000, 'observer', $parent);
+                if (TraceGate::isArmed()) {
+                    TraceGate::recordSpan('acl::RouteBefore::sessionGetUserId', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 $tAcl = microtime(true);
                 $fromCache = false;
@@ -434,8 +434,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     'from_cache' => $fromCache ?? false,
                     '_user_not_found' => (bool) ($sessionAclContext['_user_not_found'] ?? false),
                 ]);
-                if (RequestLifecycleTrace::isEnabled()) {
-                    RequestLifecycleTrace::recordSpan('acl::RouteBefore::aclContext', (microtime(true) - $tAcl) * 1000, 'observer', $parent);
+                if (TraceGate::isArmed()) {
+                    TraceGate::recordSpan('acl::RouteBefore::aclContext', (microtime(true) - $tAcl) * 1000, 'observer', $parent);
                 }
             }
             // 事件分支未设置 roleId，此处统一补全（仅用 user/role 取值，不 load Role）
@@ -448,8 +448,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     $roleId = (int)($r && method_exists($r, 'getRoleId') ? ($r->getRoleId() ?: 0) : 0);
                 }
             }
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionUserRole', (microtime(true) - $t0) * 1000, 'observer', $parent);
+            if (TraceGate::isArmed()) {
+                TraceGate::recordSpan('acl::RouteBefore::sessionUserRole', (microtime(true) - $t0) * 1000, 'observer', $parent);
             }
         }
 
@@ -548,8 +548,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             if ($roleId !== 1) {
                 $t0 = microtime(true);
                 $hasAny = $this->aclService->hasAnyPermission($roleId);
-                if (RequestLifecycleTrace::isEnabled()) {
-                    RequestLifecycleTrace::recordSpan('acl::RouteBefore::hasAnyPermission', (microtime(true) - $t0) * 1000, 'observer', $parent);
+                if (TraceGate::isArmed()) {
+                    TraceGate::recordSpan('acl::RouteBefore::hasAnyPermission', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 // 没有任何 ACL 权限：直接按“无任何权限”处理
                 if (!$hasAny) {
@@ -574,8 +574,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 
             $t0 = microtime(true);
             $allowed = $this->aclService->isRouteAllowed($roleId, $uri, $request->getMethod());
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::recordSpan('acl::RouteBefore::isRouteAllowed', (microtime(true) - $t0) * 1000, 'observer', $parent);
+            if (TraceGate::isArmed()) {
+                TraceGate::recordSpan('acl::RouteBefore::isRouteAllowed', (microtime(true) - $t0) * 1000, 'observer', $parent);
             }
             if (!$allowed) {
                 w_auth_log('acl_no_permission_for_route', '角色无当前路由权限', ['uri' => $uri, 'role_id' => $roleId, 'method' => $request->getMethod()]);

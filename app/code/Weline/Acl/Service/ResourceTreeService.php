@@ -601,16 +601,17 @@ class ResourceTreeService implements ResourceTreeServiceInterface
     {
         $aclModel = $this->newAclModel();
         
-        // 尝试按 acl_id 加载
-        if (is_numeric($id) && $id > 0) {
-            $acl = $aclModel->load((int) $id, Acl::schema_fields_ACL_ID);
+        // AbstractModel::load(field, value) — field name first, value second.
+        if (is_numeric($id) && (int) $id > 0) {
+            $acl = $aclModel->load(Acl::schema_fields_ACL_ID, (int) $id);
             if ($acl->getSourceId()) {
                 return $acl;
             }
+            // Fresh model for the source_id fallback (avoid dirty hydrate).
+            $aclModel = $this->newAclModel();
         }
         
-        // 尝试按 source_id 加载
-        $acl = $aclModel->load((string) $id, Acl::schema_fields_SOURCE_ID);
+        $acl = $aclModel->load(Acl::schema_fields_SOURCE_ID, (string) $id);
         if ($acl->getSourceId()) {
             return $acl;
         }

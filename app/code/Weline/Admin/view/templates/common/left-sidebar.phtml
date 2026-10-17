@@ -65,4 +65,53 @@ $menus = $menuRenderService->getMenuTree();
             </ul>
         </nav>
     </div>
+
+    <?php
+    $signalPanelId = 'w-backend-menu-signal-panel';
+    $signalTriggerId = 'w-backend-menu-signal-trigger';
+    $signalPanelLabel = (string)__('菜单待办');
+    $signalBadgeLabel = (string)__('查看对应菜单：%s');
+    ?>
+    <div
+        id="w-backend-menu-signal-menu"
+        class="w-menu-root w-backend-nav__signal-menu"
+        data-w-component="menu"
+        data-w-placement="right-start"
+        data-w-anchor-mode="element"
+        data-testid="backend-menu-signal-panel-root"
+        data-i18n-signal-panel="<?= htmlspecialchars($signalPanelLabel, ENT_QUOTES, 'UTF-8') ?>"
+        data-i18n-signal-badge="<?= htmlspecialchars($signalBadgeLabel, ENT_QUOTES, 'UTF-8') ?>"
+    >
+        <button
+            type="button"
+            id="<?= htmlspecialchars($signalTriggerId, ENT_QUOTES, 'UTF-8') ?>"
+            class="w-visually-hidden"
+            data-w-menu-trigger
+            aria-expanded="false"
+            aria-haspopup="menu"
+            aria-controls="<?= htmlspecialchars($signalPanelId, ENT_QUOTES, 'UTF-8') ?>"
+            aria-label="<?= htmlspecialchars($signalPanelLabel, ENT_QUOTES, 'UTF-8') ?>"
+            tabindex="-1"
+        ></button>
+        <div
+            id="<?= htmlspecialchars($signalPanelId, ENT_QUOTES, 'UTF-8') ?>"
+            class="w-menu w-backend-nav__signal-panel"
+            data-w-menu-panel
+            data-testid="backend-menu-signal-panel"
+            role="menu"
+            aria-labelledby="<?= htmlspecialchars($signalTriggerId, ENT_QUOTES, 'UTF-8') ?>"
+            aria-label="<?= htmlspecialchars($signalPanelLabel, ENT_QUOTES, 'UTF-8') ?>"
+            hidden
+        ></div>
+    </div>
 </aside>
+
+<?php
+$adminStaticsDir = dirname(__DIR__, 2) . '/statics';
+$backendMenuSignalsJs = $adminStaticsDir . '/js/backend-menu-signals.js';
+$backendMenuSignalsCss = $adminStaticsDir . '/css/backend-menu-signals.css';
+$backendMenuSignalsJsV = (string) ((int) (@filemtime($backendMenuSignalsJs) ?: time()));
+$backendMenuSignalsCssV = (string) ((int) (@filemtime($backendMenuSignalsCss) ?: time()));
+?>
+<link rel="stylesheet" href="@static(Weline_Admin::css/backend-menu-signals.css)?v=<?= htmlspecialchars($backendMenuSignalsCssV, ENT_QUOTES, 'UTF-8') ?>">
+<script src="@static(Weline_Admin::js/backend-menu-signals.js)?v=<?= htmlspecialchars($backendMenuSignalsJsV, ENT_QUOTES, 'UTF-8') ?>" defer></script>

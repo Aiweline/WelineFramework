@@ -13,7 +13,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\StateManager;
 
 class AclService implements AclServiceInterface, AuthorizationServiceInterface
@@ -156,10 +156,10 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             self::storeRequestState($state);
             return $entries;
         }
-        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+        $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
         $entries = $this->roleAccessModel->getRoleAccessListArrayByRoleId($roleId);
         if ($t0 > 0) {
-            RequestLifecycleTrace::recordSpan('acl::AclService::getRoleAclEntries_db', (microtime(true) - $t0) * 1000, 'observer');
+            TraceGate::recordSpan('acl::AclService::getRoleAclEntries_db', (microtime(true) - $t0) * 1000, 'observer');
         }
         $entries = $this->dispatchRoleAclEntriesAfter($roleId, $entries);
         self::rememberProcessRoleAclEntries($roleId, $entries);
@@ -319,7 +319,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             self::storeRequestState($state);
             return $protected;
         }
-        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+        $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
         $protected = false;
         foreach ($this->getEquivalentRoutePaths($routePath) as $candidate) {
             // Menu links may carry a deterministic query string (for example a
@@ -345,7 +345,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             }
         }
         if ($t0 > 0) {
-            RequestLifecycleTrace::recordSpan('acl::AclService::isRouteProtected_db', (microtime(true) - $t0) * 1000, 'observer');
+            TraceGate::recordSpan('acl::AclService::isRouteProtected_db', (microtime(true) - $t0) * 1000, 'observer');
         }
         self::rememberProcessRouteProtected($routePath, $protected);
         $state = self::requestState();

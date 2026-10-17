@@ -12,6 +12,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Log;
+use Weline\Framework\Runtime\PostResponseCaptureMode;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
@@ -74,7 +75,9 @@ class BackendControllerRouteAfter implements ObserverInterface
             'backend-activity-create:' . $requestId,
             static function () use ($payload, $responseCode, $responseTime): void {
                 self::createDeferredActivityLog($payload, $responseCode, $responseTime);
-            }
+            },
+            0.0,
+            PostResponseCaptureMode::None,
         );
     }
 
@@ -93,7 +96,9 @@ class BackendControllerRouteAfter implements ObserverInterface
                 'backend-activity-response:' . $id,
                 static function () use ($id, $responseCode, $responseTime): void {
                     self::updateResponseMetricsById($id, $responseCode, $responseTime);
-                }
+                },
+                0.0,
+                PostResponseCaptureMode::None,
             );
             return;
         }

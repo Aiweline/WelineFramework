@@ -17,6 +17,7 @@ use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Backend\Api\Menu\MenuReaderInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Http\Fpc\FpcMode;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Http\Request;
@@ -100,8 +101,12 @@ class MenuRenderService
      */
     private function getBackendUrlPrefix(): string
     {
-        $prefix = rtrim($this->getRequest()->getUrlBuilder()->getBackendUrl('/'), '/');
-        
+        // getBackendUrl('/') may already carry DEV auto-pierce (?w_fpc_pierce=…);
+        // strip query/fragment so this value stays a compositional path prefix.
+        $prefix = rtrim($this->stripUrlQueryAndFragment(
+            (string)$this->getRequest()->getUrlBuilder()->getBackendUrl('/')
+        ), '/');
+
         // 调试：检测异常的 URL 前缀
         // 后端 URL 可按当前上下文携带货币和语言路径段，如 /backend/USD/zh_Hans_CN；
         // 默认货币/语言可能不会输出，因此不能把缺少本地化段当作异常。
@@ -118,8 +123,18 @@ class MenuRenderService
                 'menu_debug'
             );
         }
-        
+
         return $prefix;
+    }
+
+    /**
+     * Drop query/fragment so a URL can be used as a path prefix for route concat.
+     */
+    private function stripUrlQueryAndFragment(string $url): string
+    {
+        $url = explode('#', $url, 2)[0];
+
+        return explode('?', $url, 2)[0];
     }
 
     /**
@@ -257,12 +272,15 @@ class MenuRenderService
             return $route === '' ? ($urlPrefix === '' ? '/' : $urlPrefix) : $urlPrefix . '/' . $route;
         }
 
-        $urlPrefix = rtrim($this->cachedBackendUrlPrefix ?? $this->getBackendUrlPrefix(), '/');
+        $urlPrefix = rtrim($this->stripUrlQueryAndFragment(
+            (string)($this->cachedBackendUrlPrefix ?? $this->getBackendUrlPrefix())
+        ), '/');
         if ($route === '') {
-            return $urlPrefix;
+            return FpcMode::appendPierceQueryIfEnabled($urlPrefix);
         }
 
-        return $urlPrefix . '/' . $route;
+        // Re-append pierce on the *final* href; never concat route after an existing query.
+        return FpcMode::appendPierceQueryIfEnabled($urlPrefix . '/' . $route);
     }
 
     /**
@@ -710,6 +728,8 @@ class MenuRenderService
         $rawSourceName = (string)($menu['source_name'] ?? '');
         $sourceId = htmlspecialchars($rawSourceId, ENT_QUOTES, 'UTF-8');
         $title = $this->translateMenuTitle($rawSourceName, $rawSourceId);
+        $signalAttr = $this->renderBackendMenuSignalAttr($sourceId);
+        $signalBadge = $sourceId !== '' ? $this->renderBackendMenuSignalBadge() : '';
         $nodes = array_values(array_filter(
             is_array($menu['nodes'] ?? null) ? $menu['nodes'] : [],
             fn(array $node): bool => ($node['type'] ?? '') === 'menus' && $this->isMenuEnabled($node)
@@ -720,16 +740,18 @@ class MenuRenderService
 
         if ($route === '' && $topLevel) {
             if (!$hasNodes) {
-                $html = '<li class="w-backend-nav__group" data-source="' . $sourceId . '">';
-                $html .= $icon . '<span>' . $title . '</span></li>';
+                $html = '<li class="w-backend-nav__group" data-source="' . $sourceId . '"' . $signalAttr . '>';
+                $html .= $icon . '<span>' . $title . '</span>' . $signalBadge . '</li>';
                 return $html;
             }
             // Top-level group with children: keep one hoverable icon in collapsed rail.
+            // Signal hook on <li> (not <summary>) so child menu signals are in the paint subtree.
             $open = $this->hasActiveChild($nodes);
-            $html = '<li class="w-backend-nav__entry w-backend-nav__entry--group" data-source="' . $sourceId . '">';
+            $html = '<li class="w-backend-nav__entry w-backend-nav__entry--group" data-source="'
+                . $sourceId . '"' . $signalAttr . '>';
             $html .= '<details class="w-backend-nav__disclosure"' . ($open ? ' open' : '') . '>';
             $html .= '<summary class="w-backend-nav__item w-backend-nav__item--group">';
-            $html .= $icon . '<span>' . $title . '</span>' . $this->renderIcon('chevron-down', 'sm');
+            $html .= $icon . '<span>' . $title . '</span>' . $signalBadge . $this->renderIcon('chevron-down', 'sm');
             $html .= '</summary><ul class="w-backend-nav__list">' . $this->renderSubMenu($nodes) . '</ul></details></li>';
             return $html;
         }
@@ -740,20 +762,40 @@ class MenuRenderService
 
         if (!$hasNodes) {
             if ($route === '') {
-                return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><span class="w-backend-nav__item" aria-disabled="true">'
-                    . $icon . '<span>' . $title . '</span></span></li>';
+                return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><span class="w-backend-nav__item" aria-disabled="true"'
+                    . $signalAttr . '>'
+                    . $icon . '<span>' . $title . '</span>' . $signalBadge . '</span></li>';
             }
             $url = htmlspecialchars($this->formatMenuUrlCached($menu), ENT_QUOTES, 'UTF-8');
             return '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><a class="w-backend-nav__item" href="'
-                . $url . '"' . $current . '>' . $icon . '<span>' . $title . '</span></a></li>';
+                . $url . '"' . $current . $signalAttr . '>' . $icon . '<span>' . $title . '</span>' . $signalBadge . '</a></li>';
         }
 
         $open = $active || $hasActiveChild;
-        $html = '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"><details class="w-backend-nav__disclosure"'
+        // Signal hook on <li> so nested leaf signals remain descendants for parent rollup paint.
+        $html = '<li class="w-backend-nav__entry" data-source="' . $sourceId . '"' . $signalAttr . '>'
+            . '<details class="w-backend-nav__disclosure"'
             . ($open ? ' open' : '') . '><summary class="w-backend-nav__item"' . $current . '>';
-        $html .= $icon . '<span>' . $title . '</span>' . $this->renderIcon('chevron-down', 'sm');
+        $html .= $icon . '<span>' . $title . '</span>' . $signalBadge . $this->renderIcon('chevron-down', 'sm');
         $html .= '</summary><ul class="w-backend-nav__list">' . $this->renderSubMenu($nodes) . '</ul></details></li>';
         return $html;
+    }
+
+    /**
+     * Empty JS paint hook for backend menu unread badges (never SSR counts).
+     */
+    private function renderBackendMenuSignalAttr(string $sourceIdEscaped): string
+    {
+        if ($sourceIdEscaped === '') {
+            return '';
+        }
+
+        return ' data-backend-menu-signal="' . $sourceIdEscaped . '"';
+    }
+
+    private function renderBackendMenuSignalBadge(): string
+    {
+        return '<span class="w-backend-nav__signal-badge" data-backend-menu-signal-badge hidden aria-hidden="true"></span>';
     }
 
     private function renderSearchTextAttribute(string $sourceName, string $sourceId): string

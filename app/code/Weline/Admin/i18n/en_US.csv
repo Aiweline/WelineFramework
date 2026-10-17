@@ -284,6 +284,15 @@ Cms内容管理,"CMS Content Management"
 共享,Shared
 独占,Exclusive
 个观察者，来自,"observers from"
+模组管理,"Module Management"
+系统中安装的模组。,"Modules installed in the system."
+模组名,"Module Name"
+命名空间,Namespace
+安装位置,"Installation Location"
+目录,Directory
+路由,Route
+版本,Version
+描述,Description
 路由管理,"Route management"
 查看和管理系统中所有已注册的路由，支持按模块分组浏览,"View and manage all registered routes in the system, supports browsing grouped by module"
 路由总数,"Total routes"
@@ -296,25 +305,18 @@ Cms内容管理,"CMS Content Management"
 方法,Method
 路由路径,"Route path"
 控制器信息,"Controller Information"
-命名空间,Namespace
 控制器,Controller
 设为首页,"Set as Homepage"
 条路由，来自,"items of routes, from"
 个模块,modules
-模组管理,"Module Management"
-系统中安装的模组。,"Modules installed in the system."
-模组名,"Module Name"
-安装位置,"Installation Location"
-目录,Directory
-路由,Route
-版本,Version
-描述,Description
 后台主导航,"Backend main navigation"
 收起侧边栏,"Collapse sidebar"
 展开侧边栏,"Expand sidebar"
 搜索菜单,"Search menu"
 搜索菜单…,"Search menu…"
 没有匹配的菜单,"No matching menu"
+菜单待办,"Menu todos"
+查看对应菜单：%s,"View related menu: %s"
 "Weline 管理后台","Weline management background"
 加载中,loading
 "响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"

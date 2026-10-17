@@ -87,7 +87,7 @@ class BaseController extends BackendController
         $template->setData('layout', null);
         $template->setData('contentTemplate', '');
 
-        $fullHtml = $template->fetch($layoutPath, [
+        $fullHtml = $template->fetchHtml($layoutPath, [
             'content' => (string)$content,
             'contentTemplate' => '',
         ]);
@@ -105,7 +105,7 @@ class BaseController extends BackendController
         }
         if ($fileName) {
             if (is_int(strpos($fileName, '::'))) {
-                return $this->getTemplate()->fetch($fileName);
+                return $this->getTemplate()->fetchHtml($fileName);
             }
         }
 
@@ -122,9 +122,9 @@ class BaseController extends BackendController
             $fileName = $controllerClassName . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
         }
 
-        $before = $this->getTemplate()->fetch('Weline_Admin::templates/backend/page-layout/main-content-before.phtml');
-        $content = $this->getTemplate()->fetch('templates' . DS . $fileName);
-        $after = $this->getTemplate()->fetch('Weline_Admin::templates/backend/page-layout/main-content-after.phtml');
+        $before = $this->getTemplate()->fetchHtml('Weline_Admin::templates/backend/page-layout/main-content-before.phtml');
+        $content = $this->getTemplate()->fetchHtml('templates' . DS . $fileName);
+        $after = $this->getTemplate()->fetchHtml('Weline_Admin::templates/backend/page-layout/main-content-after.phtml');
 
         return $before . $content . $after;
     }
