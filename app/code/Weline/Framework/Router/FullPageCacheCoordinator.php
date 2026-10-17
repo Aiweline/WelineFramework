@@ -1339,6 +1339,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return null;
         }
 
+        // html-disk is path-only. Canonical URI still carrying query ⇒ Extra
+        // query_keys (or pierce storm) variant — must miss disk and use Shared.
+        if ($this->canonicalCacheKeyUriHasQueryVariant($fullUri)) {
+            return null;
+        }
+
         // Prefer URL-tree generated/html (edge/Nginx authority), then legacy path-index.
         $htmlDisk = FpcHtmlDiskStore::read(
             $fullUri,
@@ -1793,6 +1799,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     {
         $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($fullUri));
         if ($fullUri === '' || !KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+            return null;
+        }
+        // Do not hydrate Process L1 from path-only disk for query-variant keys.
+        if ($this->canonicalCacheKeyUriHasQueryVariant($fullUri)) {
             return null;
         }
         $htmlDisk = FpcHtmlDiskStore::read($fullUri, 'identity');
