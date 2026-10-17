@@ -1867,6 +1867,7 @@ Configured,已配置
 "%{1} entries","%{1} 条"
 "主配置 nginx.conf","主配置 nginx.conf"
 "FPC 打穿章 map","FPC 打穿章 map"
+"FPC query allowlist bypass map（β）","FPC query allowlist bypass map（β）"
 "附加 %{1}","附加 %{1}"
 显式配置,显式配置
 "公网默认 80/443","公网默认 80/443"

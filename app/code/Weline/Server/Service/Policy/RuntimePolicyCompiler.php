@@ -704,7 +704,15 @@ final class RuntimePolicyCompiler
                 . '. Run: php bin/w framework:compile',
             );
         }
-        $registry = require $file;
+        $isDefaultLive = $file === self::DEFAULT_REGISTRY_FILE
+            || (
+                \is_string($real = \realpath($file))
+                && \is_string($defaultReal = \realpath(self::DEFAULT_REGISTRY_FILE))
+                && $real === $defaultReal
+            );
+        $registry = $isDefaultLive
+            ? \Weline\Framework\Compilation\CompiledPhpRegistry::load($file)
+            : require $file;
         if (!\is_array($registry)
             || (int)($registry['format'] ?? 0) !== RuntimePolicyProviderCompiler::FORMAT_VERSION
             || !\array_key_exists('providers', $registry)

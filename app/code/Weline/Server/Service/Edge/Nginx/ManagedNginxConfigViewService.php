@@ -53,6 +53,12 @@ final class ManagedNginxConfigViewService
             $this->paths->confDir() . \DIRECTORY_SEPARATOR . FpcPierceNginxMapWriter::MAP_BASENAME,
             true,
         );
+        $files[] = $this->readFile(
+            'fpc-query-allowlist.map.conf',
+            (string)__('FPC query allowlist bypass map（β）'),
+            $this->paths->confDir() . \DIRECTORY_SEPARATOR . FpcQueryAllowlistNginxMapWriter::MAP_BASENAME,
+            false,
+        );
 
         $confD = $this->paths->confDir() . \DIRECTORY_SEPARATOR . 'conf.d';
         if (\is_dir($confD)) {

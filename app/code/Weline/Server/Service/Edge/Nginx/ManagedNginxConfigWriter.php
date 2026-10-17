@@ -250,6 +250,22 @@ NGINX;
         } catch (\Throwable) {
             // Conf write continues; nginx -t will fail closed if pierce map missing.
         }
+        $queryAllowlistWriter = new FpcQueryAllowlistNginxMapWriter($this->paths);
+        try {
+            $queryAllowlistWriter->publish();
+        } catch (\Throwable) {
+            // Conf write continues; retry empty map below.
+        }
+        if (!\is_file($queryAllowlistWriter->mapFilePath())) {
+            try {
+                $queryAllowlistWriter->publish([
+                    'schema_version' => FpcQueryAllowlistNginxMapWriter::SNAPSHOT_SCHEMA,
+                    'declarations' => [],
+                ]);
+            } catch (\Throwable) {
+                // nginx -t fails closed if include is still missing.
+            }
+        }
         try {
             $sitemapEdgeWriter = new SitemapEdgeNginxMapWriter($this->paths);
             if (!\is_file($sitemapEdgeWriter->mapFilePath())
@@ -263,6 +279,9 @@ NGINX;
         $quotedFpcPierceMap = $this->nginxQuotedPath(
             $this->paths->confDir() . DIRECTORY_SEPARATOR . FpcPierceNginxMapWriter::MAP_BASENAME
         );
+        $quotedFpcQueryAllowlistMap = $this->nginxQuotedPath(
+            $this->paths->confDir() . DIRECTORY_SEPARATOR . FpcQueryAllowlistNginxMapWriter::MAP_BASENAME
+        );
         $quotedSitemapEdgeMap = $this->nginxQuotedPath(
             $this->paths->confDir() . DIRECTORY_SEPARATOR . SitemapEdgeNginxMapWriter::MAP_BASENAME
         );
@@ -272,6 +291,7 @@ NGINX;
         $fpcHtmlDiskMapBlock = <<<NGINX
 
     include {$quotedFpcPierceMap};
+    include {$quotedFpcQueryAllowlistMap};
     include {$quotedSitemapEdgeMap};
     map \$http_authorization \$wls_fpc_html_bypass_auth {
         default 0;
@@ -314,7 +334,9 @@ NGINX;
         default 0;
         "11" 1;
     }
-    map "\$wls_fpc_html_bypass_auth\$wls_fpc_html_bypass_upgrade\$wls_fpc_html_bypass_preview_path\$wls_fpc_html_webhook_bypass\$wls_fpc_html_diag_bypass\$wls_fpc_html_i18n_inline_cookie_bypass" \$wls_fpc_html_disk_bypass {
+    # β FPC query_keys allowlist (from fpc-query-allowlist.map.conf / policy snapshot).
+    # Variable defined in included map; OR into disk bypass so Shared can HIT.
+    map "\$wls_fpc_html_bypass_auth\$wls_fpc_html_bypass_upgrade\$wls_fpc_html_bypass_preview_path\$wls_fpc_html_webhook_bypass\$wls_fpc_html_diag_bypass\$wls_fpc_html_i18n_inline_cookie_bypass\$wls_fpc_html_query_allowlist_bypass" \$wls_fpc_html_disk_bypass {
         default 0;
         "~1" 1;
     }

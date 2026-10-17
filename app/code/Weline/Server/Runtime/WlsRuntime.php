@@ -4608,7 +4608,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
 
             try {
-                $routes = include $routerFile;
+                $routes = \Weline\Framework\Compilation\CompiledPhpRegistry::load($routerFile);
             } catch (\Throwable $e) {
                 throw new \RuntimeException(
                     'Generated router file is not readable: '
@@ -8306,6 +8306,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 }
                 $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
                 $timing['total_ms'] = $timing['pre_telemetry_total_ms'];
+                $this->recordWlsHandleSpanIfPanelArmed($timing);
                 if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
                     $cachedFpcResponse->setHeader('X-WLS-Performance-Total', (string)$timing['total_ms']);
                     $cachedFpcResponse->setHeader('X-WLS-Performance-UrlParser', (string)($timing['url_parser_call_ms'] ?? 0));
@@ -8403,6 +8404,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             unset($result);
             $this->releaseCompletedRequestPhase('normalize_output');
             $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
+            // Panel-armed only: WLS entry → response-ready (before panel/telemetry decoration).
+            $this->recordWlsHandleSpanIfPanelArmed($timing);
             $telemetryStart = \microtime(true);
             // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
             $resultStr = $app->broadcastTelemetry($resultStr, $request, true);
@@ -8661,6 +8664,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
             try {
                 if (TraceGate::isArmed()) {
+                    $timing['panel_trace_armed'] = true;
                     $timing['request_id'] = TraceGate::ensureRequestId();
                     $traceSpans = TraceGate::getSpansWithDbSummary();
                     $traceTopLimit = $this->getRequestTraceSummaryLimit('request_trace_top_limit', 40);
@@ -10070,12 +10074,37 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
     }
 
+    /**
+     * WLS entry → response-ready wall clock for the developer panel lifecycle.
+     * Same gate as framework spans: only when TraceGate is panel-armed.
+     *
+     * @param array<string, mixed> $timing
+     */
+    private function recordWlsHandleSpanIfPanelArmed(array $timing): void
+    {
+        if (!TraceGate::isArmed()) {
+            return;
+        }
+        $ms = (float)($timing['pre_telemetry_total_ms'] ?? $timing['total_ms'] ?? 0.0);
+        if ($ms <= 0.0) {
+            return;
+        }
+        TraceGate::recordSpan('wls.worker.handle', $ms, 'wls', null, [
+            'operation' => 'handle',
+            'boundary' => 'entry_to_response',
+        ]);
+    }
+
+    /**
+     * Persist WLS timing into the performance panel store only when the Weline
+     * panel was armed for this request (same policy as RequestLifecycleTrace).
+     *
+     * @param array<string, mixed> $timing
+     */
     private function recordWlsPerformancePanelTiming(array $timing, bool $isDev): void
     {
-        if (!$isDev
-            && !(\defined('DEBUG') && DEBUG)
-            && !\Weline\Framework\Manager\ObjectManager::getInstance(DeveloperAccessPolicy::class)->canAccessApi()
-        ) {
+        unset($isDev);
+        if (empty($timing['panel_trace_armed']) && !TraceGate::isArmed()) {
             return;
         }
 

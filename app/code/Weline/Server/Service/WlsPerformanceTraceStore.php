@@ -253,7 +253,9 @@ class WlsPerformanceTraceStore
         $host = \strtolower((string)($timing['host'] ?? $request['host'] ?? $request['hostname'] ?? ''));
         $status = (int)($timing['status'] ?? $request['status'] ?? 0);
         $totalMs = (float)($timing['total_ms'] ?? $summary['total_ms'] ?? $summary['total_duration_ms'] ?? 0.0);
-        $spans = $this->sanitizeTraceSpans($this->appendTimingSpans($this->normalizeSpans($spans), $timing));
+        $spans = $this->sanitizeTraceSpans($this->dedupeWlsHandleSpan(
+            $this->appendTimingSpans($this->normalizeSpans($spans), $timing)
+        ));
 
         return [
             'request_id' => $requestId,
@@ -306,8 +308,40 @@ class WlsPerformanceTraceStore
         if ((float)($right['total_ms'] ?? 0.0) <= 0.0 && (float)($left['total_ms'] ?? 0.0) > 0.0) {
             $merged['total_ms'] = $left['total_ms'];
         }
+        if (isset($merged['trace']['spans']) && \is_array($merged['trace']['spans'])) {
+            $merged['trace']['spans'] = $this->sanitizeTraceSpans(
+                $this->dedupeWlsHandleSpan($this->normalizeSpans($merged['trace']['spans']))
+            );
+            $merged['service_spans'] = $this->serviceSpans($merged['trace']['spans']);
+        }
 
         return $merged;
+    }
+
+    /**
+     * Keep a single WLS entry→response aggregate span (prefer the first).
+     *
+     * @param list<array<string, mixed>> $spans
+     * @return list<array<string, mixed>>
+     */
+    private function dedupeWlsHandleSpan(array $spans): array
+    {
+        $seen = false;
+        $out = [];
+        foreach ($spans as $span) {
+            if (!\is_array($span)) {
+                continue;
+            }
+            if ((string)($span['name'] ?? '') === 'wls.worker.handle') {
+                if ($seen) {
+                    continue;
+                }
+                $seen = true;
+            }
+            $out[] = $span;
+        }
+
+        return $out;
     }
 
     /**
@@ -478,6 +512,33 @@ class WlsPerformanceTraceStore
      */
     private function appendTimingSpans(array $spans, array $timing): array
     {
+        $hasHandle = false;
+        foreach ($spans as $existing) {
+            if (\is_array($existing) && (string)($existing['name'] ?? '') === 'wls.worker.handle') {
+                $hasHandle = true;
+                break;
+            }
+        }
+
+        // Prefer entry→response-ready; fall back to full handle wall clock.
+        $handleMs = 0.0;
+        if (isset($timing['pre_telemetry_total_ms']) && \is_numeric($timing['pre_telemetry_total_ms'])) {
+            $handleMs = (float)$timing['pre_telemetry_total_ms'];
+        } elseif (isset($timing['total_ms']) && \is_numeric($timing['total_ms'])) {
+            $handleMs = (float)$timing['total_ms'];
+        }
+        if (!$hasHandle && $handleMs > 0.0) {
+            \array_unshift($spans, [
+                'name' => 'wls.worker.handle',
+                'duration_ms' => \round($handleMs, 2),
+                'category' => 'wls',
+                'meta' => $this->sanitizeMeta([
+                    'operation' => 'handle',
+                    'boundary' => 'entry_to_response',
+                ], 'wls'),
+            ]);
+        }
+
         $map = [
             'run_before_ms' => ['wls.worker.run_before', 'wls', 'run_before'],
             'url_parser_call_ms' => ['wls.worker.url_parse', 'wls', 'url_parse'],
@@ -504,15 +565,6 @@ class WlsPerformanceTraceStore
                 'duration_ms' => \round($duration, 2),
                 'category' => $category,
                 'meta' => $this->sanitizeMeta(['operation' => $operation], $category),
-            ];
-        }
-
-        if (isset($timing['total_ms']) && \is_numeric($timing['total_ms']) && (float)$timing['total_ms'] > 0.0) {
-            $spans[] = [
-                'name' => 'wls.worker.handle',
-                'duration_ms' => \round((float)$timing['total_ms'], 2),
-                'category' => 'wls',
-                'meta' => $this->sanitizeMeta(['operation' => 'handle'], 'wls'),
             ];
         }
 
@@ -684,6 +736,7 @@ class WlsPerformanceTraceStore
         if ($category === 'wls') {
             $allowed = [
                 'operation' => true,
+                'boundary' => true,
                 'ns' => true,
                 'namespace' => true,
                 'pool' => true,

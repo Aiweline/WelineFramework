@@ -34,7 +34,15 @@ class WlsPerformancePanelObserver implements ObserverInterface
 
         $requestId = $this->requestId();
         $this->setRequestIdHeader($requestId);
-        $this->store()->record($payload, ['request_id' => $requestId]);
+        // Same gate as framework lifecycle: only persist when the Weline panel
+        // cookie armed TraceGate for this request.
+        if (!TraceGate::isArmed()) {
+            return;
+        }
+        $this->store()->record($payload, [
+            'request_id' => $requestId,
+            'panel_trace_armed' => true,
+        ]);
     }
 
     public function isPanelAllowed(): bool

@@ -105,7 +105,20 @@ final class WlsPerformanceTraceStoreTest extends TestCase
 
         $spans = $detail['trace']['spans'] ?? [];
         self::assertIsArray($spans);
-        $spanMeta = $spans[0]['meta'] ?? [];
+        self::assertSame('wls.worker.handle', (string)($spans[0]['name'] ?? ''));
+        self::assertSame('handle', (string)($spans[0]['meta']['operation'] ?? ''));
+        self::assertSame('entry_to_response', (string)($spans[0]['meta']['boundary'] ?? ''));
+        self::assertSame(128.45, (float)($spans[0]['duration_ms'] ?? 0));
+
+        $sessionSpan = null;
+        foreach ($spans as $span) {
+            if (\is_array($span) && (string)($span['name'] ?? '') === 'wls.session.read') {
+                $sessionSpan = $span;
+                break;
+            }
+        }
+        self::assertIsArray($sessionSpan);
+        $spanMeta = $sessionSpan['meta'] ?? [];
         self::assertSame('read', $spanMeta['operation'] ?? null);
         self::assertSame('checkout', $spanMeta['namespace'] ?? null);
         self::assertArrayNotHasKey('token', $spanMeta);
@@ -122,6 +135,35 @@ final class WlsPerformanceTraceStoreTest extends TestCase
         self::assertArrayNotHasKey('query_type', $timingMeta);
         self::assertArrayNotHasKey('rows', $timingMeta);
         self::assertArrayNotHasKey('token', $timingMeta);
+    }
+
+    public function testPrefersPreTelemetryTotalForWlsHandleSpanAndDedupes(): void
+    {
+        $store = $this->store(['max_recent' => 5]);
+        $telemetry = $this->telemetry('req-handle-pre-01');
+        $telemetry['trace']['spans'][] = [
+            'name' => 'wls.worker.handle',
+            'duration_ms' => 33.0,
+            'category' => 'wls',
+            'meta' => ['operation' => 'handle', 'boundary' => 'entry_to_response'],
+        ];
+
+        self::assertTrue($store->record($telemetry, [
+            'request_id' => 'req-handle-pre-01',
+            'pre_telemetry_total_ms' => 33.0,
+            'total_ms' => 40.0,
+            'telemetry_ms' => 2.0,
+            'reset_ms' => 5.0,
+        ]));
+
+        $spans = $store->getDetail('req-handle-pre-01')['trace']['spans'] ?? [];
+        $handles = \array_values(\array_filter(
+            \is_array($spans) ? $spans : [],
+            static fn(mixed $span): bool => \is_array($span) && (string)($span['name'] ?? '') === 'wls.worker.handle'
+        ));
+        self::assertCount(1, $handles);
+        self::assertSame(33.0, (float)($handles[0]['duration_ms'] ?? 0));
+        self::assertSame('entry_to_response', (string)($handles[0]['meta']['boundary'] ?? ''));
     }
 
     public function testAppendsRouterProfilePhaseSpansUnderRouterStart(): void

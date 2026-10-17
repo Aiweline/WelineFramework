@@ -972,7 +972,7 @@ class AttackDetector
                 continue;
             }
             try {
-                $routes = @(include $file);
+                $routes = \Weline\Framework\Compilation\CompiledPhpRegistry::load((string)$file);
                 if (!\is_array($routes)) {
                     continue;
                 }

@@ -9,6 +9,7 @@ use Weline\Framework\Http\Fpc\FpcPierceStamp;
 use Weline\Server\Service\Capacity\HostCapacityTier;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Nginx\FpcPierceNginxMapWriter;
+use Weline\Server\Service\Edge\Nginx\FpcQueryAllowlistNginxMapWriter;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxConfigViewService;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxConfigWriter;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxEdgeAvailability;
@@ -112,6 +113,30 @@ final class ServerNginxContractsTest extends TestCase
                 $this->assert_SitemapEdgeNginxMapWriter_testManagedNginxWriterIncludesSitemapEdgeSnippets();
             } finally {
                 $this->tearDown_SitemapEdgeNginxMapWriter();
+            }
+        },
+            'FpcQueryAllowlistNginxMapWriter::testExtractRulesFromSnapshotAndPublishMap' => function () {
+            $this->setUp_FpcQueryAllowlistNginxMapWriter();
+            try {
+                $this->assert_FpcQueryAllowlistNginxMapWriter_testExtractRulesFromSnapshotAndPublishMap();
+            } finally {
+                $this->tearDown_FpcQueryAllowlistNginxMapWriter();
+            }
+        },
+            'FpcQueryAllowlistNginxMapWriter::testManagedNginxWriterIncludesAllowlistBypass' => function () {
+            $this->setUp_FpcQueryAllowlistNginxMapWriter();
+            try {
+                $this->assert_FpcQueryAllowlistNginxMapWriter_testManagedNginxWriterIncludesAllowlistBypass();
+            } finally {
+                $this->tearDown_FpcQueryAllowlistNginxMapWriter();
+            }
+        },
+            'FpcQueryAllowlistNginxMapWriter::testRejectsWildcardAndHardcodedBusinessKeysAbsent' => function () {
+            $this->setUp_FpcQueryAllowlistNginxMapWriter();
+            try {
+                $this->assert_FpcQueryAllowlistNginxMapWriter_testRejectsWildcardAndHardcodedBusinessKeysAbsent();
+            } finally {
+                $this->tearDown_FpcQueryAllowlistNginxMapWriter();
             }
         },
         ];
@@ -441,6 +466,121 @@ private function removeTree_SitemapEdgeNginxMapWriter(string $path): void
         }
     }
     @\rmdir($path);
+}
+
+private string $root_FpcQueryAllowlistNginxMapWriter = '';
+
+private function setUp_FpcQueryAllowlistNginxMapWriter(): void
+{
+    $this->root_FpcQueryAllowlistNginxMapWriter = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-fpc-qa-' . \bin2hex(\random_bytes(8));
+    self::assertTrue(\mkdir($this->root_FpcQueryAllowlistNginxMapWriter, 0700, true));
+    $canonical = \realpath($this->root_FpcQueryAllowlistNginxMapWriter);
+    self::assertIsString($canonical);
+    $this->root_FpcQueryAllowlistNginxMapWriter = $canonical;
+}
+
+private function tearDown_FpcQueryAllowlistNginxMapWriter(): void
+{
+    $this->removeTree_SitemapEdgeNginxMapWriter($this->root_FpcQueryAllowlistNginxMapWriter);
+}
+
+private function assert_FpcQueryAllowlistNginxMapWriter_testExtractRulesFromSnapshotAndPublishMap(): void
+{
+    $paths = new ManagedNginxPaths($this->root_FpcQueryAllowlistNginxMapWriter, [
+        'runtime_root' => 'runtime',
+        'install_root' => 'install',
+        'listen_http' => 18094,
+        'listen_https' => 18494,
+    ]);
+    $paths->ensureRuntimeDirectories();
+    $snapshot = [
+        'schema_version' => FpcQueryAllowlistNginxMapWriter::SNAPSHOT_SCHEMA,
+        'declarations' => [
+            'a' => [
+                'type' => 'fpc',
+                'path_pattern' => '/products',
+                'public_path_patterns' => ['/category/*'],
+                'attrs' => [
+                    'enabled' => true,
+                    'ttl' => 3600,
+                    'query_keys' => ['Price', 'af_hanfu_chao_dai', '*'],
+                ],
+            ],
+            'b' => [
+                'type' => 'fpc',
+                'path_pattern' => '/about',
+                'public_path_patterns' => [],
+                'attrs' => [
+                    'enabled' => true,
+                    'ttl' => 3600,
+                    // no query_keys → path-only, no edge rules
+                ],
+            ],
+            'c' => [
+                'type' => 'fpc',
+                'path_pattern' => '/disabled',
+                'attrs' => [
+                    'enabled' => false,
+                    'query_keys' => ['price'],
+                ],
+            ],
+        ],
+    ];
+    $rules = FpcQueryAllowlistNginxMapWriter::extractRules($snapshot);
+    $pairs = \array_map(
+        static fn(array $r): string => $r['path_pattern'] . '|' . $r['query_key'],
+        $rules,
+    );
+    \sort($pairs);
+    self::assertSame([
+        '/category/*|af_hanfu_chao_dai',
+        '/category/*|price',
+        '/products|af_hanfu_chao_dai',
+        '/products|price',
+    ], $pairs);
+
+    $writer = new FpcQueryAllowlistNginxMapWriter($paths);
+    $result = $writer->publish($snapshot);
+    self::assertTrue($result['ok']);
+    self::assertSame(4, $result['rule_count']);
+    $body = (string)\file_get_contents($writer->mapFilePath());
+    self::assertStringContainsString('map $request_uri $wls_fpc_html_query_allowlist_bypass', $body);
+    self::assertStringContainsString('price=', $body);
+    self::assertStringContainsString('af_hanfu_chao_dai=', $body);
+    self::assertStringContainsString('/products', $body);
+    self::assertStringNotContainsString('~q/', $body);
+    self::assertStringNotContainsString('"*', $body);
+}
+
+private function assert_FpcQueryAllowlistNginxMapWriter_testManagedNginxWriterIncludesAllowlistBypass(): void
+{
+    $paths = new ManagedNginxPaths($this->root_FpcQueryAllowlistNginxMapWriter, [
+        'runtime_root' => 'runtime',
+        'install_root' => 'install',
+        'listen_http' => 18095,
+        'listen_https' => 18495,
+        'edge_cache' => true,
+        'gzip' => true,
+    ]);
+    $paths->ensureRuntimeDirectories();
+    $result = (new ManagedNginxConfigWriter($paths))->write(19095, '127.0.0.1', ['_']);
+    $config = (string)\file_get_contents($result['conf']);
+    self::assertStringContainsString(FpcQueryAllowlistNginxMapWriter::MAP_BASENAME, $config);
+    self::assertStringContainsString('$wls_fpc_html_query_allowlist_bypass', $config);
+    self::assertFileExists($paths->confDir() . DIRECTORY_SEPARATOR . FpcQueryAllowlistNginxMapWriter::MAP_BASENAME);
+    self::assertStringNotContainsString('~q/', $config);
+}
+
+private function assert_FpcQueryAllowlistNginxMapWriter_testRejectsWildcardAndHardcodedBusinessKeysAbsent(): void
+{
+    $src = (string)\file_get_contents(
+        BP . '/app/code/Weline/Server/Service/Edge/Nginx/FpcQueryAllowlistNginxMapWriter.php',
+    );
+    // Writer must not embed storefront business query names; rules come from snapshot only.
+    self::assertStringNotContainsString("'price'", $src);
+    self::assertStringNotContainsString('af_hanfu', $src);
+    self::assertSame([], FpcQueryAllowlistNginxMapWriter::normalizeQueryKeys(['*', '', 'Bad-Key', '1start']));
+    self::assertSame(['price'], FpcQueryAllowlistNginxMapWriter::normalizeQueryKeys(['Price', 'price']));
 }
 }
 

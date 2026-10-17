@@ -236,6 +236,21 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             $config,
         );
         self::assertStringContainsString(
+            'fpc-query-allowlist.map.conf',
+            $config,
+            'β query_keys allowlist map must be included for html-disk bypass pairing.',
+        );
+        self::assertStringContainsString(
+            '$wls_fpc_html_query_allowlist_bypass',
+            $config,
+            'Allowlist bypass variable must OR into $wls_fpc_html_disk_bypass.',
+        );
+        self::assertStringNotContainsString(
+            '~q/',
+            $config,
+            'α ~q/{sha1} disk leaves must not be resurrected.',
+        );
+        self::assertStringContainsString(
             'proxy_set_header X-Wls-Fpc-Bypass "";',
             $config,
         );
