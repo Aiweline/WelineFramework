@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Compare',
-    'version' => '1.0.4',
+    'version' => '1.0.5',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Eav' => '*',
+        'Weline_Theme' => '*',
     ],
     'optional' => [
         'Weline_Product' => '*',

@@ -2,11 +2,12 @@
 
 return [
     'name' => 'Weline_Consent',
-    'version' => '1.1.1',
+    'version' => '1.1.2',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Frontend' => '*',
         'Weline_SystemConfig' => '*',
+        'Weline_Theme' => '*',
         'Weline_Websites' => '*',
     ],
     'optional' => [],

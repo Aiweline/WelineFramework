@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_B2B',
-    'version' => '2.6.141',
+    'version' => '2.6.142',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
         'Weline_I18n' => '*',
         'Weline_SystemConfig' => '*',
+        'Weline_Theme' => '*',
         'Weline_Websites' => '*',
     ],
         'optional' => [

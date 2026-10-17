@@ -21,10 +21,20 @@
  *
  * @widget.default_injections {[{"layout_type":"mini-cart","layout_option":"default","slot":"footer-extras","area":"footer","sort_order":20,"required":true,"reason":"迷你购物车默认提供订单留言输入","config":{"title":"订单留言","placeholder":"如有特殊要求请留言","surface":"mini-cart"}},{"layout_type":"cart","layout_option":"default","slot":"cart-summary-note","area":"content","sort_order":20,"required":true,"reason":"购物车摘要默认提供订单留言输入","config":{"title":"订单留言","placeholder":"如有特殊要求请留言","surface":"cart"}},{"layout_type":"checkout","layout_option":"default","slot":"checkout-summary-note","area":"content","sort_order":20,"required":true,"reason":"结账摘要默认提供订单留言输入","config":{"title":"订单留言","placeholder":"如有特殊要求请留言","surface":"checkout"}}]}
  */
+use Weline\Theme\Helper\WidgetI18n;
+
+WidgetI18n::prefetchLabels([
+    '订单留言',
+    '如有特殊要求请留言',
+]);
 $rawTitle = trim((string)($this->getData('title') ?? ''));
-$title = $rawTitle !== '' ? (string)__($rawTitle) : (string)__('订单留言');
+$title = $rawTitle !== ''
+    ? (string)WidgetI18n::label($rawTitle)
+    : (string)WidgetI18n::label('订单留言');
 $rawPlaceholder = trim((string)($this->getData('placeholder') ?? ''));
-$placeholder = $rawPlaceholder !== '' ? (string)__($rawPlaceholder) : (string)__('如有特殊要求请留言');
+$placeholder = $rawPlaceholder !== ''
+    ? (string)WidgetI18n::label($rawPlaceholder)
+    : (string)WidgetI18n::label('如有特殊要求请留言');
 $surface = strtolower(trim((string)($this->getData('surface') ?? 'mini-cart')));
 if (!in_array($surface, ['mini-cart', 'cart', 'checkout'], true)) {
     $surface = 'mini-cart';

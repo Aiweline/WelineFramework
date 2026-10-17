@@ -193,14 +193,6 @@ settings,settings
 "B2B price list min_qty 必须 ≥ 1：%{1}","B2B price list min_qty must be ≥ 1: %{1}"
 "B2B membership 数据非法","Invalid B2B membership data"
 批发身份,"Wholesale membership"
-零售,Retail
-零售车,"Retail cart"
-批发车,"Wholesale cart"
-批发车是空的,"Wholesale cart is empty"
-批发车需登录后使用,"Sign in to use the wholesale cart"
-开通批发身份后可使用批发车,"Activate wholesale membership to use the wholesale cart"
-批发不可用,"Unavailable for wholesale"
-关税与进口税费未计入本次定金，到港由买家另付,"Customs duties and import taxes are not included in this deposit; the buyer pays them on arrival"
 等级、挂单跟进与订单沟通,"Tier, hold follow-up & order chat"
 批发经营与阶梯价,"Wholesale enablement and qty tiers"
 "启用批发后默认继承站点 VIP 模板；在此填写阶梯即覆盖该组。清空并保存可恢复继承。本页只维护网站级价目（不含渠道覆盖）。","After enabling wholesale, inherit site VIP template by default; filling tiers here overrides that group. Clear and save to restore inheritance. This page maintains site-level price lists only (no channel overrides)."
@@ -348,6 +340,7 @@ settings,settings
 支持批发,"Wholesale available"
 点击切换到批发模式,"Click to switch to wholesale mode"
 购买方式,"Purchase mode"
+零售,Retail
 批发起订,"Wholesale MOQ"
 件,pcs
 步进,Step
@@ -606,6 +599,13 @@ settings,settings
 "apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify, allowlist, and rollback)"
 "目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default Website"
 显示本帮助,"Show this help"
+零售车,"Retail cart"
+批发车,"Wholesale cart"
+批发车是空的,"Wholesale cart is empty"
+批发车需登录后使用,"Sign in to use the wholesale cart"
+开通批发身份后可使用批发车,"Activate wholesale membership to use the wholesale cart"
+批发不可用,"Unavailable for wholesale"
+关税与进口税费未计入本次定金，到港由买家另付,"Customs duties and import taxes are not included in this deposit; the buyer pays them on arrival"
 卖家审查已通过，可付尾款,"Seller review approved; balance payment is open"
 挂单已驳回,"Hold order rejected"
 操作失败，请稍后重试。,"Operation failed. Please try again later."

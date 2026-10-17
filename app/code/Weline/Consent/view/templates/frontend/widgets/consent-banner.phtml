@@ -16,27 +16,38 @@
  * @widget.default_injections {[{"layout_type":"*","slot":"storefront-tail-chrome","area":"footer","sort_order":60,"required":true,"reason":"店面任意布局默认 Cookie 同意条","config":[]}]}
  */
 
+use Weline\Theme\Helper\WidgetI18n;
+
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+// Path-aware WidgetI18n (not State-lagging __()) so shared chrome bags stay locale-true.
+WidgetI18n::prefetchLabels([
+    'Cookie 同意',
+    '我们使用 Cookie 以改善体验。您可以同意或稍后管理偏好。',
+    'Cookie 政策',
+    '同意',
+    '稍后',
+]);
+$t = static fn (string $word): string => $esc(WidgetI18n::label($word));
 ?>
 <div id="weline-consent-banner"
      class="w-consent-banner"
      role="dialog"
      aria-live="polite"
      data-testid="consent-banner"
-     aria-label="<?= $esc((string)__('Cookie 同意')) ?>"
+     aria-label="<?= $t('Cookie 同意') ?>"
      hidden>
     <div class="w-consent-banner__inner">
         <p class="w-consent-banner__text">
-            <?= $esc((string)__('我们使用 Cookie 以改善体验。您可以同意或稍后管理偏好。')) ?>
-            <a class="w-consent-banner__link" href="@url{'cookie'}"><?= $esc((string)__('Cookie 政策')) ?></a>
+            <?= $t('我们使用 Cookie 以改善体验。您可以同意或稍后管理偏好。') ?>
+            <a class="w-consent-banner__link" href="@url{'cookie'}"><?= $t('Cookie 政策') ?></a>
         </p>
         <div class="w-consent-banner__actions">
             <button type="button"
                     class="w-consent-banner__btn w-consent-banner__btn--primary"
-                    data-consent-accept><?= $esc((string)__('同意')) ?></button>
+                    data-consent-accept><?= $t('同意') ?></button>
             <button type="button"
                     class="w-consent-banner__btn w-consent-banner__btn--secondary"
-                    data-consent-dismiss><?= $esc((string)__('稍后')) ?></button>
+                    data-consent-dismiss><?= $t('稍后') ?></button>
         </div>
     </div>
 </div>

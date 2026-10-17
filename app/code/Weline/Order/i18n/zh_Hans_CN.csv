@@ -291,8 +291,6 @@ switch,转变
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot 必填字段为空：%{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot 数值/hash 非法"
 我的订单,我的订单
-订单留言,订单留言
-如有特殊要求请留言,如有特殊要求请留言
 查看订单进度与支付状态,查看订单进度与支付状态
 全部范围,全部范围
 多仓会拆成多个子订单；同一子订单也可分批发货,多仓会拆成多个子订单；同一子订单也可分批发货
@@ -789,6 +787,8 @@ Outbox,发件箱
 "旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","旧 结帐写入器已被割接门禁止（mode=%{1}）"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）"
+订单留言,订单留言
+如有特殊要求请留言,如有特殊要求请留言
 数据库标识符不能为空,数据库标识符不能为空
 已关闭,已关闭
 未知状态,未知状态

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Order',
-    "version" => '2.13.72',
+    "version" => '2.13.73',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',
@@ -11,6 +11,7 @@ return [
         'Weline_Inventory' => '*',
         'Weline_Payment' => '*',
         'Weline_Queue' => '*',
+        'Weline_Theme' => '*',
         'Weline_Websites' => '*',
     ],
     "optional" => [
