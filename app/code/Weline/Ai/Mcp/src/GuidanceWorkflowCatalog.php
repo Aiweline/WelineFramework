@@ -692,7 +692,7 @@ final class GuidanceWorkflowCatalog
                 ],
                 [
                     'id' => 'no_generated_edit',
-                    'summary' => '禁止直接改 generated/ 与 view/tpl；改源模板后走编译/扫描链路',
+                    'summary' => '禁止 AI 手改 generated/ 与 view/tpl；只许 setup:upgrade/--route/收集命令或 Publisher→CompiledPhpRegistry::put；改源后走系统编译链路（硬规则 no_generated_no_routes_xml）',
                 ],
                 [
                     'id' => 'taglib_attr_no_php',

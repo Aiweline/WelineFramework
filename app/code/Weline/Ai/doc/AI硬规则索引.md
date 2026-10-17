@@ -170,7 +170,7 @@
 | **默认主题用 `!important` 硬抢视觉 / design 皮肤战直接改上游 app/code / 做不到却静默改框架** | [规则/20 §7](./规则/20-前端与主题.md)；[主题开发.md 级联流程](../../../../../dev/ai-command/ai/主题开发.md)；MCP `theme_default_forbids_css_important` / `theme_design_must_inherit_not_mutate_source_widgets` |
 | 业务「配置」另造私有表 / embed `fields` ≠ 声明 `key` / 「范围」写成路径通配 | [规则/30](./规则/30-后端与数据.md) |
 | raw fetch/ajax / alert·confirm / 裸 MutationObserver | [规则/30](./规则/30-后端与数据.md) |
-| 改 Model 不 bump version / URL 写成 `/getEdit` `/postSave` / routes.xml 或 generated 直改 | [规则/30](./规则/30-后端与数据.md) |
+| 改 Model 不 bump version / URL 写成 `/getEdit` `/postSave` / **AI 手改 `generated/`·`view/tpl/`** / routes.xml | [规则/30 §14](./规则/30-后端与数据.md)；MCP **`no_generated_no_routes_xml`**（仅系统升级/收集·Publisher 写；下文读 runtime 袋） |
 | 注释内写 `<?=` `<?php` / 新增注释英文堆砌 / 代码过度巧妙难读 | [规则/30](./规则/30-后端与数据.md) |
 | Taglib callback 裸 `@static(...)` 导致 404 | [规则/30](./规则/30-后端与数据.md)、[规则/20](./规则/20-前端与主题.md) |
 | 业务类自做进程内缓存 / 清理与驱动 key 不一致 | [规则/30](./规则/30-后端与数据.md) |

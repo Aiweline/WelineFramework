@@ -986,7 +986,7 @@ SH;
             ],
             [
                 'id' => 'no_generated_no_routes_xml',
-                'summary' => 'Never edit generated/; never use routes.xml (routing is auto-discovered); end ORM chains with fetch()/fetchArray().',
+                'summary' => 'MANDATORY HARD ABSTRACT: Framework-compiled return-array / template-compile artifacts under `generated/` (routers, hooks, plugins, events, commands, classmap, factories, query_providers, taglibs, widgets, param_schemas, framework/* snapshots, …) and compiled `view/tpl/` MUST NOT be hand-edited by Agent/AI (Write / StrReplace / patch / invent PHP arrays). FORBIDDEN: treating those files as source-of-truth to “fix” by hand. REQUIRED write path ONLY: system upgrade / formal collect·compile commands (examples—not exhaustive: `php bin/w setup:upgrade`, route collect `--route`, event/hook/taglib/widget/command collect, FrameworkCompiler) or Framework Publisher/Writer APIs that persist then `CompiledPhpRegistry::put` — then consumers READ from the process runtime bag, never re-include as a second source of truth. ALSO: never author `routes.xml` (controllers are auto-discovered); end ORM Query chains with `fetch()`/`fetchArray()`. EXEMPT: reading generated files for diagnosis; tests that assert shapes; staging compile trees behind Publisher. Complements CompiledPhpRegistry lifecycle gate. Authority: Framework 开发标准与验收.md; Ai 规则/30.',
                 'doc' => 'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
             ],
             [

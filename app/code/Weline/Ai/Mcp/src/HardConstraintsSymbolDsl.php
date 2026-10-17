@@ -179,6 +179,10 @@ final class HardConstraintsSymbolDsl
             'VerdictLast' => ['gloss_zh' => '决定性结论置全文末', 'rule_ids' => ['user_facing_verdict_last']],
             'SqlBiz' => ['gloss_zh' => '业务层手写SQL方言', 'rule_ids' => ['business_forbids_sql_dialect']],
             'OrmOnly' => ['gloss_zh' => 'SQL仅Adapter/Dialect', 'rule_ids' => ['business_forbids_sql_dialect']],
+            'HandGen' => ['gloss_zh' => 'AI手改generated/或view/tpl', 'rule_ids' => ['no_generated_no_routes_xml']],
+            'RoutesXml' => ['gloss_zh' => '手写routes.xml', 'rule_ids' => ['no_generated_no_routes_xml']],
+            'FetchEnd' => ['gloss_zh' => 'ORM链以fetch/fetchArray收尾', 'rule_ids' => ['no_generated_no_routes_xml']],
+            'SysWriteGen' => ['gloss_zh' => '系统升级/收集命令或Publisher写generated', 'rule_ids' => ['no_generated_no_routes_xml']],
             'CssImp' => ['gloss_zh' => '默认主题视觉!important', 'rule_ids' => ['theme_default_forbids_css_important']],
             'Staff' => ['gloss_zh' => '专席真实子智能体', 'rule_ids' => ['engineering_team_for_new_requirements']],
             'Pass' => ['gloss_zh' => '可宣称通过/完成', 'rule_ids' => ['requirement_acceptance_always']],
@@ -303,6 +307,11 @@ final class HardConstraintsSymbolDsl
                 'formula' => 'SqlBiz→⊥∧(合法SQL→OrmOnly)',
                 'gloss_zh' => '业务禁方言SQL；仅ORM Adapter层',
                 'cluster' => '§D',
+            ],
+            'no_generated_no_routes_xml' => [
+                'formula' => 'HandGen∨RoutesXml∨¬FetchEnd→⊥|□SysWriteGen',
+                'gloss_zh' => '禁手改generated/tpl；禁routes.xml；ORM须fetch',
+                'cluster' => '§P',
             ],
             'theme_default_forbids_css_important' => [
                 'formula' => '(DefaultTheme∧CssImp∧¬UaExc)→⊥',
