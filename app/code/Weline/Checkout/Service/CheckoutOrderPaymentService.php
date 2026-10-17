@@ -172,6 +172,25 @@ final class CheckoutOrderPaymentService
             if (\is_array($order->typePayload['discount_lines'] ?? null)) {
                 $seedDiscountLines = $order->typePayload['discount_lines'];
             }
+            $couponCode = strtoupper(trim((string) (
+                $context['coupon_code']
+                ?? $order->typePayload['coupon_code']
+                ?? $order->money['coupon_code']
+                ?? ''
+            )));
+            $moneyDiscountMinor = max(0, (int) ($order->money['discount_amount_minor'] ?? 0));
+            // Checkout authority: when money has coupon discount but type_payload lines
+            // were not persisted, seed a single coupon/cart line for Payment projection.
+            if ($seedDiscountLines === [] && $moneyDiscountMinor > 0) {
+                $seedDiscountLines = [[
+                    'key' => $couponCode !== '' ? ('coupon:' . $couponCode) : 'discount',
+                    'label' => $couponCode !== ''
+                        ? (string) __('优惠券 (%1)', [$couponCode])
+                        : (string) __('优惠'),
+                    'amount_minor' => -1 * $moneyDiscountMinor,
+                    'source_type' => $couponCode !== '' ? 'coupon' : 'cart',
+                ]];
+            }
             $paymentContext = [
                 'order_id' => $order->orderUuid,
                 'payable_type' => 'weline_order',
@@ -190,7 +209,7 @@ final class CheckoutOrderPaymentService
                 'totals' => $order->money,
                 'discount_lines' => $seedDiscountLines,
                 'shipping_snapshot' => $order->shipping,
-                'coupon_code' => trim((string) ($context['coupon_code'] ?? '')),
+                'coupon_code' => $couponCode,
                 'checkout_entry' => (string) ($order->checkoutEntry ?? ''),
                 'payment_mode' => strtolower(trim((string) ($context['payment_mode'] ?? ''))),
                 'continue_pay' => !empty($context['continue_pay'])

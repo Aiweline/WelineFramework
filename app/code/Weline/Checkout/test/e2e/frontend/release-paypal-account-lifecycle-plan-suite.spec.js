@@ -79,7 +79,10 @@ moduleDescribe(test, MODULE, '发布回归 PayPal 结账生命周期', () => {
       const started = await submitPaypalCheckout(page, fixture.guest_email);
       const existingPaypal = started.paypalPage
         || (/paypal\.com|sandbox\.paypal/i.test(page.url()) ? page : null);
-      const paypalPage = await approvePaypalAndLand(context, started.redirect_url, existingPaypal);
+      const paypalPage = await approvePaypalAndLand(context, started.redirect_url, existingPaypal, {
+        transaction_no: started.transaction_no || '',
+        order_uuid: started.order_uuid || '',
+      });
 
       await paypalPage.waitForSelector('[data-testid="checkout-success"]', { timeout: 120000 });
       const success = paypalPage.locator('[data-testid="checkout-success"]');
@@ -157,7 +160,10 @@ moduleDescribe(test, MODULE, '发布回归 PayPal 结账生命周期', () => {
       const started = await submitPaypalCheckout(page, fixture.email);
       const existingPaypal = started.paypalPage
         || (/paypal\.com|sandbox\.paypal/i.test(page.url()) ? page : null);
-      const paypalPage = await approvePaypalAndLand(context, started.redirect_url, existingPaypal);
+      const paypalPage = await approvePaypalAndLand(context, started.redirect_url, existingPaypal, {
+        transaction_no: started.transaction_no || '',
+        order_uuid: started.order_uuid || '',
+      });
       await paypalPage.waitForSelector('[data-testid="checkout-success"]', { timeout: 120000 });
       const success = paypalPage.locator('[data-testid="checkout-success"]');
       const orderUuid = (await success.getAttribute('data-order-uuid')) || started.order_uuid;
@@ -269,7 +275,10 @@ moduleDescribe(test, MODULE, '发布回归 PayPal 结账生命周期', () => {
       const started = await submitPaypalCheckout(checkoutPage, fixture.email);
       const existingPaypal = started.paypalPage
         || (/paypal\.com|sandbox\.paypal/i.test(checkoutPage.url()) ? checkoutPage : null);
-      const paypal = await approvePaypalAndLand(payContext, started.redirect_url, existingPaypal);
+      const paypal = await approvePaypalAndLand(payContext, started.redirect_url, existingPaypal, {
+        transaction_no: started.transaction_no || '',
+        order_uuid: started.order_uuid || '',
+      });
       await paypal.waitForSelector('[data-testid="checkout-success"]', { timeout: 120000 });
       const events = await waitForCheckoutSuccessEvent(paypal, 45000);
       expect(

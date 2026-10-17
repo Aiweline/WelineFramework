@@ -7,8 +7,10 @@ const { execFileSync } = require('child_process');
 const {
   isControllable,
   paymentMethodCode,
-  assertWalletNotHung,
+  awaitPayPalApproveUnderShellAuthority,
   WALLET_FAIL_MS,
+  DEFAULT_LAND_BUDGET_MS,
+  extractShellKeysFromUrl,
 } = require('./payment-pathway-driver');
 
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
@@ -62,9 +64,99 @@ function assertStep(condition, stepId, detail) {
   }
 }
 
-async function paypalLoginAndApprove(paypal) {
+/**
+ * Shell-authority probe: Transaction.isSuccess / order inspect.paid.
+ * Prefer transaction_no; fall back to order_uuid. Never invents copy state machines.
+ *
+ * @param {{transaction_no?:string, order_uuid?:string}} keys
+ * @returns {() => object}
+ */
+function makeShellPaidProbe(keys = {}) {
+  let txn = String(keys.transaction_no || '').trim();
+  let orderUuid = String(keys.order_uuid || '').trim();
+  return (fresh = {}) => {
+    if (fresh && fresh.transaction_no) txn = String(fresh.transaction_no || '').trim() || txn;
+    if (fresh && fresh.order_uuid) orderUuid = String(fresh.order_uuid || '').trim() || orderUuid;
+    if (txn) {
+      try {
+        const parsed = runFixture('inspect_transaction', { transaction_no: txn });
+        const data = (parsed && parsed.data) || {};
+        return {
+          paid: !!data.paid,
+          is_success: !!data.is_success,
+          status: String(data.status || ''),
+          found: !!data.found,
+          transaction_no: txn,
+          via: 'inspect_transaction',
+        };
+      } catch (_) {
+        return { paid: false, transaction_no: txn, via: 'inspect_transaction_error' };
+      }
+    }
+    if (orderUuid) {
+      try {
+        const parsed = runFixture('inspect', { order_uuid: orderUuid });
+        const data = (parsed && parsed.data) || {};
+        return {
+          paid: !!data.paid
+            || Number(data.success_transaction_count) >= 1
+            || /paid|success|captured|completed/i.test(String(data.payment_status || '')),
+          status: String(data.payment_status || data.status || ''),
+          order_uuid: orderUuid,
+          via: 'inspect_order',
+        };
+      } catch (_) {
+        return { paid: false, order_uuid: orderUuid, via: 'inspect_order_error' };
+      }
+    }
+    return { paid: false, skipped: true, via: 'no_shell_key' };
+  };
+}
+
+/**
+ * Harvest transaction_no / order_uuid from checkout API JSON shapes.
+ * @param {any} body
+ */
+function harvestShellKeysFromPayload(body, into) {
+  if (!body || typeof body !== 'object' || !into) return into;
+  const payment = (body.payment && typeof body.payment === 'object')
+    ? body.payment
+    : ((body.data && body.data.payment) || {});
+  const data = (body.data && typeof body.data === 'object') ? body.data : body;
+  const tx0 = Array.isArray(payment.transactions) ? payment.transactions[0] : null;
+  const txn = String(
+    body.transaction_no
+    || data.transaction_no
+    || payment.transaction_no
+    || (tx0 && tx0.transaction_no)
+    || ''
+  ).trim();
+  const uuids = Array.isArray(data.order_uuids) ? data.order_uuids : [];
+  const orderUuid = String(
+    body.order_uuid
+    || data.order_uuid
+    || uuids[0]
+    || ''
+  ).trim();
+  if (txn && !into.transaction_no) into.transaction_no = txn;
+  if (orderUuid && !into.order_uuid) into.order_uuid = orderUuid;
+  return into;
+}
+
+/**
+ * @param {import('@playwright/test').Page} paypal
+ * @param {{transaction_no?:string, order_uuid?:string, wallet_budget_ms?:number, land_budget_ms?:number, includeLand?:boolean}} [shell]
+ */
+async function paypalLoginAndApprove(paypal, shell = {}) {
+  // Login path aligned with DEMO10. Approve wait uses shell authority (not wallet copy).
   await paypal.waitForLoadState('domcontentloaded');
-  for (const sel of ['#loginWithPassword', '#tryPasswordLink', 'a:has-text("Use password instead")', 'a:has-text("Log in with your password")']) {
+  for (const sel of [
+    '#loginWithPassword',
+    '#tryPasswordLink',
+    'a:has-text("Use password instead")',
+    'a:has-text("Log in with your password")',
+    'a:has-text("Try another way")',
+  ]) {
     const loc = paypal.locator(sel).first();
     if (await loc.count()) {
       await loc.click({ timeout: 3000 }).catch(() => {});
@@ -77,57 +169,50 @@ async function paypalLoginAndApprove(paypal) {
   ).first();
   await email.waitFor({ state: 'visible', timeout: 45000 }).catch(() => {});
   if (await email.count()) {
-    await email.click({ force: true }).catch(() => {});
-    await email.fill('').catch(() => {});
+    // DEMO10: fill without force-clear remount churn (suite force+empty previously remounted forms).
     await email.fill(BUYER_EMAIL, { timeout: 20000 }).catch(async () => {
-      await paypal.keyboard.type(BUYER_EMAIL, { delay: 25 });
+      await email.click({ force: true }).catch(() => {});
+      await paypal.keyboard.type(BUYER_EMAIL, { delay: 20 });
     });
   }
   const next = paypal.locator(
     '#btnNext, button:has-text("Next"), button[type="submit"]:has-text("Next"), button:has-text("下一步")'
   ).first();
   if (await next.count() && await next.isVisible().catch(() => false)) {
-    await next.click({ force: true }).catch(() => {});
-    await paypal.waitForTimeout(1500);
+    // Prefer non-force (DEMO10); force only if normal click fails.
+    await next.click({ timeout: 5000 }).catch(async () => {
+      await next.click({ force: true }).catch(() => {});
+    });
+    await paypal.waitForTimeout(1200);
   }
   const pass = paypal.locator('#password, input[name="login_password"], input[type="password"]').first();
   if (await pass.count()) {
     await pass.waitFor({ state: 'visible', timeout: 45000 }).catch(() => {});
     await pass.fill(BUYER_PASS).catch(() => {});
-    await paypal.locator(
+    const loginBtn = paypal.locator(
       '#btnLogin, button:has-text("Log In"), button:has-text("Log in"), button:has-text("登录")'
-    ).first().click({ force: true }).catch(() => {});
+    ).first();
+    await loginBtn.click({ timeout: 5000 }).catch(async () => {
+      await loginBtn.click({ force: true }).catch(() => {});
+    });
     await paypal.waitForTimeout(2500);
   }
-  // Wallet interstitial: fail-fast (≤ WALLET_FAIL_MS) — never spin 9 minutes.
-  await assertWalletNotHung(paypal, WALLET_FAIL_MS);
-  for (let i = 0; i < 40; i += 1) {
-    if (/test\.weline\.com|127\.0\.0\.1|checkout\/success|payment\/frontend\/callback|express-review/.test(paypal.url())) {
-      return;
-    }
-    const walletBusy = await paypal.locator('text=/Getting your wallet/i').isVisible().catch(() => false);
-    if (walletBusy) {
-      await assertWalletNotHung(paypal, WALLET_FAIL_MS);
-      continue;
-    }
-    // Still on email step — retry fill (PayPal sometimes remounts the form).
-    if (await email.isVisible().catch(() => false)) {
-      const cur = await email.inputValue().catch(() => '');
-      if (!String(cur || '').trim()) {
-        await email.fill(BUYER_EMAIL).catch(() => {});
-      }
-      if (await next.isVisible().catch(() => false)) {
-        await next.click({ force: true }).catch(() => {});
-      }
-    }
-    const cont = paypal.locator(
-      '#payment-submit-btn, #consentButton, button[data-id="payment-submit-btn"], [data-testid="consentButton"], button:has-text("Complete Purchase"), button:has-text("Agree and Continue"), button:has-text("Pay Now"), button:has-text("Continue"), button:has-text("Confirm"), [data-testid="submit-button"]'
-    ).first();
-    if (await cont.count() && await cont.isVisible().catch(() => false)) {
-      await cont.click({ timeout: 5000, force: true }).catch(() => {});
-    }
-    await paypal.waitForTimeout(2000);
-  }
+  const urlKeys = extractShellKeysFromUrl(paypal.url());
+  const transactionNo = String(shell.transaction_no || urlKeys.transaction_no || '').trim();
+  const orderUuid = String(shell.order_uuid || urlKeys.order_uuid || '').trim();
+  const includeLand = shell.includeLand === true;
+  await awaitPayPalApproveUnderShellAuthority({
+    paypal,
+    transaction_no: transactionNo,
+    order_uuid: orderUuid,
+    wallet_budget_ms: shell.wallet_budget_ms || WALLET_FAIL_MS,
+    land_budget_ms: shell.land_budget_ms || DEFAULT_LAND_BUDGET_MS,
+    probeShellPaid: makeShellPaidProbe({ transaction_no: transactionNo, order_uuid: orderUuid }),
+    email,
+    next,
+    buyerEmail: BUYER_EMAIL,
+    includeLand,
+  });
 }
 
 const EVENT_PROBE_INIT = `(() => {
@@ -757,48 +842,69 @@ async function submitPaypalCheckout(page, email) {
   const submit = page.locator('[data-submit], button[type="submit"]:has-text("提交"), button:has-text("下单")').first();
   await expectVisibleOrThrow(page, submit, 'checkout.submit_btn');
 
+  const shellKeys = { transaction_no: '', order_uuid: '' };
+  const onCheckoutResponse = async (res) => {
+    try {
+      const u = String(res.url() || '');
+      if (!/checkout|submit|payment|createPayment|pay/i.test(u)) return;
+      if (res.status() < 200 || res.status() >= 300) return;
+      const body = await res.json().catch(() => null);
+      harvestShellKeysFromPayload(body, shellKeys);
+      if (body && body.data) harvestShellKeysFromPayload(body.data, shellKeys);
+    } catch (_) {
+      // ignore non-JSON
+    }
+  };
+  page.on('response', onCheckoutResponse);
+
   const controllable = isControllable() || /^(fake_card|offline|free|cod)$/.test(wanted);
   const raceTimeout = controllable ? 90000 : 180000;
-  const racePromise = controllable
-    ? Promise.race([
-      page.waitForURL(/checkout\/success/, { timeout: raceTimeout })
-        .then(() => ({ via: 'success_nav', redirect_url: page.url(), paypalPage: page, order_uuid: '' }))
-        .catch(() => null),
-      page.waitForSelector('[data-testid="checkout-success"]', { timeout: raceTimeout })
-        .then(async () => {
-          const uuid = await page.locator('[data-testid="checkout-success"]').getAttribute('data-order-uuid').catch(() => '');
-          return {
-            via: 'success_dom',
-            redirect_url: page.url(),
-            paypalPage: page,
-            order_uuid: String(uuid || ''),
-          };
-        })
-        .catch(() => null),
-    ])
-    : Promise.race([
-      page.waitForURL(/paypal\.com|sandbox\.paypal/, { timeout: raceTimeout })
-        .then(() => ({ via: 'nav', redirect_url: page.url(), paypalPage: page }))
-        .catch(() => null),
-      page.context().waitForEvent('page', { timeout: raceTimeout })
-        .then(async (popup) => {
-          await popup.waitForLoadState('domcontentloaded').catch(() => {});
-          if (/paypal\.com|sandbox\.paypal/i.test(popup.url())) {
-            return { via: 'popup', redirect_url: popup.url(), paypalPage: popup };
-          }
-          return null;
-        })
-        .catch(() => null),
-    ]);
+  let raced;
+  try {
+    const racePromise = controllable
+      ? Promise.race([
+        page.waitForURL(/checkout\/success/, { timeout: raceTimeout })
+          .then(() => ({ via: 'success_nav', redirect_url: page.url(), paypalPage: page, order_uuid: '' }))
+          .catch(() => null),
+        page.waitForSelector('[data-testid="checkout-success"]', { timeout: raceTimeout })
+          .then(async () => {
+            const uuid = await page.locator('[data-testid="checkout-success"]').getAttribute('data-order-uuid').catch(() => '');
+            return {
+              via: 'success_dom',
+              redirect_url: page.url(),
+              paypalPage: page,
+              order_uuid: String(uuid || ''),
+            };
+          })
+          .catch(() => null),
+      ])
+      : Promise.race([
+        page.waitForURL(/paypal\.com|sandbox\.paypal/, { timeout: raceTimeout })
+          .then(() => ({ via: 'nav', redirect_url: page.url(), paypalPage: page }))
+          .catch(() => null),
+        page.context().waitForEvent('page', { timeout: raceTimeout })
+          .then(async (popup) => {
+            await popup.waitForLoadState('domcontentloaded').catch(() => {});
+            if (/paypal\.com|sandbox\.paypal/i.test(popup.url())) {
+              return { via: 'popup', redirect_url: popup.url(), paypalPage: popup };
+            }
+            return null;
+          })
+          .catch(() => null),
+      ]);
 
-  await submit.click({ timeout: 15000 });
-  const raced = await racePromise;
+    await submit.click({ timeout: 15000 });
+    raced = await racePromise;
+  } finally {
+    page.off('response', onCheckoutResponse);
+  }
   if (raced && (raced.redirect_url || raced.order_uuid)) {
     return {
       success: true,
       stage: `ui_${raced.via}`,
       redirect_url: raced.redirect_url || '',
-      order_uuid: raced.order_uuid || '',
+      order_uuid: String(raced.order_uuid || shellKeys.order_uuid || ''),
+      transaction_no: String(shellKeys.transaction_no || ''),
       paypalPage: raced.paypalPage,
     };
   }
@@ -808,7 +914,8 @@ async function submitPaypalCheckout(page, email) {
       success: true,
       stage: 'ui_success_url',
       redirect_url: page.url(),
-      order_uuid: String(uuid || ''),
+      order_uuid: String(uuid || shellKeys.order_uuid || ''),
+      transaction_no: String(shellKeys.transaction_no || ''),
       paypalPage: page,
     };
   }
@@ -821,7 +928,8 @@ async function submitPaypalCheckout(page, email) {
           success: true,
           stage: 'ui_context_scan',
           redirect_url: open.url(),
-          order_uuid: '',
+          order_uuid: String(shellKeys.order_uuid || ''),
+          transaction_no: String(shellKeys.transaction_no || ''),
           paypalPage: open,
         };
       }
@@ -885,10 +993,18 @@ async function submitPaypalCheckout(page, email) {
     const payload = (result && result.data && typeof result.data === 'object') ? result.data : result;
     const payment = (result && result.payment) || (payload && payload.payment) || {};
     const orderUuids = Array.isArray(payload && payload.order_uuids) ? payload.order_uuids : [];
+    const tx0 = Array.isArray(payment.transactions) ? payment.transactions[0] : null;
     return {
       success: !(result && result.success === false),
       stage: 'api_submit',
       order_uuid: String(orderUuids[0] || '').trim(),
+      transaction_no: String(
+        payment.transaction_no
+        || (result && result.transaction_no)
+        || (payload && payload.transaction_no)
+        || (tx0 && tx0.transaction_no)
+        || ''
+      ).trim(),
       checkout_group_uuid: String((payload && payload.checkout_group_uuid) || '').trim(),
       redirect_url: String(payment.redirect_url || '').trim(),
       error_code: String(payment.error_code || ''),
@@ -900,13 +1016,25 @@ async function submitPaypalCheckout(page, email) {
     stage: 'api_eval_error',
     message: String(error && error.message || error),
     redirect_url: /paypal\.com/i.test(page.url()) ? page.url() : '',
+    order_uuid: String(shellKeys.order_uuid || ''),
+    transaction_no: String(shellKeys.transaction_no || ''),
   }));
 
   if (started.redirect_url) {
-    return started;
+    return {
+      ...started,
+      order_uuid: String(started.order_uuid || shellKeys.order_uuid || ''),
+      transaction_no: String(started.transaction_no || shellKeys.transaction_no || ''),
+    };
   }
   if (/paypal\.com|sandbox\.paypal/i.test(page.url())) {
-    return { success: true, stage: 'page_url', redirect_url: page.url(), order_uuid: started.order_uuid || '' };
+    return {
+      success: true,
+      stage: 'page_url',
+      redirect_url: page.url(),
+      order_uuid: String(started.order_uuid || shellKeys.order_uuid || ''),
+      transaction_no: String(started.transaction_no || shellKeys.transaction_no || ''),
+    };
   }
   // FORCE_PAYMENT_METHOD=fake_card (and similar offline methods) pay in-process:
   // success + order_uuid with empty redirect_url is durable evidence, not a fail.
@@ -930,7 +1058,13 @@ async function expectVisibleOrThrow(page, locator, stepId) {
   }
 }
 
-async function approvePaypalAndLand(context, redirectUrl, existingPage = null) {
+/**
+ * @param {import('@playwright/test').BrowserContext} context
+ * @param {string} redirectUrl
+ * @param {import('@playwright/test').Page|null} [existingPage]
+ * @param {{transaction_no?:string, order_uuid?:string, wallet_budget_ms?:number, land_budget_ms?:number}} [shell]
+ */
+async function approvePaypalAndLand(context, redirectUrl, existingPage = null, shell = {}) {
   // Controllable driver: offline methods land on success without PayPal DOM.
   if (isControllable() || !redirectUrl || !/paypal\.com|sandbox\.paypal/i.test(String(redirectUrl || ''))) {
     const page = existingPage
@@ -952,24 +1086,25 @@ async function approvePaypalAndLand(context, redirectUrl, existingPage = null) {
     paypal = await context.newPage();
     await paypal.goto(redirectUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
   }
-  await paypalLoginAndApprove(paypal);
-  const landDeadline = Date.now() + Math.max(WALLET_FAIL_MS + 60000, 120000);
-  while (Date.now() < landDeadline) {
-    if (/test\.weline\.com|127\.0\.0\.1/.test(paypal.url()) && /checkout\/success|express-review|payment\/frontend\/callback/.test(paypal.url())) {
-      break;
-    }
-    if (/paypal\.com|sandbox\.paypal/i.test(paypal.url())) {
-      await assertWalletNotHung(paypal, WALLET_FAIL_MS);
-      const cont = paypal.locator(
-        '#payment-submit-btn, #consentButton, button[data-id="payment-submit-btn"], button:has-text("Complete Purchase"), button:has-text("Pay Now"), button:has-text("Continue")'
-      ).first();
-      if (await cont.isVisible().catch(() => false)) {
-        await cont.click({ force: true, timeout: 3000 }).catch(() => {});
-      }
-    }
-    await paypal.waitForTimeout(1000);
+
+  const urlKeys = extractShellKeysFromUrl(paypal.url());
+  const transactionNo = String(shell.transaction_no || urlKeys.transaction_no || '').trim();
+  const orderUuid = String(shell.order_uuid || urlKeys.order_uuid || '').trim();
+  const landBudgetMs = shell.land_budget_ms || DEFAULT_LAND_BUDGET_MS;
+
+  // Login + shared shell-authority waiter (approve + land). No assertWalletNotHung text gate.
+  await paypalLoginAndApprove(paypal, {
+    transaction_no: transactionNo,
+    order_uuid: orderUuid,
+    wallet_budget_ms: shell.wallet_budget_ms || WALLET_FAIL_MS,
+    land_budget_ms: landBudgetMs,
+    includeLand: true,
+  });
+
+  // Legal intermediate: /payment/handoff/ → Checkout L3 (extra settle if waiter stopped at handoff).
+  if (/payment\/handoff/.test(paypal.url())) {
+    await paypal.waitForURL(/checkout\/success|express-review/, { timeout: Math.min(90000, landBudgetMs) }).catch(() => {});
   }
-  await paypal.waitForURL(/checkout\/success|express-review|payment\/frontend\/callback/, { timeout: 90000 }).catch(() => {});
   if (/express-review/.test(paypal.url())) {
     const confirm = paypal.locator('[data-testid="express-confirm-pay"]').first();
     if (await confirm.count()) {
@@ -1178,6 +1313,8 @@ module.exports = {
   runFixture,
   assertStep,
   paypalLoginAndApprove,
+  makeShellPaidProbe,
+  harvestShellKeysFromPayload,
   installEventProbe,
   attachEventProbeLive,
   collectEvents,

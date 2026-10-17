@@ -8,6 +8,7 @@ declare(strict_types=1);
  * stdin JSON actions:
  * - prepare: create (or reuse) e2e customer; return PDP tip + credentials
  * - inspect: read order / payment / fulfillment by order_uuid
+ * - inspect_transaction: read-only PaymentTransaction by transaction_no (paid/status)
  * - cleanup: remove fixture customer + tagged orders
  *
  * Does NOT forge payment success. Playwright must complete PayPal for real orders.
@@ -218,6 +219,13 @@ function rel_paypal_inspect(string $orderUuid): array
         }
     }
 
+    $paid = $successTx >= 1
+        || in_array(
+            strtolower(trim((string)($row[Order::schema_fields_PAYMENT_STATUS] ?? ''))),
+            ['paid', 'success', 'captured', 'completed'],
+            true
+        );
+
     return [
         'order_id' => $orderId,
         'order_uuid' => $orderUuid,
@@ -234,6 +242,56 @@ function rel_paypal_inspect(string $orderUuid): array
         'item_count' => is_array($items) ? count($items) : 0,
         'success_transaction_count' => $successTx,
         'transaction_count' => is_array($txs) ? count($txs) : 0,
+        'paid' => $paid,
+    ];
+}
+
+/**
+ * Thin read-only PaymentTransaction probe for e2e shell authority (no status machine).
+ *
+ * @return array<string, mixed>
+ */
+function rel_paypal_inspect_transaction(string $transactionNo): array
+{
+    $transactionNo = trim($transactionNo);
+    if ($transactionNo === '') {
+        return [
+            'found' => false,
+            'paid' => false,
+            'is_success' => false,
+            'status' => '',
+            'transaction_no' => '',
+        ];
+    }
+
+    $om = ObjectManager::getInstance();
+    /** @var PaymentTransaction $tx */
+    $tx = $om->get(PaymentTransaction::class);
+    $tx->clear()->reset()
+        ->where(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo)
+        ->find()
+        ->fetch();
+    if (!$tx->getId()) {
+        return [
+            'found' => false,
+            'paid' => false,
+            'is_success' => false,
+            'status' => '',
+            'transaction_no' => $transactionNo,
+        ];
+    }
+
+    $status = strtolower(trim((string)$tx->getData(PaymentTransaction::schema_fields_STATUS)));
+    $isSuccess = method_exists($tx, 'isSuccess') ? (bool)$tx->isSuccess() : ($status === PaymentTransaction::STATUS_SUCCESS);
+    $paid = $isSuccess || in_array($status, ['success', 'succeeded', 'paid', 'captured', 'completed'], true);
+
+    return [
+        'found' => true,
+        'paid' => $paid,
+        'is_success' => $isSuccess,
+        'status' => $status,
+        'transaction_no' => $transactionNo,
+        'order_id' => (string)$tx->getData(PaymentTransaction::schema_fields_ORDER_ID),
     ];
 }
 
@@ -323,6 +381,11 @@ try {
 
     if ($action === 'inspect') {
         $data = rel_paypal_inspect((string)($input['order_uuid'] ?? ''));
+        rel_paypal_output(['ok' => true, 'data' => $data]);
+    }
+
+    if ($action === 'inspect_transaction') {
+        $data = rel_paypal_inspect_transaction((string)($input['transaction_no'] ?? ''));
         rel_paypal_output(['ok' => true, 'data' => $data]);
     }
 

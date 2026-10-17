@@ -73,6 +73,40 @@ final class PaymentBrowserReturnLandingOrchestrator
             );
         }
 
+        // Capture already succeeded: prefer Checkout L3 / browser_landing over L2 handoff
+        // when landing is checkout/success (not express-review confirm gate). Handoff remains
+        // for unpaid sync races; paid success should not strand browsers on /payment/handoff/.
+        $landingUrl = trim((string) ($landing['browser_landing_url'] ?? ''));
+        if (
+            $landingUrl !== ''
+            && str_contains($landingUrl, 'checkout/success')
+            && !str_contains($landingUrl, 'checkout/express-review')
+        ) {
+            $params = \is_array($landing['browser_landing_params'] ?? null)
+                ? $landing['browser_landing_params']
+                : [];
+            $transactionNo = trim((string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO));
+            if ($transactionNo !== '') {
+                $params['transaction_no'] = $transactionNo;
+            }
+            $orderUuid = trim((string) $transaction->getData(PaymentTransaction::schema_fields_ORDER_ID));
+            if ($orderUuid !== '' && empty($params['order_uuid'])) {
+                $params['order_uuid'] = $orderUuid;
+            }
+            $merged = $this->mergeLandingUrl($landingUrl, $params);
+            $base = trim((string) ($landing['storefront_base_url'] ?? ''));
+            if ($base !== '') {
+                $merged = $this->storefrontUrls->ensureLandingUnderBase($merged, $base);
+            }
+
+            return [
+                'decision' => self::DECISION_TERMINAL_L1,
+                'redirect_path' => $merged,
+                'redirect_params' => [],
+                'absolute' => str_starts_with($merged, 'http://') || str_starts_with($merged, 'https://'),
+            ];
+        }
+
         return $this->bindAbsoluteIfPossible([
             'decision' => self::DECISION_HANDOFF_L2,
             'redirect_path' => 'payment/handoff',

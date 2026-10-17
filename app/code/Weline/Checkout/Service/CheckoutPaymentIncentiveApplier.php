@@ -58,16 +58,25 @@ final class CheckoutPaymentIncentiveApplier
             ]);
             /** @var PaymentMethodIncentiveQuoteInterface $quote */
             $quote = $om->getInstance(PaymentMethodIncentiveQuoteInterface::class);
+            // Carry prior totals (esp. discount_amount_minor) so coupon authority survives
+            // when discount_lines are not yet seeded on the payment context.
+            $seedTotals = [
+                'grand_total_minor' => $baseline,
+                'currency' => $currency,
+            ];
+            if (\is_array($scopeContext['totals'] ?? null)) {
+                $seedTotals = array_replace($seedTotals, $scopeContext['totals'], [
+                    'grand_total_minor' => $baseline,
+                    'currency' => $currency,
+                ]);
+            }
             $applied = $quote->applyToOrderData($method, [
                 'amount_minor' => $baseline,
                 'amount' => $baseline / 100,
                 'currency' => $currency,
                 'currency_code' => $currency,
                 'discount_lines' => $existingDiscountLines,
-                'totals' => [
-                    'grand_total_minor' => $baseline,
-                    'currency' => $currency,
-                ],
+                'totals' => $seedTotals,
             ], $runtime);
             $orderData = \is_array($applied['order_data'] ?? null) ? $applied['order_data'] : [];
             $savings = max(0, (int) ($applied['savings_minor'] ?? 0));
@@ -107,6 +116,7 @@ final class CheckoutPaymentIncentiveApplier
         $currency = strtoupper(trim((string) ($orderData['currency'] ?? $orderData['currency_code'] ?? 'CNY'))) ?: 'CNY';
         $baseline = (int) ($orderData['amount_minor'] ?? round(((float) ($orderData['amount'] ?? 0)) * 100));
         $lines = \is_array($orderData['discount_lines'] ?? null) ? $orderData['discount_lines'] : [];
+        $totals = \is_array($orderData['totals'] ?? null) ? $orderData['totals'] : [];
         $result = $this->apply(
             $method,
             $baseline,
@@ -117,17 +127,25 @@ final class CheckoutPaymentIncentiveApplier
                 'website_id' => (int) ($orderData['website_id'] ?? 0),
                 'store_id' => (int) ($orderData['store_id'] ?? 0),
                 'currency' => $currency,
+                'totals' => $totals,
             ],
         );
         $orderData['amount_minor'] = $result['grand_total_minor'];
         $orderData['amount'] = $result['grand_total_minor'] / 100;
         $orderData['discount_lines'] = $result['discount_lines'];
         $orderData['payment_method_incentive_amount_minor'] = $result['payment_method_incentive_amount_minor'];
-        $totals = \is_array($orderData['totals'] ?? null) ? $orderData['totals'] : [];
-        $orderData['totals'] = array_replace($totals, $result['totals'], [
+        $mergedTotals = array_replace($totals, $result['totals'], [
             'grand_total_minor' => $result['grand_total_minor'],
             'currency' => $currency,
         ]);
+        // Never let incentive merge claim discount=0 when order money already carried a coupon.
+        $priorDisc = max(0, (int) ($totals['discount_amount_minor'] ?? 0));
+        $mergedDisc = max(0, (int) ($mergedTotals['discount_amount_minor'] ?? 0));
+        if ($priorDisc > $mergedDisc) {
+            $mergedTotals['discount_amount_minor'] = $priorDisc
+                + max(0, (int) ($result['savings_minor'] ?? 0));
+        }
+        $orderData['totals'] = $mergedTotals;
 
         return $orderData;
     }

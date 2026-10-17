@@ -160,11 +160,16 @@ final class PaymentMethodIncentiveQuoteService implements PaymentMethodIncentive
             }
             $nonIncentiveDiscountAbs += abs((int) ($line['amount_minor'] ?? 0));
         }
-        $totals['discount_amount_minor'] = $nonIncentiveDiscountAbs + $savings;
+        // Preserve checkout/order coupon discount when discount_lines are empty or incomplete.
+        // Prior bug: lines=[] overwrote totals.discount_amount_minor to 0 (coupon lost on intent).
+        $priorDiscountAbs = max(0, (int) ($totals['discount_amount_minor'] ?? 0));
+        $priorDiscountBase = max(0, $priorDiscountAbs - $previousIncentiveAbs);
+        $couponOrCartDiscountAbs = max($nonIncentiveDiscountAbs, $priorDiscountBase);
+        $totals['discount_amount_minor'] = $couponOrCartDiscountAbs + $savings;
         $totals['grand_total_minor'] = $newAmountMinor;
         $totals['currency'] = $currency;
         if (!isset($totals['subtotal_minor']) && $newAmountMinor > 0) {
-            $totals['subtotal_minor'] = $newAmountMinor + $nonIncentiveDiscountAbs + $savings
+            $totals['subtotal_minor'] = $newAmountMinor + $couponOrCartDiscountAbs + $savings
                 - (int) ($totals['shipping_amount_minor'] ?? 0)
                 - (int) ($totals['tax_amount_minor'] ?? 0);
         }

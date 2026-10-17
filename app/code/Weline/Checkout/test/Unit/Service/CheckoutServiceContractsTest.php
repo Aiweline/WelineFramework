@@ -597,6 +597,8 @@ private function assert_CheckoutPaymentIncentiveApplier_test_checkout_applier_an
     $applier = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Checkout' . '/Service/CheckoutPaymentIncentiveApplier.php');
     self::assertStringContainsString('PaymentMethodIncentiveQuoteInterface', $applier);
     self::assertStringContainsString('applyToPaymentContext', $applier);
+    self::assertStringContainsString("'totals' => \$totals", $applier);
+    self::assertStringContainsString('Never let incentive merge claim discount=0', $applier);
     $submit = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Checkout' . '/Service/CheckoutGroupSubmitService.php');
     self::assertStringContainsString('CheckoutPaymentIncentiveApplier', $submit);
     self::assertStringContainsString('discount_lines', $submit);
@@ -604,6 +606,9 @@ private function assert_CheckoutPaymentIncentiveApplier_test_checkout_applier_an
     $pay = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Checkout' . '/Service/CheckoutOrderPaymentService.php');
     self::assertStringContainsString('CheckoutPaymentIncentiveApplier', $pay);
     self::assertStringContainsString('syncOrderPaymentIncentive', $pay);
+    self::assertStringContainsString("source_type' => \$couponCode !== '' ? 'coupon' : 'cart'", $pay);
+    $provider = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Checkout' . '/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php');
+    self::assertStringContainsString("\$payContext['coupon_code'] = \$sessionCoupon", $provider);
 }
 
 private function assert_CheckoutPaymentMethodFallback_testCheckoutTemplateDoesNotHardcodeProviderMethodCode(): void

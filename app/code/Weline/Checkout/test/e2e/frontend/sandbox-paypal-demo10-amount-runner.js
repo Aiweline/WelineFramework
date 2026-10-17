@@ -7,8 +7,17 @@
  * (and discount applied for DEMO10).
  */
 const path = require('path');
+const { execFileSync } = require('child_process');
 const { chromium } = require(path.resolve(__dirname, '../../../../../../../tests/e2e/node_modules/playwright'));
+const {
+  awaitPayPalApproveUnderShellAuthority,
+  WALLET_FAIL_MS,
+  DEFAULT_LAND_BUDGET_MS,
+  extractShellKeysFromUrl,
+} = require('./payment-pathway-driver');
 
+const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
+const REL_FIXTURE = path.resolve(__dirname, 'release-paypal-account-lifecycle-fixture.php');
 const FRONTEND = process.env.PLAYWRIGHT_TARGET_ORIGIN || 'https://p05113ef3.test.weline.com:9555';
 const FLOW = String(process.env.FLOW || 'checkout').toLowerCase();
 const COUPON = String(process.env.COUPON_CODE || 'DEMO10').trim().toUpperCase();
@@ -72,7 +81,48 @@ function extractPaymentAmountMinor(payload) {
   return null;
 }
 
-async function loginPayPal(paypal) {
+function demo10ShellPaidProbe(transactionNo) {
+  const txn = String(transactionNo || '').trim();
+  return () => {
+    if (!txn) return { paid: false, skipped: true };
+    try {
+      const stdout = execFileSync('php', [REL_FIXTURE], {
+        cwd: ROOT_DIR,
+        input: JSON.stringify({ action: 'inspect_transaction', transaction_no: txn }),
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          HTTPS_PROXY: '',
+          https_proxy: '',
+          HTTP_PROXY: '',
+          http_proxy: '',
+          ALL_PROXY: '',
+          all_proxy: '',
+        },
+      });
+      const lines = String(stdout).trim().split(/\n/).filter(Boolean);
+      const parsed = JSON.parse(lines[lines.length - 1] || '{}');
+      const data = (parsed && parsed.data) || {};
+      return {
+        paid: !!data.paid,
+        is_success: !!data.is_success,
+        status: String(data.status || ''),
+        found: !!data.found,
+        transaction_no: txn,
+      };
+    } catch (_) {
+      return { paid: false, transaction_no: txn, probe_error: true };
+    }
+  };
+}
+
+/**
+ * Shared shell-authority approve (+ land by default). DOM Continue only when visible.
+ * @param {import('@playwright/test').Page} paypal
+ * @param {{transaction_no?:string, includeLand?:boolean, land_budget_ms?:number, wallet_budget_ms?:number}} [shell]
+ */
+async function loginPayPal(paypal, shell = {}) {
   await paypal.waitForLoadState('domcontentloaded');
   for (const sel of ['#loginWithPassword', '#tryPasswordLink', 'a:has-text("Use password instead")', 'a:has-text("Log in with your password")', 'a:has-text("Try another way")']) {
     const loc = paypal.locator(sel).first();
@@ -82,13 +132,13 @@ async function loginPayPal(paypal) {
     }
   }
   const email = paypal.locator('#email, input[name="login_email"], input[type="email"]').first();
+  const next = paypal.locator('#btnNext').first();
   if (await email.count()) {
     await email.fill(BUYER_EMAIL, { timeout: 20000 }).catch(async () => {
       await email.click({ force: true });
       await paypal.keyboard.type(BUYER_EMAIL, { delay: 20 });
     });
   }
-  const next = paypal.locator('#btnNext').first();
   if (await next.count() && await next.isVisible().catch(() => false)) {
     await next.click().catch(() => {});
     await paypal.waitForTimeout(1200);
@@ -98,18 +148,20 @@ async function loginPayPal(paypal) {
   await pass.fill(BUYER_PASS);
   await paypal.locator('#btnLogin, button:has-text("Log In"), button:has-text("Log in")').first().click();
   await paypal.waitForTimeout(2500);
-  for (let i = 0; i < 12; i += 1) {
-    if (/test\.weline\.com|127\.0\.0\.1|checkout\/success|express-review|payment\/frontend\/callback/.test(paypal.url())) {
-      return;
-    }
-    const cont = paypal.locator(
-      '#payment-submit-btn, #consentButton, button[data-id="payment-submit-btn"], [data-testid="consentButton"], button:has-text("Continue"), button:has-text("Agree and Continue"), button:has-text("Complete Purchase")'
-    ).first();
-    if (await cont.count() && await cont.isVisible().catch(() => false)) {
-      await cont.click({ timeout: 5000 }).catch(() => {});
-    }
-    await paypal.waitForTimeout(2000);
-  }
+
+  const urlKeys = extractShellKeysFromUrl(paypal.url());
+  const transactionNo = String(shell.transaction_no || urlKeys.transaction_no || '').trim();
+  await awaitPayPalApproveUnderShellAuthority({
+    paypal,
+    transaction_no: transactionNo,
+    wallet_budget_ms: shell.wallet_budget_ms || WALLET_FAIL_MS,
+    land_budget_ms: shell.land_budget_ms || DEFAULT_LAND_BUDGET_MS,
+    probeShellPaid: demo10ShellPaidProbe(transactionNo),
+    email,
+    next,
+    buyerEmail: BUYER_EMAIL,
+    includeLand: shell.includeLand !== false,
+  });
 }
 
 async function scrapePayPalDisplayedAmountMinor(paypal) {
@@ -370,10 +422,19 @@ async function runCheckout(page, context, result) {
     // Soft warn in result; hard fail only if create amount already matched and display drifts a lot.
     result.paypal_display_drift = true;
   }
-  await loginPayPal(paypal);
+  await loginPayPal(paypal, {
+    transaction_no: result.transaction_no,
+    // DEMO10 diagnosis: same wallet budget as suite; land can use full 120s settle.
+    land_budget_ms: Math.max(DEFAULT_LAND_BUDGET_MS, 120000),
+  });
   result.steps.push('paypal_approved');
-  await paypal.waitForURL(/test\.weline\.com|127\.0\.0\.1/, { timeout: 120000 });
   result.success_url = paypal.url();
+  // /payment/handoff/ is a legal intermediate before Checkout L3 success.
+  if (/payment\/handoff/.test(result.success_url)) {
+    result.steps.push('handoff_intermediate');
+    await paypal.waitForURL(/checkout\/success/, { timeout: 90000 }).catch(() => {});
+    result.success_url = paypal.url();
+  }
   if (!/checkout\/success/.test(result.success_url)) {
     await paypal.waitForURL(/checkout\/success/, { timeout: 90000 }).catch(() => {});
     result.success_url = paypal.url();
@@ -481,9 +542,11 @@ async function runExpress(page, context, result) {
   await paypal.goto(redirectUrl, { waitUntil: 'domcontentloaded' });
   result.steps.push('paypal_opened');
   result.paypal_display_minor = await scrapePayPalDisplayedAmountMinor(paypal);
-  await loginPayPal(paypal);
+  await loginPayPal(paypal, {
+    transaction_no: result.transaction_no,
+    land_budget_ms: Math.max(DEFAULT_LAND_BUDGET_MS, 120000),
+  });
   result.steps.push('paypal_approved');
-  await paypal.waitForURL(/test\.weline\.com|127\.0\.0\.1/, { timeout: 120000 });
   result.review_url = paypal.url();
   if (!/express-review/.test(result.review_url)) {
     await paypal.waitForURL(/express-review/, { timeout: 60000 });

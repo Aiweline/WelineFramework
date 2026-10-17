@@ -292,6 +292,11 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 $session = $this->checkoutGroupSubmitService->getSession($quoteToken);
                 $deposit = is_array($session['deposit'] ?? null) ? $session['deposit'] : [];
                 $cartType = strtolower(trim((string)($session['cart_type'] ?? '')));
+                // Deliver freeze coupon authority into Payment intent (request_data.coupon_code).
+                $sessionCoupon = strtoupper(trim((string) ($session['coupon_code'] ?? '')));
+                if ($sessionCoupon !== '') {
+                    $payContext['coupon_code'] = $sessionCoupon;
+                }
                 // Fail-closed: deposit purpose only for tob shell with a real deposit payload.
                 if ($cartType === 'tob' && $deposit !== [] && $this->isValidTobDepositPayload($deposit)) {
                     $payContext['purpose'] = 'deposit';

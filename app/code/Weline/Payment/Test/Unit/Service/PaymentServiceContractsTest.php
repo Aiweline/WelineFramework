@@ -294,6 +294,9 @@ final class PaymentServiceContractsTest extends TestCase
             'PaymentMethodIncentiveQuote::testApplyToOrderDataIsIdempotentWhenIncentiveLineAlreadyPresent' => function () {
             $this->assert_PaymentMethodIncentiveQuote_testApplyToOrderDataIsIdempotentWhenIncentiveLineAlreadyPresent();
         },
+            'PaymentMethodIncentiveQuote::testApplyToOrderDataPreservesCouponDiscountWhenLinesEmpty' => function () {
+            $this->assert_PaymentMethodIncentiveQuote_testApplyToOrderDataPreservesCouponDiscountWhenLinesEmpty();
+        },
             'PaymentMethodIncentiveQuote::testUnavailableMethodDoesNotAdvertiseIncentive' => function () {
             $this->assert_PaymentMethodIncentiveQuote_testUnavailableMethodDoesNotAdvertiseIncentive();
         },
@@ -1082,6 +1085,9 @@ private function assert_PaymentBrowserReturnLanding_testLandingOrchestratorDefin
     self::assertStringContainsString('checkout/success', $src);
     self::assertStringContainsString('payment/success', $src);
     self::assertStringContainsString('payment/handoff', $src);
+    // Paid capture + checkout/success landing → prefer terminal L3, not strand on handoff.
+    self::assertStringContainsString("str_contains(\$landingUrl, 'checkout/success')", $src);
+    self::assertStringContainsString('prefer Checkout L3', $src);
     self::assertStringNotContainsString('payment/frontend/checkout/success-page', $src);
     self::assertStringNotContainsString("'redirect_path' => 'payment/frontend/checkout/handoff'", $src);
     self::assertFileExists('/Users/weline/Project/Official/框架/app/code/Weline/Payment' . '/Controller/Success.php');
@@ -1293,6 +1299,31 @@ private function assert_PaymentMethodIncentiveQuote_testApplyToOrderDataIsIdempo
     self::assertSame(1392, (int) $second['order_data']['amount_minor']);
     self::assertSame(500, (int) $second['savings_minor']);
     self::assertCount(1, $second['order_data']['discount_lines']);
+}
+
+private function assert_PaymentMethodIncentiveQuote_testApplyToOrderDataPreservesCouponDiscountWhenLinesEmpty(): void
+{
+    $svc = new PaymentMethodIncentiveQuoteService();
+    // No incentive; empty discount_lines must NOT wipe totals.discount_amount_minor from freeze/order money.
+    $applied = $svc->applyToOrderData(
+        'paypal',
+        [
+            'amount_minor' => 33855,
+            'currency' => 'USD',
+            'discount_lines' => [],
+            'totals' => [
+                'subtotal_minor' => 7900,
+                'shipping_amount_minor' => 26745,
+                'tax_amount_minor' => 0,
+                'discount_amount_minor' => 790,
+                'grand_total_minor' => 33855,
+            ],
+        ],
+        ['incentive_enabled' => 0],
+    );
+    self::assertSame(0, (int) $applied['savings_minor']);
+    self::assertSame(790, (int) ($applied['order_data']['totals']['discount_amount_minor'] ?? 0));
+    self::assertSame(33855, (int) ($applied['order_data']['totals']['grand_total_minor'] ?? 0));
 }
 
 private function assert_PaymentMethodIncentiveQuote_testUnavailableMethodDoesNotAdvertiseIncentive(): void

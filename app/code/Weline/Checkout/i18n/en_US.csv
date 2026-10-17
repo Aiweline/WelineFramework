@@ -526,6 +526,7 @@ SKU,SKU
 "订单项 %{1} 暂不可售","Line item %{1} is currently unavailable for sale"
 收货地址不能为空,"Shipping address cannot be empty"
 混合业务订单,"Mixed business orders"
+"优惠券 (%1)","优惠券 (%1)"
 多个不能共同收取运费的法务主体，当前阶段禁止结账,"Multiple legal entities that cannot jointly collect freight are prohibited from settling accounts at this stage."
 匿名结账需要填写有效邮箱。,"Guest checkout requires a valid email address."
 结账行不能为空,"Checkout line cannot be empty"
