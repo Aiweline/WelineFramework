@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Extends;
 
+use Weline\Framework\Compilation\CompiledPhpRegistry;
+use Weline\Framework\Runtime\Runtime;
+
 /**
  * 扩展数据读取器（静态类）
  * 提供静态方法读取 generated/extends.php 文件中的数据
@@ -21,7 +24,7 @@ class ExtendsData
     private const REGISTRY_FILE = BP . 'generated' . DIRECTORY_SEPARATOR . 'extends.php';
 
     /**
-     * 静态缓存
+     * 静态缓存（SoftSurvivor 双登记；权威门闩为 CompiledPhpRegistry）
      *
      * @var array|null
      */
@@ -37,32 +40,22 @@ class ExtendsData
     /**
      * 获取完整的注册表数据
      *
-     * @param bool $forceReload 强制重新加载
+     * @param bool $forceReload 强制重新加载（persistent / WLS 下为 no-op，禁止二次 include）
      * @return array
      */
     public static function getRegistry(bool $forceReload = false): array
     {
-        // 内存缓存机制
-        if (!$forceReload && self::$cachedRegistry !== null) {
-            $currentMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
-            if ($currentMtime === self::$cachedFileMtime) {
-                return self::$cachedRegistry;
-            }
+        if ($forceReload && !Runtime::isPersistent()) {
+            CompiledPhpRegistry::forgetForTests(self::REGISTRY_FILE);
+            self::$cachedRegistry = null;
+            self::$cachedFileMtime = null;
         }
 
-        if (!file_exists(self::REGISTRY_FILE)) {
-            self::$cachedRegistry = [];
-            self::$cachedFileMtime = 0;
-            return [];
-        }
-
-        $registry = include self::REGISTRY_FILE;
-        if (!is_array($registry)) {
-            $registry = [];
-        }
-
+        $registry = CompiledPhpRegistry::load(self::REGISTRY_FILE) ?? [];
         self::$cachedRegistry = $registry;
-        self::$cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        self::$cachedFileMtime = \is_file(self::REGISTRY_FILE)
+            ? (int) (@\filemtime(self::REGISTRY_FILE) ?: 0)
+            : 0;
 
         return $registry;
     }
@@ -408,6 +401,9 @@ class ExtendsData
     {
         self::$cachedRegistry = null;
         self::$cachedFileMtime = null;
+        if (!Runtime::isPersistent()) {
+            CompiledPhpRegistry::forgetForTests(self::REGISTRY_FILE);
+        }
     }
 
     /**
