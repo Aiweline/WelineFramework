@@ -161,7 +161,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 **收口高压线（凡含页面/UI）**：
 
 1. AI **必须**用**当前宿主可用的真实 Browser**做**真机 Web 测试**（WB-OP：工具通道真点选 + 截图/快照 Read）；单测 / curl / **仅** `Runtime.evaluate` **不能**替代。
-2. **每次打开/导航验收页前必须禁用 HTTP 缓存**（硬，`browser_cache_disabled_on_open`）：Cursor 先 `Network.setCacheDisabled` 再 `browser_navigate`；本回合改过静态资源时导航还须带 `_wb_nc=` 并抽检正文；**禁止** `browser_cdp` `Page.reload`（会重载整个工作台并杀死全部智能体）；**禁止**仅用 `Runtime.evaluate` 冒充操作员点击；`setCacheDisabled` 被拒则 `_wb_nc=` 再 navigate 并注明降级。
+2. **每次打开/导航验收页前必须禁用 HTTP 缓存**（硬，`browser_cache_disabled_on_open`）：Cursor 先 `Network.setCacheDisabled` 再 `browser_navigate`；验收 URL **必须**带安装级 `w_fpc_pierce=`（`FpcPierceStamp::buildQuerySuffix()`）；本回合改过静态资源时还须带 `_wb_nc=` 并抽检正文；**禁止** `browser_cdp` `Page.reload`（会重载整个工作台并杀死全部智能体）；**禁止**仅用 `Runtime.evaluate` 冒充操作员点击；`setCacheDisabled` 被拒则 pierce+`_wb_nc=` 再 navigate 并注明降级。
 3. 面向用户的完成/阶段性汇报**末尾必须**有「交付地址」小节（探活过的 http(s) Markdown 链接）；禁止省略。
 4. 细则见 [WebUI浏览器验收与交付地址门禁.md](../../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
 

@@ -570,6 +570,7 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
             && str_contains((string) ($rule['summary'] ?? ''), 'Page.reload')
             && str_contains((string) ($rule['summary'] ?? ''), '_wb_nc')
+            && str_contains((string) ($rule['summary'] ?? ''), 'w_fpc_pierce')
             && str_contains((string) ($rule['summary'] ?? ''), 'FALSE PASS')),
         false,
     ),
@@ -614,6 +615,7 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'feature_delivery_urls'
             && str_contains((string) ($rule['summary'] ?? ''), '交付地址')
+            && str_contains((string) ($rule['summary'] ?? ''), 'w_fpc_pierce')
             && str_contains((string) ($rule['summary'] ?? ''), 'browser_release_after_delivery')),
         false,
     ),
@@ -2291,6 +2293,21 @@ $checks = [
     'feature_delivery_urls exposes default_local_host field' => ($featureDeliveryUrls['default_local_host'] ?? '') === '{project_hash}.test.weline.com'
         && is_array($featureDeliveryUrls['forbidden_primary_hosts'] ?? null)
         && in_array('*.weline.test', $featureDeliveryUrls['forbidden_primary_hosts'], true),
+    'feature_delivery_urls requires w_fpc_pierce on primary acceptance' => array_reduce(
+        is_array($featureDeliveryUrls['link_format']['url_rules'] ?? null) ? $featureDeliveryUrls['link_format']['url_rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'w_fpc_pierce')),
+        false,
+    )
+        && array_reduce(
+            is_array($featureDeliveryUrls['rules'] ?? null) ? $featureDeliveryUrls['rules'] : [],
+            static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'w_fpc_pierce')),
+            false,
+        )
+        && array_reduce(
+            $featureDeliveryUrls['forbidden_delivery_patterns'] ?? [],
+            static fn (bool $ok, mixed $item): bool => $ok || (is_string($item) && str_contains($item, 'w_fpc_pierce')),
+            false,
+        ),
     'closeout_delivery_reminder mentions default host' => is_string($closeoutReminder['summary_zh'] ?? null)
         && str_contains((string)$closeoutReminder['summary_zh'], '{project_hash}.test.weline.com')
         && str_contains((string)$closeoutReminder['summary_zh'], '*.weline.test'),

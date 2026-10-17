@@ -144,7 +144,7 @@ final class HardConstraintsSymbolDsl
             'WidgetWork', 'ThemeWork', 'CodexOptIn', 'Cli', 'Codex', 'RuleCRUD', 'Skill', 'LangTable',
             'SyncMap', 'DirtySym', 'Silent', 'Nested', 'InverseRaised', 'Frontend', 'NeedPlan', 'PlanDone',
             'Complex', 'Simple', 'API', 'DesignTheme', 'PlanBody', 'Scheme', 'SiteSeed', 'ProjectRules',
-            'McpGen', 'HandEdit', 'GlobalRuleEdit', 'MCP', 'HostMdc', 'DemoPage', 'Git',
+            'McpGen', 'HandEdit', 'GlobalRuleEdit', 'MCP', 'HostMdc', 'DemoPage', 'Git', 'CacheOff',
         ];
     }
 
@@ -185,6 +185,14 @@ final class HardConstraintsSymbolDsl
             'ProdProbe' => ['gloss_zh' => '生产/公网店面HTTP探活', 'rule_ids' => ['production_http_probe_forbids_agent_local_curl']],
             'AgentLocalCurl' => ['gloss_zh' => 'Agent宿主本机curl公网Host', 'rule_ids' => ['production_http_probe_forbids_agent_local_curl']],
             'SshLocalhost' => ['gloss_zh' => 'SSH站柜主Host后本机127.0.0.1+Host头', 'rule_ids' => ['production_http_probe_forbids_agent_local_curl']],
+            'PierceStamp' => [
+                'gloss_zh' => '安装级w_fpc_pierce打穿章query',
+                'rule_ids' => ['feature_delivery_urls', 'browser_cache_disabled_on_open'],
+            ],
+            'DelivUrl' => [
+                'gloss_zh' => '交付地址/规划汇报http(s)链接',
+                'rule_ids' => ['feature_delivery_urls'],
+            ],
         ];
     }
 
@@ -239,6 +247,16 @@ final class HardConstraintsSymbolDsl
             'browser_operator_self_test' => [
                 'formula' => 'WebTouch→□WBOP∧(¬WBOP→¬Pass)',
                 'gloss_zh' => 'Web改须禁缓存+抹自动+点选+截图Read',
+                'cluster' => '§✓',
+            ],
+            'browser_cache_disabled_on_open' => [
+                'formula' => 'WBOP→□(CacheOff∧PierceStamp)',
+                'gloss_zh' => '验收导航禁缓存且须FPC打穿章',
+                'cluster' => '§✓',
+            ],
+            'feature_delivery_urls' => [
+                'formula' => 'DelivUrl→□PierceStamp',
+                'gloss_zh' => '交付/规划URL须w_fpc_pierce；visitor次链可免',
                 'cluster' => '§✓',
             ],
             'real_machine_usecases_not_unit_tests' => [

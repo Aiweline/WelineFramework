@@ -670,7 +670,7 @@ final class McpSkillCatalog
                         . 'HARD（findings_wake_pm）：收到专席 escalate（含电商顾问「要开发什么」dev_ask）后同回合立刻开 channel、拉起/resume 相关席位开会并安排施工解决——不用 Issue 任务列表积压；必须落 SESSION 计划项；禁止只转述发现却不组队。'
                         . '若 escalate 来自电商顾问领域决策：同回合组队做技术怎么开发讨论（需求分析∥架构∥已触发施工专席；顾问只审业务/运营不跑偏）。\n'
                         . 'HARD（requirement_issuer_owns_acceptance）：进度节点（施工 closed/测试 pass/汇审前/每回合监控仍 open）必须写可读进度 + @发起席：请验收进度 + resume 发起席；关 plan_id / 汇审前须 issuer_acceptance=pass；禁止甩手场景漏叫醒。\n'
-                        . 'HARD（related_web_urls · 交付地址）：汇审通过后向用户汇报完成时必须写「交付地址」小节，汇总 SESSION 相关入口 + 各席 related_web_urls + 测试探活地址；格式服从 feature_delivery_urls / closeout_delivery_reminder；禁止只说已完成不列地址；纯逻辑无 Web 写 N/A。',
+                        . 'HARD（related_web_urls · 交付地址）：汇审通过后向用户汇报完成时必须写「交付地址」小节，汇总 SESSION 相关入口 + 各席 related_web_urls + 测试探活地址；格式服从 feature_delivery_urls / closeout_delivery_reminder；店面/后台主链须带安装级 w_fpc_pierce=（FpcPierceStamp::buildQuerySuffix）；禁止只说已完成不列地址或主链缺穿章；纯逻辑无 Web 写 N/A。',
                 ],
                 '需求分析' => [
                     'kind' => 'core',
@@ -806,7 +806,7 @@ final class McpSkillCatalog
                         . 'HARD（测试必须真 · tester_tests_must_be_real）：禁止「自己造假数据/假响应 → 再对着假数据断言 → 宣称 pass」的自欺闭环。禁止手写假 JSON/假 Model 数组冒充业务结果；禁止桩掉被测系统再断言桩结果；禁止只断言自己旁路 INSERT 的行而从未走冻结主 UC。允许：正式 runner / 真 Browser / 真实注册登录 / 经生产 Service 或正式真实通路 fixture 写入且可独立回查的证据（order_uuid/库/后台/展示单号）。证据不得只存在于测试进程内存。\n'
                         . 'HARD（抹掉自动化标志 · browser_strip_automation_flags）：WB-OP / Playwright 必须像真人浏览器，禁止带着自动化检测标志去点登录/提交/人机验证。每次开验收 Browser（与禁缓存同序）：CDP `Page.addScriptToEvaluateOnNewDocument`（或 Playwright `addInitScript`）在页面脚本前把 `navigator.webdriver` 置为 undefined/false；正式 runner 启动 Chromium 须 `--disable-blink-features=AutomationControlled` 且去掉 `--enable-automation`。禁止把「Human-machine verification failed / reCAPTCHA 拦自动化」当成 WB-OP pass 或甩测借口。\n'
                         . 'HARD（虚拟操作面 · 非抢占 · browser_operator_non_preemptive）：WB-OP 等在虚拟平面后台执行，禁止与用户抢 IDE/对话焦点、鼠标、键盘。Cursor：`browser_navigate` 省略 `position`；禁止默认 `position:"active"` 与系统级键鼠注入。后台≠免测；仅用户明确要求观看时才可前台。\n'
-                        . 'HARD（related_web_urls）：验收 pass 的 closed 回报必须填 related_web_urls 为探活过的前台/后台/API 地址清单（与交付地址同源），交给项目经理汇总；禁止空报 pass/closed。\n'
+                        . 'HARD（related_web_urls）：验收 pass 的 closed 回报必须填 related_web_urls 为探活过的前台/后台/API 地址清单（与交付地址同源，店面/后台须带 w_fpc_pierce=），交给项目经理汇总；禁止空报 pass/closed 或主链缺穿章。\n'
                         . '被支付开发工程师拉起时（HARD）：必须用宿主真实 Browser（WB-OP、禁缓存、已抹自动化标志）把本波触及的支付方式整条前端流程过一遍（选方式→提交→成功/失败/取消；触及则含退款/Webhook），回报 pass/fail + transaction_no/order_uuid；禁止用单测/curl 代替真浏览器。',
                 ],
                 '安全' => [
