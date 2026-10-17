@@ -13,6 +13,16 @@ final class DevToolPayloadStoreTest extends TestCase
     /** @var list<string> */
     private array $filesToCleanup = [];
 
+    protected function setUp(): void
+    {
+        if (!\defined('BP')) {
+            \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
+    }
+
     protected function tearDown(): void
     {
         foreach ($this->filesToCleanup as $file) {
@@ -151,6 +161,32 @@ final class DevToolPayloadStoreTest extends TestCase
         }
 
         self::assertSame($newValue, $store->getLatest('trace', 60));
+    }
+
+    public function testDeleteRemovesMemoryAndFileMirror(): void
+    {
+        $key = 'trace:test-delete-' . \bin2hex(\random_bytes(4));
+        $value = ['ok' => 3];
+
+        $memory = $this->createMock(MemoryStateFacade::class);
+        $memory->expects(self::once())
+            ->method('delete')
+            ->with('dev_tool_payload', 'trace:' . $key)
+            ->willReturn(true);
+
+        $fileStore = new DevToolPayloadStore(['force_file' => true]);
+        self::assertTrue($fileStore->set('trace', $key, $value, 300));
+        $filePath = $this->invokePrivateMethod($fileStore, 'filePath', ['trace', $key]);
+        if (\is_string($filePath)) {
+            $this->filesToCleanup[] = $filePath;
+        }
+        self::assertSame($value, $fileStore->get('trace', $key));
+
+        $store = new DevToolPayloadStore();
+        $this->setPrivateProperty($store, 'memoryResolved', true);
+        $this->setPrivateProperty($store, 'memory', $memory);
+        self::assertTrue($store->delete('trace', $key));
+        self::assertNull($fileStore->get('trace', $key));
     }
 
     private function setPrivateProperty(object $object, string $name, mixed $value): void

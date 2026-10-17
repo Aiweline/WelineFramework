@@ -84,6 +84,7 @@
     var settingTplPerfOverlay = false;
     var tplPerfQueryKey = 'wls_tpl_perf';
     var tplPerfStateKey = 'weline.dev.tpl_perf_overlay';
+    var docTraceCaptureKey = 'weline.dev.doc_trace_capture';
 
     window.__WELINE_PANEL_CONFIG__ = Object.assign({}, window.__WELINE_PANEL_CONFIG__ || {}, {
         apiBase: apiBase,
@@ -462,15 +463,52 @@
     /**
      * Arm/disarm request lifecycle tracing with the Weline panel open/close state.
      */
+    /**
+     * Cookie-arming endpoints must use browser fetch so Set-Cookie lands.
+     * The developer_workspace query bridge returns JSON only and drops response cookies.
+     */
+    function cookieArmFetch(path, enabled) {
+        return requestAuthorization().then(function (allowed) {
+            if (!allowed) {
+                throw new Error('Weline Panel token required.');
+            }
+            return fetch(apiUrl(path), {
+                method: 'POST',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Weline-Panel': '1'
+                },
+                body: JSON.stringify({ enabled: !!enabled })
+            }).then(function (response) {
+                return response.text().then(function (text) {
+                    var payload = null;
+                    if (text) {
+                        try {
+                            payload = JSON.parse(text);
+                        } catch (error) {
+                            payload = { raw: text };
+                        }
+                    }
+                    if (!response.ok || (payload && payload.success === false)) {
+                        var message = payload && (payload.message || payload.error || payload.msg);
+                        throw new Error(message || ('HTTP ' + response.status));
+                    }
+                    return payload || {};
+                });
+            });
+        });
+    }
+
     function setTraceRecording(enabled) {
         if (settingTraceRecording) {
             return Promise.resolve(null);
         }
         settingTraceRecording = true;
-        return apiFetch('trace/panel', {
-            method: 'POST',
-            body: { enabled: !!enabled }
-        }).catch(function (error) {
+        return cookieArmFetch('trace/panel', !!enabled).catch(function (error) {
             if (window.console && console.warn) {
                 console.warn('[WelinePanel] request-trace panel switch failed:', error);
             }
@@ -560,10 +598,7 @@
             if (!allowed) {
                 return null;
             }
-            return apiFetch('trace/tpl-perf', {
-                method: 'POST',
-                body: { enabled: nextEnabled }
-            }).then(function (result) {
+            return cookieArmFetch('trace/tpl-perf', nextEnabled).then(function (result) {
                 writeTplPerfPreference(nextEnabled);
                 var nextUrl = buildTplPerfNavigationUrl(nextEnabled);
                 var urlChanged = nextUrl !== window.location.href;
@@ -599,6 +634,103 @@
         return preferred;
     }
 
+    function currentDocumentRequestId() {
+        var fromConfig = window.__WELINE_PANEL_CONFIG__ && window.__WELINE_PANEL_CONFIG__.requestId;
+        return String(fromConfig || requestId || '');
+    }
+
+    /**
+     * Panel arm only affects future requests. If the current HTML document has no
+     * stored lifecycle, reload once after arming so the default "当前文档" view has data.
+     */
+    function ensureDocumentTraceCapture() {
+        var docId = currentDocumentRequestId();
+        if (!docId) {
+            return Promise.resolve(false);
+        }
+        var pending = '';
+        try {
+            pending = window.sessionStorage ? String(sessionStorage.getItem(docTraceCaptureKey) || '') : '';
+        } catch (error) {
+            pending = '';
+        }
+        if (pending === 'done:' + docId || pending === 'reload:' + docId) {
+            if (pending === 'reload:' + docId) {
+                try {
+                    sessionStorage.setItem(docTraceCaptureKey, 'done:' + docId);
+                } catch (error) {
+                    // ignore
+                }
+            }
+            return Promise.resolve(true);
+        }
+        return fetch(apiUrl('trace', { id: docId }), {
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Weline-Panel': '1'
+            }
+        }).then(function (response) {
+            return response.text().then(function (text) {
+                var payload = null;
+                if (text) {
+                    try {
+                        payload = JSON.parse(text);
+                    } catch (error) {
+                        payload = null;
+                    }
+                }
+                if (payload && Number(payload.code) === 200 && payload.data && payload.data.trace) {
+                    try {
+                        sessionStorage.setItem(docTraceCaptureKey, 'done:' + docId);
+                    } catch (error) {
+                        // ignore
+                    }
+                    return true;
+                }
+                try {
+                    sessionStorage.setItem(docTraceCaptureKey, 'reload:' + docId);
+                } catch (error) {
+                    // ignore
+                }
+                window.location.reload();
+                return false;
+            });
+        }).catch(function () {
+            try {
+                sessionStorage.setItem(docTraceCaptureKey, 'reload:' + docId);
+            } catch (error) {
+                // ignore
+            }
+            window.location.reload();
+            return false;
+        });
+    }
+
+    function captureDocumentTraceNow() {
+        try {
+            if (window.sessionStorage) {
+                sessionStorage.removeItem(docTraceCaptureKey);
+            }
+        } catch (error) {
+            // ignore
+        }
+        return setTraceRecording(true).then(function () {
+            var docId = currentDocumentRequestId();
+            try {
+                if (docId && window.sessionStorage) {
+                    sessionStorage.setItem(docTraceCaptureKey, 'reload:' + docId);
+                }
+            } catch (error) {
+                // ignore
+            }
+            window.location.reload();
+            return true;
+        });
+    }
+
     function openLoadedPanel() {
         var panel = document.getElementById('dev-tool-panel');
         if (!panel) {
@@ -607,12 +739,20 @@
         if (window.DevToolPanel && typeof window.DevToolPanel.toggle === 'function' && panel.classList.contains('collapsed')) {
             window.DevToolPanel.toggle();
         }
-        setTraceRecording(true);
-        if (readTplPerfPreference() && !currentUrlHasTplPerfQuery()) {
-            setTplPerfOverlay(true, { reload: true });
-        } else if (readTplPerfPreference()) {
-            setTplPerfOverlay(true, { reload: false });
-        }
+        var afterArm = setTraceRecording(true).then(function () {
+            if (readTplPerfPreference() && !currentUrlHasTplPerfQuery()) {
+                return setTplPerfOverlay(true, { reload: true });
+            }
+            if (readTplPerfPreference()) {
+                setTplPerfOverlay(true, { reload: false });
+            }
+            return ensureDocumentTraceCapture();
+        });
+        Promise.resolve(afterArm).catch(function (error) {
+            if (window.console && console.warn) {
+                console.warn('[WelinePanel] document trace capture failed:', error);
+            }
+        });
         return window.WelinePanel;
     }
 
@@ -877,6 +1017,7 @@
         api.open = openPanel;
         api.activateTab = activateTab;
         api.setTraceRecording = setTraceRecording;
+        api.captureDocumentTrace = captureDocumentTraceNow;
         api.setTplPerfOverlay = setTplPerfOverlay;
         api.isTplPerfOverlayPreferred = isTplPerfOverlayPreferred;
         api.report = buildReport;

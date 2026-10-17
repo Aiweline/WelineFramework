@@ -26,16 +26,26 @@ use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\View\Template;
 
 /**
- * Injects the developer tool panel and request trace into HTML responses.
+ * Injects the developer tool panel bootstrap into HTML responses.
+ *
+ * Request-lifecycle contract (panel-armed):
+ * - Spans accumulate request-locally in TraceGate (no compact dict / shared-cache writes).
+ * - After {@see TelemetryBroadcaster} finishes {@code request_collected}, Framework
+ *   dispatches {@code telemetry::trace_flush}; this observer then writes compact
+ *   payload once to SharedCache (+ file) under {@code trace:{request_id}} (TTL 300s).
+ * - The Weline panel reads {@code window.__WELINE_REQUEST_ID__} / header, then Trace REST
+ *   {@code ?id=}; successful SharedCache read deletes the entry (panel keeps client copy).
  */
 class DevToolPanelObserver implements ObserverInterface
 {
+    private const TRACE_FLUSH_EVENT = 'Weline_Framework::telemetry::trace_flush';
+
     private const DEFAULT_MAX_RESPONSE_BYTES = 1048576;
     private const MAX_TRACE_SPANS = 300;
     private const MAX_TRACE_META_FIELD_BYTES = 2048;
     /** 内联注入页面的 trace JSON 默认上限（字节），防止超大 JSON 撑爆 Worker 内存 */
     private const DEFAULT_MAX_TRACE_JSON_BYTES = 524288;
-    private const TRACE_TTL_SECONDS = 60;
+    private const TRACE_TTL_SECONDS = 300;
     private const PANEL_HTML_CACHE_TTL = 300.0;
 
     /** @var array<string, array{expires_at: float, html: string}> */
@@ -52,7 +62,14 @@ class DevToolPanelObserver implements ObserverInterface
 
     public function execute(Event &$event): void
     {
-        if ($event->getName() === 'Weline_Framework::App::run_after' && Runtime::isPersistent()) {
+        $eventName = (string)$event->getName();
+        if ($eventName === self::TRACE_FLUSH_EVENT) {
+            $this->finalizeTracePayloadStore($event);
+
+            return;
+        }
+
+        if ($eventName === 'Weline_Framework::App::run_after' && Runtime::isPersistent()) {
             return;
         }
 
@@ -66,23 +83,30 @@ class DevToolPanelObserver implements ObserverInterface
             return;
         }
 
+        if (TraceGate::shouldSkipForCurrentRequest()) {
+            return;
+        }
+
+        // Non-document: no HTML inject. Shared-cache write waits for trace_flush
+        // (or run_after compat finalize below when telemetry did not run).
         if ($this->request->isAjax() ||
             $this->request->isApiFrontend() ||
-            $this->request->isApiBackend()) {
-            return;
-        }
+            $this->request->isApiBackend() ||
+            $this->request->isIframe()) {
+            if ($eventName === 'Weline_Framework::App::run_after') {
+                $this->finalizeTracePayloadStore($event);
+            }
 
-        if ($this->request->isIframe()) {
-            return;
-        }
-
-        if (TraceGate::shouldSkipForCurrentRequest()) {
             return;
         }
 
         try {
             $result = $payload['result'] ?? '';
             if (empty($result) || !is_string($result)) {
+                if ($eventName === 'Weline_Framework::App::run_after') {
+                    $this->finalizeTracePayloadStore($event);
+                }
+
                 return;
             }
 
@@ -90,6 +114,10 @@ class DevToolPanelObserver implements ObserverInterface
             $this->setRequestIdHeader($requestId);
 
             if (!$this->isHtmlResponse($result)) {
+                if ($eventName === 'Weline_Framework::App::run_after') {
+                    $this->finalizeTracePayloadStore($event);
+                }
+
                 return;
             }
 
@@ -97,7 +125,6 @@ class DevToolPanelObserver implements ObserverInterface
             // on heavy storefront pages (e.g. /categories ~1.4MB). Full panel HTML stays gated.
             $skipFullPanelForSize = $this->shouldSkipForResponseSize($result);
 
-            $existingRequestIds = $this->extractRequestIdsFromResult($result);
             $panelAlreadyInjected = stripos($result, 'id="dev-tool-panel"') !== false
                 || stripos($result, 'data-weline-panel-bootstrap') !== false;
             if (!$panelAlreadyInjected) {
@@ -143,24 +170,54 @@ class DevToolPanelObserver implements ObserverInterface
                 }
             }
 
-            $this->storeTracePayload($requestId);
-            foreach ($existingRequestIds as $existingRequestId) {
-                if ($existingRequestId !== $requestId) {
-                    $this->storeTracePayload($existingRequestId);
-                }
-            }
             if (!$this->shouldUseLazyPanel() || stripos($result, 'data-weline-panel-bootstrap') === false) {
                 $result = $this->injectRequestMetaScript($result, $requestId);
             }
 
             $payload['result'] = $result;
             $this->writeBackPayload($event, $payload);
+            // Telemetry path: SharedCache write is deferred to telemetry::trace_flush
+            // (after this inject returns). run_after compat (no telemetry) flushes here.
+            if ($eventName === 'Weline_Framework::App::run_after') {
+                $this->finalizeTracePayloadStore($event);
+            }
         } catch (\Exception $e) {
             $this->logToConsole('error', 'DevToolPanel Error: ' . $e->getMessage(), [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
+            if ($eventName === 'Weline_Framework::App::run_after') {
+                $this->finalizeTracePayloadStore($event);
+            }
         }
+    }
+
+    /**
+     * Persist compact lifecycle once into SharedCache (cross-worker), keyed by
+     * this request_id only. Never remap onto ids found in HTML bags.
+     */
+    private function finalizeTracePayloadStore(?Event $event = null): void
+    {
+        $requestId = '';
+        if ($event !== null) {
+            $data = $event->getData('data');
+            if (\is_array($data)) {
+                $requestId = (string)($data['request_id'] ?? '');
+            }
+        }
+        if ($requestId === '') {
+            try {
+                $requestId = TraceGate::ensureRequestId();
+            } catch (\Throwable) {
+                return;
+            }
+        }
+        if ($requestId === '') {
+            return;
+        }
+        // End-of-cycle flush: write even when the TraceGate latch is briefly false,
+        // as long as this request already collected spans in the recorder.
+        $this->storeTracePayload($requestId, true);
     }
 
     /**
@@ -209,14 +266,25 @@ class DevToolPanelObserver implements ObserverInterface
         }
     }
 
-    private function storeTracePayload(string $requestId): void
+    private function storeTracePayload(string $requestId, bool $endOfCycleFlush = false): void
     {
-        if (!$this->shouldStoreTracePayload($requestId)) {
+        if ($requestId === '') {
+            return;
+        }
+        // Sampling / header gates apply to opportunistic stores only.
+        // End-of-cycle flush always persists whatever this request collected.
+        if (!$endOfCycleFlush && !$this->shouldStoreTracePayload($requestId)) {
             return;
         }
 
         try {
             $payload = TraceGate::exportCompactPayload();
+            // Bind identity explicitly so consumers never trust a stale summary.request_id.
+            if (!isset($payload['summary']) || !\is_array($payload['summary'])) {
+                $payload['summary'] = [];
+            }
+            $payload['request_id'] = $requestId;
+            $payload['summary']['request_id'] = $requestId;
             if ((int)($payload['summary']['span_count'] ?? 0) <= 0) {
                 return;
             }
@@ -235,6 +303,11 @@ class DevToolPanelObserver implements ObserverInterface
     private function shouldStoreTracePayload(string $requestId): bool
     {
         if (\defined('ENV_TEST') && ENV_TEST) {
+            return true;
+        }
+        // Panel open (TraceGate armed): always persist this request's lifecycle so
+        // the framework tab can default to the current document without sampling.
+        if (TraceGate::isArmed()) {
             return true;
         }
         if (!Runtime::isPersistent()) {
@@ -323,7 +396,10 @@ class DevToolPanelObserver implements ObserverInterface
 
     private function traceTtl(): int
     {
-        return ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl('dev.trace_ttl', self::TRACE_TTL_SECONDS);
+        // Request-lifecycle shared-cache TTL: 5 minutes (auto-delete if panel never fetches).
+        $ttl = ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl('dev.trace_ttl', self::TRACE_TTL_SECONDS);
+
+        return \max(60, \min(self::TRACE_TTL_SECONDS, (int)$ttl));
     }
 
     /**
@@ -440,7 +516,7 @@ class DevToolPanelObserver implements ObserverInterface
         $requestId = \htmlspecialchars($requestId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $tokenRequired = $panelAccess->requiresTokenForUi() ? '1' : '0';
         $sessionUrl = \htmlspecialchars('/' . $this->resolveApiBase() . '/panel/session', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $loaderSrc = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20260926-tpl-perf-armed');
+        $loaderSrc = \Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20261017-doc-trace-capture3');
         // HttpOnly cookie 武装徽标时前端读不到 cookie；把服务端真实状态注入 bootstrap，避免开关显示「开启」却仍渲染 timing。
         $tplPerfArmed = TraceGate::isTemplatePerfOverlayRequested() ? '1' : '0';
 

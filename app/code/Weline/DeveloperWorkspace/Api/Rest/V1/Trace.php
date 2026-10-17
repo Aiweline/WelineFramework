@@ -14,7 +14,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Trace extends DevToolRestController
 {
-    private const TRACE_TTL_SECONDS = 60;
+    private const TRACE_TTL_SECONDS = 300;
 
     private DevToolPayloadStore $payloadStore;
 
@@ -116,17 +116,17 @@ class Trace extends DevToolRestController
             return $this->error('invalid request id', [], 400);
         }
 
-        $payload = $this->payloadStore->get('trace', 'trace:' . $requestId);
-        if (!\is_array($payload)) {
-            $payload = $this->wlsTracePayload($requestId);
+        // End-of-cycle cache read: payload was written once as trace:{id} for that
+        // request. Never substitute "latest" (often this Trace API call itself).
+        $storeKey = 'trace:' . $requestId;
+        $fromSharedStore = false;
+        $payload = $this->payloadStore->get('trace', $storeKey);
+        if (\is_array($payload)) {
+            $fromSharedStore = true;
+        } else {
+            $payload = $this->wlsTracePayloadForId($requestId);
         }
-        if (!\is_array($payload)) {
-            $payload = $this->payloadStore->getLatest('trace', $this->traceTtl());
-        }
-        if (!\is_array($payload)) {
-            $payload = $this->wlsTracePayload('');
-        }
-        if (!\is_array($payload)) {
+        if (!\is_array($payload) || !$this->payloadMatchesRequestId($payload, $requestId)) {
             return $this->error('请求链路不存在或已过期，请刷新页面重试', [
                 'request_id' => $requestId,
                 'ttl' => $this->traceTtl(),
@@ -134,32 +134,146 @@ class Trace extends DevToolRestController
             ], 404);
         }
 
+        if (!isset($payload['summary']) || !\is_array($payload['summary'])) {
+            $payload['summary'] = [];
+        }
+        $payload['summary']['request_id'] = $requestId;
+        $payload['summary']['ttl_seconds'] = $this->traceTtl();
+
+        // Consume-on-read: panel keeps a client-side copy; shared cache entry is removed
+        // so other workers / repeat polls do not keep retaining the blob. TTL (5 min)
+        // remains the auto-expiry backstop if never fetched.
+        if ($fromSharedStore) {
+            try {
+                $this->payloadStore->delete('trace', $storeKey);
+            } catch (\Throwable) {
+            }
+        }
+
         return $this->success('success', $payload);
+    }
+
+    /**
+     * Recent request traces for the panel picker (document default; APIs on demand).
+     */
+    public function getRecent()
+    {
+        if (!$this->isAllowed()) {
+            return $this->error('dev tool trace is not allowed', [], 403);
+        }
+
+        $limit = (int)$this->request->getGet('limit', 30);
+        $limit = \max(1, \min(50, $limit));
+        $documentRequestId = (string)$this->request->getGet('document_id', '');
+        if ($documentRequestId !== '' && !\preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $documentRequestId)) {
+            $documentRequestId = '';
+        }
+
+        try {
+            $response = \w_query('server', 'wlsPerformanceRequests', [
+                'limit' => $limit,
+                'since' => $this->wlsTraceWindow(),
+            ]);
+        } catch (\Throwable) {
+            $response = [];
+        }
+        $rows = \is_array($response) && \is_array($response['requests'] ?? null)
+            ? $response['requests']
+            : [];
+
+        $out = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $id = (string)($row['request_id'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+            $method = \strtoupper((string)($row['method'] ?? ''));
+            $uri = (string)($row['uri'] ?? '');
+            $kind = $this->classifyTraceKind($method, $uri, $id, $documentRequestId);
+            $out[] = [
+                'request_id' => $id,
+                'method' => $method,
+                'uri' => $uri,
+                'host' => (string)($row['host'] ?? ''),
+                'status' => (int)($row['status'] ?? 0),
+                'total_ms' => (float)($row['total_ms'] ?? 0.0),
+                'kind' => $kind,
+                'is_document' => $kind === 'document',
+            ];
+        }
+
+        return $this->success('success', [
+            'document_id' => $documentRequestId,
+            'requests' => $out,
+        ]);
     }
 
     /**
      * @return array{request_id: string, format: string, trace: string, dict: array<string, mixed>, summary: array<string, mixed>}|null
      */
-    private function wlsTracePayload(string $requestId): ?array
+    private function wlsTracePayloadForId(string $requestId): ?array
     {
+        if ($requestId === '') {
+            return null;
+        }
         try {
-            $record = $requestId !== '' ? $this->wlsTraceDetail($requestId) : [];
+            $record = $this->wlsTraceDetail($requestId);
             if ($record === []) {
-                $response = \w_query('server', 'wlsPerformanceRequests', [
-                    'limit' => 1,
-                    'since' => $this->wlsTraceWindow(),
-                ]);
-                $rows = \is_array($response) && \is_array($response['requests'] ?? null)
-                    ? $response['requests']
-                    : [];
-                $latestRequestId = (string)($rows[0]['request_id'] ?? '');
-                $record = $latestRequestId !== '' ? $this->wlsTraceDetail($latestRequestId) : [];
+                return null;
+            }
+            $recordId = (string)($record['request_id'] ?? '');
+            if ($recordId !== '' && $recordId !== $requestId) {
+                return null;
             }
 
-            return $record !== [] ? $this->compactWlsTraceRecord($record) : null;
+            return $this->compactWlsTraceRecord($record);
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function payloadMatchesRequestId(array $payload, string $requestId): bool
+    {
+        $payloadId = (string)($payload['request_id']
+            ?? $payload['summary']['request_id']
+            ?? '');
+        if ($payloadId === '' || $payloadId === $requestId) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function classifyTraceKind(
+        string $method,
+        string $uri,
+        string $requestId,
+        string $documentRequestId
+    ): string {
+        if ($documentRequestId !== '' && $requestId === $documentRequestId) {
+            return 'document';
+        }
+        $path = (string)(\parse_url($uri, \PHP_URL_PATH) ?: $uri);
+        $pathLower = \strtolower($path);
+        if (
+            \str_contains($pathLower, '/api/')
+            || \str_contains($pathLower, '/dev/tool/rest/')
+            || \str_contains($pathLower, '/rest/')
+            || \preg_match('#/(ajax|query-bin)(/|$)#', $pathLower) === 1
+        ) {
+            return 'api';
+        }
+        if ($method !== '' && $method !== 'GET' && $method !== 'HEAD') {
+            return 'api';
+        }
+
+        return 'document';
     }
 
     /** @return array<string, mixed> */
@@ -391,7 +505,10 @@ class Trace extends DevToolRestController
 
     private function traceTtl(): int
     {
-        return ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl('dev.trace_ttl', self::TRACE_TTL_SECONDS);
+        // Hard default 5 minutes; policy may only tighten within 60..300s.
+        $ttl = ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl('dev.trace_ttl', self::TRACE_TTL_SECONDS);
+
+        return \max(60, \min(self::TRACE_TTL_SECONDS, (int)$ttl));
     }
 
     private function wlsTraceWindow(): int

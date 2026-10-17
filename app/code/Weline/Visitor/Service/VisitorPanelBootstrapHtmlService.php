@@ -17,7 +17,7 @@ use Weline\Framework\View\PublicThemeNamespace;
  */
 class VisitorPanelBootstrapHtmlService
 {
-    private const PANEL_SCRIPT_VERSION = '20260922-ga4-debug1';
+    private const PANEL_SCRIPT_VERSION = '20261017-event-scope-2';
 
     public function shouldInject(): bool
     {

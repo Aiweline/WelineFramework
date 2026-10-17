@@ -650,13 +650,26 @@ class Analytics extends FrontendRestController
         }
 
         try {
-            // 获取站点ID
+            // 获取站点ID（开发面板必须显式传 websiteId；缺省才回落当前请求站点）
             $websiteId = 0;
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
             } else {
                 $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
+            }
+
+            // 可选：按当前页面路径收窄（开发面板「当前范围」）；禁止用全站 URL 模糊匹配
+            $pagePath = trim((string)($this->request->getParam('pagePath')
+                ?? $this->request->getGet('pagePath')
+                ?? ''));
+            if ($pagePath !== '' && ($pagePath[0] ?? '') !== '/') {
+                $pagePath = '/' . ltrim($pagePath, '/');
+            }
+            // 去掉 LIKE 通配符，避免把路径当成模式
+            $pagePath = str_replace(['%', '_'], '', $pagePath);
+            if (strlen($pagePath) > 512) {
+                $pagePath = substr($pagePath, 0, 512);
             }
             
             // 获取时间范围
@@ -668,44 +681,45 @@ class Analytics extends FrontendRestController
                 $endDate = date('Y-m-d 23:59:59');
                 $startDate = date('Y-m-d 00:00:00', strtotime('-30 days'));
             }
+
+            $applyCommonFilters = static function ($model) use ($websiteId, $startDate, $endDate, $pagePath) {
+                $model->where(Pixel::schema_fields_WEBSITE_ID, $websiteId);
+                if ($startDate) {
+                    $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
+                }
+                if ($endDate) {
+                    $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
+                }
+                if ($pagePath !== '') {
+                    // 匹配绝对 URL 或相对路径中的当前页（含 query 前后）
+                    $model->where(Pixel::schema_fields_URL, '%' . $pagePath . '%', 'like');
+                }
+
+                return $model;
+            };
             
-            // 获取统计摘要
+            // 站点级摘要仍按 website（便于对照）；事件分布可按 pagePath 收窄
             $summary = Pixel::getWebsiteSummary($websiteId);
             
-            // 获取每日统计
+            // 获取每日统计（整站日趋势；页面范围时事件分布另算）
             $dailyStats = Pixel::getBusinessValueByPeriod($websiteId, 'daily', $startDate, $endDate);
             
-            // 获取事件统计（在时间范围内）
-            // 先获取时间范围内的事件列表
-            $model = w_obj(Pixel::class)->reset()
-                ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
-                ->fields(Pixel::schema_fields_EVENT)
-                ->group(Pixel::schema_fields_EVENT);
-            
-            if ($startDate) {
-                $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
-            }
-            if ($endDate) {
-                $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
-            }
+            // 获取事件统计（在时间范围 + 可选页面路径内）
+            $model = $applyCommonFilters(
+                w_obj(Pixel::class)->reset()
+                    ->fields(Pixel::schema_fields_EVENT)
+                    ->group(Pixel::schema_fields_EVENT)
+            );
             
             $eventResult = $model->select()->fetchArray();
             $eventList = array_column($eventResult, Pixel::schema_fields_EVENT);
             
             $eventStats = [];
             foreach ($eventList as $event) {
-                // 使用时间范围统计
-                $eventModel = w_obj(Pixel::class)->reset()
-                    ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
-                    ->where(Pixel::schema_fields_EVENT, $event);
-                
-                if ($startDate) {
-                    $eventModel->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
-                }
-                if ($endDate) {
-                    $eventModel->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
-                }
-                
+                $eventModel = $applyCommonFilters(
+                    w_obj(Pixel::class)->reset()
+                        ->where(Pixel::schema_fields_EVENT, $event)
+                );
                 $eventStats[$event] = (int)$eventModel->count();
             }
             
@@ -713,8 +727,21 @@ class Analytics extends FrontendRestController
             arsort($eventStats);
             $topEvents = array_slice($eventStats, 0, 10, true);
             
-            // 获取时间范围统计
-            $timeRangeStats = Pixel::getWebsiteStatsByDateRange($websiteId, $startDate, $endDate);
+            // 获取时间范围统计（带可选 pagePath）
+            if ($pagePath !== '') {
+                $rangeModel = $applyCommonFilters(w_obj(Pixel::class)->reset());
+                $timeRangeStats = [
+                    'website_id' => $websiteId,
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
+                    'page_path' => $pagePath,
+                    'total_count' => (int)$rangeModel->count(),
+                    'events' => $eventStats,
+                    'event_list' => $eventList,
+                ];
+            } else {
+                $timeRangeStats = Pixel::getWebsiteStatsByDateRange($websiteId, $startDate, $endDate);
+            }
             
             return $this->success(__('获取报告成功'), [
                 'summary' => $summary,
@@ -723,7 +750,10 @@ class Analytics extends FrontendRestController
                 'top_events' => $topEvents,
                 'time_range_stats' => $timeRangeStats,
                 'start_date' => $startDate,
-                'end_date' => $endDate
+                'end_date' => $endDate,
+                'website_id' => $websiteId,
+                'page_path' => $pagePath !== '' ? $pagePath : null,
+                'scope' => $pagePath !== '' ? 'page' : 'website',
             ]);
             
         } catch (\Exception $e) {

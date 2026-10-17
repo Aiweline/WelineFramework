@@ -16,6 +16,8 @@
     var lastAuditReport = null;
     var lastChannelStatus = null;
     var activeSubtab = 'overview';
+    /** 事件数据范围：page=当前页面路径+当前站点；website=当前站点整站（不含其它站点） */
+    var eventDataScope = 'page';
     var ASSISTANT_STORAGE_KEY = 'weline_event_sandbox_monitor_v1';
     var LEGACY_ASSISTANT_STORAGE_KEY = 'weline_lifecycle_assistant_v1';
     var assistantLoadPromise = null;
@@ -876,18 +878,48 @@
         };
     }
 
+    function currentPagePath() {
+        try {
+            var path = String(window.location.pathname || '/');
+            if (!path) {
+                return '/';
+            }
+            return path.length > 512 ? path.slice(0, 512) : path;
+        } catch (error) {
+            return '/';
+        }
+    }
+
     function loadAnalytics() {
         var range = defaultRange();
         var websiteId = currentWebsiteId();
+        var pagePath = currentPagePath();
+        // 事件数据必须带当前站点 websiteId；可选 pagePath 收窄到当前页面（默认），避免把整站 Top 当成「当前范围」。
+        var reportParams = {
+            websiteId: websiteId,
+            startDate: range.startDate,
+            endDate: range.endDate
+        };
+        if (eventDataScope === 'page' && pagePath) {
+            reportParams.pagePath = pagePath;
+        }
+        var dashboardParams = {
+            websiteId: websiteId,
+            interval: 30,
+            hours: 24
+        };
         return Promise.allSettled([
-            requestVisitor('analyticsReport', range).then(responseData),
-            requestVisitor('analyticsDashboard', { interval: 30, hours: 24 }).then(responseData),
-            requestVisitor('pixelBufferStats', {}).then(responseData),
+            requestVisitor('analyticsReport', reportParams).then(responseData),
+            requestVisitor('analyticsDashboard', dashboardParams).then(responseData),
+            requestVisitor('pixelBufferStats', { websiteId: websiteId }).then(responseData),
             requestVisitor('getPixelAuditReport', { websiteId: websiteId }).then(responseData),
             requestVisitor('getPixelChannelStatus', { websiteId: websiteId }).then(responseData)
         ]).then(function (results) {
             var analytics = {
                 range: range,
+                websiteId: websiteId,
+                pagePath: eventDataScope === 'page' ? pagePath : null,
+                eventDataScope: eventDataScope,
                 report: null,
                 dashboard: null,
                 buffer: null,
@@ -1165,7 +1197,10 @@
     function renderMetrics(status, analytics) {
         var report = analytics && analytics.report ? analytics.report : {};
         var dashboard = analytics && analytics.dashboard ? analytics.dashboard : {};
-        var totalCount = report.time_range_stats && report.time_range_stats.total_count || report.summary && report.summary.total_count || 0;
+        // 页面范围时 time_range_stats.total_count 可能为 0；禁止用 || 回落到整站 summary
+        var totalCount = (report.time_range_stats && report.time_range_stats.total_count != null)
+            ? Number(report.time_range_stats.total_count)
+            : Number(report.summary && report.summary.total_count || 0);
         var totalValue = report.daily_stats && report.daily_stats.total_value || 0;
         var topEvents = report.top_events || {};
         var current = dashboard.current_period || {};
@@ -1197,11 +1232,14 @@
         var topEvents = report.top_events || {};
         var errors = analytics && analytics.errors ? analytics.errors : [];
         var buffer = analytics && analytics.buffer ? analytics.buffer : {};
+        var scopeLabel = eventScopeLabel(analytics);
         return [
             errors.length ? '<div class="wvp-error">' + escapeHtml(errors.join('；')) + '</div>' : '',
+            renderScopeToolbar(),
             '<div class="wvp-grid">',
             '<div class="wvp-section"><h4>采集运行状态</h4><div class="wvp-list">',
             row('配置来源', status.source),
+            row('统计范围', scopeLabel),
             row('Pixel 开关', boolLabel(status.pixel.enabled)),
             row('Pixel 脚本', status.pixel.loaded ? '已加载' : (status.pixel.scheduled ? '已排队' : '未加载')),
             row('WLS 热缓冲', buffer.enabled ? (buffer.available ? '已启用，可用' : '已启用，内存不可用') : '未启用'),
@@ -1216,7 +1254,7 @@
             row('GA4 转发器', status.ga4.configured ? (status.ga4.autoTrackVisitorEvents ? '已配置，跟随 Pixel 事件' : '已配置，自动同步关闭') : '未配置'),
             row('当前环境', status.traffic.localAccess ? '本地/私网' : '公网域名'),
             '</div></div>',
-            '<div class="wvp-section"><h4>热门事件 Top 10</h4>',
+            '<div class="wvp-section"><h4>热门事件 Top 10（' + escapeHtml(scopeLabel) + '）</h4>',
             renderTopEvents(topEvents),
             '</div>',
             '</div>'
@@ -1290,8 +1328,53 @@
 
     function currentWebsiteId() {
         var env = window.__WelinePixelEnv || {};
-        var id = Number(env.website_id || window.WELINE_WEBSITE_ID || 0);
-        return Number.isFinite(id) ? id : 0;
+        var site = window.site || {};
+        var raw = env.website_id
+            || env.websiteId
+            || window.WELINE_WEBSITE_ID
+            || site.website_id
+            || site.websiteId
+            || 0;
+        var id = Number(raw);
+        return Number.isFinite(id) && id >= 0 ? id : 0;
+    }
+
+    function currentWebsiteScopeLabel() {
+        var env = window.__WelinePixelEnv || {};
+        var site = window.site || {};
+        var id = currentWebsiteId();
+        var code = String(env.website_code || env.websiteCode || site.website_code || site.code || '').trim();
+        if (code) {
+            return '当前站点 ' + code + ' (#' + id + ')';
+        }
+        return '当前站点 #' + id;
+    }
+
+    function eventScopeLabel(analytics) {
+        var siteLabel = currentWebsiteScopeLabel();
+        var scope = (analytics && analytics.eventDataScope) || eventDataScope;
+        var path = (analytics && analytics.pagePath) || currentPagePath();
+        if (scope === 'page') {
+            return '当前页面 ' + path + ' · ' + siteLabel;
+        }
+        return siteLabel + ' · 整站（不含其它站点）';
+    }
+
+    function renderScopeToolbar() {
+        var pageActive = eventDataScope === 'page';
+        return [
+            '<div style="margin-bottom:12px;" data-wvp-scope-toolbar="1">',
+            '<div class="wvp-chip-row" style="justify-content:flex-start;margin-bottom:8px;">',
+            statusChip(currentWebsiteScopeLabel(), 'pass'),
+            statusChip(pageActive ? '范围：当前页面' : '范围：当前站点整站', pageActive ? 'pass' : 'warn'),
+            '</div>',
+            '<div class="wvp-toolbar__actions">',
+            '<button type="button" class="wvp-btn' + (pageActive ? ' wvp-btn--primary' : '') + '" data-wvp-action="scope-page">当前页面</button>',
+            '<button type="button" class="wvp-btn' + (!pageActive ? ' wvp-btn--primary' : '') + '" data-wvp-action="scope-website">当前站点</button>',
+            '</div>',
+            '<p class="wvp-muted" style="margin:8px 0 0;">事件数据与热门事件只统计所选范围；默认当前页面，也可切到当前站点整站（不含其它站点）。</p>',
+            '</div>'
+        ].join('');
     }
 
     function hasAuditReport(report) {
@@ -1477,10 +1560,26 @@
     function renderEvents(status, analytics) {
         var report = analytics && analytics.report ? analytics.report : {};
         var dashboard = analytics && analytics.dashboard ? analytics.dashboard : {};
+        var scopeLabel = eventScopeLabel(analytics);
+        var reportWebsiteId = report.website_id != null
+            ? Number(report.website_id)
+            : (report.summary && report.summary.website_id != null
+                ? Number(report.summary.website_id)
+                : (analytics && analytics.websiteId != null ? Number(analytics.websiteId) : currentWebsiteId()));
         return [
+            renderScopeToolbar(),
+            '<div class="wvp-chip-row" style="margin-bottom:12px;">',
+            statusChip('website_id=' + formatNumber(reportWebsiteId), ''),
+            report.page_path ? statusChip('pagePath=' + report.page_path, 'pass') : statusChip('无 pagePath（整站）', 'warn'),
+            '</div>',
             '<div class="wvp-grid">',
             '<div class="wvp-section"><h4>30天汇总</h4><div class="wvp-list">',
-            row('记录数', formatNumber(report.time_range_stats && report.time_range_stats.total_count || report.summary && report.summary.total_count || 0)),
+            row('统计范围', scopeLabel),
+            row('记录数', formatNumber(
+                (report.time_range_stats && report.time_range_stats.total_count != null)
+                    ? report.time_range_stats.total_count
+                    : (report.summary && report.summary.total_count || 0)
+            )),
             row('事件类型数', formatNumber(report.summary && report.summary.event_count || Object.keys(report.event_stats || {}).length)),
             row('未处理记录', formatNumber(report.summary && report.summary.un_deal_count || 0)),
             row('价值合计', formatMoney(report.daily_stats && report.daily_stats.total_value || 0)),
@@ -1492,7 +1591,7 @@
             row('时间', dashboard.current_period && dashboard.current_period.timestamp || '--'),
             '</div></div>',
             '</div>',
-            '<div class="wvp-section" style="margin-top:14px;"><h4>事件分布</h4>',
+            '<div class="wvp-section" style="margin-top:14px;"><h4>事件分布（' + escapeHtml(scopeLabel) + '）</h4>',
             renderTopEvents(report.top_events || {}),
             '</div>'
         ].join('');
@@ -1619,6 +1718,20 @@
                 return;
             }
             var name = action.getAttribute('data-wvp-action');
+            if (name === 'scope-page' || name === 'scope-website') {
+                event.preventDefault();
+                var nextScope = name === 'scope-page' ? 'page' : 'website';
+                if (eventDataScope === nextScope) {
+                    return;
+                }
+                eventDataScope = nextScope;
+                action.disabled = true;
+                refresh({ content: root.closest('#dev-tool-content') || document.getElementById('dev-tool-content') })
+                    .finally(function () {
+                        action.disabled = false;
+                    });
+                return;
+            }
             if (name === 'audit-markers') {
                 event.preventDefault();
                 action.disabled = true;

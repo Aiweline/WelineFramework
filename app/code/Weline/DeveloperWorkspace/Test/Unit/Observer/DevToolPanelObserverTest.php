@@ -68,9 +68,11 @@ final class DevToolPanelObserverTest extends TestCase
                 'trace:req-12345678',
                 self::callback(static function (array $payload): bool {
                     return (int)($payload['summary']['span_count'] ?? 0) === 1
-                        && (string)($payload['trace'] ?? '') !== '';
+                        && (string)($payload['trace'] ?? '') !== ''
+                        && (string)($payload['request_id'] ?? '') === 'req-12345678'
+                        && (string)($payload['summary']['request_id'] ?? '') === 'req-12345678';
                 }),
-                60
+                self::greaterThan(0)
             )
             ->willReturn(true);
 
@@ -79,6 +81,25 @@ final class DevToolPanelObserverTest extends TestCase
         $method = new ReflectionMethod(DevToolPanelObserver::class, 'storeTracePayload');
         $method->setAccessible(true);
         $method->invoke($observer, 'req-12345678');
+    }
+
+    public function testEndOfCycleStoreContractDoesNotRemapOntoForeignRequestIds(): void
+    {
+        $source = (string) file_get_contents(dirname(__DIR__, 3) . '/Observer/DevToolPanelObserver.php');
+        self::assertStringContainsString('finalizeTracePayloadStore', $source);
+        self::assertStringContainsString('TRACE_FLUSH_EVENT', $source);
+        self::assertStringContainsString('telemetry::trace_flush', $source);
+        self::assertStringContainsString('Never remap onto ids found in HTML bags', $source);
+        // Regression: do not write current exportCompactPayload under ids scraped from HTML.
+        self::assertStringNotContainsString(
+            'foreach ($existingRequestIds as $existingRequestId)',
+            $source
+        );
+        // Collect path must not flush shared cache; flush event owns the write.
+        self::assertStringContainsString(
+            'SharedCache write is deferred to telemetry::trace_flush',
+            $source
+        );
     }
 
     public function testHtmlFragmentIsEligibleForDevToolInjection(): void

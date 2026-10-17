@@ -10,11 +10,15 @@
         <observer name="Weline_DeveloperWorkspace::before_schema_diff_commit_dedupe" instance="Weline\DeveloperWorkspace\Observer\BeforeSchemaDiffCommitObserver" disabled="false" shared="true" sort="10"/>
     </event>
     
-    <!-- 开发工具面板：监听 Framework 统一遥测事件 -->
+    <!-- 开发工具面板：监听 Framework 统一遥测事件（仅注入；不写共享缓存） -->
     <event name="Weline_Framework::telemetry::request_collected">
         <observer name="Weline_DeveloperWorkspace::dev_tool_panel" instance="Weline\DeveloperWorkspace\Observer\DevToolPanelObserver" disabled="false" shared="true" sort="0"/>
     </event>
-    <!-- 兼容回退：当 telemetry 事件注册未刷新时，仍可通过 run_after 注入面板 -->
+    <!-- 响应组装完成后：一次性把 compact 链路写入 SharedCache，供任意 worker 按 id 读取 -->
+    <event name="Weline_Framework::telemetry::trace_flush">
+        <observer name="Weline_DeveloperWorkspace::dev_tool_trace_flush" instance="Weline\DeveloperWorkspace\Observer\DevToolPanelObserver" disabled="false" shared="true" sort="0"/>
+    </event>
+    <!-- 兼容回退：当 telemetry 事件注册未刷新时，仍可通过 run_after 注入面板并落盘 -->
     <event name="Weline_Framework::App::run_after">
         <observer name="Weline_DeveloperWorkspace::dev_tool_panel_compat" instance="Weline\DeveloperWorkspace\Observer\DevToolPanelObserver" disabled="false" shared="true" sort="0"/>
     </event>

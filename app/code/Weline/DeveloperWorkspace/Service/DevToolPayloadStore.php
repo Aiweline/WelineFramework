@@ -74,11 +74,36 @@ class DevToolPayloadStore
             }
         }
 
-        // Always dual-write to file for cross-worker durability. Memory alone is
-        // not enough when the next poll lands on a different HTTP worker.
+        // Dual-write: SharedCacheState (cross-worker memory, not process-local) +
+        // durable file so a poll on another HTTP worker still sees the payload.
         $storedOnFile = $this->setToFile($type, $key, $value, $ttl);
 
         return $storedInMemory || $storedOnFile;
+    }
+
+    /**
+     * Remove a payload from shared memory and the durable file mirror.
+     */
+    public function delete(string $type, string $key): bool
+    {
+        $storeKey = $this->storeKey($type, $key);
+        $deletedMemory = false;
+        $memory = $this->memory();
+        if ($memory !== null) {
+            try {
+                $deletedMemory = $memory->delete(self::NAMESPACE, $storeKey);
+            } catch (\Throwable) {
+                $this->memory = null;
+            }
+        }
+
+        $path = $this->filePath($type, $key);
+        $deletedFile = false;
+        if (\is_file($path)) {
+            $deletedFile = @\unlink($path);
+        }
+
+        return $deletedMemory || $deletedFile || !\is_file($path);
     }
 
     public function getLatest(string $type, int $withinSeconds = self::DEFAULT_TTL): mixed

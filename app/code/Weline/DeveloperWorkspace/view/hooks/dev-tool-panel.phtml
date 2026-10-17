@@ -845,6 +845,32 @@ $apiDocsUrl = '/dev/tool/docs/api';
         line-height: 1.75;
     }
 
+    .dev-tool-trace-empty-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 12px 0 4px;
+        padding: 8px 14px;
+        border: 1px solid #1f6feb;
+        border-radius: 8px;
+        background: #1f6feb;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.3;
+        cursor: pointer;
+    }
+
+    .dev-tool-trace-empty-cta:hover {
+        background: #1a5fd0;
+        border-color: #1a5fd0;
+    }
+
+    .dev-tool-trace-empty-cta[disabled] {
+        opacity: 0.65;
+        cursor: wait;
+    }
+
     .badge {
         display: inline-block;
         padding: 2px 6px;
@@ -2393,6 +2419,53 @@ $apiDocsUrl = '/dev/tool/docs/api';
         border-top: 1px solid var(--dev-panel-line);
     }
 
+    #dev-tool-panel .dev-tool-trace-target {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 10px;
+        padding: 8px 10px;
+        border: 1px solid var(--dev-panel-line);
+        border-radius: 8px;
+        background: #f8fafc;
+        font-size: 12px;
+    }
+
+    #dev-tool-panel .dev-tool-trace-target-label {
+        color: #64748b;
+        white-space: nowrap;
+    }
+
+    #dev-tool-panel .dev-tool-trace-target-select {
+        flex: 1 1 220px;
+        min-width: 180px;
+        max-width: 100%;
+        height: 30px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 0 8px;
+        background: #fff;
+        color: #0f172a;
+    }
+
+    #dev-tool-panel .dev-tool-trace-target-badge {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    #dev-tool-panel .dev-tool-trace-target-badge.is-api {
+        background: #ffedd5;
+        color: #c2410c;
+    }
+
     #dev-tool-panel .dev-tool-lifecycle {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(280px, 0.44fr);
@@ -3383,6 +3456,11 @@ const DevToolPanel = (function() {
         traceLoaded: false,
         traceSpans: null,
         traceSummary: null,
+        // null = current document request_id; set only when user picks an API/other request
+        traceTargetId: null,
+        traceLoadedId: null,
+        traceRecent: null,
+        traceKind: 'document',
     };
 
     let pageContextBound = false;
@@ -5500,6 +5578,12 @@ const DevToolPanel = (function() {
 
     function renderTraceLifecycleGraph(spans) {
         var ordered = spans.slice().sort(function(a, b) {
+            // Pin WLS entry→response aggregate at the top of the lifecycle map.
+            var aHandle = String(a && a.name || '') === 'wls.worker.handle' ? 0 : 1;
+            var bHandle = String(b && b.name || '') === 'wls.worker.handle' ? 0 : 1;
+            if (aHandle !== bHandle) {
+                return aHandle - bHandle;
+            }
             var seqA = Number(a.seq || 0);
             var seqB = Number(b.seq || 0);
             return seqA === seqB ? 0 : seqA - seqB;
@@ -5624,11 +5708,14 @@ const DevToolPanel = (function() {
 
     function buildTraceUnavailableHtml(message, requestId, fpcStatus) {
         var isFpcHit = Boolean(fpcStatus && fpcStatus.hit);
+        var isDoc = isDocumentTraceTarget(requestId);
         var title = isFpcHit ? '命中 FPC，请求链路未重新执行' : '请求链路暂无数据';
         var icon = isFpcHit ? 'circle' : 'info';
         var desc = isFpcHit
             ? '当前 HTML 由 Full Page Cache 直接返回，控制器、模板、Hook、DB 等后端阶段被缓存短路，所以本次请求不会产生新的请求链路数据。'
-            : normalizeTraceUnavailableMessage(message);
+            : (isDoc
+                ? '当前文档打开时尚未武装录制（或链路已过期）。请点击下方按钮刷新采集——接口请求请从上方「查看请求」下拉选择。'
+                : normalizeTraceUnavailableMessage(message));
         var html = '<div class="dev-tool-trace-empty-card' + (isFpcHit ? ' is-fpc-hit' : '') + '">';
         html += '<h3 class="dev-tool-trace-empty-title"><i class="fa ' + icon + '"></i>' + escapeHtml(title) + '</h3>';
         html += '<p class="dev-tool-trace-empty-desc">' + escapeHtml(desc) + '</p>';
@@ -5643,89 +5730,232 @@ const DevToolPanel = (function() {
             }
         }
         html += '</div>';
+        if (!isFpcHit && isDoc) {
+            html += '<button type="button" class="dev-tool-trace-empty-cta" data-dev-tool-action="capture-doc-trace">刷新采集当前文档</button>';
+        }
         html += '<ul class="dev-tool-trace-empty-actions">';
         if (isFpcHit) {
             html += '<li>这是预期行为：FPC 命中时后端链路没有重新跑，面板只能看到缓存结果。</li>';
             html += '<li>要看真实链路，请追加 <code>?nocache=1</code> 或清理/关闭 frontend/router cache 后刷新。</li>';
             html += '<li>如果想分析 FPC 构建耗时，请在缓存 miss 或缓存重建那一次请求打开面板。</li>';
-        } else {
-            html += '<li>确认当前是 DEV/DEBUG 且页面是 HTML 响应。</li>';
-            html += '<li>刷新页面后再打开请求链路；trace 默认只保留短时间窗口。</li>';
+        } else if (isDoc) {
+            html += '<li>打开面板会武装录制 Cookie；须重新加载页面后，才会写入「当前文档」链路。</li>';
+            html += '<li>链路默认保留约 5 分钟；超时后再次点击「刷新采集当前文档」即可。</li>';
             if (fpcStatus && fpcStatus.checked) {
                 html += '<li>已探测当前页面 FPC 响应头，未发现 FPC HIT/STALE。</li>';
-            } else if (fpcStatus && fpcStatus.error) {
-                html += '<li>FPC 探测未完成：' + escapeHtml(fpcStatus.error) + '</li>';
             }
+        } else {
+            html += '<li>该接口链路不存在或已过期；可改选「当前文档」或刷新后重试。</li>';
         }
         html += '</ul>';
         html += '</div>';
         return html;
     }
 
+    function bindTraceCaptureButton(container) {
+        if (!container) return;
+        var btn = container.querySelector('[data-dev-tool-action="capture-doc-trace"]');
+        if (!btn || btn.getAttribute('data-bound') === '1') return;
+        btn.setAttribute('data-bound', '1');
+        btn.addEventListener('click', function() {
+            btn.disabled = true;
+            btn.textContent = '正在武装并刷新…';
+            if (window.WelinePanel && typeof window.WelinePanel.captureDocumentTrace === 'function') {
+                window.WelinePanel.captureDocumentTrace();
+                return;
+            }
+            window.location.reload();
+        });
+    }
+
     function renderTraceUnavailable(content, message, requestId) {
         content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>分析请求链路状态...</div></div>';
-        probeCurrentPageFpcStatus().then(function(fpcStatus) {
-            content.innerHTML = buildTraceUnavailableHtml(message, requestId, fpcStatus);
+        Promise.all([
+            probeCurrentPageFpcStatus(),
+            loadTraceRecentList()
+        ]).then(function(results) {
+            const fpcStatus = results[0];
+            const activeId = requestId || getActiveTraceRequestId();
+            content.innerHTML = renderTraceTargetPickerHtml(activeId, { request_id: activeId })
+                + buildTraceUnavailableHtml(message, requestId, fpcStatus);
+            bindTraceTargetPicker(content);
+            bindTraceCaptureButton(content);
         });
+    }
+
+    function getDocumentRequestId() {
+        const config = getDevToolRuntimeConfig();
+        return String((config && config.requestId) || window.__WELINE_REQUEST_ID__ || '');
+    }
+
+    function getActiveTraceRequestId() {
+        return String(state.traceTargetId || getDocumentRequestId() || '');
+    }
+
+    function isDocumentTraceTarget(requestId) {
+        const docId = getDocumentRequestId();
+        return !requestId || !docId || String(requestId) === docId;
+    }
+
+    function loadTraceRecentList() {
+        const documentId = getDocumentRequestId();
+        const url = getDevToolApiUrl('trace/recent', {
+            limit: 30,
+            document_id: documentId || undefined
+        });
+        if (!url) {
+            return Promise.resolve([]);
+        }
+        return devToolFetchJson(url)
+            .then(function(data) {
+                const rows = data && data.data && Array.isArray(data.data.requests) ? data.data.requests : [];
+                state.traceRecent = rows;
+                return rows;
+            })
+            .catch(function() {
+                state.traceRecent = state.traceRecent || [];
+                return state.traceRecent;
+            });
+    }
+
+    function bindTraceTargetPicker(container) {
+        if (!container) return;
+        const select = container.querySelector('#dev-tool-trace-target');
+        if (!select || select.getAttribute('data-bound') === '1') return;
+        select.setAttribute('data-bound', '1');
+        select.addEventListener('change', function() {
+            const nextId = String(select.value || '');
+            const docId = getDocumentRequestId();
+            state.traceTargetId = (!nextId || nextId === docId) ? null : nextId;
+            state.traceSpans = null;
+            state.traceSummary = null;
+            state.traceLoadedId = null;
+            renderRequestTrace();
+        });
+    }
+
+    function renderTraceTargetPickerHtml(activeId, summary) {
+        const docId = getDocumentRequestId();
+        const rows = Array.isArray(state.traceRecent) ? state.traceRecent.slice() : [];
+        const seen = {};
+        if (docId) {
+            seen[docId] = true;
+        }
+        let html = '<div class="dev-tool-trace-target">';
+        html += '<span class="dev-tool-trace-target-label">查看请求</span>';
+        html += '<select id="dev-tool-trace-target" class="dev-tool-trace-target-select" aria-label="选择要查看的请求链路">';
+        html += '<option value="' + escapeAttr(docId) + '"' + (isDocumentTraceTarget(activeId) ? ' selected' : '') + '>当前文档';
+        if (docId) {
+            html += ' · ' + escapeHtml(docId.slice(0, 18));
+        }
+        html += '</option>';
+        rows.forEach(function(row) {
+            const id = String(row && row.request_id || '');
+            if (!id || seen[id]) return;
+            seen[id] = true;
+            const kind = String(row.kind || (row.is_document ? 'document' : 'api'));
+            if (kind === 'document' && id === docId) return;
+            const method = String(row.method || '');
+            const uri = String(row.uri || '');
+            const label = (kind === 'api' ? '接口' : '文档')
+                + (method ? ' ' + method : '')
+                + (uri ? ' ' + uri : '')
+                + ' · ' + id.slice(0, 14);
+            html += '<option value="' + escapeAttr(id) + '"' + (id === String(activeId || '') ? ' selected' : '') + '>'
+                + escapeHtml(label) + '</option>';
+        });
+        html += '</select>';
+        const isDoc = isDocumentTraceTarget(activeId);
+        html += '<span class="dev-tool-trace-target-badge' + (isDoc ? '' : ' is-api') + '">'
+            + (isDoc ? '当前文档' : '接口') + '</span>';
+        const uriNote = summary && (summary.uri || (summary.request && summary.request.uri));
+        if (uriNote) {
+            html += '<span class="dev-tool-trace-target-label" title="' + escapeAttr(String(uriNote)) + '">'
+                + escapeHtml(String(uriNote).slice(0, 64)) + '</span>';
+        }
+        html += '</div>';
+        return html;
     }
 
     function renderRequestTrace() {
         const content = document.getElementById('dev-tool-content');
         if (!content) return;
 
-        if (Array.isArray(state.traceSpans)) {
-            if (state.traceSpans.length === 0) {
-                const config = getDevToolRuntimeConfig();
-                renderTraceUnavailable(content, '当前页面无请求链路数据。', config.requestId || window.__WELINE_REQUEST_ID__ || '');
-                return;
-            }
-            renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
-            return;
-        }
-
-        if (typeof window.__WELINE_REQUEST_TRACE__ !== 'undefined' && Array.isArray(window.__WELINE_REQUEST_TRACE__)) {
-            state.traceSpans = window.__WELINE_REQUEST_TRACE__;
-            state.traceSummary = null;
-            if (state.traceSpans.length === 0) {
-                const config = getDevToolRuntimeConfig();
-                renderTraceUnavailable(content, '当前页面无请求链路数据。', config.requestId || window.__WELINE_REQUEST_ID__ || '');
-                return;
-            }
-            renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
-            return;
-        }
-
-        const config = getDevToolRuntimeConfig();
-        const requestId = config.requestId || window.__WELINE_REQUEST_ID__ || '';
+        const requestId = getActiveTraceRequestId();
         if (!requestId) {
-            renderTraceUnavailable(content, '当前页面没有 request_id，请刷新页面。', '');
+            renderTraceUnavailable(content, '当前文档没有 request_id，请刷新页面。', '');
             return;
         }
 
-        content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>加载请求链路...</div></div>';
+        // Cached spans only if they belong to the active target (default = document).
+        if (Array.isArray(state.traceSpans) && state.traceLoadedId === requestId) {
+            if (state.traceSpans.length === 0) {
+                renderTraceUnavailable(content, '当前文档无请求链路数据。', requestId);
+                return;
+            }
+            renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
+            return;
+        }
+
+        // Inline payload injected with the HTML document — only for document target.
+        if (
+            isDocumentTraceTarget(requestId)
+            && typeof window.__WELINE_REQUEST_TRACE__ !== 'undefined'
+            && Array.isArray(window.__WELINE_REQUEST_TRACE__)
+        ) {
+            state.traceSpans = window.__WELINE_REQUEST_TRACE__;
+            state.traceSummary = state.traceSummary || {
+                request_id: requestId,
+                method: 'GET',
+                uri: location.pathname + location.search,
+                source: 'document_inline'
+            };
+            state.traceLoadedId = requestId;
+            state.traceKind = 'document';
+            if (state.traceSpans.length === 0) {
+                renderTraceUnavailable(content, '当前文档无请求链路数据。', requestId);
+                return;
+            }
+            loadTraceRecentList().finally(function() {
+                renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
+            });
+            return;
+        }
+
+        content.innerHTML = '<div class="dev-tool-loading"><w:icon name="pin" size="sm"></w:icon><div>加载'
+            + (isDocumentTraceTarget(requestId) ? '当前文档' : '接口')
+            + '请求链路...</div></div>';
         const url = getDevToolApiUrl('trace', { id: requestId });
         if (!url) {
             content.innerHTML = '<div class="dev-tool-empty">无法构建 trace API 地址。</div>';
             return;
         }
 
-        return devToolFetchJson(url)
-            .then(function(data) {
-                if (!data || Number(data.code) !== 200) {
-                    throw new Error((data && (data.msg || data.message)) || 'trace load failed');
-                }
-                const payload = data.data || {};
-                state.traceSummary = payload.summary || null;
-                state.traceSpans = decodeCompactTracePayload(payload);
-                if (!state.traceSpans.length) {
-                    renderTraceUnavailable(content, '当前页面无请求链路数据。', requestId);
-                    return;
-                }
-                renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
-            })
-            .catch(function(error) {
-                renderTraceUnavailable(content, error.message || '请求链路不存在或已过期，请刷新页面重试', requestId);
-            });
+        return Promise.all([
+            devToolFetchJson(url),
+            loadTraceRecentList()
+        ]).then(function(results) {
+            const data = results[0];
+            if (!data || Number(data.code) !== 200) {
+                throw new Error((data && (data.msg || data.message)) || 'trace load failed');
+            }
+            const payload = data.data || {};
+            state.traceSummary = payload.summary || null;
+            state.traceSpans = decodeCompactTracePayload(payload);
+            state.traceLoadedId = requestId;
+            state.traceKind = isDocumentTraceTarget(requestId) ? 'document' : 'api';
+            if (!state.traceSpans.length) {
+                renderTraceUnavailable(content, (state.traceKind === 'document' ? '当前文档' : '该接口') + '无请求链路数据。', requestId);
+                return;
+            }
+            renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
+        }).catch(function(error) {
+            renderTraceUnavailable(
+                content,
+                error.message || '请求链路不存在或已过期，请刷新页面重试',
+                requestId
+            );
+        });
     }
 
     function decodeCompactTracePayload(payload) {
@@ -5910,22 +6140,78 @@ const DevToolPanel = (function() {
     }
 
     function renderTraceOverview(spans, summary, codeSpans, dbSpans) {
-        var totalFromSummary = traceFirstNumber(summary, ['total_ms', 'total_duration_ms', 'timing.total_ms']);
-        var totalMs = totalFromSummary !== null && totalFromSummary > 0 ? totalFromSummary : traceRootTotal(spans);
+        var wlsHandleSpan = null;
+        for (var wi = 0; wi < spans.length; wi++) {
+            if (spans[wi] && String(spans[wi].name || '') === 'wls.worker.handle') {
+                wlsHandleSpan = spans[wi];
+                break;
+            }
+        }
+        var envelopeFromSummary = traceFirstNumber(summary, [
+            'envelope_wall_ms',
+            'timing.pre_telemetry_total_ms',
+            'pre_telemetry_total_ms'
+        ]);
+        var wlsMs = wlsHandleSpan
+            ? traceFiniteNumber(wlsHandleSpan.duration_ms, 0)
+            : (envelopeFromSummary !== null ? envelopeFromSummary : 0);
+        if (envelopeFromSummary !== null && envelopeFromSummary > wlsMs) {
+            wlsMs = envelopeFromSummary;
+        }
+        var totalFromSummary = traceFirstNumber(summary, ['wall_ms', 'total_ms', 'total_duration_ms', 'timing.total_ms']);
+        var maxSpanFromSummary = traceFirstNumber(summary, ['max_span_ms']);
+        var rootSumMs = traceRootTotal(spans);
+        var slowest = traceSlowestSpan(spans.filter(function(span) {
+            return !span || String(span.name || '') !== 'wls.worker.handle';
+        }));
+        var slowestMs = traceFiniteNumber(slowest && slowest.duration_ms, 0);
+        var maxSpanMs = Math.max(
+            slowestMs,
+            maxSpanFromSummary !== null ? maxSpanFromSummary : 0
+        );
+        // Wall clock: max(handle, longest span, summary.wall). Never orphan root-sum.
+        // A short handle after 4096-cap must not under-report below a visible stage.
+        var totalMs = Math.max(
+            wlsMs > 0 ? wlsMs : 0,
+            totalFromSummary !== null ? totalFromSummary : 0,
+            maxSpanMs
+        );
+        var totalBasis = 'none';
+        if (totalMs > 0) {
+            if (wlsMs > 0 && wlsMs + 0.005 >= maxSpanMs && totalMs <= wlsMs + 0.005) {
+                totalBasis = 'wls.worker.handle';
+            } else if (maxSpanMs > 0 && maxSpanMs + 0.005 >= totalMs) {
+                totalBasis = wlsMs > 0 ? 'max(handle,span)' : 'max_span';
+            } else if (totalFromSummary !== null && totalFromSummary > 0) {
+                totalBasis = String(traceGetPath(summary || {}, 'total_basis') || 'summary');
+            } else if (wlsMs > 0) {
+                totalBasis = 'wls.worker.handle';
+            }
+        } else if (rootSumMs > 0) {
+            totalMs = rootSumMs;
+            totalBasis = 'root_sum';
+        }
         var categoryTotals = traceCategoryTotals(spans, summary);
         var dbFromSummary = traceFirstNumber(summary, ['db_duration_ms', 'db_ms', 'timing.db_ms', 'category_totals.db']);
         var dbMs = dbFromSummary !== null ? dbFromSummary : (categoryTotals.db || traceSumDuration(dbSpans));
-        var codeMs = totalMs > 0 ? Math.max(0, totalMs - dbMs) : traceSumDuration(codeSpans);
+        // DB scalars keep accumulating after the detail cap and may overlap; never claim >100% of wall.
+        var dbExceedsWall = totalMs > 0 && dbMs > totalMs;
+        var codeMs = (!dbExceedsWall && totalMs > 0) ? Math.max(0, totalMs - dbMs) : 0;
         var dbRatio = totalMs > 0 ? Math.round((dbMs / totalMs) * 100) : 0;
-        var slowest = traceSlowestSpan(spans);
-        var slowestMs = traceFiniteNumber(slowest && slowest.duration_ms, 0);
+        var dbRatioDisplay = dbExceedsWall ? null : Math.min(100, dbRatio);
         var slowInfo = slowest ? parseTraceLifecycleInfo(slowest) : null;
         var slowCount = spans.filter(function(span) {
             return traceFiniteNumber(span && span.duration_ms, 0) >= 200;
         }).length;
         var request = traceRequestSummary(summary || {});
         var runtime = traceRuntimeSummary(summary || {});
-        var requestValue = (request.method ? request.method + ' ' : '') + (request.status ? request.status : '当前页');
+        var requestId = traceGetPath(summary || {}, 'request_id') || getActiveTraceRequestId() || '';
+        var isDoc = isDocumentTraceTarget(requestId);
+        var requestValue = (request.method ? request.method + ' ' : '')
+            + (isDoc ? '当前文档' : '接口');
+        if (request.status) {
+            requestValue += ' ' + request.status;
+        }
         var requestNote = (request.host ? request.host : '') + (request.uri ? request.uri : '');
         var runtimeValue = runtime.fpcHit ? 'FPC HIT' : (runtime.instance || runtime.mode || '当前进程');
         var runtimeNote = [];
@@ -5936,26 +6222,71 @@ const DevToolPanel = (function() {
         if (runtime.fpcSource) runtimeNote.push(runtime.fpcSource);
 
         var totalClass = getTimeClass(totalMs, 100, 500);
-        var codeClass = getTimeClass(codeMs, 80, 400);
-        var dbClass = dbRatio >= 40 || dbMs >= 200 ? 'medium' : getTimeClass(dbMs, 40, 200);
+        var codeClass = dbExceedsWall ? 'medium' : getTimeClass(codeMs, 80, 400);
+        var dbClass = dbExceedsWall || (dbRatioDisplay !== null && dbRatioDisplay >= 40) || dbMs >= 200
+            ? 'medium'
+            : getTimeClass(dbMs, 40, 200);
+        var wlsClass = getTimeClass(wlsMs, 100, 500);
         var slowestClass = getTimeClass(slowestMs, 100, 500);
         var statusClass = traceStatusClass(request.status);
         var runtimeClass = runtime.fpcHit ? 'fast' : '';
-        var requestId = traceGetPath(summary || {}, 'request_id') || window.__WELINE_REQUEST_ID__ || '';
+
+        var totalNote = '服务端墙钟';
+        if (totalBasis === 'wls.worker.handle') {
+            totalNote = '服务端墙钟 · wls.worker.handle';
+        } else if (totalBasis === 'max(handle,span)' || totalBasis === 'max_span') {
+            totalNote = '服务端墙钟 · max(handle, 最长阶段)';
+        } else if (totalBasis) {
+            totalNote = '服务端墙钟 · ' + totalBasis;
+        }
+        totalNote += ' · span ' + spans.length;
+        if (requestId) {
+            totalNote += ' · ' + requestId;
+        }
+        if (rootSumMs > totalMs * 1.15 && totalMs > 0) {
+            totalNote += '（根阶段加总 ' + formatTime(rootSumMs) + ' 含重叠，已忽略）';
+        }
+        if (wlsMs > 0 && maxSpanMs > wlsMs + 0.5) {
+            totalNote += '（handle ' + formatTime(wlsMs) + ' 偏低，已抬到最长阶段）';
+        }
+
+        var wlsNote = '进入 → 响应就绪';
+        if (wlsMs > 0 && totalMs > 0 && Math.abs(totalMs - wlsMs) <= 0.5) {
+            wlsNote += ' · 与总耗时同墙钟';
+        } else if (wlsMs > 0 && totalMs > wlsMs + 0.5) {
+            wlsNote += ' · 总耗时已按最长阶段抬升';
+        }
+
+        var codeNote = dbExceedsWall
+            ? ('DB 累计超过墙钟，无法按墙钟拆分 · ' + codeSpans.length + ' 段')
+            : ('墙钟 − DB · ' + codeSpans.length + ' 段');
+        var dbNote = dbSpans.length + ' 次 · ';
+        if (dbExceedsWall) {
+            dbNote += '累计探测（可重叠/截断后仍累加），非墙钟占比';
+        } else {
+            dbNote += '约占墙钟 ' + dbRatioDisplay + '%';
+        }
 
         var html = '<div class="dev-tool-trace-overview">';
-        html += traceOverviewCard('总耗时', formatTime(totalMs), 'span ' + spans.length + (requestId ? ' · request_id ' + requestId : ''), totalClass);
-        html += traceOverviewCard('编码阶段', formatTime(codeMs), codeSpans.length + ' 段 · 已扣除 DB 估算', codeClass);
-        html += traceOverviewCard('DB 耗时', formatTime(dbMs), dbSpans.length + ' 次 · ' + dbRatio + '%', dbClass);
+        html += traceOverviewCard('总耗时', formatTime(totalMs), totalNote, totalClass);
+        if (wlsMs > 0 || wlsHandleSpan) {
+            html += traceOverviewCard('WLS 耗时', formatTime(wlsMs), wlsNote, wlsClass);
+        }
+        html += traceOverviewCard('编码阶段', formatTime(codeMs), codeNote, codeClass);
+        html += traceOverviewCard('DB 耗时', formatTime(dbMs), dbNote, dbClass);
         html += traceOverviewCard('最慢阶段', formatTime(slowestMs), slowInfo ? (traceCategoryLabel(slowest.category) + ' · ' + slowInfo.title) : '暂无', slowestClass);
-        html += traceOverviewCard('请求状态', requestValue, requestNote || '当前页面', statusClass);
+        html += traceOverviewCard('请求状态', requestValue, requestNote || (isDoc ? '当前文档' : '接口请求'), statusClass);
         html += traceOverviewCard('运行时', runtimeValue, runtimeNote.join(' · ') || '无运行时摘要', runtimeClass);
         html += '</div>';
 
         var attention = [];
         if (summary && summary.truncated) attention.push('链路已截断');
         if (totalClass === 'slow') attention.push('总耗时偏高');
-        if (dbRatio >= 40 && dbSpans.length > 0) attention.push('DB 占比 ' + dbRatio + '%');
+        if (dbExceedsWall && dbSpans.length > 0) {
+            attention.push('DB 累计超过墙钟');
+        } else if (dbRatioDisplay !== null && dbRatioDisplay >= 40 && dbSpans.length > 0) {
+            attention.push('DB 占比 ' + dbRatioDisplay + '%');
+        }
         if (slowCount > 0) attention.push('慢阶段 ' + slowCount + ' 个');
         if (Number(request.status || 0) >= 400) attention.push('HTTP ' + request.status);
         if (runtime.fpcHit) attention.push('FPC 命中');
@@ -5976,8 +6307,10 @@ const DevToolPanel = (function() {
         if (!content) return;
         const codeSpans = spans.filter(function(s) { return (s.category || '') !== 'db'; });
         const dbSpans = spans.filter(function(s) { return (s.category || '') === 'db'; });
+        const activeId = getActiveTraceRequestId();
 
         let html = '<div class="performance-stats dev-tool-trace-shell">';
+        html += renderTraceTargetPickerHtml(activeId, summary || {});
         if (summary && summary.truncated) {
             const maxSpans = Number(summary.max_spans || spans.length || 0);
             html += '<div style="margin-bottom:8px;padding:8px 10px;border:1px solid #f0d98a;border-radius:6px;background:#fff8e1;color:#8a6d3b;font-size:12px;line-height:1.5;">';
@@ -6187,6 +6520,7 @@ const DevToolPanel = (function() {
 
         html += '</div>'; // end performance-stats
         content.innerHTML = html;
+        bindTraceTargetPicker(content);
         var container = content.closest('.dev-tool-container');
         if (container) {
             container.querySelectorAll('.trace-toggle').forEach(function(btn) {
@@ -6558,7 +6892,7 @@ const DevToolPanel = (function() {
             html += '<div>';
             html += '<div class="dev-tool-performance-kicker"><w:icon name="home" size="sm"></w:icon> 实时性能</div>';
             html += '<div class="dev-tool-performance-title">页面加载性能</div>';
-            html += '<div class="dev-tool-performance-subtitle">首位为文档返回（访问→HTML 收完）；完全加载含 DOM/资源/load。阶段条越长越值得优先查看。</div>';
+            html += '<div class="dev-tool-performance-subtitle">文档返回=浏览器侧访问→HTML 收完；应 ≥ 框架「总耗时/WLS 墙钟」。完全加载含 DOM/资源/load。</div>';
             html += buildTplPerfSwitchHtml();
             html += '</div>';
             html += '<div class="dev-tool-performance-total">';

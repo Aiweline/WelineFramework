@@ -84,7 +84,7 @@ class Routes extends DevToolRestController
         $key = 'routes:' . $type . ':' . (string)@\filemtime($routerFile) . ':' . (string)@\filesize($routerFile);
 
         return (array)$this->payloadStore()->remember('routes', $key, $this->routesTtl(), function () use ($routerFile): array {
-            $routers = include $routerFile;
+            $routers = \Weline\Framework\Compilation\CompiledPhpRegistry::load($routerFile);
             if (!\is_array($routers)) {
                 return [];
             }

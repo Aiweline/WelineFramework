@@ -36,6 +36,9 @@ final class VisitorApiContractsTest extends TestCase
             'VisitorPanelRestRoutes::testGeneratedFrontendRestContainsPanelAnalyticsRoutes' => function () {
             $this->assert_VisitorPanelRestRoutes_testGeneratedFrontendRestContainsPanelAnalyticsRoutes();
         },
+            'VisitorPanelRestRoutes::testAnalyticsReportAcceptsPagePathScope' => function () {
+            $this->assert_VisitorPanelRestRoutes_testAnalyticsReportAcceptsPagePathScope();
+        },
         ];
     }
 
@@ -48,6 +51,24 @@ private function assert_VisitorPanelRestRoutes_testPanelJsUsesApiVisitorRestBase
     self::assertStringContainsString("path: 'analytics/buffer-stats'", $panel);
     self::assertStringContainsString("path: 'analytics/audit-report'", $panel);
     self::assertStringContainsString("path: 'analytics/channel-status'", $panel);
+    // 概览/事件数据必须显式带当前站点 websiteId，禁止只传日期导致落到 website_id=0「像全站」。
+    self::assertStringContainsString('websiteId: websiteId', $panel);
+    self::assertStringContainsString('startDate: range.startDate', $panel);
+    self::assertStringContainsString('endDate: range.endDate', $panel);
+    self::assertStringContainsString('reportParams.pagePath = pagePath', $panel);
+    self::assertStringContainsString('requestVisitor(\'analyticsReport\', reportParams)', $panel);
+    self::assertStringContainsString('requestVisitor(\'analyticsDashboard\', dashboardParams)', $panel);
+    self::assertStringContainsString('currentWebsiteScopeLabel', $panel);
+    self::assertStringContainsString('data-wvp-action="scope-page"', $panel);
+    self::assertStringContainsString('data-wvp-action="scope-website"', $panel);
+}
+
+private function assert_VisitorPanelRestRoutes_testAnalyticsReportAcceptsPagePathScope(): void
+{
+    $src = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Visitor' . '/Api/Rest/V1/Analytics.php');
+    self::assertStringContainsString("getParam('pagePath')", $src);
+    self::assertStringContainsString("schema_fields_URL, '%' . \$pagePath . '%', 'like'", $src);
+    self::assertStringContainsString("'scope' => \$pagePath !== '' ? 'page' : 'website'", $src);
 }
 
 private function assert_VisitorPanelRestRoutes_testGeneratedFrontendRestContainsPanelAnalyticsRoutes(): void
