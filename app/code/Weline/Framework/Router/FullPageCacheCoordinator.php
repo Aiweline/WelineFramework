@@ -5242,8 +5242,13 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         string $fullUriForPathIndex = '',
     ): array {
         // $cacheKey kept for call-site / Reflect signature; new writes never touch hash leaves.
-        $publishHtmlDisk = static function (string $plain, string $brotli) use ($fullUriForPathIndex): ?array {
+        $publishHtmlDisk = function (string $plain, string $brotli) use ($fullUriForPathIndex): ?array {
             if ($fullUriForPathIndex === '' || ($plain === '' && $brotli === '')) {
+                return null;
+            }
+            // Query-variant Shared bodies stay inline/Shared-only — never overwrite
+            // the path-only html-disk leaf used by Nginx try_files.
+            if ($this->canonicalCacheKeyUriHasQueryVariant($fullUriForPathIndex)) {
                 return null;
             }
             if (!FpcHtmlDiskStore::publish($fullUriForPathIndex, $plain, $brotli)) {
@@ -6698,6 +6703,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
 
         return \trim((string)$value);
+    }
+
+    /**
+     * After canonicalize: non-empty query means Extra query_keys and/or pierce
+     * storm identity. html-disk remains path-only — skip serve/hydrate/publish.
+     */
+    private function canonicalCacheKeyUriHasQueryVariant(string $canonicalFullUri): bool
+    {
+        $query = (string)(\parse_url(\trim($canonicalFullUri), \PHP_URL_QUERY) ?: '');
+
+        return $query !== '';
     }
 
     /**

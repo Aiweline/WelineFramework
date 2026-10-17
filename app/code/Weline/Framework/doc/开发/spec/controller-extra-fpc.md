@@ -19,7 +19,7 @@ clarify_status: ready-for-plan
 1e. WHEN `query_keys` 为显式逗号列表 THEN 仅这些参数名（小写）参与缓存身份；键名排序后拼入 canonical URI；书写顺序不同但同名同值 SHALL 得同一身份。  
 1f. WHEN 请求携带未在 `query_keys` 中的参数（如 `utm_*`）THEN SHALL NOT 改变 FPC 身份。  
 1g. WHEN `query_keys` 含 `*`、非法名、穿章/诊断键（`_wb_nc` / `w_fpc_pierce` / `wls_tpl_*` / `nocache`）或超过 `MAX_QUERY_KEYS` THEN 归一 SHALL fail-closed 为空列表（path-only）。  
-1h. WHEN 路径策略含非空 `query_keys` 且请求携带任一白名单参 THEN 边缘 html-disk SHALL bypass（禁 `~q/{sha1}` 盘变体）；冷盘叶子仍 path-only。  
+1h. WHEN 路径策略含非空 `query_keys` 且请求携带任一白名单参 THEN 边缘 html-disk SHALL bypass，且源站 Coordinator SHALL NOT 用 path-only 冷盘 serve/hydrate/publish 该变体（禁 `~q/{sha1}` 盘变体）；冷盘叶子仍 path-only，变体权威在 Shared/Process。  
 1i. WHEN 业务页为白名单参分键 THEN SSR 体 SHALL 按这些参投影（禁止键分桶、体仍中性壳）。  
 2. WHEN 业务在同事务调用 `w_changed` 且 ChangedType 已注册 THEN 系统 SHALL Enricher→Recipe→Capability，并仍 dispatch 给 Seo 等。  
 3. WHEN Enricher 后仍缺 purge_fpc_urls 所需 urls THEN 系统 SHALL fail-fast。  

@@ -1325,6 +1325,21 @@ final class FullPageCacheCoordinatorTest extends TestCase
                     'https://example.test/products?af_hanfu_chao_dai=晋制&price=100-299&utm_source=x',
                 ),
             );
+
+            // UC-query-variant-skips-path-only-html-disk
+            $hasQueryVariant = new \ReflectionMethod(
+                FullPageCacheCoordinator::class,
+                'canonicalCacheKeyUriHasQueryVariant',
+            );
+            $hasQueryVariant->setAccessible(true);
+            self::assertTrue($hasQueryVariant->invoke(
+                $coordinator,
+                'https://example.test/products?price=100-299',
+            ));
+            self::assertFalse($hasQueryVariant->invoke(
+                $coordinator,
+                'https://example.test/products',
+            ));
         } finally {
             FullPageCacheCoordinator::clearRequestMemos();
         }
