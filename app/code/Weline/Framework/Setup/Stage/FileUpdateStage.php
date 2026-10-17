@@ -14,6 +14,7 @@ namespace Weline\Framework\Setup\Stage;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 
 /**
  * 文件更新阶段
@@ -33,6 +34,13 @@ class FileUpdateStage extends AbstractStage
      * @var array 原始文件内容备份 [文件路径 => 文件内容]
      */
     private array $originalFileData = [];
+
+    /**
+     * Array payloads for process-bag write-through after commit (path => array).
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $registryPuts = [];
     
     /**
      * 构造函数
@@ -73,6 +81,7 @@ class FileUpdateStage extends AbstractStage
         $filePath = Env::path_MODULES_FILE;
         $content = '<?php return ' . var_export($modules, true) . ';';
         $this->addFile($filePath, $content);
+        $this->registryPuts[$filePath] = $modules;
     }
     
     /**
@@ -160,6 +169,10 @@ class FileUpdateStage extends AbstractStage
         
         if (!empty($failedFiles)) {
             throw new Exception(__('部分文件写入失败：%{1}', [implode(', ', $failedFiles)]));
+        }
+
+        foreach ($this->registryPuts as $path => $payload) {
+            CompiledPhpRegistry::put($path, $payload);
         }
         
         $this->committed = true;

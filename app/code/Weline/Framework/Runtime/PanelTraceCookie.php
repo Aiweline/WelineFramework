@@ -89,9 +89,13 @@ final class PanelTraceCookie
 
     private static function read(string $cookieName): string
     {
+        $candidates = self::candidateCookieNames($cookieName);
+
         // Prefer already-parsed cookies — avoids loading Cookie helper on closed panel.
-        if (isset($_COOKIE[$cookieName]) && (string)$_COOKIE[$cookieName] !== '') {
-            return (string)$_COOKIE[$cookieName];
+        foreach ($candidates as $name) {
+            if (isset($_COOKIE[$name]) && (string)$_COOKIE[$name] !== '') {
+                return (string)$_COOKIE[$name];
+            }
         }
 
         if (\class_exists(\Weline\Framework\Http\Cookie::class, false)) {
@@ -112,19 +116,66 @@ final class PanelTraceCookie
             $fromServer = (string)$_SERVER['HTTP_COOKIE'];
         }
         if ($fromServer !== '') {
+            $wanted = [];
+            foreach ($candidates as $name) {
+                $wanted[$name] = true;
+            }
             foreach (\explode(';', $fromServer) as $pair) {
                 $pair = \trim($pair);
                 if ($pair === '' || !\str_contains($pair, '=')) {
                     continue;
                 }
                 [$name, $value] = \explode('=', $pair, 2);
-                if (\trim($name) === $cookieName) {
+                $name = \trim($name);
+                if ($name !== '' && isset($wanted[$name])) {
                     return \rawurldecode(\trim($value));
                 }
             }
         }
 
         return '';
+    }
+
+    /**
+     * Logical name plus CookieScope-qualified wire name (e.g. w_weline_trace_panel_w0).
+     *
+     * CookieScope is used only when already loaded (no autoload on the closed-panel
+     * hot path). Before CookieScope exists, a single `{name}_*` alias in $_COOKIE is
+     * accepted so TraceGate can arm from WLS worker-scoped Set-Cookie; ambiguous
+     * multi-suffix bags wait until CookieScope can pick the active worker.
+     *
+     * @return list<string>
+     */
+    private static function candidateCookieNames(string $cookieName): array
+    {
+        $names = [$cookieName];
+        if (\class_exists(\Weline\Framework\Http\CookieScope::class, false)) {
+            try {
+                $qualified = \Weline\Framework\Http\CookieScope::qualifyName($cookieName);
+                if ($qualified !== '' && $qualified !== $cookieName) {
+                    $names[] = $qualified;
+
+                    return $names;
+                }
+            } catch (\Throwable) {
+            }
+            // Isolation inactive (identity qualify): fall through to sole-alias peek.
+        }
+
+        $aliases = [];
+        foreach ($_COOKIE as $name => $value) {
+            if (!\is_string($name) || (string)$value === '') {
+                continue;
+            }
+            if ($name !== $cookieName && \str_starts_with($name, $cookieName . '_')) {
+                $aliases[] = $name;
+            }
+        }
+        if (\count($aliases) === 1) {
+            $names[] = $aliases[0];
+        }
+
+        return $names;
     }
 
     private static function panelSigningKey(): string

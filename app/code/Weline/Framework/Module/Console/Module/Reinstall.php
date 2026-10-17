@@ -184,7 +184,7 @@ class Reinstall extends CommandAbstract
         // 确保模块被标记为安装状态（reinstallModule已经删除了，这里再次确认）
         $modulesFile = Env::path_MODULES_FILE;
         if (is_file($modulesFile)) {
-            $modules = require $modulesFile;
+            $modules = \Weline\Framework\Compilation\CompiledPhpRegistry::load($modulesFile) ?? [];
             $needUpdate = false;
             foreach ($moduleNames as $moduleName) {
                 if (isset($modules[$moduleName])) {
@@ -194,8 +194,8 @@ class Reinstall extends CommandAbstract
                 }
             }
             if ($needUpdate) {
-                $content = '<?php return ' . var_export($modules, true) . ';';
-                file_put_contents($modulesFile, $content);
+                // Disk + process bag write-through — no re-include.
+                (new \Weline\Framework\Compilation\CompiledPhpArrayWriter())->write($modulesFile, $modules);
                 $this->printer->note(__('已清除模块注册信息，准备重新安装...'));
             }
         }
@@ -545,7 +545,7 @@ class Reinstall extends CommandAbstract
             return;
         }
 
-        $modules = require $modulesFile;
+        $modules = \Weline\Framework\Compilation\CompiledPhpRegistry::load($modulesFile) ?? [];
         
         if (!isset($modules[$moduleName])) {
             $this->printer->warning(__('  模块 %{1} 在 modules.php 中不存在，跳过。', [$moduleName]));
@@ -555,9 +555,7 @@ class Reinstall extends CommandAbstract
         // 从数组中删除模块
         unset($modules[$moduleName]);
 
-        // 写回文件
-        $content = '<?php return ' . var_export($modules, true) . ';';
-        file_put_contents($modulesFile, $content);
+        (new \Weline\Framework\Compilation\CompiledPhpArrayWriter())->write($modulesFile, $modules);
         
         $this->printer->success(__('  ✓ 已从 modules.php 删除模块 %{1}', [$moduleName]));
     }
@@ -576,7 +574,7 @@ class Reinstall extends CommandAbstract
             return;
         }
 
-        $dependencies = require $dependenciesFile;
+        $dependencies = \Weline\Framework\Compilation\CompiledPhpRegistry::load($dependenciesFile) ?? [];
         
         if (!isset($dependencies[$moduleName])) {
             $this->printer->warning(__('  模块 %{1} 在 module_dependencies.php 中不存在，跳过。', [$moduleName]));
@@ -586,9 +584,7 @@ class Reinstall extends CommandAbstract
         // 从数组中删除模块
         unset($dependencies[$moduleName]);
 
-        // 写回文件
-        $content = '<?php  return ' . w_var_export($dependencies, true) . ';';
-        file_put_contents($dependenciesFile, $content);
+        (new \Weline\Framework\Compilation\CompiledPhpArrayWriter())->write($dependenciesFile, $dependencies);
         
         $this->printer->success(__('  ✓ 已从 module_dependencies.php 删除模块 %{1}', [$moduleName]));
     }
@@ -1016,14 +1012,13 @@ class Reinstall extends CommandAbstract
             return;
         }
         
-        $modules = require $modulesFile;
+        $modules = \Weline\Framework\Compilation\CompiledPhpRegistry::load($modulesFile) ?? [];
         if (isset($modules[$moduleName])) {
             // 移除 installing 标志，标记为已安装
             unset($modules[$moduleName]['installing']);
             $modules[$moduleName]['installed'] = true;
             
-            $content = '<?php return ' . var_export($modules, true) . ';';
-            file_put_contents($modulesFile, $content);
+            (new \Weline\Framework\Compilation\CompiledPhpArrayWriter())->write($modulesFile, $modules);
             $this->printer->note(__('已更新模块注册信息：%{1}', [$moduleName]));
         }
     }

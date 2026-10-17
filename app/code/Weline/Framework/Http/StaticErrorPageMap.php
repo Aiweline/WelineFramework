@@ -134,7 +134,7 @@ final class StaticErrorPageMap
 
         try {
             /** @var mixed $data */
-            $data = include $file;
+            $data = \Weline\Framework\Compilation\CompiledPhpRegistry::load($file);
         } catch (\Throwable) {
             return [];
         }

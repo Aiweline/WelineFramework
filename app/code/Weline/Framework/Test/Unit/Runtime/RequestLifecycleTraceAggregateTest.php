@@ -38,6 +38,71 @@ final class RequestLifecycleTraceAggregateTest extends TestCase
         Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => $this->previousDebugConfig]]);
     }
 
+    public function testExportCompactTotalPrefersWlsHandleWallClockOverOrphanRootSum(): void
+    {
+        // Raise detail cap so all spans remain visible for this contract.
+        Env::getInstance()->applyRuntimeConfig([
+            'wls' => ['debug' => ['request_trace_max_spans' => 64]],
+        ]);
+        RequestLifecycleTrace::reset();
+        $this->enterRequest('aggregate-wall-clock');
+        RequestLifecycleTrace::installPanelTraceOn();
+
+        RequestLifecycleTrace::recordSpan('wls.worker.handle', 418.0, 'wls');
+        RequestLifecycleTrace::recordSpan('router_start', 300.0, 'framework');
+        RequestLifecycleTrace::recordSpan('view_render', 280.0, 'view');
+        RequestLifecycleTrace::recordSpan('db::q1', 40.0, 'db', 'view_render');
+
+        $summary = RequestLifecycleTrace::exportCompactPayload()['summary'];
+        self::assertSame(418.0, $summary['total_ms']);
+        self::assertSame(418.0, $summary['wall_ms'] ?? null);
+        self::assertSame('wls.worker.handle', $summary['total_basis'] ?? null);
+        // Orphan roots would sum far above wall clock; must not become total_ms.
+        self::assertGreaterThan((float)$summary['total_ms'], (float)($summary['root_sum_ms'] ?? 0.0));
+    }
+
+    public function testExportCompactWallRaisesToLongestSpanWhenHandleUnderReports(): void
+    {
+        Env::getInstance()->applyRuntimeConfig([
+            'wls' => ['debug' => ['request_trace_max_spans' => 64]],
+        ]);
+        RequestLifecycleTrace::reset();
+        $this->enterRequest('aggregate-wall-raise');
+        RequestLifecycleTrace::installPanelTraceOn();
+
+        // Mimic truncated-page bug: short handle + longer retained stage + fat DB accumulate.
+        RequestLifecycleTrace::recordSpan('wls.worker.handle', 68.97, 'wls');
+        RequestLifecycleTrace::recordSpan('视图 · Weline\\Theme\\Block\\Partials', 1370.0, 'view');
+        RequestLifecycleTrace::recordSpan('db::a', 300.0, 'db');
+        RequestLifecycleTrace::recordSpan('db::b', 360.0, 'db');
+
+        $summary = RequestLifecycleTrace::exportCompactPayload()['summary'];
+        self::assertSame(1370.0, $summary['total_ms']);
+        self::assertSame(1370.0, $summary['wall_ms'] ?? null);
+        self::assertSame(68.97, $summary['envelope_wall_ms'] ?? null);
+        self::assertSame(1370.0, $summary['max_span_ms'] ?? null);
+        self::assertSame('max(handle,span)', $summary['total_basis'] ?? null);
+        self::assertSame(660.0, $summary['db_duration_ms']);
+        // Wall raised above cumulative DB — panel must not show absurd DB% of wall.
+        self::assertGreaterThan((float)$summary['db_duration_ms'], (float)$summary['total_ms']);
+    }
+
+    public function testEnvelopeWallSurvivesDetailCapWhenHandleLandsInOverflow(): void
+    {
+        RequestLifecycleTrace::recordSpan('first_detail', 1.0);
+        RequestLifecycleTrace::recordSpan('second_detail', 2.0);
+        RequestLifecycleTrace::recordSpan('late_view', 500.0, 'view');
+        RequestLifecycleTrace::recordSpan('wls.worker.handle', 620.0, 'wls');
+
+        self::assertSame(['first_detail', 'second_detail'], array_column(RequestLifecycleTrace::getSpans(), 'name'));
+        $summary = RequestLifecycleTrace::exportCompactPayload()['summary'];
+        self::assertSame(620.0, $summary['total_ms']);
+        self::assertSame(620.0, $summary['envelope_wall_ms'] ?? null);
+        self::assertSame(620.0, $summary['max_span_ms'] ?? null);
+        self::assertSame('wls.worker.handle', $summary['total_basis'] ?? null);
+        self::assertTrue($summary['truncated']);
+    }
+
     public function testDatabaseTotalsContinueAfterDetailCapWithoutRoundingEveryCall(): void
     {
         RequestLifecycleTrace::recordSpan('db::first', 1.25, 'db', 'catalog');

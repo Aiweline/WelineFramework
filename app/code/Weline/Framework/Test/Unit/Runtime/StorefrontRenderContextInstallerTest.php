@@ -12,6 +12,7 @@ use Weline\Framework\Runtime\StorefrontRenderContext;
 use Weline\Framework\Runtime\StorefrontRenderContextInstaller;
 use Weline\Framework\Runtime\StorefrontRenderContextReader;
 use Weline\Framework\Runtime\StorefrontRenderContextResolver;
+use Weline\Websites\Data\WebsiteData;
 
 /**
  * WS1：StorefrontRenderContext 填充侧 — 幂等 / 袋键 / 禁半装.
@@ -31,7 +32,7 @@ final class StorefrontRenderContextInstallerTest extends TestCase
     {
         self::assertSame('storefront.render_context.v1', StorefrontRenderContext::BAG_KEY);
         self::assertSame('storefront.render_context.v1', StorefrontRenderContextReader::bagKey());
-        self::assertSame('websites.website_local_rows.v1', StorefrontRenderContext::WEBSITE_LOCAL_ROWS_BAG_KEY);
+        self::assertFalse(\defined(StorefrontRenderContext::class . '::WEBSITE_LOCAL_ROWS_BAG_KEY'));
     }
 
     public function testInstallOnceIsIdempotent(): void
@@ -60,14 +61,14 @@ final class StorefrontRenderContextInstallerTest extends TestCase
             ['local_code' => 'en_US', 'name' => 'Shop A', 'description' => ''],
             ['local_code' => 'zh_Hans_CN', 'name' => '商店A', 'description' => ''],
         ];
-        RequestContext::set(StorefrontRenderContext::WEBSITE_LOCAL_ROWS_BAG_KEY, [
-            '7' => $rows,
-        ]);
+        WebsiteData::clearProcessCache();
+        WebsiteData::putProcessLocalRows(7, $rows);
 
         $ctx = (new StorefrontRenderContextInstaller())->installOnce();
 
         self::assertSame($rows, $ctx->websiteLocal);
         self::assertSame($rows, StorefrontRenderContextReader::websiteLocal());
+        WebsiteData::clearProcessCache();
     }
 
     public function testReaderMergeUpdatesSingleBagWithoutParallelKey(): void

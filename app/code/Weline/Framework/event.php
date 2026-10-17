@@ -79,6 +79,16 @@ return [
             'result' => ['type' => 'string', 'required' => false, 'description' => '当前响应字符串，监听者可按需修改（例如注入调试面板脚本）'],
         ],
     ],
+    'Weline_Framework::telemetry::trace_flush' => [
+        'name' => __('请求链路写入共享缓存'),
+        'description' => __('在 request_collected 监听者（含面板注入）完成之后、响应返回之前触发一次。监听者应将当前请求的 compact 链路写入跨 Worker 共享缓存（非进程内存态），供任意 worker 按 request_id 读取。禁止边收集边写入。'),
+        'doc' => 'app/请求链路写入共享缓存.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'request_id' => ['type' => 'string', 'required' => true, 'description' => '当前请求 id；写入键 trace:{request_id}'],
+        ],
+    ],
     'Weline_Framework::App::url_parsed_after' => [
         'name' => __('URL解析后'),
         'description' => __('URL解析后，你可以在这里做一些后续操作。'),

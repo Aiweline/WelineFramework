@@ -272,11 +272,17 @@ final class TraceGate
         if (!\class_exists(RequestLifecycleTrace::class, false)) {
             if (self::getArmed() !== true) {
                 self::clearArmedSlot();
+                // CookieScope may have just gained a worker suffix; re-peek
+                // w_weline_trace_panel_w0 without keeping a sticky false latch.
+                self::bootstrapFromRequest();
             }
 
             return;
         }
         RequestLifecycleTrace::invalidateIfDisarmed();
+        if (self::getArmed() !== true) {
+            self::bootstrapFromRequest();
+        }
     }
 
     /** @return list<array<string, mixed>> */

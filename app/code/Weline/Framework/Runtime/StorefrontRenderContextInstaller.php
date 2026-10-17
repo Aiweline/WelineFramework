@@ -128,32 +128,27 @@ final class StorefrontRenderContextInstaller
      */
     private function projectWebsiteLocal(int $websiteId): ?array
     {
-        if ($websiteId < 0 || !Context::hasCurrent()) {
+        if ($websiteId < 0) {
             return null;
         }
-        $bag = RequestContext::get(StorefrontRenderContext::WEBSITE_LOCAL_ROWS_BAG_KEY);
-        if (!\is_array($bag)) {
-            return null;
-        }
-        $idKey = (string)$websiteId;
-        if (!\array_key_exists($idKey, $bag) || !\is_array($bag[$idKey])) {
-            return null;
-        }
+        try {
+            if (!\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                return null;
+            }
+            /** @var list<array{local_code?:string,name?:string,description?:string}> $rows */
+            $rows = \Weline\Websites\Data\WebsiteData::localRowsForWebsite($websiteId);
 
-        /** @var list<array{local_code?:string,name?:string,description?:string}> $rows */
-        $rows = \array_values($bag[$idKey]);
-
-        return $rows;
+            return $rows;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** @return array{active:list<string>,installed:list<string>} */
     private function resolveLocaleCatalog(): array
     {
-        $projected = StorefrontRenderContext::projectedLocaleCatalog();
-        if ($projected !== null) {
-            return $projected;
-        }
-
+        // Authority: ResolvedLanguageCatalog process bag / LocalizationProviderRegistry.
+        // No parallel RequestContext locale-catalog staging bag.
         $active = [];
         $installed = [];
         try {

@@ -46,10 +46,10 @@ class Commands
                 $commandParts = explode(' ', trim($needCommand));
                 $commandName = end($commandParts); // 获取最后一个部分（命令名）
                 
-                // 加载所有已注册的命令
+                // 加载所有已注册的命令（经 CompiledPhpRegistry 进程门闩，禁止二次 include）
                 $commandsFile = BP . 'generated' . DS . 'commands.php';
                 if (file_exists($commandsFile)) {
-                    $registeredCommands = require $commandsFile;
+                    $registeredCommands = \Weline\Framework\Compilation\CompiledPhpRegistry::load($commandsFile);
                     
                     if (isset($registeredCommands[$commandName])) {
                         $commandClass = $registeredCommands[$commandName];

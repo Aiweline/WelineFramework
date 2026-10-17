@@ -318,7 +318,9 @@ class RouteUpdateStage extends AbstractStage
             @\opcache_invalidate($path, true);
         }
         \clearstatcache(true, $path);
-        $routers = require $path;
+        // Backup/live router PHP return arrays — process gate (CLI may forget after rewrite).
+        \Weline\Framework\Compilation\CompiledPhpRegistry::forgetForTests($path);
+        $routers = \Weline\Framework\Compilation\CompiledPhpRegistry::load($path);
         if (!\is_array($routers)) {
             return 0;
         }

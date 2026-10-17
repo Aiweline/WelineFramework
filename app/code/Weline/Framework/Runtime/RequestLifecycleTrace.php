@@ -43,6 +43,15 @@ final class RequestLifecycleTraceState
     public int $droppedSpanCount = 0;
     public int $themeDroppedSpanCount = 0;
 
+    /**
+     * WLS entry→response envelope (ms), kept even when the handle span is
+     * dropped into slow-overflow after the chronological detail cap.
+     */
+    public float $envelopeWallMs = 0.0;
+
+    /** Longest observed span duration (ms), retained or overflow. */
+    public float $maxObservedSpanMs = 0.0;
+
     /** @var array<string, array<string, mixed>> */
     public array $phases = [];
 
@@ -859,6 +868,8 @@ class RequestLifecycleTrace
 
             return;
         }
+        // Wall-clock scalars survive the detail cap (handle may only land in overflow).
+        self::observeSpanTiming($state, $name, $durationMs);
         if ($state->recordingDisabledUntilReset) {
             ++$state->droppedSpanCount;
             self::retainSlowOverflowSpan($name, $durationMs, $category, $parent, $meta, $state);
@@ -892,8 +903,9 @@ class RequestLifecycleTrace
         if (!empty($meta)) {
             $span['meta'] = self::sanitizeMetaForStorage($meta, $state);
         }
+        // Request-local list only — compact dict/rows are built once at export/flush
+        // (no collect-while-write into worker process dictionaries).
         $state->spans[] = $span;
-        self::appendCompactSpan($span, $state);
     }
 
     /** Keep late enclosing spans visible without expanding the chronological trace or its dictionaries. */
@@ -1157,15 +1169,11 @@ class RequestLifecycleTrace
     public static function exportCompactPayload(): array
     {
         $state = self::state();
-        // Compact rows and category maps keep the original chronological detail contract.
         $spans = $state->spans;
-        if (empty($state->compactRows) && !empty($spans)) {
-            foreach ($spans as $span) {
-                self::appendCompactSpan($span, $state);
-            }
-        }
+        // Build compact encoding once at flush/export — not incrementally during recordSpan.
+        self::rebuildCompactRows($state);
 
-        $totalMs = 0.0;
+        $rootSumMs = 0.0;
         $categoryCounts = [];
         $categoryTotals = [];
         foreach ($spans as $span) {
@@ -1174,12 +1182,13 @@ class RequestLifecycleTrace
             $categoryCounts[$category] = ($categoryCounts[$category] ?? 0) + 1;
             $categoryTotals[$category] = ($categoryTotals[$category] ?? 0.0) + $durationMs;
             if ((string)($span['parent'] ?? '') === '') {
-                $totalMs += $durationMs;
+                $rootSumMs += $durationMs;
             }
         }
-        if ($totalMs <= 0.0) {
-            $totalMs = (float)\array_sum($categoryTotals);
-        }
+        // Wall clock: max(handle envelope, longest span). Never orphan root-sum
+        // (nested work double-counts) and never trust a short handle alone when a
+        // retained/overflow stage already exceeds it (common after 4096-cap).
+        [$totalMs, $totalBasis, $handleMs, $maxSpanMs] = self::resolveWallClock($state, $rootSumMs, $categoryTotals);
 
         return [
             'request_id' => self::ensureRequestId(),
@@ -1193,11 +1202,77 @@ class RequestLifecycleTrace
             'summary' => self::getAggregateSummary() + [
                 'request_id' => self::ensureRequestId(),
                 'total_ms' => \round($totalMs, 2),
+                'wall_ms' => \round($totalMs, 2),
+                'envelope_wall_ms' => \round($handleMs, 2),
+                'max_span_ms' => \round($maxSpanMs, 2),
+                'root_sum_ms' => \round($rootSumMs, 2),
+                'total_basis' => $totalBasis,
                 // Category maps describe retained details; DB scalar totals also include dropped details.
                 'category_counts' => $categoryCounts,
                 'category_totals' => self::roundFloatMap($categoryTotals),
             ],
         ];
+    }
+
+    private static function rebuildCompactRows(RequestLifecycleTraceState $state): void
+    {
+        $state->compactRows = [];
+        $state->names = [];
+        $state->nameIds = [];
+        $state->categories = [];
+        $state->categoryIds = [];
+        $state->metas = [];
+        $state->metaIds = [];
+        $state->nextSeq = 1;
+        foreach ($state->spans as $span) {
+            if (!\is_array($span)) {
+                continue;
+            }
+            self::appendCompactSpan($span, $state);
+        }
+    }
+
+    /**
+     * @param array<string, float> $categoryTotals
+     * @return array{0: float, 1: string, 2: float, 3: float}
+     */
+    private static function resolveWallClock(
+        RequestLifecycleTraceState $state,
+        float $rootSumMs,
+        array $categoryTotals
+    ): array {
+        $handleMs = $state->envelopeWallMs;
+        $maxSpanMs = $state->maxObservedSpanMs;
+        $wallMs = \max($handleMs, $maxSpanMs);
+        $basis = 'none';
+        if ($wallMs > 0.0) {
+            if ($handleMs > 0.0 && $handleMs + 0.005 >= $maxSpanMs) {
+                $basis = 'wls.worker.handle';
+            } elseif ($maxSpanMs > 0.0 && $maxSpanMs > $handleMs) {
+                $basis = $handleMs > 0.0 ? 'max(handle,span)' : 'max_span';
+            }
+        } elseif ($rootSumMs > 0.0) {
+            $wallMs = $rootSumMs;
+            $basis = 'root_sum';
+        } else {
+            $wallMs = (float)\array_sum($categoryTotals);
+            $basis = $wallMs > 0.0 ? 'category_sum' : 'none';
+        }
+
+        return [$wallMs, $basis, $handleMs, $maxSpanMs];
+    }
+
+    private static function observeSpanTiming(
+        RequestLifecycleTraceState $state,
+        string $name,
+        float $durationMs
+    ): void {
+        if ($durationMs > $state->maxObservedSpanMs) {
+            $state->maxObservedSpanMs = $durationMs;
+        }
+        if ($name === 'wls.worker.handle' && $durationMs > $state->envelopeWallMs) {
+            $state->envelopeWallMs = $durationMs;
+        }
     }
 
     /**
@@ -1218,6 +1293,8 @@ class RequestLifecycleTrace
             'db_duration_ms' => \round($state->dbDurationMs, 2),
             'wls_span_count' => $state->wlsSpanCount,
             'wls_duration_ms' => \round($state->wlsDurationMs, 2),
+            'envelope_wall_ms' => \round($state->envelopeWallMs, 2),
+            'max_span_ms' => \round($state->maxObservedSpanMs, 2),
             'truncated' => $state->recordingDisabledUntilReset,
             'max_spans' => self::getMaxSpansCap($state),
             'slow_overflow_span_count' => \count($state->slowOverflowSpans),

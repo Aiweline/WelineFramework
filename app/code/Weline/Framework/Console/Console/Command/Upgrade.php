@@ -426,10 +426,14 @@ class Upgrade extends CommandAbstract
      */
     public function refreshForModules(array $moduleNames): array
     {
-        // 1. 加载现有命令
-        $commands = is_file(Env::path_COMMANDS_FILE) 
-            ? require Env::path_COMMANDS_FILE 
-            : [];
+        // 1. 加载现有命令（CLI：可 forget 后经门闩重读）
+        if (\is_file(Env::path_COMMANDS_FILE)) {
+            \Weline\Framework\Compilation\CompiledPhpRegistry::forgetForTests(Env::path_COMMANDS_FILE);
+            $loaded = \Weline\Framework\Compilation\CompiledPhpRegistry::load(Env::path_COMMANDS_FILE);
+            $commands = \is_array($loaded) ? $loaded : [];
+        } else {
+            $commands = [];
+        }
         
         // 2. 清除目标模块的命令
         $commands = $this->clearModuleCommands($commands, $moduleNames);
@@ -728,6 +732,7 @@ class Upgrade extends CommandAbstract
     private function writeCommandsFile(array $commands): void
     {
         $content = '<?php return ' . w_var_export($commands, true) . ";\n";
+        // publishContent puts into CompiledPhpRegistry — no forget+re-include.
         (new GeneratedPhpArrayPublisher())->publishContent(
             Env::path_COMMANDS_FILE,
             $content,

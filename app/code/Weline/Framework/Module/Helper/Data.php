@@ -886,21 +886,6 @@ class Data extends AbstractHelper
     }
 
     /**
-     * @DESC         |更新路由
-     *
-     * @param array $routers 路由数组
-     *
-     * @throws \Weline\Framework\App\Exception
-     */
-    public function updateRouters(array &$routers)
-    {
-        $this->file->open(Env::path_MODULES_FILE, $this->file::mode_w_add);
-        $text = '<?php return ' . var_export($routers, true) . ';';
-        $this->file->write($text);
-        $this->file->close();
-    }
-
-    /**
      * PC/API 控制器 area 链是否属于后台（含 BackendPageController 中间基类）。
      *
      * @param list<string>|array<int, string> $ctlArea

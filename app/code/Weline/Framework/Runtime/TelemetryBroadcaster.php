@@ -23,6 +23,9 @@ class TelemetryBroadcaster
 {
     private const REQUEST_COLLECTED_EVENT = 'Weline_Framework::telemetry::request_collected';
 
+    /** After panel/telemetry listeners finish; persist compact lifecycle to shared cache. */
+    private const TRACE_FLUSH_EVENT = 'Weline_Framework::telemetry::trace_flush';
+
     private const TRACE_MODE_OFF = 'off';
 
     private const TRACE_MODE_SAMPLED = 'sampled';
@@ -82,11 +85,55 @@ class TelemetryBroadcaster
 
         $eventsManager->dispatch(self::REQUEST_COLLECTED_EVENT, $eventData);
 
-        if (!$allowResultMutation) {
-            return $result;
-        }
+        $mutatedResult = !$allowResultMutation
+            ? $result
+            : (string)($eventData['data']['result'] ?? $result);
 
-        return (string)($eventData['data']['result'] ?? $result);
+        // Response is fully assembled (panel inject done). Flush once into shared
+        // memory cache so any worker can serve Trace REST by request_id — never
+        // mid-request, never process-local-only accumulation for consumers.
+        self::dispatchTraceFlush($eventsManager);
+
+        return $mutatedResult;
+    }
+
+    private static function dispatchTraceFlush(EventsManager $eventsManager): void
+    {
+        if (!$eventsManager->hasObservers(self::TRACE_FLUSH_EVENT)) {
+            return;
+        }
+        $spanCount = 0;
+        try {
+            // Prefer live recorder summary even if the gate latch briefly disagrees.
+            if (\class_exists(RequestLifecycleTrace::class, false)) {
+                $spanCount = (int)(RequestLifecycleTrace::getAggregateSummary()['span_count'] ?? 0);
+            } elseif (TraceGate::isArmed()) {
+                $spanCount = (int)(TraceGate::getAggregateSummary()['span_count'] ?? 0);
+            }
+        } catch (\Throwable) {
+            $spanCount = 0;
+        }
+        if (!TraceGate::isArmed() && $spanCount <= 0) {
+            return;
+        }
+        try {
+            $requestId = TraceGate::ensureRequestId();
+        } catch (\Throwable) {
+            return;
+        }
+        if ($requestId === '') {
+            return;
+        }
+        try {
+            // EventsManager::dispatch requires argument #2 by reference.
+            $flushData = [
+                'data' => [
+                    'request_id' => $requestId,
+                ],
+            ];
+            $eventsManager->dispatch(self::TRACE_FLUSH_EVENT, $flushData);
+        } catch (\Throwable) {
+        }
     }
 
     private static function allowsDebugResponseDecoration(): bool

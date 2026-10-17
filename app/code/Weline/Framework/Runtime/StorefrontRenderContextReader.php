@@ -41,7 +41,16 @@ final class StorefrontRenderContextReader
         if ($context instanceof StorefrontRenderContext && $context->websiteLocal !== null) {
             return $context->websiteLocal;
         }
-        return self::peekWebsiteLocalRowsBag();
+        try {
+            if (!\class_exists(\Weline\Websites\Data\WebsiteData::class) || !Context::hasCurrent()) {
+                return null;
+            }
+            $rows = \Weline\Websites\Data\WebsiteData::localRowsForWebsite(RequestContext::getWelineWebsiteId());
+
+            return $rows === [] ? null : $rows;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** @return array{active:list<string>,installed:list<string>} */
@@ -94,33 +103,12 @@ final class StorefrontRenderContextReader
     }
 
     /**
-     * Publish website_local projection after WebsiteData warms the underlying bag.
+     * Publish website_local projection after WebsiteData warms the process/shared bag.
      *
      * @param list<array{local_code?:string,name?:string,description?:string}> $rows
      */
     public static function mergeWebsiteLocal(array $rows): ?StorefrontRenderContext
     {
         return self::mergeFields(['website_local' => \array_values($rows)]);
-    }
-
-    /**
-     * @return list<array{local_code?:string,name?:string,description?:string}>|null
-     */
-    private static function peekWebsiteLocalRowsBag(): ?array
-    {
-        if (!Context::hasCurrent()) {
-            return null;
-        }
-        $bag = RequestContext::get(StorefrontRenderContext::WEBSITE_LOCAL_ROWS_BAG_KEY);
-        if (!\is_array($bag)) {
-            return null;
-        }
-        $websiteId = RequestContext::getWelineWebsiteId();
-        $idKey = (string)$websiteId;
-        if (!\array_key_exists($idKey, $bag) || !\is_array($bag[$idKey])) {
-            return null;
-        }
-
-        return \array_values($bag[$idKey]);
     }
 }

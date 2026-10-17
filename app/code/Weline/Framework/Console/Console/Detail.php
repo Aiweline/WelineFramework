@@ -21,7 +21,7 @@ class Detail extends \Weline\Framework\Console\CommandAbstract
             $this->printer->error(__('命令行信息不存在'));
             return;
         }
-        $commands = include $commands;
+        $commands = \Weline\Framework\Compilation\CompiledPhpRegistry::load($commands) ?? [];
         # 获取命令行信息
         foreach($commands as $module_commands){
             foreach($module_commands as $module_command => $command_info){

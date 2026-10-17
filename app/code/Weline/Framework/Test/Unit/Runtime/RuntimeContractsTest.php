@@ -417,7 +417,8 @@ private function assert_StorefrontRenderContextInstallerDecouple_testInstallerDo
     self::assertStringNotContainsString('WebsiteData', $src);
     self::assertStringContainsString('preferredInstalledLanguageCodes', $src);
     self::assertStringContainsString('LocalizationProviderRegistry', $src);
-    self::assertStringContainsString('projectedLocaleCatalog', $src);
+    self::assertStringNotContainsString('projectedLocaleCatalog', $src);
+    self::assertStringNotContainsString('LOCALE_CATALOG_BAG_KEY', $src);
 }
 
 private function assert_StorefrontRenderContextInstallerDecouple_testTimezoneDoesNotSoftPullWebsiteData(): void

@@ -1660,7 +1660,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 if (\function_exists('opcache_invalidate')) {
                     @\opcache_invalidate($routerFile, true);
                 }
-                $routes = require $routerFile;
+                // Setup may have just rewritten routers — forget stale bag then load via gate.
+                if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+                    \Weline\Framework\Compilation\CompiledPhpRegistry::forgetForTests($routerFile);
+                }
+                $routes = \Weline\Framework\Compilation\CompiledPhpRegistry::load($routerFile);
             } catch (\Throwable) {
                 continue;
             }
