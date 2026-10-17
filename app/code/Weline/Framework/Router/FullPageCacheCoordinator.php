@@ -6478,7 +6478,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return $fullUri;
         }
 
-        $filteredQuery = $this->filterQueryStringForCacheKey($query);
+        // Allowlist path MUST come from $fullUri (Worker/probe pass URI explicitly);
+        // getRawFullUri() may still point at another request identity.
+        $filteredQuery = $this->filterQueryStringForCacheKey($query, $fullUri);
         if ($filteredQuery === $query) {
             return $fullUri;
         }
@@ -6619,7 +6621,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
-    private function filterGetParamsForCacheKey(array $params): array
+    private function filterGetParamsForCacheKey(array $params, string $pathContextUri = ''): array
     {
         // Default path-only: drop visitor query except (1) pierce-gated storm keys and
         // (2) path-scoped Extra query_keys allowlist. Sorted for stable Shared identity.
@@ -6628,7 +6630,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $kept = [];
         foreach ($params as $key => $value) {
             $normalized = \strtolower(\trim((string)$key));
-            if ($normalized === '' || !$this->isCacheKeyRetainedQueryParam($normalized)) {
+            if ($normalized === '' || !$this->isCacheKeyRetainedQueryParam($normalized, $pathContextUri)) {
                 continue;
             }
             if (\array_key_exists($normalized, $kept)) {
@@ -6645,12 +6647,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      * @param array<string, mixed> $params
      * @return list<string>
      */
-    private function getIgnorableGetParamKeys(array $params): array
+    private function getIgnorableGetParamKeys(array $params, string $pathContextUri = ''): array
     {
         $keys = [];
         foreach (\array_keys($params) as $key) {
             $key = (string)$key;
-            if ($this->isCacheKeyRetainedQueryParam($key)) {
+            if ($this->isCacheKeyRetainedQueryParam($key, $pathContextUri)) {
                 continue;
             }
             $keys[] = $key;
@@ -6659,7 +6661,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         return $keys;
     }
 
-    private function filterQueryStringForCacheKey(string $query): string
+    private function filterQueryStringForCacheKey(string $query, string $pathContextUri = ''): string
     {
         $segments = \preg_split('/[&;]/', $query, -1, \PREG_SPLIT_NO_EMPTY);
         if ($segments === false || $segments === []) {
@@ -6671,7 +6673,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $parts = \explode('=', $segment, 2);
             $rawKey = $parts[0] ?? '';
             $decodedKey = \strtolower(\trim((string)\urldecode((string)$rawKey)));
-            if ($decodedKey === '' || !$this->isCacheKeyRetainedQueryParam($decodedKey)) {
+            if ($decodedKey === '' || !$this->isCacheKeyRetainedQueryParam($decodedKey, $pathContextUri)) {
                 continue;
             }
             // First occurrence wins; rebuild with canonical value so order/encoding
@@ -6720,8 +6722,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      * Query params retained in the Process/Shared cache identity:
      * - pierce-gated storm keys (_wb_nc / wls_tpl_perf / wls_tpl_route);
      * - path-scoped Extra `query_keys` allowlist (default empty = path-only).
+     *
+     * @param string $pathContextUri URI whose path selects the Extra allowlist
+     *                               (empty → current request raw URI).
      */
-    private function isCacheKeyRetainedQueryParam(string $key): bool
+    private function isCacheKeyRetainedQueryParam(string $key, string $pathContextUri = ''): bool
     {
         $key = \strtolower(\trim($key));
         if ($key === '') {
@@ -6732,12 +6737,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest();
         }
 
-        return $this->isPathAllowlistedCacheKeyQueryParam($key);
+        return $this->isPathAllowlistedCacheKeyQueryParam($key, $pathContextUri);
     }
 
-    private function isPathAllowlistedCacheKeyQueryParam(string $key): bool
+    private function isPathAllowlistedCacheKeyQueryParam(string $key, string $pathContextUri = ''): bool
     {
-        $allow = $this->currentPathCacheKeyQueryAllowlist();
+        $allow = $this->currentPathCacheKeyQueryAllowlist($pathContextUri);
 
         return $allow[$key] ?? false;
     }
@@ -6745,11 +6750,14 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     /**
      * @return array<string, bool>
      */
-    private function currentPathCacheKeyQueryAllowlist(): array
+    private function currentPathCacheKeyQueryAllowlist(string $pathContextUri = ''): array
     {
         try {
-            $rawFullUri = $this->getRawFullUri();
-            $path = $this->policyPath($rawFullUri !== '' ? $rawFullUri : '/');
+            $sourceUri = \trim($pathContextUri);
+            if ($sourceUri === '') {
+                $sourceUri = $this->getRawFullUri();
+            }
+            $path = $this->policyPath($sourceUri !== '' ? $sourceUri : '/');
             $memo = RequestContext::get(self::MEMO_QUERY_ALLOWLIST);
             if (\is_array($memo)
                 && ($memo['sig'] ?? null) === $path
@@ -6762,7 +6770,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             }
 
             $map = [];
-            $fullUri = $rawFullUri !== '' ? $rawFullUri : ('https://localhost' . ($path === '' ? '/' : $path));
+            $fullUri = ($sourceUri !== '' && \str_contains($sourceUri, '://'))
+                ? $sourceUri
+                : ('https://localhost' . ($path === '' ? '/' : $path));
             $policy = $this->effectiveFpcPolicy($fullUri, null, $path);
             foreach (\Weline\Framework\Controller\Extra\FpcPolicySnapshot::queryKeysFromPolicy($policy) as $allowKey) {
                 $allowKey = \strtolower(\trim((string)$allowKey));
