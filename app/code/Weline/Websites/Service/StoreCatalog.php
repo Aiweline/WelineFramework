@@ -155,17 +155,12 @@ final class StoreCatalog implements StoreCatalogInterface
     private function remember(string $logicalKey, callable $builder, ?\Weline\Framework\Cache\CachePolicy $policy = null): mixed
     {
         $hotCache = $this->hotCache();
-        if (!$hotCache instanceof StorefrontScopeHotCache) {
-            return $builder();
+        if (!$hotCache instanceof StorefrontScopeHotCache || $policy === null) {
+            return $this->rehydrateCachedValue($builder());
         }
 
-        $value = $hotCache->rememberForRequest(
-            'websites.store_catalog',
-            $logicalKey,
-            $policy === null
-                ? $builder
-                : fn(): mixed => $hotCache->rememberPolicy($policy, $logicalKey, $builder),
-        );
+        // Process L1 + shared L2 only — do not mirror catalog rows into RequestContext.
+        $value = $hotCache->rememberPolicy($policy, $logicalKey, $builder);
 
         return $this->rehydrateCachedValue($value);
     }
@@ -244,14 +239,15 @@ final class StoreCatalog implements StoreCatalogInterface
         if (!$hotCache instanceof StorefrontScopeHotCache) {
             return;
         }
+        $policy = StorefrontScopeCatalogCacheCoordinator::storePolicy();
         foreach ($stores as $store) {
-            $hotCache->rememberForRequest(
-                'websites.store_catalog',
+            $hotCache->rememberPolicy(
+                $policy,
                 'id:' . $store->id,
                 static fn(): StoreSummary => $store,
             );
-            $hotCache->rememberForRequest(
-                'websites.store_catalog',
+            $hotCache->rememberPolicy(
+                $policy,
                 'code:' . $store->websiteId . ':' . $store->code,
                 static fn(): StoreSummary => $store,
             );
@@ -563,8 +559,8 @@ final class StoreCatalog implements StoreCatalogInterface
             }
         };
         if ($hotCache instanceof StorefrontScopeHotCache) {
-            $hotCache->rememberForRequest(
-                'websites.store_catalog',
+            $hotCache->rememberPolicy(
+                StorefrontScopeCatalogCacheCoordinator::storePolicy(),
                 'website-exists:' . $websiteId,
                 static function () use ($assert): bool {
                     $assert();

@@ -262,8 +262,8 @@ final class WebsitesServiceContractsTest extends TestCase
             'StorefrontScopeCatalogCache::testCatalogPoliciesUseTheCentralScopeCacheBoundary' => function () {
             $this->assert_StorefrontScopeCatalogCache_testCatalogPoliciesUseTheCentralScopeCacheBoundary();
         },
-            'StorefrontScopeCatalogCache::testCatalogReadsDelegateToRequestMemoAndPolicyCache' => function () {
-            $this->assert_StorefrontScopeCatalogCache_testCatalogReadsDelegateToRequestMemoAndPolicyCache();
+            'StorefrontScopeCatalogCache::testCatalogReadsDelegateToPolicyCacheWithoutRequestMemo' => function () {
+            $this->assert_StorefrontScopeCatalogCache_testCatalogReadsDelegateToPolicyCacheWithoutRequestMemo();
         },
             'WebsiteCatalogProcessCache::testCatalogOwnsProcessBagAndClear' => function () {
             $this->assert_WebsiteCatalogProcessCache_testCatalogOwnsProcessBagAndClear();
@@ -770,8 +770,9 @@ private function assert_ScopeCatalogHotCachePublisher_testPublisherRequiresFroze
 {
     $src = (string) file_get_contents((string) (new \ReflectionClass(ScopeCatalogHotCachePublisher::class))->getFileName());
     self::assertStringContainsString('freezeCurrent', $src);
-    self::assertStringContainsString('projectLocaleCatalogBag', $src);
-    self::assertStringContainsString('StorefrontRenderContext::projectLocaleCatalog', $src);
+    self::assertStringNotContainsString('projectLocaleCatalogBag', $src);
+    self::assertStringNotContainsString('StorefrontRenderContext::projectLocaleCatalog', $src);
+    self::assertStringContainsString('ResolvedLanguageCatalog process bag', $src);
     self::assertStringContainsString('hasCompleteFrozenScope', $src);
     self::assertStringContainsString('rememberPolicy', $src);
     self::assertStringContainsString('byStore', $src);
@@ -1276,13 +1277,15 @@ private function assert_StorefrontScopeCatalogCache_testCatalogPoliciesUseTheCen
     self::assertSame(['catalog'], $channelPolicy->dependencies);
 }
 
-private function assert_StorefrontScopeCatalogCache_testCatalogReadsDelegateToRequestMemoAndPolicyCache(): void
+private function assert_StorefrontScopeCatalogCache_testCatalogReadsDelegateToPolicyCacheWithoutRequestMemo(): void
 {
     $storeSource = (string) file_get_contents((string) (new \ReflectionClass(StoreCatalog::class))->getFileName());
     $channelSource = (string) file_get_contents((string) (new \ReflectionClass(SalesChannelCatalog::class))->getFileName());
-    self::assertStringContainsString('rememberForRequest', $storeSource);
+    self::assertStringNotContainsString('rememberForRequest', $storeSource);
+    self::assertStringContainsString('rememberPolicy', $storeSource);
     self::assertStringContainsString('StorefrontScopeCatalogCacheCoordinator::storePolicy()', $storeSource);
-    self::assertStringContainsString('rememberForRequest', $channelSource);
+    self::assertStringNotContainsString('rememberForRequest', $channelSource);
+    self::assertStringContainsString('rememberPolicy', $channelSource);
     self::assertStringContainsString('StorefrontScopeCatalogCacheCoordinator::channelPolicy()', $channelSource);
 }
 

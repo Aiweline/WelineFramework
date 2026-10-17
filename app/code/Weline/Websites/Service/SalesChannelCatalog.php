@@ -180,17 +180,12 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
     private function remember(string $logicalKey, callable $builder, ?\Weline\Framework\Cache\CachePolicy $policy = null): mixed
     {
         $hotCache = $this->hotCache();
-        if (!$hotCache instanceof StorefrontScopeHotCache) {
-            return $builder();
+        if (!$hotCache instanceof StorefrontScopeHotCache || $policy === null) {
+            return $this->rehydrateCachedValue($builder());
         }
 
-        $value = $hotCache->rememberForRequest(
-            'websites.sales_channel_catalog',
-            $logicalKey,
-            $policy === null
-                ? $builder
-                : fn(): mixed => $hotCache->rememberPolicy($policy, $logicalKey, $builder),
-        );
+        // Process L1 + shared L2 only — do not mirror catalog rows into RequestContext.
+        $value = $hotCache->rememberPolicy($policy, $logicalKey, $builder);
 
         return $this->rehydrateCachedValue($value);
     }

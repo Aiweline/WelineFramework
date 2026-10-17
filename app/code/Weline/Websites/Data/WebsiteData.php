@@ -23,8 +23,6 @@ use Weline\Websites\Model\WebsiteLanguage;
 class WebsiteData
 {
     private const STATE_KEY = 'websites.website_data.state.v1';
-    /** Request-scoped LocalDescription rows keyed by website_id (Fiber-safe). */
-    private const LOCAL_ROWS_BAG_KEY = 'websites.website_local_rows.v1';
     private const SHARED_CACHE_TTL = 300;
     private const SHARED_SNAPSHOT_BY_ID_PREFIX = 'websites.snapshot.by_id.v1.';
     private const SHARED_SNAPSHOT_BY_CODE_PREFIX = 'websites.snapshot.by_code.v1.';
@@ -108,7 +106,28 @@ class WebsiteData
     public static function resetRequestState(): void
     {
         RequestContext::remove(self::STATE_KEY);
-        RequestContext::remove(self::LOCAL_ROWS_BAG_KEY);
+    }
+
+    /**
+     * LocalDescription rows for a website — process bag + shared pool (never RequestContext).
+     *
+     * @return list<array{local_code: string, name: string, description: string}>
+     */
+    public static function localRowsForWebsite(int $websiteId): array
+    {
+        return self::loadLocalRowsOnce($websiteId);
+    }
+
+    /**
+     * @param list<array{local_code: string, name: string, description: string}> $rows
+     * @internal tests / warmers
+     */
+    public static function putProcessLocalRows(int $websiteId, array $rows): void
+    {
+        if ($websiteId < 0) {
+            return;
+        }
+        self::rememberProcessLocalRows((string)$websiteId, \array_values($rows));
     }
 
     /**
@@ -376,25 +395,10 @@ class WebsiteData
             return [];
         }
 
-        $bag = RequestContext::get(self::LOCAL_ROWS_BAG_KEY);
-        if (!\is_array($bag)) {
-            $bag = [];
-        }
         $idKey = (string)$websiteId;
-        if (\array_key_exists($idKey, $bag) && \is_array($bag[$idKey])) {
-            /** @var list<array{local_code: string, name: string, description: string}> $hit */
-            $hit = $bag[$idKey];
-
-            return $hit;
-        }
-
         if (isset(self::$processLocalRowsByWebsiteId[$idKey])) {
             $rows = self::$processLocalRowsByWebsiteId[$idKey];
-            $bag[$idKey] = $rows;
-            RequestContext::set(self::LOCAL_ROWS_BAG_KEY, $bag);
-            if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
-                \Weline\Framework\Runtime\StorefrontRenderContextReader::mergeWebsiteLocal($rows);
-            }
+            self::projectWebsiteLocalIntoRenderContext($rows);
 
             return $rows;
         }
@@ -404,11 +408,7 @@ class WebsiteData
             if (\is_array($cached)) {
                 $rows = \array_values($cached);
                 self::rememberProcessLocalRows($idKey, $rows);
-                $bag[$idKey] = $rows;
-                RequestContext::set(self::LOCAL_ROWS_BAG_KEY, $bag);
-                if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
-                    \Weline\Framework\Runtime\StorefrontRenderContextReader::mergeWebsiteLocal($rows);
-                }
+                self::projectWebsiteLocalIntoRenderContext($rows);
 
                 return $rows;
             }
@@ -425,14 +425,20 @@ class WebsiteData
             );
         } catch (\Throwable) {
         }
-        $bag[$idKey] = $rows;
-        RequestContext::set(self::LOCAL_ROWS_BAG_KEY, $bag);
-        // Project into storefront.render_context.v1 when Installer already ran (no parallel bag).
+        // Project matched current-site rows into render VO when Installer already ran.
+        self::projectWebsiteLocalIntoRenderContext($rows);
+
+        return $rows;
+    }
+
+    /**
+     * @param list<array{local_code: string, name: string, description: string}> $rows
+     */
+    private static function projectWebsiteLocalIntoRenderContext(array $rows): void
+    {
         if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
             \Weline\Framework\Runtime\StorefrontRenderContextReader::mergeWebsiteLocal($rows);
         }
-
-        return $rows;
     }
 
     /**

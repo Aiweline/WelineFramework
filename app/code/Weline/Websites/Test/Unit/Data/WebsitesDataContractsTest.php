@@ -42,28 +42,28 @@ final class WebsitesDataContractsTest extends TestCase
             'WebsiteDataAssociationMemo::testLocalizationProviderUsesWebsiteDataOnly' => function () {
             $this->assert_WebsiteDataAssociationMemo_testLocalizationProviderUsesWebsiteDataOnly();
         },
-            'WebsiteLocalRowsRequestMemo::testSourceUsesRequestScopedLocalRowsBagNotProcessStaticFieldCache' => function () {
-            $this->setUp_WebsiteLocalRowsRequestMemo();
+            'WebsiteLocalRowsProcessBag::testSourceUsesProcessBagNotRequestContextMirror' => function () {
+            $this->setUp_WebsiteLocalRowsProcessBag();
             try {
-                $this->assert_WebsiteLocalRowsRequestMemo_testSourceUsesRequestScopedLocalRowsBagNotProcessStaticFieldCache();
+                $this->assert_WebsiteLocalRowsProcessBag_testSourceUsesProcessBagNotRequestContextMirror();
             } finally {
-                $this->tearDown_WebsiteLocalRowsRequestMemo();
+                $this->tearDown_WebsiteLocalRowsProcessBag();
             }
         },
-            'WebsiteLocalRowsRequestMemo::testResetRequestStateClearsLocalRowsBag' => function () {
-            $this->setUp_WebsiteLocalRowsRequestMemo();
+            'WebsiteLocalRowsProcessBag::testClearProcessCacheDropsLocalRows' => function () {
+            $this->setUp_WebsiteLocalRowsProcessBag();
             try {
-                $this->assert_WebsiteLocalRowsRequestMemo_testResetRequestStateClearsLocalRowsBag();
+                $this->assert_WebsiteLocalRowsProcessBag_testClearProcessCacheDropsLocalRows();
             } finally {
-                $this->tearDown_WebsiteLocalRowsRequestMemo();
+                $this->tearDown_WebsiteLocalRowsProcessBag();
             }
         },
-            'WebsiteLocalRowsRequestMemo::testInjectedLocalRowsBagServesAlternateNameWithoutExtraShape' => function () {
-            $this->setUp_WebsiteLocalRowsRequestMemo();
+            'WebsiteLocalRowsProcessBag::testInjectedProcessBagServesAlternateNameWithoutRequestBag' => function () {
+            $this->setUp_WebsiteLocalRowsProcessBag();
             try {
-                $this->assert_WebsiteLocalRowsRequestMemo_testInjectedLocalRowsBagServesAlternateNameWithoutExtraShape();
+                $this->assert_WebsiteLocalRowsProcessBag_testInjectedProcessBagServesAlternateNameWithoutRequestBag();
             } finally {
-                $this->tearDown_WebsiteLocalRowsRequestMemo();
+                $this->tearDown_WebsiteLocalRowsProcessBag();
             }
         },
         ];
@@ -121,9 +121,7 @@ private function assert_WebsiteDataAssociationMemo_testLocalizationProviderUsesW
     self::assertStringNotContainsString('WebsiteCurrency::class', $source);
 }
 
-private const LOCAL_ROWS_BAG_KEY_WebsiteLocalRowsRequestMemo = 'websites.website_local_rows.v1';
-
-private function setUp_WebsiteLocalRowsRequestMemo(): void
+private function setUp_WebsiteLocalRowsProcessBag(): void
 {
     Context::leave();
     Context::enter(new Context());
@@ -131,7 +129,7 @@ private function setUp_WebsiteLocalRowsRequestMemo(): void
     WebsiteData::clearProcessCache();
 }
 
-private function tearDown_WebsiteLocalRowsRequestMemo(): void
+private function tearDown_WebsiteLocalRowsProcessBag(): void
 {
     WebsiteData::resetRequestState();
     WebsiteData::clearProcessCache();
@@ -139,47 +137,50 @@ private function tearDown_WebsiteLocalRowsRequestMemo(): void
     parent::tearDown();
 }
 
-private function assert_WebsiteLocalRowsRequestMemo_testSourceUsesRequestScopedLocalRowsBagNotProcessStaticFieldCache(): void
+private function assert_WebsiteLocalRowsProcessBag_testSourceUsesProcessBagNotRequestContextMirror(): void
 {
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Websites' . '/Data/WebsiteData.php');
-    self::assertStringContainsString("websites.website_local_rows.v1", $src);
     self::assertStringContainsString('loadLocalRowsOnce', $src);
     self::assertStringContainsString('$processLocalRowsByWebsiteId', $src);
     self::assertStringContainsString('rememberProcessLocalRows', $src);
+    self::assertStringContainsString('function localRowsForWebsite', $src);
+    self::assertStringNotContainsString('websites.website_local_rows.v1', $src);
     self::assertStringNotContainsString('private static array $localizedFieldCache', $src, 'per-field process-static cache is Fiber-unsafe and misses listConfiguredLocalNames');
     self::assertMatchesRegularExpression('/function\s+listConfiguredLocalNames[\s\S]*loadLocalRowsOnce\s*\(/', $src);
     self::assertMatchesRegularExpression('/function\s+resolveLocalizedFieldForLocale[\s\S]*loadLocalRowsOnce\s*\(/', $src);
-    self::assertMatchesRegularExpression('/function\s+resetRequestState[\s\S]*LOCAL_ROWS_BAG_KEY|website_local_rows\.v1/', $src);
     self::assertMatchesRegularExpression('/function\s+clearProcessCache[\s\S]*processLocalRowsByWebsiteId/', $src);
 }
 
-private function assert_WebsiteLocalRowsRequestMemo_testResetRequestStateClearsLocalRowsBag(): void
+private function assert_WebsiteLocalRowsProcessBag_testClearProcessCacheDropsLocalRows(): void
 {
-    RequestContext::set(self::LOCAL_ROWS_BAG_KEY_WebsiteLocalRowsRequestMemo, ['0' => [['local_code' => 'en_US', 'name' => 'EN', 'description' => '']]]);
-    WebsiteData::resetRequestState();
-    self::assertNull(RequestContext::get(self::LOCAL_ROWS_BAG_KEY_WebsiteLocalRowsRequestMemo));
+    WebsiteData::putProcessLocalRows(0, [['local_code' => 'en_US', 'name' => 'EN', 'description' => '']]);
+    self::assertSame(
+        [['local_code' => 'en_US', 'name' => 'EN', 'description' => '']],
+        WebsiteData::localRowsForWebsite(0),
+    );
+    WebsiteData::clearProcessCache();
+    $prop = new \ReflectionProperty(WebsiteData::class, 'processLocalRowsByWebsiteId');
+    self::assertSame([], $prop->getValue());
 }
 
-private function assert_WebsiteLocalRowsRequestMemo_testInjectedLocalRowsBagServesAlternateNameWithoutExtraShape(): void
+private function assert_WebsiteLocalRowsProcessBag_testInjectedProcessBagServesAlternateNameWithoutRequestBag(): void
 {
     $website = new WebsiteLocalRowsMemoWebsiteStub([Website::schema_fields_ID => 0, Website::schema_fields_CODE => 'default', Website::schema_fields_NAME => '主表站名', Website::schema_fields_URL => 'https://default.example.test', Website::schema_fields_DEFAULT_CURRENCY => 'CNY', Website::schema_fields_DEFAULT_LANGUAGE => 'zh_Hans_CN', Website::schema_fields_DEFAULT_TIMEZONE => 'UTC', Website::schema_fields_DESCRIPTION => '']);
     WebsiteData::setWebsite($website);
-    RequestContext::set(self::LOCAL_ROWS_BAG_KEY_WebsiteLocalRowsRequestMemo, ['0' => [['local_code' => 'zh_Hans_CN', 'name' => '中文站名', 'description' => '中文简介'], ['local_code' => 'en_US', 'name' => 'EN Brand', 'description' => 'EN about']]]);
-    // Prefer en_US when current display looks Chinese / empty locale path.
+    WebsiteData::putProcessLocalRows(0, [
+        ['local_code' => 'zh_Hans_CN', 'name' => '中文站名', 'description' => '中文简介'],
+        ['local_code' => 'en_US', 'name' => 'EN Brand', 'description' => 'EN about'],
+    ]);
     $alt = WebsiteData::getOrganizationAlternateName('中文站名');
     self::assertSame('EN Brand', $alt);
-    // Same bag must still serve after repeated SEO-style callers.
     self::assertSame('EN Brand', WebsiteData::getOrganizationAlternateName('中文站名'));
     self::assertSame('EN Brand', WebsiteData::getOrganizationAlternateName('中文站名'));
-    self::assertSame('EN Brand', WebsiteData::getOrganizationAlternateName('中文站名'));
-    $bag = RequestContext::get(self::LOCAL_ROWS_BAG_KEY_WebsiteLocalRowsRequestMemo);
-    self::assertIsArray($bag);
-    self::assertCount(1, $bag, 'request bag stays one website_id entry; no process static growth');
+    self::assertNull(RequestContext::get('websites.website_local_rows.v1'));
 }
 }
 
 /**
- * Minimal Website stub for request-memo contract (no ORM).
+ * Minimal Website stub for process-bag local-rows contract (no ORM).
  */
 final class WebsiteLocalRowsMemoWebsiteStub extends Website
 {

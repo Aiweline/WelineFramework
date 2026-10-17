@@ -1314,7 +1314,7 @@ class Website extends BackendController
     {
         try {
             $routers = is_file(Env::path_FRONTEND_PC_ROUTER_FILE)
-                ? (array)include Env::path_FRONTEND_PC_ROUTER_FILE
+                ? (array)(\Weline\Framework\Compilation\CompiledPhpRegistry::load(Env::path_FRONTEND_PC_ROUTER_FILE) ?? [])
                 : [];
         } catch (\Throwable) {
             $routers = [];
