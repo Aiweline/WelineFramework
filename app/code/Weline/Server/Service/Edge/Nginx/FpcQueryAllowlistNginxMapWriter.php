@@ -31,8 +31,12 @@ final class FpcQueryAllowlistNginxMapWriter
 
     public const SNAPSHOT_SCHEMA = 'fpc-policy-snapshot.v1';
 
-    /** Optional lang/currency (and similar) segments before policy path. */
-    private const LOC_PREFIX = '(?:/(?:[A-Za-z]{2,12}(?:_[A-Za-z0-9]+)*|[A-Z]{3})){0,4}';
+    /**
+     * Optional lang/currency segments before policy path.
+     * Must NOT match plain storefront segments like /products (no underscore, len>2).
+     * Matches: /en, /zh_Hans_CN, /USD — not /products or /categories.
+     */
+    private const LOC_PREFIX = '(?:/(?:[A-Za-z]{2}(?:_[A-Za-z0-9]+)+|[A-Za-z]{2}|[A-Z]{3})){0,4}';
 
     public const MAX_RULES = 512;
 

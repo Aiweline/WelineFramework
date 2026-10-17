@@ -550,6 +550,25 @@ private function assert_FpcQueryAllowlistNginxMapWriter_testExtractRulesFromSnap
     self::assertStringContainsString('/products', $body);
     self::assertStringNotContainsString('~q/', $body);
     self::assertStringNotContainsString('"*', $body);
+    // LOC prefix must not treat /products as a locale segment.
+    self::assertStringContainsString('[A-Za-z]{2}(?:_[A-Za-z0-9]+)+', $body);
+    self::assertStringNotContainsString('[A-Za-z]{2,12}(?:_[A-Za-z0-9]+)*', $body);
+    $priceRule = null;
+    foreach (\preg_split("/\n/", $body) ?: [] as $line) {
+        if (\str_contains($line, '/products') && \str_contains($line, 'price=')) {
+            $priceRule = \trim($line);
+            break;
+        }
+    }
+    self::assertNotNull($priceRule);
+    self::assertMatchesRegularExpression('/^"~\\*\\^/', $priceRule);
+    if (!\preg_match('/^"~\\*\\^(.+)"\\s+1;\\s*$/', (string)$priceRule, $m)) {
+        self::fail('price allowlist map rule shape unexpected: ' . (string)$priceRule);
+    }
+    $re = '#^' . $m[1] . '#i';
+    self::assertSame(1, \preg_match($re, '/products?price=100-299'));
+    self::assertSame(1, \preg_match($re, '/zh_Hans_CN/USD/products?utm=1&price=100'));
+    self::assertSame(0, \preg_match($re, '/products'));
 }
 
 private function assert_FpcQueryAllowlistNginxMapWriter_testManagedNginxWriterIncludesAllowlistBypass(): void
