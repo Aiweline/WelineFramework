@@ -16,6 +16,7 @@ final class HookRenderResultRuntimeTest extends TestCore
     protected function tearDown(): void
     {
         RequestContext::remove('view.hook.decorate_output');
+        RequestContext::remove('view.hook.require_string_result');
         RequestContext::remove('view.hook.handled_empty.header-language-switcher');
         parent::tearDown();
     }
@@ -57,6 +58,7 @@ final class HookRenderResultRuntimeTest extends TestCore
         self::assertFalse($handled->shouldUseFallback());
         self::assertTrue(RequestContext::get('view.hook.decorate_output'));
         self::assertFalse(RequestContext::has('view.hook.handled_empty.header-language-switcher'));
+        self::assertFalse(RequestContext::has('view.hook.require_string_result'));
 
         $template->mode = 'empty';
         self::assertTrue(
@@ -73,6 +75,30 @@ final class HookRenderResultRuntimeTest extends TestCore
             '<span>rendered</span>',
             $template->getHookResult('header-language-switcher', false, true)->html,
         );
+    }
+
+    public function testPreferFallbackForcesStringCaptureFlagDuringGetHook(): void
+    {
+        $template = new class extends Template {
+            public bool $sawRequireString = false;
+
+            public function __construct()
+            {
+            }
+
+            public function getHook(string $name, bool $forceRefresh = false): string
+            {
+                $this->sawRequireString = RequestContext::get('view.hook.require_string_result') === true;
+
+                return '<span>hook-body</span>';
+            }
+        };
+
+        $result = $template->getHookResult('header-language-switcher', false, true);
+        self::assertTrue($template->sawRequireString);
+        self::assertSame('<span>hook-body</span>', $result->html);
+        self::assertFalse($result->shouldUseFallback());
+        self::assertFalse(RequestContext::has('view.hook.require_string_result'));
     }
 
     public function testEmptyNameDoesNotDispatch(): void

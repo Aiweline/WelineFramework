@@ -155,6 +155,28 @@ final class ThemeLayoutSourceReuseTest extends TestCase
         self::assertSame(2, $normalizer->extractions, 'Even a retained snapshot must not share parsed metadata across requests.');
     }
 
+    public function testCaptureMemoReturnsSameInstanceWithinRequest(): void
+    {
+        $root = sys_get_temp_dir() . '/weline-source-memo-' . bin2hex(random_bytes(6)) . '/theme-layout-entities';
+        $paths = new ThemeLayoutEntityPaths($root);
+        $path = $paths->partialPhtml($this->identity, 'probe');
+        mkdir(dirname($path), 0770, true);
+        file_put_contents($path, $this->source('MEMO'));
+        try {
+            $this->normalizer();
+            $first = ThemeLayoutSourceSnapshot::capture($paths, $this->identity, 'homepage');
+            $second = ThemeLayoutSourceSnapshot::capture($paths, $this->identity, 'homepage');
+            self::assertSame($first, $second);
+            RequestContext::remove(ThemeLayoutSourceSnapshot::REQUEST_CAPTURE_MEMO_KEY);
+            $third = ThemeLayoutSourceSnapshot::capture($paths, $this->identity, 'homepage');
+            self::assertNotSame($first, $third);
+            self::assertSame($first->fingerprint(), $third->fingerprint());
+        } finally {
+            $paths->purgeAllEntities();
+            @rmdir(dirname($root));
+        }
+    }
+
     public function testSourcePhasesAreRecordedOnlyWhenTraceIsEnabled(): void
     {
         $root = sys_get_temp_dir() . '/weline-source-trace-' . bin2hex(random_bytes(6)) . '/theme-layout-entities';
@@ -170,6 +192,8 @@ final class ThemeLayoutSourceReuseTest extends TestCase
             RequestLifecycleTrace::installPanelTraceOn();
             RequestLifecycleTrace::reset();
             Partials::clearMetaCache();
+            // Capture memo intentionally skips a second walk; clear so phases re-record.
+            RequestContext::remove(ThemeLayoutSourceSnapshot::REQUEST_CAPTURE_MEMO_KEY);
             ThemeLayoutSourceSnapshot::capture($paths, $this->identity, 'homepage')->install(Template::getInstance());
             self::assertSame('TRACE|', (new SourceReusePartials())->renderPartials('frontend', 'probe'));
             $names = array_column(RequestLifecycleTrace::getSpans(), 'name');

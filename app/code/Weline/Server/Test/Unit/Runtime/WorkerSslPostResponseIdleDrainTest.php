@@ -4,11 +4,13 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 
 final class WorkerSslPostResponseIdleDrainTest extends TestCase
 {
     private array $originalTasks = [];
+    private mixed $previousMaxPerDrain = null;
 
     protected function setUp(): void
     {
@@ -17,17 +19,20 @@ final class WorkerSslPostResponseIdleDrainTest extends TestCase
         $this->originalTasks = $property->getValue();
         $property->setValue(null, []);
         $GLOBALS['idle_queue_replay_flushes'] = 0;
+        $this->previousMaxPerDrain = Env::get('wls.post_response_task_max_per_drain', 8);
     }
 
     protected function tearDown(): void
     {
         (new \ReflectionProperty(PostResponseTaskQueue::class, 'tasks'))->setValue(null, $this->originalTasks);
         unset($GLOBALS['idle_queue_replay_flushes']);
+        Env::set('wls.post_response_task_max_per_drain', $this->previousMaxPerDrain);
         parent::tearDown();
     }
 
-    public function testIdleCyclesDrainOneTaskAfterWritesAndWakeDelayedTasksWithoutHttp(): void
+    public function testIdleCyclesDrainMultipleTasksUnderDefaultBudget(): void
     {
+        Env::set('wls.post_response_task_max_per_drain', 8);
         $executed = [];
         foreach (['a', 'b'] as $key) {
             PostResponseTaskQueue::enqueue($key, static function () use (&$executed, $key): void {
@@ -35,9 +40,8 @@ final class WorkerSslPostResponseIdleDrainTest extends TestCase
             });
         }
         $this->runIdleCycle();
-        self::assertSame([['a', 1]], $executed, '空闲循环必须在写阶段之后按既有单任务预算推进。');
-        $this->runIdleCycle();
-        self::assertSame([['a', 1], ['b', 2]], $executed);
+        self::assertSame([['a', 1], ['b', 1]], $executed, '默认 max_per_drain 应在同一空闲循环内推进短队列（仍受 budget_ms 约束）。');
+        self::assertSame(0, PostResponseTaskQueue::pendingCount());
 
         PostResponseTaskQueue::enqueue('delayed', static function () use (&$executed): void {
             $executed[] = ['delayed', $GLOBALS['idle_queue_replay_flushes']];
@@ -46,7 +50,23 @@ final class WorkerSslPostResponseIdleDrainTest extends TestCase
         self::assertCount(2, $executed);
         usleep(40000);
         $this->runIdleCycle();
-        self::assertSame(['delayed', 4], $executed[2]);
+        self::assertSame(['delayed', 3], $executed[2]);
+        self::assertSame(0, PostResponseTaskQueue::pendingCount());
+    }
+
+    public function testPinnedMaxOneStillDrainsOneTaskPerIdleCycle(): void
+    {
+        Env::set('wls.post_response_task_max_per_drain', 1);
+        $executed = [];
+        foreach (['a', 'b'] as $key) {
+            PostResponseTaskQueue::enqueue($key, static function () use (&$executed, $key): void {
+                $executed[] = [$key, $GLOBALS['idle_queue_replay_flushes']];
+            });
+        }
+        $this->runIdleCycle();
+        self::assertSame([['a', 1]], $executed, '钉死 max_per_drain=1 时仍按单任务/循环推进。');
+        $this->runIdleCycle();
+        self::assertSame([['a', 1], ['b', 2]], $executed);
         self::assertSame(0, PostResponseTaskQueue::pendingCount());
     }
 

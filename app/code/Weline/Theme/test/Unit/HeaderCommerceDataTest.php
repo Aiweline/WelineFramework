@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\test\Unit;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Helper\HeaderCommerceData;
 use Weline\Theme\Service\AllMenu\AllMenuTreeRegistry;
@@ -51,7 +53,7 @@ final class HeaderCommerceDataTest extends TestCase
         // Absolute nav URLs must embed origin in the shared key (v2); forbid origin-free v1.
         self::assertStringNotContainsString('theme.header.category_nav.v1.', $source);
         self::assertStringContainsString("listTypes(true, 'frontend')", $source);
-        self::assertStringContainsString('RequestLifecycleTrace::measurePhase', $source);
+        self::assertStringContainsString('TraceGate::measurePhase', $source);
     }
 
     public function testFormatMoneyUsesCurrencySymbol(): void

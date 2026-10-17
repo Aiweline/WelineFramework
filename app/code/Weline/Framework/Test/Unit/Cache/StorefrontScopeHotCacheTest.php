@@ -253,6 +253,42 @@ final class StorefrontScopeHotCacheTest extends TestCase
         self::assertNotSame([], $rp->getValue());
     }
 
+    public function testTrimProcessCacheToBudgetPreservesChromeUntilLastResort(): void
+    {
+        $adapter = new InMemoryAdapter();
+        $pool = new CachePool('theme_storefront_chrome', $adapter, jitterRatio: 0.0);
+        $other = new CachePool('unit_other_pool', $adapter, jitterRatio: 0.0);
+        $cacheManager = $this->createMock(CacheManager::class);
+        $cacheManager->method('pool')->willReturnCallback(
+            static function (string $id) use ($pool, $other): CachePool {
+                return $id === 'theme_storefront_chrome' ? $pool : $other;
+            }
+        );
+        $service = new StorefrontScopeHotCache($cacheManager);
+
+        $payload = \str_repeat('c', 40_000);
+        $service->remember('theme_storefront_chrome', 'theme.chrome.header.x', 60, static fn(): string => $payload, []);
+        for ($i = 0; $i < 4; $i++) {
+            $service->remember('unit_other_pool', 'other.' . $i, 60, static fn(): string => $payload, []);
+        }
+
+        StorefrontScopeHotCache::trimProcessCacheToBudget(50_000);
+
+        $rp = new \ReflectionProperty(StorefrontScopeHotCache::class, 'processCache');
+        $rp->setAccessible(true);
+        /** @var array<string, mixed> $cache */
+        $cache = $rp->getValue();
+        $keys = \array_keys($cache);
+        $hasChrome = false;
+        foreach ($keys as $key) {
+            if (\str_contains(\strtolower((string)$key), 'chrome')) {
+                $hasChrome = true;
+                break;
+            }
+        }
+        self::assertTrue($hasChrome, 'chrome key must survive while non-chrome can be trimmed');
+    }
+
     private function policyService(string $poolId, ?InMemoryAdapter &$adapter = null, mixed $generation = null): StorefrontScopeHotCache
     {
         $adapter = new InMemoryAdapter();

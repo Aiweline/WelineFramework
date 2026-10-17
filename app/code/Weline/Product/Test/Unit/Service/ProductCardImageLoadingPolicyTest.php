@@ -34,28 +34,39 @@ final class ProductCardImageLoadingPolicyTest extends TestCase
         );
     }
 
-    public function testPageLevelEagerBudgetCapsMultiShelfResets(): void
+    public function testExplicitLazyOverridesCardIndexForFragmentBodies(): void
     {
-        $method = new \ReflectionMethod(ProductCardRenderer::class, 'bucketCardIndexForFragmentReuse');
-        $method->setAccessible(true);
+        self::assertSame(
+            ['loading' => 'lazy'],
+            ProductCardRenderer::imageLoadingAttributes([
+                'card_index' => 0,
+                'image_loading' => 'lazy',
+            ]),
+        );
+    }
 
+    public function testStampUpgradesLazyImageWithinPageEagerBudget(): void
+    {
+        $lazy = '<article><img class="wpc-image" src="/a.jpg" loading="lazy" decoding="async"></article>';
+        $stamped = [];
         for ($i = 0; $i < 8; ++$i) {
-            $bucketed = $method->invoke(null, ['id' => 100 + $i, 'card_index' => $i]);
-            self::assertSame(0, (int)$bucketed['card_index'], 'first shelf index ' . $i);
-            self::assertSame(
-                ['loading' => 'eager', 'fetchpriority' => 'high'],
-                ProductCardRenderer::imageLoadingAttributes($bucketed),
-            );
+            $stamped[] = ProductCardRenderer::stampImageLoadingAttributes($lazy, $i);
+            self::assertStringContainsString('loading="eager"', $stamped[$i], 'slot ' . $i);
+            self::assertStringContainsString('fetchpriority="high"', $stamped[$i], 'slot ' . $i);
         }
 
-        // Second shelf resets local indexes to 0..7 but page budget is exhausted.
+        // Second shelf resets local indexes but page budget is exhausted.
         for ($i = 0; $i < 8; ++$i) {
-            $bucketed = $method->invoke(null, ['id' => 200 + $i, 'card_index' => $i]);
-            self::assertSame(8, (int)$bucketed['card_index'], 'second shelf index ' . $i);
-            self::assertSame(
-                ['loading' => 'lazy'],
-                ProductCardRenderer::imageLoadingAttributes($bucketed),
-            );
+            $out = ProductCardRenderer::stampImageLoadingAttributes($lazy, $i);
+            self::assertStringContainsString('loading="lazy"', $out, 'overflow slot ' . $i);
+            self::assertStringNotContainsString('fetchpriority', $out, 'overflow slot ' . $i);
         }
+    }
+
+    public function testStampLeavesLazyWhenCardIndexOutsideViewport(): void
+    {
+        $lazy = '<img class="wpc-image" loading="lazy">';
+        $out = ProductCardRenderer::stampImageLoadingAttributes($lazy, 8);
+        self::assertSame($lazy, $out);
     }
 }

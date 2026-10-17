@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\View\Template;
 
 /** 直接验证实际采集器，不渲染页面或访问存储。 */
@@ -104,7 +105,7 @@ final class TemplateRenderProfileTest extends TestCase
     public function testDisabledTraceDoesNotAllocateAggregateAndKeepsSlowProfileBehavior(): void
     {
         $this->setTracing(false);
-        self::assertFalse(RequestLifecycleTrace::isEnabled());
+        self::assertFalse(TraceGate::isArmed());
         $this->record('fast.phtml', 0.25, 1.0, 0.25, 2.0, 40);
         $this->record('slow.phtml', 0.25, 21.0, 0.25, 22.0, 80);
         self::assertNull(RequestContext::get('view.template.aggregate'));

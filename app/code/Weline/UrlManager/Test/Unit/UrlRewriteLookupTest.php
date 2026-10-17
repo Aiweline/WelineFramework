@@ -231,9 +231,44 @@ final class UrlRewriteLookupTest extends TestCase
         self::assertCount(2, $this->ledger->queries);
     }
 
+    public function testRewriteCandidateLookupUsesOneQueryAndPrefersNormalizedPrettyPath(): void
+    {
+        $this->insertRewriteRow(10, 7, 'cms/page/view?id=1', 'contact');
+        $this->insertRewriteRow(20, 7, 'cms/page/view?id=2', '/contact');
+        $this->insertRewriteRow(30, 8, 'cms/page/view?id=9', 'contact');
+
+        $row = $this->model->findLatestByWebsiteAndRewrites(7, ['contact', '/contact']);
+        self::assertSame(10, (int)$row['rewrite_id']);
+        self::assertSame('cms/page/view?id=1', $row['path']);
+        self::assertCount(1, $this->ledger->queries);
+        self::assertContains('contact', array_values($this->ledger->queries[0]['bindings']));
+        self::assertContains('/contact', array_values($this->ledger->queries[0]['bindings']));
+    }
+
+    public function testRewriteCandidateLookupFallsBackToSlashVariantAndMissesCleanly(): void
+    {
+        $this->insertRewriteRow(40, 7, 'pagebuilder/frontend/page/view?page_id=1', '/about');
+
+        $row = $this->model->findLatestByWebsiteAndRewrites(7, ['about', '/about']);
+        self::assertSame(40, (int)$row['rewrite_id']);
+        self::assertCount(1, $this->ledger->queries);
+
+        $this->ledger->queries = [];
+        self::assertNull($this->model->findLatestByWebsiteAndRewrites(7, ['missing', '/missing']));
+        self::assertCount(1, $this->ledger->queries);
+
+        self::assertNull($this->model->findLatestByWebsiteAndRewrites(7, []));
+    }
+
     private function insertRow(int $id, int $website, string $path, ?string $fingerprint): void
     {
         $statement = $this->database->prepare('INSERT INTO url_rewrite_fixture VALUES (?, ?, ?, ?, ?)');
         $statement->execute([$id, $website, $path, $fingerprint, '/target-' . $id]);
+    }
+
+    private function insertRewriteRow(int $id, int $website, string $path, string $rewrite): void
+    {
+        $statement = $this->database->prepare('INSERT INTO url_rewrite_fixture VALUES (?, ?, ?, ?, ?)');
+        $statement->execute([$id, $website, $path, UrlRewrite::pathFingerprint($path), $rewrite]);
     }
 }

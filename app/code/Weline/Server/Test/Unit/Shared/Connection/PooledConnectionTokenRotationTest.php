@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Shared\Connection;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Session\Server\SharedStateTokenStore;
@@ -82,7 +84,7 @@ final class PooledConnectionTokenRotationTest extends TestCase
         \Weline\Framework\Runtime\RequestContext::set('get', $_GET);
         \Weline\Framework\Runtime\RequestLifecycleTrace::reset();
         \Weline\Framework\Runtime\RequestLifecycleTrace::installPanelTraceOn();
-        self::assertTrue(\Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled());
+        self::assertTrue(\Weline\Framework\Runtime\TraceGate::isArmed());
 
         try {
             if ($response !== null) {

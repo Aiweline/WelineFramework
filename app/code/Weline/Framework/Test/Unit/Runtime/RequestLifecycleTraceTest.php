@@ -279,6 +279,65 @@ class RequestLifecycleTraceTest extends TestCase
         self::assertCount(1, RequestLifecycleTrace::getSpans());
     }
 
+    public function testFastOffLatchSkipsRepeatProbesUntilInvalidateOrInstall(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        RequestLifecycleTrace::clearPanelTrace();
+
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+        self::assertFalse(RequestLifecycleTrace::isHotArmed());
+
+        // Sticky closed: still false without re-arming cookies; measurePhase must not record.
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+        self::assertSame('ok', RequestLifecycleTrace::measurePhase('noop', static fn(): string => 'ok'));
+        RequestLifecycleTrace::recordSpan('must_skip', 9.0, 'framework');
+        self::assertSame([], RequestLifecycleTrace::getSpans());
+
+        RequestLifecycleTrace::installPanelTraceOn();
+        self::assertTrue(RequestLifecycleTrace::isEnabled());
+        self::assertTrue(RequestLifecycleTrace::isHotArmed());
+    }
+
+    public function testThemeSpansBelowMinMsAreDroppedWhenPanelOpen(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        RequestLifecycleTrace::installPanelTraceOn();
+
+        RequestLifecycleTrace::recordSpan('theme.slots.widget.fast', 0.2, 'theme');
+        RequestLifecycleTrace::recordSpan('theme.slots.widget.slow', 5.5, 'theme');
+
+        $spans = RequestLifecycleTrace::getSpans();
+        self::assertCount(1, $spans);
+        self::assertSame('theme.slots.widget.slow', $spans[0]['name']);
+        self::assertSame(1, RequestLifecycleTrace::getThemeDroppedSpanCount());
+        self::assertSame(1, RequestLifecycleTrace::getAggregateSummary()['dropped_span_count']);
+    }
+
+    public function testCookieScopeResetWhileDisarmedAllowsQualifiedReArm(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        RequestLifecycleTrace::clearPanelTrace();
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+        self::assertFalse(RequestLifecycleTrace::isHotArmed());
+
+        // Closed latch must not re-probe until CookieScope / invalidate while disarmed.
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+
+        \Weline\Framework\Http\CookieScope::resetRequestState();
+        // Still no cookie → resolves closed again.
+        self::assertFalse(RequestLifecycleTrace::isEnabled());
+
+        RequestLifecycleTrace::installPanelTraceOn();
+        self::assertTrue(RequestLifecycleTrace::isEnabled());
+        self::assertTrue(RequestLifecycleTrace::isHotArmed());
+    }
+
     public function testDatabaseTraceRedactsAuthenticationDigestStatements(): void
     {
         Context::enter(new Context([

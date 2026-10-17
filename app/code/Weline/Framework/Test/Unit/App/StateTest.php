@@ -455,6 +455,35 @@ class StateTest extends TestCore
         }
     }
 
+    public function testLanguageShapeRejectsModuleRoutersLikeBtCenter(): void
+    {
+        $ref = new \ReflectionMethod(State::class, 'isLanguageSegmentCandidate');
+        $ref->setAccessible(true);
+
+        self::assertTrue($ref->invoke(null, 'en_US'));
+        self::assertTrue($ref->invoke(null, 'ja_JP'));
+        self::assertTrue($ref->invoke(null, 'zh_Hans'));
+        self::assertTrue($ref->invoke(null, 'zh_Hans_CN'));
+        self::assertFalse($ref->invoke(null, 'bt_center'), 'Module backend_router must not look like a locale');
+        self::assertFalse($ref->invoke(null, 'my_module'));
+
+        $kept = State::resolveLocalizationFromPathSegments(['bt_center', 'backend', 'bt-server'], false);
+        self::assertSame('', $kept['language']);
+        self::assertSame(0, $kept['consumed']);
+        self::assertSame(['bt_center', 'backend', 'bt-server'], $kept['remaining']);
+    }
+
+    public function testApiModuleRouterSurvivesWhenAreaPrefixDetectionDisabled(): void
+    {
+        $stripped = State::resolveLocalizationFromPathSegments(['api', 'backend', 'user'], false);
+        self::assertSame(0, $stripped['area_offset']);
+        self::assertSame(['api', 'backend', 'user'], $stripped['remaining']);
+
+        $asArea = State::resolveLocalizationFromPathSegments(['api', 'backend', 'user'], true);
+        self::assertSame(1, $asArea['area_offset']);
+        self::assertSame(['backend', 'user'], $asArea['remaining']);
+    }
+
     /** @param list<string> $codes */
     private static function seedAllowedLanguageCodes(array $codes): void
     {

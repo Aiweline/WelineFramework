@@ -639,6 +639,78 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         }
     }
 
+    public function testHttpWorkerTransportPeersHttpsReadyReceiptForProcessHit(): void
+    {
+        FullPageCacheCoordinator::clearProcessCache();
+
+        try {
+            $cacheKey = 'abcdef0123456789';
+            $body = '<html><body>' . \str_repeat('scheme-peer-homepage-', 64) . '</body></html>';
+            $receipt = $this->exactHomepageReceipt($cacheKey);
+
+            $runtime = new WlsRuntime();
+            $runtimeReceipt = new \ReflectionProperty($runtime, 'homepageCacheWarmupReceipt');
+            $runtimeReceipt->setValue($runtime, $receipt);
+
+            $coordinator = $this->coordinator();
+            $setProcessPayload = new \ReflectionMethod($coordinator, 'setProcessCachedPayload');
+            $setProcessPayload->invoke($coordinator, $cacheKey, [
+                KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+                KeyBuilder::UNIFIED_CACHE_FPC_KEY => $body,
+                KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => [
+                    'Content-Type: text/html; charset=utf-8',
+                    'Cache-Control: public, max-age=60',
+                ],
+                'fpc_variant' => [
+                    'lang' => 'zh_Hans_CN',
+                    'currency' => 'CNY',
+                ],
+                'fpc_html_urls_validated' => true,
+                'fpc_expires_at' => \microtime(true) + 60.0,
+            ]);
+
+            self::assertSame($receipt, $runtime->resolveHomepageFastPathReceipt('https://example.test/'));
+            self::assertNull($runtime->resolveHomepageFastPathReceipt('http://example.test/'));
+
+            $httpDecision = WorkerPolicyDecision::allow(
+                '127.0.0.1',
+                'GET',
+                'HTTP/1.1',
+                '/',
+                '/',
+                [
+                    'host' => 'example.test',
+                    'accept' => 'text/html',
+                    'accept-encoding' => 'identity',
+                    'connection' => 'keep-alive',
+                ],
+                '',
+                \str_repeat('e', 64),
+                false,
+                WorkerPolicyDecision::CACHE_FPC_PROCESS_L1
+                    | WorkerPolicyDecision::CACHE_FPC_SHARED_L2,
+            );
+            $httpHit = (new WorkerFullPageCacheFastPath($coordinator, $runtime, true))->lookup(
+                $httpDecision,
+                'http',
+            );
+            self::assertIsArray($httpHit);
+            // Scheme peer must bind READY https receipt; Process-layer soft-serve
+            // is OK in unit fixture when namespace clock drifts — never html-disk.
+            self::assertStringContainsString('process', (string)$httpHit['source']);
+            self::assertDoesNotMatchRegularExpression(
+                '/X-Weline-Fpc-Source:\\s*html-disk/i',
+                $httpHit['response'],
+            );
+            self::assertMatchesRegularExpression(
+                '/X-Weline-Fpc:\\s*HIT|X-Weline-Fpc:\\s*STALE/i',
+                $httpHit['response'],
+            );
+        } finally {
+            FullPageCacheCoordinator::clearProcessCache();
+        }
+    }
+
     public function testExpiredAnonymousHomepageUsesStaleReceiptWithoutEnteringRouter(): void
     {
         FullPageCacheCoordinator::clearProcessCache();

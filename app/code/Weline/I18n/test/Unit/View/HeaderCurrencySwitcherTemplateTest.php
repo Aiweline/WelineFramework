@@ -8,87 +8,49 @@ use PHPUnit\Framework\TestCase;
 
 final class HeaderCurrencySwitcherTemplateTest extends TestCase
 {
-    public function testCurrencyOptionDoesNotRepeatSymbolInMetaText(): void
+    private function templateSource(): string
     {
         $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
-
         self::assertFileExists($path);
-        $content = (string) file_get_contents($path);
 
-        self::assertStringContainsString('<span class="w-currency-switcher__symbol"', $content);
-        self::assertStringNotContainsString('<span class="weline-choice-symbol"', $content);
-
-        preg_match('/<span class="w-currency-switcher__copy">(?P<copy>.*?)<\/span>/s', $content, $matches);
-        self::assertArrayHasKey('copy', $matches, 'Currency switcher should render a copy block.');
-        self::assertStringContainsString('$currencyName', $matches['copy']);
-        self::assertStringContainsString('$currencyCode', $matches['copy']);
-        self::assertStringNotContainsString('$currencySymbol', $matches['copy']);
-        self::assertStringNotContainsString('·', $matches['copy']);
+        return (string)file_get_contents($path);
     }
 
-    public function testCurrencyPanelUsesPerRenderInstanceId(): void
+    public function testCurrencySwitcherDelegatesToIslandBuilder(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
-        $content = (string) file_get_contents($path);
+        $content = $this->templateSource();
 
-        self::assertStringContainsString('SwitcherInstanceId::create(', $content);
-        // Instance ids must stay random per render; RequestContext may be used for assets
-        // dedupe, but must not feed the switcher DOM id.
-        self::assertDoesNotMatchRegularExpression(
-            '/\$currencySwitcherId\s*=\s*[^\n]*RequestContext::/',
-            $content
-        );
-        self::assertStringContainsString('$currencySwitcherId', $content);
-        self::assertStringContainsString('aria-controls="<?= $escape($currencySwitcherId) ?>"', $content);
-        self::assertStringContainsString('id="<?= $escape($currencySwitcherId) ?>"', $content);
-        self::assertStringNotContainsString('aria-controls="w-currency-switcher-menu"', $content);
-        self::assertStringNotContainsString('id="w-currency-switcher-menu"', $content);
+        self::assertStringContainsString('CurrencySwitcherIslandBuilder', $content);
+        self::assertStringContainsString('renderLiveIslandHtml', $content);
+        self::assertStringContainsString('isChromeShellBuild', $content);
+        self::assertStringContainsString('pendingIslandHtml', $content);
     }
 
-    public function testCurrencySwitcherSkipsNonConvertibleRates(): void
+    public function testCurrencySwitcherOmitsHotPathCatalogAssembly(): void
     {
-        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
-        $content = (string) file_get_contents($path);
+        $content = $this->templateSource();
 
-        self::assertStringContainsString('$currencyIsConvertible', $content);
-        self::assertStringContainsString('rate<=0', $content);
-        self::assertStringContainsString('getBaseCurrency()', $content);
-        self::assertStringContainsString('!$currencyIsConvertible($currencyCode, $rate)', $content);
-    }
-
-    public function testCurrencyTriggerPrefersSymbolGlyph(): void
-    {
-        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
-        $content = (string) file_get_contents($path);
-
-        self::assertStringContainsString('$triggerCurrencyLabel', $content);
-        self::assertStringContainsString('CurrencySymbol::forCode', $content);
-        self::assertStringContainsString('data-currency-symbol=', $content);
-        self::assertStringContainsString('w-currency-switcher__code', $content);
-        self::assertStringNotContainsString(
-            '<span class="w-currency-switcher__current current-currency"><?= $escape($displayCurrentCurrency) ?></span>',
-            $content
-        );
-    }
-
-    public function testCurrencyTriggerOmitsCashIconThatReadsAsCamera(): void
-    {
-        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
-        $content = (string) file_get_contents($path);
-
-        self::assertStringNotContainsString('name="cash"', $content);
-        self::assertStringContainsString('name="chevron-down"', $content);
-    }
-
-    public function testCurrencyDisplayNamesUseCurrencyHelperNotSymfonyIntl(): void
-    {
-        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
-        $content = (string) file_get_contents($path);
-
-        self::assertStringContainsString('CurrencyDisplayName', $content);
-        self::assertStringContainsString('CurrencyDisplayName::forCode', $content);
+        self::assertStringNotContainsString('CurrencyData::getCurrencies', $content);
+        self::assertStringNotContainsString('CurrencyDisplayName::forCode', $content);
+        self::assertStringNotContainsString('header-currency-switcher-data', $content);
+        self::assertStringNotContainsString('EventsManager', $content);
+        self::assertStringNotContainsString('aliasDisplayLocales', $content);
         self::assertStringNotContainsString('Symfony\\Component\\Intl\\Currencies', $content);
         self::assertStringNotContainsString('Symfony\Component\Intl\Currencies', $content);
+    }
+
+    public function testCurrencySwitcherKeepsIslandMarkerContractViaBuilder(): void
+    {
+        $builderPath = dirname(__DIR__, 4) . '/Currency/Service/CurrencySwitcherIslandBuilder.php';
+        self::assertFileExists($builderPath);
+        $builder = (string)file_get_contents($builderPath);
+
+        self::assertStringContainsString('data-weline-chrome-island="currency-switcher"', $builder);
+        self::assertStringContainsString('data-currency-switcher="true"', $builder);
+        self::assertStringContainsString('SwitcherInstanceId::create', $builder);
+        self::assertStringContainsString('w-currency-switcher__trigger', $builder);
+        self::assertStringNotContainsString('name="cash"', $builder);
+        self::assertStringContainsString('chevron-down', $builder);
     }
 
     public function testSwitcherInstanceIdsStayUniqueWithoutSharedRequestContext(): void

@@ -47,7 +47,7 @@ final class StateManagerPersistentEntryBaselineTest extends TestCase
         self::assertNotContains('request_instance', $omit);
     }
 
-    public function testRunWlsPersistentRequestEntryBaselineClearsViewHookRuntimeCaches(): void
+    public function testRunWlsPersistentRequestEntryBaselineKeepsProcessHotCaches(): void
     {
         $hookReaderReflection = new ReflectionClass(HookReader::class);
         $hookReaderStaticCache = $hookReaderReflection->getProperty('staticFileListCache');
@@ -55,21 +55,73 @@ final class StateManagerPersistentEntryBaselineTest extends TestCase
         $hookReaderStaticCache->setValue(null, ['hooks::foo' => ['x' => 'y']]);
 
         $taglibReflection = new ReflectionClass(Taglib::class);
-        foreach (['varParserCache', 'hookCheckCache', 'compiledRegexCache'] as $propertyName) {
-            $property = $taglibReflection->getProperty($propertyName);
-            $property->setAccessible(true);
-            $property->setValue(null, ['stale' => 'value']);
-        }
+        $varParserCache = $taglibReflection->getProperty('varParserCache');
+        $varParserCache->setAccessible(true);
+        $varParserCache->setValue(null, ['expr' => '$expr']);
+
         $cachedTagsProperty = $taglibReflection->getProperty('cachedTags');
         $cachedTagsProperty->setAccessible(true);
-        $cachedTagsProperty->setValue(null, ['stale']);
+        $cachedTagsProperty->setValue(null, ['stale-keep']);
+
+        $compileDepth = $taglibReflection->getProperty('compileDepth');
+        $compileDepth->setAccessible(true);
+        $compileDepth->setValue(null, 3);
 
         StateManager::runWlsPersistentRequestEntryBaseline();
 
-        self::assertSame([], $hookReaderStaticCache->getValue());
-        self::assertSame([], $taglibReflection->getProperty('varParserCache')->getValue());
-        self::assertSame([], $taglibReflection->getProperty('hookCheckCache')->getValue());
-        self::assertSame([], $taglibReflection->getProperty('compiledRegexCache')->getValue());
+        self::assertSame(['hooks::foo' => ['x' => 'y']], $hookReaderStaticCache->getValue());
+        self::assertSame(['expr' => '$expr'], $varParserCache->getValue());
+        self::assertSame(['stale-keep'], $cachedTagsProperty->getValue());
+        self::assertSame(0, $compileDepth->getValue());
+    }
+
+    public function testInvalidateProcessCachesClearsTaglibHotCaches(): void
+    {
+        $taglibReflection = new ReflectionClass(Taglib::class);
+        $varParserCache = $taglibReflection->getProperty('varParserCache');
+        $varParserCache->setAccessible(true);
+        $varParserCache->setValue(null, ['expr' => '$expr']);
+
+        $cachedTagsProperty = $taglibReflection->getProperty('cachedTags');
+        $cachedTagsProperty->setAccessible(true);
+        $cachedTagsProperty->setValue(null, ['tag']);
+
+        Taglib::invalidateProcessCaches();
+
+        self::assertSame([], $varParserCache->getValue());
         self::assertNull($cachedTagsProperty->getValue());
+    }
+
+    public function testCachedTagsAreProcessSharedNotFiberBucketed(): void
+    {
+        $taglibReflection = new ReflectionClass(Taglib::class);
+        self::assertFalse(
+            $taglibReflection->hasProperty('fiberCachedTags'),
+            'Process-hot tag config must not be Fiber-bucketed (over-isolation tax + stale Fiber hazard)'
+        );
+
+        $cachedTagsProperty = $taglibReflection->getProperty('cachedTags');
+        $cachedTagsProperty->setAccessible(true);
+        $cachedTagsProperty->setValue(null, ['shared']);
+
+        Taglib::resetRequestState();
+        self::assertSame(['shared'], $cachedTagsProperty->getValue());
+
+        Taglib::invalidateProcessCaches();
+        self::assertNull($cachedTagsProperty->getValue());
+    }
+
+    public function testHookReaderInvalidateProcessCachesClearsFileList(): void
+    {
+        $hookReaderReflection = new ReflectionClass(HookReader::class);
+        $hookReaderStaticCache = $hookReaderReflection->getProperty('staticFileListCache');
+        $hookReaderStaticCache->setAccessible(true);
+        $hookReaderStaticCache->setValue(null, ['hooks::bar' => ['a' => 'b']]);
+
+        HookReader::resetRequestState();
+        self::assertSame(['hooks::bar' => ['a' => 'b']], $hookReaderStaticCache->getValue());
+
+        HookReader::invalidateProcessCaches();
+        self::assertSame([], $hookReaderStaticCache->getValue());
     }
 }

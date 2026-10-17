@@ -42,8 +42,12 @@ final class ObjectManagerRuntimeMetadataPreloadTest extends TestCase
     {
         $this->writeObjectManagerProperty('precompiledMetadata', null);
         $this->writeObjectManagerProperty('precompiledLoaded', false);
+        $this->writeObjectManagerProperty('precompiledMetadataRejectReason', null);
+        $this->writeObjectManagerProperty('precompiledMetadataTrustedAfterPreload', false);
         $this->writeObjectManagerProperty('compiledFactories', null);
         $this->writeObjectManagerProperty('compiledFactoriesLoaded', false);
+        $this->writeObjectManagerProperty('compiledFactoriesRejectReason', null);
+        $this->writeObjectManagerProperty('compiledFactoriesTrustedAfterPreload', false);
         $this->writeObjectManagerProperty('generatedPluginRegistry', null);
         $this->writeObjectManagerProperty('generatedPluginRegistryMtime', null);
     }

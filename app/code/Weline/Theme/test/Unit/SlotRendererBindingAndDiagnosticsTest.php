@@ -41,9 +41,11 @@ final class SlotRendererBindingAndDiagnosticsTest extends TestCore
     public function testLoadSharedChromeReadsPublishedChromePayloadNotRetiredProjection(): void
     {
         $src = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/SlotRendererService.php');
-        self::assertStringContainsString('getChromePayload(', $src);
+        self::assertStringContainsString('peekChromePayload(', $src);
         self::assertStringContainsString('function fillEmptyNestedChromeSlots(', $src);
         self::assertStringContainsString('FOOTER_NESTED_CHROME_SLOTS', $src);
+        self::assertStringContainsString('HEADER_NESTED_CHROME_SLOTS', $src);
+        self::assertStringContainsString('isInheritedChromeCarrierSlot', $src);
         // Retired v3 RequestContext chrome_source projection is no longer the fill path.
         self::assertStringNotContainsString(
             'ThemeLayoutEntityChrome::class',

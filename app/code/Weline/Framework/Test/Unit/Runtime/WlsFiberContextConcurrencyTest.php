@@ -23,7 +23,7 @@ final class WlsFiberContextConcurrencyTest extends TestCase
         SseContext::reset();
         RequestContext::cleanup();
         Context::leave();
-        Url::resetWlsFiberInterleavedParserScratch();
+        Url::resetParserRequestCaches();
         parent::tearDown();
     }
 
@@ -145,12 +145,14 @@ final class WlsFiberContextConcurrencyTest extends TestCase
 
     public function testRestoreClearsUrlInterleavedParserScratch(): void
     {
+        Url::resetParserRequestCaches();
         $_SERVER['HTTP_HOST'] = 'sess-a.test:9001';
         $_SERVER['REQUEST_URI'] = '/a';
         Url::$parserServer = [
             'HTTP_HOST' => 'sess-a.test:9001',
             'WELINE_WEBSITE_URL' => 'http://sess-a.test:9001',
         ];
+        // Foreign static cache with empty Fiber state → soft reset projects empty state.
         Url::$parserCache = ['/backend/foo' => ['server' => ['stub' => true]]];
 
         $ctx = WlsFiberContext::capture();
@@ -164,6 +166,33 @@ final class WlsFiberContextConcurrencyTest extends TestCase
         self::assertSame([], Url::$parserServer);
         self::assertSame([], Url::$parserCache);
         self::assertSame('sess-a.test:9001', $_SERVER['HTTP_HOST']);
+    }
+
+    public function testRestoreProjectsFiberParserCachesButClearsServer(): void
+    {
+        Url::resetParserRequestCaches();
+        \class_exists(Url::class);
+        $stateClass = \Weline\Framework\Http\UrlParserRequestState::class;
+        $state = new $stateClass();
+        $state->parserCache = ['keep-key' => ['ok' => 1]];
+        $state->parserUrlCache = ['u' => ['host' => 'a']];
+        $state->splitUrlCache = ['s' => ['path' => '/']];
+
+        $mainProp = new \ReflectionProperty(Url::class, 'mainParserState');
+        $mainProp->setAccessible(true);
+        $mainProp->setValue(null, $state);
+
+        Url::$parserServer = ['HTTP_HOST' => 'polluted.test'];
+        Url::$parserCache = ['foreign' => []];
+        Url::$parserUrlCache = ['foreign-url' => []];
+        Url::$splitUrlCache = ['foreign-split' => []];
+
+        Url::projectWlsFiberParserScratchAfterRestore();
+
+        self::assertSame([], Url::$parserServer);
+        self::assertSame(['keep-key' => ['ok' => 1]], Url::$parserCache);
+        self::assertSame(['u' => ['host' => 'a']], Url::$parserUrlCache);
+        self::assertSame(['s' => ['path' => '/']], Url::$splitUrlCache);
     }
 
     public function testRestoreAlsoReinstatesCapturedContextSnapshot(): void

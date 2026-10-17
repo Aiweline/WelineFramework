@@ -11,6 +11,7 @@ use Weline\Framework\Context;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Query;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
 
@@ -55,7 +56,7 @@ final class QueryIteratorTraceTest extends TestCase
         foreach ([1, 2] as $batchSize) {
             RequestLifecycleTrace::reset();
             $query = $this->query('SELECT fixture_read(id) AS id, label FROM trace_fixture WHERE label = :wanted ORDER BY id', [':wanted' => 'fixture bound value']);
-            self::assertTrue(RequestLifecycleTrace::isEnabled(), 'The actual Query iterator must run inside an enabled request trace.');
+            self::assertTrue(TraceGate::isArmed(), 'The actual Query iterator must run inside an enabled request trace.');
             $rows = [];
             $batchLengths = [];
             $consumerMs = 0.0;

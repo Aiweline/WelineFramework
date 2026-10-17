@@ -10,6 +10,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
 use Weline\Server\Session\Server\SessionProtocol;
@@ -273,7 +274,7 @@ final class SharedStateClientTest extends TestCase
             $conn->expects(self::once())->method('send')->willReturn(true);
             $conn->expects(self::once())->method('read')->willReturn($response);
 
-            self::assertFalse(RequestLifecycleTrace::isEnabled());
+            self::assertFalse(TraceGate::isArmed());
             self::assertSame($response, $this->createClientWithPool($pool)->request(SessionProtocol::CMD_GET, ['ns' => 'sess', 'key' => 'disabled-fixture-key']));
             self::assertSame([], RequestLifecycleTrace::getSpans());
             self::assertSame([], RequestLifecycleTrace::getAggregateSummary()['phases']);

@@ -28,8 +28,11 @@ final class ProductPublicUrlChangeTest extends TestCase
     {
         $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/ProductSearchProjectionMutationCoordinator.php');
         self::assertStringContainsString('\\w_changed($change)', $src);
+        self::assertStringContainsString('notifyCatalogChanged', $src);
+        self::assertStringContainsString('afterCommit', $src);
         self::assertStringNotContainsString('ProductStorefrontCacheInvalidator', $src);
         self::assertStringNotContainsString('product_storefront_fpc_', $src);
+        self::assertStringNotContainsString('purgeAll', $src);
     }
 
     public function testSitemapServiceExposesCrossWebsiteGlobalProductUrls(): void

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\Env;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
@@ -34,7 +35,7 @@ final class SharedConnectionTimingTest extends TestCase
         self::assertTrue(RequestContext::isInitialized());
         RequestLifecycleTrace::reset();
         RequestLifecycleTrace::installPanelTraceOn();
-        self::assertTrue(RequestLifecycleTrace::isEnabled());
+        self::assertTrue(TraceGate::isArmed());
     }
 
     protected function tearDown(): void
@@ -128,7 +129,7 @@ final class SharedConnectionTimingTest extends TestCase
         try {
             self::assertFalse(\file_exists($missingTokenPath));
             for ($index = 0; $index < 32; ++$index) {
-                RequestLifecycleTrace::recordSpan('fixture.' . $index, 0.01, 'test');
+                TraceGate::recordSpan('fixture.' . $index, 0.01, 'test');
             }
             $startedAt = \hrtime(true);
             self::assertFalse($connection->connect());
