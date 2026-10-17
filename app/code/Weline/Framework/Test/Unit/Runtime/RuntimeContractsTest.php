@@ -280,6 +280,7 @@ private function assert_SoftSurvivorMatrix_testRegistrySymbolsAreSoftSurvivors()
     self::assertFalse(SoftSurvivorCatalog::isRegistrySoftSurvivor('Weline\Framework\Router\FullPageCacheCoordinator::$processFpcPayloadCache'));
     self::assertSame(SoftSurvivorCatalog::ROLE_CONTENT, SoftSurvivorCatalog::roleFor('Weline\Framework\Router\FullPageCacheCoordinator::$processFpcPayloadCache'));
     self::assertTrue(SoftSurvivorCatalog::isRegistrySoftSurvivor('Weline\Framework\Service\Query\QueryProviderRegistry::$processCompiledRegistry'));
+    self::assertTrue(SoftSurvivorCatalog::isRegistrySoftSurvivor('Weline\Framework\Compilation\CompiledPhpRegistry::$entries'));
     self::assertTrue(SoftSurvivorCatalog::isRegistrySoftSurvivor('Weline\Widget\Service\WidgetRegistry::$staticCachedRegistry'));
     self::assertSame(SoftSurvivorCatalog::ROLE_CONTENT, SoftSurvivorCatalog::roleFor('Weline\Framework\Phrase\DictionaryCacheNamespace::$bagRefs'));
 }
