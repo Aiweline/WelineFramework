@@ -11,9 +11,10 @@ use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\System\File\Scanner;
 
 /**
- * Framework 词典编译：从模块 CSV 构建收集侧产物（words.php / *_total.csv）。
- * `generated/language/{locale}.php` 不由本类写出——唯一写入权威是 I18n
+ * Framework 词典编译：从模块 CSV 构建收集侧产物（*_total.csv）。
+ * `generated/language/{locale}.php` 与区袋不由本类写出——唯一写入权威是 I18n
  * `AiTranslationPublisher::publishLocale`（dictionary_compile_after 触发）。
+ * 不再写 `words.php`（冗余中间快照；运行时与收集均不依赖）。
  * 源码扫描 / DB 合并由 dictionary_compile Observer（如 I18n）增强。
  */
 class DictionaryCompiler
@@ -306,22 +307,6 @@ class DictionaryCompiler
     {
         $defaultLocale = Env::default_LANGUAGE_CODE;
 
-        if ($sourceTranslations !== [] || isset($localsWords[$defaultLocale])) {
-            $defaultLocalWords = array_merge($sourceTranslations, $localsWords[$defaultLocale] ?? []);
-            $defaultLocalFile = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-            $dir = dirname($defaultLocalFile);
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
-            $file = @fopen($defaultLocalFile, 'w+');
-            if ($file !== false) {
-                fwrite($file, '<?php return ' . var_export($defaultLocalWords, true) . ';');
-                fclose($file);
-            } else {
-                w_log_warning(__('警告：无法创建翻译文件 %{file}', ['file' => $defaultLocalFile]), [], 'phrase');
-            }
-        }
-
         if ($sourceTranslations !== [] && isset($localsWords[$defaultLocale])) {
             $localsWords[$defaultLocale] = array_merge($sourceTranslations, $localsWords[$defaultLocale]);
         }
@@ -359,26 +344,21 @@ class DictionaryCompiler
             }
         }
 
-        $wordsFile = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-        $dir = dirname($wordsFile);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
-        $text = '<?php return ' . var_export($wordsByModule, true) . ';';
-        if (@file_put_contents($wordsFile, $text) === false) {
-            w_log_warning(__('警告：无法写入翻译文件 %{file}', ['file' => $wordsFile]), [], 'phrase');
-        }
-
+        // 不写 generated/language/words.php（无运行时/收集消费者）。
         // 不写 generated/language/{locale}.php：避免与 AiTranslationPublisher 双写/冲库。
         // locale 袋由 I18n dictionary_compile_after → publishLocale 从系统词典导出。
+
+        $languageDir = Env::path_TRANSLATE_FILES_PATH;
+        if (!is_dir($languageDir)) {
+            mkdir($languageDir, 0755, true);
+        }
 
         foreach ($wordsByModule as $locale => $moduleWordsData) {
             if ($locale === 'all_words' || !is_array($moduleWordsData)) {
                 continue;
             }
 
-            $csvFilePath = dirname($wordsFile) . DS . $locale . '_total.csv';
+            $csvFilePath = $languageDir . $locale . '_total.csv';
             $csvHandle = @fopen($csvFilePath, 'w+');
             if ($csvHandle === false) {
                 continue;

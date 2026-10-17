@@ -58,6 +58,11 @@ class RequestContext
         $context->set(self::INITIALIZED_PATH, true);
 
         self::syncFromServer();
+        // Arm request-trace only when panel cookies are present — otherwise TraceGate
+        // stays disarmed and RequestLifecycleTrace is never autoloaded this request.
+        if (\class_exists(TraceGate::class, false) || \class_exists(TraceGate::class)) {
+            TraceGate::bootstrapFromRequest();
+        }
     }
 
     public static function getRequestId(): ?string

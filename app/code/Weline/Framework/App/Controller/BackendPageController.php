@@ -44,7 +44,7 @@ class BackendPageController extends BackendController
         $template->setData('layout', null);
         $template->setData('contentTemplate', '');
 
-        return $template->fetch($layoutPath, [
+        return $template->fetchHtml($layoutPath, [
             'content' => (string)$content,
             'contentTemplate' => '',
         ]);

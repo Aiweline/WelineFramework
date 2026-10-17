@@ -1594,6 +1594,27 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
         }
 
+        // 有 Controller 树却不在 PC 路由表：指纹会「全绿跳扫」导致永久 404（seed 无该模块、又不再收集）
+        $orphanModules = $this->detectPcRouteOrphanModules($modules, $scope);
+        if ($orphanModules !== []) {
+            $skipAll = false;
+            foreach ($orphanModules as $orphanName) {
+                if (!\in_array($orphanName, $changed, true)) {
+                    $changed[] = $orphanName;
+                }
+            }
+            if (\PHP_SAPI === 'cli') {
+                $this->printing->note(__(
+                    '   - 检测到 %{1} 个 PC 路由孤儿模块（有 Controller 却不在 backend_pc/frontend_pc），强制重扫：%{2}',
+                    [
+                        \count($orphanModules),
+                        \implode(', ', \array_slice($orphanModules, 0, 12))
+                            . (\count($orphanModules) > 12 ? '…' : ''),
+                    ]
+                ));
+            }
+        }
+
         return [
             'skip_all' => $skipAll,
             'changed' => $changed,
@@ -1619,6 +1640,113 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
         // 至少 backend_pc + frontend_pc 一类核心产物存在才允许全跳
         return $present >= 2;
+    }
+
+    /**
+     * 已启用模块：磁盘有可注册的 PC Controller，但 backend_pc/frontend_pc 均无该 module 条目。
+     *
+     * @param array<string, mixed> $modules
+     * @param list<string>|null $scope
+     * @return list<string>
+     */
+    private function detectPcRouteOrphanModules(array $modules, ?array $scope): array
+    {
+        $present = [];
+        foreach ([Env::path_BACKEND_PC_ROUTER_FILE, Env::path_FRONTEND_PC_ROUTER_FILE] as $routerFile) {
+            if (!\is_string($routerFile) || $routerFile === '' || !\is_file($routerFile)) {
+                continue;
+            }
+            try {
+                if (\function_exists('opcache_invalidate')) {
+                    @\opcache_invalidate($routerFile, true);
+                }
+                $routes = require $routerFile;
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!\is_array($routes)) {
+                continue;
+            }
+            foreach ($routes as $info) {
+                if (!\is_array($info)) {
+                    continue;
+                }
+                $moduleName = (string)($info['module'] ?? '');
+                if ($moduleName !== '') {
+                    $present[$moduleName] = true;
+                }
+            }
+        }
+
+        $orphans = [];
+        foreach ($modules as $moduleName => $moduleData) {
+            $name = \is_string($moduleName) && $moduleName !== ''
+                ? $moduleName
+                : (string)(\is_array($moduleData) ? ($moduleData['name'] ?? '') : '');
+            if ($name === '') {
+                continue;
+            }
+            if ($scope !== null && !\in_array($name, $scope, true)) {
+                continue;
+            }
+            if (isset($present[$name])) {
+                continue;
+            }
+            if (\is_array($moduleData) && \array_key_exists('status', $moduleData) && empty($moduleData['status'])) {
+                continue;
+            }
+            $module = new Module(\is_array($moduleData) ? $moduleData : ['name' => $name]);
+            $basePath = \rtrim((string)$module->getBasePath(), DIRECTORY_SEPARATOR);
+            if ($basePath === '') {
+                continue;
+            }
+            $controllerDir = $basePath . DIRECTORY_SEPARATOR . 'Controller';
+            if (!$this->moduleHasPcControllerCandidates($controllerDir)) {
+                continue;
+            }
+            $orphans[] = $name;
+        }
+
+        \sort($orphans, \SORT_STRING);
+
+        return $orphans;
+    }
+
+    /**
+     * Controller 树下是否存在可注册的 PC 控制器候选（排除 Trait / Router 入口）。
+     */
+    private function moduleHasPcControllerCandidates(string $controllerDir): bool
+    {
+        $controllerDir = \rtrim(\str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $controllerDir), DIRECTORY_SEPARATOR);
+        if ($controllerDir === '' || !\is_dir($controllerDir)) {
+            return false;
+        }
+        try {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator(
+                    $controllerDir,
+                    \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::CURRENT_AS_FILEINFO
+                )
+            );
+            foreach ($iterator as $info) {
+                if (!$info instanceof \SplFileInfo || !$info->isFile()) {
+                    continue;
+                }
+                if (\strtolower($info->getExtension()) !== 'php') {
+                    continue;
+                }
+                $base = $info->getBasename('.php');
+                if ($base === 'Router' || \str_ends_with($base, 'Trait')) {
+                    continue;
+                }
+
+                return true;
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
     }
 
     /**

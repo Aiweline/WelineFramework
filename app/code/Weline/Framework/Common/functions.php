@@ -406,13 +406,13 @@ if (!function_exists('framework_view_process_block')) {
             }
         }
         $params['vars'] = $vars;
-        $traceEnabled = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled();
+        $traceEnabled = \Weline\Framework\Runtime\TraceGate::isArmed();
         $traceName = 'view::block::' . substr($block_class, 0, 180);
         $traceStart = 0.0;
         $cacheStatus = 'none';
         if ($traceEnabled) {
             $traceStart = microtime(true);
-            \Weline\Framework\Runtime\RequestLifecycleTrace::pushCurrentParent($traceName);
+            \Weline\Framework\Runtime\TraceGate::pushCurrentParent($traceName);
         }
         if (isset($params['cache']) && $cache_time = intval($params['cache'])) {
             /**@var CacheInterface $cache */
@@ -436,8 +436,8 @@ if (!function_exists('framework_view_process_block')) {
             $result = ObjectManager::make($block_class, ['data' => $params])->render();
         }
         if ($traceEnabled) {
-            \Weline\Framework\Runtime\RequestLifecycleTrace::popCurrentParent();
-            \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan($traceName, (microtime(true) - $traceStart) * 1000, 'view', null, [
+            \Weline\Framework\Runtime\TraceGate::popCurrentParent();
+            \Weline\Framework\Runtime\TraceGate::recordSpan($traceName, (microtime(true) - $traceStart) * 1000, 'view', null, [
                 'class' => $block_class,
                 'cache' => $cacheStatus,
             ]);

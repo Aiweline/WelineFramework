@@ -50,6 +50,21 @@ class WlsFiberContext
 
     public static function capture(): self
     {
+        return self::captureInternal(true);
+    }
+
+    /**
+     * Post-response queue Full mode: same fiber/context projection as {@see capture()},
+     * but skips HeaderCollector — drain always calls {@see restore()} with
+     * $restoreResponseState=false, so capturing headers was pure stickiness tax.
+     */
+    public static function captureForPostResponse(): self
+    {
+        return self::captureInternal(false);
+    }
+
+    private static function captureInternal(bool $includeHeaderCollector): self
+    {
         $ctx = self::captureProcessProjection();
 
         try {
@@ -64,7 +79,9 @@ class WlsFiberContext
             $ctx->contextSnapshot = null;
         }
 
-        $ctx->headerCollectorState = HeaderCollector::getInstance()->captureState();
+        if ($includeHeaderCollector) {
+            $ctx->headerCollectorState = HeaderCollector::getInstance()->captureState();
+        }
 
         return $ctx;
     }
@@ -253,7 +270,8 @@ class WlsFiberContext
         $_REQUEST = $this->requestVars;
         $_FILES = $this->filesVars;
 
-        Url::resetWlsFiberInterleavedParserScratch();
+        // Same-request Fiber resume: soft-project caches; do NOT hard-clear.
+        Url::projectWlsFiberParserScratchAfterRestore();
 
         return $restoredServer;
     }

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Framework',
-        "version" => '2.5.403',
+        "version" => '2.5.412',
     "requires" => [
     ],
     "optional" => [
@@ -30,5 +30,7 @@ return [
             => \Weline\Framework\Http\Url::class,
         'process_cache_resetter.Weline_Framework'
             => \Weline\Framework\Api\Runtime\ProcessCacheResetter::class,
+        'request_resetter.Weline_Framework'
+            => \Weline\Framework\Api\Runtime\RequestResetter::class,
     ],
 ];

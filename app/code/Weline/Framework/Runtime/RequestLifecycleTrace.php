@@ -7,7 +7,8 @@ declare(strict_types=1);
  *
  * DEV/DEBUG 下默认关闭；仅当 Weline 开发面板打开（签名 Cookie）时记录，
  * 关闭面板即停止。不认配置开关与租约 TTL。
- * WLS 下需在 StateManager 注册重置，避免跨请求残留。
+ * 关闭后 hotArmed=false：measurePhase/recordSpan/push/pop 等采集入口直接跳过，
+ * 不读 Cookie、不写 span、不创建业务侧干扰。WLS 下需在 StateManager 注册重置。
  */
 
 namespace Weline\Framework\Runtime;
@@ -23,15 +24,24 @@ use Weline\Framework\Env\WelineEnv;
 final class RequestLifecycleTraceState
 {
     public ?bool $enabledCache = null;
+    /**
+     * Sticky "panel closed" latch: after one full negative resolve, hot paths
+     * skip cookie HMAC / overlay probes until force-enable / invalidate, or
+     * CookieScope arm-identity changes (qualified cookie suffix becomes visible).
+     */
+    public bool $fastOff = false;
+    public ?string $fastOffScopeKey = null;
     public bool $maxSpansLogged = false;
     public bool $recordingDisabledUntilReset = false;
     public ?int $maxSpansCapCache = null;
     public ?int $metaStringMaxBytesCache = null;
+    public ?float $themeSpanMinMsCache = null;
     public int $dbSpanCount = 0;
     public float $dbDurationMs = 0.0;
     public int $wlsSpanCount = 0;
     public float $wlsDurationMs = 0.0;
     public int $droppedSpanCount = 0;
+    public int $themeDroppedSpanCount = 0;
 
     /** @var array<string, array<string, mixed>> */
     public array $phases = [];
@@ -103,6 +113,20 @@ class RequestLifecycleTrace
     private static ?\WeakMap $contextStates = null;
 
     private static ?RequestLifecycleTraceState $mainState = null;
+
+    /**
+     * Hot gate for every instrumentation call site.
+     * null = unresolved (resolve at most once); false = panel closed → zero work;
+     * true = recording. Fiber/Context isolated like {@see state()}.
+     *
+     * @var \WeakMap<\Fiber, bool>|null
+     */
+    private static ?\WeakMap $fiberHotArmed = null;
+
+    /** @var \WeakMap<Context, bool>|null */
+    private static ?\WeakMap $contextHotArmed = null;
+
+    private static ?bool $mainHotArmed = null;
 
     /**
      * Resolve trace storage without sharing mutable state between request Fibers.
@@ -201,19 +225,24 @@ class RequestLifecycleTrace
      * 不认 DEV/DEBUG 常开、不认 wls.debug.request_trace / wls_trace 配置与查询开关。
      *
      * WLS Master / Dispatcher / Session / Memory 等控制面没有请求级 reset。
-     * 无活跃 RequestContext 时必须保持关闭（且不写入 enabledCache）。
+     * 无活跃 RequestContext 时必须保持关闭（且不写入 hotArmed=false，以免毒化后续请求）。
+     *
+     * 关面板后 hotArmed=false：所有采集点只读该标志并直接跳过，不碰 state()/Cookie/HMAC。
      */
     public static function isEnabled(): bool
     {
-        $state = self::state();
-        if ($state->enabledCache === true) {
+        $hot = self::getHotArmed();
+        if ($hot === false) {
+            return false;
+        }
+        if ($hot === true) {
             return true;
         }
 
         $hasActiveRequestContext = \class_exists(RequestContext::class, false)
             && RequestContext::isInitialized();
 
-        // Persistent control-plane / pre-request: never enable. Do not cache —
+        // Persistent control-plane / pre-request: never enable. Do not latch hotArmed —
         // Workers still need to enable after RequestContext becomes ready.
         if (\class_exists(Runtime::class, false)
             && Runtime::isPersistent()
@@ -222,21 +251,10 @@ class RequestLifecycleTrace
             return false;
         }
 
-        // Cookie scope may become available after the early bootstrap check.
-        if ($state->enabledCache === false) {
-            if ((self::isPanelTraceArmed() && !self::shouldSkipForCurrentRequest())
-                || self::isTemplatePerfOverlayRequested()
-            ) {
-                $state->enabledCache = true;
-                return true;
-            }
-            return false;
-        }
-
         $enabled = self::isPanelTraceArmed() || self::isTemplatePerfOverlayRequested();
 
         if (!$enabled) {
-            $state->enabledCache = false;
+            self::latchDisarmed();
             return false;
         }
 
@@ -245,12 +263,186 @@ class RequestLifecycleTrace
         }
 
         if (self::shouldSkipForCurrentRequest()) {
-            $state->enabledCache = false;
+            self::latchDisarmed();
             return false;
         }
 
-        $state->enabledCache = true;
+        self::latchArmed();
         return true;
+    }
+
+    /**
+     * True only while recording. Closed or unresolved → false.
+     * Prefer this at call sites that only need a boolean skip (no resolve).
+     */
+    public static function isHotArmed(): bool
+    {
+        return self::getHotArmed() === true;
+    }
+
+    /**
+     * Drop sticky enablement latch (panel cookie clear / CookieScope while disarmed / tests).
+     */
+    public static function invalidateEnablementCache(): void
+    {
+        self::clearHotArmed();
+        try {
+            $state = self::state();
+        } catch (\Throwable) {
+            return;
+        }
+        $state->enabledCache = null;
+        $state->fastOff = false;
+        $state->fastOffScopeKey = null;
+    }
+
+    /**
+     * CookieScope policy reset while panel is closed: allow a later qualified cookie to arm.
+     * Never disturb an actively recording request (avoids CookieScope event span pollution).
+     */
+    public static function invalidateIfDisarmed(): void
+    {
+        if (self::getHotArmed() === true) {
+            return;
+        }
+        self::clearHotArmed();
+        try {
+            if (self::$fiberStates === null && self::$contextStates === null && self::$mainState === null) {
+                return;
+            }
+            $state = self::state();
+            $state->enabledCache = null;
+            $state->fastOff = false;
+            $state->fastOffScopeKey = null;
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * Same-request panel/tpl-perf arm: skip negative latch and cookie re-probe.
+     * Control-plane (WLS persistent without RequestContext) must stay uncached —
+     * cookie may be installed for a later real request, but Master must not enable.
+     */
+    public static function forceEnableCache(): void
+    {
+        $hasActiveRequestContext = \class_exists(RequestContext::class, false)
+            && RequestContext::isInitialized();
+        if (\class_exists(Runtime::class, false)
+            && Runtime::isPersistent()
+            && !$hasActiveRequestContext
+        ) {
+            return;
+        }
+
+        self::latchArmed();
+    }
+
+    /** @return bool|null null unresolved, true recording, false closed */
+    private static function getHotArmed(): ?bool
+    {
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        if ($fiber !== null) {
+            self::$fiberHotArmed ??= new \WeakMap();
+
+            return self::$fiberHotArmed[$fiber] ?? null;
+        }
+
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            self::$contextHotArmed ??= new \WeakMap();
+
+            return self::$contextHotArmed[$context] ?? null;
+        }
+
+        return self::$mainHotArmed;
+    }
+
+    private static function setHotArmed(bool $armed): void
+    {
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        if ($fiber !== null) {
+            self::$fiberHotArmed ??= new \WeakMap();
+            self::$fiberHotArmed[$fiber] = $armed;
+
+            return;
+        }
+
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            self::$contextHotArmed ??= new \WeakMap();
+            self::$contextHotArmed[$context] = $armed;
+
+            return;
+        }
+
+        self::$mainHotArmed = $armed;
+    }
+
+    private static function clearHotArmed(): void
+    {
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        if ($fiber !== null) {
+            if (self::$fiberHotArmed !== null && isset(self::$fiberHotArmed[$fiber])) {
+                unset(self::$fiberHotArmed[$fiber]);
+            }
+
+            return;
+        }
+
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            if (self::$contextHotArmed !== null && isset(self::$contextHotArmed[$context])) {
+                unset(self::$contextHotArmed[$context]);
+            }
+
+            return;
+        }
+
+        self::$mainHotArmed = null;
+    }
+
+    private static function latchDisarmed(): void
+    {
+        self::setHotArmed(false);
+        $state = self::state();
+        $state->enabledCache = false;
+        $state->fastOff = true;
+        $state->fastOffScopeKey = null;
+        if (\class_exists(TraceGate::class, false)) {
+            TraceGate::disarm();
+        }
+    }
+
+    private static function latchArmed(): void
+    {
+        self::setHotArmed(true);
+        $state = self::state();
+        $state->enabledCache = true;
+        $state->fastOff = false;
+        $state->fastOffScopeKey = null;
+        if (\class_exists(TraceGate::class, false)) {
+            TraceGate::markArmed(true);
+        }
+    }
+
+    /**
+     * Recording gate for instrumentation APIs: closed → false with zero side effects;
+     * unresolved → resolve once via {@see isEnabled()}.
+     */
+    private static function guardRecording(): bool
+    {
+        $hot = self::getHotArmed();
+        if ($hot === false) {
+            return false;
+        }
+        if ($hot === true) {
+            return true;
+        }
+        try {
+            return self::isEnabled();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -350,29 +542,37 @@ class RequestLifecycleTrace
             }
         } catch (\Throwable) {
         }
-        $state = self::state();
-        $state->enabledCache = true;
+        self::forceEnableCache();
     }
 
     public static function panelTraceCookieName(): string
     {
-        return self::PANEL_TRACE_COOKIE;
+        return PanelTraceCookie::panelCookieName();
     }
 
     public static function isPanelTraceArmed(): bool
     {
-        return self::isValidPanelTraceCookie(self::readPanelTraceCookieValue());
+        return PanelTraceCookie::isPanelArmed();
     }
 
     /** Install panel-open cookie into the current process (tests / same-request). */
     public static function installPanelTraceOn(): void
     {
-        $_COOKIE[self::PANEL_TRACE_COOKIE] = self::buildPanelTraceCookieValue();
+        $_COOKIE[PanelTraceCookie::PANEL_COOKIE] = PanelTraceCookie::buildPanelValue();
+        self::invalidateEnablementCache();
+        TraceGate::bootstrapFromRequest();
     }
 
     public static function clearPanelTrace(): void
     {
-        unset($_COOKIE[self::PANEL_TRACE_COOKIE]);
+        unset($_COOKIE[PanelTraceCookie::PANEL_COOKIE]);
+        // If tpl-perf overlay still armed, re-resolve; otherwise latch closed hard.
+        if (PanelTraceCookie::isTplPerfArmed()) {
+            self::invalidateEnablementCache();
+            TraceGate::bootstrapFromRequest();
+        } else {
+            self::latchDisarmed();
+        }
     }
 
     /**
@@ -395,6 +595,8 @@ class RequestLifecycleTrace
                     'Lax'
                 );
             }
+            self::forceEnableCache();
+            TraceGate::armFromPanel();
 
             return;
         }
@@ -416,97 +618,42 @@ class RequestLifecycleTrace
 
     public static function buildPanelTraceCookieValue(): string
     {
-        $signature = \hash_hmac('sha256', self::PANEL_TRACE_PAYLOAD, self::panelTraceSigningKey());
-
-        return self::base64UrlEncode(self::PANEL_TRACE_PAYLOAD . '.' . $signature);
+        return PanelTraceCookie::buildPanelValue();
     }
 
     public static function isValidPanelTraceCookie(string $cookieValue): bool
     {
-        if ($cookieValue === '') {
-            return false;
-        }
-
-        $decoded = self::base64UrlDecode($cookieValue);
-        if ($decoded === '') {
-            return false;
-        }
-
-        $parts = \explode('.', $decoded, 2);
-        if (\count($parts) !== 2) {
-            return false;
-        }
-
-        [$payload, $signature] = $parts;
-        if ($payload !== self::PANEL_TRACE_PAYLOAD || $signature === '') {
-            return false;
-        }
-
-        $expected = \hash_hmac('sha256', self::PANEL_TRACE_PAYLOAD, self::panelTraceSigningKey());
-
-        return \hash_equals($expected, $signature);
-    }
-
-    private static function readPanelTraceCookieValue(): string
-    {
-        if (\class_exists(\Weline\Framework\Http\Cookie::class)) {
-            $fromHelper = \Weline\Framework\Http\Cookie::get(self::PANEL_TRACE_COOKIE, '');
-            if (\is_scalar($fromHelper) && (string)$fromHelper !== '') {
-                return (string)$fromHelper;
-            }
-        }
-
-        $fromServer = '';
-        if (\class_exists(WelineEnv::class, false)) {
-            $fromServer = (string)WelineEnv::server('HTTP_COOKIE', '');
-        }
-        if ($fromServer === '' && isset($_SERVER['HTTP_COOKIE'])) {
-            $fromServer = (string)$_SERVER['HTTP_COOKIE'];
-        }
-        if ($fromServer !== '') {
-            foreach (\explode(';', $fromServer) as $pair) {
-                $pair = \trim($pair);
-                if ($pair === '' || !\str_contains($pair, '=')) {
-                    continue;
-                }
-                [$name, $value] = \explode('=', $pair, 2);
-                if (\trim($name) === self::PANEL_TRACE_COOKIE) {
-                    return \rawurldecode(\trim($value));
-                }
-            }
-        }
-
-        return isset($_COOKIE[self::PANEL_TRACE_COOKIE])
-            ? (string)$_COOKIE[self::PANEL_TRACE_COOKIE]
-            : '';
-    }
-
-    private static function panelTraceSigningKey(): string
-    {
-        $salt = \defined('BP') ? (string)BP : __DIR__;
-
-        return \hash('sha256', $salt . '|request_lifecycle_trace_panel');
+        return PanelTraceCookie::isValidPanelValue($cookieValue);
     }
 
     public static function panelTplPerfCookieName(): string
     {
-        return self::PANEL_TPL_PERF_COOKIE;
+        return PanelTraceCookie::tplPerfCookieName();
     }
 
     public static function isPanelTplPerfArmed(): bool
     {
-        return self::isValidPanelTplPerfCookie(self::readPanelTplPerfCookieValue());
+        return PanelTraceCookie::isTplPerfArmed();
     }
 
     /** Install tpl-perf overlay cookie into the current process (tests / same-request). */
     public static function installPanelTplPerfOn(): void
     {
-        $_COOKIE[self::PANEL_TPL_PERF_COOKIE] = self::buildPanelTplPerfCookieValue();
+        $_COOKIE[PanelTraceCookie::TPL_PERF_COOKIE] = PanelTraceCookie::buildTplPerfValue();
+        self::invalidateEnablementCache();
+        TraceGate::bootstrapFromRequest();
     }
 
     public static function clearPanelTplPerf(): void
     {
-        unset($_COOKIE[self::PANEL_TPL_PERF_COOKIE]);
+        unset($_COOKIE[PanelTraceCookie::TPL_PERF_COOKIE]);
+        // If panel trace cookie still armed, re-resolve; otherwise latch closed hard.
+        if (PanelTraceCookie::isPanelArmed()) {
+            self::invalidateEnablementCache();
+            TraceGate::bootstrapFromRequest();
+        } else {
+            self::latchDisarmed();
+        }
     }
 
     /**
@@ -529,6 +676,8 @@ class RequestLifecycleTrace
                     'Lax'
                 );
             }
+            self::forceEnableCache();
+            TraceGate::armFromPanel();
 
             return;
         }
@@ -550,76 +699,12 @@ class RequestLifecycleTrace
 
     public static function buildPanelTplPerfCookieValue(): string
     {
-        $signature = \hash_hmac('sha256', self::PANEL_TPL_PERF_PAYLOAD, self::panelTplPerfSigningKey());
-
-        return self::base64UrlEncode(self::PANEL_TPL_PERF_PAYLOAD . '.' . $signature);
+        return PanelTraceCookie::buildTplPerfValue();
     }
 
     public static function isValidPanelTplPerfCookie(string $cookieValue): bool
     {
-        if ($cookieValue === '') {
-            return false;
-        }
-
-        $decoded = self::base64UrlDecode($cookieValue);
-        if ($decoded === '') {
-            return false;
-        }
-
-        $parts = \explode('.', $decoded, 2);
-        if (\count($parts) !== 2) {
-            return false;
-        }
-
-        [$payload, $signature] = $parts;
-        if ($payload !== self::PANEL_TPL_PERF_PAYLOAD || $signature === '') {
-            return false;
-        }
-
-        $expected = \hash_hmac('sha256', self::PANEL_TPL_PERF_PAYLOAD, self::panelTplPerfSigningKey());
-
-        return \hash_equals($expected, $signature);
-    }
-
-    private static function readPanelTplPerfCookieValue(): string
-    {
-        if (\class_exists(\Weline\Framework\Http\Cookie::class)) {
-            $fromHelper = \Weline\Framework\Http\Cookie::get(self::PANEL_TPL_PERF_COOKIE, '');
-            if (\is_scalar($fromHelper) && (string)$fromHelper !== '') {
-                return (string)$fromHelper;
-            }
-        }
-
-        $fromServer = '';
-        if (\class_exists(WelineEnv::class, false)) {
-            $fromServer = (string)WelineEnv::server('HTTP_COOKIE', '');
-        }
-        if ($fromServer === '' && isset($_SERVER['HTTP_COOKIE'])) {
-            $fromServer = (string)$_SERVER['HTTP_COOKIE'];
-        }
-        if ($fromServer !== '') {
-            foreach (\explode(';', $fromServer) as $pair) {
-                $pair = \trim($pair);
-                if ($pair === '' || !\str_contains($pair, '=')) {
-                    continue;
-                }
-                [$name, $value] = \explode('=', $pair, 2);
-                if (\trim($name) === self::PANEL_TPL_PERF_COOKIE) {
-                    return \rawurldecode(\trim($value));
-                }
-            }
-        }
-
-        return isset($_COOKIE[self::PANEL_TPL_PERF_COOKIE])
-            ? (string)$_COOKIE[self::PANEL_TPL_PERF_COOKIE]
-            : '';
-    }
-
-    private static function panelTplPerfSigningKey(): string
-    {
-        $salt = \defined('BP') ? (string)BP : __DIR__;
-
-        return \hash('sha256', $salt . '|request_lifecycle_tpl_perf_panel');
+        return PanelTraceCookie::isValidTplPerfValue($cookieValue);
     }
 
     private static function isSecureRequest(): bool
@@ -752,7 +837,7 @@ class RequestLifecycleTrace
         array $meta = []
     ): void
     {
-        if (!self::isEnabled()) {
+        if (!self::guardRecording()) {
             return;
         }
         $state = self::state();
@@ -764,6 +849,15 @@ class RequestLifecycleTrace
         } elseif ($category === 'wls') {
             ++$state->wlsSpanCount;
             $state->wlsDurationMs += $durationMs;
+        } elseif ($category === 'theme'
+            && $durationMs < self::getThemeSpanMinMs($state)
+        ) {
+            // Open-panel Theme slot trees are the largest span fan-out; drop
+            // sub-threshold leaves so the DevTool tree stays usable.
+            ++$state->themeDroppedSpanCount;
+            ++$state->droppedSpanCount;
+
+            return;
         }
         if ($state->recordingDisabledUntilReset) {
             ++$state->droppedSpanCount;
@@ -854,7 +948,7 @@ class RequestLifecycleTrace
      */
     public static function recordPhase(string $name, float $durationMs, array $meta = []): void
     {
-        if (!self::isEnabled()) {
+        if (!self::guardRecording()) {
             return;
         }
 
@@ -879,7 +973,7 @@ class RequestLifecycleTrace
      */
     public static function reserveSummaryPhases(array $names): void
     {
-        if (!self::isEnabled() || $names === []) {
+        if ($names === [] || !self::guardRecording()) {
             return;
         }
 
@@ -922,14 +1016,8 @@ class RequestLifecycleTrace
      */
     public static function measurePhase(string $name, callable $callback, array $meta = []): mixed
     {
-        // Tracing must never block the measured work (unit fixtures may lack w_env_cookie).
-        $enabled = false;
-        try {
-            $enabled = self::isEnabled();
-        } catch (\Throwable) {
-            $enabled = false;
-        }
-        if (!$enabled) {
+        // Closed: return callback only — no state()/Cookie/HMAC.
+        if (!self::guardRecording()) {
             return $callback();
         }
 
@@ -975,14 +1063,12 @@ class RequestLifecycleTrace
      */
     public static function redactDatabaseSql(string $sql): string
     {
-        return self::containsAuthenticationPersistence($sql)
-            ? self::REDACTED_AUTH_SQL
-            : $sql;
+        return TraceGate::redactDatabaseSql($sql);
     }
 
     public static function containsAuthenticationPersistence(string $sql): bool
     {
-        return \preg_match('/\b(?:session_digest|token_digest)\b/i', $sql) === 1;
+        return TraceGate::containsAuthenticationPersistence($sql);
     }
 
     public static function ensureRequestId(): string
@@ -1264,6 +1350,39 @@ class RequestLifecycleTrace
         return $state->maxSpansCapCache;
     }
 
+    /**
+     * Minimum duration (ms) for category=theme detail spans. Default 1.0;
+     * set wls.debug.request_trace_theme_min_ms=0 to keep every theme leaf.
+     */
+    private static function getThemeSpanMinMs(RequestLifecycleTraceState $state): float
+    {
+        if ($state->themeSpanMinMsCache !== null) {
+            return $state->themeSpanMinMsCache;
+        }
+
+        $minMs = 1.0;
+        if (\class_exists(\Weline\Framework\App\Env::class, false)) {
+            try {
+                $configured = \Weline\Framework\App\Env::get('wls.debug.request_trace_theme_min_ms', 1.0);
+                if (\is_numeric($configured)) {
+                    $minMs = (float)$configured;
+                }
+            } catch (\Throwable) {
+                $minMs = 1.0;
+            }
+        }
+
+        $state->themeSpanMinMsCache = \max(0.0, $minMs);
+
+        return $state->themeSpanMinMsCache;
+    }
+
+    /** @internal tests / DevTool overflow banner */
+    public static function getThemeDroppedSpanCount(): int
+    {
+        return self::state()->themeDroppedSpanCount;
+    }
+
     private static function getMetaStringMaxBytes(RequestLifecycleTraceState $state): int
     {
         if ($state->metaStringMaxBytesCache !== null) {
@@ -1298,7 +1417,7 @@ class RequestLifecycleTrace
      */
     public static function pushCurrentParent(string $observerSpanName): void
     {
-        if (!self::isEnabled()) {
+        if (!self::guardRecording()) {
             return;
         }
         self::registerStateManager();
@@ -1310,7 +1429,7 @@ class RequestLifecycleTrace
      */
     public static function popCurrentParent(): void
     {
-        if (!self::isEnabled()) {
+        if (!self::guardRecording()) {
             return;
         }
         $state = self::state();
@@ -1325,6 +1444,9 @@ class RequestLifecycleTrace
      */
     public static function getCurrentParent(): ?string
     {
+        if (self::getHotArmed() !== true) {
+            return null;
+        }
         $stack = self::state()->currentParentStack;
         if ($stack === []) {
             return null;
@@ -1337,7 +1459,7 @@ class RequestLifecycleTrace
      */
     public static function startSpan(string $name): void
     {
-        if (!self::isEnabled()) {
+        if (!self::guardRecording()) {
             return;
         }
         self::registerStateManager();
@@ -1349,7 +1471,7 @@ class RequestLifecycleTrace
      */
     public static function endSpan(string $name, string $category = 'framework'): void
     {
-        if (!self::isEnabled()) {
+        if (!self::guardRecording()) {
             return;
         }
         $state = self::state();
@@ -1452,6 +1574,10 @@ class RequestLifecycleTrace
 
     public static function reset(): void
     {
+        self::clearHotArmed();
+        if (\class_exists(TraceGate::class, false)) {
+            TraceGate::reset();
+        }
         $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
         if ($fiber !== null) {
             if (self::$fiberStates !== null && isset(self::$fiberStates[$fiber])) {

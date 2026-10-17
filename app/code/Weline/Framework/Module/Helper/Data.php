@@ -102,7 +102,9 @@ class Data extends AbstractHelper
             $events = [];
             unset($events);
             $this->collected_controller_attributes_events = [];
-            $this->collected_route_registrations = [];
+            // 禁止清空 collected_route_registrations：路由扫描中途 ACL 分块 flush
+            // 若顺带清空，会丢掉当前模块尚未 batchRegisterRoutes 的 PC/API 注册，
+            // 表现为「有 Controller、指纹全绿、菜单 404」（如 Weline_Order）。
             if (\function_exists('gc_collect_cycles')) {
                 \gc_collect_cycles();
             }
@@ -300,10 +302,7 @@ class Data extends AbstractHelper
                             // 原始路由与 baseRouter 路由不一致时，注册原始路由
                             $origin_route = str_replace('-', '', $route);
                             if ($router !== $origin_route) {
-                                $backend = false;
-                                if (in_array('BackendController', $ctl_area)) {
-                                    $backend = true;
-                                }
+                                $backend = $this->controllerAreaIsBackendPc($ctl_area);
                                 $params = [
                                     'type' => DataInterface::type_API,
                                     'area' => $ctl_area,
@@ -466,10 +465,7 @@ class Data extends AbstractHelper
                     }
                     $ctl_methods = $ctl_data['methods'];
                     $ctl_area = $ctl_data['area'];
-                    $backend = false;
-                    if (in_array('BackendController', $ctl_area)) {
-                        $backend = true;
-                    }
+                    $backend = $this->controllerAreaIsBackendPc($ctl_area);
                     $router = $register_module->getRouter($backend);
                     $baseRouter = trim($router . $baseRouter, '/');
                     foreach ($ctl_methods as $method => $attributes) {
@@ -543,10 +539,7 @@ class Data extends AbstractHelper
                             // 原始路由与 baseRouter 路由不一致时，注册原始路由
                             $origin_route = str_replace('-', '', $route);
                             if ($router !== $origin_route) {
-                                $backend = false;
-                                if (in_array('BackendController', $ctl_area)) {
-                                    $backend = true;
-                                }
+                                $backend = $this->controllerAreaIsBackendPc($ctl_area);
                                 $params = [
                                     'type' => DataInterface::type_PC,
                                     'area' => $ctl_area,
@@ -905,6 +898,17 @@ class Data extends AbstractHelper
         $text = '<?php return ' . var_export($routers, true) . ';';
         $this->file->write($text);
         $this->file->close();
+    }
+
+    /**
+     * PC/API 控制器 area 链是否属于后台（含 BackendPageController 中间基类）。
+     *
+     * @param list<string>|array<int, string> $ctlArea
+     */
+    private function controllerAreaIsBackendPc(array $ctlArea): bool
+    {
+        return \in_array('BackendController', $ctlArea, true)
+            || \in_array('BackendPageController', $ctlArea, true);
     }
 
     /**

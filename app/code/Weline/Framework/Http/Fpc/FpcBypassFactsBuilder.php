@@ -62,6 +62,12 @@ final class FpcBypassFactsBuilder
         }
 
         $pierceOk = FpcPierceStamp::isValidRequest($cookieHeader, $query);
+        $devAutoPierce = false;
+        try {
+            $devAutoPierce = FpcMode::isDevAutoPierceEnabled();
+        } catch (\Throwable) {
+            $devAutoPierce = false;
+        }
 
         return [
             'query' => $query,
@@ -73,6 +79,8 @@ final class FpcBypassFactsBuilder
                 'editor_mode' => $editorMode,
                 'cdn_fpc_dev_mode' => $cdnFlag ? '1' : '',
                 'fpc_pierce_stamp' => $pierceOk ? '1' : '',
+                // Admin「链接自带签章」：开启期间 Coordinator 必须 BYPASS，才能生成带章链接。
+                'dev_auto_pierce' => $devAutoPierce ? '1' : '',
             ],
         ];
     }

@@ -24,6 +24,13 @@ final readonly class StorefrontRenderContext
     public const WEBSITE_LOCAL_ROWS_BAG_KEY = 'websites.website_local_rows.v1';
 
     /**
+     * Scope-projected locale catalog for Installer (active/installed lists).
+     * Written once after ScopeIdentity freeze; not a second authority bag for
+     * consumers — they still read {@see self::BAG_KEY} after install.
+     */
+    public const LOCALE_CATALOG_BAG_KEY = 'storefront.locale_catalog.v1';
+
+    /**
      * @param list<array{local_code?:string,name?:string,description?:string}>|null $websiteLocal
      * @param array{active:list<string>,installed:list<string>} $localeCatalog
      * @param array{scope_key?:string,enabled?:bool,reason?:string,generation?:int,since?:int}|null $maintenance
@@ -68,6 +75,52 @@ final readonly class StorefrontRenderContext
             return;
         }
         RequestContext::set(self::BAG_KEY, $context);
+    }
+
+    /**
+     * Project Scope-resolved locale lists before Installer runs.
+     *
+     * @param array{active?:list<string>|mixed,installed?:list<string>|mixed} $catalog
+     */
+    public static function projectLocaleCatalog(array $catalog): void
+    {
+        if (!Context::hasCurrent()) {
+            return;
+        }
+        $active = isset($catalog['active']) && \is_array($catalog['active'])
+            ? \array_values(\array_map('strval', $catalog['active']))
+            : [];
+        $installed = isset($catalog['installed']) && \is_array($catalog['installed'])
+            ? \array_values(\array_map('strval', $catalog['installed']))
+            : $active;
+        if ($installed === []) {
+            $installed = $active;
+        }
+        RequestContext::set(self::LOCALE_CATALOG_BAG_KEY, [
+            'active' => $active,
+            'installed' => $installed,
+        ]);
+    }
+
+    /** @return array{active:list<string>,installed:list<string>}|null */
+    public static function projectedLocaleCatalog(): ?array
+    {
+        if (!Context::hasCurrent()) {
+            return null;
+        }
+        $bag = RequestContext::get(self::LOCALE_CATALOG_BAG_KEY);
+        if (!\is_array($bag)
+            || !isset($bag['active'], $bag['installed'])
+            || !\is_array($bag['active'])
+            || !\is_array($bag['installed'])
+        ) {
+            return null;
+        }
+
+        return [
+            'active' => \array_values(\array_map('strval', $bag['active'])),
+            'installed' => \array_values(\array_map('strval', $bag['installed'])),
+        ];
     }
 
     /**

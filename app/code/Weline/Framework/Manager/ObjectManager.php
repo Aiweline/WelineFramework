@@ -18,14 +18,13 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Adapter\FileAdapter;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Compilation\ServiceProviderRegistry;
+use Weline\Framework\Manager\Di\ReflectionArtifactContract;
 use Weline\Framework\Manager\FactoryObjectInterface;
 use Weline\Framework\Runtime\RequestScope;
+use Weline\Framework\Runtime\Runtime;
 
 class ObjectManager implements ManagerInterface
 {
-    private const PRECOMPILED_METADATA_FORMAT = 'weline-reflection-metadata/v2';
-
-    private const COMPILED_FACTORY_FORMAT = 'weline-compiled-factories/v2';
 
     public const unserializable_class = [
         \PDO::class,
@@ -116,6 +115,21 @@ class ObjectManager implements ManagerInterface
      * 编译型工厂是否已尝试加载
      */
     private static bool $compiledFactoriesLoaded = false;
+
+    private static ?string $compiledFactoriesRejectReason = null;
+
+    private static ?string $precompiledMetadataRejectReason = null;
+
+    /**
+     * WLS persistent workers may trust v2 artifacts after successful preload
+     * (mirrors canTrustGeneratedPluginRegistryForRuntime) to skip per-class hash_file.
+     */
+    private static bool $compiledFactoriesTrustedAfterPreload = false;
+
+    private static bool $precompiledMetadataTrustedAfterPreload = false;
+
+    /** @var int Contract/test counter for reflection DI fallback amplification. */
+    private static int $parseMethodParamsMetadataCalls = 0;
 
     private static ?array $generatedPluginRegistry = null;
     private static ?int $generatedPluginRegistryMtime = null;
@@ -2068,14 +2082,34 @@ class ObjectManager implements ManagerInterface
             }
         }
 
+        $reflectionMetadataCount = \is_array(self::$precompiledMetadata) ? \count(self::$precompiledMetadata) : 0;
+        $compiledFactoriesCount = \is_array(self::$compiledFactories) ? \count(self::$compiledFactories) : 0;
+
+        if (self::canTrustGeneratedArtifactsForRuntime()) {
+            self::$precompiledMetadataTrustedAfterPreload = $reflectionMetadataCount > 0;
+            self::$compiledFactoriesTrustedAfterPreload = $compiledFactoriesCount > 0;
+        }
+
         return [
-            'reflection_metadata' => \is_array(self::$precompiledMetadata) ? \count(self::$precompiledMetadata) : 0,
-            'compiled_factories' => \is_array(self::$compiledFactories) ? \count(self::$compiledFactories) : 0,
+            'reflection_metadata' => $reflectionMetadataCount,
+            'compiled_factories' => $compiledFactoriesCount,
             'plugin_classes' => \is_array(self::$generatedPluginRegistry['class_to_plugins'] ?? null)
                 ? \count(self::$generatedPluginRegistry['class_to_plugins'])
                 : 0,
             'reflection_safe_classes' => self::countNestedScalarValues($safeClasses),
+            'reflection_metadata_reject_reason' => self::$precompiledMetadataRejectReason,
+            'compiled_factories_reject_reason' => self::$compiledFactoriesRejectReason,
         ];
+    }
+
+    public static function getParseMethodParamsMetadataCallCount(): int
+    {
+        return self::$parseMethodParamsMetadataCalls;
+    }
+
+    public static function resetParseMethodParamsMetadataCallCount(): void
+    {
+        self::$parseMethodParamsMetadataCalls = 0;
     }
 
     private static function countNestedScalarValues(array $rows): int
@@ -2100,24 +2134,28 @@ class ObjectManager implements ManagerInterface
             return;
         }
         self::$precompiledLoaded = true;
+        self::$precompiledMetadataRejectReason = null;
+        self::$precompiledMetadataTrustedAfterPreload = false;
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_metadata.php';
-        if (\is_file($file)) {
-            $payload = include $file;
-            if (\is_array($payload)
-                && ($payload['format'] ?? null) === self::PRECOMPILED_METADATA_FORMAT
-                && (int)($payload['php_version_id'] ?? 0) === \PHP_VERSION_ID
-                && \is_array($payload['metadata'] ?? null)
-                && \is_array($payload['source_signatures'] ?? null)
-            ) {
-                self::$precompiledMetadata = $payload['metadata'];
-                self::$precompiledMetadataSourceSignatures = $payload['source_signatures'];
-            }
+        if (!\is_file($file)) {
+            self::$precompiledMetadataRejectReason = ReflectionArtifactContract::REJECT_MISSING;
+            return;
         }
+
+        $payload = include $file;
+        $accepted = ReflectionArtifactContract::acceptReflectionMetadataPayload($payload);
+        if (!($accepted['ok'] ?? false)) {
+            self::$precompiledMetadataRejectReason = (string)($accepted['reason'] ?? ReflectionArtifactContract::REJECT_INVALID_PAYLOAD);
+            return;
+        }
+
+        self::$precompiledMetadata = $accepted['metadata'];
+        self::$precompiledMetadataSourceSignatures = $accepted['source_signatures'];
     }
 
     /**
      * 加载编译型工厂容器（从 generated/compiled_factories.php）
-     * 文件不存在时保持 null，getInstance 回退到反射路径
+     * 文件不存在或非 v2 时保持 null，getInstance 回退到反射路径
      */
     private static function loadCompiledFactories(): void
     {
@@ -2125,28 +2163,43 @@ class ObjectManager implements ManagerInterface
             return;
         }
         self::$compiledFactoriesLoaded = true;
+        self::$compiledFactoriesRejectReason = null;
+        self::$compiledFactoriesTrustedAfterPreload = false;
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'compiled_factories.php';
-        if (\is_file($file)) {
-            $payload = include $file;
-            if (\is_array($payload)
-                && ($payload['format'] ?? null) === self::COMPILED_FACTORY_FORMAT
-                && (int)($payload['php_version_id'] ?? 0) === \PHP_VERSION_ID
-                && \is_array($payload['factories'] ?? null)
-                && \is_array($payload['source_signatures'] ?? null)
-            ) {
-                self::$compiledFactories = $payload['factories'];
-                self::$compiledFactorySourceSignatures = $payload['source_signatures'];
-            }
+        if (!\is_file($file)) {
+            self::$compiledFactoriesRejectReason = ReflectionArtifactContract::REJECT_MISSING;
+            return;
         }
+
+        $payload = include $file;
+        $accepted = ReflectionArtifactContract::acceptCompiledFactoriesPayload($payload);
+        if (!($accepted['ok'] ?? false)) {
+            self::$compiledFactoriesRejectReason = (string)($accepted['reason'] ?? ReflectionArtifactContract::REJECT_INVALID_PAYLOAD);
+            return;
+        }
+
+        self::$compiledFactories = $accepted['factories'];
+        self::$compiledFactorySourceSignatures = $accepted['source_signatures'];
+    }
+
+    private static function canTrustGeneratedArtifactsForRuntime(): bool
+    {
+        return \class_exists(Runtime::class, false) && Runtime::isPersistent();
     }
 
     private static function compiledFactoryIsCurrent(string $className): bool
     {
+        if (!(self::$compiledFactories[$className] ?? null) instanceof \Closure) {
+            unset(self::$compiledFactories[$className], self::$compiledFactorySourceSignatures[$className]);
+            return false;
+        }
+
+        if (self::$compiledFactoriesTrustedAfterPreload && self::canTrustGeneratedArtifactsForRuntime()) {
+            return true;
+        }
+
         $expected = self::$compiledFactorySourceSignatures[$className] ?? null;
-        if (!\is_string($expected)
-            || \preg_match('/^[a-f0-9]{64}$/D', $expected) !== 1
-            || !(self::$compiledFactories[$className] ?? null) instanceof \Closure
-        ) {
+        if (!\is_string($expected) || \preg_match('/^[a-f0-9]{64}$/D', $expected) !== 1) {
             unset(self::$compiledFactories[$className], self::$compiledFactorySourceSignatures[$className]);
             return false;
         }
@@ -2163,6 +2216,10 @@ class ObjectManager implements ManagerInterface
     private static function precompiledMetadataIsCurrent(string $className, string $methodName): bool
     {
         $cacheKey = $className . '::' . $methodName;
+        if (self::$precompiledMetadataTrustedAfterPreload && self::canTrustGeneratedArtifactsForRuntime()) {
+            return isset(self::$precompiledMetadata[$cacheKey]);
+        }
+
         $expected = self::$precompiledMetadataSourceSignatures[$cacheKey] ?? null;
         if (!\is_string($expected) || \preg_match('/^[a-f0-9]{64}$/D', $expected) !== 1) {
             return false;
@@ -2184,47 +2241,12 @@ class ObjectManager implements ManagerInterface
 
         try {
             $class = self::getReflectionInstance($className);
-            $method = null;
-            if ($factoryMode) {
-                $constructor = $class->getConstructor();
-                if ($constructor !== null && $constructor->isPrivate() && $class->hasMethod('getInstance')) {
-                    $candidate = $class->getMethod('getInstance');
-                    if ($candidate->isStatic() && $candidate->getNumberOfRequiredParameters() === 0) {
-                        $method = $candidate;
-                    }
-                }
-                $method ??= $constructor;
-            } elseif ($methodName !== null && $class->hasMethod($methodName)) {
-                $method = $class->getMethod($methodName);
-            }
-
-            $files = [];
-            $classFile = $class->getFileName();
-            if (\is_string($classFile) && $classFile !== '') {
-                $files[$classFile] = true;
-            }
-            if ($method instanceof \ReflectionMethod) {
-                $declarationFile = $method->getDeclaringClass()->getFileName();
-                if (\is_string($declarationFile) && $declarationFile !== '') {
-                    $files[$declarationFile] = true;
-                }
-            }
-            if ($files === []) {
-                return self::$currentSourceSignatures[$cacheKey] = null;
-            }
-
-            $paths = \array_keys($files);
-            \sort($paths, \SORT_STRING);
-            $context = \hash_init('sha256');
-            foreach ($paths as $path) {
-                $digest = (string)@\hash_file('sha256', $path);
-                if (\preg_match('/^[a-f0-9]{64}$/D', $digest) !== 1) {
-                    return self::$currentSourceSignatures[$cacheKey] = null;
-                }
-                \hash_update($context, $digest . "\0");
-            }
-
-            return self::$currentSourceSignatures[$cacheKey] = \hash_final($context);
+            return self::$currentSourceSignatures[$cacheKey] = ReflectionArtifactContract::computeSourceSignature(
+                $className,
+                $methodName,
+                $factoryMode,
+                $class,
+            );
         } catch (\Throwable) {
             return self::$currentSourceSignatures[$cacheKey] = null;
         }
@@ -2278,6 +2300,8 @@ class ObjectManager implements ManagerInterface
      */
     private static function parseMethodParamsMetadata($instance_or_class, string $methodsName): array
     {
+        self::$parseMethodParamsMetadataCalls++;
+
         // 获取类名
         $className = $instance_or_class instanceof ReflectionClass
             ? $instance_or_class->getName()
@@ -2483,34 +2507,19 @@ class ObjectManager implements ManagerInterface
                         }
                         
                         $actualClass = $paramTypeName;
-                        $args = interface_exists($actualClass, true)
-                            ? []
-                            : self::getMethodParams($actualClass);
-                        // 接口由 module.php provides 权威解析；具体类沿用原 DI。
+                        // Empty-arg getInstance so compiled factories remain eligible for
+                        // dependencies (non-empty $args permanently bypasses that path).
+                        // initClassInstance already runs __init / Factory create.
                         try {
-                            $newObj = ObjectManager::getInstance($actualClass, $args);
+                            $newObj = ObjectManager::getInstance($actualClass);
                         } catch (\ReflectionException $e) {
                             if (CLI or DEV) {
                                 echo('无法实例化该类：' . $actualClass . '，错误：' . $e->getMessage());
                             }
                             throw new Exception('无法实例化该类：' . $paramTypeName . '，错误：' . $e->getMessage());
                         }
-                        // PHP 8 性能优化：直接调用 __init，使用 try-catch 处理不存在的情况
-                        try {
-                            $newObj->__init();
-                        } catch (\Error $e) {
-                            // __init 方法不存在，忽略
-                        }
-                        // 处理 Factory 类
-                        if ($newObj instanceof FactoryObjectInterface) {
-                            $instance = $newObj->create();
-                            self::setScopedInstance($paramTypeName, $instance);
-                            self::setScopedInstance($actualClass, $newObj);
-                            $paramArr[] = $instance;
-                        } else {
-                            self::setScopedInstance($paramTypeName, $newObj);
-                            $paramArr[] = $newObj;
-                        }
+                        self::setScopedInstance($paramTypeName, $newObj);
+                        $paramArr[] = $newObj;
                     } catch (\Exception $e) {
                         // 如果实例化失败，记录错误但继续处理其他参数
                         if (CLI or DEV) {

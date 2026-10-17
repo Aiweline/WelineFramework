@@ -27,11 +27,29 @@ class HookReader extends ModuleFileReader
     private static array $staticFileListCache = [];
 
     /**
-     * @var array|null generated/hooks.php registry cache for the current WLS request.
+     * @var array|null generated/hooks.php registry cache (process-hot; mtime-checked).
      */
     private static ?array $registryCache = null;
     private static ?int $registryCacheMtime = null;
 
+    /**
+     * WLS 请求边界对称 API：静态列表/registry 为进程热缓存，请求边界不清理。
+     */
+    public static function resetRequestState(): void
+    {
+    }
+
+    /**
+     * 进程级失效别名（与 Taglib::invalidateProcessCaches 对称）。
+     */
+    public static function invalidateProcessCaches(): void
+    {
+        self::clearStaticCache();
+    }
+
+    /**
+     * 进程级失效（worker cache clear、hooks 注册表变更等）。
+     */
     public static function clearStaticCache(): void
     {
         self::$staticFileListCache = [];

@@ -55,12 +55,20 @@ final class FpcDiag
     /**
      * 记录一条决策事件。未启用时立即返回；任何写入失败都不得影响请求。
      *
+     * 昂贵实参（sha1 切片、variant 构建、URI 规范化等）应通过 $dataFn 延迟求值：
+     * 未 armed 时闭包一次都不会执行，热路径零开销；armed 时按调用顺序合并到 $data 之后。
+     *
      * @param array<string, mixed> $data
+     * @param (\\Closure(): array<string, mixed>)|null $dataFn
      */
-    public static function event(string $name, array $data = []): void
+    public static function event(string $name, array $data = [], ?\Closure $dataFn = null): void
     {
         if (!self::isArmed()) {
             return;
+        }
+
+        if ($dataFn !== null) {
+            $data = \array_merge($data, $dataFn());
         }
 
         $payload = [

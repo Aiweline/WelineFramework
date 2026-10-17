@@ -26,7 +26,7 @@ use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\Runtime;
 
 class Core
@@ -402,14 +402,14 @@ class Core
             $eventManager = ObjectManager::getInstance(EventsManager::class);
         }
         $eventData = ['router' => $this];
-        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::pushCurrentParent('controller_chain::router_before_start');
+        $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
+        if (TraceGate::isArmed()) {
+            TraceGate::pushCurrentParent('controller_chain::router_before_start');
         }
         $eventManager->dispatch('Weline_Framework_Router::before_start', $eventData);
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan('controller_chain::router_before_start', (microtime(true) - $t0) * 1000, 'controller');
+        if (TraceGate::isArmed()) {
+            TraceGate::popCurrentParent();
+            TraceGate::recordSpan('controller_chain::router_before_start', (microtime(true) - $t0) * 1000, 'controller');
         }
 
         # 获取URL
@@ -516,10 +516,13 @@ class Core
             explode('/', $url),
             static fn(string $segment): bool => $segment !== ''
         ));
-        // Url::parser already removed rest_* area keys. Remaining "api" is the
-        // Weline_Api module router (same string as rest_frontend prefix) — do not
-        // strip it again or backend/frontend Auth routes 404.
-        $detectAreaPrefix = !$this->isAlreadyInRestApiArea();
+        // Url::parser already consumed the area key for the current request.
+        // Remaining "api" is the Weline_Api module router (same string as
+        // rest_frontend prefix) — do not strip it again on PC backend/frontend
+        // or REST areas, or those module routes 404. Only re-detect when the
+        // first segment is still this request's area_router (backend key left
+        // in getUrlPath()).
+        $detectAreaPrefix = $this->shouldDetectAreaPrefixForStrippedPath($segments);
         $localization = State::resolveLocalizationFromPathSegments($segments, $detectAreaPrefix);
         $remaining = \is_array($localization['remaining'] ?? null)
             ? $localization['remaining']
@@ -554,6 +557,45 @@ class Core
         }
 
         return false;
+    }
+
+    /**
+     * Whether resolveLocalization should treat the first segment as an area key.
+     *
+     * @param list<string> $segments
+     */
+    private function shouldDetectAreaPrefixForStrippedPath(array $segments): bool
+    {
+        if ($this->isAlreadyInRestApiArea()) {
+            return false;
+        }
+
+        $first = (string)($segments[0] ?? '');
+        if ($first === '') {
+            return false;
+        }
+
+        $area = isset($this->request_area) ? (string)$this->request_area : '';
+        $isPcArea = $area === \Weline\Framework\Controller\Data\DataInterface::type_pc_BACKEND
+            || $area === \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND;
+        if (!$isPcArea && isset($this->request)) {
+            try {
+                if (\method_exists($this->request, 'isBackend') && $this->request->isBackend()) {
+                    $isPcArea = true;
+                }
+            } catch (\Throwable) {
+                // ignore — fall through to default detect
+            }
+        }
+
+        if ($isPcArea) {
+            $areaRouter = isset($this->area_router) ? (string)$this->area_router : '';
+            // Backend key still present as first segment → strip it; otherwise keep
+            // module routers that collide with rest_frontend ("api").
+            return $areaRouter !== '' && $first === $areaRouter;
+        }
+
+        return true;
     }
     
     /**
@@ -617,14 +659,14 @@ class Core
         }
 
         if ($this->shouldUseDirectGeneratedRouteFastPath($hasPreviewTheme, $isFrontendRootRequest)) {
-            $fastPathStart = RequestLifecycleTrace::isEnabled() ? \microtime(true) : 0.0;
+            $fastPathStart = TraceGate::isArmed() ? \microtime(true) : 0.0;
             $directRouteUrl = $this->resolveDirectGeneratedRouteUrl();
             if ($directRouteUrl !== null) {
                 $this->routerGeneratedGetParams = [];
                 $this->request->setRule([]);
                 $this->request->setData([]);
                 if ($fastPathStart > 0) {
-                    RequestLifecycleTrace::recordSpan(
+                    TraceGate::recordSpan(
                         'router::direct_generated_route_fast_path',
                         (\microtime(true) - $fastPathStart) * 1000,
                         'framework',
@@ -635,7 +677,7 @@ class Core
                 return $directRouteUrl;
             }
             if ($fastPathStart > 0) {
-                RequestLifecycleTrace::recordSpan(
+                TraceGate::recordSpan(
                     'router::direct_generated_route_fast_path_miss',
                     (\microtime(true) - $fastPathStart) * 1000,
                     'framework'
@@ -1670,8 +1712,8 @@ class Core
             $routeProfileLast = $now;
             $routeProfile['elapsed_ms'] = \round(($now - $routeProfileStart) * 1000, 2);
             // Panel / lifecycle 细粒度：挂在 router_start 下，锁定 action/fpc/模板前各切片。
-            if ($deltaMs > 0.0 && RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::recordSpan(
+            if ($deltaMs > 0.0 && TraceGate::isArmed()) {
+                TraceGate::recordSpan(
                     'router.route::' . $name,
                     $deltaMs,
                     'router',
@@ -1925,23 +1967,23 @@ class Core
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $eventData = ['route' => $this];
 
-        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::pushCurrentParent('controller_chain::route_before');
+        $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
+        if (TraceGate::isArmed()) {
+            TraceGate::pushCurrentParent('controller_chain::route_before');
         }
         $eventManager->dispatch('Weline_Framework_Router::route_before', $eventData);
         $routeProfileMark('route_before');
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan('controller_chain::route_before', (microtime(true) - $t0) * 1000, 'controller');
+        if (TraceGate::isArmed()) {
+            TraceGate::popCurrentParent();
+            TraceGate::recordSpan('controller_chain::route_before', (microtime(true) - $t0) * 1000, 'controller');
         }
 
-        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+        $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
         $dispatch = ObjectManager::getInstance((string)$dispatch);
         $dispatch->__setModuleInfo($this->router);
         $routeProfileMark('controller_init');
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::recordSpan('controller_chain::controller_init', (microtime(true) - $t0) * 1000, 'controller');
+        if (TraceGate::isArmed()) {
+            TraceGate::recordSpan('controller_chain::controller_init', (microtime(true) - $t0) * 1000, 'controller');
         }
         # 检测控制器方法
         if (!method_exists($dispatch, $method)) {
@@ -1950,10 +1992,10 @@ class Core
         }
         FiberOutputBuffer::beginCapture();
 
-        // 将 action_execute 设为当前父节点，控制器内通过 RequestLifecycleTrace::recordSpan() 打的子 span 会挂到本节点下，便于拆分 1.x s 耗时
-        $actionSpanStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::pushCurrentParent('controller_chain::action_execute');
+        // 将 action_execute 设为当前父节点，控制器内通过 TraceGate::recordSpan() 打的子 span 会挂到本节点下，便于拆分 1.x s 耗时
+        $actionSpanStart = TraceGate::isArmed() ? microtime(true) : 0.0;
+        if (TraceGate::isArmed()) {
+            TraceGate::pushCurrentParent('controller_chain::action_execute');
         }
         try {
             $result = call_user_func([$dispatch, $method], /*...$this->request->getParams()*/);
@@ -1980,17 +2022,17 @@ class Core
             }
             
             # ----------事件：route_after（控制器链路二层）------------
-            $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::pushCurrentParent('controller_chain::route_after');
+            $t0 = TraceGate::isArmed() ? microtime(true) : 0.0;
+            if (TraceGate::isArmed()) {
+                TraceGate::pushCurrentParent('controller_chain::route_after');
             }
             $resultData = new DataObject(['result' => $result, 'route' => $this]);
             $eventData = ['data' => $resultData];
             $eventManager->dispatch('Weline_Framework_Router::route_after', $eventData);
             $routeProfileMark('route_after');
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::popCurrentParent();
-                RequestLifecycleTrace::recordSpan('controller_chain::route_after', (microtime(true) - $t0) * 1000, 'controller');
+            if (TraceGate::isArmed()) {
+                TraceGate::popCurrentParent();
+                TraceGate::recordSpan('controller_chain::route_after', (microtime(true) - $t0) * 1000, 'controller');
             }
             // 获取输出缓冲区内容（控制器可能直接输出而不是返回）
             $output = FiberOutputBuffer::endCapture();
@@ -2022,9 +2064,9 @@ class Core
             $routeProfilePublish('throwable');
             throw $e;
         } finally {
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::popCurrentParent();
-                RequestLifecycleTrace::recordSpan('controller_chain::action_execute', (microtime(true) - $actionSpanStart) * 1000, 'controller');
+            if (TraceGate::isArmed()) {
+                TraceGate::popCurrentParent();
+                TraceGate::recordSpan('controller_chain::action_execute', (microtime(true) - $actionSpanStart) * 1000, 'controller');
             }
         }
 

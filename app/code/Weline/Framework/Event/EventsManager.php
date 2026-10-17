@@ -10,7 +10,7 @@
 namespace Weline\Framework\Event;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Config\XmlReader;
 use Weline\Framework\App\Exception;
@@ -78,6 +78,11 @@ class EventsManager
      */
     public function resetRequestState(): void
     {
+        foreach ($this->events as $event) {
+            if ($event instanceof Event) {
+                $event->releaseBoundPayload();
+            }
+        }
         $this->events = [];
         // observer/module 状态属于进程级只读缓存，频繁清空会导致每请求重扫事件配置。
         // 仅重置请求内 Event 实例数据，避免跨请求污染同时保留热缓存性能。
@@ -243,7 +248,7 @@ class EventsManager
      */
     public function dispatch(string $eventName, mixed &$data = []): static
     {
-        $traceStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+        $traceStart = TraceGate::isArmed() ? microtime(true) : 0.0;
 
         // Resolve the current registry snapshot once, including cached negative results.
         $observers = $this->getEventObservers($eventName);
@@ -251,47 +256,37 @@ class EventsManager
         // 检查是否有监听器，没有则直接跳过
         if (empty($observers)) {
             if ($traceStart > 0) {
-                RequestLifecycleTrace::recordSpan('event::' . $eventName, (microtime(true) - $traceStart) * 1000, 'event');
+                TraceGate::recordSpan('event::' . $eventName, (microtime(true) - $traceStart) * 1000, 'event');
             }
             return $this;
         }
 
         if (is_array($data)) {
-            $data['observers'] = $observers;
-            $event = (new Event($data))->setName($eventName);
+            // Array payload is bound by reference; observers stay off the caller bag.
+            $event = Event::forArrayPayload($data, $observers, $eventName);
         } else {
             $event = (new Event(['data' => &$data, 'observers' => $observers]))->setName($eventName);
         }
 
+        if (isset($this->events[$eventName]) && $this->events[$eventName] instanceof Event) {
+            $this->events[$eventName]->releaseBoundPayload();
+        }
         $this->events[$eventName] = $event;
         $event->dispatch();
 
-        // 将 Observer 修改的 Event 数据回写到调用方的 $data（通过引用）
-        // Event 构造时复制了 $data，Observer 修改的是 Event 内部的 _data，
-        // 必须在 dispatch 完成后同步回去，否则调用方永远读不到 Observer 设置的 result/error 等
-        if (is_array($data)) {
-            $modifiedInner = $event->getEvenData();
-            if ($modifiedInner !== null) {
-                if (array_key_exists('data', $data)) {
-                    // 结构化事件数据（如 ['data' => ['operation' => ...]]）
-                    $data['data'] = $modifiedInner;
-                } elseif (is_array($modifiedInner)) {
-                    // 扁平事件数据（如 ['provider' => ..., 'result' => null]）
-                    foreach ($modifiedInner as $k => $v) {
-                        $data[$k] = $v;
-                    }
-                }
-            }
-        } else {
+        if (!is_array($data)) {
             // 标量（如 seo_decode 的 $url）：观察者 setData('data', $decoded) 后需回写给调用方
             $modified = $event->getEvenData('data');
             if ($modified !== null) {
                 $data = $modified;
             }
+        } else {
+            // Caller bag is source of truth after in-place observer mutations; drop Event→bag stickiness.
+            $event->releaseBoundPayload();
         }
 
         if ($traceStart > 0) {
-            RequestLifecycleTrace::recordSpan('event::' . $eventName, (microtime(true) - $traceStart) * 1000, 'event');
+            TraceGate::recordSpan('event::' . $eventName, (microtime(true) - $traceStart) * 1000, 'event');
         }
         return $this;
     }

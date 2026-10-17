@@ -31,6 +31,13 @@ final class FpcBypassEvaluator
      */
     public static function shouldBypass(array $facts, ?array $rules = null): bool
     {
+        $env = \is_array($facts['env'] ?? null) ? $facts['env'] : [];
+        // Install opt-in: admin「链接自带签章」开启期间必须打穿 FPC，否则 HIT 旧 HTML
+        // 永远不会走到 Url::getUrl 的 append 路径（与面板文案一致）。
+        if (self::envFlagOn($env, 'dev_auto_pierce')) {
+            return true;
+        }
+
         $rules ??= self::loadRules();
         if ($rules === []) {
             return false;
@@ -41,7 +48,6 @@ final class FpcBypassEvaluator
         foreach ((\is_array($facts['headers'] ?? null) ? $facts['headers'] : []) as $name => $value) {
             $headers[\strtolower((string)$name)] = (string)$value;
         }
-        $env = \is_array($facts['env'] ?? null) ? $facts['env'] : [];
 
         $pierceOk = (bool)($facts['pierce_stamp_valid'] ?? false)
             || \in_array(\strtolower(\trim((string)($env['fpc_pierce_stamp'] ?? ''))), ['1', 'true', 'yes', 'on'], true);
@@ -107,6 +113,13 @@ final class FpcBypassEvaluator
     {
         return [
             [
+                'id' => 'framework.dev_auto_pierce',
+                'match' => [
+                    'env_flags' => ['dev_auto_pierce'],
+                ],
+                'effect' => 'bypass_serve_and_publish',
+            ],
+            [
                 'id' => 'theme.editor_preview_query',
                 'match' => [
                     // Presence alone must not bypass; require_pierce_stamp gated in shouldBypass().
@@ -122,6 +135,7 @@ final class FpcBypassEvaluator
                         'nocache',
                         '_wb_nc',
                         'wls_tpl_perf',
+                        'wls_tpl_route',
                     ],
                 ],
                 'effect' => 'bypass_serve_and_publish',
@@ -247,17 +261,25 @@ final class FpcBypassEvaluator
             return false;
         }
         foreach ($flags as $flag) {
-            $flag = (string)$flag;
-            if ($flag === '' || !\array_key_exists($flag, $env)) {
-                continue;
-            }
-            $value = \strtolower(\trim((string)$env[$flag]));
-            if (\in_array($value, ['1', 'true', 'yes', 'on'], true)) {
+            if (self::envFlagOn($env, (string)$flag)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $env
+     */
+    private static function envFlagOn(array $env, string $flag): bool
+    {
+        if ($flag === '' || !\array_key_exists($flag, $env)) {
+            return false;
+        }
+        $value = \strtolower(\trim((string)$env[$flag]));
+
+        return \in_array($value, ['1', 'true', 'yes', 'on'], true);
     }
 
     /**

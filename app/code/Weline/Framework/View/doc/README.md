@@ -4,7 +4,8 @@ View 模块提供模板渲染和标签编译功能。
 
 ## 核心组件
 
-- **Template** - 模板渲染引擎
+- **Template** - 模板 Facade（`fetch` / `getHook` + `resolve` / `include` / `capture`）
+- **View/Engine** - 运行时内核（stream / capture / include）；见 [运行时引擎.md](运行时引擎.md)
 - **Taglib** - 标签编译器（v2 极致性能版）
 - **Block** - 视图块基类
 

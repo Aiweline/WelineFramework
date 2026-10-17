@@ -15,9 +15,10 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\PostResponseCaptureMode;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\ProcessSharedInterface;
 
@@ -99,7 +100,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         if (!KeyBuilder::policyAllowsSharedCache($policy)) {
             return $this->rememberForRequest($policy->resource, $logicalKey, $builder);
         }
-        $traceMeta = RequestLifecycleTrace::isEnabled() ? [
+        $traceMeta = TraceGate::isArmed() ? [
             'resource' => $policy->resource,
             'scope' => $policy->scope,
             'logical_key_hash' => hash('sha256', $logicalKey),
@@ -134,7 +135,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         callable $builder,
     ): mixed {
         $policy = $this->resolvePolicy($policy);
-        $traceMeta = RequestLifecycleTrace::isEnabled() ? [
+        $traceMeta = TraceGate::isArmed() ? [
             'resource' => $policy->resource,
             'scope' => $policy->scope,
             'logical_key_hash' => hash('sha256', $logicalKey),
@@ -337,7 +338,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             'keys' => \count($toFetch),
             'custom_dimensions' => true,
         ];
-        $cachedMap = RequestLifecycleTrace::measurePhase(
+        $cachedMap = TraceGate::measurePhase(
             'storefront.cache.shared_read_batch',
             fn(): array => $this->readSharedMultiple($pool, array_keys($toFetch), true),
             $phaseMeta,
@@ -413,7 +414,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             $freshTtlSeconds,
             $staleTtlSeconds ?? ($freshTtlSeconds * self::DEFAULT_STALE_MULTIPLIER),
         );
-        $traceMeta = RequestLifecycleTrace::isEnabled() ? ['logical_key_hash' => hash('sha256', $logicalKey)] : null;
+        $traceMeta = TraceGate::isArmed() ? ['logical_key_hash' => hash('sha256', $logicalKey)] : null;
         return $this->rememberKey($poolIdentity, $this->scopedKey($logicalKey, $dimensionFlags), $freshTtlSeconds, $builder, $staleTtlSeconds, false, $traceMeta, 0);
     }
 
@@ -482,7 +483,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             $preflightLockKey = 'storefront-hot-cache:' . hash('sha256', $processKey);
             // Explicit policy waits use a local file lock: WLS CAS may block well beyond the policy budget under load.
             $preflightFlight = $this->preflightFileFlight ??= new SingleFlightCoordinator(preferFileLock: true);
-            $preflightToken = RequestLifecycleTrace::measurePhase(
+            $preflightToken = TraceGate::measurePhase(
                 'storefront.cache.singleflight_acquire',
                 fn(): mixed => $preflightFlight->acquire($preflightLockKey, $singleFlightWaitMs, 30),
                 $phaseMeta,
@@ -492,7 +493,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             }
             if ($preflightToken !== null) {
                 try {
-                    $cached = RequestLifecycleTrace::measurePhase(
+                    $cached = TraceGate::measurePhase(
                         'storefront.cache.shared_read',
                         fn(): mixed => $this->readShared($pool, $scopedKey, $explicitDimensions),
                         $phaseMeta,
@@ -524,7 +525,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                             return $entry['payload'];
                         }
                     }
-                    $payload = RequestLifecycleTrace::measurePhase(
+                    $payload = TraceGate::measurePhase(
                         'storefront.cache.builder',
                         $builder,
                         $phaseMeta,
@@ -537,7 +538,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                     }
                     $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
                     $wrote = false;
-                    RequestLifecycleTrace::measurePhase(
+                    TraceGate::measurePhase(
                         'storefront.cache.shared_write',
                         function () use ($pool, $scopedKey, $entry, $freshTtlSeconds, $staleTtlSeconds, $explicitDimensions, &$wrote): void {
                             $wrote = $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
@@ -560,7 +561,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             }
         }
 
-        $cached = RequestLifecycleTrace::measurePhase(
+        $cached = TraceGate::measurePhase(
             'storefront.cache.shared_read',
             fn(): mixed => $this->readShared($pool, $scopedKey, $explicitDimensions),
             $phaseMeta,
@@ -599,7 +600,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         // Policies without a wait budget remain non-blocking. A timed-out
         // policy preflight also falls through here and keeps the old
         // shared-recheck-then-build availability path.
-        $token = RequestLifecycleTrace::measurePhase(
+        $token = TraceGate::measurePhase(
             'storefront.cache.singleflight_acquire',
             fn(): mixed => $flight->acquire($lockKey, 0, 30),
             $phaseMeta,
@@ -611,7 +612,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         // 重跑冷构建并反复写共享池（占位失败风暴下会自旋放大）。持锁者完成
         // 后，本请求走下方 raw builder 只服务当前请求、不落缓存。
         if ($token === null) {
-            return RequestLifecycleTrace::measurePhase(
+            return TraceGate::measurePhase(
                 'storefront.cache.builder_uncontended',
                 $builder,
                 $phaseMeta,
@@ -619,7 +620,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         }
         try {
             // Another worker may have populated the entry while this worker waited.
-            $cached = RequestLifecycleTrace::measurePhase(
+            $cached = TraceGate::measurePhase(
                 'storefront.cache.shared_recheck',
                 fn(): mixed => $this->readShared($pool, $scopedKey, $explicitDimensions),
                 $phaseMeta,
@@ -638,7 +639,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                     return $entry['payload'];
                 }
             }
-            $payload = RequestLifecycleTrace::measurePhase(
+            $payload = TraceGate::measurePhase(
                 'storefront.cache.builder',
                 $builder,
                 $phaseMeta,
@@ -651,7 +652,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             }
             $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
             $wrote = false;
-            RequestLifecycleTrace::measurePhase(
+            TraceGate::measurePhase(
                 'storefront.cache.shared_write',
                 function () use ($pool, $scopedKey, $entry, $freshTtlSeconds, $staleTtlSeconds, $explicitDimensions, &$wrote): void {
                     $wrote = $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
@@ -753,8 +754,8 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     }
 
     /**
-     * Soft memory-pressure trim: prefer product/card keys, then FIFO.
-     * Shared/MS payloads remain; next hit rebuilds L1.
+     * Soft memory-pressure trim: prefer product/card, then non-chrome FIFO.
+     * Chrome / theme.head Layer B peeks are last-resort only (Shared/MS remains).
      */
     public static function trimProcessCacheToBudget(int $maxBytes): int
     {
@@ -769,6 +770,8 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         ) {
             $evictKey = self::oldestProductProcessKey()
                 ?? self::oldestCardProcessKey()
+                ?? self::oldestNonChromeProcessKey()
+                ?? self::oldestChromeProcessKey()
                 ?? \array_key_first(self::$processCache);
             if (!\is_string($evictKey)) {
                 break;
@@ -904,15 +907,34 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
 
     private static function isChromeProcessKey(string $key): bool
     {
+        $lower = \strtolower($key);
         $pool = \explode('|', $key, 2)[0] ?? $key;
-
-        return \str_contains(\strtolower($pool), 'chrome');
+        if (\str_contains(\strtolower($pool), 'chrome')) {
+            return true;
+        }
+        // Layer B peeks: theme.chrome.* / theme.head.* / storefront_chrome|head resource.
+        return \str_contains($lower, 'theme.chrome.')
+            || \str_contains($lower, 'theme.head.')
+            || \str_contains($lower, 'storefront_chrome')
+            || \str_contains($lower, 'storefront_head');
     }
 
     private static function oldestChromeProcessKey(): ?string
     {
         foreach (\array_keys(self::$processCache) as $processKey) {
             if (self::isChromeProcessKey($processKey)) {
+                return $processKey;
+            }
+        }
+
+        return null;
+    }
+
+    /** Soft trim: FIFO among non-chrome keys so Layer B chrome peeks survive longer. */
+    private static function oldestNonChromeProcessKey(): ?string
+    {
+        foreach (\array_keys(self::$processCache) as $processKey) {
+            if (!self::isChromeProcessKey($processKey)) {
                 return $processKey;
             }
         }
@@ -1183,6 +1205,8 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         }
         self::$refreshQueued[$queueKey] = true;
 
+        // SCOPE: keys are precomputed; builder must be self-contained under restored
+        // website/store/channel/lang/currency. Avoid FULL fiber capture stickiness.
         PostResponseTaskQueue::enqueue('storefront-hot-cache:' . \sha1($queueKey), function () use (
             $poolIdentity,
             $scopedKey,
@@ -1227,7 +1251,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                     $flight->release($lockKey, $token);
                 }
             }
-        });
+        }, 0.0, PostResponseCaptureMode::Scope);
     }
 
 }

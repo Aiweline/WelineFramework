@@ -132,25 +132,12 @@ class Taglib
     // ====== 原有缓存 ======
     
     /**
-     * 性能优化：缓存变量解析结果
+     * 进程热缓存：变量解析结果（纯函数，跨请求可复用；配置变更时 invalidateProcessCaches）
      */
     private static array $varParserCache = [];
-    
-    /**
-     * 性能优化：缓存 Hook 检查结果
-     */
-    private static array $hookCheckCache = [];
-    
-    /**
-     * 性能优化：缓存编译后的正则表达式
-     */
-    private static array $compiledRegexCache = [];
 
     /** @var \WeakMap<\Fiber, int>|null */
     private static ?\WeakMap $fiberCompileDepth = null;
-
-    /** @var \WeakMap<\Fiber, array>|null */
-    private static ?\WeakMap $fiberCachedTags = null;
 
     private static function currentFiber(): ?\Fiber
     {
@@ -187,33 +174,18 @@ class Taglib
         self::$fiberCompileDepth[$fiber] = $depth;
     }
 
+    /**
+     * Process-hot tag config (built-in + generated/taglibs.php). Not request-scoped —
+     * shared across Fibers; invalidated only via {@see invalidateProcessCaches()}.
+     */
     private static function getCachedTagsValue(): ?array
     {
-        $fiber = self::currentFiber();
-        if ($fiber === null) {
-            return self::$cachedTags;
-        }
-
-        return self::$fiberCachedTags[$fiber] ?? null;
+        return self::$cachedTags;
     }
 
     private static function setCachedTagsValue(?array $tags): void
     {
-        $fiber = self::currentFiber();
-        if ($fiber === null) {
-            self::$cachedTags = $tags;
-            return;
-        }
-
-        self::$fiberCachedTags ??= new \WeakMap();
-        if ($tags === null) {
-            if (isset(self::$fiberCachedTags[$fiber])) {
-                unset(self::$fiberCachedTags[$fiber]);
-            }
-            return;
-        }
-
-        self::$fiberCachedTags[$fiber] = $tags;
+        self::$cachedTags = $tags;
     }
     
     // ====== 懒加载获取器 ======
@@ -1071,16 +1043,34 @@ class Taglib
         $this->getTagRegistry()->clearCache();
         $this->stageResolver?->clearCache();
         TemplateCacheManager::getInstance()->clearAll();
-        self::clearStaticCaches();
+        self::invalidateProcessCaches();
     }
 
-    public static function clearStaticCaches(): void
+    /**
+     * WLS 请求边界：只复位请求态（嵌套编译深度）。
+     * 不丢弃 varParser / tags 进程热缓存。
+     */
+    public static function resetRequestState(): void
+    {
+        self::setCompileDepthValue(0);
+    }
+
+    /**
+     * 进程级失效：标签注册表/模块变更、cache clear、显式 clearCache 时调用。
+     * 必须直接清主槽（不可只走「当前 Fiber」路径），挂起 Fiber 恢复后也会 miss 并重建。
+     */
+    public static function invalidateProcessCaches(): void
     {
         self::$varParserCache = [];
-        self::$hookCheckCache = [];
-        self::$compiledRegexCache = [];
-        self::setCachedTagsValue(null);
-        self::setCompileDepthValue(0);
+        self::$cachedTags = null;
+    }
+
+    /**
+     * 兼容别名：等同 {@see invalidateProcessCaches()}（进程失效，非请求边界）。
+     */
+    public static function clearStaticCaches(): void
+    {
+        self::invalidateProcessCaches();
     }
 
     /**
@@ -1585,8 +1575,8 @@ class Taglib
     }
 
     /**
-     * 静态缓存：在同一个请求中缓存已收集的标签配置
-     * 避免重复的事件分发和标签类实例化
+     * 进程热缓存：已收集的标签配置（内置 + generated/taglibs.php）。
+     * 跨请求/Fiber 共享；仅 invalidateProcessCaches 清空。
      */
     private static ?array $cachedTags = null;
 
@@ -2587,6 +2577,30 @@ class Taglib
                         return file_get_contents($template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_TEMPLATE, $templatePath));
                     }
             ],
+            // <w:partial-once path="Module::…/card.phtml" var="$_w_card"/>
+            // Emits a one-time resolve(); loop bodies should $this->include($var, $data).
+            'partial-once' => [
+                'tag' => 1,
+                'tag-self-close' => 1,
+                'attr' => ['path' => 1, 'var' => 0],
+                'callback' =>
+                    static function ($tag_key, $config, $tag_data, $attributes): string {
+                        $path = \trim((string)($attributes['path'] ?? ''));
+                        if ($path === '') {
+                            $path = \trim((string)($tag_data[2] ?? $tag_data[1] ?? ''));
+                        }
+                        if ($path === '') {
+                            return '<!-- warning: partial-once missing path -->';
+                        }
+                        $var = \trim((string)($attributes['var'] ?? '$_weline_partial_once_path'));
+                        if (!\preg_match('/^\$[A-Za-z_][A-Za-z0-9_]*$/', $var)) {
+                            return '<!-- warning: partial-once var must be a simple $identifier -->';
+                        }
+                        $pathExport = \var_export($path, true);
+
+                        return self::PHP_OPEN_TAG . 'php ' . $var . ' = $this->resolve(' . $pathExport . ');' . self::PHP_CLOSE_TAG;
+                    }
+            ],
             'js' => [
                 'tag' => 1,
                 'attr' => ['type' => 0, 'async' => 0, 'defer' => 0, 'crossorigin' => 0, 'integrity' => 0, 'nomodule' => 0, 'id' => 0, 'class' => 0, 'data-*' => 0],
@@ -3093,7 +3107,7 @@ class Taglib
         $tags = $reordered_tags;
         
         // 为内置标签添加 w: 前缀别名（支持 <w:hook> 等写法）
-        $builtinTagsWithAlias = ['hook', 'if', 'else', 'elseif', 'foreach', 'for', 'switch', 'case', 'var', 'lang', 'block', 'template'];
+        $builtinTagsWithAlias = ['hook', 'if', 'else', 'elseif', 'foreach', 'for', 'switch', 'case', 'var', 'lang', 'block', 'template', 'partial-once'];
         foreach ($builtinTagsWithAlias as $tagName) {
             if (isset($tags[$tagName]) && !isset($tags['w:' . $tagName])) {
                 $tags['w:' . $tagName] = $tags[$tagName];

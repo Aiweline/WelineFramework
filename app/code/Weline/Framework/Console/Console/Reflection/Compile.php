@@ -14,6 +14,7 @@ namespace Weline\Framework\Console\Console\Reflection;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
+use Weline\Framework\Manager\Di\ReflectionArtifactContract;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -58,9 +59,10 @@ class SafeRecursiveDirectoryIterator extends \RecursiveDirectoryIterator
  *
  * 1. 正则扫描框架内 ObjectManager::getInstance/make 的 ::class 调用（热点类）
  * 2. 扫描所有已注册模块的类，预编译构造函数参数元数据
- * 3. 生成 reflection_metadata.php 与 compiled_factories.php
+ * 3. 生成 reflection_metadata.php 与 compiled_factories.php（v2 信封）
  *
  * 生成文件：generated/reflection_metadata.php, generated/compiled_factories.php
+ * 权威格式：ReflectionArtifactContract::*FORMAT（legacy 扁平无效）
  */
 class Compile extends CommandAbstract
 {
@@ -90,10 +92,14 @@ class Compile extends CommandAbstract
         $hotCount = \count($hotClasses);
 
         $metadata = [];
+        /** @var array<string, string> metadata cacheKey => source signature */
+        $metadataSourceSignatures = [];
         $classCount = 0;
         $errorCount = 0;
         /** @var array<string, array{className: string, constructor: array|null, useGetInstance: bool, isStaticClass: bool}> */
         $factoryCandidates = [];
+        /** @var array<string, string> FQCN => source signature */
+        $factorySourceSignatures = [];
         /** @var array<string, array{candidates_hash: string, safe: list<string>}> */
         $safeClassesCache = ['modules' => []];
         $cacheFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_safe_classes.php';
@@ -283,6 +289,15 @@ class Compile extends CommandAbstract
                             'methodName' => '__construct',
                             'params' => $paramMetadata,
                         ];
+                        $metaSignature = ReflectionArtifactContract::computeSourceSignature(
+                            $className,
+                            '__construct',
+                            false,
+                            $refClass,
+                        );
+                        if (\is_string($metaSignature)) {
+                            $metadataSourceSignatures[$cacheKey] = $metaSignature;
+                        }
                         $classCount++;
                     }
 
@@ -301,6 +316,15 @@ class Compile extends CommandAbstract
                             'useGetInstance' => $useGetInstance,
                             'isStaticClass' => $isStaticClass,
                         ];
+                        $factorySignature = ReflectionArtifactContract::computeSourceSignature(
+                            $className,
+                            null,
+                            true,
+                            $refClass,
+                        );
+                        if (\is_string($factorySignature)) {
+                            $factorySourceSignatures[$className] = $factorySignature;
+                        }
                     }
 
                     if ($verbose && !empty($paramMetadata)) {
@@ -334,24 +358,35 @@ class Compile extends CommandAbstract
         }
 
         $outputFile = $generatedDir . DIRECTORY_SEPARATOR . 'reflection_metadata.php';
+        $metadataEnvelope = [
+            'format' => ReflectionArtifactContract::REFLECTION_METADATA_FORMAT,
+            'php_version_id' => \PHP_VERSION_ID,
+            'metadata' => $metadata,
+            'source_signatures' => $metadataSourceSignatures,
+        ];
         $metadataContent = "<?php\n\n";
         $metadataContent .= "/**\n";
         $metadataContent .= " * 预编译反射元数据 - 自动生成，请勿手动编辑\n";
         $metadataContent .= " * \n";
         $metadataContent .= " * 生成时间: " . date('Y-m-d H:i:s') . "\n";
+        $metadataContent .= " * 格式: " . ReflectionArtifactContract::REFLECTION_METADATA_FORMAT . "\n";
         $metadataContent .= " * 类数量: {$classCount}\n";
         $metadataContent .= " * \n";
         $metadataContent .= " * 用途：避免 FPM/WLS 模式下每次请求都执行反射操作\n";
         $metadataContent .= " * 重新生成：php bin/w reflection:compile\n";
         $metadataContent .= " */\n\n";
-        $metadataContent .= "return " . var_export($metadata, true) . ";\n";
+        $metadataContent .= "return " . var_export($metadataEnvelope, true) . ";\n";
 
         \file_put_contents($outputFile, $metadataContent);
 
         $safeCacheContent = "<?php\n/**\n * 安全类验证缓存 - 自动生成，请勿手动编辑\n * 生成时间: " . $safeClassesCache['generated_at'] . "\n * 用途：reflection:compile 复用验证结果，减少子进程次数\n */\nreturn " . \var_export($safeClassesCache, true) . ";\n";
         \file_put_contents($cacheFile, $safeCacheContent);
 
-        $factoryCount = $this->generateCompiledFactories($factoryCandidates, $generatedDir);
+        $factoryCount = $this->generateCompiledFactories(
+            $factoryCandidates,
+            $factorySourceSignatures,
+            $generatedDir,
+        );
 
         $this->printer->success(__('反射元数据与编译型工厂预编译完成！'));
         $this->printer->note(__('  反射元数据类数: %{1}', [$classCount]));
@@ -465,18 +500,23 @@ class Compile extends CommandAbstract
     }
 
     /**
-     * 生成 compiled_factories.php：每个类对应一个闭包，运行时零反射实例化
+     * 生成 compiled_factories.php（v2 信封）：每个类对应一个闭包，运行时零反射实例化
      *
      * @param array<string, array{className: string, constructor: array|null, useGetInstance: bool, isStaticClass: bool}> $factoryCandidates
+     * @param array<string, string> $factorySourceSignatures
      */
-    private function generateCompiledFactories(array $factoryCandidates, string $generatedDir): int
-    {
+    private function generateCompiledFactories(
+        array $factoryCandidates,
+        array $factorySourceSignatures,
+        string $generatedDir,
+    ): int {
         $lines = [];
         $lines[] = "<?php";
         $lines[] = "";
         $lines[] = "/**";
         $lines[] = " * 编译型工厂容器 - 自动生成，请勿手动编辑";
         $lines[] = " * 生成时间: " . date('Y-m-d H:i:s');
+        $lines[] = " * 格式: " . ReflectionArtifactContract::COMPILED_FACTORIES_FORMAT;
         $lines[] = " * 用途：ObjectManager 无参 getInstance 时优先使用，避免反射";
         $lines[] = " * 重新生成：php bin/w reflection:compile 或 s:up";
         $lines[] = " */";
@@ -484,9 +524,18 @@ class Compile extends CommandAbstract
         $lines[] = "use Weline\\Framework\\Manager\\ObjectManager;";
         $lines[] = "";
         $lines[] = "return [";
+        $lines[] = "    'format' => '" . ReflectionArtifactContract::COMPILED_FACTORIES_FORMAT . "',";
+        $lines[] = "    'php_version_id' => " . \PHP_VERSION_ID . ",";
+        $lines[] = "    'factories' => [";
 
         $count = 0;
+        $emittedSignatures = [];
         foreach ($factoryCandidates as $className => $info) {
+            $signature = $factorySourceSignatures[$className] ?? null;
+            if (!\is_string($signature) || \preg_match('/^[a-f0-9]{64}$/D', $signature) !== 1) {
+                continue;
+            }
+
             $useGetInstance = $info['useGetInstance'];
             $constructor = $info['constructor'] ?? null;
 
@@ -532,10 +581,18 @@ class Compile extends CommandAbstract
                 $body = "new {$fqcnForNew}(" . \implode(', ', $args) . ")";
             }
 
-            $lines[] = "    '{$keyEscaped}' => static fn() => {$body},";
+            $lines[] = "        '{$keyEscaped}' => static fn() => {$body},";
+            $emittedSignatures[$className] = $signature;
             $count++;
         }
 
+        $lines[] = "    ],";
+        $lines[] = "    'source_signatures' => [";
+        foreach ($emittedSignatures as $className => $signature) {
+            $keyEscaped = \str_replace('\\', '\\\\', $className);
+            $lines[] = "        '{$keyEscaped}' => '{$signature}',";
+        }
+        $lines[] = "    ],";
         $lines[] = "];";
         $content = \implode("\n", $lines);
 

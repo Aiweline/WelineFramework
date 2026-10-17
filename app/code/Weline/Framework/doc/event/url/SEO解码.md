@@ -30,7 +30,13 @@
 
 ```php
 // app/code/Weline/Framework/Http/Url.php
-$event->dispatch('Weline_Framework_Url::seo_decode', $url);
+$payload = [
+    'url' => $url,
+    'lookup_path' => $strippedPrettyPath, // 已去除货币/语言前缀
+    'website_id' => (int)$websiteId,
+];
+$event->dispatch('Weline_Framework_Url::seo_decode', $payload);
+// 观察者回写 $payload['url'] 为解码后的控制器路径
 ```
 
 #### 使用场景
@@ -96,21 +102,19 @@ class SeoDecodeUrlObserver implements ObserverInterface
 
 #### 事件数据
 
-`Weline_Framework_Url::seo_decode` 事件传递的数据：
+`Weline_Framework_Url::seo_decode` 事件传递**数组载荷**（引用回写）：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| url | Url | URL对象，可以修改此对象来改变解码后的URL |
+| url | string | 工作 URL；观察者解码后写回控制器路径（如 `/guide?r=northeast`） |
+| lookup_path | string | 已剥货币/语言前缀的 pretty 路径（无前导 `/`），供 rewrite 表查找 |
+| website_id | int | 当前网站 ID |
 
 **获取和修改数据**：
 
 ```php
-// 获取URL对象
-$url = $event->getData();
-
-// 修改URL对象
-$url->setPath('/new/path');
-$url->setParam('key', 'value');
+$lookup = (string)$event->getData('lookup_path');
+$event->setData('url', '/catalog/product/view?id=1');
 ```
 
 #### 使用示例

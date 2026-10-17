@@ -174,6 +174,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         'x-weline-route-',
     ];
 
+    /**
+     * Request-scoped FPC memo keys (stored in RequestContext storage, so
+     * RequestContext::init() clears them every request; see also
+     * clearRequestMemos() — invoked by clearProcessCache() and the Framework
+     * request_resetter capability for belt-and-braces request isolation).
+     */
+    private const MEMO_RAW_FULL_URI = 'fpc.memo.raw_full_uri.v1';
+    private const MEMO_CACHE_KEY_FULL_URI = 'fpc.memo.cache_key_full_uri.v1';
+    private const MEMO_CURRENT_VARIANT = 'fpc.memo.current_variant.v1';
+    private const MEMO_EFFECTIVE_FPC_POLICY = 'fpc.memo.effective_policy.v1';
+
     private ?CacheManager $cacheManager;
     private ?CachePoolInterface $cachePool;
     private ?NamespaceKeyDecorator $namespaceKeyDecorator;
@@ -298,8 +309,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                     'acquired' => true,
                     'driver' => 'shared',
                     'adapter' => \get_class($adapter),
-                    'key_sha' => \substr(\sha1($lockKey), 0, 12),
-                ]);
+                ], static fn(): array => ['key_sha' => \substr(\sha1($lockKey), 0, 12)]);
 
                 return [
                     'driver' => 'shared',
@@ -312,8 +322,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 'acquired' => false,
                 'reason' => 'shared_lock_busy',
                 'adapter' => \get_class($adapter),
-                'key_sha' => \substr(\sha1($lockKey), 0, 12),
-            ]);
+            ], static fn(): array => ['key_sha' => \substr(\sha1($lockKey), 0, 12)]);
 
             return null;
         }
@@ -323,8 +332,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             FpcDiag::event('fpc_lock', [
                 'acquired' => false,
                 'reason' => 'file_lock_busy',
-                'key_sha' => \substr(\sha1($lockKey), 0, 12),
-            ]);
+            ], static fn(): array => ['key_sha' => \substr(\sha1($lockKey), 0, 12)]);
 
             return null;
         }
@@ -685,16 +693,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $cachePool = $this->cache();
         $adapter = \method_exists($cachePool, 'getAdapter') ? $cachePool->getAdapter() : null;
         FpcDiag::event('fpc_publish_store', [
-            'key_sha' => \substr(\sha1($unifiedCacheKey), 0, 12),
-            'full_key' => $unifiedCacheKey,
-            'variant' => $variant,
             'stored' => $sharedPublished,
             'ttl' => $storeTtl,
             'policy_ttl' => $ttl,
-            'payload_keys' => \is_array($sharedPayload) ? \array_keys($sharedPayload) : [],
             'pool_class' => \get_class($cachePool),
             'adapter_class' => \is_object($adapter) ? \get_class($adapter) : '',
             'last_error' => (string)($storeError['message'] ?? ''),
+        ], static fn(): array => [
+            'key_sha' => \substr(\sha1($unifiedCacheKey), 0, 12),
+            'full_key' => $unifiedCacheKey,
+            'variant' => $variant,
+            'payload_keys' => \is_array($sharedPayload) ? \array_keys($sharedPayload) : [],
         ]);
         if (!$sharedPublished && InternalHomepagePrime::isCurrentRequest()) {
             throw new \RuntimeException('Homepage warmup could not publish the compact shared FPC payload.');
@@ -1148,8 +1157,23 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         return $this->hasLoggedInFrontendSession();
     }
 
+    /**
+     * Drop request-scoped FPC memos (URI / cache-key / variant). Signature- and
+     * identity-keyed memos self-invalidate on input change; this is the manual
+     * escape hatch — invoked from clearProcessCache() (business invalidators)
+     * and the Framework request_resetter capability (per-request isolation).
+     */
+    public static function clearRequestMemos(): void
+    {
+        RequestContext::remove(self::MEMO_RAW_FULL_URI);
+        RequestContext::remove(self::MEMO_CACHE_KEY_FULL_URI);
+        RequestContext::remove(self::MEMO_CURRENT_VARIANT);
+        RequestContext::remove(self::MEMO_EFFECTIVE_FPC_POLICY);
+    }
+
     public static function clearProcessCache(): void
     {
+        self::clearRequestMemos();
         self::$processFpcPayloadCache = [];
         self::$processFpcPayloadExpiresAt = [];
         self::$processFpcPayloadBytes = [];
@@ -1676,25 +1700,62 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             || $this->isEditorOrPreviewRequest($fullUri)
             || $this->isExcludedFrontendPath($fullUri)
             || $this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri)
-            || !$this->legacyPreRouterFpcAllowed()
         ) {
+            return false;
+        }
+        // Public pre-router FPC stays gated by legacyPreRouterFpcAllowed.
+        // Layer B forceSharedRead (Process L1 Hydrate) must still pull Shared /
+        // html-disk when a Storefront Scope installer is configured.
+        if (!$forceSharedRead && !$this->legacyPreRouterFpcAllowed()) {
             return false;
         }
 
         if (!$this->effectiveFpcPolicy($fullUri)['enabled']) {
             return false;
         }
-        $variant = $this->buildFpcVariantFromCookieHeader($cookieHeader, $fullUri);
-        $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $method, $variant);
-        if (!$forceSharedRead && $this->getProcessCachedPayload($cacheKey) !== null) {
+        $variant = null;
+        $cacheKey = '';
+        try {
+            $variant = $this->buildFpcVariantFromCookieHeader($cookieHeader, $fullUri);
+            $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $method, $variant);
+        } catch (\Throwable) {
+            // Layer B idle Fiber may lack a frozen request context; still allow
+            // html-disk→Process hydrate with a minimal anonymous variant.
+            $variant = [
+                'lang' => $this->normalizeVariantLang(self::DEFAULT_LANG),
+                'currency' => $this->normalizeVariantCurrency(self::DEFAULT_CURRENCY),
+            ];
+            try {
+                $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $method, $variant);
+            } catch (\Throwable) {
+                $cacheKey = '';
+            }
+        }
+        if ($cacheKey !== '' && !$forceSharedRead && $this->getProcessCachedPayload($cacheKey) !== null) {
             return true;
         }
 
-        $cached = $this->cache()->get($cacheKey);
-        if (\is_array($cached)) {
-            $cached = $this->hydrateSharedPayload($cached);
+        $cached = null;
+        if ($cacheKey !== '') {
+            $cached = $this->cache()->get($cacheKey);
+            if (\is_array($cached)) {
+                $cached = $this->hydrateSharedPayload($cached);
+            }
         }
         if (!$this->payloadHasAuthoritativeBody($cached)) {
+            // Layer A Cron/orchestrator may stock URL-tree html-disk without a
+            // Memory Shared L2 entry. Layer B still must hydrate Process (no SSR).
+            $cached = $this->buildProcessPayloadFromHtmlDisk($fullUri, $variant);
+            if ($this->payloadHasAuthoritativeBody($cached) && $cacheKey === '') {
+                // No namespace-decorated key available; derive a stable process key
+                // from full URI so receipts can still pin Process L1.
+                $cacheKey = KeyBuilder::build(
+                    'router',
+                    'unified-fpc:' . $fullUri . ':html-disk-hydrate:' . \strtoupper($method)
+                );
+            }
+        }
+        if (!$this->payloadHasAuthoritativeBody($cached) || $cacheKey === '') {
             // SharedState 短断或单次读失败时保留仍在自身 TTL 内的 process FPC；
             // 显式 cache-clear IPC 仍会立即清理进程缓存，不用一次瞬时故障制造下一个冷请求。
             return false;
@@ -1702,7 +1763,81 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
         $this->setProcessCachedPayload($cacheKey, $cached);
         $this->deleteProcessCachedFormattedResponsesForPayload($cacheKey);
-        return $this->getProcessCachedPayload($cacheKey) !== null;
+        if ($this->getProcessCachedPayload($cacheKey) === null) {
+            return false;
+        }
+        // Layer B / peer hydrate: pin Process receipt so READY status and Worker
+        // fast-path can adopt without waiting for a public HIT or SSR prime.
+        $cachedVariant = $cached[self::VARIANT_PAYLOAD_KEY] ?? null;
+        if (!\is_array($cachedVariant)) {
+            $cachedVariant = $variant;
+        }
+        if (\is_array($cachedVariant)) {
+            $this->registerLocalizedHomepageProcessReceipt($fullUri, $cachedVariant, $cacheKey);
+            $this->registerRootHomepageProcessReceipt($fullUri, $cachedVariant, $cacheKey);
+            $this->registerRootCatalogProcessReceipt($fullUri, $cachedVariant, $cacheKey);
+        }
+
+        return true;
+    }
+
+    /**
+     * Build a Process-ready FPC payload from URL-tree html-disk authority.
+     *
+     * @param array<string, mixed> $variant
+     * @return array<string, mixed>|null
+     */
+    private function buildProcessPayloadFromHtmlDisk(string $fullUri, array $variant): ?array
+    {
+        $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($fullUri));
+        if ($fullUri === '' || !KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+            return null;
+        }
+        $htmlDisk = FpcHtmlDiskStore::read($fullUri, 'identity');
+        if (!\is_array($htmlDisk)) {
+            $htmlDisk = FpcHtmlDiskStore::read($fullUri, 'gzip, deflate, br');
+        }
+        if (!\is_array($htmlDisk)) {
+            return null;
+        }
+        $raw = (string)($htmlDisk['body'] ?? '');
+        $diskPath = \trim((string)($htmlDisk['path'] ?? ''));
+        if ($raw === '' || $diskPath === '' || !\is_file($diskPath)) {
+            return null;
+        }
+        $encoding = ($htmlDisk['encoding'] ?? null) === 'br'
+            ? self::FPC_BODY_FILE_ENCODING_BROTLI
+            : self::FPC_BODY_FILE_ENCODING_IDENTITY;
+        $policyTtl = (int)($this->effectiveFpcPolicy($fullUri)['ttl'] ?? self::MAX_STALE_TTL_SECONDS);
+        if ($policyTtl <= 0) {
+            $policyTtl = self::MAX_STALE_TTL_SECONDS;
+        }
+        // Process L1 must stay pointer-only for multi-100KiB homepage bodies
+        // (PROCESS_FPC_INLINE_MAX_BYTES). Point at live html-disk authority.
+        $payload = [
+            KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+            KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => [
+                'Content-Type' => 'text/html; charset=utf-8',
+            ],
+            'policy_ttl' => $policyTtl,
+            self::UNIFIED_CACHE_EXPIRES_AT_KEY => \microtime(true) + $policyTtl,
+            self::VARIANT_PAYLOAD_KEY => $variant,
+            self::UNIFIED_CACHE_FPC_BODY_FILE_KEY => [
+                'path' => $diskPath,
+                'bytes' => \strlen($raw),
+                'encoding' => $encoding,
+            ],
+        ];
+        $hydrated = $this->hydrateSharedPayload($payload);
+        if (!$this->payloadHasAuthoritativeBody($hydrated)) {
+            return null;
+        }
+        $body = $this->resolvePlaintextBody($hydrated) ?? '';
+        if ($body === '' || !\Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
+            return null;
+        }
+
+        return $this->stripPlaintextWhenBrotliAuthority($hydrated);
     }
 
     /**
@@ -1836,6 +1971,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
+        $response->setHeader('X-Weline-FPC-Source', 'process');
         $this->applyFpcHitEdgeCacheHeaders($response, false, $cached);
         $this->applyFpcHitPerformanceHeaders($response, 'process', $variant);
         $this->ensureVaryHeader($response, 'Cookie');
@@ -2256,7 +2392,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'identity_digest' => \hash('sha256', $unifiedCacheKey),
             'cache_key' => $unifiedCacheKey,
             'scope_identity' => $context->scopeIdentity->toArray(),
-            'namespace_fingerprint' => $context->namespaceFingerprint,
+            // FPC-composed fingerprint (base Scope vector ∪ path Extra), not the
+            // path-stable context bag used by Phrase/HotCache.
+            'namespace_fingerprint' => $this->fpcNamespaceFingerprint($fullUri),
             'policy_fingerprint' => $policy['policy_fingerprint'],
             'policy_path' => $this->policyPath($fullUri),
             'lang' => $context->lang,
@@ -2567,18 +2705,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $privateSessionToken = '';
         // Signed-in shoppers may HIT the public guest FPC; Account soft-reconciles.
         // Never use a private-session token here (P1a hard-off).
-        // Worker fpc_probe / storefront-scoped installs skip legacy Shared rebuild
-        // here (receipt paths cover Process/Shared). Still allow cold-disk durable
-        // keyed by the caller-supplied public full URI (must include host + path).
-        if (!$this->legacyPreRouterFpcAllowed()) {
-            return $this->tryFormattedColdDiskDurableHit(
-                $fullUri,
-                $method,
-                $acceptEncoding,
-                $cookieHeader,
-                $keepAlive,
-            );
-        }
+        // When legacy Shared rebuild is gated off, still serve Layer B Process L1
+        // before falling through to Layer A html-disk (do not skip Process adopt).
+        $allowLegacyShared = $this->legacyPreRouterFpcAllowed();
         if ($loggedInFrontendSession) {
             $privateSessionToken = '';
         }
@@ -2588,6 +2717,19 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
         if (!$this->effectiveFpcPolicy($fullUri)['enabled']) {
             // Persist-until-purge: Extra policy may be gone while cold disk remains.
+            $processFirst = $this->tryFormattedProcessL1HitForFullUri(
+                $fullUri,
+                $cacheMethod,
+                $method,
+                $acceptEncoding,
+                $cookieHeader,
+                $keepAlive,
+                $hitEncoding,
+            );
+            if ($processFirst !== null) {
+                return $processFirst;
+            }
+
             return $this->tryFormattedColdDiskDurableHit(
                 $fullUri,
                 $method,
@@ -2601,6 +2743,16 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $payloadCacheKey = $cacheKey;
         $source = 'process';
         $cached = $this->getProcessCachedPayload($cacheKey);
+        if ($cached === null && !$allowLegacyShared) {
+            // Layer B miss → Layer A html-disk (no Shared rebuild on this gate).
+            return $this->tryFormattedColdDiskDurableHit(
+                $fullUri,
+                $method,
+                $acceptEncoding,
+                $cookieHeader,
+                $keepAlive,
+            );
+        }
         if ($cached === null) {
             if ($processOnly) {
                 return null;
@@ -3364,14 +3516,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $cacheSource = 'process';
         if ($cached !== null) {
             FpcDiag::event('fpc_lookup', [
-                'key_sha' => \substr(\sha1($cacheKey), 0, 12),
-                'full_key' => $cacheKey,
                 'cache_key_full_uri' => $this->getCacheKeyFullUri(),
                 'raw_full_uri' => $this->getRawFullUri(),
                 'engine_identity' => (string)(RequestContext::get('fpc.engine_identity_url', '') ?? ''),
                 'source' => 'process',
                 'found' => true,
-            ]);
+            ], static fn(): array => ['key_sha' => \substr(\sha1($cacheKey), 0, 12), 'full_key' => $cacheKey]);
         }
         if ($cached === null) {
             if ($processOnly) {
@@ -3382,16 +3532,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             self::cooperativeBuildYield();
             $cached = $this->cache()->get($cacheKey);
             $rawShared = \is_array($cached);
+            // variant stays eager: buildCurrentFpcVariant() throws on a
+            // non-cacheable context today — preserving that propagation keeps
+            // control flow identical (its cost is now memoized anyway).
             FpcDiag::event('fpc_lookup', [
-                'key_sha' => \substr(\sha1($cacheKey), 0, 12),
-                'full_key' => $cacheKey,
                 'cache_key_full_uri' => $this->getCacheKeyFullUri(),
                 'raw_full_uri' => $this->getRawFullUri(),
                 'engine_identity' => (string)(RequestContext::get('fpc.engine_identity_url', '') ?? ''),
                 'source' => 'shared',
                 'variant' => $this->buildCurrentFpcVariant(),
                 'found' => \is_array($cached),
-            ]);
+            ], static fn(): array => ['key_sha' => \substr(\sha1($cacheKey), 0, 12), 'full_key' => $cacheKey]);
             if (\is_array($cached)) {
                 $cached = $this->hydrateSharedPayload($cached);
                 if ($cached === null && $rawShared) {
@@ -3489,6 +3640,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
+        // Honest Worker Source: process|shared (edge Nginx may still inject html-disk).
+        if ($cacheSource === 'process' || $cacheSource === 'shared') {
+            $response->setHeader('X-Weline-FPC-Source', $cacheSource);
+        }
         $this->applyFpcHitEdgeCacheHeaders($response, false, $cached);
         $this->applyFpcHitPerformanceHeaders(
             $response,
@@ -4036,6 +4191,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $response->setHeader('Content-Length', (string)\strlen($encodedBody));
         $this->ensureVaryAcceptEncoding($response);
         $response->setHeader('X-Weline-FPC', 'HIT');
+        $sourceLabel = \str_starts_with($source, 'process')
+            ? 'process'
+            : (\str_starts_with($source, 'shared') ? 'shared' : $source);
+        if ($sourceLabel === 'process' || $sourceLabel === 'shared') {
+            $response->setHeader('X-Weline-FPC-Source', $sourceLabel);
+        }
         $this->applyFpcHitEdgeCacheHeaders($response, str_starts_with($source, 'stale-'), $cached);
         $response->setHeader('X-Weline-Fpc-Fresh-Until', (string)($cached[self::UNIFIED_CACHE_EXPIRES_AT_KEY] ?? 0));
         $variant = \is_array($cached[self::VARIANT_PAYLOAD_KEY] ?? null)
@@ -4759,11 +4920,49 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
                 return ['enabled' => false, 'ttl' => 0, 'policy_fingerprint' => 'scope-unavailable'];
             }
-            $path = $policyPath ?? $this->policyPath($fullUri);
             $resolver = ObjectManager::getInstance(\Weline\Framework\Controller\Extra\ExtraPolicyResolver::class);
-            // Default-allow storefront HTML: one year unless @Extra type=fpc declares otherwise.
-            $resolved = $resolver->resolveFpcForPath($path, $identity)
-                ?? ['enabled' => true, 'ttl' => 31536000, 'policy_fingerprint' => 'not-applicable'];
+            // Request-scoped memo (§3 方向二): FpcPolicySnapshot::resolve() is a
+            // pure function of (snapshot, path, scope); policyPath() is a pure
+            // function of (fullUri, websiteUrl); fpcSnapshot() is frozen per
+            // request. Structure: one generation (the snapshot array, compared
+            // by identity/content ===) guarding per-fullUri entries, each keyed
+            // by its own inputs (explicit policy path, scope, website mount).
+            // ANY input change self-invalidates (fixture/test snapshot swap
+            // builds a fresh array; URI, mount path or scope rewrite changes a
+            // string). Entries are keyed per fullUri so call sites mixing raw
+            // and canonical URIs cannot thrash a single slot. Miss cost ~0.02µs
+            // (same-zval compare) vs ~131µs resolve + path normalize.
+            $snapshot = $resolver->fpcSnapshot();
+            $memo = RequestContext::get(self::MEMO_EFFECTIVE_FPC_POLICY);
+            $entries = (\is_array($memo)
+                && ($memo['snap'] ?? null) === $snapshot
+                && \is_array($memo['entries'] ?? null))
+                ? $memo['entries']
+                : [];
+            $entrySignature = [$identity->canonicalKey(), $this->currentWebsiteUrlForPathVariant()];
+            // Composite key: callers passing an explicit $policyPath (publish)
+            // must not clobber read-path entries computed from the same URI.
+            $entryKey = $fullUri . "\x1e" . ($policyPath ?? '');
+            $entry = $entries[$entryKey] ?? null;
+            $resolved = null;
+            $path = $policyPath;
+            if (\is_array($entry)
+                && ($entry['sig'] ?? null) === $entrySignature
+                && \is_array($entry['policy'] ?? null)
+            ) {
+                $resolved = $entry['policy'];
+                $path = (string)($entry['path'] ?? $policyPath);
+            }
+            if ($resolved === null) {
+                $path = $policyPath ?? $this->policyPath($fullUri);
+                // Default-allow storefront HTML: one year unless @Extra type=fpc declares otherwise.
+                $resolved = $resolver->resolveFpcForPath($path, $identity)
+                    ?? ['enabled' => true, 'ttl' => 31536000, 'policy_fingerprint' => 'not-applicable'];
+                if (Context::hasCurrent()) {
+                    $entries[$entryKey] = ['sig' => $entrySignature, 'path' => $path, 'policy' => $resolved];
+                    RequestContext::set(self::MEMO_EFFECTIVE_FPC_POLICY, ['snap' => $snapshot, 'entries' => $entries]);
+                }
+            }
             FpcDiag::event('fpc_policy', [
                 'fingerprint' => $resolved['policy_fingerprint'] ?? 'unknown',
                 'ttl' => $resolved['ttl'] ?? null,
@@ -4850,6 +5049,96 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     {
         $configured = (int)Env::get('wls.performance.fpc_stale_ttl_seconds', self::DEFAULT_STALE_TTL_SECONDS);
         return \max(60, \min($configured, self::MAX_STALE_TTL_SECONDS));
+    }
+
+    /**
+     * Layer B Process L1 formatted HIT for Worker pre-router (before html-disk).
+     *
+     * @return array{response: string, source: string, bytes: int}|null
+     */
+    private function tryFormattedProcessL1HitForFullUri(
+        string $fullUri,
+        string $cacheMethod,
+        string $method,
+        string $acceptEncoding,
+        string $cookieHeader,
+        bool $keepAlive,
+        ?string $hitEncoding,
+    ): ?array {
+        $variant = $this->buildFpcVariantFromCookieHeader($cookieHeader, $fullUri);
+        $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $cacheMethod, $variant);
+        $cached = $this->getProcessCachedPayload($cacheKey);
+        if (!\is_array($cached)) {
+            return null;
+        }
+        if ($method === 'GET' && $hitEncoding !== null) {
+            $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey, $hitEncoding);
+            $formatted = $this->getProcessCachedFormattedResponse($formattedKey);
+            if ($formatted !== null) {
+                return [
+                    'response' => $this->withFormattedResponseConnection($formatted, $keepAlive),
+                    'source' => 'process-formatted',
+                    'bytes' => \strlen($formatted),
+                ];
+            }
+        }
+
+        return $this->buildFormattedHitArrayFromPayload(
+            $cached,
+            $cacheKey,
+            $variant,
+            $acceptEncoding,
+            $method,
+            $keepAlive,
+            true,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $cached
+     * @param array<string, mixed> $variant
+     * @return array{response: string, source: string, bytes: int}|null
+     */
+    private function buildFormattedHitArrayFromPayload(
+        array $cached,
+        string $cacheKey,
+        array $variant,
+        string $acceptEncoding,
+        string $method,
+        bool $keepAlive,
+        bool $decorateRequest,
+    ): ?array {
+        $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
+        [$responseBody, $encoding] = $this->resolveEncodedHitBody($cached, $acceptEncoding, $cacheKey);
+        $response = Response::fromContent($responseBody, $statusCode, 'text/html; charset=utf-8');
+        $this->applyCachedHeaders($response, $cached[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
+        if ($encoding !== null) {
+            $response->setHeader('Content-Encoding', $encoding);
+            $response->setHeader('Content-Length', (string)\strlen($responseBody));
+            $this->ensureVaryAcceptEncoding($response);
+        }
+        $response->setHeader('X-Weline-FPC', 'HIT');
+        $response->setHeader('X-Weline-FPC-Source', 'process');
+        $this->applyFpcHitEdgeCacheHeaders($response, false, $cached);
+        $this->applyFpcHitPerformanceHeaders($response, 'process', $variant);
+        $this->ensureVaryHeader($response, 'Cookie');
+        $response->markTelemetryPrepared();
+        if ($decorateRequest) {
+            $response = $this->markCacheHit($response);
+        }
+        $http = $response->toHttpString($keepAlive);
+        if (\strtoupper($method) === 'HEAD') {
+            $headerEnd = \strpos($http, "\r\n\r\n");
+            if ($headerEnd !== false) {
+                $http = \substr($http, 0, $headerEnd + 4);
+            }
+        }
+
+        return [
+            'response' => $http,
+            'source' => 'process',
+            'bytes' => $decorateRequest ? \strlen($http) : \strlen($responseBody),
+        ];
     }
 
     /**
@@ -5368,9 +5657,25 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if (!$context->cacheable) {
             throw new \LogicException(__('Storefront 缓存上下文尚未完成版本冻结'));
         }
+        // StorefrontCacheKeyContext is final readonly — instance identity (===)
+        // changes exactly when the frozen context is replaced, so keying the
+        // memo on the object is self-invalidating (locale/currency fixtures
+        // install a new instance per change).
+        $memo = RequestContext::get(self::MEMO_CURRENT_VARIANT);
+        if (\is_array($memo)
+            && ($memo['ctx'] ?? null) === $context
+            && \is_array($memo['val'] ?? null)
+        ) {
+            return $memo['val'];
+        }
         // App freezes the validated visitor-path locale before FPC. Do not
         // re-read mutable State after freezing its namespace generation vector.
-        return $this->variantFromStorefrontContext($context, []);
+        $value = $this->variantFromStorefrontContext($context, []);
+        if (Context::hasCurrent()) {
+            RequestContext::set(self::MEMO_CURRENT_VARIANT, ['ctx' => $context, 'val' => $value]);
+        }
+
+        return $value;
     }
 
     /**
@@ -5412,9 +5717,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     }
 
     /**
-     * NamespaceGenerationSnapshot freezes the complete storefront version
-     * vector for the current request/Fiber, so a build cannot switch versions
-     * between lock acquisition, payload publication and receipt capture.
+     * NamespaceGenerationSnapshot freezes the base storefront version vector
+     * for the current request/Fiber; FPC then composes path Extra on top so a
+     * build cannot switch versions between lock, publication and receipt.
      */
     private function decorateFpcLogicalKey(string $logicalKey, string $fullUri): string
     {
@@ -5424,13 +5729,29 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         );
     }
 
+    /**
+     * FPC generation fingerprint = Scope-stable base ∪ path Extra namespaces.
+     * StorefrontCacheKeyContext.namespaceFingerprint stays base-only (Phrase/HotCache).
+     */
     private function fpcNamespaceFingerprint(string $fullUri): string
     {
         $context = $this->currentStorefrontCacheKeyContext();
         if (!$context->cacheable || $context->namespaceFingerprint === null) {
             throw new \LogicException(__('FPC 缺少已冻结的 Storefront 命名空间指纹'));
         }
-        return $context->namespaceFingerprint;
+        $identity = $context->scopeIdentity;
+        if ($identity === null) {
+            throw new \LogicException(__('FPC 缺少已冻结的 ScopeIdentity'));
+        }
+        try {
+            return $this->storefrontCacheKeyContextResolver()->fingerprintForIdentity(
+                $identity,
+                $context->translationLocales,
+                $this->policyPath($fullUri),
+            );
+        } catch (\Throwable $e) {
+            throw new \LogicException(__('FPC 无法合成路径 Extra 命名空间指纹'), 0, $e);
+        }
     }
 
     private function namespaceKeyDecorator(): NamespaceKeyDecorator
@@ -5949,6 +6270,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         // generated/html/live/{host}/{path}. Frozen visitor pretty path wins;
         // reject /guide?view=|/guide?d= controller identities (they collapse
         // to /guide after path-only query strip).
+        //
+        // The frozen branch is the hot path (App freezes early each request) —
+        // it must stay first so the memo below never taxes it.
         try {
             $frozen = \trim((string)(RequestContext::get('fpc.engine_identity_url', '') ?? ''));
             if ($frozen !== ''
@@ -5960,6 +6284,18 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             }
         } catch (\Throwable) {
             // RequestContext may be unavailable in early CLI probes.
+        }
+
+        // Non-frozen fallback: memo keyed on a signature over every input this
+        // branch reads, so ANY writer (canonicalize, applyParsedUrl, rewrite,
+        // unit fixtures) changing a source value invalidates by signature change.
+        $memoSignature = $this->rawFullUriMemoSignature();
+        $memo = RequestContext::get(self::MEMO_RAW_FULL_URI);
+        if (\is_array($memo)
+            && ($memo['sig'] ?? null) === $memoSignature
+            && \is_string($memo['val'] ?? null)
+        ) {
+            return $memo['val'];
         }
 
         $full = \trim((string)(\w_env('full_request_uri', '') ?? ''));
@@ -5982,6 +6318,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 ?: ($_SERVER['REQUEST_URI'] ?? '')
             ),
         );
+        $value = '';
         if ($originPath !== '' && \str_starts_with($originPath, '/')) {
             $scheme = '';
             $host = '';
@@ -6016,20 +6353,93 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 ));
             }
             if ($host !== '') {
-                return $scheme . '://' . $host . $originPath;
+                $value = $scheme . '://' . $host . $originPath;
             }
         }
 
-        if ($full !== '' && \Weline\Framework\Http\Fpc\FpcEngineIdentity::isGuideControllerUri($full)) {
-            return '';
+        if ($value === '') {
+            if ($full !== '' && \Weline\Framework\Http\Fpc\FpcEngineIdentity::isGuideControllerUri($full)) {
+                return '';
+            }
+
+            $value = $full;
         }
 
-        return $full;
+        if (Context::hasCurrent()) {
+            RequestContext::set(self::MEMO_RAW_FULL_URI, ['sig' => $memoSignature, 'val' => $value]);
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return string Signature over every input getRawFullUri() reads
+     *               (Env mappings + $_SERVER fallbacks). Pure change detector —
+     *               over-invalidation is safe, under-invalidation is not.
+     */
+    private function rawFullUriMemoSignature(): string
+    {
+        return \implode("\x1f", [
+            (string)(RequestContext::get('fpc.engine_identity_url', '') ?? ''),
+            (string)(\w_env('full_request_uri', '') ?? ''),
+            (string)WelineEnv::server('WELINE_VISITOR_REQUEST_URI', ''),
+            (string)($_SERVER['WELINE_VISITOR_REQUEST_URI'] ?? ''),
+            (string)WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', ''),
+            (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? ''),
+            (string)WelineEnv::server('ORIGIN_REQUEST_URI', ''),
+            (string)($_SERVER['ORIGIN_REQUEST_URI'] ?? ''),
+            (string)WelineEnv::server('REQUEST_URI', ''),
+            (string)($_SERVER['REQUEST_URI'] ?? ''),
+            (string)WelineEnv::server('REQUEST_SCHEME', ''),
+            (string)($_SERVER['REQUEST_SCHEME'] ?? ''),
+            (string)WelineEnv::server('HTTP_HOST', ''),
+            (string)($_SERVER['HTTP_HOST'] ?? ''),
+        ]);
     }
 
     private function getCacheKeyFullUri(): string
     {
-        return $this->canonicalizeFullUriForCacheKey($this->getRawFullUri());
+        $rawFullUri = $this->getRawFullUri();
+        // canonicalizeFullUriForCacheKey early-returns when the raw URI carries
+        // no query — cover only that input in the signature so the clean-URL
+        // hot path never pays GET/cookie/stamp probing it cannot affect.
+        $memoSignature = $rawFullUri !== '' && \str_contains($rawFullUri, '?')
+            ? $this->cacheKeyFullUriMemoSignature($rawFullUri)
+            : 'noquery:' . $rawFullUri;
+        $memo = RequestContext::get(self::MEMO_CACHE_KEY_FULL_URI);
+        if (\is_array($memo)
+            && ($memo['sig'] ?? null) === $memoSignature
+            && \is_string($memo['val'] ?? null)
+        ) {
+            return $memo['val'];
+        }
+
+        $value = $this->canonicalizeFullUriForCacheKey($rawFullUri);
+        if (Context::hasCurrent()) {
+            RequestContext::set(self::MEMO_CACHE_KEY_FULL_URI, ['sig' => $memoSignature, 'val' => $value]);
+        }
+
+        return $value;
+    }
+
+    /**
+     * When the raw URI carries a query, the derivation additionally probes
+     * FpcPierceStamp (isValidCurrentRequest: QUERY_STRING parse + GET merge +
+     * cookie compare), so the memo signature must cover exactly those inputs.
+     * The install secret is created before any serving request can present a
+     * stamp; if that invariant were ever broken the signature would not observe it.
+     */
+    private function cacheKeyFullUriMemoSignature(string $rawFullUri): string
+    {
+        $get = WelineEnv::getGet(null, []);
+
+        return \implode("\x1f", [
+            $rawFullUri,
+            (string)WelineEnv::server('QUERY_STRING', ''),
+            \is_array($get) ? (string)\serialize($get) : '',
+            (string)WelineEnv::server('HTTP_COOKIE', ''),
+            (string)(WelineEnv::get('server.http_cookie', '') ?? ''),
+        ]);
     }
 
     private function canonicalizeFullUriForCacheKey(string $fullUri): string
@@ -6087,6 +6497,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $requestUri = $path . ($query !== '' ? '?' . $query : '');
         $originalGet = (array)WelineEnv::getGet(null, []);
         $filteredGet = $this->filterGetParamsForCacheKey($originalGet);
+
+        // §7 memo fence: input signatures would auto-invalidate after the URI
+        // rewrite below, but drop the memo explicitly so no stale value can
+        // survive this canonicalize boundary even if a signature input changes.
+        RequestContext::remove(self::MEMO_RAW_FULL_URI);
+        RequestContext::remove(self::MEMO_CACHE_KEY_FULL_URI);
 
         WelineEnv::setServer('REQUEST_URI', $requestUri, 'FPC canonical cache build');
         WelineEnv::setServer('QUERY_STRING', $query, 'FPC canonical cache build');
@@ -6185,7 +6601,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function filterGetParamsForCacheKey(array $params): array
     {
         // Path-only product FPC: drop every query param except diagnostic storm keys
-        // (_wb_nc / wls_tpl_perf) which must stay out of IGNORABLE and keep a distinct
+        // (_wb_nc / wls_tpl_perf / wls_tpl_route) which must stay out of IGNORABLE and keep a distinct
         // Process/Shared identity so storm MISS is never promoted into clean-URL HIT KPI.
         $kept = [];
         foreach ($params as $key => $value) {
@@ -6241,7 +6657,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function isCacheKeyRetainedQueryParam(string $key): bool
     {
         $key = \strtolower(\trim($key));
-        if ($key !== '_wb_nc' && $key !== 'wls_tpl_perf') {
+        if ($key !== '_wb_nc' && $key !== 'wls_tpl_perf' && $key !== 'wls_tpl_route') {
             return false;
         }
 

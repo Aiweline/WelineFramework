@@ -316,7 +316,7 @@ URL生成参数,URL生成参数
 规范化访客URI,规范化访客URI
 "在网站匹配与 SEO 解码之前触发。观察者可保留访客 origin_uri，同时改写 routing_uri（例如剥除 /~preview/{token}/ 命名空间）。","在网站匹配与 SEO 解码之前触发。观察者可保留访客 origin_uri，同时改写 routing_uri（例如剥除 /~preview/{token}/ 命名空间）。"
 SEO解码,SEO解码
-"在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。","在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。"
+"在URL SEO解码时触发。载荷为数组：url（可回写）、lookup_path（已剥币语的 pretty 路径）、website_id。","在URL SEO解码时触发。载荷为数组：url（可回写）、lookup_path（已剥币语的 pretty 路径）、website_id。"
 视图文件获取,视图文件获取
 "在获取视图文件时触发，允许其他模块自定义视图文件路径。可以通过修改 filename 字段来改变要加载的视图文件。","在获取视图文件时触发，允许其他模块自定义视图文件路径。可以通过修改 filename 字段来改变要加载的视图文件。"
 "解析主题静态资源 URL","解析主题静态资源 URL"
@@ -992,6 +992,7 @@ operation：%{id},operation：%{id}
 "- 已跳过类映射缓存（--skip-classmap）","- 已跳过类映射缓存（--skip-classmap）"
 "✓ 优化缓存生成完成。","✓ 优化缓存生成完成。"
 "- 路由磁盘产物缺失或为空，忽略 Controller 源指纹，强制全量重扫","- 路由磁盘产物缺失或为空，忽略 Controller 源指纹，强制全量重扫"
+"- 检测到 %{1} 个 PC 路由孤儿模块（有 Controller 却不在 backend_pc/frontend_pc），强制重扫：%{2}","- 检测到 %{1} 个 PC 路由孤儿模块（有 Controller 却不在 backend_pc/frontend_pc），强制重扫：%{2}"
 "- classmap 无变化，跳过重新生成","- classmap 无变化，跳过重新生成"
 "- 类映射缓存已生成，共 %{1} 个类","- 类映射缓存已生成，共 %{1} 个类"
 "- 跳过 PSR-4 缓存生成：Composer autoload 未找到","- 跳过 PSR-4 缓存生成：Composer autoload 未找到"
@@ -2493,6 +2494,8 @@ Operation：%{1}.%{2},操作：%{1}.%{2}
 "FPC 命中响应装饰器返回了无效响应","FPC 命中响应装饰器返回了无效响应"
 "Storefront 缓存上下文尚未完成版本冻结","Storefront 缓存上下文尚未完成版本冻结"
 "FPC 缺少已冻结的 Storefront 命名空间指纹","FPC 缺少已冻结的 Storefront 命名空间指纹"
+"FPC 缺少已冻结的 ScopeIdentity","FPC 缺少已冻结的 ScopeIdentity"
+"FPC 无法合成路径 Extra 命名空间指纹","FPC 无法合成路径 Extra 命名空间指纹"
 开始更新所有模块的路由...,开始更新所有模块的路由...
 开始更新指定模块的路由：%{1},开始更新指定模块的路由：%{1}
 "模块 %{1} 路由注册失败：%{2}","模块 %{1} 路由注册失败：%{2}"
@@ -2513,6 +2516,8 @@ Operation：%{1}.%{2},操作：%{1}.%{2}
 路由路径,路由路径
 HTTP方法,HTTP方法
 控制器,控制器
+"Compile and seal logical→tpl/com view file-map under generated/view/file-map","Compile and seal logical→tpl/com view file-map under generated/view/file-map"
+"在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。","在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。"
 "ChangedType %{type} Recipe 需要 urls，Enricher/impact 仍为空","ChangedType %{type} Recipe 需要 urls，Enricher/impact 仍为空"
 "未找到 E2E 目录：%{1}","未找到 E2E 目录：%{1}"
 "模块 %{1} 未找到 E2E 用例，退出。","模块 %{1} 未找到 E2E 用例，退出。"

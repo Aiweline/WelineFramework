@@ -270,7 +270,7 @@ class SchedulerSystem
             $timeoutSec = \max(0.0, $timeoutSec - (\hrtime(true) - $windowStartNs) / 1_000_000_000);
         }
         // Core I/O must not autoload request tracing outside an already traced request.
-        if (!\class_exists(RequestLifecycleTrace::class, false) || !RequestLifecycleTrace::isEnabled()) {
+        if (!\class_exists(TraceGate::class, false) || !TraceGate::isArmed()) {
             if (!self::$schedulerActive || !self::$ioWaitEnabled || !\Fiber::getCurrent()) {
                 return self::selectOnce($stream, $writable, $timeoutSec);
             }
@@ -382,7 +382,7 @@ class SchedulerSystem
                 }
                 $meta['io_resolution'] = $ioTiming->resolution ?? null;
                 try {
-                    RequestLifecycleTrace::recordSpan('runtime.io.await_socket', $durationMs, 'runtime', null, $meta);
+                    TraceGate::recordSpan('runtime.io.await_socket', $durationMs, 'runtime', null, $meta);
                 } catch (\Throwable) {
                     // Observability must preserve the original await result or exception.
                 }
@@ -570,7 +570,7 @@ class SchedulerSystem
             return;
         }
 
-        if (!\class_exists(RequestLifecycleTrace::class, false) || !RequestLifecycleTrace::isEnabled()) {
+        if (!\class_exists(TraceGate::class, false) || !TraceGate::isArmed()) {
             self::dispatchWait('yield', []);
             self::suspendCurrentFiber();
             return;
@@ -581,7 +581,7 @@ class SchedulerSystem
         $durationMs = (\hrtime(true) - $startNs) / 1_000_000;
         if ($durationMs >= 5.0) {
             try {
-                RequestLifecycleTrace::recordSpan('runtime.yield.wait', $durationMs, 'runtime');
+                TraceGate::recordSpan('runtime.yield.wait', $durationMs, 'runtime');
             } catch (\Throwable) {
                 // Observability must not change yield semantics.
             }

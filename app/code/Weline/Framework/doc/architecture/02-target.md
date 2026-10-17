@@ -67,9 +67,13 @@ flowchart LR
 迁移桥解析；PROD/WLS 缺失产物、格式不匹配或服务未编译时必须
 fail closed。全局 Provider/Runtime 解析器在切换前仍保持现有路径，避免
 Phase 1 将兼容桥误当成已完成的全量迁移。
-`reflection:compile` 与 `generated/compiled_factories.php` 是 ObjectManager 旧桥接，
+`reflection:compile` 与 `generated/compiled_factories.php` /
+`generated/reflection_metadata.php` 是 ObjectManager 旧桥接，
 不是 2.0 容器的权威产物；只在未迁移调用点仍需兼容时保留，
 最后一个 allowlist 清零后删除，禁止两套工厂同时扩展。
+OM 桥权威信封为 `weline-compiled-factories/v2` 与
+`weline-reflection-metadata/v2`（含 `php_version_id` + `source_signatures`）；
+legacy 扁平 `return [FQCN=>…]` 运行时无效，须重新 `reflection:compile`。
 
 所有 Framework PHP 注册表先在目标同目录写完整临时文件，再由统一
 publisher 发布。POSIX 使用同文件系统 `rename` 原子替换；Windows 在独占

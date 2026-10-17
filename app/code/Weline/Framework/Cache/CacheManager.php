@@ -129,6 +129,12 @@ class CacheManager implements CacheManagerInterface, ProcessSharedInterface
             'durable' => true,
             'tip' => '货币装配缓存（豁免 WLS 内存劫持；换货币冷启动）',
         ],
+        'weline_currency_switcher_island' => [
+            'ttl' => 3600,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '店面货币切换器选项岛 HotCache（豁免 WLS 内存劫持；按 lang 共享）',
+        ],
         'i18n' => [
             'ttl' => 86400,
             'permanent' => true,

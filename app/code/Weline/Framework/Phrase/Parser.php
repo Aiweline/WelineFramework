@@ -19,7 +19,7 @@ use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\MemDiag;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\StateManager;
@@ -129,7 +129,7 @@ class Parser
 
     /**
      * @DESC         # 翻译解析函数
-     * DEV环境下解析字词并收集到generated/language/words.php
+     * 运行时词典来自 generated/language/{locale}.php 与区袋；无 words.php 回退。
      * @AUTH    秋枫雁飞
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/8/16 22:50
@@ -199,76 +199,54 @@ class Parser
             return $words;
         }
 
-        if (Runtime::isPersistent()) {
-            self::ensureStateRegistered();
-            $requestState->usedWords[$words] = $words;
-            self::enterTranslationResolution();
-            try {
-                // 请求覆盖词典只读；缺词不收集、不 hydrate。
-                $lang = State::getLangLocal();
-                $eventTranslation = self::translateFromEventDictionary($words, $lang);
-                if ($eventTranslation !== null) {
-                    return self::maybeMarkInlinePhrase($words, $eventTranslation);
-                }
-                if (EventDictionary::isExclusive($lang)) {
-                    return self::maybeMarkInlinePhrase($words, $words);
-                }
-
-                $layers = RequestLifecycleTrace::measurePhase(
-                    'i18n.phrase.layered_words',
-                    static fn(): array => self::getCurrentLayeredWords(),
-                );
-                $translationCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $words;
-                $requestWords = &DictionaryCacheNamespace::localCache($requestState->translatedWords, self::workerTranslatedWordCacheMax(), self::layerLocales($layers));
-                if (isset($requestWords[$translationCacheKey]) && \is_string($requestWords[$translationCacheKey])) {
-                    return self::maybeMarkInlinePhrase($words, $requestWords[$translationCacheKey]);
-                }
-
-                $resolved = RequestLifecycleTrace::measurePhase(
-                    'i18n.phrase.resolve',
-                    static fn(): string => self::translateWordFromLayers($words, $layers),
-                );
-                if (!\is_string($resolved) || $resolved === '') {
-                    $resolved = $words;
-                }
-
-                // CJK identity miss on a non-zh locale must not poison request cache:
-                // early __() before prefetchWords would otherwise lock Chinese into
-                // H1/title for the rest of the request even after dictionary prefetch.
-                if (
-                    $resolved === $words
-                    && self::sourceContainsCjk($words)
-                    && !self::isChineseLocaleCode((string)($layers['lang'] ?? ''))
-                ) {
-                    return self::maybeMarkInlinePhrase($words, $resolved);
-                }
-
-                return $requestWords[$translationCacheKey] = self::maybeMarkInlinePhrase($words, $resolved);
-            } finally {
-                self::leaveTranslationResolution();
-            }
-        }
-
-        // CLI / FPM：只读文件层 + 进程缓存；缺词原样返回，禁止写回词典 / 收集 / DB hydrate。
-        self::getWords();
+        // WLS / CLI / FPM：分层查找；缺词原样返回，禁止写回词典 / 收集 / DB hydrate。
+        // 显式全词库物化仅经 getWords()，热路径不得 array_merge 整袋。
+        self::ensureStateRegistered();
         $requestState->usedWords[$words] = $words;
-
-        $lang = State::getLangLocal();
-        $eventTranslation = self::translateFromEventDictionary($words, $lang);
-        if ($eventTranslation !== null) {
-            return self::maybeMarkInlinePhrase($words, $eventTranslation);
-        }
-        if (EventDictionary::isExclusive($lang)) {
-            return self::maybeMarkInlinePhrase($words, $words);
-        }
-
-        if (isset(self::$words[$words])) {
-            $translated = self::$words[$words];
-            if (\is_string($translated) && $translated !== '' && $translated !== $words) {
-                return self::maybeMarkInlinePhrase($words, $translated);
+        self::enterTranslationResolution();
+        try {
+            $lang = State::getLangLocal();
+            $eventTranslation = self::translateFromEventDictionary($words, $lang);
+            if ($eventTranslation !== null) {
+                return self::maybeMarkInlinePhrase($words, $eventTranslation);
             }
+            if (EventDictionary::isExclusive($lang)) {
+                return self::maybeMarkInlinePhrase($words, $words);
+            }
+
+            $layers = TraceGate::measurePhase(
+                'i18n.phrase.layered_words',
+                static fn(): array => self::getCurrentLayeredWords(),
+            );
+            $translationCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $words;
+            $requestWords = &DictionaryCacheNamespace::localCache($requestState->translatedWords, self::workerTranslatedWordCacheMax(), self::layerLocales($layers));
+            if (isset($requestWords[$translationCacheKey]) && \is_string($requestWords[$translationCacheKey])) {
+                return self::maybeMarkInlinePhrase($words, $requestWords[$translationCacheKey]);
+            }
+
+            $resolved = TraceGate::measurePhase(
+                'i18n.phrase.resolve',
+                static fn(): string => self::translateWordFromLayers($words, $layers),
+            );
+            if (!\is_string($resolved) || $resolved === '') {
+                $resolved = $words;
+            }
+
+            // CJK identity miss on a non-zh locale must not poison request cache:
+            // early __() before prefetchWords would otherwise lock Chinese into
+            // H1/title for the rest of the request even after dictionary prefetch.
+            if (
+                $resolved === $words
+                && self::sourceContainsCjk($words)
+                && !self::isChineseLocaleCode((string)($layers['lang'] ?? ''))
+            ) {
+                return self::maybeMarkInlinePhrase($words, $resolved);
+            }
+
+            return $requestWords[$translationCacheKey] = self::maybeMarkInlinePhrase($words, $resolved);
+        } finally {
+            self::leaveTranslationResolution();
         }
-        return self::maybeMarkInlinePhrase($words, $words);
     }
 
     /**
@@ -324,25 +302,19 @@ class Parser
     {
         $result = [];
         $requestState = self::requestState();
-        $layers = Runtime::isPersistent() ? self::getCurrentLayeredWords() : null;
-        $layerCacheKey = \is_array($layers) ? (string)($layers['cache_key'] ?? '') : '';
+        $layers = self::getCurrentLayeredWords();
+        $layerCacheKey = (string)($layers['cache_key'] ?? '');
         foreach ($requestState->usedWords as $word) {
-            // 获取翻译（如果存在）
-            if (Runtime::isPersistent()) {
-                $translationCacheKey = $layerCacheKey . '|' . $word;
-                if (!\array_key_exists($translationCacheKey, $requestState->translatedWords)) {
-                    DictionaryCacheNamespace::localCache($requestState->translatedWords, self::workerTranslatedWordCacheMax(), self::layerLocales($layers))[$translationCacheKey] = self::translateWordFromLayers(
-                        $word,
-                        $layers,
-                    );
-                }
-                $result[$word] = DictionaryCacheNamespace::localCache($requestState->translatedWords, self::workerTranslatedWordCacheMax(), self::layerLocales($layers))[$translationCacheKey];
-            } elseif (isset(self::$words[$word])) {
-                $result[$word] = self::$words[$word];
-            } else {
-                // 如果没有翻译，使用原词
-                $result[$word] = $word;
+            $translationCacheKey = $layerCacheKey . '|' . $word;
+            $requestWords = &DictionaryCacheNamespace::localCache(
+                $requestState->translatedWords,
+                self::workerTranslatedWordCacheMax(),
+                self::layerLocales($layers),
+            );
+            if (!\array_key_exists($translationCacheKey, $requestWords)) {
+                $requestWords[$translationCacheKey] = self::translateWordFromLayers($word, $layers);
             }
+            $result[$word] = $requestWords[$translationCacheKey];
         }
         return $result;
     }
@@ -1434,36 +1406,11 @@ class Parser
                 self::touchHeavyLocaleResident($lang);
                 return $merged;
             } catch (\Throwable) {
-                // 回退到总词典文件
+                // 区袋/整袋失败：不回退 words.php（已废除），返回空词典。
             }
         }
 
-        $all_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-        if (!is_file($all_words_file)) {
-            return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024, [$lang])[$cache_key] = [];
-        }
-
-        try {
-            if (\function_exists('opcache_invalidate')) {
-                @opcache_invalidate($all_words_file, true);
-            }
-            $all_words_data = (array)include $all_words_file;
-            $all_words = [];
-
-            if (isset($all_words_data['all_words']) && is_array($all_words_data['all_words'])) {
-                $all_words = array_merge($all_words, $all_words_data['all_words']);
-            }
-
-            if (isset($all_words_data[$lang]) && is_array($all_words_data[$lang])) {
-                $all_words = array_merge($all_words, self::extractModuleWords($all_words_data[$lang], $modules));
-            }
-
-            $merged = DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024, [$lang])[$cache_key] = $all_words;
-            self::touchHeavyLocaleResident($lang);
-            return $merged;
-        } catch (\Throwable) {
-            return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024, [$lang])[$cache_key] = [];
-        }
+        return DictionaryCacheNamespace::localCache(self::$workerLocaleWordsCache, 1024, [$lang])[$cache_key] = [];
     }
 
     /**
@@ -2077,7 +2024,7 @@ class Parser
                     }
                     try {
                         // 与普通解析复用同一词条键，由统一缓存池执行 WLS 批量传输。
-                        $translations = RequestLifecycleTrace::measurePhase(
+                        $translations = TraceGate::measurePhase(
                             'i18n.phrase.exact_dictionary_batch',
                             static fn(): array => $provider->exactWords($candidateLocale, $unresolved),
                             ['locale' => $candidateLocale, 'words' => \count($unresolved)],

@@ -339,7 +339,7 @@ return [
     ],
     'Weline_Framework_Url::seo_decode' => [
         'name' => __('SEO解码'),
-        'description' => __('在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。'),
+        'description' => __('在URL SEO解码时触发。载荷为数组：url（可回写）、lookup_path（已剥币语的 pretty 路径）、website_id。'),
         'doc' => 'url/SEO解码.md',
     ],
     

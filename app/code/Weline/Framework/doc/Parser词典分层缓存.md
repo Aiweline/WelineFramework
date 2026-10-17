@@ -9,7 +9,7 @@ WLS 请求在路由、Observer 和视图执行过程中逐步发现模块。公�
 - 模块 CSV 的 locale fallback 合并结果按 generation、目标语言、默认语言和模块复用一次，仍在原 `workerModuleWordsCache` 中管理。
 - 普通解析按原模块优先级、locale fallback 和增量发布顺序查找译文；请求 overlay/exclusive 优先。最终译文及已确认的缺失词继续复用现有 `workerTranslatedWordsCache`，不新增业务缓存。
 - 层构建时已经确认的字典完成事实随层携带，负词解析不再逐词重复检查所有模块。失败或未完成的加载不发布完整层，也不把暂时原词回退冻结为最终译文。
-- 只有显式 `getWords()` 或旧的完整词典消费者物化合并数组。非持久 CLI 的显式全词库语义保留；空模块 WLS 请求仍只按需逐词回退。
+- 只有显式 `getWords()` 或旧的完整词典消费者物化合并数组。**CLI / FPM 热路径（`processWords` / `__()`）与 WLS 同走分层查找**，不再强制 `getWords()` 整袋 merge；非持久环境的显式全词库 API 语义仍保留给 `getWords()`；空模块请求仍只按需逐词回退。
 
 ## 定向验证
 

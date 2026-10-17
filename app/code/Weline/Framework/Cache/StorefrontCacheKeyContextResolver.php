@@ -204,30 +204,30 @@ final class StorefrontCacheKeyContextResolver implements ProcessSharedInterface
         return array_values(array_unique($paths));
     }
 
-    /** @return list<string> */
+    /**
+     * Path Extra namespaces join the FPC generation vector only.
+     *
+     * Scope freeze ({@see freezeCurrent}) must stay path-stable for Phrase/HotCache.
+     * Never infer Extra from the current Request URI when $policyPath is null —
+     * that contaminated StorefrontCacheKeyContext.namespaceFingerprint with FPC
+     * path policy and cold-loaded fpcSnapshot on every freeze.
+     *
+     * @return list<string>
+     */
     private function extraNamespacesForCurrentRequest(?string $policyPath = null): array
     {
         try {
-            if (!class_exists(\Weline\Framework\Controller\Extra\ExtraPolicyResolver::class)) {
+            if ($policyPath === null || $policyPath === '') {
                 return [];
             }
-            $path = $policyPath ?? '';
-            if ($policyPath === null && Context::hasCurrent()) {
-                $uri = (string)(RequestContext::get('request.uri')
-                    ?? $_SERVER['REQUEST_URI']
-                    ?? '');
-                $path = \Weline\Framework\Controller\Extra\FpcPolicySnapshot::normalizePath(
-                    $uri, (string)\Weline\Framework\Env\WelineEnv::get('website_url', ''),
-                );
-            }
-            if ($path === '') {
+            if (!class_exists(\Weline\Framework\Controller\Extra\ExtraPolicyResolver::class)) {
                 return [];
             }
             /** @var \Weline\Framework\Controller\Extra\ExtraPolicyResolver $resolver */
             $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
                 \Weline\Framework\Controller\Extra\ExtraPolicyResolver::class
             );
-            return $resolver->namespacesForPath((string)$path, 'fpc');
+            return $resolver->namespacesForPath((string)$policyPath, 'fpc');
         } catch (\Throwable) {
             return [];
         }

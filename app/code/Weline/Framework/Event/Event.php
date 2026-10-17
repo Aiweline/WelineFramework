@@ -18,10 +18,68 @@ use Weline\Framework\Output\Cli\Printing as CliPrinting;
 use Weline\Framework\Output\Debug\Printing;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\Registry\Service\RegistryProgress;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 
 class Event extends \Weline\Framework\DataObject\DataObject
 {
+    /** Observer configs — never written into the caller payload bag. */
+    private array $observerConfigs = [];
+
+    /** True when {@see $boundPayload} is bound by reference to the dispatch caller. */
+    private bool $payloadBound = false;
+
+    /**
+     * Caller array payload (same zval as EventsManager::dispatch &$data).
+     * Untyped so PHP can keep the reference.
+     *
+     * @var array|null
+     */
+    private $boundPayload = null;
+
+    /**
+     * Bind an array dispatch payload by reference and keep observers private.
+     *
+     * @param array<string, mixed> $payload
+     * @param list<array<string, mixed>|ObserverInterface> $observers
+     */
+    public static function forArrayPayload(array &$payload, array $observers, string $name = ''): self
+    {
+        $event = new self([]);
+        $event->boundPayload =& $payload;
+        $event->payloadBound = true;
+        $event->observerConfigs = $observers;
+        if ($name !== '') {
+            $event->setName($name);
+        }
+
+        return $event;
+    }
+
+    /**
+     * Drop the reference to the caller array bag after dispatch / request reset.
+     *
+     * Must rebind before nulling — a direct `$this->boundPayload = null` would
+     * overwrite the caller's array via the live reference.
+     */
+    public function releaseBoundPayload(): void
+    {
+        if (!$this->payloadBound) {
+            return;
+        }
+
+        $detached = null;
+        $this->boundPayload =& $detached;
+        unset($detached);
+        $this->boundPayload = null;
+        $this->payloadBound = false;
+    }
+
+    /** @internal diagnostics / unit tests */
+    public function isPayloadBound(): bool
+    {
+        return $this->payloadBound;
+    }
+
     public function __construct(array|string $data = [], array $legacyData = [])
     {
         $legacyName = null;
@@ -34,11 +92,11 @@ class Event extends \Weline\Framework\DataObject\DataObject
         // 保持观察者配置数组结构，不在此处实例化
         // 实例化将在 dispatch() 方法中按需进行
         if (isset($data['observers'])) {
-            // 确保 observers 是数组
             if (!is_array($data['observers'])) {
                 $data['observers'] = [];
             }
-            // 保持原始配置数组结构，不进行实例化
+            $this->observerConfigs = $data['observers'];
+            unset($data['observers']);
         }
         parent::__construct($data);
 
@@ -60,6 +118,10 @@ class Event extends \Weline\Framework\DataObject\DataObject
 
     public function setData(array|string $key, mixed $value = null): static
     {
+        if ($this->payloadBound) {
+            return $this->setBoundPayloadData($key, $value);
+        }
+
         $eventData = $this->_getData('data');
         if (!$eventData) {
             if (is_array($key)) {
@@ -95,8 +157,16 @@ class Event extends \Weline\Framework\DataObject\DataObject
 
     public function getEvenData(string $key = ''): mixed
     {
+        if ($this->payloadBound) {
+            return $this->getBoundEvenData($key);
+        }
+
         $eventData = $this->_getData('data');
         if ($key === '') {
+            return $eventData;
+        }
+        // Same contract as getBoundEvenData: getData('data') returns the nested bag.
+        if ($key === 'data') {
             return $eventData;
         }
         if ($eventData instanceof DataObject) {
@@ -104,12 +174,6 @@ class Event extends \Weline\Framework\DataObject\DataObject
         }
         if (\is_array($eventData) && \array_key_exists($key, $eventData)) {
             return $eventData[$key];
-        }
-        // Non-array event payloads (e.g. ResourceChange) are stored under the
-        // synthetic "data" wrapper. Observers asking for "data" receive the
-        // payload itself; any other key is undefined.
-        if ($key === 'data') {
-            return $eventData;
         }
 
         return null;
@@ -128,9 +192,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
      */
     public function addObserver(Observer $observer): static
     {
-        $observers = $this->_getData('observers');
-        $observers[] = $observer;
-        $this->setData('observers', $observers);
+        $this->observerConfigs[] = $observer;
 
         return $this;
     }
@@ -144,7 +206,96 @@ class Event extends \Weline\Framework\DataObject\DataObject
      */
     public function getObservers(): array
     {
-        return $this->_getData('observers');
+        return $this->observerConfigs;
+    }
+
+    private function usesNestedDataKey(): bool
+    {
+        return \is_array($this->boundPayload) && \array_key_exists('data', $this->boundPayload);
+    }
+
+    private function setBoundPayloadData(array|string $key, mixed $value = null): static
+    {
+        if (!\is_array($this->boundPayload)) {
+            return $this;
+        }
+
+        if ($this->usesNestedDataKey()) {
+            // Replacing the nested bag itself (rare); do not dig into DataObject fields.
+            if (!\is_array($key) && $key === 'data') {
+                $this->boundPayload['data'] = $value;
+                return $this;
+            }
+            $eventData = $this->boundPayload['data'];
+            if ($eventData instanceof DataObject) {
+                if (\is_array($key)) {
+                    $eventData->setData($key);
+                } else {
+                    $eventData->setData($key, $value);
+                }
+                return $this;
+            }
+            if (!\is_array($eventData)) {
+                $eventData = [];
+            }
+            if (\is_array($key)) {
+                foreach ($key as $k => $item) {
+                    $eventData[$k] = $item;
+                }
+            } else {
+                $eventData[$key] = $value;
+            }
+            $this->boundPayload['data'] = $eventData;
+            return $this;
+        }
+
+        // Flat bag: mutate caller array in place (no nested copy / writeback).
+        if (\is_array($key)) {
+            foreach ($key as $k => $item) {
+                $this->boundPayload[$k] = $item;
+            }
+        } else {
+            $this->boundPayload[$key] = $value;
+        }
+
+        return $this;
+    }
+
+    private function getBoundEvenData(string $key = ''): mixed
+    {
+        if (!\is_array($this->boundPayload)) {
+            return null;
+        }
+
+        if ($this->usesNestedDataKey()) {
+            $eventData = $this->boundPayload['data'];
+            if ($key === '') {
+                return $eventData;
+            }
+            // Observers historically fetch the whole nested bag via getData('data').
+            // When the bag is a DataObject, dig-into-field must NOT win over that contract
+            // (otherwise layout_resolve bags never claim — Theme shells 404 as not_found).
+            if ($key === 'data') {
+                return $eventData;
+            }
+            if ($eventData instanceof DataObject) {
+                return $eventData->getData($key);
+            }
+            if (\is_array($eventData) && \array_key_exists($key, $eventData)) {
+                return $eventData[$key];
+            }
+
+            return null;
+        }
+
+        if ($key === '') {
+            return $this->boundPayload;
+        }
+        if (\array_key_exists($key, $this->boundPayload)) {
+            return $this->boundPayload[$key];
+        }
+
+        return null;
     }
 
     /**
@@ -224,7 +375,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
             $this->initLogFile();
         }
 
-        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $traceEnabled = TraceGate::isArmed();
         $upgradeAfterProgress = PHP_SAPI === 'cli'
             && $this->getName() === 'Weline_Framework_Setup::upgrade_after';
         $upgradeAfterTotal = $upgradeAfterProgress ? count($observers) : 0;
@@ -275,7 +426,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
                 $observerSpanName = null;
                 if ($traceEnabled) {
                     $observerSpanName = 'observer::' . str_replace('\\', '::', get_class($observer));
-                    RequestLifecycleTrace::pushCurrentParent($observerSpanName);
+                    TraceGate::pushCurrentParent($observerSpanName);
                 }
                 try {
                     // 执行观察者（其内派发的事件会挂到本观察者下，回到此处才算观察者结束）
@@ -286,12 +437,12 @@ class Event extends \Weline\Framework\DataObject\DataObject
                     }
                 } finally {
                     if ($traceEnabled) {
-                        RequestLifecycleTrace::popCurrentParent();
+                        TraceGate::popCurrentParent();
                     }
                 }
                 $observerDurationMs = (microtime(true) - $observerSpanStart) * 1000;
                 if ($traceEnabled && $observerSpanName !== null) {
-                    RequestLifecycleTrace::recordSpan($observerSpanName, $observerDurationMs, 'observer', 'event::' . $this->getName());
+                    TraceGate::recordSpan($observerSpanName, $observerDurationMs, 'observer', 'event::' . $this->getName());
                 }
                 if ($upgradeAfterProgress) {
                     $this->printUpgradeAfterObserverProgress(

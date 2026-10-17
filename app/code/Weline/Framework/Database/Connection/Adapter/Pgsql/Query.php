@@ -23,7 +23,7 @@ use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Database\Transaction\TransactionCoordinator;
 use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 
 /**
  * PostgreSQL 查询构建器
@@ -2305,12 +2305,12 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
         $dbTraceStart = 0.0;
         $dbTraceSql = '';
-        if (RequestLifecycleTrace::isEnabled()) {
+        if (TraceGate::isArmed()) {
             $dbTraceStart = microtime(true);
             try {
-                $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
+                $dbTraceSql = TraceGate::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             } catch (\Throwable) {
-                $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->sql);
+                $dbTraceSql = TraceGate::redactDatabaseSql($this->sql);
             }
         }
         $this->resolveFetchTypeFromSql();
@@ -2702,26 +2702,26 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         // Development SQL logging
         if (Env::get('log.dev_sql.enabled', false)) {
             $log_file = Env::get('log.dev_sql.file', 'dev_sql');
-            $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
+            $sqlWithValues = TraceGate::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             Env::log($log_file, $sqlWithValues, 'QUERY', true, true, 0);
         }
         
         // Database query logging
         if (Env::get('log.db.enabled', false)) {
             $file = Env::get('log.db.file', 'db');
-            $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
+            $sqlWithValues = TraceGate::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             Env::log($file, $sqlWithValues, 'QUERY', true, true, 0);
         }
         
         # 调试环境信息
         if (DEV && Debug::target('pre_fetch')) {
-            $sensitiveDiagnostic = RequestLifecycleTrace::containsAuthenticationPersistence($this->sql);
+            $sensitiveDiagnostic = TraceGate::containsAuthenticationPersistence($this->sql);
             $msg = __('即将执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
-            $msg .= '$this->sql:' . RequestLifecycleTrace::redactDatabaseSql($this->sql) . PHP_EOL;
+            $msg .= '$this->sql:' . TraceGate::redactDatabaseSql($this->sql) . PHP_EOL;
             $msg .= '$this->bound_values:' . ($sensitiveDiagnostic ? '[REDACTED]' : json_encode($this->bound_values)) . PHP_EOL;
-            $msg .= 'Format SQL:' . RequestLifecycleTrace::redactDatabaseSql((string)$this->getSql(true));
+            $msg .= 'Format SQL:' . TraceGate::redactDatabaseSql((string)$this->getSql(true));
             Debug::target('pre_fetch', $msg);
         }
         
@@ -2883,7 +2883,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     if ($duration < 0) {
                         $duration = 0;
                     }
-                    RequestLifecycleTrace::recordSpan(
+                    TraceGate::recordSpan(
                         $dbTraceLabel,
                         $duration,
                         'db',
@@ -3090,13 +3090,13 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->fetch_type = '';
         # 调试环境信息
         if (DEV && Debug::target('fetch')) {
-            $sensitiveDiagnostic = RequestLifecycleTrace::containsAuthenticationPersistence($this->sql);
+            $sensitiveDiagnostic = TraceGate::containsAuthenticationPersistence($this->sql);
             $msg = __('执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
-            $msg .= '$this->sql:' . RequestLifecycleTrace::redactDatabaseSql($this->sql) . PHP_EOL;
+            $msg .= '$this->sql:' . TraceGate::redactDatabaseSql($this->sql) . PHP_EOL;
             $msg .= '$this->bound_values:' . ($sensitiveDiagnostic ? '[REDACTED]' : json_encode($this->bound_values)) . PHP_EOL;
-            $msg .= 'Format SQL:' . RequestLifecycleTrace::redactDatabaseSql((string)$this->getSql(true));
+            $msg .= 'Format SQL:' . TraceGate::redactDatabaseSql((string)$this->getSql(true));
             Debug::target('fetch', $msg);
         }
         
@@ -3172,11 +3172,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $dbTraceSql = '';
         $traceOperation = $this->fetch_type ?: 'query';
         $traceTable = $this->table !== '' ? $this->table : 'unknown';
-        if (RequestLifecycleTrace::isEnabled()) {
+        if (TraceGate::isArmed()) {
             $dbTraceStart = hrtime(true);
             $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
             // Keep placeholders: iterator diagnostics never interpolate bound values.
-            $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->sql);
+            $dbTraceSql = TraceGate::redactDatabaseSql($this->sql);
         }
 
         $stmt = $this->PDOStatement;
@@ -3260,7 +3260,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 if ($dbTraceStart > 0) {
                     // Generator suspension belongs to its consumer, not the database driver.
                     $duration = max(0, hrtime(true) - $dbTraceStart - $dbTraceSuspended) / 1_000_000;
-                    RequestLifecycleTrace::recordSpan(
+                    TraceGate::recordSpan(
                         $dbTraceLabel,
                         $duration,
                         'db',

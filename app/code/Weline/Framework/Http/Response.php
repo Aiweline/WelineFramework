@@ -7,6 +7,7 @@ use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Fpc\FpcDevAutoPierceClientScript;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
@@ -513,6 +514,8 @@ class Response implements ResponseInterface, RequestLocalInterface
         // Storefront generation Cookie + Vary (Cookie header name only). Shared
         // FPC suppress still no-ops setCookie on shareable HIT shells.
         $this->applyStorefrontGenerationOutboundIfNeeded();
+        // Dev auto-pierce client: stamp non-Url::getUrl links (category cards etc.).
+        $this->injectFpcDevAutoPierceClientIfNeeded();
 
         if ($this->telemetryPrepared) {
             return;
@@ -570,6 +573,29 @@ class Response implements ResponseInterface, RequestLocalInterface
             StorefrontGenerationOutbound::applyToResponse($this);
         } catch (\Throwable) {
             // Outbound decoration must never block emission.
+        }
+    }
+
+    /**
+     * When「链接自带签章」is on, stamp same-origin navigational links client-side.
+     * Covers localizeHref / hardcoded paths that never hit Url::getUrl.
+     */
+    private function injectFpcDevAutoPierceClientIfNeeded(): void
+    {
+        try {
+            if ($this->body === '' || \strncmp($this->body, 'WQB1', 4) === 0) {
+                return;
+            }
+            if (!\str_contains($this->body, '</body>') && !\str_contains($this->body, '</BODY>')) {
+                return;
+            }
+            $injected = FpcDevAutoPierceClientScript::injectIntoHtml($this->body);
+            if ($injected !== $this->body) {
+                $this->body = $injected;
+                $this->synchronizeContentLengthHeader();
+            }
+        } catch (\Throwable) {
+            // Decoration must never block emission.
         }
     }
 

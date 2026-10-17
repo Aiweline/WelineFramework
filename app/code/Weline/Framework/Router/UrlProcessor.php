@@ -80,7 +80,14 @@ class UrlProcessor
                 explode(self::URL_PATH_SPLIT, $url),
                 static fn(string $segment): bool => $segment !== ''
             ));
-            $localized = State::resolveLocalizationFromPathSegments($segments);
+            // Area key is handled above (admin / REST). Do not treat remaining
+            // "api" (Weline_Api module router) as rest_frontend again.
+            $detectAreaPrefix = !($isAdmin
+                || $requestArea === \Weline\Framework\Controller\Data\DataInterface::type_pc_BACKEND
+                || $requestArea === \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND
+                || $requestArea === \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND
+                || $requestArea === \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND);
+            $localized = State::resolveLocalizationFromPathSegments($segments, $detectAreaPrefix);
             $url = implode(self::URL_PATH_SPLIT, $localized['remaining']);
         }
         
@@ -175,8 +182,9 @@ class UrlProcessor
         // 收集路由生成的 GET 参数
         $this->generatedGetParams = $this->collectGeneratedGetParams($originalGet);
         
-        // 规范化 URL
-        $url = $this->normalize($url, '', false, '');
+        // Area key already removed above; keep requestArea so normalize does not
+        // re-strip module routers that share the rest_frontend string ("api").
+        $url = $this->normalize($url, '', false, $requestArea);
         
         return $url;
     }

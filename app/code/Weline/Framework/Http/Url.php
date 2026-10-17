@@ -18,6 +18,7 @@ use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Fpc\FpcMode;
 use Weline\Framework\Manager\ObjectManager;
 
 final class UrlParserRequestState
@@ -26,9 +27,27 @@ final class UrlParserRequestState
     public array $parserMatchs = [];
     public array $parserCache = [];
     public array $decodeUrls = [];
+    public array $parserUrlCache = [];
+    public array $splitUrlCache = [];
+    public array $parserSiteMatchs = [];
     public bool $parsingInProgress = false;
     /** 当前请求 ID —— 用于检测 WLS 多请求复用 Fiber 时的状态泄漏 */
     public ?string $requestId = null;
+
+    public function clearRequestScratch(bool $includingCaches = true): void
+    {
+        $this->parserServer = [];
+        $this->decodeUrls = [];
+        $this->parsingInProgress = false;
+        if (!$includingCaches) {
+            return;
+        }
+        $this->parserMatchs = [];
+        $this->parserCache = [];
+        $this->parserUrlCache = [];
+        $this->splitUrlCache = [];
+        $this->parserSiteMatchs = [];
+    }
 }
 
 class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterface
@@ -43,6 +62,11 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     private const PARSER_SITES_VERSION_FILE = 'var/runtime/website_detect/parser_sites.version';
     private const PROCESS_DECODE_CACHE_TTL = 300;
     private const PROCESS_DECODE_CACHE_MAX_ITEMS = 4096;
+    /** Per-request/Fiber fat parse result bag — caps WLS concurrent RSS peaks. */
+    private const REQUEST_PARSER_CACHE_MAX_ITEMS = 512;
+    private const REQUEST_PARSER_MATCHS_MAX_ITEMS = 256;
+    private const REQUEST_PARSER_URL_CACHE_MAX_ITEMS = 512;
+    private const REQUEST_PARSER_SPLIT_CACHE_MAX_ITEMS = 512;
 
     /**
      * @deprecated WLS 模式下此属性会过期。始终使用 $this->getRequest() 获取当前请求。
@@ -59,6 +83,8 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     private static ?UrlParserRequestState $mainParserState = null;
     /** @var \WeakMap<\Fiber, UrlParserRequestState>|null */
     private static ?\WeakMap $fiberParserStates = null;
+    /** Nested Fiber scratch window depth ({@see parser()} / parse_url / split_url). */
+    private static int $fiberScratchWindowDepth = 0;
     private static string $parserSitesVersion = '';
     private static float $parserSitesVersionCheckedAt = 0.0;
     
@@ -1298,6 +1324,11 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         }
         // 通用 URL 生成后参数钩子：始终派发（seo on/off 都走）。Theme 画布身份等只挂这里。
         $eventManager->dispatch('Weline_Framework_Url::url_generate_params', $url);
+        // Local-dev auto pierce: after rewrite hooks so SEO path changes cannot strip the stamp.
+        if (\is_string($url)) {
+            $url = FpcMode::appendPierceQueryIfEnabled($url);
+        }
+
         return $url;
     }
 
@@ -1491,13 +1522,15 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     }
 
     /**
-     * Process-L1 identity for SEO decode results.
+     * Stable SEO-decode identity: website + locale-stripped lookup path.
      *
-     * Must not embed the current page request_uri / area_route / request_prefix:
-     * those copy one process entry per PDP for the same decoded URL and never hit
-     * across same-locale crawls (cap 4096 thrash).
+     * Must not embed lang/currency/request_uri/raw URL literals — parser writes
+     * WELINE_USER_LANG after the first decode, and applyParsedUrl re-decodes
+     * ORIGIN vs absolute forms; those must hit the same L1 entry.
+     *
+     * @return array{website_id:string,lookup_path:string,host:string,area:string}
      */
-    private static function buildUrlProcessDecodeCacheKey(string $url, string $websiteId = ''): string
+    private static function seoDecodeLookupIdentity(string $url, string $websiteId = ''): array
     {
         $currentServer = self::currentServer();
         $parserServer = self::$parserServer;
@@ -1509,52 +1542,104 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             return (string)($currentServer[$key] ?? $fallback);
         };
 
-        return KeyBuilder::requestScopeHash([
-            'scope' => 'decode_url_process',
-            'cache_version' => '20260921-stable-storefront',
-            'url' => $url,
+        $pathOnly = (string)(\parse_url($url, \PHP_URL_PATH) ?: $url);
+        $lookupPath = '';
+        try {
+            $lookupPath = (string)(self::stripStorefrontLocalizationFromPath($pathOnly)['path'] ?? '');
+        } catch (\Throwable) {
+            // Fail-open for early bootstrap / contract harness without Env BP:
+            // keep path-only identity so absolute vs relative forms still unify.
+            $lookupPath = \ltrim((string)(\strtok($pathOnly, '?') ?: $pathOnly), '/');
+        }
+
+        return [
             'website_id' => $websiteId !== '' ? $websiteId : $contextValue('WELINE_WEBSITE_ID'),
-            'website_code' => $contextValue('WELINE_WEBSITE_CODE'),
-            'lang' => $contextValue('WELINE_USER_LANG'),
-            'currency' => $contextValue('WELINE_USER_CURRENCY'),
+            'lookup_path' => $lookupPath,
             'host' => (string)($currentServer['HTTP_HOST'] ?? $currentServer['SERVER_NAME'] ?? $parserServer['HTTP_HOST'] ?? $parserServer['SERVER_NAME'] ?? ''),
             'area' => $contextValue('WELINE_AREA'),
+        ];
+    }
+
+    /**
+     * Process + request L1 identity for SEO decode results.
+     *
+     * Must not embed the current page request_uri / area_route / request_prefix /
+     * lang / currency / raw URL: those shard one entry per PDP or false-cold after
+     * parser mutates WELINE_USER_LANG (cap 4096 thrash).
+     */
+    private static function buildUrlProcessDecodeCacheKey(string $url, string $websiteId = ''): string
+    {
+        $identity = self::seoDecodeLookupIdentity($url, $websiteId);
+
+        return KeyBuilder::requestScopeHash([
+            'scope' => 'decode_url_process',
+            'cache_version' => '20261016-lookup-path-identity',
+            'website_id' => $identity['website_id'],
+            'lookup_path' => $identity['lookup_path'],
+            'host' => $identity['host'],
+            'area' => $identity['area'],
         ], [
+            'area' => false,
             'area_route' => false,
+            'website' => false,
+            'website_url' => false,
+            'host' => false,
+            'base_url' => false,
+            'lang' => false,
+            'lang_local' => false,
+            'currency' => false,
             'request_prefix' => false,
             'full_request_uri' => false,
-            'website_url' => false,
-            'base_url' => false,
         ]);
     }
 
     public static function parse_url(string $url, string $key = '', string $default = ''): array|string
     {
-        $cacheKey = self::buildUrlRequestCacheKey('parse_url', $url);
-        if (isset(self::$parserUrlCache[$cacheKey])) {
+        $scratchBackup = self::enterFiberScratchWindow();
+        try {
+            $cacheKey = self::buildUrlRequestCacheKey('parse_url', $url);
+            if (isset(self::$parserUrlCache[$cacheKey])) {
+                if ($key) {
+                    return self::$parserUrlCache[$cacheKey][$key] ?? $default;
+                }
+                return self::$parserUrlCache[$cacheKey];
+            }
+            try {
+                $parsed = parse_url($url);
+            } catch (\ValueError $e) {
+                $parsed = [];
+                if (\function_exists('w_log_warning')) {
+                    \w_log_warning('[Url] parse_url failed for malformed URL: ' . $e->getMessage());
+                }
+            }
+            self::storeCappedArrayItem(
+                self::$parserUrlCache,
+                $cacheKey,
+                is_array($parsed) ? $parsed : [],
+                self::REQUEST_PARSER_URL_CACHE_MAX_ITEMS
+            );
             if ($key) {
                 return self::$parserUrlCache[$cacheKey][$key] ?? $default;
             }
             return self::$parserUrlCache[$cacheKey];
+        } finally {
+            self::leaveFiberScratchWindow($scratchBackup);
         }
-        try {
-            $parsed = parse_url($url);
-        } catch (\ValueError $e) {
-            $parsed = [];
-            if (\function_exists('w_log_warning')) {
-                \w_log_warning('[Url] parse_url failed for malformed URL: ' . $e->getMessage());
-            }
-        }
-        self::$parserUrlCache[$cacheKey] = is_array($parsed) ? $parsed : [];
-        if ($key) {
-            return self::$parserUrlCache[$cacheKey][$key] ?? $default;
-        }
-        return self::$parserUrlCache[$cacheKey];
     }
 
     public static array $splitUrlCache = [];
 
     public static function split_url(string $url, string $key = '', string $default = ''): array|string
+    {
+        $scratchBackup = self::enterFiberScratchWindow();
+        try {
+            return self::splitUrlWithScratchBound($url, $key, $default);
+        } finally {
+            self::leaveFiberScratchWindow($scratchBackup);
+        }
+    }
+
+    private static function splitUrlWithScratchBound(string $url, string $key = '', string $default = ''): array|string
     {
         $cacheKey = self::buildUrlRequestCacheKey('split_url', $url);
         if (isset(self::$splitUrlCache[$cacheKey])) {
@@ -1572,9 +1657,11 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         if ($path) {
             $paths = explode('/', trim($path, '/'));
         }
-        self::$splitUrlCache[$cacheKey]['path'] = $parse['path'] ?? '';
-        self::$splitUrlCache[$cacheKey]['split'] = $paths;
-        self::$splitUrlCache[$cacheKey]['query'] = $parse['query'] ?? '';
+        self::storeCappedArrayItem(self::$splitUrlCache, $cacheKey, [
+            'path' => $parse['path'] ?? '',
+            'split' => $paths,
+            'query' => $parse['query'] ?? '',
+        ], self::REQUEST_PARSER_SPLIT_CACHE_MAX_ITEMS);
         if ($key) {
             return self::$splitUrlCache[$cacheKey][$key] ?? $default;
         }
@@ -1597,24 +1684,7 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         $perfMark = static function (string $name) use (&$perfMarks, $perfStart): void {
             $perfMarks[$name] = \round((\microtime(true) - $perfStart) * 1000, 2);
         };
-        $restoreParserScratch = false;
-        $parserScratchBackup = [];
-        if (self::currentParserFiber() !== null) {
-            $parserScratchBackup = [
-                'parserServer' => self::$parserServer,
-                'parserMatchs' => self::$parserMatchs,
-                'parserCache' => self::$parserCache,
-                'decodeUrls' => self::$decode_urls,
-                'parsingInProgress' => self::$parsingInProgress,
-            ];
-            $state = self::parserState();
-            self::$parserServer = $state->parserServer;
-            self::$parserMatchs = $state->parserMatchs;
-            self::$parserCache = $state->parserCache;
-            self::$decode_urls = $state->decodeUrls;
-            self::$parsingInProgress = $state->parsingInProgress;
-            $restoreParserScratch = true;
-        }
+        $parserScratchBackup = self::enterFiberScratchWindow();
         
         // 防止重入：如果正在解析中，直接返回URL，避免无限循环
         try {
@@ -2009,6 +2079,11 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                     $matchResult['server'] = self::$parserServer;
                 }
                 $matchResult = self::rehydrateVisitorLocaleOnParseResult($matchResult, (string)$uri);
+                $matchResult = self::alignParseResultWithLiveParserServer(
+                    $matchResult,
+                    (string)$uri,
+                    (string)$url
+                );
                 if ($isCurrentRequestParse) {
                     self::syncParserServerToCurrentContext();
                 }
@@ -2023,6 +2098,11 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             $cached = self::$parserCache[$parserCacheKey];
             if (\is_array($cached)) {
                 $cached = self::rehydrateVisitorLocaleOnParseResult($cached, (string)$uri);
+                $cached = self::alignParseResultWithLiveParserServer(
+                    $cached,
+                    (string)$uri,
+                    (string)($cached['url'] ?? $url)
+                );
                 if ($isCurrentRequestParse) {
                     self::syncParserServerToCurrentContext();
                 }
@@ -2359,31 +2439,18 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         # 解析缓存（必须在更新 $parserServer 后缓存，确保 server 字段包含正确的语言/货币）
         if ($data['all_match']) {
             $match_url = $data['website_url'] . ($has_area ? $area : '') . '/' . $data['currency'] . '/' . $data['language'];
-            self::$parserMatchs[$match_url] = $data;
+            self::storeCappedArrayItem(self::$parserMatchs, $match_url, $data, self::REQUEST_PARSER_MATCHS_MAX_ITEMS);
         }
         $perfMark('done');
         $data['_perf'] = $perfMarks;
-        self::$parserCache[$parserCacheKey] = $data;
+        self::storeCappedArrayItem(self::$parserCache, $parserCacheKey, $data, self::REQUEST_PARSER_CACHE_MAX_ITEMS);
         if ($key) {
             return $data[$key] ?? '';
         }
 
         return $data;
         } finally {
-            if ($restoreParserScratch) {
-                $state = self::parserState();
-                $state->parserServer = self::$parserServer;
-                $state->parserMatchs = self::$parserMatchs;
-                $state->parserCache = self::$parserCache;
-                $state->decodeUrls = self::$decode_urls;
-                $state->parsingInProgress = self::$parsingInProgress;
-
-                self::$parserServer = $parserScratchBackup['parserServer'] ?? [];
-                self::$parserMatchs = $parserScratchBackup['parserMatchs'] ?? [];
-                self::$parserCache = $parserScratchBackup['parserCache'] ?? [];
-                self::$decode_urls = $parserScratchBackup['decodeUrls'] ?? [];
-                self::$parsingInProgress = (bool)($parserScratchBackup['parsingInProgress'] ?? false);
-            }
+            self::leaveFiberScratchWindow($parserScratchBackup);
         }
     }
 
@@ -2543,20 +2610,69 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         return false;
     }
 
+    /**
+     * Strip leading currency/locale path segments for SEO rewrite lookup.
+     *
+     * Does not mutate visitor ORIGIN; returns remaining public pretty path
+     * (no leading slash) plus any detected path locale/currency.
+     *
+     * @return array{path:string,currency:string,language:string}
+     */
+    public static function stripStorefrontLocalizationFromPath(string $path): array
+    {
+        $normalized = \ltrim((string)(\parse_url($path, \PHP_URL_PATH) ?: $path), '/');
+        $normalized = \ltrim(\strtok($normalized, '?') ?: $normalized, '/');
+        if ($normalized === '') {
+            return ['path' => '', 'currency' => '', 'language' => ''];
+        }
+
+        $segments = \array_values(\array_filter(
+            \explode('/', $normalized),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return ['path' => '', 'currency' => '', 'language' => ''];
+        }
+
+        $localization = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 4));
+        $currency = \strtoupper(\trim((string)($localization['currency'] ?? '')));
+        $language = \trim((string)($localization['language'] ?? ''));
+        if ($currency !== '' && isset($segments[0]) && \strtoupper((string)$segments[0]) === $currency) {
+            \array_shift($segments);
+        }
+        if ($language !== '' && isset($segments[0])
+            && \strcasecmp((string)$segments[0], $language) === 0
+        ) {
+            \array_shift($segments);
+        }
+
+        return [
+            'path' => \implode('/', $segments),
+            'currency' => $currency,
+            'language' => $language,
+        ];
+    }
+
     public static function decode_url(string $url): string
     {
-        $decodeCacheKey = self::buildUrlRequestCacheKey('decode_url', $url);
+        $websiteId = (string)(self::currentServer()['WELINE_WEBSITE_ID'] ?? self::$parserServer['WELINE_WEBSITE_ID'] ?? '');
+        // Request + process L1 share lookup-path identity (not raw URL / lang).
+        $decodeCacheKey = self::buildUrlProcessDecodeCacheKey($url, $websiteId);
         if (isset(self::$decode_urls[$decodeCacheKey])) {
             return self::$decode_urls[$decodeCacheKey];
         }
         # decode seo url
         if (Env::get('seo')) {
-            $websiteId = (string)(self::currentServer()['WELINE_WEBSITE_ID'] ?? self::$parserServer['WELINE_WEBSITE_ID'] ?? '');
-            $processCacheKey = self::buildUrlProcessDecodeCacheKey($url, $websiteId);
+            $processCacheKey = $decodeCacheKey;
             $expiresAt = self::$processDecodeUrlExpiresAt[$processCacheKey] ?? 0;
             if ($expiresAt >= \time() && \array_key_exists($processCacheKey, self::$processDecodeUrls)) {
                 $cachedUrl = (string)self::$processDecodeUrls[$processCacheKey];
                 self::$decode_urls[$decodeCacheKey] = $cachedUrl;
+                // Alias decoded form → self so applyParsedUrl re-entry hits L1.
+                $decodedIdentityKey = self::buildUrlProcessDecodeCacheKey($cachedUrl, $websiteId);
+                if ($decodedIdentityKey !== $decodeCacheKey) {
+                    self::$decode_urls[$decodedIdentityKey] = $cachedUrl;
+                }
                 return $cachedUrl;
             }
             unset(self::$processDecodeUrls[$processCacheKey], self::$processDecodeUrlExpiresAt[$processCacheKey]);
@@ -2564,19 +2680,31 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             /**@var EventsManager $event */
             $event = ObjectManager::getInstance(EventsManager::class);
             $origin_url = $url;
-            $event->dispatch('Weline_Framework_Url::seo_decode', $url);
-            if (!\is_scalar($url)) {
-                $url = $origin_url;
-            } else {
-                $url = (string)$url;
+            $identity = self::seoDecodeLookupIdentity($origin_url, $websiteId);
+            $pathOnly = (string)(\parse_url($origin_url, \PHP_URL_PATH) ?: $origin_url);
+            $stripped = self::stripStorefrontLocalizationFromPath($pathOnly);
+            if ($stripped['language'] !== '') {
+                self::rememberPathLanguage($stripped['language']);
             }
-            
-            // 缓存原始URL到解码后URL的映射
-            self::$decode_urls[self::buildUrlRequestCacheKey('decode_url', $origin_url)] = $url;
-            
-            // 关键：如果URL发生了变化，也缓存解码后的URL指向自己，避免二次解码
+            // Structured payload: observers rewrite `url`; lookup_path is already
+            // locale-stripped so RouterRewrite does not re-parse currency/language.
+            $payload = [
+                'url' => $url,
+                'lookup_path' => $identity['lookup_path'] !== ''
+                    ? $identity['lookup_path']
+                    : $stripped['path'],
+                'website_id' => (int)$websiteId,
+            ];
+            $event->dispatch('Weline_Framework_Url::seo_decode', $payload);
+            $decoded = $payload['url'] ?? $origin_url;
+            $url = \is_scalar($decoded) ? (string)$decoded : $origin_url;
+
+            // Identity key for origin (pretty / absolute / locale-prefixed alike).
+            self::$decode_urls[$decodeCacheKey] = $url;
+            // Alias decoded controller path → self to avoid second seo_decode.
             if ($url !== $origin_url) {
-                self::$decode_urls[self::buildUrlRequestCacheKey('decode_url', $url)] = $url;
+                $decodedIdentityKey = self::buildUrlProcessDecodeCacheKey($url, $websiteId);
+                self::$decode_urls[$decodedIdentityKey] = $url;
             }
             if (\count(self::$processDecodeUrls) >= self::PROCESS_DECODE_CACHE_MAX_ITEMS) {
                 $oldest = \array_key_first(self::$processDecodeUrls);
@@ -2590,50 +2718,68 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         }
         return $url;
     }
+
+    /**
+     * Clear process-scoped SEO decode L1 (cross-request TTL bag).
+     *
+     * Used when url_rewrite rows change so WLS workers do not keep serving
+     * stale decode_url results for up to PROCESS_DECODE_CACHE_TTL seconds.
+     * Does not clear per-request {@see self::$decode_urls}; request bags stay
+     * owned by {@see resetParserRequestCaches()} / Fiber scratch reset.
+     */
+    public static function clearProcessDecodeCache(): void
+    {
+        self::$processDecodeUrls = [];
+        self::$processDecodeUrlExpiresAt = [];
+    }
     
     /**
-     * WLS 多 Fiber 交错时清理「随请求变化」的 Url 解析缓存。
+     * Same-request Fiber resume soft projection (ONLY for {@see WlsFiberContext::restore}).
      *
-     * {@see self::$parserServer} 在首次 {@see parser()} 时从 $_SERVER 拷贝后会持续原地修改；
-     * 与 {@see WlsFiberContext} 只快照 $_SERVER 不同，静态解析态不会随 Fiber 切换而自动一致，
-     * 会导致 getBackendUrl()/getBaseHost 依赖的 HTTP_HOST、WELINE_WEBSITE_URL 等与当前连接错位
-     *（例如 SSE 长连接挂起期间其它请求改写 parserServer，恢复后仍沿用错误 host）。
+     * Drops host-sensitive parserServer / decode / reentrancy flag, keeps this Fiber's
+     * match/cache/url/split/siteMatchs, and projects them onto process statics so
+     * post-restore readers do not see a peer Fiber's leftovers.
      *
-     * 调用点：WLS worker 中 Fiber 新请求入口 `wlsFiberRequestContextEnter`、
-     * {@see WlsFiberContext::restore}（恢复 $_SERVER 之后）。
-     *
-     * 不清空 parserSites/parserMatchs 等站点与路由表缓存，避免每次握手重复 detect_website。
+     * NEVER call from new-request enter (`wlsFiberRequestContextEnter` / Event enter) —
+     * those MUST use {@see resetParserRequestCaches()} or cross-request cache leaks.
      */
-    public static function resetWlsFiberInterleavedParserScratch(): void
+    public static function projectWlsFiberParserScratchAfterRestore(): void
     {
         $state = self::parserState();
-        $state->parserServer = [];
-        $state->parserMatchs = [];
-        $state->parserCache = [];
-        $state->decodeUrls = [];
-        $state->parsingInProgress = false;
+        $state->clearRequestScratch(false);
 
         self::$parserServer = [];
-        self::$parserMatchs = [];
-        self::$parserCache = [];
         self::$decode_urls = [];
         self::$parsingInProgress = false;
+        self::$parserMatchs = $state->parserMatchs;
+        self::$parserCache = $state->parserCache;
+        self::$parserUrlCache = $state->parserUrlCache;
+        self::$splitUrlCache = $state->splitUrlCache;
+        self::$parserSiteMatchs = $state->parserSiteMatchs;
     }
 
     /**
-     * 重置所有请求级解析缓存（WLS 请求入口调用）。
+     * @deprecated Use {@see projectWlsFiberParserScratchAfterRestore()} after Fiber restore,
+     *             or {@see resetParserRequestCaches()} on new-request enter. Kept as soft
+     *             alias so restore-oriented callers stay correct; enter sites must not use this.
+     */
+    public static function resetWlsFiberInterleavedParserScratch(): void
+    {
+        self::projectWlsFiberParserScratchAfterRestore();
+    }
+
+    /**
+     * Hard-clear all request-scoped parser bags for the current Fiber/request.
      *
-     * 与 StateManager::reset()（请求结束时运行）不同，此方法在请求开始时运行，
-     * 确保 run_before 观察者和后续 URL 解析不会读到上一个请求的残留状态。
-     * parserSites/parserCurrencies/parserLanguages 保留不重置（跨请求缓存以节省 DB 查询）。
+     * Call sites: WLS new-request enter (`wlsFiberRequestContextEnter` / Event enter),
+     * and {@see \Weline\Server\Runtime\WlsRuntime} request pipeline entry.
+     * Does not clear process warm bags (parserSites / Languages / Currencies / processDecode).
      */
     public static function resetParserRequestCaches(): void
     {
-        self::resetWlsFiberInterleavedParserScratch();
-        self::$parserMatchs = [];
-        self::$parserSiteMatchs = [];
-        self::$parserUrlCache = [];
-        self::$splitUrlCache = [];
+        $state = self::parserState();
+        $state->clearRequestScratch(true);
+        self::publishEmptyParserRequestStatics();
     }
 
     public static function resetWebsiteParserSites(): void
@@ -2647,7 +2793,11 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         self::$parserSiteMatchs = [];
         self::$parserSiteMatchUrlCache = [];
         self::$parserMatchs = [];
+        self::$parserCache = [];
+        self::$parserUrlCache = [];
+        self::$splitUrlCache = [];
         self::$parserSitesVersion = '';
+        self::clearAllFiberParserRequestScratch();
     }
 
     public static function bumpWebsiteParserSitesVersion(?string $version = null): string
@@ -3115,6 +3265,162 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         }
 
         return \Fiber::getCurrent();
+    }
+
+    /**
+     * FIFO cap for per-request/Fiber associative bags (WLS resident peak control).
+     *
+     * @param array<string|int, mixed> $bag
+     */
+    private static function storeCappedArrayItem(array &$bag, string|int $key, mixed $value, int $maxItems): void
+    {
+        if ($maxItems > 0 && !\array_key_exists($key, $bag) && \count($bag) >= $maxItems) {
+            $oldest = \array_key_first($bag);
+            if ($oldest !== null) {
+                unset($bag[$oldest]);
+            }
+        }
+        $bag[$key] = $value;
+    }
+
+    /**
+     * Bind process static scratch to the current Fiber {@see UrlParserRequestState}.
+     *
+     * Nested calls (parser → split_url → parse_url) share one window via depth.
+     *
+     * @return array<string, mixed>|null Owner backup to pass to {@see leaveFiberScratchWindow()}; null when nested/non-fiber.
+     */
+    private static function enterFiberScratchWindow(): ?array
+    {
+        if (self::currentParserFiber() === null) {
+            return null;
+        }
+        if (self::$fiberScratchWindowDepth > 0) {
+            self::$fiberScratchWindowDepth++;
+            return null;
+        }
+
+        $backup = [
+            'parserServer' => self::$parserServer,
+            'parserMatchs' => self::$parserMatchs,
+            'parserCache' => self::$parserCache,
+            'decodeUrls' => self::$decode_urls,
+            'parserUrlCache' => self::$parserUrlCache,
+            'splitUrlCache' => self::$splitUrlCache,
+            'parserSiteMatchs' => self::$parserSiteMatchs,
+            'parsingInProgress' => self::$parsingInProgress,
+        ];
+        $state = self::parserState();
+        self::$parserServer = $state->parserServer;
+        self::$parserMatchs = $state->parserMatchs;
+        self::$parserCache = $state->parserCache;
+        self::$decode_urls = $state->decodeUrls;
+        self::$parserUrlCache = $state->parserUrlCache;
+        self::$splitUrlCache = $state->splitUrlCache;
+        self::$parserSiteMatchs = $state->parserSiteMatchs;
+        self::$parsingInProgress = $state->parsingInProgress;
+        self::$fiberScratchWindowDepth = 1;
+
+        return $backup;
+    }
+
+    /**
+     * @param array<string, mixed>|null $backup From {@see enterFiberScratchWindow()}
+     */
+    private static function leaveFiberScratchWindow(?array $backup): void
+    {
+        if (self::$fiberScratchWindowDepth > 1) {
+            self::$fiberScratchWindowDepth--;
+            return;
+        }
+        if (self::$fiberScratchWindowDepth !== 1 || $backup === null) {
+            self::$fiberScratchWindowDepth = 0;
+            return;
+        }
+
+        $state = self::parserState();
+        $state->parserServer = self::$parserServer;
+        $state->parserMatchs = self::$parserMatchs;
+        $state->parserCache = self::$parserCache;
+        $state->decodeUrls = self::$decode_urls;
+        $state->parserUrlCache = self::$parserUrlCache;
+        $state->splitUrlCache = self::$splitUrlCache;
+        $state->parserSiteMatchs = self::$parserSiteMatchs;
+        $state->parsingInProgress = self::$parsingInProgress;
+
+        self::$parserServer = $backup['parserServer'] ?? [];
+        self::$parserMatchs = $backup['parserMatchs'] ?? [];
+        self::$parserCache = $backup['parserCache'] ?? [];
+        self::$decode_urls = $backup['decodeUrls'] ?? [];
+        self::$parserUrlCache = $backup['parserUrlCache'] ?? [];
+        self::$splitUrlCache = $backup['splitUrlCache'] ?? [];
+        self::$parserSiteMatchs = $backup['parserSiteMatchs'] ?? [];
+        self::$parsingInProgress = (bool)($backup['parsingInProgress'] ?? false);
+        self::$fiberScratchWindowDepth = 0;
+    }
+
+    /**
+     * After soft restore, live {@see $parserServer} is re-seeded from $_SERVER while match/cache
+     * entries may still embed a prior server snapshot. Transport/host keys from live win;
+     * empty live values do not wipe cached locale/area; routing URI overlays apply last.
+     *
+     * @param array<string, mixed> $parse
+     * @return array<string, mixed>
+     */
+    private static function alignParseResultWithLiveParserServer(
+        array $parse,
+        string $visitorUri = '',
+        string $routingUri = ''
+    ): array {
+        $cachedServer = \is_array($parse['server'] ?? null) ? $parse['server'] : [];
+        $server = $cachedServer;
+        foreach (self::$parserServer as $key => $value) {
+            if ($value === '' || $value === null) {
+                continue;
+            }
+            $server[$key] = $value;
+        }
+        if ($visitorUri !== '') {
+            $server['ORIGIN_REQUEST_URI'] = $visitorUri;
+            $server['WELINE_ORIGIN_REQUEST_URI'] = $visitorUri;
+        }
+        if ($routingUri !== '') {
+            $server['REQUEST_URI'] = $routingUri;
+        }
+        $parse['server'] = $server;
+        self::$parserServer = $server;
+
+        return $parse;
+    }
+
+    private static function publishEmptyParserRequestStatics(): void
+    {
+        self::$parserServer = [];
+        self::$parserMatchs = [];
+        self::$parserCache = [];
+        self::$decode_urls = [];
+        self::$parserUrlCache = [];
+        self::$splitUrlCache = [];
+        self::$parserSiteMatchs = [];
+        self::$parsingInProgress = false;
+    }
+
+    /**
+     * Drop request-scoped parser bags on every live Fiber state (site registry bump).
+     */
+    private static function clearAllFiberParserRequestScratch(): void
+    {
+        if (self::$mainParserState !== null) {
+            self::$mainParserState->clearRequestScratch(true);
+        }
+        if (self::$fiberParserStates === null) {
+            return;
+        }
+        foreach (self::$fiberParserStates as $state) {
+            if ($state instanceof UrlParserRequestState) {
+                $state->clearRequestScratch(true);
+            }
+        }
     }
 
     /**

@@ -889,7 +889,9 @@ class State extends DataObject
     }
 
     /**
-     * 语言路径段快速形态判断（无正则）：xx_Name 或 xx_Name_CC。
+     * 语言路径段快速形态判断（无正则）：language_REGION / language_Script / language_Script_REGION。
+     *
+     * 必须与模块 backend_router（如 bt_center）区分：第二段全小写的 xx_name 不是 locale。
      */
     private static function isLanguageSegmentCandidate(string $segment): bool
     {
@@ -905,14 +907,28 @@ class State extends DataObject
         if (\count($parts) < 2 || \count($parts) > 3 || \strlen($parts[0]) !== 2) {
             return false;
         }
-        if (\strlen($parts[1]) < 2 || !ctype_alpha($parts[1])) {
+
+        $tail = $parts[1];
+        if (\strlen($tail) < 2 || !ctype_alpha($tail)) {
             return false;
         }
+
         if (\count($parts) === 3) {
-            return \strlen($parts[2]) === 2 && ctype_upper($parts[2]) && ctype_alpha($parts[2]);
+            $region = $parts[2];
+            if (!(\strlen($region) === 2 && ctype_upper($region) && ctype_alpha($region))) {
+                return false;
+            }
+            // Script：至少 4 字母且非全小写（Hans / Hant / Latn）
+            return \strlen($tail) >= 4 && $tail !== strtolower($tail);
         }
 
-        return true;
+        // language_REGION：第二段恰为 2 位大写区码（en_US / ja_JP）
+        if (\strlen($tail) === 2 && ctype_upper($tail)) {
+            return true;
+        }
+
+        // language_Script（无区码）：第二段 ≥4 且非全小写（zh_Hans）
+        return \strlen($tail) >= 4 && $tail !== strtolower($tail);
     }
 
     private static function isCurrencySegmentCandidate(string $segment): bool

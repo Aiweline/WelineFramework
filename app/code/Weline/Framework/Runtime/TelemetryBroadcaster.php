@@ -57,8 +57,8 @@ class TelemetryBroadcaster
             return $result;
         }
 
-        $spans = RequestLifecycleTrace::isEnabled()
-            ? RequestLifecycleTrace::getSpansWithDbSummary()
+        $spans = TraceGate::isArmed()
+            ? TraceGate::getSpansWithDbSummary()
             : [];
 
         $requestSnapshot = self::buildRequestSnapshot($request);

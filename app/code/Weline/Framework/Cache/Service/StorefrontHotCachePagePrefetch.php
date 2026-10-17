@@ -7,7 +7,7 @@ namespace Weline\Framework\Cache\Service;
 use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\View\Template;
 
 /**
@@ -28,7 +28,7 @@ final class StorefrontHotCachePagePrefetch
         }
 
         $total = 0;
-        RequestLifecycleTrace::measurePhase(
+        TraceGate::measurePhase(
             'storefront.cache.page_prefetch',
             function () use (&$total, $template, $templateRefs): void {
                 if (RequestContext::get(self::LATCH_KEY) !== true) {

@@ -149,6 +149,11 @@ final class StorefrontRenderContextInstaller
     /** @return array{active:list<string>,installed:list<string>} */
     private function resolveLocaleCatalog(): array
     {
+        $projected = StorefrontRenderContext::projectedLocaleCatalog();
+        if ($projected !== null) {
+            return $projected;
+        }
+
         $active = [];
         $installed = [];
         try {

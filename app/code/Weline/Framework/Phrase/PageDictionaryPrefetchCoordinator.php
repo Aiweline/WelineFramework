@@ -7,7 +7,7 @@ namespace Weline\Framework\Phrase;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\View\Template;
 
 /**
@@ -93,7 +93,7 @@ final class PageDictionaryPrefetchCoordinator
             return 0;
         }
 
-        RequestLifecycleTrace::measurePhase(
+        TraceGate::measurePhase(
             'view.page.dictionary_prefetch',
             static fn() => Parser::prefetchGlobalDictionaryModules($needed),
             [

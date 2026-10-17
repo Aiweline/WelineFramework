@@ -28,7 +28,7 @@ use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\DevToolMemoryLimitBootstrap;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestPipeline;
 use Weline\Framework\Runtime\Runtime;
@@ -281,9 +281,18 @@ class App
 
     public function applyParsedUrl(array $parse): void
     {
+        // B3: manual profiling is opt-in via RequestLifecycleTrace (panel
+        // signature cookie / template overlay). Closed → the step recorder is a
+        // no-op: no microtime, no profile array, no RequestContext::set.
+        // Consumers (WlsRuntime) already guard with is_array() && !== [], so a
+        // missing 'app.apply_url.profile' key is tolerated everywhere.
+        $applyUrlProfileEnabled = TraceGate::isArmed();
         $applyUrlProfile = [];
-        $applyUrlLast = \microtime(true);
-        $markApplyUrlStep = static function (string $name, array $meta = []) use (&$applyUrlProfile, &$applyUrlLast): void {
+        $applyUrlLast = $applyUrlProfileEnabled ? \microtime(true) : 0.0;
+        $markApplyUrlStep = static function (string $name, array $meta = []) use (&$applyUrlProfile, &$applyUrlLast, $applyUrlProfileEnabled): void {
+            if (!$applyUrlProfileEnabled) {
+                return;
+            }
             $now = \microtime(true);
             $step = [
                 'name' => $name,
@@ -295,8 +304,8 @@ class App
             $applyUrlProfile[] = $step;
             $applyUrlLast = $now;
         };
-        $flushApplyUrlProfile = static function () use (&$applyUrlProfile): void {
-            if ($applyUrlProfile !== []) {
+        $flushApplyUrlProfile = static function () use (&$applyUrlProfile, $applyUrlProfileEnabled): void {
+            if ($applyUrlProfileEnabled && $applyUrlProfile !== []) {
                 RequestContext::set('app.apply_url.profile', $applyUrlProfile);
             }
         };
@@ -313,7 +322,7 @@ class App
         $markApplyUrlStep('load_context_server', [
             'parse_server_keys' => \count($parse['server']),
             'context_server_keys' => \count($server),
-            'origin' => RequestLifecycleTrace::isEnabled() ? self::parsedUrlOriginProfile($parse['server']) : [],
+            'origin' => TraceGate::isArmed() ? self::parsedUrlOriginProfile($parse['server']) : [],
         ]);
         $rawRequestUri = Url::decode_url($this->normalizeParsedUri(
             $_SERVER['WELINE_ORIGIN_REQUEST_URI']
@@ -357,7 +366,7 @@ class App
         }
         $markApplyUrlStep('server_context_set', [
             'keys' => \count($parse['server']),
-            'origin' => RequestLifecycleTrace::isEnabled() ? self::parsedUrlOriginProfile($parse['server']) : [],
+            'origin' => TraceGate::isArmed() ? self::parsedUrlOriginProfile($parse['server']) : [],
         ]);
 
         if ($area !== '') {
@@ -490,7 +499,7 @@ class App
         $markApplyUrlStep('storefront_scope_install', [
             'installed' => RequestContext::scopeIdentity() instanceof ScopeIdentity,
             'route_path' => $navigationScope?->routePath,
-            'origin' => RequestLifecycleTrace::isEnabled() ? self::parsedUrlOriginProfile($parse['server']) : [],
+            'origin' => TraceGate::isArmed() ? self::parsedUrlOriginProfile($parse['server']) : [],
         ]);
 
         $scopeGateEventManager = $this->resolveEventManager();

@@ -23,6 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\ResultManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Security\Token;
 use Weline\Framework\Ui\FormKey;
@@ -600,8 +601,28 @@ class PcController extends Core
         /**@var DataObject $eventData */
         $fileName = $eventData->getData('fileName');
         $fetchProfileTemplateStart = \microtime(true);
-        $content = $this->getTemplate()->fetch($fileName);
-        $memoryProbe('after_template_fetch', $content);
+        // Theme may skip controller content include when layout slots own the tree
+        // (e.g. layoutType=homepage → layouts/homepage).
+        $skipTemplateFetch = (bool)$eventData->getData('skipTemplateFetch');
+        if ($skipTemplateFetch) {
+            $content = (string)($eventData->getData('content') ?? '');
+            $memoryProbe('skip_template_fetch', $content);
+            try {
+                if (\class_exists(\Weline\Framework\Runtime\TemplateRenderRouteTrace::class)) {
+                    \Weline\Framework\Runtime\TemplateRenderRouteTrace::mark(
+                        'controller_fetch',
+                        'skip_template_fetch',
+                        ['file' => (string)$fileName, 'bytes' => \strlen($content)]
+                    );
+                }
+            } catch (\Throwable) {
+            }
+        } else {
+            // Always capture: controller content is assigned to event payload (string),
+            // not merely echoed into the Router Fiber frame.
+            $content = $this->getTemplate()->fetchHtml($fileName);
+            $memoryProbe('after_template_fetch', $content);
+        }
         $fetchProfileTemplateMs = \round((\microtime(true) - $fetchProfileTemplateStart) * 1000, 2);
         // 触发Weline_Framework_Controller::fetch_file_after事件
         $eventData->setData('content', $content);
@@ -613,6 +634,34 @@ class PcController extends Core
         $memoryProbe('before_return', $finalContent);
         $fetchProfileTotalMs = \round((\microtime(true) - $fetchProfileStart) * 1000, 2);
         $uri = (string)(\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
+        if (TraceGate::isArmed()) {
+            $fetchMeta = [
+                'file' => (string)$fileName,
+                'uri' => $uri,
+                'content_bytes' => \is_string($finalContent) ? \strlen($finalContent) : 0,
+            ];
+            TraceGate::recordSpan(
+                'controller.fetch.before',
+                $fetchProfileBeforeMs,
+                'controller',
+                null,
+                $fetchMeta,
+            );
+            TraceGate::recordSpan(
+                'controller.fetch.template',
+                $fetchProfileTemplateMs,
+                'controller',
+                null,
+                $fetchMeta,
+            );
+            TraceGate::recordSpan(
+                'controller.fetch.after',
+                $fetchProfileAfterMs,
+                'controller',
+                null,
+                $fetchMeta,
+            );
+        }
         if ($fetchProfileTotalMs >= 20.0) {
             $entry = [
                 'file' => (string)$fileName,

@@ -498,8 +498,7 @@ class StateManager
 
         try {
             if (\class_exists(\Weline\Framework\View\Taglib::class, false)) {
-                \Weline\Framework\View\Taglib::clearStaticCaches();
-                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Taglib::class);
+                \Weline\Framework\View\Taglib::resetRequestState();
             }
         } catch (\Throwable $e) {
             RequestResetException::append($failures, 'taglib', $e);
@@ -507,11 +506,7 @@ class StateManager
 
         try {
             if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class, false)) {
-                \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
-                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Config\HookReader::class);
-            }
-            if (\class_exists(\Weline\Framework\Hook\Hooker::class, false)) {
-                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Hooker::class);
+                \Weline\Framework\Hook\Config\HookReader::resetRequestState();
             }
         } catch (\Throwable $e) {
             RequestResetException::append($failures, 'view_hooks', $e);
@@ -918,17 +913,16 @@ class StateManager
             }
         });
 
+        // Entry baseline + this finally callback both reset Taglib compileDepth.
+        // Dual path is intentional: with peer Fibers, finally omits this name and
+        // the next request's entry baseline must still zero depth; with no peers,
+        // cost is a single int write (process-hot caches are not touched).
         self::registerResetCallback('view_hook_runtime_cache', function () {
             if (\class_exists(\Weline\Framework\View\Taglib::class, false)) {
-                \Weline\Framework\View\Taglib::clearStaticCaches();
-                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Taglib::class);
+                \Weline\Framework\View\Taglib::resetRequestState();
             }
             if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class, false)) {
-                \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
-                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Config\HookReader::class);
-            }
-            if (\class_exists(\Weline\Framework\Hook\Hooker::class, false)) {
-                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Hooker::class);
+                \Weline\Framework\Hook\Config\HookReader::resetRequestState();
             }
         });
 

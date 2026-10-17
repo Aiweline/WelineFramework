@@ -66,6 +66,11 @@ final class CookieScope
         self::$cachedPolicy = null;
         self::$cachedScopeKey = '';
         self::$resolving = false;
+        // While request-trace is closed, allow a later qualified panel cookie to arm.
+        // Never disturb an actively recording request.
+        if (\class_exists(\Weline\Framework\Runtime\TraceGate::class, false)) {
+            \Weline\Framework\Runtime\TraceGate::invalidateIfDisarmed();
+        }
     }
 
     /**

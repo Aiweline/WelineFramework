@@ -111,10 +111,15 @@ class Handle implements RegisterInterface
                 $path = '';
                 // 继承链上若同时出现 Frontend/Backend 基类标记，优先写入后台路由表，
                 // 避免误注册到 frontend_pc（裸 /admin 等会走前台匹配）。
-                if (in_array(DataInterfaceAlias::type_pc_BACKEND, $param['area'], true)) {
+                // BackendPageController 是 BackendController 的正式中间基类，须同等视为后台。
+                $areaList = \is_array($param['area'] ?? null) ? $param['area'] : [];
+                if (
+                    \in_array(DataInterfaceAlias::type_pc_BACKEND, $areaList, true)
+                    || \in_array('BackendPageController', $areaList, true)
+                ) {
                     $path = self::path_backend_PC;
                     $param['area'] = DataInterfaceAlias::type_pc_BACKEND;
-                } elseif (in_array(DataInterfaceAlias::type_pc_FRONTEND, $param['area'], true)) {
+                } elseif (in_array(DataInterfaceAlias::type_pc_FRONTEND, $areaList, true)) {
                     $path = self::path_frontend_PC;
                     $param['area'] = DataInterfaceAlias::type_pc_FRONTEND;
                 }

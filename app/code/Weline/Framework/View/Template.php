@@ -28,16 +28,21 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\PostResponseCaptureMode;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\TemplateRenderRouteTrace;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Runtime\WlsRuntimeAdapterResolver;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Cache\TemplateCachePolicyRegistry;
+use Weline\Framework\View\Engine\EngineFlags;
+use Weline\Framework\View\Engine\HookRuntime;
+use Weline\Framework\View\Engine\ViewEngine;
 use Weline\Framework\View\Helper\EmbeddedPageTitle;
 use Weline\Framework\View\Helper\HtmlCacheAdmission;
 use Weline\Framework\Runtime\RequestLocalInterface;
@@ -1141,8 +1146,8 @@ class Template extends DataObject implements RequestLocalInterface
             unset($this->pinnedSourceDigests[$logicalPath]);
         }
         ++$this->pinnedSourceGeneration;
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::measurePhase('template.source_pin', function () use ($logicalPath, $source): void {
+        if (TraceGate::isArmed()) {
+            TraceGate::measurePhase('template.source_pin', function () use ($logicalPath, $source): void {
                 $this->pinnedSources[$logicalPath] = $source;
             });
             return;
@@ -1152,6 +1157,16 @@ class Template extends DataObject implements RequestLocalInterface
 
     public function getFetchFile(string $fileName, string|null $module_name = ''): string
     {
+        $memoKey = null;
+        if ($module_name === '' || $module_name === null) {
+            $origin = $this->activeSourceOrigin;
+            $memoKey = 'view.fetch_file:' . $fileName . '|' . $origin;
+            $memoized = RequestContext::get($memoKey);
+            if (\is_string($memoized) && $memoized !== '' && \is_file($memoized)) {
+                return $memoized;
+            }
+        }
+
         if (isset($this->pinnedSources[$fileName])) {
             return $this->getFetchFileFromSource($fileName, ...$this->pinnedSources[$fileName]);
         }
@@ -1170,7 +1185,12 @@ class Template extends DataObject implements RequestLocalInterface
             throw new Exception('Unable to read template source: ' . $tplFile);
         }
 
-        return $this->compileSourceBytes($comFileName, $content, $tplFile, '');
+        $compiled = $this->compileSourceBytes($comFileName, $content, $tplFile, '');
+        if ($memoKey !== null) {
+            RequestContext::set($memoKey, $compiled);
+        }
+
+        return $compiled;
     }
 
     /** Compile a captured or virtual source with the ordinary Taglib/i18n pipeline. */
@@ -1202,8 +1222,8 @@ class Template extends DataObject implements RequestLocalInterface
 
     private function sourceBytesDigest(string $sourceBytes): string
     {
-        return RequestLifecycleTrace::isEnabled()
-            ? RequestLifecycleTrace::measurePhase('template.source_bytes_digest', static fn(): string => md5(md5($sourceBytes) . '|' . strlen($sourceBytes) . '|' . Taglib::COMPILER_GENERATION) . '-' . strlen($sourceBytes))
+        return TraceGate::isArmed()
+            ? TraceGate::measurePhase('template.source_bytes_digest', static fn(): string => md5(md5($sourceBytes) . '|' . strlen($sourceBytes) . '|' . Taglib::COMPILER_GENERATION) . '-' . strlen($sourceBytes))
             : md5(md5($sourceBytes) . '|' . strlen($sourceBytes) . '|' . Taglib::COMPILER_GENERATION) . '-' . strlen($sourceBytes);
     }
 
@@ -1463,9 +1483,86 @@ class Template extends DataObject implements RequestLocalInterface
      * @return bool|void
      * @throws \Exception
      */
+    /**
+     * Preferred engine entry (resolve logical → compiled path).
+     */
+    public function resolve(string $logical): string
+    {
+        return $this->getFetchFile($logical);
+    }
+
+    /**
+     * Include into the current capture frame (list hot path).
+     *
+     * @param array<string, mixed> $data
+     */
+    public function include(string $logicalOrCompiled, array $data = []): void
+    {
+        ViewEngine::for($this)->include($logicalOrCompiled, $data);
+    }
+
+    /**
+     * Capture a template to string (always nested-safe via fetchHtml).
+     *
+     * @param array<string, mixed> $data
+     */
+    public function capture(string $logical, array $data = []): string
+    {
+        return ViewEngine::for($this)->capture($logical, $data);
+    }
+
+    /**
+     * ViewEngine host helpers (public for Engine package; not general API).
+     */
+    public function shortEngineRouteIdentity(string $filename): string
+    {
+        return $this->shortRenderRouteIdentity($filename);
+    }
+
+    public function addSourceModuleForEngine(string $fileName): void
+    {
+        $this->addSourceModuleToRequest(DataInterface::dir_type_TEMPLATE, $fileName);
+    }
+
+    /**
+     * Render a template.
+     *
+     * Nested (already inside FiberOutputBuffer capture): stream into the current
+     * frame with no nested capture and return '' — for `<?= $this->fetch() ?>`.
+     * Top-level / explicit string needs: use {@see fetchHtml} (always captures).
+     * When {@see EngineFlags::isV2Enabled()} (default), delegates to {@see ViewEngine}.
+     *
+     * @param array<string, mixed> $data
+     */
     public function fetch(string $fileName, array $data = [])
     {
-        /** Get output buffer. */
+        if (EngineFlags::isV2Enabled()) {
+            return ViewEngine::for($this)->fetch($fileName, $data);
+        }
+
+        return $this->fetchLegacy($fileName, $data);
+    }
+
+    /**
+     * Legacy fetch path (rollback when view.engine.v2=false).
+     *
+     * @param array<string, mixed> $data
+     */
+    private function fetchLegacy(string $fileName, array $data = [])
+    {
+        if (FiberOutputBuffer::hasActiveCapture()) {
+            TemplateRenderRouteTrace::armIfRequested();
+            TemplateRenderRouteTrace::begin('fetch_stream', $this->shortRenderRouteIdentity($fileName));
+            try {
+                $this->addSourceModuleToRequest(DataInterface::dir_type_TEMPLATE, $fileName);
+                $this->streamCompiledFile($this->getFetchFile($fileName), $data);
+
+                return '';
+            } finally {
+                TemplateRenderRouteTrace::end('fetch_stream', $this->shortRenderRouteIdentity($fileName));
+            }
+        }
+
         return $this->fetchHtml($fileName, $data);
     }
 
@@ -1499,11 +1596,17 @@ class Template extends DataObject implements RequestLocalInterface
      */
     public function fetchHtml(string $fileName, array $dictionary = []) 
     {
-        $this->addSourceModuleToRequest(DataInterface::dir_type_TEMPLATE, $fileName);
+        TemplateRenderRouteTrace::armIfRequested();
+        TemplateRenderRouteTrace::begin('fetch_html', $this->shortRenderRouteIdentity($fileName));
+        try {
+            $this->addSourceModuleToRequest(DataInterface::dir_type_TEMPLATE, $fileName);
 
-        $comFileName = $this->getFetchFile($fileName);
-        $result = $this->ob_file($comFileName, $dictionary);
-        return $result;
+            $comFileName = $this->getFetchFile($fileName);
+            $result = $this->ob_file($comFileName, $dictionary);
+            return $result;
+        } finally {
+            TemplateRenderRouteTrace::end('fetch_html', $this->shortRenderRouteIdentity($fileName));
+        }
     }
 
     private function addSourceModuleToRequest(string $type, string $source): void
@@ -1538,15 +1641,22 @@ class Template extends DataObject implements RequestLocalInterface
 
     private function fetchHookHtml(string $hookFile): string
     {
+        TemplateRenderRouteTrace::armIfRequested();
         $this->addSourceModuleToRequest('hooks', $hookFile);
 
         $templateCachePolicies = self::templateCachePolicies();
         $cachePolicy = $templateCachePolicies->output($hookFile);
         if ($cachePolicy === null) {
+            TemplateRenderRouteTrace::mark('hook', $this->shortRenderRouteIdentity($hookFile), ['policy' => 'none']);
             return $this->fetchTagHtml('hooks', $hookFile);
         }
         $renderOnceGroup = \trim((string)($cachePolicy['render_once_group'] ?? ''));
         if ($renderOnceGroup !== '' && $this->isTemplateCacheRenderOnceComplete($renderOnceGroup)) {
+            TemplateRenderRouteTrace::mark(
+                'hook_render_once_skip',
+                $this->shortRenderRouteIdentity($hookFile),
+                ['group' => $renderOnceGroup]
+            );
             return '';
         }
 
@@ -1667,28 +1777,38 @@ class Template extends DataObject implements RequestLocalInterface
 
     private function queueStaticHookOutputRefresh(string $cacheKey, string $compiledFile, int $ttl): void
     {
+        // Drain already restored Scope; nested enqueue would re-capture and cascade.
+        if (PostResponseTaskQueue::isDraining()) {
+            return;
+        }
         if (!$this->acquireRuntimeHookRefreshLock($cacheKey)) {
             return;
         }
 
-        PostResponseTaskQueue::enqueue('theme-hook-output:' . $cacheKey, function () use ($cacheKey, $compiledFile, $ttl): void {
-            $html = $this->ob_file($compiledFile);
-            if (!\is_string($html)) {
-                return;
-            }
-            if ($this->isEmptyCacheHtml($html)) {
-                $this->logHookCacheDiagnostic('skip_empty_static_hook_output_refresh', [
-                    'cache_key' => $cacheKey,
-                    'compiled_file' => $compiledFile,
-                ]);
-                return;
-            }
-            if (!HtmlCacheAdmission::admit($html)) {
-                return;
-            }
-            $this->rememberStaticHookOutput($cacheKey, $html, $ttl);
-            self::runtimeHookCacheSet($cacheKey, $html, $ttl);
-        });
+        // SCOPE: cache key precomputed; re-render under restored website/lang/origin pins.
+        PostResponseTaskQueue::enqueue(
+            'theme-hook-output:' . $cacheKey,
+            function () use ($cacheKey, $compiledFile, $ttl): void {
+                $html = $this->ob_file($compiledFile);
+                if (!\is_string($html)) {
+                    return;
+                }
+                if ($this->isEmptyCacheHtml($html)) {
+                    $this->logHookCacheDiagnostic('skip_empty_static_hook_output_refresh', [
+                        'cache_key' => $cacheKey,
+                        'compiled_file' => $compiledFile,
+                    ]);
+                    return;
+                }
+                if (!HtmlCacheAdmission::admit($html)) {
+                    return;
+                }
+                $this->rememberStaticHookOutput($cacheKey, $html, $ttl);
+                self::runtimeHookCacheSet($cacheKey, $html, $ttl);
+            },
+            0.0,
+            PostResponseCaptureMode::Scope,
+        );
     }
 
     /**
@@ -1770,9 +1890,14 @@ class Template extends DataObject implements RequestLocalInterface
                 return null;
             }
 
+            // Shard by account-area / i18n-inline / theme so Visitor pixel skip,
+            // I18n inline shell, and theme-bound boot never poison one bag.
             // Logical discriminator only — outer hook.output buildEnvironmentScoped
             // applies lang/currency/website. Do not nest environmentHash here.
-            return 'body-end|auth:' . $authContext;
+            return 'body-end|auth:' . $authContext
+                . '|acct:' . ($this->isCustomerAccountAreaPath($requestPath) ? '1' : '0')
+                . '|i18n:' . ($this->isI18nInlineEditActiveForBodyEndCache() ? '1' : '0')
+                . '|theme:' . $this->frontendThemeIdForBodyEndCache();
         } catch (\Throwable) {
             return null;
         }
@@ -1781,6 +1906,52 @@ class Template extends DataObject implements RequestLocalInterface
     private function isAccountAuthRequestPath(string $requestPath): bool
     {
         return \preg_match('#(^|/)customer/account/(login|register|forgot-password|challenge|logout)(/|$)#', $requestPath) === 1;
+    }
+
+    /** Account chrome area (not only login/register) — aligns Visitor body-end skip. */
+    private function isCustomerAccountAreaPath(string $requestPath): bool
+    {
+        $path = \strtolower(\trim($requestPath, '/'));
+        return $path === 'customer/account'
+            || \str_starts_with($path, 'customer/account/');
+    }
+
+    private function isI18nInlineEditActiveForBodyEndCache(): bool
+    {
+        try {
+            if (!\class_exists(\Weline\I18n\Service\InlineEdit\InlineEditSession::class)) {
+                return false;
+            }
+            /** @var \Weline\I18n\Service\InlineEdit\InlineEditSession $session */
+            $session = ObjectManager::getInstance(\Weline\I18n\Service\InlineEdit\InlineEditSession::class);
+
+            return $session->isActive($this->request);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function frontendThemeIdForBodyEndCache(): string
+    {
+        try {
+            $app = \Weline\Framework\Runtime\ThemeApplicationContext::current('frontend', 'runtime')
+                ?? \Weline\Framework\Runtime\ThemeApplicationContext::current('frontend');
+            if ($app !== null && isset($app->themeId) && (int)$app->themeId >= 0) {
+                return (string)(int)$app->themeId;
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            if (\class_exists(\Weline\Theme\Helper\ThemeData::class)) {
+                $theme = \Weline\Theme\Helper\ThemeData::getCurrentTheme();
+                if ($theme !== null && \method_exists($theme, 'getId')) {
+                    return (string)(int)$theme->getId();
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return '0';
     }
 
     private function i18nStaticHookCacheContext(string $eventName, string $type): ?string
@@ -1818,15 +1989,106 @@ class Template extends DataObject implements RequestLocalInterface
 
     public function ob_file(string $filename, array $dictionary = []): string
     {
-        $profileStart = \microtime(true);
-        // 每次渲染都重新执行 init，确保请求级状态始终绑定当前请求。
-        $this->init();
-        // WLS swaps the request instance per incoming request. Refresh the legacy
-        // `$this->request` reference so older templates using that property stay correct.
+        TemplateRenderRouteTrace::armIfRequested();
+        $routeIdentity = $this->shortRenderRouteIdentity($filename);
+        TemplateRenderRouteTrace::begin('ob_file', $routeIdentity);
+        try {
+            return $this->obFileInner($filename, $dictionary);
+        } finally {
+            TemplateRenderRouteTrace::end('ob_file', $routeIdentity);
+        }
+    }
+
+    /**
+     * Include compiled PHP into the current Fiber capture frame (no nested beginCapture).
+     *
+     * @param array<string, mixed> $dictionary
+     */
+    /**
+     * Stream a compiled template into the open capture (or echo via ob_file).
+     * Public for {@see ViewEngine}; prefer {@see include()} / {@see fetch()} from templates.
+     *
+     * @param array<string, mixed> $dictionary
+     */
+    public function streamCompiledFile(string $filename, array $dictionary = []): void
+    {
+        if (!FiberOutputBuffer::hasActiveCapture()) {
+            echo $this->ob_file($filename, $dictionary);
+
+            return;
+        }
+
+        TemplateRenderRouteTrace::armIfRequested();
+        $routeIdentity = $this->shortRenderRouteIdentity($filename);
+        TemplateRenderRouteTrace::begin('stream_file', $routeIdentity);
+        $temporaryTemplateData = $this->pushTemporaryTemplateData($dictionary);
+        $previousSourceOrigin = $this->activeSourceOrigin;
+        $this->activeSourceOrigin = $this->compiledSourceOrigins[$filename] ?? '';
+        try {
+            $this->softBindRequestForNestedRender();
+            $block = $this;
+            $this->setData('block', $this);
+            $extractData = $this->getData();
+            if (\is_array($extractData) && $extractData !== []) {
+                $extractData = EmbeddedPageTitle::sanitizePublicSlots($extractData);
+                if (\array_key_exists('title', $extractData)) {
+                    parent::setData('title', $extractData['title']);
+                }
+                if (isset($extractData['meta']) && \is_array($extractData['meta'])) {
+                    parent::setData('meta', $extractData['meta']);
+                }
+                extract($extractData, EXTR_SKIP);
+            }
+            self::cooperativeTemplateYield();
+            include $filename;
+            self::cooperativeTemplateYield();
+        } finally {
+            $this->popTemporaryTemplateData($temporaryTemplateData);
+            $this->activeSourceOrigin = $previousSourceOrigin;
+            TemplateRenderRouteTrace::end('stream_file', $routeIdentity);
+        }
+    }
+
+    /**
+     * Nested render bind: refresh request carriers without full init() (title wipe).
+     */
+    private function softBindRequestForNestedRender(): void
+    {
+        if (!$this->isRequestRuntime()) {
+            return;
+        }
+
         $this->request = ObjectManager::getInstance(Request::class);
-        RequestLifecycleTrace::armTemplatePerfOverlayIfRequested();
-        $ioBefore = RequestLifecycleTrace::isEnabled()
-            ? RequestLifecycleTrace::snapshotIoCounters()
+        $context = Context::getCurrent();
+        $carriers = $context?->get('view.template.init_carriers');
+        if ($carriers === null) {
+            $carriers = ['req' => new TemplateRequestView(), 'env' => new TemplateEnvView()];
+            $context?->set('view.template.init_carriers', $carriers);
+        }
+        $this->setData('req', $carriers['req']);
+        $this->setData('env', $carriers['env']);
+        if (\trim((string)$this->getData('lang')) === '') {
+            $this->initLanguage();
+        }
+    }
+
+    private function obFileInner(string $filename, array $dictionary = []): string
+    {
+        $profileStart = \microtime(true);
+        // Nested string capture (fetchHtml inside an open page frame): soft-bind only.
+        // Top-level page/fragment capture still runs full init for request isolation.
+        if (FiberOutputBuffer::hasActiveCapture()) {
+            $this->softBindRequestForNestedRender();
+        } else {
+            // 每次顶层渲染都重新执行 init，确保请求级状态始终绑定当前请求。
+            $this->init();
+            // WLS swaps the request instance per incoming request. Refresh the legacy
+            // `$this->request` reference so older templates using that property stay correct.
+            $this->request = ObjectManager::getInstance(Request::class);
+        }
+        TraceGate::armTemplatePerfOverlayIfRequested();
+        $ioBefore = TraceGate::isArmed()
+            ? TraceGate::snapshotIoCounters()
             : ['db_duration_ms' => 0.0, 'db_span_count' => 0, 'wls_duration_ms' => 0.0, 'wls_span_count' => 0];
         $profileInitEnd = \microtime(true);
         $reusableTemplateCacheKey = $this->buildReusableTemplateOutputCacheKey($filename, $dictionary);
@@ -1854,6 +2116,7 @@ class Template extends DataObject implements RequestLocalInterface
                     \strlen($html),
                     $io
                 );
+                TemplateRenderRouteTrace::mark('ob_file_cache_hit', $this->shortRenderRouteIdentity($filename));
 
                 return $this->annotateTemplateRenderOverlay($html, $filename, $totalMs, \strlen($html), $io);
             }
@@ -1972,8 +2235,8 @@ class Template extends DataObject implements RequestLocalInterface
      */
     private function deltaTemplateIoCounters(array $before, ?float $totalMs = null): array
     {
-        $after = RequestLifecycleTrace::isEnabled()
-            ? RequestLifecycleTrace::snapshotIoCounters()
+        $after = TraceGate::isArmed()
+            ? TraceGate::snapshotIoCounters()
             : ['db_duration_ms' => 0.0, 'db_span_count' => 0, 'wls_duration_ms' => 0.0, 'wls_span_count' => 0];
         $dbMs = \max(0.0, (float)$after['db_duration_ms'] - (float)$before['db_duration_ms']);
         $wlsMs = \max(0.0, (float)$after['wls_duration_ms'] - (float)$before['wls_duration_ms']);
@@ -2014,7 +2277,35 @@ class Template extends DataObject implements RequestLocalInterface
      */
     private function shouldAnnotateTemplateRenderOverlay(): bool
     {
-        return RequestLifecycleTrace::isTemplatePerfOverlayRequested();
+        return TraceGate::isTemplatePerfOverlayRequested();
+    }
+
+    private function shortRenderRouteIdentity(string $filename): string
+    {
+        $path = \str_replace('\\', '/', $filename);
+        $basePath = \defined('BP') ? \str_replace('\\', '/', (string)BP) : '';
+        if ($basePath !== '' && \str_starts_with($path, $basePath)) {
+            $path = \ltrim(\substr($path, \strlen($basePath)), '/');
+        }
+        // Keep owning module so multi-module hooks that share a Theme-relative
+        // suffix (e.g. hooks/Weline_Theme/.../body-end) do not collapse to one
+        // false duplicate identity.
+        $owner = '';
+        if (\preg_match('#(?:^|/)app/code/([^/]+)/([^/]+)/#', $path, $ownerMatch) === 1
+            || \preg_match('#(?:^|/)code/([^/]+)/([^/]+)/#', $path, $ownerMatch) === 1
+        ) {
+            $owner = $ownerMatch[1] . '_' . $ownerMatch[2] . '/';
+        }
+        if (\preg_match('#/(widgets|partials|layouts|templates|hooks)/(.+)$#', $path, $m) === 1) {
+            return $owner . $m[1] . '/' . $m[2];
+        }
+        if (\str_contains($path, '/')) {
+            $parts = \explode('/', $path);
+
+            return $owner . \implode('/', \array_slice($parts, -3));
+        }
+
+        return $path !== '' ? $path : '(empty)';
     }
 
     /**
@@ -2172,7 +2463,7 @@ class Template extends DataObject implements RequestLocalInterface
         int $bytes,
         ?array $io = null
     ): void {
-        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $traceEnabled = TraceGate::isArmed();
         if (!$traceEnabled && $totalMs < 20.0 && $includeMs < 20.0) {
             return;
         }
@@ -2677,6 +2968,171 @@ class Template extends DataObject implements RequestLocalInterface
         return $this->getUrlObject()->getBackendApiUrl($path, $params, $merge_query);
     }
     /*_______________URL____________*/
+
+    /**
+     * Stream hook contributors into the current capture (memoized file list per request).
+     */
+    private function streamHookIntoCurrentCapture(string $name, bool $forceRefresh): void
+    {
+        $templateCachePolicies = self::templateCachePolicies();
+        if (!$forceRefresh && $templateCachePolicies->isRequestCacheable($name)) {
+            $context = Context::current();
+            $requestId = RequestContext::getId();
+            if ($requestId === null || $requestId === '') {
+                $requestId = (string)($context->get('runtime.request_count') ?? \spl_object_id($context));
+            }
+            $requestCacheKey = KeyBuilder::buildEnvironmentScoped(
+                'view.hook.request',
+                $requestId . ':' . $name,
+                [
+                    'cache_version' => '20261013-hook-request-v2',
+                ],
+                [
+                    'area_route' => false,
+                ],
+            );
+            $cachedHookHtml = RequestContext::get($requestCacheKey);
+            if (\is_string($cachedHookHtml)) {
+                echo $cachedHookHtml;
+
+                return;
+            }
+        }
+
+        $aggregatePolicy = $templateCachePolicies->aggregate($name);
+        if ($aggregatePolicy !== null) {
+            $aggregateContext = $this->resolveTemplateCachePolicyContext($aggregatePolicy, $name);
+            if ($aggregateContext !== null) {
+                $aggregateCacheKey = KeyBuilder::buildEnvironmentScoped(
+                    'view.hook.aggregate',
+                    $name . '|' . $aggregateContext . '|' . $templateCachePolicies->aggregateDigest($name),
+                    [
+                        'cache_version' => '20261013-hook-aggregate-v2',
+                        'origin' => $this->baseUrlCacheContext(),
+                    ],
+                    [
+                        'area_route' => false,
+                    ],
+                );
+                $aggregateTtl = $this->staticHookAggregateCacheTtl();
+                if (!$forceRefresh) {
+                    $cachedAggregateHtml = $this->readStaticHookAggregateCache($aggregateCacheKey, $aggregateTtl);
+                    if ($cachedAggregateHtml['status'] !== 'miss') {
+                        echo (string)$cachedAggregateHtml['html'];
+
+                        return;
+                    }
+                    $runtimeCachedAggregate = $this->readRuntimeHookCache($aggregateCacheKey, $aggregateTtl);
+                    if ($runtimeCachedAggregate['status'] !== 'miss') {
+                        echo (string)$runtimeCachedAggregate['html'];
+
+                        return;
+                    }
+                }
+            }
+        }
+
+        foreach ($this->resolveHookContributorFiles($name) as $hookerFile) {
+            $this->streamHookContributorFile((string)$hookerFile);
+        }
+    }
+
+    /**
+     * @return array<string, string> module => logical hook file
+     */
+    private function resolveHookContributorFiles(string $name): array
+    {
+        $memoKey = 'view.hook.files:' . $name;
+        $memoized = RequestContext::get($memoKey);
+        if (\is_array($memoized)) {
+            return $memoized;
+        }
+
+        $hookFiles = [];
+        $hookFilesWithMeta = [];
+        try {
+            /** @var \Weline\Framework\Hook\Config\HookReader $hookReader */
+            $hookReader = ObjectManager::make(\Weline\Framework\Hook\Config\HookReader::class);
+            $hookReader->setPath($name);
+            $hookFilesWithMeta = $hookReader->getFileListWithMeta();
+            if ($hookFilesWithMeta !== []) {
+                foreach ($hookFilesWithMeta as $module => $meta) {
+                    $filePath = (string)($meta['file'] ?? $meta['path'] ?? '');
+                    if ($filePath === '') {
+                        continue;
+                    }
+                    $hookFiles[$module] = strpos($filePath, '::') !== false
+                        ? $filePath
+                        : $module . '::hooks/' . $filePath;
+                }
+            }
+            if ($hookFiles === []) {
+                $hookFiles = $hookReader->getFileList();
+            }
+        } catch (\Throwable) {
+            /** @var Hooker $hooker */
+            $hooker = ObjectManager::getInstance(Hooker::class);
+            $hookFiles = $hooker->getHook($name);
+        }
+
+        $soloHook = null;
+        foreach ($hookFilesWithMeta as $module => $meta) {
+            if (!empty($meta['solo'])) {
+                $soloHook = $module;
+                break;
+            }
+        }
+        if ($soloHook !== null && isset($hookFiles[$soloHook])) {
+            $hookFiles = [$soloHook => $hookFiles[$soloHook]];
+        }
+
+        if ($hookFiles !== [] && \method_exists(\Weline\Framework\Phrase\Parser::class, 'prefetchGlobalDictionaryModules')) {
+            $dictionaryModules = [];
+            foreach ($hookFiles as $hookFile) {
+                try {
+                    [, $sourceModule] = $this->processModuleSourceFilePath('hooks', (string)$hookFile);
+                    if ($sourceModule !== '') {
+                        $dictionaryModules[$sourceModule] = $sourceModule;
+                    }
+                } catch (\Throwable) {
+                }
+            }
+            if ($dictionaryModules !== []) {
+                $dictionaryModules = \array_values($dictionaryModules);
+                \sort($dictionaryModules);
+                if (!\Weline\Framework\Phrase\PageDictionaryPrefetchCoordinator::coversModules($dictionaryModules)) {
+                    TraceGate::measurePhase(
+                        'view.hook.dictionary_prefetch',
+                        static fn() => \Weline\Framework\Phrase\Parser::prefetchGlobalDictionaryModules($dictionaryModules),
+                        ['hook' => $name, 'modules' => \count($dictionaryModules), 'module_set_hash' => \sha1(\implode('|', $dictionaryModules))],
+                    );
+                    \Weline\Framework\Phrase\PageDictionaryPrefetchCoordinator::noteAdditionalModules($dictionaryModules);
+                }
+            }
+        }
+
+        RequestContext::set($memoKey, $hookFiles);
+
+        return $hookFiles;
+    }
+
+    private function streamHookContributorFile(string $hookFile): void
+    {
+        $this->addSourceModuleToRequest('hooks', $hookFile);
+        $templateCachePolicies = self::templateCachePolicies();
+        $cachePolicy = $templateCachePolicies->output($hookFile);
+        if ($cachePolicy === null) {
+            TemplateRenderRouteTrace::mark('hook_stream_file', $this->shortRenderRouteIdentity($hookFile), ['policy' => 'none']);
+            $compiledFile = $this->fetchTagSource('hooks', $hookFile);
+            $this->streamCompiledFile($compiledFile);
+
+            return;
+        }
+
+        // Output-cacheable contributors still need a string for HIT/store.
+        echo $this->fetchHookHtml($hookFile);
+    }
+
     /**
      * @throws \ReflectionException
      * @throws Exception
@@ -2693,6 +3149,23 @@ class Template extends DataObject implements RequestLocalInterface
                 'buffer' => FiberOutputBuffer::debugState(),
             ]);
         }
+
+        // Nested echo getHook(...): stream contributors into the open frame (no nested OB).
+        // DEV decoration and top-level/string consumers keep the capture path below.
+        // getHookResult(<else/>) MUST receive a string — streaming+'' would falsely trigger
+        // fallback and double-render (e.g. header language switcher ×2).
+        if (HookRuntime::preferStreamIntoCapture($this->shouldDecorateHookOutput())) {
+            TemplateRenderRouteTrace::armIfRequested();
+            TemplateRenderRouteTrace::begin('hook_stream', $name);
+            try {
+                $this->streamHookIntoCurrentCapture($name, $forceRefresh);
+            } finally {
+                TemplateRenderRouteTrace::end('hook_stream', $name);
+            }
+
+            return '';
+        }
+
         $requestCacheKey = null;
         $aggregateCacheKey = null;
         $templateCachePolicies = self::templateCachePolicies();
@@ -2742,16 +3215,11 @@ class Template extends DataObject implements RequestLocalInterface
                 );
                 $aggregateTtl = $this->staticHookAggregateCacheTtl();
                 if (!$forceRefresh) {
+                    // Complete aggregates may legitimately be empty (all contributor
+                    // stubs moved to footer chrome). Empty HTML is a valid HIT — do
+                    // not discard it, or body-end keeps re-walking every empty file.
                     $cachedAggregateHtml = $this->readStaticHookAggregateCache($aggregateCacheKey, $aggregateTtl);
                     if ($cachedAggregateHtml['status'] !== 'miss') {
-                        if ($this->isEmptyCacheHtml((string)$cachedAggregateHtml['html'])) {
-                            unset(self::$staticHookAggregateOutputCache[$aggregateCacheKey]);
-                            $this->logHookCacheDiagnostic('skip_empty_static_hook_aggregate_cache', [
-                                'hook' => $name,
-                                'cache_key' => $aggregateCacheKey,
-                                'status' => (string)$cachedAggregateHtml['status'],
-                            ]);
-                        } else {
                         if ($cachedAggregateHtml['status'] === 'stale' && ($aggregatePolicy['allow_async_refresh'] ?? false)) {
                             $this->queueStaticHookAggregateRefresh($name, $aggregateCacheKey, $aggregateTtl);
                         }
@@ -2767,19 +3235,10 @@ class Template extends DataObject implements RequestLocalInterface
                             ]);
                         }
                         return (string)$cachedAggregateHtml['html'];
-                        }
                     }
 
                     $runtimeCachedAggregate = $this->readRuntimeHookCache($aggregateCacheKey, $aggregateTtl);
                     if ($runtimeCachedAggregate['status'] !== 'miss') {
-                        if ($this->isEmptyCacheHtml((string)$runtimeCachedAggregate['html'])) {
-                            self::runtimeHookCacheDelete($aggregateCacheKey);
-                            $this->logHookCacheDiagnostic('skip_empty_runtime_hook_aggregate_cache', [
-                                'hook' => $name,
-                                'cache_key' => $aggregateCacheKey,
-                                'status' => (string)$runtimeCachedAggregate['status'],
-                            ]);
-                        } else {
                         $this->rememberStaticHookAggregate($aggregateCacheKey, (string)$runtimeCachedAggregate['html'], $aggregateTtl, (string)$runtimeCachedAggregate['status']);
                         if ($runtimeCachedAggregate['status'] === 'stale' && ($aggregatePolicy['allow_async_refresh'] ?? false)) {
                             $this->queueStaticHookAggregateRefresh($name, $aggregateCacheKey, $aggregateTtl);
@@ -2796,18 +3255,17 @@ class Template extends DataObject implements RequestLocalInterface
                             ]);
                         }
                         return (string)$runtimeCachedAggregate['html'];
-                        }
                     }
                 }
             }
         }
 
-        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $traceEnabled = TraceGate::isArmed();
         $traceName = 'view::hook::' . substr($name, 0, 180);
         $traceStart = 0.0;
         if ($traceEnabled) {
             $traceStart = microtime(true);
-            RequestLifecycleTrace::pushCurrentParent($traceName);
+            TraceGate::pushCurrentParent($traceName);
         }
 
         $hooker_content = '';
@@ -2882,7 +3340,7 @@ class Template extends DataObject implements RequestLocalInterface
                 \sort($dictionaryModules);
                 // Page-level prime already covered these modules — skip per-hook phase/MGET.
                 if (!\Weline\Framework\Phrase\PageDictionaryPrefetchCoordinator::coversModules($dictionaryModules)) {
-                    RequestLifecycleTrace::measurePhase(
+                    TraceGate::measurePhase(
                         'view.hook.dictionary_prefetch',
                         static fn() => \Weline\Framework\Phrase\Parser::prefetchGlobalDictionaryModules($dictionaryModules),
                         ['hook' => $name, 'modules' => \count($dictionaryModules), 'module_set_hash' => \sha1(\implode('|', $dictionaryModules))],
@@ -2929,7 +3387,7 @@ class Template extends DataObject implements RequestLocalInterface
             $hookHtml = '';
             if ($traceEnabled) {
                 $fileTraceStart = microtime(true);
-                RequestLifecycleTrace::pushCurrentParent($fileTraceName);
+                TraceGate::pushCurrentParent($fileTraceName);
             }
             if ($traceAccountSidebarHook) {
                 $this->logAccountSidebarTemplateTrace('hook_file_before', [
@@ -2943,8 +3401,8 @@ class Template extends DataObject implements RequestLocalInterface
                 $hookHtml = $this->fetchHookHtml((string)$hooker_file);
             } finally {
                 if ($traceEnabled) {
-                    RequestLifecycleTrace::popCurrentParent();
-                    RequestLifecycleTrace::recordSpan($fileTraceName, (microtime(true) - $fileTraceStart) * 1000, 'view', null, [
+                    TraceGate::popCurrentParent();
+                    TraceGate::recordSpan($fileTraceName, (microtime(true) - $fileTraceStart) * 1000, 'view', null, [
                         'hook' => $name,
                         'module' => (string)$module,
                         'file' => (string)$hooker_file,
@@ -3004,8 +3462,8 @@ class Template extends DataObject implements RequestLocalInterface
         }
         
         if ($traceEnabled) {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan($traceName, (microtime(true) - $traceStart) * 1000, 'view', null, [
+            TraceGate::popCurrentParent();
+            TraceGate::recordSpan($traceName, (microtime(true) - $traceStart) * 1000, 'view', null, [
                 'hook' => $name,
                 'files' => count($hookFiles),
                 'output_bytes' => $hookOutputBytes,
@@ -3017,17 +3475,11 @@ class Template extends DataObject implements RequestLocalInterface
             RequestContext::set($requestCacheKey, $hooker_content);
         }
         if ($aggregateCacheKey !== null) {
+            // Store even when all contributors render empty: complete body-end
+            // stubs still need an aggregate HIT to avoid re-walking N empty files.
             $aggregateTtl = $this->staticHookAggregateCacheTtl();
-            if ($this->isEmptyCacheHtml($hooker_content) && $hookFiles !== []) {
-                $this->logHookCacheDiagnostic('skip_empty_static_hook_aggregate_store', [
-                    'hook' => $name,
-                    'cache_key' => $aggregateCacheKey,
-                    'files' => count($hookFiles),
-                ]);
-            } else {
-                $this->rememberStaticHookAggregate($aggregateCacheKey, $hooker_content, $aggregateTtl);
-                self::runtimeHookCacheSet($aggregateCacheKey, $hooker_content, $aggregateTtl);
-            }
+            $this->rememberStaticHookAggregate($aggregateCacheKey, $hooker_content, $aggregateTtl);
+            self::runtimeHookCacheSet($aggregateCacheKey, $hooker_content, $aggregateTtl);
         }
 
         if ($traceAccountSidebarHook) {
@@ -3062,13 +3514,19 @@ class Template extends DataObject implements RequestLocalInterface
         $fileCount = $this->countHookImplementationFiles($name);
         $handledEmptyKey = 'view.hook.handled_empty.' . $name;
         $decorateOutputKey = 'view.hook.decorate_output';
+        $requireStringKey = 'view.hook.require_string_result';
         $hadDecorateOutput = RequestContext::has($decorateOutputKey);
         $previousDecorateOutput = RequestContext::get($decorateOutputKey);
+        $hadRequireString = RequestContext::has($requireStringKey);
+        $previousRequireString = RequestContext::get($requireStringKey);
         RequestContext::remove($handledEmptyKey);
 
         if ($preferFallbackOnEmpty) {
             // Fallback must be decided from semantic output, never from DEV/visual-editor comments.
             RequestContext::set($decorateOutputKey, false);
+            // Block Fiber stream-into-capture: that path returns '' after already echoing,
+            // which would both paint the hook AND take <else/> (duplicate chrome controls).
+            RequestContext::set($requireStringKey, true);
         }
 
         try {
@@ -3083,6 +3541,11 @@ class Template extends DataObject implements RequestLocalInterface
                     RequestContext::set($decorateOutputKey, $previousDecorateOutput);
                 } else {
                     RequestContext::remove($decorateOutputKey);
+                }
+                if ($hadRequireString) {
+                    RequestContext::set($requireStringKey, $previousRequireString);
+                } else {
+                    RequestContext::remove($requireStringKey);
                 }
             }
         }
@@ -3159,13 +3622,22 @@ class Template extends DataObject implements RequestLocalInterface
 
     private function queueStaticHookAggregateRefresh(string $name, string $cacheKey, int $ttl): void
     {
+        if (PostResponseTaskQueue::isDraining()) {
+            return;
+        }
         if (!$this->acquireRuntimeHookRefreshLock($cacheKey)) {
             return;
         }
 
-        PostResponseTaskQueue::enqueue('theme-hook-aggregate:' . $cacheKey, function () use ($name): void {
-            $this->getHook($name, true);
-        });
+        // SCOPE + drain-nested gate: force refresh must not enqueue child Full/Scope tasks.
+        PostResponseTaskQueue::enqueue(
+            'theme-hook-aggregate:' . $cacheKey,
+            function () use ($name): void {
+                $this->getHook($name, true);
+            },
+            0.0,
+            PostResponseCaptureMode::Scope,
+        );
     }
 
     /**
@@ -3423,7 +3895,7 @@ class Template extends DataObject implements RequestLocalInterface
 
     private function getHookCacheContext(): string
     {
-        $parent = RequestLifecycleTrace::getCurrentParent();
+        $parent = TraceGate::getCurrentParent();
         if (\is_string($parent) && $parent !== '') {
             return $parent;
         }
@@ -3526,6 +3998,7 @@ class Template extends DataObject implements RequestLocalInterface
                     self::runtimeHookCacheSetImmediate($key, $value, $ttl);
                 },
                 \microtime(true) + self::STATIC_HOOK_SHARED_WRITE_IDLE_GRACE_SECONDS,
+                PostResponseCaptureMode::None,
             );
             return;
         }

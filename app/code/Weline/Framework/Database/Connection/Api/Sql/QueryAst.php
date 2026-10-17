@@ -26,7 +26,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Debug;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 
 /**
@@ -953,7 +953,7 @@ abstract class QueryAst implements WriteIntentQueryInterface, PhysicalTableQuery
         if (Env::get('log.dev_sql.enabled', false)) {
             $log_file = Env::get('log.dev_sql.file', 'dev_sql');
             // Get SQL with bound values replaced
-            $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
+            $sqlWithValues = TraceGate::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             Env::log($log_file, $sqlWithValues, 'QUERY', true, true, 0);
         }
         
@@ -961,31 +961,31 @@ abstract class QueryAst implements WriteIntentQueryInterface, PhysicalTableQuery
         if (Env::get('log.db.enabled', false)) {
             $file = Env::get('log.db.file', 'db');
             // Use compact standard format: [timestamp] [QUERY] source - SQL
-            $sqlWithValues = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
+            $sqlWithValues = TraceGate::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             Env::log($file, $sqlWithValues, 'QUERY', true, true, 0);
         }
         # 调试环境信息
         if (DEV && Debug::target('pre_fetch')) {
-            $sensitiveDiagnostic = RequestLifecycleTrace::containsAuthenticationPersistence($this->sql);
+            $sensitiveDiagnostic = TraceGate::containsAuthenticationPersistence($this->sql);
             $msg = __('即将执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
-            $msg .= '$this->sql:' . RequestLifecycleTrace::redactDatabaseSql($this->sql) . PHP_EOL;
+            $msg .= '$this->sql:' . TraceGate::redactDatabaseSql($this->sql) . PHP_EOL;
             $msg .= '$this->bound_values:' . ($sensitiveDiagnostic ? '[REDACTED]' : json_encode($this->bound_values)) . PHP_EOL;
-            $msg .= 'Format SQL:' . RequestLifecycleTrace::redactDatabaseSql((string)$this->getSql(true));
+            $msg .= 'Format SQL:' . TraceGate::redactDatabaseSql((string)$this->getSql(true));
             Debug::target('pre_fetch', $msg);
         }
         // 防御：fetch_type 为空但 sql 已有时，根据 SQL 推断操作类型（避免链式操作中 query 被 reset/clear 后丢失类型）
         $this->resolveFetchTypeFromSql();
-        if (RequestLifecycleTrace::isEnabled()) {
+        if (TraceGate::isArmed()) {
             $dbTraceStart = microtime(true);
         }
         $dbTraceSql = '';
         if ($dbTraceStart > 0) {
             try {
-                $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->getSqlWithBounds($this->sql));
+                $dbTraceSql = TraceGate::redactDatabaseSql($this->getSqlWithBounds($this->sql));
             } catch (\Throwable) {
-                $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->sql);
+                $dbTraceSql = TraceGate::redactDatabaseSql($this->sql);
             }
         }
         $fetchRowLimit = $this->getFetchRowLimit();
@@ -1047,7 +1047,7 @@ abstract class QueryAst implements WriteIntentQueryInterface, PhysicalTableQuery
         if ($dbTraceStart > 0) {
             $op = $this->fetch_type ?: 'query';
             $table = $this->table !== '' ? $this->table : 'unknown';
-            RequestLifecycleTrace::recordSpan(
+            TraceGate::recordSpan(
                 'db::' . $op . '::' . $table,
                 (microtime(true) - $dbTraceStart) * 1000,
                 'db',
@@ -1163,13 +1163,13 @@ abstract class QueryAst implements WriteIntentQueryInterface, PhysicalTableQuery
         $this->fetch_type = '';
         # 调试环境信息
         if (DEV && Debug::target('fetch')) {
-            $sensitiveDiagnostic = RequestLifecycleTrace::containsAuthenticationPersistence($this->sql);
+            $sensitiveDiagnostic = TraceGate::containsAuthenticationPersistence($this->sql);
             $msg = __('执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
-            $msg .= '$this->sql:' . RequestLifecycleTrace::redactDatabaseSql($this->sql) . PHP_EOL;
+            $msg .= '$this->sql:' . TraceGate::redactDatabaseSql($this->sql) . PHP_EOL;
             $msg .= '$this->bound_values:' . ($sensitiveDiagnostic ? '[REDACTED]' : json_encode($this->bound_values)) . PHP_EOL;
-            $msg .= 'Format SQL:' . RequestLifecycleTrace::redactDatabaseSql((string)$this->getSql(true));
+            $msg .= 'Format SQL:' . TraceGate::redactDatabaseSql((string)$this->getSql(true));
             Debug::target('fetch', $msg);
         }
         //        $this->clear();

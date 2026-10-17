@@ -141,6 +141,13 @@ final class TagRegistry
                 priority: TagDefinition::PRIORITY_LAYOUT,
                 aliases: ['include'],
             ),
+            // Hoist resolve() once before a loop; developer include()s in the loop body.
+            new TagDefinition(
+                name: 'partial-once',
+                stage: TagDefinition::STAGE_COMPILE,
+                priority: TagDefinition::PRIORITY_LAYOUT,
+                aliases: ['w:partial-once'],
+            ),
             new TagDefinition(
                 name: 'extends',
                 stage: TagDefinition::STAGE_COMPILE,

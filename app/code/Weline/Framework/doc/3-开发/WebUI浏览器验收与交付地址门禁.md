@@ -73,11 +73,11 @@
 
 | 宿主示例 | 推荐动作（按序） |
 |----------|------------------|
-| Cursor ide-browser | `Network.enable` → `Network.setCacheDisabled({cacheDisabled:true})` → `browser_navigate`；**本回合改过静态资源时，导航 URL 还必须带 `_wb_nc=<unix_ms>`**，并抽检已加载脚本/样式正文含本回合标记（`fetch(...,{cache:'no-store'})` 或 curl `Cache-Control: no-cache`）；若 `setCacheDisabled` 被拒：注明降级并用 `_wb_nc=` 再 navigate（或关标签再开）；**禁止** `browser_cdp` `Page.reload`（会重载整个 Cursor 窗口、杀死全部智能体） |
-| Playwright / Puppeteer / 其它 CDP | 等价 CDP `Network.setCacheDisabled`，或会话级禁用缓存后再导航；本回合改静态时同样 cache-bust query + 正文抽检（Playwright 页内 `page.reload` 可用——不是 Cursor `browser_cdp`） |
-| 无 CDP 能力 | 对验收 URL **必须**带缓存破坏 query；仍须在日志注明限制 |
+| Cursor ide-browser | `Network.enable` → `Network.setCacheDisabled({cacheDisabled:true})` → `browser_navigate`；**验收导航 URL 必须带安装级 `w_fpc_pierce=<secret>`**（`FpcPierceStamp::buildQuerySuffix()` / `generated/framework/fpc_pierce_secret`；用 `?`/`&`，禁止叠第二个 `?`）——无穿章则 `_wb_nc`/诊断 query 不能打穿 FPC；**本回合改过静态资源时，还必须再带 `_wb_nc=<unix_ms>`**，并抽检已加载脚本/样式正文含本回合标记（`fetch(...,{cache:'no-store'})` 或 curl `Cache-Control: no-cache`）；若 `setCacheDisabled` 被拒：注明降级并用 pierce+`_wb_nc=` 再 navigate（或关标签再开）；**禁止** `browser_cdp` `Page.reload`（会重载整个 Cursor 窗口、杀死全部智能体） |
+| Playwright / Puppeteer / 其它 CDP | 等价 CDP `Network.setCacheDisabled`，或会话级禁用缓存后再导航；验收 URL 同样须穿章；本回合改静态时再 cache-bust query + 正文抽检（Playwright 页内 `page.reload` 可用——不是 Cursor `browser_cdp`） |
+| 无 CDP 能力 | 对验收 URL **必须**带穿章 + 缓存破坏 query；仍须在日志注明限制 |
 
-**禁止假 PASS**：跳过禁缓存就宣称 WB-OP PASS；仅用 CDP `Runtime.evaluate` 触发 UI、却从未用操作员 `browser_click` 证明同路径；未抽检本回合静态正文却声称「已加载新 JS/CSS」。
+**禁止假 PASS**：跳过禁缓存或跳过穿章就宣称 WB-OP PASS（明示 `visitor-path` HIT 探针除外）；仅用 CDP `Runtime.evaluate` 触发 UI、却从未用操作员 `browser_click` 证明同路径；未抽检本回合静态正文却声称「已加载新 JS/CSS」。
 
 打开顺序（机器契约 `closeout_delivery_reminder.browser_open_order`）：
 
@@ -123,8 +123,8 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 ```markdown
 ## 交付地址
 
-- [后台系统配置](http://p05113ef3.test.weline.com:9555/后台前缀/system-config/...)
-- [前台某某页](http://p05113ef3.test.weline.com:9555/path)
+- [后台系统配置](http://p05113ef3.test.weline.com:9555/后台前缀/system-config/...?w_fpc_pierce=<install_secret>)
+- [前台某某页](http://p05113ef3.test.weline.com:9555/path?w_fpc_pierce=<install_secret>)
 - API / Query：`w_query ...` 或 N/A
 ```
 
@@ -134,14 +134,17 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 |----|------|
 | 小节标题 | `交付地址`（或 `Delivery URLs`） |
 | 主验收链接 | 可点击 Markdown `[名称](http(s)://完整URL)`（本机 WLS 常为 `http://`） |
+| FPC 打穿章 | 店面/后台**主验收** URL（含规划/会话/related_web_urls）**必须**带安装级 `w_fpc_pierce=`（`FpcPierceStamp::buildQuerySuffix()`）；已有 query 用 `&`，禁止叠第二个 `?`；**禁止**把密钥样例写进规则/文档 |
 | 默认 Host | `{project_hash}.test.weline.com`（例：`p05113ef3.test.weline.com`）；**禁止**把 `*.weline.test` 当作主验收 Host |
-| 探活 | 交付前对字面 URL `curl` 探活；失败不得交死链 |
+| 探活 | 交付前对字面 URL（含穿章）`curl` 探活；失败不得交死链 |
 | 覆盖面 | 本功能涉及的全部前台页、后台页；有 API 一并列出 |
+| visitor-path | 仅当用例明示测访客 FPC HIT / html-disk 时，可无穿章并标注 `visitor-path`（次链） |
 | 无 UI | 写 `N/A` + CLI/接口入口，**禁止省略整节** |
 
 禁止：
 
 - 省略「交付地址」小节
+- 主验收店面/后台链接缺 `w_fpc_pierce=`
 - 臆造路由 / Host
 - 主链用仅某客户端可点的伪协议（如 `command:simpleBrowser.api.open`）——主链用标准 `http(s)://…` Markdown 链接；宿主 opener 仅可作辅链
 - 有可用 `*.test.weline.com` Host 时强行改成 `127.0.0.1`
@@ -149,7 +152,7 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 - 仅变色「打开」文字、无 Markdown 链接语法
 - 把源码路径拼成假 URL（如 `…/app/code/.../*.php`）
 
-技能细节：`local-browser-urls`（探活、Host 优先、query 勿二次编码）。
+技能细节：`local-browser-urls`（探活、Host 优先、穿章、query 勿二次编码）。
 
 ## 标准收口顺序（固定）
 

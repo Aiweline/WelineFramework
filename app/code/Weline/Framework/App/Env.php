@@ -99,8 +99,6 @@ class Env extends DataObject
     public const default_LANGUAGE_CODE = 'zh_Hans_CN';
     public const path_TRANSLATE_DEFAULT_FILE = self::GENERATED_DIR . DS . 'language' . DS . self::default_LANGUAGE_CODE . '.php';
 
-    public const path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE = self::GENERATED_DIR . DS . 'language' . DS . 'words.php';
-
     // 日志
     public const log_path_ERROR = 'error';
 
@@ -192,6 +190,9 @@ class Env extends DataObject
                 'fpc_cooperative_yield_enabled' => true,
                 'template_cooperative_yield_enabled' => true,
             ],
+            // FPC admin (CacheManager 全页缓存): auto-pierce key is absent by default —
+            // FpcMode treats absent as OFF (opt-in) so FPC stays hittable until enabled.
+            'fpc' => [],
         ],
         'security' => [
             'csrf' => [

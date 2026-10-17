@@ -66,12 +66,9 @@ trait TraitTemplate
         }
         $eventData = ['position' => $position, 'is_backend' => $is_backend, 'class' => ''];
         $this->eventsManager->dispatch("Framework_View::{$position}", $eventData);
-        $eventDataObj = $this->eventsManager->getEventData("Framework_View::{$position}");
-        if (!$eventDataObj) {
-            return '';
-        }
-        $class = $eventDataObj->getData('class');
-        if (empty($class) || !class_exists($class)) {
+        // Caller bag is SoT after array-payload ref envelope; do not re-read Event stickiness.
+        $class = (string)($eventData['class'] ?? '');
+        if ($class === '' || !class_exists($class)) {
             return '';
         }
         $object = ObjectManager::getInstance($class);
@@ -204,11 +201,11 @@ trait TraitTemplate
             case DataInterface::dir_type_TEMPLATE:
             case DataInterface::dir_type_THEME:
                 if ($t_f = $this->viewCache->get($cache_key)) {
-                    $data = $this->fetch($t_f);
+                    $data = $this->fetchHtml($t_f);
                     break;
                 }
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
-                $data = $this->fetch($t_f, $module_name);
+                $data = $this->fetchHtml($t_f);
                 $this->viewCache->set($cache_key, $t_f);
                 break;
             case DataInterface::dir_type_STATICS:
@@ -874,7 +871,7 @@ trait TraitTemplate
         return $event_filename;
     }
 
-    private function resolveThemeCacheKeyForFetchFile(string $filename): string
+    protected function resolveThemeCacheKeyForFetchFile(string $filename): string
     {
         $path = str_replace('\\', '/', $filename);
         $norm = str_replace('\\', '/', strtolower((string)$path));
