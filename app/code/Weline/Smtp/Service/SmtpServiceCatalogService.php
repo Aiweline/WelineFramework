@@ -5,6 +5,7 @@ namespace Weline\Smtp\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Mail\Service\MailOutboundRelaySecretService;
+use Weline\Mail\Service\StalwartManagementAdapter;
 use Weline\Smtp\Model\SmtpAccount;
 use Weline\Smtp\Model\SmtpService;
 
@@ -156,7 +157,7 @@ final class SmtpServiceCatalogService
         if ($host === '') {
             return ['success' => false, 'message' => (string)__('请填写外部 SMTP 主机'), 'smtp_service_id' => 0];
         }
-        if ($port < 1 || $port > 65535) {
+        if ($port < 1 || $port > 65535 || $port === 25) {
             $port = 587;
         }
         if (!in_array($tls, ['starttls', 'smtps', 'none'], true)) {
@@ -220,6 +221,111 @@ final class SmtpServiceCatalogService
     }
 
     /**
+     * 更新外部填入凭据；密码留空则保留原密封值。中继端口禁止 25 → 587。
+     *
+     * @return array{success: bool, message: string, smtp_service_id: int}
+     */
+    public function updateExternalService(
+        int $serviceId,
+        string $name,
+        string $host,
+        int $port,
+        string $username,
+        string $password,
+        string $tls = 'starttls',
+    ): array {
+        /** @var SmtpService $svc */
+        $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
+        if (!$svc->getId()) {
+            return ['success' => false, 'message' => (string)__('服务不存在'), 'smtp_service_id' => 0];
+        }
+        if ((string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_EXTERNAL) {
+            return ['success' => false, 'message' => (string)__('仅外部填入服务可在此改主机凭据'), 'smtp_service_id' => $serviceId];
+        }
+        $name = trim($name) !== '' ? trim($name) : (string)$svc->getData(SmtpService::schema_fields_NAME);
+        $host = strtolower(trim($host));
+        if ($host === '') {
+            return ['success' => false, 'message' => (string)__('请填写外部 SMTP 主机'), 'smtp_service_id' => $serviceId];
+        }
+        if ($port < 1 || $port > 65535 || $port === 25) {
+            $port = 587;
+        }
+        if (!in_array($tls, ['starttls', 'smtps', 'none'], true)) {
+            $tls = 'starttls';
+        }
+        $svc->setData(SmtpService::schema_fields_NAME, $name)
+            ->setData(SmtpService::schema_fields_SMTP_HOSTNAME, $host)
+            ->setData(SmtpService::schema_fields_PORT, $port)
+            ->setData(SmtpService::schema_fields_TLS, $tls)
+            ->setData(SmtpService::schema_fields_USERNAME, trim($username) !== '' ? trim($username) : null)
+            ->setData(SmtpService::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+        if (trim($password) !== '') {
+            try {
+                /** @var MailOutboundRelaySecretService $secrets */
+                $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                $svc->setData(SmtpService::schema_fields_PASSWORD_SEALED, $secrets->seal($password));
+            } catch (\Throwable $e) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('密码密封失败：%{1}', [$e->getMessage()]),
+                    'smtp_service_id' => $serviceId,
+                ];
+            }
+        }
+        $svc->save();
+
+        return [
+            'success' => true,
+            'message' => (string)__('外部 Smtp 凭据已更新'),
+            'smtp_service_id' => $serviceId,
+        ];
+    }
+
+    /**
+     * 删除 Smtp 服务：外部直接删；本机启用先删下属账户再删服务。
+     *
+     * @return array{success: bool, message: string}
+     */
+    public function deleteService(int $serviceId): array
+    {
+        /** @var SmtpService $svc */
+        $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
+        if (!$svc->getId()) {
+            return ['success' => false, 'message' => (string)__('服务不存在')];
+        }
+        $mode = (string)$svc->getData(SmtpService::schema_fields_MODE);
+        if ($mode === SmtpService::MODE_SELF) {
+            /** @var SmtpAccount $acctModel */
+            $acctModel = ObjectManager::getInstance(SmtpAccount::class);
+            $rows = $acctModel->clear()
+                ->where(SmtpAccount::schema_fields_SERVICE_ID, $serviceId)
+                ->select()
+                ->fetchArray();
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $aid = (int)($row[SmtpAccount::schema_fields_ID] ?? $row['smtp_account_id'] ?? 0);
+                if ($aid <= 0) {
+                    continue;
+                }
+                $one = ObjectManager::getInstance(SmtpAccount::class)->clear()->load($aid);
+                if ($one->getId()) {
+                    $one->delete();
+                }
+            }
+        }
+        $svc->delete();
+
+        return [
+            'success' => true,
+            'message' => $mode === SmtpService::MODE_EXTERNAL
+                ? (string)__('外部 Smtp 已删除')
+                : (string)__('本机 Smtp 服务及下属账户已删除'),
+        ];
+    }
+
+    /**
      * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string}
      */
     public function createAccountOnService(int $serviceId, string $localPart, string $role = SmtpAccount::ROLE_SUBMIT): array
@@ -258,6 +364,12 @@ final class SmtpServiceCatalogService
         } catch (\Throwable $e) {
             return $this->acctFail(__('密码密封失败：%{1}', [$e->getMessage()]));
         }
+        // 本机 Smtp 账号必须先落 Stalwart，再写目录库——禁止「库里有密码、邮局登不上」的假开通。
+        try {
+            $this->provisionSelfMailboxToStalwart($email, $password);
+        } catch (\Throwable $e) {
+            return $this->acctFail(__('Stalwart 开通失败：%{1}', [$e->getMessage()]));
+        }
         $now = date('Y-m-d H:i:s');
         $role = in_array($role, [SmtpAccount::ROLE_SUBMIT, SmtpAccount::ROLE_RELAY], true)
             ? $role
@@ -277,11 +389,31 @@ final class SmtpServiceCatalogService
 
         return [
             'success' => $id > 0,
-            'message' => $id > 0 ? (string)__('账户已创建，请立即复制密码') : (string)__('保存失败'),
+            'message' => $id > 0 ? (string)__('账户已创建（已同步 Stalwart），请立即复制密码') : (string)__('保存失败'),
             'smtp_account_id' => $id,
             'email' => $email,
             'password_once' => $id > 0 ? $password : '',
         ];
+    }
+
+    /**
+     * 本机 submit/relay 账号：ensure 域名后写入/重置 Stalwart 凭据。
+     */
+    private function provisionSelfMailboxToStalwart(string $email, string $password): void
+    {
+        $email = strtolower(trim($email));
+        $password = (string)$password;
+        if ($email === '' || $password === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            throw new \InvalidArgumentException('Smtp 邮箱或密码无效。');
+        }
+        $domain = substr(strrchr($email, '@') ?: '', 1);
+        if ($domain === '') {
+            throw new \InvalidArgumentException('Smtp 邮箱域名无效。');
+        }
+        /** @var StalwartManagementAdapter $mgmt */
+        $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+        $mgmt->ensureDomain($domain);
+        $mgmt->provisionOrResetAccount($email, $password, 128);
     }
 
     /**
@@ -307,6 +439,466 @@ final class SmtpServiceCatalogService
         }
 
         return $out;
+    }
+
+    /**
+     * 外投下拉选项（不含密码；保存时用 resolveOutboundPick 取密封密码）。
+     *
+     * @return list<array{key: string, label: string, host: string, port: int, username: string, tls: string, mode: string}>
+     */
+    public function listOutboundPicks(): array
+    {
+        $picks = [];
+        foreach ($this->listServices() as $svc) {
+            if (!$svc instanceof SmtpService) {
+                continue;
+            }
+            if ((string)$svc->getData(SmtpService::schema_fields_STATUS) !== 'active') {
+                continue;
+            }
+            $sid = (int)$svc->getId();
+            $mode = (string)$svc->getData(SmtpService::schema_fields_MODE);
+            $host = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)));
+            $port = (int)$svc->getData(SmtpService::schema_fields_PORT);
+            if ($port < 1 || $port > 65535) {
+                $port = 587;
+            }
+            $tls = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_TLS))) ?: 'starttls';
+            $name = trim((string)$svc->getData(SmtpService::schema_fields_NAME));
+            if ($mode === SmtpService::MODE_EXTERNAL) {
+                if ($host === '') {
+                    continue;
+                }
+                $user = trim((string)$svc->getData(SmtpService::schema_fields_USERNAME));
+                $picks[] = [
+                    'key' => 'ext:' . $sid,
+                    'label' => (string)__('外部 · %{1}（%{2}:%{3}）', [
+                        $name !== '' ? $name : $host,
+                        $host,
+                        (string)$port,
+                    ]),
+                    'host' => $host,
+                    'port' => $port,
+                    'username' => $user,
+                    'tls' => $tls,
+                    'mode' => 'external',
+                ];
+                continue;
+            }
+            if ($mode !== SmtpService::MODE_SELF) {
+                continue;
+            }
+            foreach ($this->listAccountsForService($sid) as $acct) {
+                if (!$acct instanceof SmtpAccount) {
+                    continue;
+                }
+                if ((string)$acct->getData(SmtpAccount::schema_fields_STATUS) !== 'active') {
+                    continue;
+                }
+                $email = strtolower(trim((string)$acct->getData(SmtpAccount::schema_fields_EMAIL)));
+                if ($email === '' || $host === '') {
+                    continue;
+                }
+                $role = (string)$acct->getData(SmtpAccount::schema_fields_ROLE);
+                $picks[] = [
+                    'key' => 'acct:' . (int)$acct->getId(),
+                    'label' => (string)__('本机 · %{1}（%{2} → %{3}:%{4}）', [
+                        $email,
+                        $role !== '' ? $role : 'submit',
+                        $host,
+                        (string)$port,
+                    ]),
+                    'host' => $host,
+                    'port' => $port,
+                    'username' => $email,
+                    'tls' => $tls,
+                    'mode' => 'self',
+                ];
+            }
+        }
+
+        return $picks;
+    }
+
+    /**
+     * @return array{success: bool, message: string, host: string, port: int, username: string, password: string, tls: string}
+     */
+    public function resolveOutboundPick(string $pickKey): array
+    {
+        $pickKey = trim($pickKey);
+        $empty = [
+            'success' => false,
+            'message' => (string)__('请选择 Smtp 账户或服务'),
+            'host' => '',
+            'port' => 587,
+            'username' => '',
+            'password' => '',
+            'tls' => 'starttls',
+        ];
+        if ($pickKey === '') {
+            return $empty;
+        }
+        if (str_starts_with($pickKey, 'acct:')) {
+            $accountId = (int)substr($pickKey, 5);
+            if ($accountId <= 0) {
+                return $empty;
+            }
+            /** @var SmtpAccount $acct */
+            $acct = ObjectManager::getInstance(SmtpAccount::class)->clear()->load($accountId);
+            if (!$acct->getId()) {
+                return array_merge($empty, ['message' => (string)__('Smtp 账户不存在')]);
+            }
+            $sid = (int)$acct->getData(SmtpAccount::schema_fields_SERVICE_ID);
+            /** @var SmtpService $svc */
+            $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($sid);
+            if (!$svc->getId() || (string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_SELF) {
+                return array_merge($empty, ['message' => (string)__('所属本机 Smtp 服务无效')]);
+            }
+            $revealed = $this->revealAccountPassword($accountId);
+            if (empty($revealed['success'])) {
+                return array_merge($empty, ['message' => (string)($revealed['message'] ?? __('无法读取账户密码'))]);
+            }
+            $host = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)));
+            $port = (int)$svc->getData(SmtpService::schema_fields_PORT);
+            $tls = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_TLS))) ?: 'starttls';
+
+            return [
+                'success' => true,
+                'message' => '',
+                'host' => $host,
+                'port' => ($port >= 1 && $port <= 65535) ? $port : 587,
+                'username' => strtolower(trim((string)$acct->getData(SmtpAccount::schema_fields_EMAIL))),
+                'password' => (string)($revealed['password_once'] ?? ''),
+                'tls' => in_array($tls, ['starttls', 'smtps', 'none'], true) ? $tls : 'starttls',
+            ];
+        }
+        if (str_starts_with($pickKey, 'ext:')) {
+            $serviceId = (int)substr($pickKey, 4);
+            if ($serviceId <= 0) {
+                return $empty;
+            }
+            /** @var SmtpService $svc */
+            $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
+            if (!$svc->getId() || (string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_EXTERNAL) {
+                return array_merge($empty, ['message' => (string)__('外部 Smtp 服务不存在')]);
+            }
+            $host = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)));
+            $port = (int)$svc->getData(SmtpService::schema_fields_PORT);
+            $tls = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_TLS))) ?: 'starttls';
+            $user = trim((string)$svc->getData(SmtpService::schema_fields_USERNAME));
+            $password = '';
+            $sealed = (string)$svc->getData(SmtpService::schema_fields_PASSWORD_SEALED);
+            if ($sealed !== '') {
+                try {
+                    /** @var MailOutboundRelaySecretService $secrets */
+                    $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                    $password = $secrets->open($sealed);
+                } catch (\Throwable $e) {
+                    return array_merge($empty, ['message' => (string)__('无法解密外部 Smtp 密码：%{1}', [$e->getMessage()])]);
+                }
+            }
+
+            return [
+                'success' => true,
+                'message' => '',
+                'host' => $host,
+                'port' => ($port >= 1 && $port <= 65535) ? $port : 587,
+                'username' => $user,
+                'password' => $password,
+                'tls' => in_array($tls, ['starttls', 'smtps', 'none'], true) ? $tls : 'starttls',
+            ];
+        }
+
+        return $empty;
+    }
+
+    /**
+     * 解密展示（不落明文）；页面只 flash 一次。
+     *
+     * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string}
+     */
+    public function revealAccountPassword(int $accountId): array
+    {
+        /** @var SmtpAccount $model */
+        $model = ObjectManager::getInstance(SmtpAccount::class)->clear()->load($accountId);
+        if (!$model->getId()) {
+            return $this->acctFail(__('账户不存在'));
+        }
+        $sealed = (string)$model->getData(SmtpAccount::schema_fields_PASSWORD_SEALED);
+        if ($sealed === '') {
+            return $this->acctFail(__('该账户无密封密码'), $accountId, (string)$model->getData(SmtpAccount::schema_fields_EMAIL));
+        }
+        try {
+            /** @var MailOutboundRelaySecretService $secrets */
+            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+            $plain = $secrets->open($sealed);
+        } catch (\Throwable $e) {
+            return $this->acctFail(__('无法解密密码：%{1}', [$e->getMessage()]), $accountId, (string)$model->getData(SmtpAccount::schema_fields_EMAIL));
+        }
+
+        return [
+            'success' => true,
+            'message' => (string)__('密码如下（请立即复制，页面不会常显）'),
+            'smtp_account_id' => $accountId,
+            'email' => (string)$model->getData(SmtpAccount::schema_fields_EMAIL),
+            'password_once' => $plain,
+        ];
+    }
+
+    /**
+     * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string}
+     */
+    public function resetAccountPassword(int $accountId): array
+    {
+        /** @var SmtpAccountManageService $manage */
+        $manage = ObjectManager::getInstance(SmtpAccountManageService::class);
+        $result = $manage->resetPassword($accountId);
+
+        return [
+            'success' => !empty($result['success']),
+            'message' => (string)($result['message'] ?? __('重置失败')),
+            'smtp_account_id' => (int)($result['smtp_account_id'] ?? $accountId),
+            'email' => (string)($result['email'] ?? ''),
+            'password_once' => (string)($result['password_once'] ?? ''),
+        ];
+    }
+
+    /**
+     * 探测本机服务账户是否已存在于本机 Stalwart 邮局（一次按域拉清单，避免逐账号往返）。
+     *
+     * @return array{
+     *   by_account_id: array<int, bool>,
+     *   probe_ok: bool,
+     *   target_label: string,
+     *   stalwart_local_parts: list<string>
+     * }
+     */
+    public function probeStalwartPresenceForService(int $serviceId): array
+    {
+        $empty = [
+            'by_account_id' => [],
+            'probe_ok' => false,
+            'target_label' => (string)__('本机 Stalwart 邮局'),
+            'stalwart_local_parts' => [],
+        ];
+        if ($serviceId <= 0) {
+            return $empty;
+        }
+        /** @var SmtpService $svc */
+        $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
+        if (!$svc->getId()
+            || (string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_SELF
+        ) {
+            return $empty;
+        }
+        $host = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)));
+        $domain = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_DOMAIN_NAME)));
+        $target = $host !== ''
+            ? (string)__('本机 Stalwart 邮局（%{1}）', [$host])
+            : (string)__('本机 Stalwart 邮局');
+        $empty['target_label'] = $target;
+        if ($domain === '') {
+            return $empty;
+        }
+        try {
+            /** @var StalwartManagementAdapter $mgmt */
+            $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+            $locals = $mgmt->listLocalPartsForDomain($domain);
+            $set = [];
+            foreach ($locals as $local) {
+                $set[strtolower(trim((string)$local))] = true;
+            }
+            $byId = [];
+            foreach ($this->listAccountsForService($serviceId) as $acct) {
+                $aid = (int)$acct->getId();
+                if ($aid <= 0) {
+                    continue;
+                }
+                $email = strtolower(trim((string)$acct->getData(SmtpAccount::schema_fields_EMAIL)));
+                $at = strrpos($email, '@');
+                $local = $at === false ? '' : substr($email, 0, $at);
+                $byId[$aid] = $local !== '' && isset($set[$local]);
+            }
+
+            return [
+                'by_account_id' => $byId,
+                'probe_ok' => true,
+                'target_label' => $target,
+                'stalwart_local_parts' => array_keys($set),
+            ];
+        } catch (\Throwable) {
+            return $empty;
+        }
+    }
+
+    /**
+     * 把本机 Stalwart 里已有、但 Smtp 目录缺失的账号同步进目录（无密码，需重置后才能再「写入」）。
+     *
+     * @return array{success: bool, message: string, imported: int, skipped: int}
+     */
+    public function importAccountsFromStalwart(int $serviceId): array
+    {
+        if ($serviceId <= 0) {
+            return ['success' => false, 'message' => (string)__('服务不存在'), 'imported' => 0, 'skipped' => 0];
+        }
+        /** @var SmtpService $svc */
+        $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
+        if (!$svc->getId()) {
+            return ['success' => false, 'message' => (string)__('服务不存在'), 'imported' => 0, 'skipped' => 0];
+        }
+        if ((string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_SELF) {
+            return [
+                'success' => false,
+                'message' => (string)__('外部填入服务无需从本机 Stalwart 同步账号'),
+                'imported' => 0,
+                'skipped' => 0,
+            ];
+        }
+        $domain = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_DOMAIN_NAME)));
+        if ($domain === '') {
+            return ['success' => false, 'message' => (string)__('服务域名无效'), 'imported' => 0, 'skipped' => 0];
+        }
+        try {
+            /** @var StalwartManagementAdapter $mgmt */
+            $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+            $locals = $mgmt->listLocalPartsForDomain($domain);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => (string)__('读取本机 Stalwart 账号失败：%{1}', [$e->getMessage()]),
+                'imported' => 0,
+                'skipped' => 0,
+            ];
+        }
+        $existing = [];
+        foreach ($this->listAccountsForService($serviceId) as $acct) {
+            $email = strtolower(trim((string)$acct->getData(SmtpAccount::schema_fields_EMAIL)));
+            if ($email !== '') {
+                $existing[$email] = true;
+            }
+        }
+        $imported = 0;
+        $skipped = 0;
+        $now = date('Y-m-d H:i:s');
+        foreach ($locals as $local) {
+            $local = strtolower(trim((string)$local));
+            if ($local === '') {
+                continue;
+            }
+            $email = $local . '@' . $domain;
+            if (isset($existing[$email])) {
+                $skipped++;
+                continue;
+            }
+            /** @var SmtpAccount $dupCheck */
+            $dupCheck = ObjectManager::getInstance(SmtpAccount::class);
+            $dup = $dupCheck->clear()->where(SmtpAccount::schema_fields_EMAIL, $email)->find()->fetch();
+            if ($dup instanceof SmtpAccount && $dup->getId()) {
+                $skipped++;
+                continue;
+            }
+            /** @var SmtpAccount $model */
+            $model = ObjectManager::getInstance(SmtpAccount::class);
+            $model->clear()
+                ->setData(SmtpAccount::schema_fields_SERVICE_ID, $serviceId)
+                ->setData(SmtpAccount::schema_fields_DOMAIN_NAME, $domain)
+                ->setData(SmtpAccount::schema_fields_EMAIL, $email)
+                ->setData(SmtpAccount::schema_fields_DISPLAY_NAME, $local)
+                ->setData(SmtpAccount::schema_fields_ROLE, SmtpAccount::ROLE_SUBMIT)
+                ->setData(SmtpAccount::schema_fields_STATUS, 'needs_password')
+                ->setData(SmtpAccount::schema_fields_PASSWORD_SEALED, '')
+                ->setData(SmtpAccount::schema_fields_CREATED_AT, $now)
+                ->setData(SmtpAccount::schema_fields_UPDATED_AT, $now)
+                ->save();
+            if ((int)$model->getId() > 0) {
+                $imported++;
+                $existing[$email] = true;
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => (string)__(
+                '已从本机 Stalwart 同步：新增 %{1} 个目录账号，已有 %{2} 个跳过。无密码账号请先「重置密码」。',
+                [(string)$imported, (string)$skipped]
+            ),
+            'imported' => $imported,
+            'skipped' => $skipped,
+        ];
+    }
+
+    /**
+     * 把目录里已有本机账户（密封密码）补写入本机 Stalwart 邮局，不改密码、不重建库行。
+     *
+     * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string}
+     */
+    public function syncAccountToStalwart(int $accountId): array
+    {
+        /** @var SmtpAccount $model */
+        $model = ObjectManager::getInstance(SmtpAccount::class)->clear()->load($accountId);
+        if (!$model->getId()) {
+            return $this->acctFail(__('账户不存在'));
+        }
+        $email = strtolower(trim((string)$model->getData(SmtpAccount::schema_fields_EMAIL)));
+        $serviceId = (int)$model->getData(SmtpAccount::schema_fields_SERVICE_ID);
+        if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            return $this->acctFail(__('账户邮箱无效'), $accountId, $email);
+        }
+        $targetHost = '';
+        if ($serviceId > 0) {
+            /** @var SmtpService $svc */
+            $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
+            if ($svc->getId()
+                && (string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_SELF
+            ) {
+                return $this->acctFail(__('外部填入服务无需写入本机 Stalwart'), $accountId, $email);
+            }
+            if ($svc->getId()) {
+                $targetHost = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)));
+            }
+        }
+        try {
+            /** @var StalwartManagementAdapter $mgmt */
+            $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+            if ($mgmt->accountExists($email)) {
+                return [
+                    'success' => true,
+                    'message' => (string)__('%{1} 已在本机 Stalwart 邮局%{2}，无需再写入', [
+                        $email,
+                        $targetHost !== '' ? '（' . $targetHost . '）' : '',
+                    ]),
+                    'smtp_account_id' => $accountId,
+                    'email' => $email,
+                    'password_once' => '',
+                ];
+            }
+        } catch (\Throwable) {
+            // 探测失败时仍尝试写入（凭据/邮局短暂不可达时不挡补写）
+        }
+        $sealed = (string)$model->getData(SmtpAccount::schema_fields_PASSWORD_SEALED);
+        if ($sealed === '') {
+            return $this->acctFail(__('该账户无密封密码，请先重置密码'), $accountId, $email);
+        }
+        try {
+            /** @var MailOutboundRelaySecretService $secrets */
+            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+            $plain = $secrets->open($sealed);
+            $this->provisionSelfMailboxToStalwart($email, $plain);
+        } catch (\Throwable $e) {
+            return $this->acctFail(__('写入本机 Stalwart 邮局失败：%{1}', [$e->getMessage()]), $accountId, $email);
+        }
+        $model->setData(SmtpAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))->save();
+
+        return [
+            'success' => true,
+            'message' => (string)__('已将 %{1} 写入本机 Stalwart 邮局%{2}（密码未改）', [
+                $email,
+                $targetHost !== '' ? '（' . $targetHost . '）' : '',
+            ]),
+            'smtp_account_id' => $accountId,
+            'email' => $email,
+            'password_once' => '',
+        ];
     }
 
     /**

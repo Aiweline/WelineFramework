@@ -85,9 +85,11 @@ settings,settings
 邮件配置项管理,"Email config item management"
 查看邮件配置,"View email settings"
 查看邮件配置项,"View email config items"
+"请先启用 Smtp 服务","请先启用 Smtp 服务"
+证书已就绪,证书已就绪
+证书同步未完成,证书同步未完成
 启用失败,启用失败
 已关闭,已关闭
-"请先启用 Smtp 服务","请先启用 Smtp 服务"
 中继服务已开启,中继服务已开启
 中继服务已关闭,中继服务已关闭
 密码（仅一次）：%{1},密码（仅一次）：%{1}
@@ -167,8 +169,12 @@ copy,copy
 "<strong>传输账户</strong>：填外部 SMTP 主机账号，或把上方 Smtp 账户凭据抄进传输；不依赖企业邮是否启域。","<strong>传输账户</strong>：填外部 SMTP 主机账号，或把上方 Smtp 账户凭据抄进传输；不依赖企业邮是否启域。"
 <strong>发信渠道绑定</strong>：按渠道选择传输账户。,<strong>发信渠道绑定</strong>：按渠道选择传输账户。
 "Smtp 服务（独立于邮局）","Smtp 服务（独立于邮局）"
+"DNS 未指向本机","DNS 未指向本机"
+证书需要配置,证书需要配置
+证书同步失败,证书同步失败
 已启用,已启用
 中继服务开,中继服务开
+重试证书接线,重试证书接线
 关闭中继服务,关闭中继服务
 开启中继服务,开启中继服务
 "关闭 Smtp 服务","关闭 Smtp 服务"
@@ -362,6 +368,10 @@ Smtp配置,"Smtp configuration"
 入池/出证暂未能同步：%{1},入池/出证暂未能同步：%{1}
 入域名池失败,入域名池失败
 入池/出证暂未能同步,入池/出证暂未能同步
+"；Stalwart 证书已就绪","；Stalwart 证书已就绪"
+"；DNS 未指向本机，Stalwart 未接线","；DNS 未指向本机，Stalwart 未接线"
+；证书需要配置,；证书需要配置
+"；Stalwart 证书同步暂未能完成：%{1}","；Stalwart 证书同步暂未能完成：%{1}"
 "Smtp 已启用（域名已在池中）。%{1}","Smtp 已启用（域名已在池中）。%{1}"
 "Smtp 已启用：DNS 已通并已入域名池申请证书","Smtp 已启用：DNS 已通并已入域名池申请证书"
 "Smtp 服务已关闭（域名池记录保留；账户停止新建）","Smtp 服务已关闭（域名池记录保留；账户停止新建）"
@@ -376,6 +386,9 @@ Smtp配置,"Smtp configuration"
 入池失败,入池失败
 "本机 Smtp 服务已启用（域名已在池中）。%{1}","本机 Smtp 服务已启用（域名已在池中）。%{1}"
 "本机 Smtp 服务已启用并入池出证","本机 Smtp 服务已启用并入池出证"
+"已默认创建发信账号 %{1}，密码（仅一次）：%{2}","已默认创建发信账号 %{1}，密码（仅一次）：%{2}"
+"已默认创建发信账号 %{1}","已默认创建发信账号 %{1}"
+默认账号未创建：%{1},默认账号未创建：%{1}
 "外部 Smtp","外部 Smtp"
 "请填写外部 SMTP 主机","请填写外部 SMTP 主机"
 密码密封失败：%{1},密码密封失败：%{1}
@@ -383,12 +396,41 @@ Smtp配置,"Smtp configuration"
 状态无效,状态无效
 服务不存在,服务不存在
 状态已更新,状态已更新
+仅外部填入服务可在此改主机凭据,仅外部填入服务可在此改主机凭据
+"外部 Smtp 凭据已更新","外部 Smtp 凭据已更新"
+"外部 Smtp 已删除","外部 Smtp 已删除"
+"本机 Smtp 服务及下属账户已删除","本机 Smtp 服务及下属账户已删除"
 外部填入服务不建本机账户；请直接拷贝主机凭据,外部填入服务不建本机账户；请直接拷贝主机凭据
 服务未启用,服务未启用
 请先在该服务开启中继,请先在该服务开启中继
 账号或域名无效,账号或域名无效
 账户已存在,账户已存在
-账户已创建，请立即复制密码,账户已创建，请立即复制密码
+"Stalwart 开通失败：%{1}","Stalwart 开通失败：%{1}"
+"账户已创建（已同步 Stalwart），请立即复制密码","账户已创建（已同步 Stalwart），请立即复制密码"
+"外部 · %{1}（%{2}:%{3}）","外部 · %{1}（%{2}:%{3}）"
+"本机 · %{1}（%{2} → %{3}:%{4}）","本机 · %{1}（%{2} → %{3}:%{4}）"
+"请选择 Smtp 账户或服务","请选择 Smtp 账户或服务"
+"Smtp 账户不存在","Smtp 账户不存在"
+"所属本机 Smtp 服务无效","所属本机 Smtp 服务无效"
+无法读取账户密码,无法读取账户密码
+"外部 Smtp 服务不存在","外部 Smtp 服务不存在"
+"无法解密外部 Smtp 密码：%{1}","无法解密外部 Smtp 密码：%{1}"
+账户不存在,账户不存在
+该账户无密封密码,该账户无密封密码
+无法解密密码：%{1},无法解密密码：%{1}
+密码如下（请立即复制，页面不会常显）,密码如下（请立即复制，页面不会常显）
+"本机 Stalwart 邮局","Local Stalwart mail server"
+"本机 Stalwart 邮局（%{1}）","Local Stalwart mail server (%{1})"
+"外部填入服务无需从本机 Stalwart 同步账号","External services do not sync accounts from local Stalwart"
+服务域名无效,"Service domain is invalid"
+"读取本机 Stalwart 账号失败：%{1}","Failed to read local Stalwart accounts: %{1}"
+"已从本机 Stalwart 同步：新增 %{1} 个目录账号，已有 %{2} 个跳过。无密码账号请先「重置密码」。","Synced from local Stalwart: added %{1} catalog account(s), skipped %{2} existing. Reset password for accounts without a sealed secret."
+账户邮箱无效,账户邮箱无效
+"外部填入服务无需写入本机 Stalwart","外部填入服务无需写入本机 Stalwart"
+"%{1} 已在本机 Stalwart 邮局%{2}，无需再写入","%{1} already exists on local Stalwart mail server%{2}; no write needed"
+该账户无密封密码，请先重置密码,该账户无密封密码，请先重置密码
+"写入本机 Stalwart 邮局失败：%{1}","Failed to write to local Stalwart mail server: %{1}"
+"已将 %{1} 写入本机 Stalwart 邮局%{2}（密码未改）","Wrote %{1} to local Stalwart mail server%{2} (password unchanged)"
 "异步/CLI 发信必须显式传入 scope 或 website_code","Async/CLI send must pass scope or website_code explicitly"
 "异步/CLI 发信必须显式传入 locale，或确保网站有默认语言","Async/CLI send must pass locale explicitly, or ensure website has a default language"
 未标注渠道,"Unlabeled channel"
@@ -404,15 +446,20 @@ Global,Global
 账号名格式无效,账号名格式无效
 "该 Smtp 账户已存在","该 Smtp 账户已存在"
 "Smtp 账户保存失败","Smtp 账户保存失败"
-"Smtp 账户已创建，请立即复制密码","Smtp 账户已创建，请立即复制密码"
-"Smtp 账户不存在","Smtp 账户不存在"
-密码已重置，请立即复制,密码已重置，请立即复制
+"Smtp 账户已创建（已同步 Stalwart），请立即复制密码","Smtp 账户已创建（已同步 Stalwart），请立即复制密码"
+"Stalwart 密码同步失败：%{1}","Stalwart 密码同步失败：%{1}"
+"密码已重置并同步 Stalwart，请立即复制","密码已重置并同步 Stalwart，请立即复制"
 配置项不齐全%{1},"Configuration item is incomplete %{1}"
 "发件人配置不完整：缺少 host 或 username","Sender configuration incomplete: missing host or username"
 "SMTP Host 未配置","SMTP Host is not configured"
 "SMTP 用户名未配置","SMTP username is not configured"
 接受者邮箱为空：请正确设置接收邮箱！,"Recipient email is empty: Please set the receiving email correctly!"
 发送者邮箱为空：请正确设置发件邮箱！,"Sender email is empty: please set the sending email correctly!"
+"写入 Stalwart 失败：%{1}","写入 Stalwart 失败：%{1}"
+"已将 %{1} 写入 Stalwart（密码未改）","已将 %{1} 写入 Stalwart（密码未改）"
+账户已创建，请立即复制密码,账户已创建，请立即复制密码
+"Smtp 账户已创建，请立即复制密码","Smtp 账户已创建，请立即复制密码"
+密码已重置，请立即复制,密码已重置，请立即复制
 完成,完成
 失败,失败
 分流邮箱已挂接,分流邮箱已挂接

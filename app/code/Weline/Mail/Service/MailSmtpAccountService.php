@@ -155,14 +155,9 @@ class MailSmtpAccountService
         }
 
         try {
-            /** @var StalwartEngineAdapter $stalwart */
-            $stalwart = ObjectManager::getInstance(StalwartEngineAdapter::class);
-            return $stalwart->sendMessage(
-                (string)$config['email'],
-                $to,
-                $subject,
-                $content
-            );
+            /** @var \Weline\Mail\Service\Mailbox\MailboxOpsService $ops */
+            $ops = ObjectManager::getInstance(\Weline\Mail\Service\Mailbox\MailboxOpsService::class);
+            return $ops->send($accountId, $to, $subject, $content);
         } catch (\InvalidArgumentException|\DomainException $exception) {
             return ['success' => false, 'message' => $exception->getMessage()];
         } catch (\Throwable) {

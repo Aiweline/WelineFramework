@@ -31,4 +31,18 @@ final class StalwartManagementAdapterTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         (new StalwartManagementAdapter())->buildUserObject('alice', 'domain-id', 'short', 1024);
     }
+
+    public function testImportManagedHostnameCertificateSourceLocksProvenShape(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/StalwartManagementAdapter.php');
+        self::assertStringContainsString('function importManagedHostnameCertificate', $src);
+        self::assertStringContainsString('x:Certificate/set', $src);
+        self::assertStringContainsString("'@type' => 'Text'", $src);
+        self::assertStringContainsString("'secret' => \$privateKeyPem", $src);
+        self::assertStringContainsString("\$setArgs['destroy'] = \$destroy", $src);
+        self::assertStringContainsString("ReloadTlsCertificates", $src);
+        self::assertStringContainsString("ReloadSettings", $src);
+        self::assertStringContainsString('certificateIdsCoveringHostname', $src);
+        self::assertStringNotContainsString('AcmeProvider', $src);
+    }
 }

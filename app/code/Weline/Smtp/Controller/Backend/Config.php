@@ -111,8 +111,59 @@ class Config extends BackendController
         $this->assign('smtp_create_account_url', $this->_url->getBackendUrl('smtp/backend/config/createSmtpAccount', $scopeQs));
         $this->assign('smtp_reset_account_url', $this->_url->getBackendUrl('smtp/backend/config/resetSmtpAccountPassword', $scopeQs));
         $this->assign('smtp_set_relay_url', $this->_url->getBackendUrl('smtp/backend/config/setRelayService', $scopeQs));
+        $this->assign('smtp_sync_tls_url', $this->_url->getBackendUrl('smtp/backend/config/syncTls', $scopeQs));
+        $tlsStatus = [
+            'status' => 'needs_cert',
+            'message' => '',
+            'hostname' => (string)($serviceState['smtp_hostname'] ?? ''),
+        ];
+        $smtpHost = trim((string)($serviceState['smtp_hostname'] ?? ''));
+        if ($smtpHost !== '' && !empty($serviceState['enabled'])) {
+            try {
+                $tls = w_query('mail', 'getSmtpTlsStatus', ['hostname' => $smtpHost]);
+                if (is_array($tls)) {
+                    $tlsStatus = $tls;
+                }
+            } catch (\Throwable) {
+            }
+        }
+        $this->assign('smtp_tls_status', $tlsStatus);
         $this->assignScopeVars($workScope);
         return $this->fetch('Weline_Smtp::backend/Config');
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postSyncTls(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $storageScope = (string)$workScope['storage_scope'];
+        $state = $this->data->getServiceState($storageScope);
+        $host = trim((string)($state['smtp_hostname'] ?? ''));
+        $root = trim((string)($state['domain_name'] ?? ''));
+        if ($host === '') {
+            $this->getMessageManager()->addError((string)__('请先启用 Smtp 服务'));
+            $this->redirect($this->scopedConfigUrl($workScope));
+
+            return '';
+        }
+        try {
+            $result = w_query('mail', 'syncSmtpTlsFromDomainPool', [
+                'hostname' => $host,
+                'root_domain' => $root,
+            ]);
+            $status = is_array($result) ? (string)($result['status'] ?? '') : '';
+            $msg = is_array($result) ? (string)($result['message'] ?? '') : '';
+            if ($status === 'ready') {
+                $this->getMessageManager()->addSuccess($msg !== '' ? $msg : (string)__('证书已就绪'));
+            } else {
+                $this->getMessageManager()->addError($msg !== '' ? $msg : (string)__('证书同步未完成'));
+            }
+        } catch (\Throwable $e) {
+            $this->getMessageManager()->addError($e->getMessage());
+        }
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
     }
 
     #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]

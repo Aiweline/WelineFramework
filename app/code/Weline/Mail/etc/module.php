@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Mail',
-    "version" => '0.2.25',
+    "version" => '0.2.27',
     "requires" => [
         'Weline_Admin' => '*',
         'Weline_Cron' => '*',
@@ -11,6 +11,7 @@ return [
         'Weline_Queue' => '*',
         'Weline_Smtp' => '*',
         'Weline_SystemConfig' => '*',
+        'Weline_Websites' => '*',
     ],
     "optional" => [
     ],

@@ -8,6 +8,7 @@ use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Mail\Service\MailAccountEnsureService;
 use Weline\Mail\Service\MailComposerService;
 use Weline\Mail\Service\MailSmtpAccountService;
+use Weline\Mail\Service\StalwartTlsCertificateSyncService;
 
 class MailQueryProvider implements QueryProviderInterface
 {
@@ -15,7 +16,13 @@ class MailQueryProvider implements QueryProviderInterface
         private readonly MailSmtpAccountService $smtpAccountService,
         private readonly MailComposerService $composerService,
         private readonly ?MailAccountEnsureService $ensureService = null,
+        private readonly ?StalwartTlsCertificateSyncService $tlsSync = null,
     ) {
+    }
+
+    private function tlsSync(): StalwartTlsCertificateSyncService
+    {
+        return $this->tlsSync ?? ObjectManager::getInstance(StalwartTlsCertificateSyncService::class);
     }
 
     private function ensureService(): MailAccountEnsureService
@@ -43,10 +50,55 @@ class MailQueryProvider implements QueryProviderInterface
             'ensureDefaultSmtpAccount' => $this->ensureDefaultSmtpAccount($params),
             'setDefaultSmtpAccount' => $this->setDefaultSmtpAccount($params),
             'ensureMailbox' => $this->ensureMailbox($params),
+            'getSmtpTlsStatus' => $this->getSmtpTlsStatus($params),
+            'syncSmtpTlsFromDomainPool' => $this->syncSmtpTlsFromDomainPool($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Mail 查询器不支持的操作：%{1}', $operation)
             ),
         };
+    }
+
+    private function getSmtpTlsStatus(array $params): array
+    {
+        $hostname = trim((string)($params['hostname'] ?? $params['domain'] ?? ''));
+        if ($hostname === '') {
+            return [
+                'success' => false,
+                'status' => StalwartTlsCertificateSyncService::STATUS_ERROR,
+                'message' => (string)__('主机名为空'),
+            ];
+        }
+
+        return $this->tlsSync()->getStatus($hostname);
+    }
+
+    private function syncSmtpTlsFromDomainPool(array $params): array
+    {
+        $root = trim((string)($params['root_domain'] ?? ''));
+        $originIp = trim((string)($params['origin_ip'] ?? ''));
+        $hostnames = $params['hostnames'] ?? null;
+        if (is_array($hostnames) && $hostnames !== []) {
+            $items = $this->tlsSync()->ensureForHostnames(
+                array_map('strval', $hostnames),
+                $root,
+                $originIp
+            );
+
+            return [
+                'success' => $items !== [] && !in_array(false, array_column($items, 'success'), true),
+                'items' => $items,
+            ];
+        }
+        $hostname = trim((string)($params['hostname'] ?? $params['domain'] ?? ''));
+        if ($hostname === '') {
+            return [
+                'success' => false,
+                'status' => StalwartTlsCertificateSyncService::STATUS_ERROR,
+                'message' => (string)__('主机名为空'),
+            ];
+        }
+
+        return $this->tlsSync()->ensureForHostname($hostname, $root, $originIp);
     }
 
     private function resolveActiveMailDomain(array $params): array
@@ -281,6 +333,24 @@ class MailQueryProvider implements QueryProviderInterface
                         ['name' => 'local_part', 'type' => 'string', 'required' => true, 'description' => __('邮箱本地部分')],
                         ['name' => 'display_name', 'type' => 'string', 'required' => false, 'description' => __('显示名')],
                         ['name' => 'quota_mb', 'type' => 'int', 'required' => false, 'description' => __('容量MB')],
+                    ],
+                ],
+                [
+                    'name' => 'getSmtpTlsStatus',
+                    'description' => __('查询 smtp/mail 主机相对域名池与本机 Stalwart 的 TLS 状态'),
+                    'params' => [
+                        ['name' => 'hostname', 'type' => 'string', 'required' => true, 'description' => __('FQDN')],
+                    ],
+                ],
+                [
+                    'name' => 'syncSmtpTlsFromDomainPool',
+                    'description' => __('入池出证（如需）并将 PEM 导入本机 Stalwart'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'hostname', 'type' => 'string', 'required' => false, 'description' => __('单主机 FQDN')],
+                        ['name' => 'hostnames', 'type' => 'array', 'required' => false, 'description' => __('多主机')],
+                        ['name' => 'root_domain', 'type' => 'string', 'required' => false, 'description' => __('根域')],
+                        ['name' => 'origin_ip', 'type' => 'string', 'required' => false, 'description' => __('源站 IP')],
                     ],
                 ],
             ],

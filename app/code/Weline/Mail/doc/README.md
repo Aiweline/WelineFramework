@@ -75,7 +75,7 @@ fake 引擎仅用于 `.test` / `.invalid` 域名的本地业务冒烟。fake 账
 
 ### smtp 别名、TLS 与端口
 
-企业邮主机为 `mail.example.com`；可选 `smtp.example.com` CNAME（DNS-only）供 **Smtp 模块**独立启用时使用。**TLS 证书由 Websites 域名池颁发**；**不必**在 Stalwart Admin 手开 ACME。启域只开通企业邮箱 `contact@`。Smtp 中继请在 Smtp 配置启用（池选或自填域名，DNS 通过后入池）；企业邮箱外投可在域名卡填写 smarthost 并按账号勾选。
+企业邮主机为 `mail.example.com`；可选 `smtp.example.com`（须与 mail 同指本机公网 IP）供 **Smtp 模块**独立启用时使用。**TLS 证书由 Websites 域名池颁发，并自动导入本机 Stalwart**；**不必**在 Stalwart Admin 手开 ACME。启域只开通企业邮箱 `contact@`。Smtp 中继请在 Smtp 配置启用（池选或自填域名，DNS 通过后入池并接线）；企业邮箱外投可在域名卡填写 smarthost 并按账号勾选。
 
 #### 云安全组 / 防火墙（入站放行，必需）
 

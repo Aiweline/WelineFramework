@@ -6,12 +6,13 @@ namespace Weline\Mail\Controller\Backend;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Mail\Model\MailAccount;
 use Weline\Mail\Model\MailDomain;
-use Weline\Mail\Model\MailMessage;
 use Weline\Mail\Service\DnsRecordAdvisor;
 use Weline\Mail\Service\MailOriginIpResolver;
-use Weline\Mail\Service\StalwartEngineAdapter;
+use Weline\Mail\Service\Mailbox\MailboxFolder;
+use Weline\Mail\Service\Mailbox\MailboxOpsService;
 
 #[\Weline\Framework\Acl\Acl(
     'Weline_Mail::mail',
@@ -37,8 +38,10 @@ class Index extends BackendController
             default => 'mailbox',
         };
         $folder = strtolower(trim((string)$this->request->getParam('folder', 'inbox')));
-        if (!in_array($folder, ['inbox', 'sent'], true)) {
-            $folder = 'inbox';
+        try {
+            $folder = MailboxFolder::assertValid($folder);
+        } catch (\InvalidArgumentException) {
+            $folder = MailboxFolder::INBOX;
         }
 
         /** @var MailDomain $domainModel */
@@ -88,53 +91,26 @@ class Index extends BackendController
         $selectedMailbox = $selectedAccount
             ? strtolower(trim((string)$selectedAccount->getData(MailAccount::schema_fields_EMAIL)))
             : '';
+        $selectedMailboxIsFake = false;
+        if ($selectedAccount) {
+            $selectedDomainId = (int)$selectedAccount->getData(MailAccount::schema_fields_DOMAIN_ID);
+            $selectedDomainMeta = $domainLookup[$selectedDomainId] ?? null;
+            $selectedDomainName = strtolower(trim((string)($selectedDomainMeta['domain_name'] ?? '')));
+            $selectedMailboxIsFake = self::isFakeDomainLookupEntry($selectedDomainMeta)
+                || $this->isFakeTestDomain($selectedDomainName);
+        }
         $mailboxMessages = [];
         $selectedMessage = null;
         $mailboxError = null;
         $messageId = trim((string)$this->request->getParam('message', ''));
 
         if ($selectedAccount && $mailView === 'mailbox') {
-            $domainId = (int)$selectedAccount->getData(MailAccount::schema_fields_DOMAIN_ID);
-            $selectedDomain = $domainLookup[$domainId] ?? null;
-            $isFake = self::isFakeDomainLookupEntry($selectedDomain);
-
             try {
-                if ($isFake) {
-                    /** @var MailMessage $messageModel */
-                    $messageModel = ObjectManager::getInstance(MailMessage::class);
-                    $items = $messageModel->clear()
-                        ->where(MailMessage::schema_fields_ACCOUNT_ID, $selectedAccountId)
-                        ->where(MailMessage::schema_fields_FOLDER, $folder)
-                        ->order(MailMessage::schema_fields_ID, 'DESC')
-                        ->limit(50)
-                        ->select()
-                        ->fetch()
-                        ->getItems();
-                    foreach ($items as $item) {
-                        $body = (string)$item->getData(MailMessage::schema_fields_BODY);
-                        $normalized = [
-                            'id' => (string)$item->getId(),
-                            'from' => (string)$item->getData(MailMessage::schema_fields_FROM_EMAIL),
-                            'to' => (string)$item->getData(MailMessage::schema_fields_TO_EMAIL),
-                            'subject' => (string)$item->getData(MailMessage::schema_fields_SUBJECT),
-                            'received_at' => (string)$item->getData(MailMessage::schema_fields_CREATED_AT),
-                            'preview' => strlen($body) > 120 ? substr($body, 0, 117) . '...' : $body,
-                            'body' => $body,
-                            'unread' => !(bool)$item->getData(MailMessage::schema_fields_IS_READ),
-                            'has_attachment' => false,
-                        ];
-                        $mailboxMessages[] = $normalized;
-                        if ($messageId !== '' && $normalized['id'] === $messageId) {
-                            $selectedMessage = $normalized;
-                        }
-                    }
-                } else {
-                    /** @var StalwartEngineAdapter $engine */
-                    $engine = ObjectManager::getInstance(StalwartEngineAdapter::class);
-                    $mailboxMessages = $engine->listMailboxMessages($selectedMailbox, $folder, 50);
-                    if ($messageId !== '') {
-                        $selectedMessage = $engine->getMailboxMessage($selectedMailbox, $messageId);
-                    }
+                /** @var MailboxOpsService $ops */
+                $ops = ObjectManager::getInstance(MailboxOpsService::class);
+                $mailboxMessages = $ops->list($selectedAccountId, $folder, 50);
+                if ($messageId !== '') {
+                    $selectedMessage = $ops->get($selectedAccountId, $messageId);
                 }
             } catch (\Throwable $throwable) {
                 $mailboxError = $throwable->getMessage();
@@ -148,6 +124,7 @@ class Index extends BackendController
         $this->assign('mailbox_accounts', $mailboxAccounts);
         $this->assign('selected_account_id', $selectedAccountId);
         $this->assign('selected_mailbox', $selectedMailbox);
+        $this->assign('selected_mailbox_is_fake', $selectedMailboxIsFake);
         $this->assign('mailbox_messages', $mailboxMessages);
         $this->assign('selected_message', $selectedMessage);
         $this->assign('mailbox_error', $mailboxError);
@@ -175,22 +152,59 @@ class Index extends BackendController
         $smtpServices = [];
         $smtpAccountsByService = [];
         $smtpPoolDomains = [];
-        if ($mailView === 'smtp') {
+        $smtpAccountPasswords = [];
+        $smtpCanViewPasswords = false;
+        $smtpOutboundPicks = [];
+        $smtpStalwartByService = [];
+        if ($mailView === 'smtp' || $mailView === 'accounts') {
             /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
             $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
-            $smtpServices = $catalog->listServices();
-            foreach ($smtpServices as $svc) {
-                $sid = (int)$svc->getId();
-                if ($sid > 0) {
-                    $smtpAccountsByService[$sid] = $catalog->listAccountsForService($sid);
-                }
+            if ($mailView === 'accounts') {
+                $smtpOutboundPicks = $catalog->listOutboundPicks();
             }
-            // getDomainPoolList 返回域名行列表（非 {items:...} 包装）；与 queryWebsiteDomainPools 同形。
-            $smtpPoolDomains = $this->queryWebsiteDomainPools(200);
+            if ($mailView === 'smtp') {
+                $smtpServices = $catalog->listServices();
+                foreach ($smtpServices as $svc) {
+                    $sid = (int)$svc->getId();
+                    if ($sid > 0) {
+                        $smtpAccountsByService[$sid] = $catalog->listAccountsForService($sid);
+                        if ((string)$svc->getData(\Weline\Smtp\Model\SmtpService::schema_fields_MODE)
+                            === \Weline\Smtp\Model\SmtpService::MODE_SELF
+                        ) {
+                            $smtpStalwartByService[$sid] = $catalog->probeStalwartPresenceForService($sid);
+                        }
+                    }
+                }
+                // 有「开通或重置邮箱密码」ACL 时本页直接解出密码展示，不另开 reveal 路由。
+                $smtpCanViewPasswords = $this->isMailAclAllowed('Weline_Mail::mail_accounts_password');
+                if ($smtpCanViewPasswords) {
+                    foreach ($smtpAccountsByService as $accts) {
+                        foreach ($accts as $acct) {
+                            if (!$acct instanceof \Weline\Smtp\Model\SmtpAccount) {
+                                continue;
+                            }
+                            $aid = (int)$acct->getId();
+                            if ($aid <= 0) {
+                                continue;
+                            }
+                            $revealed = $catalog->revealAccountPassword($aid);
+                            if (!empty($revealed['success']) && (string)($revealed['password_once'] ?? '') !== '') {
+                                $smtpAccountPasswords[$aid] = (string)$revealed['password_once'];
+                            }
+                        }
+                    }
+                }
+                // getDomainPoolList 返回域名行列表（非 {items:...} 包装）；与 queryWebsiteDomainPools 同形。
+                $smtpPoolDomains = $this->queryWebsiteDomainPools(200);
+            }
         }
         $this->assign('smtp_services', $smtpServices);
         $this->assign('smtp_accounts_by_service', $smtpAccountsByService);
         $this->assign('smtp_pool_domains', $smtpPoolDomains);
+        $this->assign('smtp_account_passwords', $smtpAccountPasswords);
+        $this->assign('smtp_can_view_passwords', $smtpCanViewPasswords);
+        $this->assign('smtp_outbound_picks', $smtpOutboundPicks);
+        $this->assign('smtp_stalwart_by_service', $smtpStalwartByService);
 
         $compose = $this->resolveComposeContext($selectedAccountId, $mailboxAccounts);
         $this->assign('compose_open', $compose['open']);
@@ -376,10 +390,30 @@ class Index extends BackendController
         $user = trim((string)$this->request->getParam('outbound_relay_username', ''));
         $password = (string)$this->request->getParam('outbound_relay_password', '');
         $tls = strtolower(trim((string)$this->request->getParam('outbound_relay_tls', 'starttls')));
+        $pickKey = trim((string)$this->request->getParam('outbound_smtp_pick', ''));
+        if ($pickKey !== '') {
+            /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+            $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+            $picked = $catalog->resolveOutboundPick($pickKey);
+            if (empty($picked['success'])) {
+                return $this->respondFormResult(400, (string)($picked['message'] ?? __('Smtp 选择无效')));
+            }
+            $host = strtolower(trim((string)($picked['host'] ?? '')));
+            $port = (int)($picked['port'] ?? 587);
+            $user = trim((string)($picked['username'] ?? ''));
+            $password = (string)($picked['password'] ?? '');
+            $tls = strtolower(trim((string)($picked['tls'] ?? 'starttls')));
+            $enabled = 1;
+        }
+        // 填了中继主机即默认启用认证外投（禁止只填主机却仍走 MX）。
+        if ($host !== '' && $enabled !== 1) {
+            $enabled = 1;
+        }
         if (!in_array($tls, ['starttls', 'smtps', 'none'], true)) {
             $tls = 'starttls';
         }
-        if ($port < 1 || $port > 65535) {
+        // 中继 smarthost 禁止 25（Submission 用 587/465）。
+        if ($port < 1 || $port > 65535 || $port === 25) {
             $port = 587;
         }
         /** @var MailAccount $account */
@@ -388,7 +422,7 @@ class Index extends BackendController
             return $this->respondFormResult(404, __('邮箱账号不存在'));
         }
         if ($enabled === 1 && $host === '') {
-            return $this->respondFormResult(400, __('开启外投时请填写 smarthost 主机'));
+            return $this->respondFormResult(400, __('开启外投时请选择 Smtp 账户或填写 smarthost 主机'));
         }
         $account->setData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED, $enabled)
             ->setData(MailAccount::schema_fields_OUTBOUND_RELAY_HOST, $host !== '' ? $host : null)
@@ -412,17 +446,154 @@ class Index extends BackendController
             $account->setData(MailAccount::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED, null);
         }
         $account->save();
-        /** @var \Weline\Mail\Service\MailOutboundRelaySyncService $sync */
-        $sync = ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySyncService::class);
-        $result = $sync->syncAll();
+        // 外投路由下发改响应后异步，避免阻塞保存页。
+        PostResponseTaskQueue::enqueue(
+            'mail-outbound-relay-sync',
+            static function (): void {
+                try {
+                    ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySyncService::class)->syncAll();
+                } catch (\Throwable) {
+                    // 异步失败不回灌本次表单；下次保存或人工 sync 可再试。
+                }
+            }
+        );
         $msg = $enabled
-            ? (string)__('已保存该账号外投 smarthost')
-            : (string)__('已关闭该账号外投');
-        if (!empty($result['message'])) {
-            $msg .= '；' . (string)$result['message'];
+            ? (string)__('已保存该账号外投 smarthost（路由异步下发）')
+            : (string)__('已关闭该账号外投（路由异步下发）');
+
+        return $this->respondFormResult(200, $msg);
+    }
+
+    /**
+     * 邮箱正文异步拉取（JSON），避免整页跳转。
+     */
+    public function getMailboxMessage(): string
+    {
+        $accountId = max(0, (int)$this->request->getParam('account', 0));
+        $messageId = trim((string)$this->request->getParam('message', ''));
+        if ($accountId <= 0 || $messageId === '') {
+            return $this->fetchJson(['code' => 400, 'msg' => (string)__('缺少账号或邮件 ID'), 'data' => null]);
+        }
+        try {
+            $data = ObjectManager::getInstance(MailboxOpsService::class)->get($accountId, $messageId);
+            if (!is_array($data) || (string)($data['id'] ?? '') === '') {
+                return $this->fetchJson(['code' => 404, 'msg' => (string)__('邮件不存在'), 'data' => null]);
+            }
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => null]);
         }
 
-        return $this->respondFormResult(!empty($result['success']) ? 200 : 500, $msg);
+        return $this->fetchJson(['code' => 200, 'msg' => 'ok', 'data' => $data]);
+    }
+
+    public function getMailboxSearch(): string
+    {
+        $accountId = max(0, (int)$this->request->getParam('account', 0));
+        $folder = strtolower(trim((string)$this->request->getParam('folder', 'inbox')));
+        try {
+            $folder = MailboxFolder::assertValid($folder);
+        } catch (\InvalidArgumentException) {
+            $folder = MailboxFolder::INBOX;
+        }
+        $q = trim((string)$this->request->getParam('q', ''));
+        if ($accountId <= 0) {
+            return $this->fetchJson(['code' => 400, 'msg' => (string)__('缺少账号'), 'data' => []]);
+        }
+        try {
+            $rows = ObjectManager::getInstance(MailboxOpsService::class)->search($accountId, $folder, $q, 50);
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => []]);
+        }
+        return $this->fetchJson(['code' => 200, 'msg' => 'ok', 'data' => $rows]);
+    }
+
+    public function postMailboxBatch(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->fetchJson(['code' => 405, 'msg' => (string)__('无效的请求方法'), 'data' => null]);
+        }
+        $accountId = max(0, (int)$this->request->getParam('account', 0));
+        $action = strtolower(trim((string)$this->request->getParam('action', '')));
+        $folder = strtolower(trim((string)$this->request->getParam('folder', 'inbox')));
+        $idsRaw = $this->request->getParam('ids', []);
+        if (is_string($idsRaw)) {
+            $idsRaw = preg_split('/[\s,]+/', $idsRaw) ?: [];
+        }
+        $ids = is_array($idsRaw) ? array_values(array_map('strval', $idsRaw)) : [];
+        try {
+            $result = ObjectManager::getInstance(MailboxOpsService::class)
+                ->batch($accountId, $action, $ids, $folder);
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => null]);
+        }
+        return $this->fetchJson([
+            'code' => !empty($result['success']) ? 200 : 422,
+            'msg' => (string)($result['message'] ?? ''),
+            'data' => null,
+        ]);
+    }
+
+    public function getMailboxComposePrefill(): string
+    {
+        $accountId = max(0, (int)$this->request->getParam('account', 0));
+        $messageId = trim((string)$this->request->getParam('message', ''));
+        $mode = strtolower(trim((string)$this->request->getParam('mode', 'reply')));
+        if ($accountId <= 0 || $messageId === '') {
+            return $this->fetchJson(['code' => 400, 'msg' => (string)__('缺少账号或邮件 ID'), 'data' => null]);
+        }
+        try {
+            $data = ObjectManager::getInstance(MailboxOpsService::class)
+                ->buildComposePrefill($accountId, $messageId, $mode);
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => null]);
+        }
+        return $this->fetchJson(['code' => 200, 'msg' => 'ok', 'data' => $data]);
+    }
+
+    public function getMailboxAttachment(): string
+    {
+        $accountId = max(0, (int)$this->request->getParam('account', 0));
+        $blobId = trim((string)$this->request->getParam('blob', ''));
+        $name = trim((string)$this->request->getParam('name', 'attachment'));
+        if ($accountId <= 0 || $blobId === '') {
+            return $this->fetchJson(['code' => 400, 'msg' => (string)__('缺少附件参数'), 'data' => null]);
+        }
+        try {
+            $file = ObjectManager::getInstance(MailboxOpsService::class)
+                ->downloadAttachment($accountId, $blobId, $name);
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => null]);
+        }
+        $safeName = preg_replace('/[^\w.\-]+/u', '_', $file['name']) ?: 'attachment';
+        header('Content-Type: ' . ($file['type'] !== '' ? $file['type'] : 'application/octet-stream'));
+        header('Content-Disposition: attachment; filename="' . $safeName . '"');
+        header('Content-Length: ' . (string)$file['size']);
+        echo $file['content'];
+        throw new ResponseTerminateException();
+    }
+
+    public function postMailboxUpload(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->fetchJson(['code' => 405, 'msg' => (string)__('无效的请求方法'), 'data' => null]);
+        }
+        $accountId = max(0, (int)$this->request->getParam('account', 0));
+        $file = $_FILES['file'] ?? null;
+        if ($accountId <= 0 || !is_array($file) || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return $this->fetchJson(['code' => 400, 'msg' => (string)__('请选择附件'), 'data' => null]);
+        }
+        $tmp = (string)($file['tmp_name'] ?? '');
+        $name = (string)($file['name'] ?? 'attachment');
+        $type = (string)($file['type'] ?? 'application/octet-stream');
+        $binary = is_readable($tmp) ? (string)file_get_contents($tmp) : '';
+        if ($binary === '') {
+            return $this->fetchJson(['code' => 400, 'msg' => (string)__('附件读取失败'), 'data' => null]);
+        }
+        $result = ObjectManager::getInstance(MailboxOpsService::class)->upload($accountId, $name, $type, $binary);
+        if (isset($result['success']) && $result['success'] === false) {
+            return $this->fetchJson(['code' => 422, 'msg' => (string)($result['message'] ?? ''), 'data' => null]);
+        }
+        return $this->fetchJson(['code' => 200, 'msg' => 'ok', 'data' => $result]);
     }
 
     public function postCreateSmtpServiceSelf(): string
@@ -481,6 +652,67 @@ class Index extends BackendController
         return $this->respondFormResult(!empty($result['success']) ? 200 : 400, $msg);
     }
 
+    public function postResetSmtpServiceAccountPassword(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->respondFormResult(405, __('无效的请求方法'));
+        }
+        // 复用「开通或重置邮箱密码」ACL，不另注册 reveal/reset 路由资源。
+        if (!$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')) {
+            return $this->respondFormResult(403, __('无权限重置 Smtp 账户密码'));
+        }
+        $accountId = (int)$this->request->getParam('smtp_account_id', 0);
+        /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+        $result = $catalog->resetAccountPassword($accountId);
+        $msg = (string)($result['message'] ?? __('失败'));
+        $once = (string)($result['password_once'] ?? '');
+        $email = (string)($result['email'] ?? '');
+        if (!empty($result['success']) && $once !== '') {
+            $msg .= ' ' . (string)__('账号 %{1} 新密码：%{2}', [$email !== '' ? $email : (string)$accountId, $once]);
+        }
+
+        return $this->respondFormResult(!empty($result['success']) ? 200 : 400, $msg);
+    }
+
+    public function postSyncSmtpServiceAccountToStalwart(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->respondFormResult(405, __('无效的请求方法'));
+        }
+        if (!$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')) {
+            return $this->respondFormResult(403, __('无权限写入 Smtp 账户到本机 Stalwart 邮局'));
+        }
+        $accountId = (int)$this->request->getParam('smtp_account_id', 0);
+        /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+        $result = $catalog->syncAccountToStalwart($accountId);
+
+        return $this->respondFormResult(
+            !empty($result['success']) ? 200 : 400,
+            (string)($result['message'] ?? __('失败'))
+        );
+    }
+
+    public function postImportSmtpAccountsFromStalwart(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->respondFormResult(405, __('无效的请求方法'));
+        }
+        if (!$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')) {
+            return $this->respondFormResult(403, __('无权限从本机 Stalwart 同步账号'));
+        }
+        $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
+        /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+        $result = $catalog->importAccountsFromStalwart($serviceId);
+
+        return $this->respondFormResult(
+            !empty($result['success']) ? 200 : 400,
+            (string)($result['message'] ?? __('失败'))
+        );
+    }
+
     public function postSetSmtpServiceStatus(): string
     {
         $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
@@ -488,6 +720,61 @@ class Index extends BackendController
         /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
         $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
         $result = $catalog->setStatus($serviceId, $status);
+
+        return $this->respondFormResult(
+            !empty($result['success']) ? 200 : 400,
+            (string)($result['message'] ?? __('失败'))
+        );
+    }
+
+    public function postUpdateSmtpServiceExternal(): string
+    {
+        /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+        $result = $catalog->updateExternalService(
+            (int)$this->request->getParam('smtp_service_id', 0),
+            trim((string)$this->request->getParam('name', '')),
+            trim((string)$this->request->getParam('smtp_hostname', '')),
+            (int)$this->request->getParam('port', 587),
+            trim((string)$this->request->getParam('username', '')),
+            (string)$this->request->getParam('password', ''),
+            strtolower(trim((string)$this->request->getParam('tls_mode', 'starttls')))
+        );
+        if (!empty($result['success'])) {
+            PostResponseTaskQueue::enqueue(
+                'mail-outbound-relay-sync',
+                static function (): void {
+                    try {
+                        ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySyncService::class)->syncAll();
+                    } catch (\Throwable) {
+                    }
+                }
+            );
+        }
+
+        return $this->respondFormResult(
+            !empty($result['success']) ? 200 : 400,
+            (string)($result['message'] ?? __('失败'))
+        );
+    }
+
+    public function postDeleteSmtpService(): string
+    {
+        $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
+        /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+        $result = $catalog->deleteService($serviceId);
+        if (!empty($result['success'])) {
+            PostResponseTaskQueue::enqueue(
+                'mail-outbound-relay-sync',
+                static function (): void {
+                    try {
+                        ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySyncService::class)->syncAll();
+                    } catch (\Throwable) {
+                    }
+                }
+            );
+        }
 
         return $this->respondFormResult(
             !empty($result['success']) ? 200 : 400,
@@ -948,7 +1235,7 @@ class Index extends BackendController
             $query['account'] = $accountId;
         }
         $folder = strtolower(trim((string)$this->request->getParam('folder', '')));
-        if (in_array($folder, ['inbox', 'sent'], true)) {
+        if (in_array($folder, MailboxFolder::all(), true)) {
             $query['folder'] = $folder;
         }
 
@@ -1005,11 +1292,24 @@ class Index extends BackendController
             if (!is_array($pool)) {
                 return (string)__('域名池同步返回异常。');
             }
-            if (($pool['success'] ?? false) === true) {
-                return (string)($pool['message'] ?? __('已入域名池并申请证书。'));
+            $baseMsg = (($pool['success'] ?? false) === true)
+                ? (string)($pool['message'] ?? __('已入域名池并申请证书。'))
+                : (string)($pool['message'] ?? __('域名池/证书同步未完成。'));
+            try {
+                w_query('mail', 'syncSmtpTlsFromDomainPool', [
+                    'hostnames' => $hostnames,
+                    'root_domain' => $rootDomain,
+                    'origin_ip' => $originIp,
+                ]);
+            } catch (\Throwable $tlsEx) {
+                w_log_warning(
+                    '[Mail] ' . __('入池后 Stalwart TLS 同步失败：%{1}', [$tlsEx->getMessage()]),
+                    [],
+                    'mail'
+                );
             }
 
-            return (string)($pool['message'] ?? __('域名池/证书同步未完成。'));
+            return $baseMsg;
         } catch (\Throwable $e) {
             w_log_error(
                 '[Mail] ' . __('DNS 通后入域名池失败：%{1}', [$e->getMessage()]),
@@ -1124,8 +1424,21 @@ class Index extends BackendController
         }
 
         $to = trim((string)$this->request->getParam('to', ''));
+        if ($to === '') {
+            $to = trim((string)$this->request->getParam('compose_to', ''));
+        }
+        $subject = trim((string)$this->request->getParam('subject', ''));
+        if ($subject === '') {
+            $subject = trim((string)$this->request->getParam('compose_subject', ''));
+        }
+        $body = (string)$this->request->getParam('body', '');
+        if ($body === '') {
+            $body = (string)$this->request->getParam('compose_body', '');
+        }
         $open = (string)$this->request->getParam('compose', '') === '1'
             || $to !== ''
+            || $subject !== ''
+            || $body !== ''
             || trim((string)$this->request->getParam('source', '')) !== '';
 
         $customerPick = $this->resolveComposeCustomerPick($to);
@@ -1133,8 +1446,8 @@ class Index extends BackendController
         return [
             'open' => $open,
             'to' => $customerPick['email'] !== '' ? $customerPick['email'] : $to,
-            'subject' => trim((string)$this->request->getParam('subject', '')),
-            'body' => (string)$this->request->getParam('body', ''),
+            'subject' => $subject,
+            'body' => $body,
             'source' => preg_replace('/[^a-z0-9_]/', '', strtolower(trim((string)$this->request->getParam('source', '')))) ?: '',
             'source_id' => max(0, (int)$this->request->getParam('source_id', 0)),
             'account_id' => $accountId,
@@ -1203,11 +1516,16 @@ class Index extends BackendController
 
     private function canPickAnyLocalMailbox(): bool
     {
+        return $this->isMailAclAllowed('Weline_Mail::mail_send_as');
+    }
+
+    private function isMailAclAllowed(string $source): bool
+    {
         $userId = (int)($this->getLoginUserId() ?? 0);
         if ($userId === 1) {
             return true;
         }
-        if ($userId <= 0) {
+        if ($userId <= 0 || $source === '') {
             return false;
         }
         $ctx = \Weline\Backend\Model\BackendUser::getAclContext($userId);
@@ -1219,7 +1537,7 @@ class Index extends BackendController
         try {
             return ObjectManager::getInstance(
                 \Weline\Acl\Api\Authorization\ResourceAuthorizationServiceInterface::class
-            )->isSourceAllowed($roleId, 'Weline_Mail::mail_send_as');
+            )->isSourceAllowed($roleId, $source);
         } catch (\Throwable) {
             return false;
         }

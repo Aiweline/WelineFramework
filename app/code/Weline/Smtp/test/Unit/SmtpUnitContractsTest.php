@@ -618,6 +618,7 @@ private function assert_MailSmtpBootstrapDefaultRelay_testEnableServiceDnsBefore
     self::assertStringContainsString('ensurePublicDnsHostnamesInPool', $src);
     self::assertStringContainsString('request_certificate', $src);
     self::assertStringContainsString('normalizeDomainInput', $src);
+    self::assertStringContainsString("syncSmtpTlsFromDomainPool", $src);
 }
 
 private function bootstrapEnsureBody_MailSmtpBootstrapDefaultRelay(string $src): string
@@ -1472,7 +1473,7 @@ private function assert_SmtpServiceCatalog_testSmtpServiceModelHasSelfAndExterna
 
 private function assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes(): void
 {
-    $src = (string) \file_get_contents(BP . '/app/code/Weline/Smtp/Service/SmtpServiceCatalogService.php');
+    $src = (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/Service/SmtpServiceCatalogService.php');
     self::assertStringContainsString('function createSelfService', $src);
     self::assertStringContainsString('function createExternalService', $src);
     self::assertStringContainsString('ensurePublicDnsHostnamesInPool', $src);
@@ -1481,7 +1482,26 @@ private function assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes():
     self::assertStringContainsString('域名已在池中', $src);
     self::assertStringContainsString("createAccountOnService(\$id, 'smtp'", $src);
     self::assertStringContainsString('已默认创建发信账号', $src);
+    self::assertStringContainsString('function revealAccountPassword', $src);
+    self::assertStringContainsString('function resetAccountPassword', $src);
+    self::assertStringContainsString('function syncAccountToStalwart', $src);
+    self::assertStringContainsString('function probeStalwartPresenceForService', $src);
+    self::assertStringContainsString('function importAccountsFromStalwart', $src);
+    self::assertStringContainsString('写入本机 Stalwart 邮局失败', $src);
+    self::assertStringContainsString('listLocalPartsForDomain', (string) \file_get_contents(\BP . '/app/code/Weline/Mail/Service/StalwartManagementAdapter.php'));
+    self::assertStringContainsString('function listOutboundPicks', $src);
+    self::assertStringContainsString('function resolveOutboundPick', $src);
     self::assertStringContainsString('MODE_EXTERNAL', $src);
+    self::assertStringContainsString('provisionSelfMailboxToStalwart', $src);
+    self::assertStringContainsString('StalwartManagementAdapter', $src);
+    self::assertStringContainsString('ensureDomain', $src);
+    self::assertStringContainsString('provisionOrResetAccount', $src);
+    self::assertStringContainsString('Stalwart 开通失败', $src);
+    $manage = (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/Service/SmtpAccountManageService.php');
+    self::assertStringContainsString('provisionSelfMailboxToStalwart', $manage);
+    self::assertStringContainsString('provisionOrResetAccount', $manage);
+    self::assertStringContainsString('Stalwart 开通失败', $manage);
+    self::assertStringContainsString('Stalwart 密码同步失败', $manage);
 }
 
 private function assert_SmtpServiceCatalog_testSmtpAccountBelongsToService(): void

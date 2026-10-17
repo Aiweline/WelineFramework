@@ -5,6 +5,7 @@ namespace Weline\Smtp\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Mail\Service\MailOutboundRelaySecretService;
+use Weline\Mail\Service\StalwartManagementAdapter;
 use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Model\SmtpAccount;
 
@@ -58,6 +59,11 @@ final class SmtpAccountManageService
         } catch (\Throwable $e) {
             return $this->fail(__('密码密封失败：%{1}', [$e->getMessage()]), 0, $email, false);
         }
+        try {
+            $this->provisionSelfMailboxToStalwart($email, $password);
+        } catch (\Throwable $e) {
+            return $this->fail(__('Stalwart 开通失败：%{1}', [$e->getMessage()]), 0, $email, false);
+        }
         $now = date('Y-m-d H:i:s');
         $role = in_array($role, [SmtpAccount::ROLE_SUBMIT, SmtpAccount::ROLE_RELAY], true)
             ? $role
@@ -79,7 +85,7 @@ final class SmtpAccountManageService
 
         return [
             'success' => true,
-            'message' => (string)__('Smtp 账户已创建，请立即复制密码'),
+            'message' => (string)__('Smtp 账户已创建（已同步 Stalwart），请立即复制密码'),
             'smtp_account_id' => $id,
             'email' => $email,
             'password_once' => $password,
@@ -120,12 +126,18 @@ final class SmtpAccountManageService
             return $this->fail(__('Smtp 账户不存在'), 0, '', false);
         }
         $password = $this->generatePassword();
+        $email = (string)$model->getData(SmtpAccount::schema_fields_EMAIL);
         /** @var MailOutboundRelaySecretService $secrets */
         $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
         try {
             $sealed = $secrets->seal($password);
         } catch (\Throwable $e) {
-            return $this->fail(__('密码密封失败：%{1}', [$e->getMessage()]), $accountId, (string)$model->getData(SmtpAccount::schema_fields_EMAIL), false);
+            return $this->fail(__('密码密封失败：%{1}', [$e->getMessage()]), $accountId, $email, false);
+        }
+        try {
+            $this->provisionSelfMailboxToStalwart($email, $password);
+        } catch (\Throwable $e) {
+            return $this->fail(__('Stalwart 密码同步失败：%{1}', [$e->getMessage()]), $accountId, $email, false);
         }
         $model->setData(SmtpAccount::schema_fields_PASSWORD_SEALED, $sealed)
             ->setData(SmtpAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
@@ -133,12 +145,29 @@ final class SmtpAccountManageService
 
         return [
             'success' => true,
-            'message' => (string)__('密码已重置，请立即复制'),
+            'message' => (string)__('密码已重置并同步 Stalwart，请立即复制'),
             'smtp_account_id' => $accountId,
-            'email' => (string)$model->getData(SmtpAccount::schema_fields_EMAIL),
+            'email' => $email,
             'password_once' => $password,
             'created' => false,
         ];
+    }
+
+    private function provisionSelfMailboxToStalwart(string $email, string $password): void
+    {
+        $email = strtolower(trim($email));
+        $password = (string)$password;
+        if ($email === '' || $password === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            throw new \InvalidArgumentException('Smtp 邮箱或密码无效。');
+        }
+        $domain = substr(strrchr($email, '@') ?: '', 1);
+        if ($domain === '') {
+            throw new \InvalidArgumentException('Smtp 邮箱域名无效。');
+        }
+        /** @var StalwartManagementAdapter $mgmt */
+        $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+        $mgmt->ensureDomain($domain);
+        $mgmt->provisionOrResetAccount($email, $password, 128);
     }
 
     private function generatePassword(): string

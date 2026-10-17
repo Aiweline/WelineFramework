@@ -105,9 +105,31 @@ final class SmtpServiceEnableService
             'pool_domain_id' => (string)$poolDomainId,
         ], $scope);
 
+        $tlsNote = '';
+        $tlsStatus = null;
+        try {
+            $tlsStatus = w_query('mail', 'syncSmtpTlsFromDomainPool', [
+                'hostname' => $smtpHost,
+                'root_domain' => $root,
+                'origin_ip' => $originIp,
+            ]);
+            if (is_array($tlsStatus) && ($tlsStatus['status'] ?? '') === 'ready') {
+                $tlsNote = (string)__('；Stalwart 证书已就绪');
+            } elseif (is_array($tlsStatus) && ($tlsStatus['status'] ?? '') === 'needs_dns') {
+                $tlsNote = (string)__('；DNS 未指向本机，Stalwart 未接线');
+            } elseif (is_array($tlsStatus) && ($tlsStatus['status'] ?? '') === 'needs_cert') {
+                $tlsNote = (string)__('；证书需要配置');
+            } elseif (is_array($tlsStatus) && ($tlsStatus['message'] ?? '') !== '') {
+                $tlsNote = '；' . (string)$tlsStatus['message'];
+            }
+        } catch (\Throwable $e) {
+            $tlsNote = (string)__('；Stalwart 证书同步暂未能完成：%{1}', [$e->getMessage()]);
+        }
+
         $msg = $poolWarn !== ''
             ? (string)__('Smtp 已启用（域名已在池中）。%{1}', [$poolWarn])
             : (string)__('Smtp 已启用：DNS 已通并已入域名池申请证书');
+        $msg .= $tlsNote;
 
         return [
             'success' => true,
@@ -116,6 +138,7 @@ final class SmtpServiceEnableService
             'domain_name' => $root,
             'smtp_hostname' => $smtpHost,
             'pool' => is_array($pool) ? $pool : ['domain_id' => $poolDomainId, 'success' => true],
+            'tls' => is_array($tlsStatus) ? $tlsStatus : null,
         ];
     }
 

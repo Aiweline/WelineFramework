@@ -85,6 +85,63 @@ final class StalwartManagementAdapter
         return $this->accountId($localPart, $domainId) !== null;
     }
 
+    /**
+     * 列出某域在本机 Stalwart 中已存在的账号本地部分（不含 @域）。
+     *
+     * @return list<string>
+     */
+    public function listLocalPartsForDomain(string $domainName): array
+    {
+        $domainName = strtolower(trim($domainName));
+        if ($domainName === '' || !preg_match('/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/', $domainName)) {
+            return [];
+        }
+        try {
+            $domainId = $this->domainId($domainName);
+        } catch (\Throwable) {
+            return [];
+        }
+        $result = $this->managementCall('x:Account/query', [
+            'filter' => ['domainId' => $domainId],
+            'limit' => 200,
+        ]);
+        $ids = $result['ids'] ?? [];
+        if (!is_array($ids) || $ids === []) {
+            return [];
+        }
+        $idList = [];
+        foreach ($ids as $id) {
+            $id = trim((string)$id);
+            if ($id !== '') {
+                $idList[] = $id;
+            }
+        }
+        if ($idList === []) {
+            return [];
+        }
+        $get = $this->managementCall('x:Account/get', [
+            'ids' => $idList,
+            'properties' => ['name', 'domainId'],
+        ]);
+        $list = $get['list'] ?? [];
+        if (!is_array($list)) {
+            return [];
+        }
+        $out = [];
+        foreach ($list as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $name = strtolower(trim((string)($item['name'] ?? '')));
+            if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9._-]{0,63}$/', $name)) {
+                continue;
+            }
+            $out[$name] = $name;
+        }
+
+        return array_values($out);
+    }
+
     public function provisionAccount(string $mailbox, string $password, int $quotaMb): string
     {
         [$localPart, $domainName] = $this->splitMailbox($mailbox);
@@ -138,26 +195,332 @@ final class StalwartManagementAdapter
     }
 
     /**
-     * 持久化外投 Relay/route 意图；Stalwart Settings 对象写入随后续 API 对齐。
+     * 将域名池/Server 管理的 PEM 导入本机 Stalwart（destroy-by-SAN → create Text → 双 Reload）。
+     * 形状钉死为生产已验证会话，禁止 Stalwart 自建 ACME 双轨。
+     *
+     * @return array{success:bool,hostname:string,cert_id:string,destroyed:list<string>,message:string}
+     */
+    public function importManagedHostnameCertificate(
+        string $hostname,
+        string $fullchainPem,
+        string $privateKeyPem,
+    ): array {
+        $hostname = strtolower(rtrim(trim($hostname), '.'));
+        if ($hostname === '' || !preg_match('/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/', $hostname)) {
+            throw new \InvalidArgumentException('主机名无效。');
+        }
+        $fullchainPem = trim($fullchainPem);
+        $privateKeyPem = trim($privateKeyPem);
+        if ($fullchainPem === '' || $privateKeyPem === ''
+            || !str_contains($fullchainPem, 'BEGIN CERTIFICATE')
+            || !str_contains($privateKeyPem, 'PRIVATE KEY')
+        ) {
+            throw new \InvalidArgumentException('证书或私钥 PEM 不完整。');
+        }
+
+        $destroy = $this->certificateIdsCoveringHostname($hostname);
+        $createKey = preg_replace('/[^a-z0-9]+/', '_', $hostname) ?: 'host';
+        $setArgs = [
+            'create' => [
+                $createKey => [
+                    '@type' => 'Certificate',
+                    'certificate' => ['@type' => 'Text', 'value' => $fullchainPem],
+                    'privateKey' => ['@type' => 'Text', 'secret' => $privateKeyPem],
+                ],
+            ],
+        ];
+        if ($destroy !== []) {
+            $setArgs['destroy'] = $destroy;
+        }
+
+        $setResult = $this->managementCall('x:Certificate/set', $setArgs, 30);
+        $certId = (string)($setResult['created'][$createKey]['id'] ?? '');
+        if ($certId === '' && isset($setResult['notCreated'][$createKey])) {
+            $type = (string)($setResult['notCreated'][$createKey]['type'] ?? '');
+            throw new \RuntimeException('Stalwart 证书导入失败' . ($type !== '' ? '：' . $type : '。'));
+        }
+        if ($certId === '') {
+            // 部分版本 create 键回显不同；按 SAN 再查一次
+            $ids = $this->certificateIdsCoveringHostname($hostname);
+            $certId = (string)($ids[0] ?? '');
+        }
+        if ($certId === '') {
+            throw new \RuntimeException('Stalwart 证书导入后未返回证书 id。');
+        }
+
+        $reloadResult = $this->managementCall('x:Action/set', [
+            'create' => [
+                'reload' => ['@type' => 'ReloadSettings'],
+                'tls' => ['@type' => 'ReloadTlsCertificates'],
+            ],
+        ], 30);
+        if (isset($reloadResult['notCreated']['reload']) || isset($reloadResult['notCreated']['tls'])) {
+            $detail = (string)(
+                ($reloadResult['notCreated']['tls']['type'] ?? null)
+                ?? ($reloadResult['notCreated']['reload']['type'] ?? '')
+            );
+            throw new \RuntimeException('Stalwart 证书 Reload 失败' . ($detail !== '' ? '：' . $detail : '。'));
+        }
+
+        return [
+            'success' => true,
+            'hostname' => $hostname,
+            'cert_id' => $certId,
+            'destroyed' => $destroy,
+            'message' => (string)__('已导入 Stalwart 证书'),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function certificateIdsCoveringHostname(string $hostname): array
+    {
+        $hostname = strtolower(rtrim(trim($hostname), '.'));
+        if ($hostname === '') {
+            return [];
+        }
+        $credential = $this->managementCredential();
+        $response = $this->requestJson(
+            $credential['base_url'] . '/jmap/',
+            $credential['username'],
+            $credential['password'],
+            [
+                'using' => [self::CORE_CAPABILITY, self::MANAGEMENT_CAPABILITY],
+                'methodCalls' => [
+                    ['x:Certificate/query', ['filter' => null], 'q'],
+                    [
+                        'x:Certificate/get',
+                        [
+                            '#ids' => [
+                                'resultOf' => 'q',
+                                'name' => 'x:Certificate/query',
+                                'path' => '/ids',
+                            ],
+                            'properties' => ['id', 'subjectAlternativeNames'],
+                        ],
+                        'g',
+                    ],
+                ],
+            ],
+            30
+        );
+        $list = [];
+        foreach (($response['methodResponses'] ?? []) as $mr) {
+            if (!is_array($mr) || ($mr[0] ?? '') !== 'x:Certificate/get') {
+                continue;
+            }
+            $items = $mr[1]['list'] ?? [];
+            if (!is_array($items)) {
+                continue;
+            }
+            foreach ($items as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $sans = $item['subjectAlternativeNames'] ?? [];
+                if ($sans instanceof \stdClass) {
+                    $sans = (array)$sans;
+                }
+                if (!is_array($sans)) {
+                    continue;
+                }
+                $hit = isset($sans[$hostname])
+                    || in_array($hostname, array_map('strval', array_keys($sans)), true)
+                    || in_array($hostname, array_map('strval', array_values($sans)), true);
+                if (!$hit) {
+                    continue;
+                }
+                $id = trim((string)($item['id'] ?? ''));
+                if ($id !== '') {
+                    $list[] = $id;
+                }
+            }
+        }
+
+        return array_values(array_unique($list));
+    }
+
+    /**
+     * 外投 Relay/route：落盘审计 + JMAP 写入 MtaRoute / MtaOutboundStrategy，并 ReloadSettings。
+     * 中继端口禁止 25（Stalwart Relay 缺省即 25，会直连 MX）；缺省/非法/25 → 587。
      *
      * @param list<array<string, mixed>> $routes
      * @param array<string, mixed> $strategyRoute
      */
     public function applyOutboundRelayRoutes(array $routes, array $strategyRoute): void
     {
+        $normalizedRoutes = [];
+        foreach ($routes as $route) {
+            if (!is_array($route)) {
+                continue;
+            }
+            $normalizedRoutes[] = $this->normalizeRelayRoute($route);
+        }
+
         $dir = rtrim((string)BP, '/\\') . '/var/mail';
         if (!is_dir($dir) && !@mkdir($dir, 0750, true) && !is_dir($dir)) {
             throw new \RuntimeException('无法写入 var/mail 外投路由目录。');
         }
         $payload = [
             'updated_at' => gmdate('c'),
-            'routes' => $routes,
+            'routes' => $normalizedRoutes,
             'strategy_route' => $strategyRoute,
         ];
         $path = $dir . '/outbound-relay-routes.json';
         $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         if ($json === false || @file_put_contents($path, $json) === false) {
             throw new \RuntimeException('外投路由载荷落盘失败。');
+        }
+
+        foreach ($normalizedRoutes as $index => $route) {
+            $this->upsertMtaRelayRoute($route, 'relay-' . $index);
+        }
+
+        $strategyResult = $this->managementCall('x:MtaOutboundStrategy/set', [
+            'update' => [
+                'singleton' => [
+                    'route' => $this->normalizeStrategyRouteExpression($strategyRoute),
+                ],
+            ],
+        ]);
+        if (isset($strategyResult['notUpdated']['singleton'])) {
+            $type = (string)($strategyResult['notUpdated']['singleton']['type'] ?? '');
+            throw new \RuntimeException('Stalwart 外投策略更新失败' . ($type !== '' ? '：' . $type : '。'));
+        }
+
+        $reloadResult = $this->managementCall('x:Action/set', [
+            'create' => [
+                'reload' => ['@type' => 'ReloadSettings'],
+            ],
+        ]);
+        if (!isset($reloadResult['created']['reload']) && isset($reloadResult['notCreated']['reload'])) {
+            $type = (string)($reloadResult['notCreated']['reload']['type'] ?? '');
+            throw new \RuntimeException('Stalwart ReloadSettings 失败' . ($type !== '' ? '：' . $type : '。'));
+        }
+    }
+
+    /**
+     * Stalwart Expression.match 必须是对象 map；PHP list/JSON 数组会 invalidPatch。
+     *
+     * @param array<string, mixed> $strategyRoute
+     * @return array<string, mixed>
+     */
+    private function normalizeStrategyRouteExpression(array $strategyRoute): array
+    {
+        $else = (string)($strategyRoute['else'] ?? "'mx'");
+        if ($else === '' || $else === 'mx') {
+            $else = "'mx'";
+        }
+        $rawMatch = $strategyRoute['match'] ?? [];
+        if ($rawMatch instanceof \stdClass) {
+            $rawMatch = (array)$rawMatch;
+        }
+        if (!is_array($rawMatch)) {
+            $rawMatch = [];
+        }
+        $matchMap = [];
+        $i = 0;
+        foreach ($rawMatch as $rule) {
+            if (!is_array($rule)) {
+                continue;
+            }
+            $if = trim((string)($rule['if'] ?? ''));
+            $then = trim((string)($rule['then'] ?? ''));
+            if ($if === '' || $then === '') {
+                continue;
+            }
+            // 兼容旧两参写法 → 当前 Stalwart 单参。
+            if ($if === "is_local_domain('', rcpt_domain)") {
+                $if = 'is_local_domain(rcpt_domain)';
+            }
+            $matchMap[(string)$i] = ['if' => $if, 'then' => $then];
+            $i++;
+        }
+
+        return [
+            'match' => (object)$matchMap,
+            'else' => $else,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $route
+     * @return array<string, mixed>
+     */
+    private function normalizeRelayRoute(array $route): array
+    {
+        $name = trim((string)($route['name'] ?? ''));
+        $address = strtolower(trim((string)($route['address'] ?? '')));
+        if ($name === '' || $address === '') {
+            throw new \InvalidArgumentException('外投 Relay 路由缺少 name/address。');
+        }
+        $port = (int)($route['port'] ?? 587);
+        if ($port < 1 || $port > 65535 || $port === 25) {
+            $port = 587;
+        }
+        $authSecret = $route['authSecret'] ?? ['@type' => 'None'];
+        if (!is_array($authSecret)) {
+            $authSecret = ['@type' => 'None'];
+        }
+
+        return [
+            '@type' => 'Relay',
+            'name' => $name,
+            'address' => $address,
+            'port' => $port,
+            'protocol' => (string)($route['protocol'] ?? 'smtp') ?: 'smtp',
+            'implicitTls' => (bool)($route['implicitTls'] ?? false),
+            'allowInvalidCerts' => (bool)($route['allowInvalidCerts'] ?? true),
+            'authUsername' => trim((string)($route['authUsername'] ?? '')),
+            'authSecret' => $authSecret,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $route
+     */
+    private function upsertMtaRelayRoute(array $route, string $createKey): void
+    {
+        $name = (string)$route['name'];
+        $query = $this->managementCall('x:MtaRoute/query', [
+            'filter' => ['name' => $name],
+            'limit' => 1,
+        ]);
+        $existingId = (string)($query['ids'][0] ?? '');
+        $fields = [
+            'address' => $route['address'],
+            'port' => (int)$route['port'],
+            'protocol' => $route['protocol'],
+            'implicitTls' => (bool)$route['implicitTls'],
+            'allowInvalidCerts' => (bool)($route['allowInvalidCerts'] ?? true),
+            'authUsername' => $route['authUsername'],
+            'authSecret' => $route['authSecret'],
+        ];
+
+        if ($existingId !== '') {
+            $result = $this->managementCall('x:MtaRoute/set', [
+                'update' => [
+                    $existingId => $fields,
+                ],
+            ]);
+            if (isset($result['notUpdated'][$existingId])) {
+                $type = (string)($result['notUpdated'][$existingId]['type'] ?? '');
+                throw new \RuntimeException('Stalwart Relay 路由更新失败（' . $name . '）' . ($type !== '' ? '：' . $type : '。'));
+            }
+            return;
+        }
+
+        $createObject = array_merge(['@type' => 'Relay', 'name' => $name], $fields);
+        $result = $this->managementCall('x:MtaRoute/set', [
+            'create' => [
+                $createKey => $createObject,
+            ],
+        ]);
+        $createdId = (string)($result['created'][$createKey]['id'] ?? '');
+        if ($createdId === '') {
+            $type = (string)($result['notCreated'][$createKey]['type'] ?? '');
+            throw new \RuntimeException('Stalwart Relay 路由创建失败（' . $name . '）' . ($type !== '' ? '：' . $type : '。'));
         }
     }
 
@@ -225,7 +588,7 @@ final class StalwartManagementAdapter
     /**
      * @return array<string, mixed>
      */
-    private function managementCall(string $method, array $arguments): array
+    private function managementCall(string $method, array $arguments, int $timeoutSeconds = 12): array
     {
         $credential = $this->managementCredential();
         $response = $this->requestJson(
@@ -235,7 +598,8 @@ final class StalwartManagementAdapter
             [
                 'using' => [self::CORE_CAPABILITY, self::MANAGEMENT_CAPABILITY],
                 'methodCalls' => [[$method, $arguments, 'management']],
-            ]
+            ],
+            $timeoutSeconds
         );
         $methodResponse = $response['methodResponses'][0] ?? null;
         if (!is_array($methodResponse) || !isset($methodResponse[0], $methodResponse[1])) {
@@ -323,8 +687,13 @@ final class StalwartManagementAdapter
     /**
      * @return array<string, mixed>
      */
-    private function requestJson(string $url, string $username, string $password, array $payload): array
-    {
+    private function requestJson(
+        string $url,
+        string $username,
+        string $password,
+        array $payload,
+        int $timeoutSeconds = 12,
+    ): array {
         $parts = parse_url($url);
         $host = strtolower((string)($parts['host'] ?? ''));
         if (!is_array($parts)
@@ -341,12 +710,13 @@ final class StalwartManagementAdapter
         if ($handle === false) {
             throw new \RuntimeException('无法初始化 Stalwart 管理请求。');
         }
+        $timeoutSeconds = max(3, min(60, $timeoutSeconds));
         $encoded = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         curl_setopt_array($handle, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_CONNECTTIMEOUT => 3,
-            CURLOPT_TIMEOUT => 12,
+            CURLOPT_TIMEOUT => $timeoutSeconds,
             CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
             CURLOPT_USERPWD => $username . ':' . $password,
             CURLOPT_POST => true,

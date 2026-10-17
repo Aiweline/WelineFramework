@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\Mail\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Mail\Service\Mailbox\StalwartMailboxClient;
+
 class StalwartEngineAdapter implements MailEngineInterface
 {
     private const LINUX_INSTALL_DIR = '/opt/stalwart';
@@ -226,259 +229,54 @@ class StalwartEngineAdapter implements MailEngineInterface
     }
 
     /**
+     * @deprecated Use MailboxOpsService / StalwartMailboxClient
      * @return list<array<string, mixed>>
      */
     public function listInboxMessages(string $mailbox, int $limit = 50): array
     {
-        $context = $this->openMailboxSession($mailbox);
-        $inboxId = $this->findInboxId($context);
-        $limit = max(1, min(100, $limit));
-        $query = $this->jmapCall($context, 'Email/query', [
-            'accountId' => $context['account_id'],
-            'filter' => ['inMailbox' => $inboxId],
-            'sort' => [['property' => 'receivedAt', 'isAscending' => false]],
-            'limit' => $limit,
-        ]);
-        $ids = array_values(array_filter(
-            (array)($query['ids'] ?? []),
-            static fn($id): bool => is_string($id) && $id !== ''
-        ));
-        if ($ids === []) {
-            return [];
-        }
-
-        $result = $this->jmapCall($context, 'Email/get', [
-            'accountId' => $context['account_id'],
-            'ids' => $ids,
-            'properties' => [
-                'id',
-                'threadId',
-                'from',
-                'to',
-                'subject',
-                'receivedAt',
-                'sentAt',
-                'preview',
-                'hasAttachment',
-                'size',
-                'keywords',
-            ],
-        ]);
-
-        $messages = [];
-        foreach ((array)($result['list'] ?? []) as $message) {
-            if (is_array($message)) {
-                $messages[] = $this->normalizeMessage($message, false);
-            }
-        }
-        return $messages;
-    }
-
-    public function getInboxMessage(string $mailbox, string $messageId): ?array
-    {
-        $messageId = trim($messageId);
-        if ($messageId === '' || strlen($messageId) > 255) {
-            throw new \InvalidArgumentException('邮件标识无效。');
-        }
-
-        $context = $this->openMailboxSession($mailbox);
-        $result = $this->jmapCall($context, 'Email/get', [
-            'accountId' => $context['account_id'],
-            'ids' => [$messageId],
-            'properties' => [
-                'id',
-                'threadId',
-                'from',
-                'to',
-                'cc',
-                'bcc',
-                'subject',
-                'receivedAt',
-                'sentAt',
-                'preview',
-                'hasAttachment',
-                'size',
-                'keywords',
-                'bodyValues',
-                'textBody',
-                'htmlBody',
-            ],
-            'fetchTextBodyValues' => true,
-            'fetchHTMLBodyValues' => true,
-            'maxBodyValueBytes' => 131072,
-        ]);
-        $message = $result['list'][0] ?? null;
-
-        return is_array($message) ? $this->normalizeMessage($message, true) : null;
+        return $this->mailboxClient()->listMessages($mailbox, 'inbox', $limit);
     }
 
     /**
+     * @deprecated Use MailboxOpsService / StalwartMailboxClient
+     */
+    public function getInboxMessage(string $mailbox, string $messageId): ?array
+    {
+        return $this->mailboxClient()->getMessage($mailbox, $messageId);
+    }
+
+    /**
+     * @deprecated Use MailboxOpsService / StalwartMailboxClient
      * @return list<array<string, mixed>>
      */
     public function listMailboxMessages(string $mailbox, string $folder = 'inbox', int $limit = 50): array
     {
-        $folder = strtolower(trim($folder));
-        if (!in_array($folder, ['inbox', 'sent'], true)) {
-            throw new \InvalidArgumentException('邮件夹参数无效。');
-        }
-        if ($folder === 'inbox') {
-            return $this->listInboxMessages($mailbox, $limit);
-        }
-
-        $context = $this->openMailboxSession($mailbox);
-        $mailboxId = $this->findMailboxIdByRole($context, 'sent');
-        $limit = max(1, min(100, $limit));
-        $query = $this->jmapCall($context, 'Email/query', [
-            'accountId' => $context['account_id'],
-            'filter' => ['inMailbox' => $mailboxId],
-            'sort' => [['property' => 'sentAt', 'isAscending' => false]],
-            'limit' => $limit,
-        ]);
-        $ids = array_values(array_filter(
-            (array)($query['ids'] ?? []),
-            static fn($id): bool => is_string($id) && $id !== ''
-        ));
-        if ($ids === []) {
-            return [];
-        }
-
-        $result = $this->jmapCall($context, 'Email/get', [
-            'accountId' => $context['account_id'],
-            'ids' => $ids,
-            'properties' => [
-                'id', 'threadId', 'from', 'to', 'cc', 'bcc', 'subject',
-                'receivedAt', 'sentAt', 'preview', 'hasAttachment', 'size', 'keywords',
-            ],
-        ]);
-
-        $messages = [];
-        foreach ((array)($result['list'] ?? []) as $message) {
-            if (is_array($message)) {
-                $messages[] = $this->normalizeMessage($message, false);
-            }
-        }
-        return $messages;
+        return $this->mailboxClient()->listMessages($mailbox, $folder, $limit);
     }
 
+    /**
+     * @deprecated Use MailboxOpsService / StalwartMailboxClient
+     */
     public function getMailboxMessage(string $mailbox, string $messageId): ?array
     {
-        return $this->getInboxMessage($mailbox, $messageId);
+        return $this->mailboxClient()->getMessage($mailbox, $messageId);
     }
 
+    /**
+     * @deprecated Use MailboxOpsService / StalwartMailboxClient
+     */
     public function sendMessage(
         string $mailbox,
         string|array $to,
         string $subject,
         string $body
     ): array {
-        $mailbox = strtolower(trim($mailbox));
-        if (!filter_var($mailbox, FILTER_VALIDATE_EMAIL)) {
-            throw new \InvalidArgumentException('发件邮箱格式无效。');
-        }
-        $recipients = $this->normalizeSendRecipients($to);
-        $subject = trim($subject);
-        $body = trim($body);
-        if ($recipients === []) {
-            throw new \InvalidArgumentException('收件邮箱格式不正确。');
-        }
-        if ($subject === '' || $body === '') {
-            throw new \InvalidArgumentException('主题和正文不能为空。');
-        }
+        return $this->mailboxClient()->send($mailbox, $to, $subject, $body);
+    }
 
-        $context = $this->openMailboxSession($mailbox);
-        $draftsId = $this->findMailboxIdByRole($context, 'drafts');
-        $sentId = $this->findMailboxIdByRole($context, 'sent');
-        $capabilities = [
-            self::JMAP_CORE_CAPABILITY,
-            self::JMAP_MAIL_CAPABILITY,
-            'urn:ietf:params:jmap:submission',
-        ];
-        $identities = $this->jmapCallWithCapabilities(
-            $context,
-            'Identity/get',
-            ['accountId' => $context['account_id']],
-            $capabilities
-        );
-        $identityId = '';
-        foreach ((array)($identities['list'] ?? []) as $identity) {
-            if (!is_array($identity)) {
-                continue;
-            }
-            if ($identityId === '') {
-                $identityId = (string)($identity['id'] ?? '');
-            }
-            if (strtolower((string)($identity['email'] ?? '')) === $mailbox) {
-                $identityId = (string)($identity['id'] ?? '');
-                break;
-            }
-        }
-        if ($identityId === '') {
-            throw new \RuntimeException('目标邮箱没有可用的发件身份。');
-        }
-
-        $create = $this->jmapCallWithCapabilities(
-            $context,
-            'Email/set',
-            [
-                'accountId' => $context['account_id'],
-                'create' => [
-                    'draft' => [
-                        'mailboxIds' => (object)[$draftsId => true],
-                        'keywords' => (object)['$draft' => true],
-                        'from' => [['email' => $mailbox]],
-                        'to' => array_map(
-                            static fn(string $email): array => ['email' => $email],
-                            $recipients
-                        ),
-                        'subject' => $subject,
-                        'bodyStructure' => ['type' => 'text/plain', 'partId' => 'body'],
-                        'bodyValues' => ['body' => ['value' => $body]],
-                    ],
-                ],
-            ],
-            $capabilities
-        );
-        $emailId = (string)($create['created']['draft']['id'] ?? '');
-        if ($emailId === '') {
-            $type = (string)($create['notCreated']['draft']['type'] ?? '');
-            throw new \RuntimeException('邮件草稿创建失败' . ($type !== '' ? '：' . $type : '。'));
-        }
-
-        $submission = $this->jmapCallWithCapabilities(
-            $context,
-            'EmailSubmission/set',
-            [
-                'accountId' => $context['account_id'],
-                'create' => [
-                    'submission' => [
-                        'identityId' => $identityId,
-                        'emailId' => $emailId,
-                    ],
-                ],
-            ],
-            $capabilities
-        );
-        if (empty($submission['created']['submission']['id'])) {
-            $type = (string)($submission['notCreated']['submission']['type'] ?? '');
-            throw new \RuntimeException('邮件提交失败' . ($type !== '' ? '：' . $type : '。'));
-        }
-
-        $this->jmapCallWithCapabilities(
-            $context,
-            'Email/set',
-            [
-                'accountId' => $context['account_id'],
-                'update' => [
-                    $emailId => [
-                        'mailboxIds' => (object)[$sentId => true],
-                        'keywords' => (object)['$seen' => true],
-                    ],
-                ],
-            ],
-            $capabilities
-        );
-
-        return ['success' => true, 'message' => __('邮件已提交发送')];
+    private function mailboxClient(): StalwartMailboxClient
+    {
+        return ObjectManager::getInstance(StalwartMailboxClient::class);
     }
 
     /**

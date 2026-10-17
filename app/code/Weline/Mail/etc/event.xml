@@ -13,4 +13,9 @@
                   shared="true"
                   sort="120"/>
     </event>
+    <event name="Weline_Server::domain::certificate_issued">
+        <observer name="Weline_Mail::certificate_issued_stalwart_tls"
+                  instance="Weline\Mail\Observer\CertificateIssuedStalwartTls"
+                  sort="200"/>
+    </event>
 </config>
