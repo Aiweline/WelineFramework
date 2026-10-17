@@ -83,6 +83,20 @@ final class FpcPolicySnapshotTest extends TestCase
         self::assertSame('/products/coat', FpcPolicySnapshot::normalizePath('https://shop.test/store/en_US/USD/products/coat?q=1', 'https://shop.test/store/'));
     }
 
+    public function testResolveSurfacesSortedQueryKeysAndFingerprint(): void
+    {
+        $scope = ScopeIdentity::channel(0, 'default', 'main', 'web', 'normal');
+        $snapshot = $this->snapshot();
+        $without = FpcPolicySnapshot::resolve($snapshot, '/products/coat', $scope);
+        self::assertSame([], $without['query_keys']);
+        $snapshot['declarations']['a']['attrs']['query_keys'] = ['price', 'af_x', 'price'];
+        $with = FpcPolicySnapshot::resolve($snapshot, '/products/coat', $scope);
+        self::assertSame(['af_x', 'price'], $with['query_keys']);
+        self::assertNotSame($without['policy_fingerprint'], $with['policy_fingerprint']);
+        self::assertTrue(FpcPolicySnapshot::requestCarriesAllowlistedQuery($with['query_keys'], ['utm_source' => 'x', 'price' => '1-2']));
+        self::assertFalse(FpcPolicySnapshot::requestCarriesAllowlistedQuery($with['query_keys'], ['utm_source' => 'x']));
+    }
+
     private function snapshot(): array
     {
         return ['schema_version' => 'fpc-policy-snapshot.v1', 'revision' => 'one', 'source_version' => 1,

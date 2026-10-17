@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace Weline\Cdn\Service;
 
+use Weline\Framework\Extends\Module\Weline_Framework\Extra\Type\FpcExtraType;
+
 /** 控制面变更的纯函数：版本化清理集合不会丢失连续保存。 */
 final class FpcPolicyStateReducer
 {
@@ -55,7 +57,15 @@ final class FpcPolicyStateReducer
         $row['class'] = ltrim((string)$row['class'], '\\');
         $row['method'] = strtolower((string)$row['method']);
         $row['declaration_id'] = hash('sha256', implode("\n", [$row['module'], $row['class'], $row['method'], 'fpc']));
-        $row['attrs'] = ['enabled' => (bool)($row['attrs']['enabled'] ?? true), 'ttl' => (int)($row['attrs']['ttl'] ?? 600), 'namespaces' => array_values((array)($row['namespaces'] ?? $row['attrs']['namespaces'] ?? []))];
+        $namespaces = array_values((array)($row['namespaces'] ?? $row['attrs']['namespaces'] ?? []));
+        // Guest-shared allowlist: same fail-closed normalizer as FpcExtraType (`*` / storm → empty = path-only).
+        $queryKeys = FpcExtraType::normalizeQueryKeys($row['attrs']['query_keys'] ?? []);
+        $row['attrs'] = [
+            'enabled' => (bool)($row['attrs']['enabled'] ?? true),
+            'ttl' => (int)($row['attrs']['ttl'] ?? 600),
+            'namespaces' => $namespaces,
+            'query_keys' => $queryKeys,
+        ];
         $row['namespaces'] = $row['attrs']['namespaces'];
         $row['public_path_patterns'] = array_values(array_unique((array)($row['public_path_patterns'] ?? [])));
         sort($row['public_path_patterns']);

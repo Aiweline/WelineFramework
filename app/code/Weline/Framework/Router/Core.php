@@ -23,6 +23,7 @@ use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Sse\SseContext;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\RequestContext;
@@ -1099,7 +1100,7 @@ class Core
             }
 
             try {
-                $routers = include $routerFilepath;
+                $routers = CompiledPhpRegistry::load($routerFilepath) ?? [];
             } catch (\Throwable) {
                 continue;
             }
@@ -1162,7 +1163,13 @@ class Core
             || ($persistentRuntime && $cachedRouters === [])
         ) {
             try {
-                $routers = include $routerFilepath;
+                if (!$persistentRuntime
+                    && $hasCacheEntry
+                    && (self::$generatedRouterFileMtimes[$routerFilepath] ?? -1) !== $mtime
+                ) {
+                    CompiledPhpRegistry::forgetForTests($routerFilepath);
+                }
+                $routers = CompiledPhpRegistry::load($routerFilepath) ?? [];
             } catch (\Throwable $throwable) {
                 if ($hasCachedRouters) {
                     self::$generatedRouterFileFrozen[$routerFilepath] = true;
@@ -1239,7 +1246,7 @@ class Core
         }
 
         try {
-            $routers = include $snapshotFile;
+            $routers = CompiledPhpRegistry::load($snapshotFile);
         } catch (\Throwable) {
             return [];
         }

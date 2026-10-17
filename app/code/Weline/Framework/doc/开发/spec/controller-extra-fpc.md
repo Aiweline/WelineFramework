@@ -15,6 +15,12 @@ clarify_status: ready-for-plan
 1. WHEN 控制器声明 `@Extra type=fpc` 且 type 已注册 THEN 升级收集 SHALL 写入可读侧车策略。  
 1b. WHEN 无 Extra 匹配且路径未硬排除 THEN 源站 FPC SHALL 默认允许且 TTL=一年（31536000）。  
 1c. WHEN `@Extra type=fpc enabled=false` 或路径硬排除 THEN SHALL NOT 发布共享 FPC。  
+1d. WHEN `@Extra type=fpc` 省略 `query_keys` 或归一后为空 THEN Shared/Process FPC 身份 SHALL 为 path-only（忽略访客 query，穿章风暴键除外）。  
+1e. WHEN `query_keys` 为显式逗号列表 THEN 仅这些参数名（小写）参与缓存身份；键名排序后拼入 canonical URI；书写顺序不同但同名同值 SHALL 得同一身份。  
+1f. WHEN 请求携带未在 `query_keys` 中的参数（如 `utm_*`）THEN SHALL NOT 改变 FPC 身份。  
+1g. WHEN `query_keys` 含 `*`、非法名、穿章/诊断键（`_wb_nc` / `w_fpc_pierce` / `wls_tpl_*` / `nocache`）或超过 `MAX_QUERY_KEYS` THEN 归一 SHALL fail-closed 为空列表（path-only）。  
+1h. WHEN 路径策略含非空 `query_keys` 且请求携带任一白名单参 THEN 边缘 html-disk SHALL bypass（禁 `~q/{sha1}` 盘变体）；冷盘叶子仍 path-only。  
+1i. WHEN 业务页为白名单参分键 THEN SSR 体 SHALL 按这些参投影（禁止键分桶、体仍中性壳）。  
 2. WHEN 业务在同事务调用 `w_changed` 且 ChangedType 已注册 THEN 系统 SHALL Enricher→Recipe→Capability，并仍 dispatch 给 Seo 等。  
 3. WHEN Enricher 后仍缺 purge_fpc_urls 所需 urls THEN 系统 SHALL fail-fast。  
 4. IF 请求为预览/draft 配方 THEN SHALL NOT purge_fpc_all。  
@@ -31,6 +37,13 @@ clarify_status: ready-for-plan
 
 升级收集失败，错误列出已注册 type。
 
+## UC-03 query_keys 身份（无顺序）
+
+1. 控制器声明 `query_keys=price,af_x`。  
+2. 请求 `?utm=1&af_x=晋制&price=100-299` 与 `?price=100-299&af_x=晋制` → 同一 Shared 键。  
+3. 仅 `?utm=1` → path-only 键（与无 query 相同）。  
+4. `query_keys=*` 或 `query_keys=_wb_nc,price` → 归一为空，path-only。
+
 ## 非目标
 
-Seo 迁 Capability；业务 Provider 调 FPC；兼容双跑。
+Seo 迁 Capability；业务 Provider 调 FPC；兼容双跑；任意 query / 前缀通配进共享键；html-disk `~q/{sha1}` 变体叶。

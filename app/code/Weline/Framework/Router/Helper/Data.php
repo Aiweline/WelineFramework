@@ -10,6 +10,8 @@
 namespace Weline\Framework\Router\Helper;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
+use Weline\Framework\Runtime\Runtime;
 
 class Data
 {
@@ -125,14 +127,10 @@ class Data
             $this->batchRouters[$path] = [];
             return [];
         } else {
-            // 非批量模式：从文件读取
+            // 非批量模式：从文件读取（WLS：门闩一次；CLI setup：可失效后重读）
             $routers = [];
             if (is_file($path)) {
-                $this->invalidatePhpFileCache($path);
-                $routers = require $path;
-                if (!is_array($routers)) {
-                    $routers = [];
-                }
+                $routers = $this->loadRouterFileOnce($path);
             }
             return $routers;
         }
@@ -152,10 +150,40 @@ class Data
                 $this->batchRouters[$path] = [];
                 continue;
             }
-            $this->invalidatePhpFileCache($path);
-            $routers = require $path;
-            $this->batchRouters[$path] = \is_array($routers) ? $routers : [];
+            $routers = $this->loadRouterFileOnce($path);
+            $this->batchRouters[$path] = $routers;
         }
+    }
+
+    /**
+     * Read one generated router PHP array once per process (WLS).
+     * CLI setup may invalidate then re-load after disk rewrites.
+     *
+     * @return array<string, mixed>
+     */
+    public function readRoutersFile(string $path): array
+    {
+        if (!\is_file($path)) {
+            return [];
+        }
+        if (Runtime::isPersistent() || (\defined('WLS_MODE') && WLS_MODE)) {
+            $routers = CompiledPhpRegistry::load($path);
+
+            return \is_array($routers) ? $routers : [];
+        }
+        $this->invalidatePhpFileCache($path);
+        CompiledPhpRegistry::forgetForTests($path);
+        $routers = CompiledPhpRegistry::load($path);
+
+        return \is_array($routers) ? $routers : [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadRouterFileOnce(string $path): array
+    {
+        return $this->readRoutersFile($path);
     }
     
     /**
@@ -233,6 +261,8 @@ class Data
         }
 
         $this->invalidatePhpFileCache($path);
+        // Process bag write-through — subsequent load() must not re-include.
+        \Weline\Framework\Compilation\CompiledPhpRegistry::put($path, $data);
     }
 
     private function invalidatePhpFileCache(string $path): void
@@ -277,11 +307,7 @@ class Data
             // 立即写入模式：需要从文件读取现有路由并合并
             $existingRouters = [];
             if (is_file($path)) {
-                $this->invalidatePhpFileCache($path);
-                $existingRouters = require $path;
-                if (!is_array($existingRouters)) {
-                    $existingRouters = [];
-                }
+                $existingRouters = $this->loadRouterFileOnce($path);
             }
             // 合并现有路由和新路由
             $routers = array_merge($existingRouters, $routers);
@@ -312,9 +338,8 @@ class Data
             $routers = [];
             $routers[$api['router']] = $api['rule'];
             if (is_file($path)) {
-                $this->invalidatePhpFileCache($path);
-                $file_routers = require $path;
-                if (is_array($file_routers)) {
+                $file_routers = $this->loadRouterFileOnce($path);
+                if ($file_routers !== []) {
                     $routers = array_merge($file_routers, $routers);
                 }
             }
@@ -367,11 +392,7 @@ class Data
             return;
         }
 
-        $this->invalidatePhpFileCache($path);
-        $routers = require $path;
-        if (!is_array($routers)) {
-            $routers = [];
-        }
+        $routers = $this->loadRouterFileOnce($path);
 
         $cleared = false;
         foreach ($routers as $routerKey => $router) {

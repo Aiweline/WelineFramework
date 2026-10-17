@@ -23,8 +23,7 @@ final class ExtraPolicyResolver implements ProcessSharedInterface
     public function fpcSnapshot(): array
     {
         $hot = ObjectManager::getInstance(StorefrontScopeHotCache::class);
-        return $hot->rememberForRequest('framework.fpc_policy_snapshot', 'snapshot.v1', fn(): array =>
-            $hot->rememberPolicy(new CachePolicy(
+        return $hot->rememberPolicy(new CachePolicy(
                 resource: 'framework.fpc_policy_snapshot', pool: 'router', scope: 'global',
                 vary: [], dependencies: ['global/fpc-policy'], freshTtlSeconds: 3600, staleTtlSeconds: 0,
             ), 'snapshot.v1', function (): array {
@@ -57,13 +56,36 @@ final class ExtraPolicyResolver implements ProcessSharedInterface
                 return ['schema_version' => 'fpc-policy-snapshot.v1', 'source_version' => 0,
                     'revision' => hash('sha256', json_encode($rows)), 'compiled_at' => '',
                     'declarations' => $rows, 'overrides' => [], 'scope_chains' => []];
-            })
-        );
+            });
     }
 
     public function resolveFpcForPath(string $path, ScopeIdentity $scope): ?array
     {
         return FpcPolicySnapshot::resolve($this->fpcSnapshot(), $path, $scope);
+    }
+
+    /**
+     * Path-scoped guest query allowlist for FPC cache identity + β html-disk bypass.
+     * Empty list means path-only (default).
+     *
+     * @return list<string>
+     */
+    public function queryKeysForPath(string $path, ScopeIdentity $scope): array
+    {
+        return FpcPolicySnapshot::queryKeysFromPolicy($this->resolveFpcForPath($path, $scope));
+    }
+
+    /**
+     * β pairing helper: true when this path's policy allowlists at least one key present in $query.
+     *
+     * @param array<string, mixed> $query
+     */
+    public function requestCarriesAllowlistedQueryForPath(string $path, ScopeIdentity $scope, array $query): bool
+    {
+        return FpcPolicySnapshot::requestCarriesAllowlistedQuery(
+            $this->queryKeysForPath($path, $scope),
+            $query,
+        );
     }
 
     public function resolveForPath(string $path, string $type = 'fpc'): ?array

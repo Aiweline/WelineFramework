@@ -129,7 +129,7 @@ class Handle implements RegisterInterface
                     if ($this->helper->isBatchMode()) {
                         $routers = $this->helper->getBatchRouters($path);
                     } elseif (is_file($path)) {
-                        $routers = require $path;
+                        $routers = $this->helper->readRoutersFile($path);
                     }
                     
                     $router = [

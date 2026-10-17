@@ -55,7 +55,7 @@ class Listing implements CommandInterface
             }
 
             try {
-                $routes = include $filePath;
+                $routes = \Weline\Framework\Compilation\CompiledPhpRegistry::load($filePath);
                 if (!is_array($routes)) {
                     continue;
                 }

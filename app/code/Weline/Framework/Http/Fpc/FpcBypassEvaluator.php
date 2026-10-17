@@ -85,17 +85,15 @@ final class FpcBypassEvaluator
             return self::$cachedRules;
         }
         $path = BP . self::SIDECAR_RELATIVE;
-        if (\is_file($path)) {
-            try {
-                $data = include $path;
-            } catch (\Throwable) {
-                $data = null;
-            }
-            if (\is_array($data) && ($data['schema_version'] ?? '') === self::SCHEMA) {
-                $rules = $data['rules'] ?? null;
-                if (\is_array($rules) && $rules !== []) {
-                    return self::$cachedRules = \array_values($rules);
-                }
+        try {
+            $data = \Weline\Framework\Compilation\CompiledPhpRegistry::load($path);
+        } catch (\Throwable) {
+            $data = null;
+        }
+        if (\is_array($data) && ($data['schema_version'] ?? '') === self::SCHEMA) {
+            $rules = $data['rules'] ?? null;
+            if (\is_array($rules) && $rules !== []) {
+                return self::$cachedRules = \array_values($rules);
             }
         }
 

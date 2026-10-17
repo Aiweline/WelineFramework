@@ -63,9 +63,11 @@ final class FpcPolicySnapshot
             sort($namespaces, SORT_STRING);
             $paths = array_values(array_unique([(string)($row['path_pattern'] ?? ''), ...(array)($row['public_path_patterns'] ?? [])]));
             sort($paths, SORT_STRING);
+            $queryKeys = self::queryKeysFromAttrs($attrs);
             $resolved[] = ['rank' => $candidate['rank'], 'policy' => [
                 'declaration_id' => $id, 'enabled' => $enabled, 'ttl' => $ttl, 'namespaces' => $namespaces,
-                'policy_fingerprint' => hash('sha256', json_encode([$id, $codeEnabled, $codeTtl, $enabled, $ttl, $namespaces, $paths, $scope->canonicalKey(), $mode], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)),
+                'query_keys' => $queryKeys,
+                'policy_fingerprint' => hash('sha256', json_encode([$id, $codeEnabled, $codeTtl, $enabled, $ttl, $namespaces, $paths, $queryKeys, $scope->canonicalKey(), $mode], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)),
                 'snapshot_revision' => (string)($snapshot['revision'] ?? ''), 'source_version' => (int)($snapshot['source_version'] ?? 0),
                 'enabled_source' => $enabledSource, 'ttl_source' => $ttlSource,
             ]];
@@ -109,6 +111,76 @@ final class FpcPolicySnapshot
             ?: ((bool)($a['row']['attrs']['enabled'] ?? true) <=> (bool)($b['row']['attrs']['enabled'] ?? true))
             ?: strcmp(self::declarationId($a['row']), self::declarationId($b['row'])));
         return $matches;
+    }
+
+    /**
+     * Guest-shared allowlist from a resolved policy (empty = path-only).
+     *
+     * @param array<string, mixed>|null $policy
+     * @return list<string>
+     */
+    public static function queryKeysFromPolicy(?array $policy): array
+    {
+        if (!\is_array($policy)) {
+            return [];
+        }
+
+        return self::queryKeysFromAttrs($policy);
+    }
+
+    /**
+     * True when the request query carries at least one allowlisted key (β edge bypass gate).
+     *
+     * @param list<string> $queryKeys
+     * @param array<string, mixed> $query
+     */
+    public static function requestCarriesAllowlistedQuery(array $queryKeys, array $query): bool
+    {
+        if ($queryKeys === [] || $query === []) {
+            return false;
+        }
+        $lookup = [];
+        foreach ($query as $rawKey => $_value) {
+            $lookup[\strtolower(\trim((string)$rawKey))] = true;
+        }
+        foreach ($queryKeys as $key) {
+            $key = \strtolower(\trim((string)$key));
+            if ($key !== '' && isset($lookup[$key])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $attrs
+     * @return list<string>
+     */
+    private static function queryKeysFromAttrs(array $attrs): array
+    {
+        $raw = $attrs['query_keys'] ?? [];
+        if (\is_string($raw)) {
+            $raw = \array_map('trim', \explode(',', $raw));
+        }
+        if (!\is_array($raw)) {
+            return [];
+        }
+        $keys = [];
+        foreach ($raw as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $key = \strtolower(\trim((string)$item));
+            if ($key === '' || $key === '*' || \str_contains($key, '*')) {
+                continue;
+            }
+            $keys[$key] = true;
+        }
+        $list = \array_keys($keys);
+        \sort($list, \SORT_STRING);
+
+        return $list;
     }
 
     private static function scopeChain(ScopeIdentity $scope): array

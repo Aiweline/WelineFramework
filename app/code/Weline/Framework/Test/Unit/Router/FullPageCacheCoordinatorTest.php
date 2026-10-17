@@ -1260,6 +1260,76 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertMatchesRegularExpression('/CDN-Cache-Control: public, max-age=[0-5]\r\n/', $wire);
     }
 
+    public function testQueryAllowlistCacheKeyUcs(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $filter = new \ReflectionMethod(FullPageCacheCoordinator::class, 'filterQueryStringForCacheKey');
+        $filter->setAccessible(true);
+        $canonical = new \ReflectionMethod(FullPageCacheCoordinator::class, 'canonicalizeFullUriForCacheKey');
+        $canonical->setAccessible(true);
+        $allowlistMemo = (new \ReflectionClass(FullPageCacheCoordinator::class))
+            ->getConstant('MEMO_QUERY_ALLOWLIST');
+
+        try {
+            // UC-allowlist-split + UC-non-allowlisted-dropped
+            $this->setCurrentFpcUri('https://example.test/products?price=100-299&utm_source=x', '/products?price=100-299&utm_source=x');
+            FullPageCacheCoordinator::clearRequestMemos();
+            RequestContext::set($allowlistMemo, ['sig' => '/products', 'map' => ['price' => true]]);
+            self::assertSame('price=100-299', $filter->invoke($coordinator, 'utm_source=x&price=100-299&af_other=1'));
+            self::assertSame(
+                'https://example.test/products?price=100-299',
+                $canonical->invoke($coordinator, 'https://example.test/products?utm_source=x&price=100-299'),
+            );
+            self::assertNotSame(
+                $canonical->invoke($coordinator, 'https://example.test/products'),
+                $canonical->invoke($coordinator, 'https://example.test/products?price=100-299'),
+            );
+
+            // UC-default-path-only (empty allowlist)
+            $this->setCurrentFpcUri('https://example.test/about?price=1', '/about?price=1');
+            FullPageCacheCoordinator::clearRequestMemos();
+            RequestContext::set($allowlistMemo, ['sig' => '/about', 'map' => []]);
+            self::assertSame('', $filter->invoke($coordinator, 'price=1&utm_source=x'));
+            self::assertSame(
+                'https://example.test/about',
+                $canonical->invoke($coordinator, 'https://example.test/about?price=1'),
+            );
+
+            // UC-order-independent + encoding-normalized allowlisted identity
+            $this->setCurrentFpcUri('https://example.test/products', '/products');
+            FullPageCacheCoordinator::clearRequestMemos();
+            RequestContext::set($allowlistMemo, [
+                'sig' => '/products',
+                'map' => ['af_hanfu_chao_dai' => true, 'price' => true],
+            ]);
+            $orderedA = $filter->invoke(
+                $coordinator,
+                'utm_source=x&af_hanfu_chao_dai=%E6%99%8B%E5%88%B6&price=100-299',
+            );
+            $orderedB = $filter->invoke(
+                $coordinator,
+                'price=100-299&af_hanfu_chao_dai=晋制&utm_campaign=y',
+            );
+            self::assertSame($orderedA, $orderedB);
+            self::assertSame(
+                'af_hanfu_chao_dai=' . rawurlencode('晋制') . '&price=100-299',
+                $orderedA,
+            );
+            self::assertSame(
+                $canonical->invoke(
+                    $coordinator,
+                    'https://example.test/products?price=100-299&af_hanfu_chao_dai=晋制',
+                ),
+                $canonical->invoke(
+                    $coordinator,
+                    'https://example.test/products?af_hanfu_chao_dai=晋制&price=100-299&utm_source=x',
+                ),
+            );
+        } finally {
+            FullPageCacheCoordinator::clearRequestMemos();
+        }
+    }
+
     private function coordinator(CachePoolInterface $pool): FullPageCacheCoordinator
     {
         $authority = new class implements NamespaceGenerationInterface {

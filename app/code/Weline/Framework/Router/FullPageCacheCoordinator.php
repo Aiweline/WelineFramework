@@ -184,6 +184,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private const MEMO_CACHE_KEY_FULL_URI = 'fpc.memo.cache_key_full_uri.v1';
     private const MEMO_CURRENT_VARIANT = 'fpc.memo.current_variant.v1';
     private const MEMO_EFFECTIVE_FPC_POLICY = 'fpc.memo.effective_policy.v1';
+    private const MEMO_QUERY_ALLOWLIST = 'fpc.memo.query_allowlist.v1';
 
     private ?CacheManager $cacheManager;
     private ?CachePoolInterface $cachePool;
@@ -1169,6 +1170,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         RequestContext::remove(self::MEMO_CACHE_KEY_FULL_URI);
         RequestContext::remove(self::MEMO_CURRENT_VARIANT);
         RequestContext::remove(self::MEMO_EFFECTIVE_FPC_POLICY);
+        RequestContext::remove(self::MEMO_QUERY_ALLOWLIST);
     }
 
     public static function clearProcessCache(): void
@@ -6432,6 +6434,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function cacheKeyFullUriMemoSignature(string $rawFullUri): string
     {
         $get = WelineEnv::getGet(null, []);
+        $allowlist = \array_keys($this->currentPathCacheKeyQueryAllowlist());
+        \sort($allowlist, \SORT_STRING);
 
         return \implode("\x1f", [
             $rawFullUri,
@@ -6439,6 +6443,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             \is_array($get) ? (string)\serialize($get) : '',
             (string)WelineEnv::server('HTTP_COOKIE', ''),
             (string)(WelineEnv::get('server.http_cookie', '') ?? ''),
+            \implode(',', $allowlist),
         ]);
     }
 
@@ -6503,6 +6508,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         // survive this canonicalize boundary even if a signature input changes.
         RequestContext::remove(self::MEMO_RAW_FULL_URI);
         RequestContext::remove(self::MEMO_CACHE_KEY_FULL_URI);
+        RequestContext::remove(self::MEMO_QUERY_ALLOWLIST);
 
         WelineEnv::setServer('REQUEST_URI', $requestUri, 'FPC canonical cache build');
         WelineEnv::setServer('QUERY_STRING', $query, 'FPC canonical cache build');
@@ -6600,15 +6606,22 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      */
     private function filterGetParamsForCacheKey(array $params): array
     {
-        // Path-only product FPC: drop every query param except diagnostic storm keys
-        // (_wb_nc / wls_tpl_perf / wls_tpl_route) which must stay out of IGNORABLE and keep a distinct
-        // Process/Shared identity so storm MISS is never promoted into clean-URL HIT KPI.
+        // Default path-only: drop visitor query except (1) pierce-gated storm keys and
+        // (2) path-scoped Extra query_keys allowlist. Sorted for stable Shared identity.
+        // First occurrence wins; values are scalar-canonical (urldecode) so encoding
+        // variants of the same allowlisted name=value share one key.
         $kept = [];
         foreach ($params as $key => $value) {
-            if ($this->isCacheKeyRetainedQueryParam((string)$key)) {
-                $kept[$key] = $value;
+            $normalized = \strtolower(\trim((string)$key));
+            if ($normalized === '' || !$this->isCacheKeyRetainedQueryParam($normalized)) {
+                continue;
             }
+            if (\array_key_exists($normalized, $kept)) {
+                continue;
+            }
+            $kept[$normalized] = self::canonicalCacheKeyQueryValue($value);
         }
+        \ksort($kept, \SORT_STRING);
 
         return $kept;
     }
@@ -6638,31 +6651,108 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return '';
         }
 
-        $kept = [];
+        $keptByKey = [];
         foreach ($segments as $segment) {
-            $rawKey = \explode('=', $segment, 2)[0] ?? '';
-            if (!$this->isCacheKeyRetainedQueryParam((string)\urldecode($rawKey))) {
+            $parts = \explode('=', $segment, 2);
+            $rawKey = $parts[0] ?? '';
+            $decodedKey = \strtolower(\trim((string)\urldecode((string)$rawKey)));
+            if ($decodedKey === '' || !$this->isCacheKeyRetainedQueryParam($decodedKey)) {
                 continue;
             }
-            $kept[] = $segment;
+            // First occurrence wins; rebuild with canonical value so order/encoding
+            // of allowlisted params does not fork Shared identity.
+            if (!isset($keptByKey[$decodedKey])) {
+                $rawValue = $parts[1] ?? '';
+                $canonicalValue = self::canonicalCacheKeyQueryValue(
+                    \urldecode((string)$rawValue),
+                );
+                $keptByKey[$decodedKey] = \rawurlencode($decodedKey) . '=' . \rawurlencode($canonicalValue);
+            }
         }
+        \ksort($keptByKey, \SORT_STRING);
 
-        return \implode('&', $kept);
+        return \implode('&', \array_values($keptByKey));
     }
 
     /**
-     * Diagnostic storm keys retained in the Process/Shared cache identity.
-     * Product/marketing query never participates — FPC is path-only.
+     * Scalar string for allowlisted query identity (arrays → first scalar).
+     */
+    private static function canonicalCacheKeyQueryValue(mixed $value): string
+    {
+        if (\is_array($value)) {
+            $first = \reset($value);
+            $value = $first;
+        }
+        if (!\is_scalar($value) && $value !== null) {
+            return '';
+        }
+
+        return \trim((string)$value);
+    }
+
+    /**
+     * Query params retained in the Process/Shared cache identity:
+     * - pierce-gated storm keys (_wb_nc / wls_tpl_perf / wls_tpl_route);
+     * - path-scoped Extra `query_keys` allowlist (default empty = path-only).
      */
     private function isCacheKeyRetainedQueryParam(string $key): bool
     {
         $key = \strtolower(\trim($key));
-        if ($key !== '_wb_nc' && $key !== 'wls_tpl_perf' && $key !== 'wls_tpl_route') {
+        if ($key === '') {
             return false;
         }
+        if ($key === '_wb_nc' || $key === 'wls_tpl_perf' || $key === 'wls_tpl_route') {
+            // Storm identity only when the install pierce stamp is present.
+            return \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest();
+        }
 
-        // Storm identity only when the install pierce stamp is present.
-        return \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest();
+        return $this->isPathAllowlistedCacheKeyQueryParam($key);
+    }
+
+    private function isPathAllowlistedCacheKeyQueryParam(string $key): bool
+    {
+        $allow = $this->currentPathCacheKeyQueryAllowlist();
+
+        return $allow[$key] ?? false;
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function currentPathCacheKeyQueryAllowlist(): array
+    {
+        try {
+            $rawFullUri = $this->getRawFullUri();
+            $path = $this->policyPath($rawFullUri !== '' ? $rawFullUri : '/');
+            $memo = RequestContext::get(self::MEMO_QUERY_ALLOWLIST);
+            if (\is_array($memo)
+                && ($memo['sig'] ?? null) === $path
+                && \is_array($memo['map'] ?? null)
+            ) {
+                /** @var array<string, bool> $map */
+                $map = $memo['map'];
+
+                return $map;
+            }
+
+            $map = [];
+            $fullUri = $rawFullUri !== '' ? $rawFullUri : ('https://localhost' . ($path === '' ? '/' : $path));
+            $policy = $this->effectiveFpcPolicy($fullUri, null, $path);
+            foreach (\Weline\Framework\Controller\Extra\FpcPolicySnapshot::queryKeysFromPolicy($policy) as $allowKey) {
+                $allowKey = \strtolower(\trim((string)$allowKey));
+                if ($allowKey !== '') {
+                    $map[$allowKey] = true;
+                }
+            }
+
+            if (Context::hasCurrent()) {
+                RequestContext::set(self::MEMO_QUERY_ALLOWLIST, ['sig' => $path, 'map' => $map]);
+            }
+
+            return $map;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function isIgnorableCacheQueryParam(string $key): bool

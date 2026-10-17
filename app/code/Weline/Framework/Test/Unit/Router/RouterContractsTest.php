@@ -48,6 +48,9 @@ final class RouterContractsTest extends TestCase
             'FullPageCacheDiagTrack::testProductQueryIsPathOnlyButStormKeysRemainInCacheIdentity' => function () {
             $this->assert_FullPageCacheDiagTrack_testProductQueryIsPathOnlyButStormKeysRemainInCacheIdentity();
         },
+            'FullPageCacheDiagTrack::testQueryAllowlistRetainHooksPresent' => function () {
+            $this->assert_FullPageCacheDiagTrack_testQueryAllowlistRetainHooksPresent();
+        },
             'FullPageCacheDiagTrack::testProductFpcDoesNotHardExcludeSearchPathSegment' => function () {
             $this->assert_FullPageCacheDiagTrack_testProductFpcDoesNotHardExcludeSearchPathSegment();
         },
@@ -183,6 +186,29 @@ private function assert_FullPageCacheDiagTrack_testProductQueryIsPathOnlyButStor
     // Without pierce stamp, storm keys must not retain a distinct cache identity.
     self::assertSame('', $filter->invoke($coordinator, 'size=s&_wb_nc=1'));
     self::assertSame('', $filter->invoke($coordinator, 'wls_tpl_perf=1&gclid=abc'));
+}
+
+private function assert_FullPageCacheDiagTrack_testQueryAllowlistRetainHooksPresent(): void
+{
+    $framework = '/Users/weline/Project/Official/框架/app/code/Weline/Framework';
+    $coord = (string) file_get_contents($framework . '/Router/FullPageCacheCoordinator.php');
+    self::assertStringContainsString('isPathAllowlistedCacheKeyQueryParam', $coord);
+    self::assertStringContainsString('currentPathCacheKeyQueryAllowlist', $coord);
+    self::assertStringContainsString('queryKeysFromPolicy', $coord);
+    $extra = (string) file_get_contents($framework . '/Extends/module/Weline_Framework/Extra/Type/FpcExtraType.php');
+    self::assertStringContainsString('query_keys', $extra);
+    self::assertStringContainsString('MAX_QUERY_KEYS', $extra);
+    $snapshot = (string) file_get_contents($framework . '/Controller/Extra/FpcPolicySnapshot.php');
+    self::assertStringContainsString('requestCarriesAllowlistedQuery', $snapshot);
+    $resolver = (string) file_get_contents($framework . '/Controller/Extra/ExtraPolicyResolver.php');
+    self::assertStringContainsString('queryKeysForPath', $resolver);
+    self::assertStringContainsString('requestCarriesAllowlistedQueryForPath', $resolver);
+    $catalog = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product/Controller/Frontend/Catalog.php');
+    self::assertMatchesRegularExpression('/@Extra\\s+type=fpc\\b[^\\n]*query_keys=/', $catalog);
+    self::assertStringContainsString('query_keys=af_available_colors,', $catalog);
+    self::assertStringContainsString(',page,price,sort', $catalog);
+    $keysHelper = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product/Service/StorefrontListingFpcQueryKeys.php');
+    self::assertStringContainsString('class StorefrontListingFpcQueryKeys', $keysHelper);
 }
 
 private function assert_FullPageCacheDiagTrack_testProductFpcDoesNotHardExcludeSearchPathSegment(): void

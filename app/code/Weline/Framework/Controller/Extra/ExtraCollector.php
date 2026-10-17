@@ -49,13 +49,16 @@ final class ExtraCollector
         if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
             throw new Exception(__('无法创建 Extra 侧车目录'));
         }
-        $export = var_export([
+        $payload = [
             'schema_version' => self::SCHEMA,
             'declarations' => $declarations,
-        ], true);
+        ];
+        $export = var_export($payload, true);
         (new \Weline\Framework\Compilation\AtomicCompiledFilePublisher())->publish(
             $path, "<?php\nreturn " . $export . ";\n",
         );
+        // Write-through process bag — loadSidecar must not re-include.
+        \Weline\Framework\Compilation\CompiledPhpRegistry::put($path, $payload);
         // 配置了快照提供方时，由它在完整快照发布后推进代次。
         $resolution = \Weline\Framework\Manager\ObjectManager::getInstance(
             \Weline\Framework\Runtime\RuntimeProviderResolver::class,
@@ -75,14 +78,17 @@ final class ExtraCollector
     {
         $path = BP . self::SIDECAR_RELATIVE;
         clearstatcache(true, $path);
-        if (!is_file($path)) {
-            return null;
-        }
-        // 代次已由写侧推进；当前 Worker 不得继续读取旧 OPcache 侧车。
-        if (function_exists('opcache_invalidate')) {
+        // CLI write paths may invalidate OPcache then forget the process gate so
+        // the next load sees the new sidecar. Persistent Workers never re-include;
+        // freshness comes from server:reload / recycle.
+        if (!\Weline\Framework\Runtime\Runtime::isPersistent()
+            && \function_exists('opcache_invalidate')
+            && \is_file($path)
+        ) {
             @opcache_invalidate($path, true);
+            \Weline\Framework\Compilation\CompiledPhpRegistry::forgetForTests($path);
         }
-        $data = include $path;
+        $data = \Weline\Framework\Compilation\CompiledPhpRegistry::load($path);
         if (!is_array($data) || ($data['schema_version'] ?? '') !== self::SCHEMA) {
             return null;
         }
@@ -207,7 +213,7 @@ final class ExtraCollector
             foreach ($parts as $part) {
                 $key = strtolower((string)$part[1]);
                 $val = $part[2] !== '' ? $part[2] : ($part[3] !== '' ? $part[3] : $part[4]);
-                if ($key === 'namespaces' || $key === 'public_path_patterns') {
+                if ($key === 'namespaces' || $key === 'public_path_patterns' || $key === 'query_keys') {
                     $attrs[$key] = array_values(array_filter(array_map('trim', explode(',', (string)$val))));
                 } elseif ($key === 'enabled') {
                     $attrs[$key] = !in_array(strtolower((string)$val), ['0', 'false', 'no', 'off'], true);

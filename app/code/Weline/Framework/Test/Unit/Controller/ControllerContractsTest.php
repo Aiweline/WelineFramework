@@ -63,9 +63,25 @@ private function assert_ExtraTypeRegistry_testFpcExtraTypeNormalizesDeclaration(
     self::assertSame(600, $normalized['ttl']);
     self::assertSame(['website/default/catalog'], $normalized['namespaces']);
     self::assertSame(['/catalog/product/*'], $normalized['public_path_patterns']);
+    self::assertSame([], $normalized['query_keys']);
+    $withKeys = $type->normalize(['type' => 'fpc', 'query_keys' => 'price,AF_Color,price']);
+    self::assertSame(['af_color', 'price'], $withKeys['query_keys']);
+    self::assertSame([], $type->normalize(['type' => 'fpc', 'query_keys' => '*'])['query_keys']);
+    self::assertSame([], $type->normalize(['type' => 'fpc', 'query_keys' => '_wb_nc,price'])['query_keys']);
+    self::assertSame([], $type->normalize(['type' => 'fpc', 'query_keys' => 'w_fpc_pierce,price'])['query_keys']);
+    // Declaration order must not change normalized identity list (sorted unique).
+    self::assertSame(
+        ['af_x', 'page', 'price', 'sort'],
+        $type->normalize(['type' => 'fpc', 'query_keys' => 'sort,price,af_x,page,price'])['query_keys'],
+    );
     $defaults = $type->normalize(['type' => 'fpc']);
     self::assertTrue($defaults['enabled']);
     self::assertSame(31536000, $defaults['ttl']);
+    self::assertSame([], $defaults['query_keys']);
+    $spec = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework/doc/开发/spec/controller-extra-fpc.md');
+    self::assertStringContainsString('1e. WHEN `query_keys`', $spec);
+    self::assertStringContainsString('UC-03 query_keys', $spec);
+    self::assertStringContainsString('path-only', $spec);
 }
 
 private function assert_ExtraTypeRegistry_testExtraTypeProviderInterfacePrefix(): void
