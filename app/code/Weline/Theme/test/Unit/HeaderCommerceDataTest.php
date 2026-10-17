@@ -40,7 +40,8 @@ final class HeaderCommerceDataTest extends TestCase
             dirname(__DIR__, 2) . '/Helper/HeaderCommerceData.php'
         );
 
-        self::assertStringContainsString('rememberForRequest', $source);
+        self::assertStringContainsString('rememberPolicy', $source);
+        self::assertStringNotContainsString('rememberForRequest', $source);
         self::assertStringContainsString("theme.header.hot_words", $source);
         self::assertStringContainsString("theme.header.search_types", $source);
         self::assertStringContainsString('headerSearchTypesPolicy', $source);

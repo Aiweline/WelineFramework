@@ -216,12 +216,12 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             pool: self::STOREFRONT_CHROME_POOL,
             // wave8-8c8: website (not channel) so deferred bag-prime and probes share L1/L2.
             scope: 'website',
-            // Cross-scope cold dig 2026-10-09: currency in vary forced full header/footer SSR
-            // per currency. Shell is now lang-only; currency-switcher islands hydrate live
-            // (Partials::hydrateChromeCurrencyIslands) so selected currency never cross-bags.
-            // xscope A (2026-10-11): keep currency=false — do NOT expand currency vary first;
-            // EUR/GBP quiet samples still measured; miss → layout/host/contention first.
-            vary: ['lang'],
+            // Correctness 2026-10-17: chrome embeds language-sensitive shared widgets
+            // (Consent/Compare/Marketing coupon…). Keys must vary lang×currency so a
+            // Phrase/WidgetI18n bag for one locale cannot poison another. Currency-switcher
+            // islands still hydrate live (Partials::hydrateChromeCurrencyIslands).
+            // Warmer seeds gate currencies × locales to blunt cold-cut cost.
+            vary: ['lang', 'currency'],
             dependencies: ['catalog', 'config', 'global/i18n', 'theme'],
             freshTtlSeconds: max(1, $freshTtlSeconds),
             staleTtlSeconds: max(0, $staleTtlSeconds),

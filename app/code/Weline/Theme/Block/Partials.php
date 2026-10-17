@@ -633,9 +633,9 @@ class Partials extends Block
     }
 
     /**
-     * Header/footer shared bag stores lang-only shell HTML: currency-switcher and
-     * header-search facade islands are stripped so the bag can be reused across
-     * currencies and search tip keys (q/type/category).
+     * Header/footer shared bag HTML is keyed by lang×currency (Policy + KeyBuilder).
+     * Currency-switcher and header-search facade islands are still stripped so the
+     * selected currency UI / tip keys (q/type/category) hydrate live on serve.
      *
      * Frontend header/footer: after strip, fill empty nested chrome carriers
      * (mini-cart footer-extras, footer-*-links, header-nav-extensions, …)
@@ -1723,7 +1723,7 @@ class Partials extends Block
                 // v15：frontend head 升格页级 Policy（request_path+seo_fp）；禁跨 URL 串 SEO。
                 // v16：guest header 键去掉 cart_count/total（种袋 0 vs 探针车导致 846ms miss）。
                 // v17：head Policy website + 瘦键 + assets 片段复用（wave9-9s）。
-                // v18：chrome 大壳 lang-only；货币开关器岛后注水（跨货币共享 shell）。
+                // v19：chrome 大壳 lang×currency；货币开关器岛仍后注水（选中币种 UI）。
                 // v19：I18n hook 自带岛标记；无岛旧袋按 data-currency-switcher 回退剥离（防错显币种）。
                 // v20：嵌套 chrome 源指纹由 mtime|size 升为内容 sha256（NestedChromeSourceFingerprint）。
                 // v21：搜索 facade（q/type/category）岛后注水；header 键 guest-neutral（禁按 tip q 分袋）。
@@ -1732,8 +1732,9 @@ class Partials extends Block
                 // v23：HTML 袋改 KeyBuilder::buildEnvironmentScoped，禁 sha1|environmentHash 自建。
                 // v24：建袋填实 footer-extras（coupon/留言）；指纹扩 Marketing/Order 嵌套源；拒空壳毒袋。
                 // v25：footer 浮层/尾 chrome 源指纹（FooterNestedChromeSourceFingerprint）入 nested_widgets。
+                // v26：壳袋恢复 currency 维（Policy + KeyBuilder）；防语言敏感 shared 部件窜语。
                 // Frontend header chrome is always guest-SSR; auth no longer splits the bucket.
-                'schema' => 'chrome-partial-v25-footer-tail-chrome-fp',
+                'schema' => 'chrome-partial-v26-lang-currency',
                 'nested_widgets' => ($area === 'frontend' && $type === 'header')
                     ? $this->frontendHeaderNestedChromeFingerprint()
                     : (($area === 'frontend' && $type === 'footer')
@@ -1783,10 +1784,11 @@ class Partials extends Block
                 // Reuse chrome across routes, but retain KeyBuilder's existing
                 // website_url/host/base_url dimensions: rendered HTML contains
                 // absolute links and cannot cross the actual URL origin.
-                // currency=false: shell bag is lang-only; switcher islands hydrate live.
+                // currency=true: shell embeds language-sensitive shared widgets; islands
+                // still hydrate the selected currency UI on serve.
                 'area' => false,
                 'area_route' => false,
-                'currency' => false,
+                'currency' => true,
             ];
 
             $identity = $type === 'head' ? 'theme.head.partial' : 'theme.chrome.partial';

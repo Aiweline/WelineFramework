@@ -99,6 +99,30 @@ final class WidgetCacheContractsTest extends TestCase
                 $this->tearDown_WidgetOutputCache();
             }
         },
+            'WidgetOutputCache::testThemeIdSplitsNonShareKeys' => function () {
+            $this->setUp_WidgetOutputCache();
+            try {
+                $this->assert_WidgetOutputCache_testThemeIdSplitsNonShareKeys();
+            } finally {
+                $this->tearDown_WidgetOutputCache();
+            }
+        },
+            'WidgetOutputCache::testShareIgnoresThemeId' => function () {
+            $this->setUp_WidgetOutputCache();
+            try {
+                $this->assert_WidgetOutputCache_testShareIgnoresThemeId();
+            } finally {
+                $this->tearDown_WidgetOutputCache();
+            }
+        },
+            'WidgetOutputCache::testParamDigestSplitsCacheKeys' => function () {
+            $this->setUp_WidgetOutputCache();
+            try {
+                $this->assert_WidgetOutputCache_testParamDigestSplitsCacheKeys();
+            } finally {
+                $this->tearDown_WidgetOutputCache();
+            }
+        },
             'WidgetOutputCache::testTaglibInjectsProductDimsIntoBuildKey' => function () {
             $this->setUp_WidgetOutputCache();
             try {
@@ -144,7 +168,9 @@ private function assert_WidgetOutputCache_testBuildKeyUsesSystemEnvironmentScope
     self::assertStringContainsString("'widget.output'", $src);
     self::assertStringContainsString("'area_route' => false", $src);
     self::assertStringNotContainsString("return 'widget.output.' . \\sha1(", $src);
-    self::assertStringContainsString('20261013-widget-output-env-scoped-v4', $src);
+    self::assertStringContainsString('20261017-widget-output-share-tier-v5', $src);
+    self::assertStringContainsString('SHARE_TIER_FRAMEWORK', $src);
+    self::assertStringContainsString('paramDigest', $src);
 }
 
 private function assert_WidgetOutputCache_testRememberStoresAndHits(): void
@@ -190,7 +216,8 @@ private function assert_WidgetOutputCache_testShareMergesLayoutScopedKeys(): voi
     self::assertTrue(WidgetOutputCache::normalizeShare(true));
     self::assertTrue(WidgetOutputCache::normalizeShare('true'));
     self::assertFalse(WidgetOutputCache::normalizeShare('off'));
-    $base = ['identity' => 'm::t::c', 'node_uid' => 'n1', 'ttl' => 3600];
+    // share=true → framework-global (layout *); share=false → theme-local (layout splits).
+    $base = ['identity' => 'm::t::c', 'node_uid' => 'n1', 'ttl' => 3600, 'theme_id' => 3];
     $isolatedA = WidgetOutputCache::buildKey($base + ['layout_name' => 'product.default', 'share' => false], []);
     $isolatedB = WidgetOutputCache::buildKey($base + ['layout_name' => 'cart.default', 'share' => false], []);
     $sharedA = WidgetOutputCache::buildKey($base + ['layout_name' => 'product.default', 'share' => true], []);
@@ -198,6 +225,34 @@ private function assert_WidgetOutputCache_testShareMergesLayoutScopedKeys(): voi
     self::assertNotSame($isolatedA, $isolatedB);
     self::assertSame($sharedA, $sharedB);
     self::assertNotSame($isolatedA, $sharedA);
+}
+
+private function assert_WidgetOutputCache_testThemeIdSplitsNonShareKeys(): void
+{
+    $base = ['identity' => 'm::t::c', 'node_uid' => 'n1', 'ttl' => 3600, 'layout_name' => 'product.default', 'share' => false];
+    $themeA = WidgetOutputCache::buildKey($base + ['theme_id' => 3], []);
+    $themeB = WidgetOutputCache::buildKey($base + ['theme_id' => 9], []);
+    self::assertNotSame($themeA, $themeB, 'non-share keys must split by theme_id');
+}
+
+private function assert_WidgetOutputCache_testShareIgnoresThemeId(): void
+{
+    $base = ['identity' => 'm::t::c', 'node_uid' => 'n1', 'ttl' => 3600, 'layout_name' => 'product.default', 'share' => true];
+    $themeA = WidgetOutputCache::buildKey($base + ['theme_id' => 3], []);
+    $themeB = WidgetOutputCache::buildKey($base + ['theme_id' => 9], []);
+    self::assertSame($themeA, $themeB, 'framework-global share must ignore theme_id');
+}
+
+private function assert_WidgetOutputCache_testParamDigestSplitsCacheKeys(): void
+{
+    $base = ['identity' => 'm::t::c', 'node_uid' => 'n1', 'ttl' => 3600, 'layout_name' => 'product.default', 'share' => true];
+    $a = WidgetOutputCache::buildKey($base, ['title' => '优惠券']);
+    $b = WidgetOutputCache::buildKey($base, ['title' => '折扣码']);
+    self::assertNotSame($a, $b, 'different instance params must produce different keys');
+    self::assertNotSame(
+        WidgetOutputCache::paramDigest(['title' => '优惠券']),
+        WidgetOutputCache::paramDigest(['title' => '折扣码']),
+    );
 }
 
 private function assert_WidgetOutputCache_testLangAndCurrencySplitCacheKeys(): void

@@ -21,7 +21,7 @@ related_wave: storefront-xscope-hotcache-wave（A-xscope-chrome-hit）
 ## 细节
 
 - 语种源：`WebsiteLanguage::getWebsiteLanguageCodes(Website::ID_DEFAULT)`；基线优先 `zh_Hans_CN`、`en_US`。
-- 池：`weline_theme_storefront_chrome`；Policy `vary=['lang']`。
+- 池：`weline_theme_storefront_chrome`；Policy `vary=['lang','currency']`（语言敏感共享部件防毒；warmer 按门禁币×locale 预热）。
 - 搜索框请求态只在 hydrate 路径注入；袋内 `query=>''`。
 - 验收 soft-clear 后新语种 search hit1：exclusive chrome ≪ 修前 ~856ms 或 wall &lt; 2.5s；搜索框 value 仍为 tip 词（hydrate）。
 

@@ -224,6 +224,10 @@ final class ThemeLayoutEntityBakeCoordinator
      * persist the merged chrome bake nodes (homepage + mini-cart nested footer-extras), not
      * only when the row is empty — re-solidify otherwise left a stale/empty payload while
      * PHTML was regenerated, so the safety-net fill could not restore coupon/留言.
+     *
+     * Structure only (slots / node_uid / config). Translated HTML lives in WidgetOutputCache
+     * and theme.storefront_chrome bags keyed by lang×currency — never bake one locale's
+     * Phrase output into a language-agnostic solidify artifact for cross-locale reuse.
      */
     private function persistChromePayload(ThemeVersionIdentity $identity): void
     {

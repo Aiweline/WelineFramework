@@ -58,6 +58,14 @@ final class ThemeHeadChromeCssPack
     /** Design/theme-owned overlay list relative to theme view root. */
     public const OVERLAY_LIST_RELATIVE = 'partials/head/theme-head-css-overlay.php';
 
+    /**
+     * Request-scoped: pack keys that successfully returned a &lt;link&gt; from tryLinkHtml.
+     * area\0pack → true. Used so themeOverlayAbsorbed cannot lie on manifest alone.
+     *
+     * @var array<string, true>
+     */
+    private array $emittedPacks = [];
+
     public function __construct(
         private readonly ThemeResourceConfig $resourceConfig,
         private readonly ThemeContextService $themeContext,
@@ -165,7 +173,13 @@ final class ThemeHeadChromeCssPack
             $attrs .= ' data-weline-theme-tokens="1"';
         }
 
-        return '<link' . $attrs . ' href="' . $safe . '"/>';
+        $html = '<link' . $attrs . ' href="' . $safe . '"/>';
+        // Fail-closed absorb: only mark after a real link string is produced.
+        // Callers must echo this return value; thin design prefixes that skip
+        // PACK_OVERLAY must not silence skin theme:css via manifest alone.
+        $this->markPackEmitted($area, $pack);
+
+        return $html;
     }
 
     /**
@@ -190,7 +204,11 @@ final class ThemeHeadChromeCssPack
     }
 
     /**
-     * Whether overlay CSS was emitted as PACK_OVERLAY (skip skin fallback duplicate links).
+     * Whether PACK_OVERLAY was actually linked this request (skip skin fallback duplicates).
+     *
+     * Manifest presence alone is NOT enough: design thin assets-prefix that defer
+     * packs to suffix but forget to emit PACK_OVERLAY must leave absorb=false so
+     * skin theme:css still ships brand/responsive leaves (fail-closed).
      */
     public function themeOverlayAbsorbed(string $area, string $pack): bool
     {
@@ -201,6 +219,10 @@ final class ThemeHeadChromeCssPack
         if ($pack !== self::PACK_STOREFRONT && $pack !== self::PACK_OVERLAY) {
             return false;
         }
+        // Emit gate first — never claim absorb before tryLinkHtml returned a link.
+        if (!$this->wasPackEmitted($area, self::PACK_OVERLAY)) {
+            return false;
+        }
         $theme = $this->resolveTheme($area);
         if (!$theme instanceof WelineTheme || (int)$theme->getId() < 1) {
             return false;
@@ -208,6 +230,16 @@ final class ThemeHeadChromeCssPack
         $manifest = $this->loadThemeOverlayManifest($area, $theme);
 
         return $manifest['common'] !== [] || $manifest['layouts'] !== [];
+    }
+
+    private function markPackEmitted(string $area, string $pack): void
+    {
+        $this->emittedPacks[$area . "\0" . $pack] = true;
+    }
+
+    private function wasPackEmitted(string $area, string $pack): bool
+    {
+        return isset($this->emittedPacks[$area . "\0" . $pack]);
     }
 
     private function publishPack(string $area, string $pack, array $options): string

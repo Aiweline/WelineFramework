@@ -23,6 +23,7 @@ return [
     'Weline_Theme::theme/frontend/widgets/header/notice-right-link/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/header-policy-links/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/top-bar/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/header/full-header/default.phtml',
     'Weline_Theme::theme/frontend/widgets/banner/hero-banner/default.phtml',
     'Weline_Theme::theme/frontend/widgets/banner/hero-slider/default.phtml',
     'Weline_Theme::theme/frontend/widgets/banner/promo-banner/default.phtml',

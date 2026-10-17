@@ -542,7 +542,7 @@ class Router implements RouterInterface
         }
 
         try {
-            $routes = include Env::path_FRONTEND_PC_ROUTER_FILE;
+            $routes = \Weline\Framework\Compilation\CompiledPhpRegistry::load(Env::path_FRONTEND_PC_ROUTER_FILE) ?? [];
         } catch (\Throwable) {
             return false;
         }

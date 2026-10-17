@@ -476,9 +476,9 @@ final class ThemeServiceContractsTest extends TestCase
             'StorefrontChromeXscopeKey::testPathAUsesPathLocalSourceDigestForHeaderFooter' => function () {
             $this->assert_StorefrontChromeXscopeKey_testPathAUsesPathLocalSourceDigestForHeaderFooter();
         },
-            'StorefrontChromeXscopeKey::testChromePolicyKeepsWebsiteLangWithoutCurrencyVary' => function () {
-            $this->assert_StorefrontChromeXscopeKey_testChromePolicyKeepsWebsiteLangWithoutCurrencyVary();
-        },
+            'StorefrontChromeXscopeKey::testChromePolicyKeepsWebsiteLangAndCurrencyVary' => function () {
+            $this->assert_StorefrontChromeXscopeKey_testChromePolicyKeepsWebsiteLangAndCurrencyVary();
+            },
             'StorefrontChromeXscopeKey::testWarmerDoesNotExpandLayoutFamiliesWhilePathAActive' => function () {
             $this->assert_StorefrontChromeXscopeKey_testWarmerDoesNotExpandLayoutFamiliesWhilePathAActive();
         },
@@ -652,6 +652,9 @@ final class ThemeServiceContractsTest extends TestCase
         },
             'ThemeHeadChromeCssPack::testPackClassConstantsMatchHeadWiring' => function () {
             $this->assert_ThemeHeadChromeCssPack_testPackClassConstantsMatchHeadWiring();
+        },
+            'ThemeHeadChromeCssPack::testThemeOverlayAbsorbedRequiresEmit' => function () {
+            $this->assert_ThemeHeadChromeCssPack_testThemeOverlayAbsorbedRequiresEmit();
         },
             'ThemeHeadChromeCssPack::testDesignThemeOverlayListsMatchSkinCssFallback' => function () {
             $this->assert_ThemeHeadChromeCssPack_testDesignThemeOverlayListsMatchSkinCssFallback();
@@ -1373,8 +1376,8 @@ private function assert_HeadAndProductCardRememberPolicy_testStorefrontChromePol
     $policy = StorefrontThemeCacheCoordinator::storefrontChromePolicy();
     self::assertSame('theme.storefront_chrome', $policy->resource);
     self::assertSame(5000, $policy->singleFlightWaitMs);
-    self::assertSame(['lang'], $policy->vary);
-    self::assertNotContains('currency', $policy->vary);
+    self::assertSame(['currency', 'lang'], $policy->vary);
+    self::assertContains('currency', $policy->vary);
 }
 
 private function assert_HeadAndProductCardRememberPolicy_testProductCardLogicalKeyPartitionsByProductAndFlags(): void
@@ -2711,7 +2714,7 @@ private function assert_StorefrontChromeLocaleCacheWarmer_testModuleProvidesChro
     $module = require '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/etc/module.php';
     $provides = $module['provides'] ?? [];
     self::assertSame(StorefrontChromeLocaleCacheWarmer::class, $provides['cache.warmer.theme.storefront_chrome_locales'] ?? null);
-    self::assertSame('2.2.974', (string) ($module['version'] ?? ''));
+    self::assertSame('2.3.25', (string) ($module['version'] ?? ''));
 }
 
 private function assert_StorefrontChromeLocaleCacheWarmer_testWarmerTargetsStorefrontChromePool(): void
@@ -2829,10 +2832,11 @@ private function assert_StorefrontChromeXscopeKey_testT1ShellLayoutAgnosticEvide
 private function assert_StorefrontChromeXscopeKey_testPathANeutralizesLayoutDimsAndBumpsSchema(): void
 {
     $partials = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Block/Partials.php');
-    self::assertStringContainsString("'schema' => 'chrome-partial-v22-layout-agnostic-shell'", $partials);
+    self::assertStringContainsString("'schema' => 'chrome-partial-v26-lang-currency'", $partials);
     self::assertStringContainsString('xscope A', $partials);
     self::assertStringContainsString("? 'shared'", $partials);
     self::assertStringContainsString("(\$area === 'frontend' && (\$type === 'header' || \$type === 'footer'))", $partials);
+    self::assertStringContainsString("'currency' => true", $partials);
     // Must not keep raw theme layoutType as the frontend header/footer key dim.
     self::assertStringNotContainsString("'layout_type' => (string)(\$themeData['layoutType'] ?? ''),\n" . "                'layout_option' => (string)(\$themeData['layoutOption'] ?? ''),", $partials);
 }
@@ -2850,14 +2854,17 @@ private function assert_StorefrontChromeXscopeKey_testPathAUsesPathLocalSourceDi
     self::assertStringContainsString('$snapshot->fingerprint()', $partials);
 }
 
-private function assert_StorefrontChromeXscopeKey_testChromePolicyKeepsWebsiteLangWithoutCurrencyVary(): void
+private function assert_StorefrontChromeXscopeKey_testChromePolicyKeepsWebsiteLangAndCurrencyVary(): void
 {
     $policy = StorefrontThemeCacheCoordinator::storefrontChromePolicy();
     self::assertSame('website', $policy->scope);
-    self::assertSame(['lang'], $policy->vary);
-    self::assertNotContains('currency', $policy->vary);
+    // CachePolicy sorts vary alphabetically → currency before lang.
+    self::assertSame(['currency', 'lang'], $policy->vary);
+    self::assertContains('currency', $policy->vary);
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontThemeCacheCoordinator.php');
-    self::assertStringContainsString('do NOT expand currency vary first', $src);
+    self::assertStringContainsString("vary: ['lang', 'currency']", $src);
+    self::assertStringContainsString('Warmer seeds gate currencies', $src);
+    self::assertStringNotContainsString('do NOT expand currency vary first', $src);
 }
 
 private function assert_StorefrontChromeXscopeKey_testWarmerDoesNotExpandLayoutFamiliesWhilePathAActive(): void
@@ -2865,6 +2872,8 @@ private function assert_StorefrontChromeXscopeKey_testWarmerDoesNotExpandLayoutF
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontChromeLocaleCacheWarmer.php');
     self::assertStringContainsString('Path A (T1 pass)', $src);
     self::assertStringContainsString("'homepage'", $src);
+    self::assertStringContainsString('GATE_CURRENCIES', $src);
+    self::assertStringContainsString("foreach (\$currencies as \$currency)", $src);
     // Path B not implemented as multi-layout warm loop yet.
     self::assertStringNotContainsString("layoutType'] = 'search'", $src);
     self::assertStringNotContainsString("layoutType'] = 'product_list'", $src);
@@ -3106,9 +3115,9 @@ private function assert_StructureCacheKeyGate_testChromeAndNavigationHtmlKeepLan
     $chrome = StorefrontThemeCacheCoordinator::storefrontChromePolicy();
     $nav = StorefrontThemeCacheCoordinator::headerNavigationPolicy();
     self::assertContains('lang', $chrome->vary);
-    // Chrome shell is lang-only; currency-switcher islands hydrate live.
-    self::assertSame(['lang'], $chrome->vary);
-    self::assertNotContains('currency', $chrome->vary);
+    // Chrome shell varies lang×currency (shared widgets); currency-switcher islands still hydrate live.
+    self::assertSame(['currency', 'lang'], $chrome->vary);
+    self::assertContains('currency', $chrome->vary);
     self::assertContains('lang', $nav->vary);
 }
 
@@ -3654,6 +3663,48 @@ private function assert_ThemeHeadChromeCssPack_testPackClassConstantsMatchHeadWi
     self::assertTrue(method_exists(ThemeResourceGateway::class, 'buildHeadChromeArtifact'));
     self::assertTrue(method_exists(ThemeHeadChromeCssPack::class, 'warmAreaPacks'));
     self::assertTrue(method_exists(ThemeHeadChromeCssPack::class, 'themeOverlayAbsorbed'));
+}
+
+/**
+ * Absorb must require a real PACK_OVERLAY tryLinkHtml emit this request.
+ * Manifest-only true would let thin design prefixes silence skin CSS and drop brand/responsive.
+ */
+private function assert_ThemeHeadChromeCssPack_testThemeOverlayAbsorbedRequiresEmit(): void
+{
+    $src = $this->read_ThemeHeadChromeCssPack('Service/ThemeHeadChromeCssPack.php');
+    self::assertStringContainsString('emittedPacks', $src);
+    self::assertStringContainsString('markPackEmitted', $src);
+    self::assertStringContainsString('wasPackEmitted', $src);
+    $absorbFn = strpos($src, 'function themeOverlayAbsorbed');
+    self::assertNotFalse($absorbFn);
+    $absorbBody = substr($src, $absorbFn, 1200);
+    self::assertStringContainsString('wasPackEmitted', $absorbBody);
+    self::assertStringContainsString('PACK_OVERLAY', $absorbBody);
+    self::assertMatchesRegularExpression(
+        '/wasPackEmitted\s*\(\s*\$area\s*,\s*self::PACK_OVERLAY\s*\)/',
+        $absorbBody,
+        'themeOverlayAbsorbed must gate on PACK_OVERLAY emit before manifest'
+    );
+    $tryFn = strpos($src, 'function tryLinkHtml');
+    self::assertNotFalse($tryFn);
+    $tryBody = substr($src, $tryFn, 2400);
+    self::assertStringContainsString('markPackEmitted', $tryBody, 'tryLinkHtml must mark emit when returning a link');
+    self::assertMatchesRegularExpression(
+        '/\$html\s*=\s*\'<link\'[\s\S]{0,400}markPackEmitted\s*\(\s*\$area\s*,\s*\$pack\s*\)[\s\S]{0,120}return\s+\$html/',
+        $tryBody,
+        'tryLinkHtml must mark emit after building link HTML and before return'
+    );
+    // DaoCharms thin prefix + suffix owns three packs (overlay before skin).
+    $daoSuffix = (string) file_get_contents(
+        '/Users/weline/Project/Official/框架/app/design/Weline/daocharms/frontend/partials/head/assets-suffix.phtml'
+    );
+    self::assertStringContainsString('PACK_OVERLAY', $daoSuffix);
+    self::assertStringContainsString('daocharms-skin.phtml', $daoSuffix);
+    $overlayPos = strpos($daoSuffix, 'PACK_OVERLAY');
+    $skinPos = strpos($daoSuffix, 'daocharms-skin.phtml');
+    self::assertNotFalse($overlayPos);
+    self::assertNotFalse($skinPos);
+    self::assertLessThan($skinPos, $overlayPos, 'DaoCharms must emit PACK_OVERLAY before skin absorb check');
 }
 
 private function assert_ThemeHeadChromeCssPack_testDesignThemeOverlayListsMatchSkinCssFallback(): void

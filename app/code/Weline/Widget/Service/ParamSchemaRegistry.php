@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\Widget\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
+use Weline\Framework\Runtime\Runtime;
 
 /**
  * ParamSchema 注册表
@@ -31,33 +33,33 @@ class ParamSchemaRegistry
      */
     public function getRegistry(bool $forceReload = false): array
     {
+        $persistent = Runtime::isPersistent()
+            || (\defined('WLS_MODE') && WLS_MODE);
+
         if (!$forceReload && self::$staticCachedRegistry !== null) {
+            if ($persistent) {
+                return self::$staticCachedRegistry;
+            }
             if (!file_exists(self::REGISTRY_FILE)) {
                 return self::$staticCachedRegistry;
             }
             $currentMtime = filemtime(self::REGISTRY_FILE);
             $mtimeUnchanged = self::$staticCachedFileMtime !== null && $currentMtime === self::$staticCachedFileMtime;
-            if (self::$staticCachedRegistry !== [] && $mtimeUnchanged) {
-                return self::$staticCachedRegistry;
-            }
-            if (self::$staticCachedRegistry === []) {
-                if (!$mtimeUnchanged || filesize(self::REGISTRY_FILE) > 100) {
-                    // 重载
-                } else {
-                    return self::$staticCachedRegistry;
-                }
-            } elseif ($mtimeUnchanged) {
+            if ($mtimeUnchanged) {
                 return self::$staticCachedRegistry;
             }
         }
 
-        if (!file_exists(self::REGISTRY_FILE)) {
+        if ($forceReload && !$persistent) {
+            CompiledPhpRegistry::forgetForTests(self::REGISTRY_FILE);
+        }
+
+        $registry = CompiledPhpRegistry::load(self::REGISTRY_FILE);
+        if ($registry === null) {
             self::$staticCachedRegistry = [];
             self::$staticCachedFileMtime = 0;
             return [];
         }
-
-        $registry = include self::REGISTRY_FILE;
         if (!is_array($registry)) {
             $registry = [];
         }

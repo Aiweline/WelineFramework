@@ -340,6 +340,16 @@ class Widget implements TaglibInterface
                 $offerId = max(0, (int)($params['offer_id'] ?? $params['product_offer_id'] ?? 0));
             }
 
+            $themeId = 0;
+            if ($ttl > 0 && \class_exists(\Weline\Theme\Helper\ThemeData::class)) {
+                try {
+                    $currentTheme = \Weline\Theme\Helper\ThemeData::getCurrentTheme();
+                    if ($currentTheme && $currentTheme->getId()) {
+                        $themeId = max(0, (int)$currentTheme->getId());
+                    }
+                } catch (\Throwable) {
+                }
+            }
             $html = \Weline\Widget\Cache\WidgetOutputCache::remember(
                 $ttl,
                 $ttl > 0 ? \Weline\Widget\Cache\WidgetOutputCache::buildKey([
@@ -350,6 +360,7 @@ class Widget implements TaglibInterface
                     'offer_id' => $offerId,
                     'layout_name' => \Weline\Widget\Cache\WidgetOutputCache::resolveLayoutName([], $params),
                     'share' => $share,
+                    'theme_id' => $themeId,
                     'ttl' => $ttl,
                 ], $params) : '',
                 $renderCore,

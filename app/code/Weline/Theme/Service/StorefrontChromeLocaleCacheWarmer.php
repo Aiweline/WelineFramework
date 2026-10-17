@@ -27,10 +27,10 @@ use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Service\ThemeApplicationContextProducer;
 
 /**
- * Seeds theme.storefront_chrome (+ head home/assets) per enabled website locale.
+ * Seeds theme.storefront_chrome (+ head home/assets) per enabled website locale × gate currency.
  *
- * Header chrome is guest-neutral (lang-only); search facade hydrates on serve.
- * Soft-clear / empty L2 otherwise makes first hit of a new locale pay chrome builder.
+ * Chrome policy varies lang+currency (language-sensitive shared widgets in shell).
+ * Soft-clear / empty L2 otherwise makes first hit of a new locale×currency pay chrome builder.
  * CLI/Clear must pin the acceptance public Host so KeyBuilder env scope matches HTTP.
  * MUST install the same homepage ThemeLayoutSourceSnapshot the storefront Index
  * path installs (SolidifiedControllerTemplateResolver) so chrome partial bytes are
@@ -64,6 +64,14 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
      * @var list<string>
      */
     private const GATE_LOCALES = ['fr_FR', 'it_IT', 'es_ES'];
+
+    /**
+     * Gate currencies for chrome warm (policy vary includes currency).
+     * USD first so acceptance Host URI stays aligned with dig probes.
+     *
+     * @var list<string>
+     */
+    private const GATE_CURRENCIES = ['USD', 'CNY'];
 
     public function getName(): string
     {
@@ -137,38 +145,44 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
             /** @var StorefrontCacheKeyContextResolver $resolver */
             $resolver = ObjectManager::getInstance(StorefrontCacheKeyContextResolver::class);
 
+            $currencies = self::GATE_CURRENCIES;
+            $notes[] = 'currencies=' . \implode(',', $currencies);
+            $comboIdx = 0;
             foreach ($locales as $idx => $locale) {
+                foreach ($currencies as $currency) {
                 $elapsedMs = (\hrtime(true) - $started) / 1e6;
                 if ($elapsedMs >= self::BUDGET_MS) {
-                    $remaining = \count($locales) - $idx;
+                    $remaining = (\count($locales) - $idx) * \count($currencies);
                     $notes[] = 'budget_ms=' . self::BUDGET_MS;
-                    $notes[] = 'remaining=' . $remaining;
+                    $notes[] = 'remaining≈' . $remaining;
                     $notes[] = 'warm_partial=1';
-                    break;
+                    break 2;
                 }
 
+                $comboTag = $locale . '@' . $currency;
                 try {
                     // Peer warmers (product) call resetWelineVars(); re-pin every
-                    // locale so Clear chain matches standalone CLI Host identity.
+                    // locale×currency so Clear chain matches standalone CLI Host identity.
                     $this->installAcceptancePublicHost();
                     RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
                     RequestContext::setWelineUserLang($locale);
-                    RequestContext::setWelineUserCurrency('USD');
-                    $this->installHomeRequestUri($locale);
+                    RequestContext::setWelineUserCurrency($currency);
+                    $this->installHomeRequestUri($locale, $currency);
                     RequestContext::remove('framework.cache.storefront_key_context.v2');
                     Partials::clearOutputCache();
                     $this->ensureFrontendThemeAssignedToTemplate();
                     // Match storefront Index: chrome keys use snapshot.fingerprint.
                     $snapNote = $this->installHomepageLayoutSourceSnapshot();
-                    if ($idx === 0) {
+                    if ($comboIdx === 0) {
                         $notes[] = $snapNote;
                     }
+                    ++$comboIdx;
 
                     if ($resolver instanceof StorefrontCacheKeyContextResolver) {
                         $ctx = $resolver->freezeCurrent();
                         if (!$ctx->cacheable) {
                             ++$skipped;
-                            $notes[] = 'freeze_fail:' . $locale . ':' . ($ctx->failureCode ?: 'unknown');
+                            $notes[] = 'freeze_fail:' . $comboTag . ':' . ($ctx->failureCode ?: 'unknown');
                             continue;
                         }
                     }
@@ -186,7 +200,7 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
                         ++$localeRender;
                     } else {
                         ++$skipped;
-                        $notes[] = 'empty_chrome:' . $locale;
+                        $notes[] = 'empty_chrome:' . $comboTag;
                     }
 
                     if (\is_string($header) && \trim($header) !== '') {
@@ -211,7 +225,7 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
                             ++$headAssetsL2Hit;
                         }
                     } else {
-                        $notes[] = 'empty_head:' . $locale;
+                        $notes[] = 'empty_head:' . $comboTag;
                     }
 
                     // chrome_n=2 on dig = header+footer bags. gate_ok only when BOTH L2 HIT
@@ -220,15 +234,15 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
                     $warmedRender += $localeRender;
                     if ($chromeL2) {
                         ++$warmedL2Hit;
-                        if (\in_array($locale, self::GATE_LOCALES, true)) {
+                        if (\in_array($locale, self::GATE_LOCALES, true) && $currency === 'USD') {
                             $notes[] = 'gate_ok:' . $locale;
                         }
                     } elseif ($localeRender > 0) {
-                        $notes[] = 'l2_miss:' . $locale
+                        $notes[] = 'l2_miss:' . $comboTag
                             . ':header=' . ($headerL2 ? '1' : '0')
                             . ':footer=' . ($footerL2 ? '1' : '0')
                             . ':head=' . ($headL2 ? '1' : '0');
-                        if (\in_array($locale, self::GATE_LOCALES, true)) {
+                        if (\in_array($locale, self::GATE_LOCALES, true) && $currency === 'USD') {
                             $notes[] = 'gate_miss:' . $locale;
                         }
                     }
@@ -243,7 +257,8 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
                     }
                 } catch (\Throwable $e) {
                     ++$skipped;
-                    $notes[] = 'error:' . $locale . ':' . $e->getMessage();
+                    $notes[] = 'error:' . $comboTag . ':' . $e->getMessage();
+                }
                 }
             }
         } catch (\Throwable $e) {
@@ -478,11 +493,15 @@ final class StorefrontChromeLocaleCacheWarmer implements CacheWarmerInterface
         }
     }
 
-    private function installHomeRequestUri(string $locale): void
+    private function installHomeRequestUri(string $locale, string $currency = 'USD'): void
     {
         $locale = \trim($locale);
+        $currency = \strtoupper(\trim($currency));
+        if ($currency === '') {
+            $currency = 'USD';
+        }
         $path = $locale !== '' ? '/' . $locale . '/' : '/';
-        $uri = $path . '?currency=USD';
+        $uri = $path . '?currency=' . \rawurlencode($currency);
         WelineEnv::setServer('REQUEST_URI', $uri, 'StorefrontChromeLocaleCacheWarmer');
         WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $uri, 'StorefrontChromeLocaleCacheWarmer');
         try {

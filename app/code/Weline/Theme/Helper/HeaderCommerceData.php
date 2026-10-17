@@ -791,25 +791,18 @@ final class HeaderCommerceData
             return $builder();
         }
 
-        return $cache->rememberForRequest(
-            $resource,
-            $logicalKey,
-            function () use ($cache, $policy, $sharedLogicalKey, $resource, $logicalKey, $builder): mixed {
-                if ($policy !== null) {
-                    try {
-                        return $cache->rememberPolicy(
-                            $policy,
-                            $sharedLogicalKey ?? $logicalKey,
-                            static fn(): mixed => TraceGate::measurePhase($resource, $builder),
-                        );
-                    } catch (\Throwable) {
-                        // Shared metadata is an optimization boundary; preserve the
-                        // request result if the optional cache service is unavailable.
-                    }
-                }
+        if ($policy !== null) {
+            try {
+                return $cache->rememberPolicy(
+                    $policy,
+                    $sharedLogicalKey ?? $logicalKey,
+                    static fn(): mixed => TraceGate::measurePhase($resource, $builder),
+                );
+            } catch (\Throwable) {
+                // Shared metadata is an optimization boundary; fall through to live build.
+            }
+        }
 
-                return TraceGate::measurePhase($resource, $builder);
-            },
-        );
+        return TraceGate::measurePhase($resource, $builder);
     }
 }

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Widget',
-    "version" => '1.0.30',
+    "version" => '1.0.31',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Ai' => '*',

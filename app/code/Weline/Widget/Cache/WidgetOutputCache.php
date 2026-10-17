@@ -11,15 +11,23 @@ use Weline\Framework\View\Cache\TemplateFragmentOutputCache;
  * 部件 HTML 输出缓存（guest-safe；进程 SWR 袋用 Framework TemplateFragmentOutputCache）。
  *
  * TTL：正整数秒；缺省 / 0 / off → 不缓存。
- * share：默认 false（键含 layout_name，按布局隔离）；true → 布局段为 `*`，跨布局共享袋。
- * 禁止键含 Session；调用方须带 node_uid / config 指纹。
+ * share=true → 框架全局公共段（layout=`*`、theme=`*`）；share=false → 仅主题内
+ * （layout 名 + theme_id）。两档均经 KeyBuilder 带 website/lang/currency。
+ * 禁止键含 Session；调用方须带 node_uid / 参数指纹。
  */
 final class WidgetOutputCache
 {
-    public const CACHE_VERSION = '20261013-widget-output-env-scoped-v4';
+    public const CACHE_VERSION = '20261017-widget-output-share-tier-v5';
 
     /** Layout-key sentinel when {@see normalizeShare} is true. */
     public const SHARED_LAYOUT_TOKEN = '*';
+
+    /** Theme-key sentinel for framework-global share bags. */
+    public const SHARED_THEME_TOKEN = '*';
+
+    public const SHARE_TIER_FRAMEWORK = 'framework';
+
+    public const SHARE_TIER_THEME = 'theme';
 
     /** RequestContext key: current page layout name (`{layout_type}.{layout_option}`). */
     public const REQUEST_LAYOUT_NAME_KEY = 'theme.current_layout_name';
@@ -46,7 +54,7 @@ final class WidgetOutputCache
     }
 
     /**
-     * Normalize @widget.share / share="…" — default false (layout-scoped keys).
+     * Normalize @widget.share / share="…" — default false (theme-local keys).
      */
     public static function normalizeShare(mixed $raw): bool
     {
@@ -77,6 +85,35 @@ final class WidgetOutputCache
         return self::normalizeShare(
             $bag['_cache_share'] ?? $bag['cache_share'] ?? $bag['_share'] ?? $bag['share'] ?? false,
         );
+    }
+
+    /**
+     * Theme id for theme-local bags; 0 when unknown.
+     *
+     * @param array<string, mixed> $parts
+     * @param array<string, mixed> $bag
+     */
+    public static function resolveThemeId(array $parts = [], array $bag = []): int
+    {
+        if (\array_key_exists('theme_id', $parts) && $parts['theme_id'] !== null && $parts['theme_id'] !== '') {
+            return max(0, (int)$parts['theme_id']);
+        }
+        foreach (['theme_id', '_theme_id'] as $key) {
+            if (isset($bag[$key]) && $bag[$key] !== '' && $bag[$key] !== null) {
+                return max(0, (int)$bag[$key]);
+            }
+        }
+        if (\class_exists(\Weline\Theme\Helper\ThemeData::class)) {
+            try {
+                $theme = \Weline\Theme\Helper\ThemeData::getCurrentTheme();
+                if ($theme && $theme->getId()) {
+                    return max(0, (int)$theme->getId());
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return 0;
     }
 
     /**
@@ -129,6 +166,58 @@ final class WidgetOutputCache
     }
 
     /**
+     * Stable fingerprint of instance business params (excludes framework noise).
+     *
+     * @param array<string, mixed> $bag
+     */
+    public static function paramDigest(array $bag): string
+    {
+        $noise = [
+            'theme_component',
+            'theme_component_meta',
+            'config',
+            'children',
+            'preview_mode',
+            'editor_mode',
+            'node_uid',
+            '_node_uid',
+            '_widget_instance_key',
+            '_cache',
+            'cache',
+            '_cache_share',
+            'cache_share',
+            '_share',
+            'share',
+            '_layout_name',
+            'layout_name',
+            '_layout_type',
+            'layout_type',
+            '_layout_option',
+            'layout_option',
+            'page_type',
+            'theme_id',
+            '_theme_id',
+        ];
+        $clean = [];
+        foreach ($bag as $key => $value) {
+            $k = (string)$key;
+            if ($k === '' || \in_array($k, $noise, true)) {
+                continue;
+            }
+            if (\str_starts_with($k, '_')) {
+                continue;
+            }
+            $clean[$k] = $value;
+        }
+        self::ksortRecursive($clean);
+
+        return \hash(
+            'sha256',
+            (string)\json_encode($clean, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
+        );
+    }
+
+    /**
      * @param array<string, mixed> $configForDigest Stable widget config bag (node params).
      * @param array{
      *   identity?: string,
@@ -138,6 +227,7 @@ final class WidgetOutputCache
      *   offer_id?: int,
      *   ttl?: int,
      *   share?: bool|string|int,
+     *   theme_id?: int,
      *   layout_name?: string,
      *   layout_type?: string,
      *   layout_option?: string
@@ -156,23 +246,15 @@ final class WidgetOutputCache
             }
         }
 
-        $digestBag = $configForDigest;
-        unset(
-            $digestBag['theme_component'],
-            $digestBag['theme_component_meta'],
-            $digestBag['config'],
-            $digestBag['children'],
-            $digestBag['preview_mode'],
-            $digestBag['editor_mode'],
-        );
-        $configDigest = \hash(
-            'sha256',
-            (string)\json_encode($digestBag, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
-        );
+        $configDigest = self::paramDigest($configForDigest);
         $share = self::resolveShare($parts, $configForDigest);
+        $shareTier = $share ? self::SHARE_TIER_FRAMEWORK : self::SHARE_TIER_THEME;
         $layoutName = $share
             ? self::SHARED_LAYOUT_TOKEN
             : self::resolveLayoutName($parts, $configForDigest);
+        $themeSeg = $share
+            ? self::SHARED_THEME_TOKEN
+            : (string)self::resolveThemeId($parts, $configForDigest);
 
         // Logical payload only — lang/currency/website enter via KeyBuilder system build.
         $logical = \implode('|', [
@@ -183,8 +265,9 @@ final class WidgetOutputCache
             (string)($parts['node_uid'] ?? ''),
             (string)max(0, (int)($parts['product_id'] ?? 0)),
             (string)max(0, (int)($parts['offer_id'] ?? 0)),
+            $shareTier,
             $layoutName,
-            $share ? '1' : '0',
+            $themeSeg,
             $configDigest,
             (string)max(0, (int)($parts['ttl'] ?? 0)),
         ]);
@@ -227,5 +310,17 @@ final class WidgetOutputCache
         }
 
         return $html;
+    }
+
+    /** @param array<string, mixed> $data */
+    private static function ksortRecursive(array &$data): void
+    {
+        \ksort($data);
+        foreach ($data as &$value) {
+            if (\is_array($value)) {
+                self::ksortRecursive($value);
+            }
+        }
+        unset($value);
     }
 }

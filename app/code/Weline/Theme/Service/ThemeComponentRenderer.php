@@ -107,7 +107,7 @@ class ThemeComponentRenderer
         $ttl = $this->resolveWidgetOutputCacheTtl($definition, $dictionary, $context);
         $html = WidgetOutputCache::remember(
             $ttl,
-            $ttl > 0 ? $this->buildWidgetOutputCacheKey($definition, $templatePath, $dictionary, $ttl, $context) : '',
+            $ttl > 0 ? $this->buildWidgetOutputCacheKey($definition, $templatePath, $dictionary, $ttl, $context, $theme) : '',
             function () use ($templatePath, $dictionary): string {
                 if (is_file($templatePath)) {
                     return (string)$this->runtimeTemplateMaterializer->renderFile($templatePath, $dictionary);
@@ -155,6 +155,7 @@ class ThemeComponentRenderer
         array $dictionary,
         int $ttl,
         array $context = [],
+        ?WelineTheme $theme = null,
     ): string {
         // Only attach product dims when the instance dictionary explicitly carries them.
         // Chrome shells (coupon/notice/mini-cart) must not inherit PDP currentOffer and
@@ -169,6 +170,10 @@ class ThemeComponentRenderer
                 $dictionary,
             ),
         );
+        $themeId = 0;
+        if ($theme && $theme->getId()) {
+            $themeId = max(0, (int)$theme->getId());
+        }
 
         return WidgetOutputCache::buildKey([
             'identity' => $definition->getIdentity(),
@@ -178,6 +183,7 @@ class ThemeComponentRenderer
             'offer_id' => $offerId,
             'layout_name' => WidgetOutputCache::resolveLayoutName([], $dictionary),
             'share' => $share,
+            'theme_id' => $themeId,
             'ttl' => $ttl,
         ], $dictionary);
     }

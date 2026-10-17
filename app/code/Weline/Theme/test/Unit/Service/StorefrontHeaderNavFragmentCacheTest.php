@@ -172,9 +172,10 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
         self::assertSame('theme.storefront_chrome', $policy->resource);
         self::assertSame(StorefrontThemeCacheCoordinator::STOREFRONT_CHROME_POOL, $policy->pool);
         // wave8-8c8: website scope so deferred bag-prime and probes share L1/L2.
-        // chrome shell is lang-only (currency switcher hydrates live; matches Partials dims).
+        // chrome shell varies lang×currency (shared widgets); currency switcher still hydrates live.
         self::assertSame('website', $policy->scope);
-        self::assertSame(['lang'], $policy->vary);
+        // CachePolicy sorts vary alphabetically → currency before lang.
+        self::assertSame(['currency', 'lang'], $policy->vary);
         self::assertSame(['catalog', 'config', 'global/i18n', 'theme'], $policy->dependencies);
         self::assertSame(45, $policy->freshTtlSeconds);
         self::assertSame(600, $policy->staleTtlSeconds);
