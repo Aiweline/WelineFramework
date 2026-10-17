@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Shared\Client;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Connection\ConnectionPoolManager;
 use Weline\Server\Shared\Contract\ConnectionPoolInterface;
@@ -69,7 +71,7 @@ class SharedStateClient
         $casDeadline = $cmd === SessionProtocol::CMD_COMPARE_SET
             ? $requestStart + $this->atomicWriteTimeout
             : null;
-        $trace = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled() ? [
+        $trace = \Weline\Framework\Runtime\TraceGate::isArmed() ? [
             'rpc_start_monotonic_us' => \intdiv($requestStartNs, 1000),
             'rpc_end_monotonic_us' => null,
             'read_start_monotonic_us' => null,
@@ -179,7 +181,7 @@ class SharedStateClient
                 $requestEndNs = \hrtime(true);
                 $trace['rpc_end_monotonic_us'] = \intdiv($requestEndNs, 1000);
                 // RPC is a child of existing cache/session spans; do not count it again in WLS totals.
-                \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+                \Weline\Framework\Runtime\TraceGate::recordSpan(
                     'wls.rpc.request',
                     ($requestEndNs - $requestStartNs) / 1_000_000,
                     'rpc',

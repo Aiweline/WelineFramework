@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Cache\Adapter;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Cache\Contract\AtomicCacheConfirmationInterface;
 use Weline\Framework\Cache\Exception\AtomicWriteOutcomeUnknownException;
 use Weline\Framework\Cache\Contract\BatchCacheAdapterInterface;
@@ -343,7 +345,7 @@ class WlsMemoryAdapter implements AtomicCacheConfirmationInterface, BatchCacheAd
 
         if ($this->isRemoteUnavailable()) {
             $this->logRemoteFailureStage('before_dispatch_unavailable');
-            \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan('wls.cache.cas.failure', 0, 'wls', meta: [
+            \Weline\Framework\Runtime\TraceGate::recordSpan('wls.cache.cas.failure', 0, 'wls', meta: [
                 'command' => 'cache_cas', 'failed_stage' => 'before_dispatch_unavailable',
             ]);
             return false;
@@ -357,14 +359,14 @@ class WlsMemoryAdapter implements AtomicCacheConfirmationInterface, BatchCacheAd
             $this->setCompareAndSetReplyConfirmed(true);
         } catch (AtomicWriteOutcomeUnknownException $error) {
             $this->logRemoteFailureStage('write_outcome_unknown', $error);
-            \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan('wls.cache.cas.failure', 0, 'wls', meta: [
+            \Weline\Framework\Runtime\TraceGate::recordSpan('wls.cache.cas.failure', 0, 'wls', meta: [
                 'command' => 'cache_cas', 'failed_stage' => 'write_outcome_unknown', 'exception_class' => $error::class,
             ]);
             $this->markRemoteUnavailable($error);
             throw $error;
         } catch (\Throwable $throwable) {
             $this->logRemoteFailureStage('transport_exception', $throwable);
-            \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan('wls.cache.cas.failure', 0, 'wls', meta: [
+            \Weline\Framework\Runtime\TraceGate::recordSpan('wls.cache.cas.failure', 0, 'wls', meta: [
                 'command' => 'cache_cas', 'failed_stage' => 'transport_exception', 'exception_class' => $throwable::class,
             ]);
             $this->markRemoteUnavailable($throwable);
@@ -902,7 +904,7 @@ class WlsMemoryAdapter implements AtomicCacheConfirmationInterface, BatchCacheAd
     private function markRemoteUnavailable(\Throwable $throwable): void
     {
         $this->logRemoteFailureStage('remote_unavailable', $throwable);
-        \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan('wls.cache.remote.unavailable', 0, 'wls', meta: [
+        \Weline\Framework\Runtime\TraceGate::recordSpan('wls.cache.remote.unavailable', 0, 'wls', meta: [
             'failed_stage' => 'remote_unavailable', 'exception_class' => $throwable::class,
         ]);
         unset($throwable);

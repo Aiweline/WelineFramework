@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\Manager\ObjectManager;
@@ -237,9 +239,9 @@ class WlsPerformanceTraceStore
         $spans = \is_array($trace['spans'] ?? null) ? $trace['spans'] : [];
 
         $requestId = (string)($timing['request_id'] ?? $request['request_id'] ?? $summary['request_id'] ?? '');
-        if ($requestId === '' && \class_exists(\Weline\Framework\Runtime\RequestLifecycleTrace::class, false)) {
+        if ($requestId === '') {
             try {
-                $requestId = \Weline\Framework\Runtime\RequestLifecycleTrace::ensureRequestId();
+                $requestId = \Weline\Framework\Runtime\TraceGate::ensureRequestId();
             } catch (\Throwable) {
                 $requestId = '';
             }

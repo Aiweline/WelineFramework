@@ -204,65 +204,27 @@ class WlsPanel extends BackendController
         return $this->renderPanel('security', (string)__('WLS 安全'));
     }
 
-    #[Acl('Weline_Server::wls_panel_fpc_pierce', '查看 FPC 打穿章', 'key', '查看店面 FPC 诊断打穿章', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
+    #[Acl('Weline_Server::wls_panel_fpc_pierce', '查看 FPC 打穿章', 'key', '已迁入缓存服务「全页缓存」；旧 URL 重定向', 'Weline_Server::wls_panel_security', accessMode: Acl::ACCESS_MODE_READ)]
     public function getFpcPierce(): string
     {
-        return $this->renderPanel('fpc_pierce', (string)__('FPC 打穿章'));
-    }
-
-    #[Acl('Weline_Server::wls_panel_fpc_pierce_rotate', '轮换 FPC 打穿章', 'refresh', '轮换店面 FPC 诊断打穿章并刷新 Nginx', 'Weline_Server::wls_panel_fpc_pierce', accessMode: Acl::ACCESS_MODE_EDIT)]
-    public function postFpcPierceRotate(): string
-    {
-        /** @var FpcPierceStampAdminService $admin */
-        $admin = ObjectManager::getInstance(FpcPierceStampAdminService::class);
-        $result = $admin->rotateAndPublish(true);
-        if ($this->request->isAjax()) {
-            return $this->fetchJson([
-                'success' => (bool)$result['ok'],
-                'message' => (string)$result['message'],
-                'data' => $result,
-            ]);
-        }
-        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('*/backend/wls-panel/fpc-pierce', [
-            'panel_notice' => (bool)$result['ok'] ? 'fpc_pierce_rotated' : 'fpc_pierce_rotate_failed',
-        ]));
+        // Dual-entry closeout: pierce admin lives under CacheManager 全页缓存.
+        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('admin/system/full-page-cache'));
 
         return '';
     }
 
-    #[Acl('Weline_Server::wls_panel_fpc_pierce_issue', '签发 FPC 打穿章 Cookie', 'cookie', '为当前浏览器签发 FPC 诊断打穿章 Cookie', 'Weline_Server::wls_panel_fpc_pierce', accessMode: Acl::ACCESS_MODE_EDIT)]
+    #[Acl('Weline_Server::wls_panel_fpc_pierce_rotate', '轮换 FPC 打穿章', 'refresh', '已迁入全页缓存页；旧 POST 重定向', 'Weline_Server::wls_panel_fpc_pierce', accessMode: Acl::ACCESS_MODE_EDIT)]
+    public function postFpcPierceRotate(): string
+    {
+        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('admin/system/full-page-cache'));
+
+        return '';
+    }
+
+    #[Acl('Weline_Server::wls_panel_fpc_pierce_issue', '签发 FPC 打穿章 Cookie', 'cookie', '已迁入全页缓存页；旧 POST 重定向', 'Weline_Server::wls_panel_fpc_pierce', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postFpcPierceIssue(): string
     {
-        /** @var FpcPierceStampAdminService $admin */
-        $admin = ObjectManager::getInstance(FpcPierceStampAdminService::class);
-        $admin->ensurePublished(false);
-        $cookie = $admin->issueBrowserCookie((int)$this->request->getPost('ttl_sec', 28800));
-        $opts = $cookie['options'];
-        \setcookie(
-            (string)$cookie['name'],
-            (string)$cookie['value'],
-            [
-                'expires' => (int)($opts['expires'] ?? 0),
-                'path' => (string)($opts['path'] ?? '/'),
-                'secure' => (bool)($opts['secure'] ?? true),
-                'httponly' => (bool)($opts['httponly'] ?? true),
-                'samesite' => (string)($opts['samesite'] ?? 'Lax'),
-            ]
-        );
-        if ($this->request->isAjax()) {
-            return $this->fetchJson([
-                'success' => true,
-                'message' => 'cookie_issued',
-                'data' => [
-                    'name' => $cookie['name'],
-                    'expires' => (int)($opts['expires'] ?? 0),
-                    'status' => $admin->status(),
-                ],
-            ]);
-        }
-        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('*/backend/wls-panel/fpc-pierce', [
-            'panel_notice' => 'fpc_pierce_cookie_issued',
-        ]));
+        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('admin/system/full-page-cache'));
 
         return '';
     }
@@ -515,7 +477,8 @@ class WlsPanel extends BackendController
         }
         $this->assign('panelSecurityProbe', $panelSecurityProbe);
         $panelPierceStamp = null;
-        if (\in_array($activePage, ['security', 'fpc_pierce'], true)) {
+        // fpc_pierce route redirects to CacheManager; only security overview may show stamp summary.
+        if ($activePage === 'security') {
             try {
                 /** @var FpcPierceStampAdminService $pierceAdmin */
                 $pierceAdmin = ObjectManager::getInstance(FpcPierceStampAdminService::class);

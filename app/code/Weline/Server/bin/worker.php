@@ -1616,7 +1616,10 @@ if ($controlPort > 0 || $supervisorEnabled) {
                             \Weline\Framework\Phrase\Parser::clearWorkerCaches();
                         }
                         if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class)) {
-                            \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
+                            \Weline\Framework\Hook\Config\HookReader::invalidateProcessCaches();
+                        }
+                        if (\class_exists(\Weline\Framework\View\Taglib::class)) {
+                            \Weline\Framework\View\Taglib::invalidateProcessCaches();
                         }
                         if (\class_exists(\Weline\Framework\View\Template::class)) {
                             \Weline\Framework\View\Template::clearStaticHookCaches();
@@ -2293,6 +2296,7 @@ $deferredWorkerBootstrapWarmupNotBefore = wlsWorkerDeferredWarmupNotBefore(
 );
 $deferredWorkerBootstrapLoopCompleted = false;
 $homepageKeepWarmFiber = null;
+$processL1HydrateFiber = null;
 $attackLogNextFlushCheckAt = 0.0;
 
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
@@ -2586,8 +2590,13 @@ while (true) {
         }
     }
 
-    // ========== Homepage keep-warm (idle, low priority) ==========
-    foreach (['homepageKeepWarmFiber', 'deferredWarmupFiber', 'sharedRuntimeConnectionWarmupFiber'] as $bgFiberVar) {
+    // ========== Homepage keep-warm / Process L1 Hydrate (idle, low priority) ==========
+    foreach ([
+        'homepageKeepWarmFiber',
+        'processL1HydrateFiber',
+        'deferredWarmupFiber',
+        'sharedRuntimeConnectionWarmupFiber',
+    ] as $bgFiberVar) {
         $bgFiber = ${$bgFiberVar} ?? null;
         if ($bgFiber instanceof \Fiber && $bgFiber->isTerminated()) {
             \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($bgFiber);
@@ -2626,6 +2635,54 @@ while (true) {
             $fiberScheduler->unregisterFiber();
             $homepageKeepWarmFiber = null;
             WlsLogger::warning_('[WorkerWarmup] homepage keep-warm start failed: ' . $e->getMessage());
+        }
+    }
+    // Layer B hydrate is Shared→Process only; must retry while deferred even if
+    // the public application gate is closed (maintenance / policy). Keep-warm
+    // stays gated; hydrate must not wait for public traffic.
+    if ($runtime instanceof \Weline\Server\Runtime\WlsRuntime
+        && $workerLoopStartedSent
+        && !$isMaintenanceWorker
+        && !$ipcReceivedShutdown
+        && $processL1HydrateFiber === null
+        && !wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null)
+        && $runtime->shouldScheduleProcessL1Hydrate($activeRequests, $ipcDraining, $homepageMemoryPressure)
+    ) {
+        $fiberScheduler->registerFiber();
+        $processL1HydrateFiber = new \Fiber(static function () use ($runtime, $fiberScheduler, $ipcClient): void {
+            $self = \Fiber::getCurrent();
+            try {
+                $result = $runtime->runProcessL1HydrateCycle();
+                if ((bool)($result['homepage_ok'] ?? false)
+                    && $ipcClient !== null
+                    && $ipcClient->isConnected()
+                ) {
+                    $homepageFields = \Weline\Server\Service\Runtime\WorkerReadinessState::statusReportHomepageFields();
+                    if ((int)($homepageFields['homepage_fpc_hit'] ?? 0) === 1) {
+                        $ipcClient->send(
+                            \Weline\Server\IPC\ControlMessage::statusReport(
+                                0,
+                                \memory_get_usage(true),
+                                0,
+                                $homepageFields
+                            ),
+                            false
+                        );
+                    }
+                }
+            } finally {
+                if ($self instanceof \Fiber) {
+                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
+                }
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $processL1HydrateFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            $processL1HydrateFiber = null;
+            WlsLogger::warning_('[WorkerWarmup] process-l1-hydrate start failed: ' . $e->getMessage());
         }
     }
 
@@ -3265,7 +3322,12 @@ while (true) {
 
     if ($ipcClient !== null && $ipcClient->isConnected()) {
         $policyTrackedFibers = \count($activeFibers);
-        foreach ([$homepageKeepWarmFiber, $deferredWarmupFiber ?? null, $sharedRuntimeConnectionWarmupFiber ?? null] as $backgroundFiber) {
+        foreach ([
+            $homepageKeepWarmFiber,
+            $processL1HydrateFiber ?? null,
+            $deferredWarmupFiber ?? null,
+            $sharedRuntimeConnectionWarmupFiber ?? null,
+        ] as $backgroundFiber) {
             if ($backgroundFiber instanceof \Fiber && !$backgroundFiber->isTerminated()) {
                 $policyTrackedFibers++;
             }

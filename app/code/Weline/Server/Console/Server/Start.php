@@ -441,14 +441,31 @@ class Start extends CommandAbstract
             return 1;
         }
 
-        // Explicit clean-start is intentionally targeted. Without -f it stays
-        // fail-closed and never signals processes. With -f the operator accepts
-        // a stop-then-force-retire path that can clear corrupt endpoints and
-        // indeterminate lock probes for this named instance only.
+        // -f = force + project factory reset (instance artifacts + Session/Memory).
+        // -clean without -f stays fail-closed and never signals processes.
         $masterOnly = isset($args['master-only']) || getenv('WLS_MASTER_ONLY');
         $forceClean = \array_key_exists('f', $args)
             || \array_key_exists('force', $args);
-        if ($cleanRequested && !$masterOnly) {
+        if ($forceClean && !$masterOnly) {
+            try {
+                $this->printer->warning(__(
+                    '检测到 -f：将强制停止本实例（若仍在线），重置本项目 WLS 运行态（实例资料 + Session/Memory 共享态），再执行完整新代启动。',
+                ));
+                if (!$this->prepareForceResetStart($instanceName, $config)) {
+                    return 1;
+                }
+                $this->printer->success(__(
+                    '实例 [%{1}] 已强制重置本项目 WLS 运行态；开始完整新代启动。',
+                    [$instanceName],
+                ));
+            } catch (\Throwable $exception) {
+                $this->printer->error(__(
+                    '实例 [%{1}] 强制重置失败：%{2}',
+                    [$instanceName, $exception->getMessage()],
+                ));
+                return 1;
+            }
+        } elseif ($cleanRequested && !$masterOnly) {
             try {
                 $instanceManager = $this->getInstanceManager();
                 $oldEndpoint = null;
@@ -460,18 +477,7 @@ class Start extends CommandAbstract
                 $endpointPath = $instanceManager->getInstanceFile($instanceName);
                 $hasEndpointResidue = \is_file($endpointPath) || \is_link($endpointPath);
 
-                if ($forceClean) {
-                    $this->printer->warning(__(
-                        '检测到 -clean -f：将强制停止本实例（若仍在线），并强制退役旧运行资料（含损坏端点或不确定锁探测），再执行完整新代启动。',
-                    ));
-                    if (!$this->prepareForcedCleanStart($instanceName, $config)) {
-                        return 1;
-                    }
-                    $this->printer->success(__(
-                        '实例 [%{1}] 的旧运行资料已强制清理；开始完整新代启动。',
-                        [$instanceName],
-                    ));
-                } elseif (!$hasEndpointResidue && $oldEndpoint === null) {
+                if (!$hasEndpointResidue && $oldEndpoint === null) {
                     $this->printer->note(__(
                         '实例 [%{1}] 没有旧运行资料；继续执行完整新代启动。',
                         [$instanceName],
@@ -486,8 +492,8 @@ class Start extends CommandAbstract
                         [$instanceName, $cleanRestartCommand],
                     ));
                     $this->printer->note(__(
-                        '若需强制停止并清理损坏资料，请执行：%{1} -f',
-                        [$cleanRestartCommand],
+                        '若需强制停止并重置本项目 WLS 运行态，请执行：php bin/w server:start%{1} -f',
+                        [$instanceName === 'default' ? '' : (' ' . $instanceName)],
                     ));
                     return 1;
                 } else {
@@ -10591,10 +10597,20 @@ class Start extends CommandAbstract
     }
     
     /**
-     * `-clean -f`: stop the named instance when still online, then force-retire
-     * its offline/corrupt runtime artifacts before a full new generation starts.
+     * `-f` (and legacy `-clean -f`): stop the named instance when still online,
+     * force-retire its offline/corrupt runtime artifacts, then factory-reset
+     * this project's Session/Memory shared state before a full new generation.
      *
      * @param array<string,mixed> $config
+     */
+    protected function prepareForceResetStart(string $instanceName, array $config): bool
+    {
+        return $this->prepareForcedCleanStart($instanceName, $config);
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @deprecated Prefer prepareForceResetStart(); kept as the shared body for -f reset.
      */
     protected function prepareForcedCleanStart(string $instanceName, array $config): bool
     {
@@ -10636,12 +10652,12 @@ class Start extends CommandAbstract
 
         if ($needsStop) {
             $this->printer->warning(__(
-                '实例 [%{1}] 仍在线或 Master 进程仍存活：先按 server:stop -f 强制停止再清理。',
+                '实例 [%{1}] 仍在线或 Master 进程仍存活：先按 server:stop -f 强制停止再重置。',
                 [$instanceName],
             ));
             if ($port <= 0) {
                 $this->printer->error(__(
-                    '无法解析实例 [%{1}] 的端口，已中止强制清理启动。',
+                    '无法解析实例 [%{1}] 的端口，已中止强制重置启动。',
                     [$instanceName],
                 ));
                 return false;
@@ -10665,11 +10681,28 @@ class Start extends CommandAbstract
                 [$instanceName],
             ));
             $this->printer->note(__(
-                '请先执行 php bin/w server:stop %{1} -f，确认停止后再重试 php bin/w server:start%{2} -clean -f',
+                '请先执行 php bin/w server:stop %{1} -f，确认停止后再重试 php bin/w server:start%{2} -f',
                 [
                     $instanceName,
                     $instanceName === 'default' ? '' : (' ' . $instanceName),
                 ],
+            ));
+            return false;
+        }
+
+        try {
+            $sharedReset = $this->createSharedStateServiceManager()->forceResetProjectSharedState(
+                $config,
+                \is_array($this->getEnvConfig()) ? $this->getEnvConfig() : [],
+            );
+            $this->printer->note(__(
+                '本项目 Session/Memory 共享态已重置（registry_cleared=%{1}）。',
+                [!empty($sharedReset['registry_cleared']) ? 'yes' : 'no'],
+            ));
+        } catch (\Throwable $exception) {
+            $this->printer->error(__(
+                '本项目 Session/Memory 共享态重置失败：%{1}',
+                [$exception->getMessage()],
             ));
             return false;
         }
@@ -13504,8 +13537,8 @@ PHP;
                 '--win' => __('窗口模式：Windows 为各 WLS PHP 子进程打开可见控制台；macOS 为各进程打开 Terminal 跟随日志窗口（Direct/shared_fd 不能整进程迁入）'),
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
                 '-r, --restart' => __('滚动排水重启：Master 保持运行，Orchestrator 分批次排水替换 Worker（默认三批）'),
-                '-f' => __('与 -r 同用时强制完整重启；与 -clean 同用时强制停止本实例并退役损坏/不确定的旧运行资料'),
-                '-clean, --clean' => __('清理当前实例旧运行资料后完整新代启动；不加 -f 时仅允许已停止且身份可证明的安全清理'),
+                '-f' => __('强制 + 重置：强制停止本实例（若在线），重置本项目 WLS 运行态（实例资料 + Session/Memory），再完整新代启动；与 -r 同用时另跳过排水'),
+                '-clean, --clean' => __('仅清理当前实例旧运行资料后完整新代启动；不加 -f 时仅允许已停止且身份可证明的安全清理（不含共享态重置）'),
                 '--ssl-cert <path>' => __('公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
                 '--ssl-key <path>' => __('公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
                 '--certificate-profile <profile>' => __('WLS 2.0 证书信任范围：production（默认）或显式 test；域名后缀不会自动启用 test'),
@@ -13531,7 +13564,7 @@ PHP;
                 __('启动副作用') => __('auto/gateway 仅在 virgin host 上从最终项目发行物自带的签名包首装宿主网关；不下载或编译 legacy Nginx，复制到宿主 A/B 槽后不依赖引导项目'),
                 __('多项目支持') => __('多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离'),
                 __('配置记忆') => __('首次 server:start api -p 9981 会保存回源端口，之后 server:start api 自动复用'),
-                __('清理启动') => __('普通启动不会自动删除损坏或过期资料；确认实例已停止后执行 php bin/w server:start [name] -clean；在线或资料损坏时用 -clean -f 强制停止并清理'),
+                __('清理/重置启动') => __('普通启动不会自动删除损坏或过期资料；安全离线清理用 -clean；代码更新或共享态卡住时用 -f 强制重置本项目 WLS 运行态后启动'),
                 __('智能模式') => __('worker_count 设为 "auto" 时由运行时策略按 OS/CPU/内存自动计算'),
                 __('事件循环') => __('Windows Direct 使用内置 stream_select；Linux reuseport/shared_fd 与 macOS shared_fd Direct 使用预装 ext-event，缺失时停止并提示显式 --install-deps'),
                 __('HTTP/3') => __('仅当 nginx -V 证明包含 ngx_http_v3_module 时配置 QUIC/Alt-Svc；可用 verifier 必须通过 owner-bound 真实 QUIC，否则明确 pending'),
@@ -13557,8 +13590,9 @@ PHP;
                 __('显式安装依赖后启动') => 'php bin/w server:start deps -p 9984 --install-deps',
                 __('Windows 可见窗口') => 'php bin/w server:start win -p 9985 --win',
                 __('滚动排水重启') => 'php bin/w server:start api -r',
-                __('强制完整重启') => 'php bin/w server:start api -r -f',
-                __('强制清理并启动') => 'php bin/w server:start -clean -f',
+                __('强制完整重启（含运行态重置）') => 'php bin/w server:start api -r -f',
+                __('强制重置并启动') => 'php bin/w server:start -f',
+                __('强制清理并启动（同 -f）') => 'php bin/w server:start -clean -f',
                 __('指定 Nginx TLS 证书') => 'php bin/w server:start api --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem',
                 __('设置 Worker 内存') => 'php bin/w server:start api --worker-memory-limit=512M',
                 __('查看所有实例状态') => 'php bin/w server:status --all',

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Session\Storage\SharedSessionStateInterface;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\SessionStateFacadeInterface;
@@ -207,7 +207,7 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
 
     private function traceOperation(string $name, array $meta, callable $operation): mixed
     {
-        $start = \class_exists(RequestLifecycleTrace::class, false) && RequestLifecycleTrace::isEnabled()
+        $start = \class_exists(TraceGate::class, false) && TraceGate::isArmed()
             ? self::monotonicSeconds()
             : 0.0;
 
@@ -215,7 +215,7 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
             return $operation();
         } finally {
             if ($start > 0.0) {
-                RequestLifecycleTrace::recordSpan(
+                TraceGate::recordSpan(
                     $name,
                     (self::monotonicSeconds() - $start) * 1000,
                     'wls',

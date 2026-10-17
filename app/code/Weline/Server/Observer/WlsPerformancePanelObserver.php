@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Server\Observer;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\DeveloperAccessPolicy;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Server\Service\WlsPerformanceTraceStore;
 
 class WlsPerformancePanelObserver implements ObserverInterface
@@ -57,7 +58,7 @@ class WlsPerformancePanelObserver implements ObserverInterface
     private function requestId(): string
     {
         try {
-            return RequestLifecycleTrace::ensureRequestId();
+            return TraceGate::ensureRequestId();
         } catch (\Throwable) {
             return 'wls-' . \bin2hex(\random_bytes(8));
         }

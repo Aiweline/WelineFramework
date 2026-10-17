@@ -628,7 +628,8 @@ curl -k --http3-only https://example.com/
 | `php bin/w server:doctor` | 按实例模式报告 Nginx 或纯 WLS 的 TLS/H2/H1、H3 readiness 与会话恢复边界 |
 | `php bin/w server:stop [name ...]` | 停止一个或多个 WLS 实例；Nginx 实例会停止本项目托管 Nginx，纯 WLS 实例不会触碰它 |
 | `php bin/w server:start -r` | 滚动排水重启（Master 保持，分批次排水替换 Worker，默认三批） |
-| `php bin/w server:start -r -f` | 强制完整重启（停 Master，跳过排水） |
+| `php bin/w server:start -f` | **强制 + 重置**：停本实例（若在线），清理本实例运行资料，并重置本项目 Session/Memory 共享态后完整新代启动（代码更新或共享态卡住时用） |
+| `php bin/w server:start -r -f` | 同上重置，并跳过排水（停 Master 后完整重启） |
 
 ## 7. 故障排查
 
@@ -639,6 +640,7 @@ curl -k --http3-only https://example.com/
 | Nginx 80/443 绑定失败 | 端口被占用或 Nginx 进程权限不足 | 处理 Nginx 的端口/权限；不要让 WLS 抢占公网端口 |
 | 端口被占用 | 已有进程占用该端口 | 使用 `server:stop` 停止对应实例，或 `-p 9981` 等改端口 |
 | Nginx 502 | WLS 未启动或端口错误 | 执行 `php bin/w server:status` 确认 WLS 监听端口，与 Nginx `proxy_pass` 一致 |
+| Nginx 502 + `Stale WLS shared-state lifecycle binding` | Session/Memory 共享态 generation/PID 漂移，普通 `-r` 无法拉起 | 在项目根执行 `php bin/w server:start [name] -f`（强制重置本项目运行态后再启） |
 | 子进程停在 STARTING 且 PID=0 | 批量 launcher 创建后 `pcntl_exec` 失败或子进程在注册前退出 | 查看对应 `var/process/<process>.log`；launcher 会记录脱敏后的 errno、PHP 可执行文件名和脚本名，不再静默等待到 READY 超时 |
 | 启动预检报 `compiled_factories.php` 构造参数为 `null` | 旧反射编译器把对象默认值错误降级为 `null` | 更新代码后执行 `php bin/w reflection:compile`；新编译器会让无法安全字面量化的类回退到一次性反射，且预检失败返回非零退出码 |
 | Worker 异常退出 | 进程崩溃 | Master 默认启用，会自动重启异常 Worker |
@@ -665,4 +667,12 @@ curl -k --http3-only https://example.com/
 
 动态 READY 预热由模块通过 `FpcWarmupProviderInterface` 发布有限的匿名公开路径；当前 Product 默认提供各语言商品列表路径。示例配置中的 `wls.worker.dynamic_ready_gate_paths` 留空时使用模块声明，只有需要覆盖模块默认值时才显式配置路径。更大范围的运行期热点发现仍可使用 `wls.worker.dynamic_hot_paths` 或 `Weline_Server::dispatcher::warmup_paths`，不要把商品 ID 或无限制 URL 列表写入启动预热。
 
-商品关键路径的默认 READY 后预热由 `wls.worker.storefront_deferred_warmup_enabled=true` 控制，使用统一 FPC 构建与二次命中校验；`storefront_deferred_warmup_max_paths` 默认 6（含 `/`、非默认语首页与目录代表路径），`storefront_deferred_warmup_peer_wait_ms` 默认 5000ms 供其他 Worker 等待共享发布。动态首渲染门禁 `dynamic_ready_gate_enabled` 仍默认关闭；只有显式开启时才在 READY 前执行严格首渲染证明并承担对应启动成本。诊断链若需要只加载模板/Slot/目录进程状态，可使用内部 chain warmup 标记，不能让该一张卡响应进入公共 FPC。
+店面预热分三层（勿混）：
+
+- **Layer A Shared 库存**：Framework Cron / `cache:clear`→`StorefrontWarmupOrchestrator` + 各模块 `cache.warmer.*`（含 chrome 子进程）。边沿 Nginx try_files / 冷盘可标 `X-Weline-FPC-Source: html-disk`（边沿权威）。Worker **不得**再跑整页 deferred SSR（`needsDeferredStorefrontWarmup` / keep-warm 硬关）。
+- **Layer B Process L1 Hydrate**：各业务 Worker READY 后（及 soft reclaim **trim 释放后**）从 Shared **无 SSR** 灌入本进程袋与首页 Process FPC；默认 `wls.worker.process_l1_hydrate_enabled=true`。关则回退「首个真实用户付袋填充税」。idle Hydrate **不**依赖公网 application gate（维护模式仍可重试 adopt）；keep-warm 仍绑 gate。直连 Worker 统一 HIT 诚实标 `process|shared`——**不等于**公网边沿 `html-disk`；Status `source=process` 是 Worker 袋 adopt 证明。Worker 传输常为 `http://host/`（TLS 在边沿），READY receipt 常为 `https://host/`——快路径须 scheme peer 对齐，禁止因 scheme 分叉误标冷盘。
+- **Layer C 公网首触**：A+B 皆 miss 时才由真实请求冷填。
+
+Soft reclaim：Theme soft 只 `clearMetaCache` + Partials/HotCache **trim 到预算**（禁 soft 全清 `clearOutputCache`）；仅 trim 释放字节时才排队 Layer B（另有 12s coalesce）。
+
+READY 首页默认 `ready_gate_homepage_fail_open=true`（跳过 in-process 渲染，防模板 fatal 杀进程）；Status 在 Layer B 成功前可为 `deferred…hit=false`。动态首渲染门禁 `dynamic_ready_gate_enabled` 仍默认关闭。诊断链若需要只加载模板/Slot/目录进程状态，可使用内部 chain warmup 标记，不能让该一张卡响应进入公共 FPC。

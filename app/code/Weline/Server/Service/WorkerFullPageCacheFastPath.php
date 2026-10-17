@@ -108,26 +108,14 @@ final class WorkerFullPageCacheFastPath
                 $cookieHeader = (string)($headers['cookie'] ?? '');
                 // Guest homepage receipt ignores cookies; still pass header for
                 // cold-disk / formatted fallthrough identity helpers.
-                $receipt = $this->runtime?->resolveHomepageFastPathReceipt(
+                // READY often stores https:// public origin while the Worker
+                // transport is plain http://:port — try scheme peers so Process
+                // L1 adopt is not false-missed as html-disk.
+                $receipt = $this->resolveRootHomepageReceiptAcrossOriginPeers(
                     $fullUri,
-                    $cookieHeader,
-                ) ?? $this->coordinator->resolveRootHomepageProcessReceipt(
-                    $fullUri,
+                    $scheme,
                     $cookieHeader,
                 );
-                if ($receipt === null) {
-                    $receipt = $this->coordinator->resolveRootHomepageProcessReceipt(
-                        $this->alternateRootFullUri($fullUri, $scheme),
-                        $cookieHeader,
-                    );
-                }
-                if ($receipt === null) {
-                    $receipt = $this->coordinator->resolveRootHomepageStaleReceipt($fullUri, $cookieHeader)
-                        ?? $this->coordinator->resolveRootHomepageStaleReceipt(
-                            $this->alternateRootFullUri($fullUri, $scheme),
-                            $cookieHeader,
-                        );
-                }
                 if (\is_array($receipt)) {
                     $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
                     RequestContext::installScopeIdentity(ScopeIdentity::fromArray($receipt['scope_identity']));
@@ -345,6 +333,87 @@ final class WorkerFullPageCacheFastPath
         $headerPort = (int)($hostParts['port'] ?? $defaultPort);
 
         return $targetPort === $headerPort;
+    }
+
+    /**
+     * Resolve anonymous `/` receipt across port peers and http↔https peers.
+     *
+     * TLS terminates at the edge; Worker often sees `http://host/` while READY
+     * hydrated `https://host/`. Port peers alone are not enough — without the
+     * scheme peer, Process L1 HIT falls through to html-disk despite Status
+     * `source=process` adopt.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function resolveRootHomepageReceiptAcrossOriginPeers(
+        string $fullUri,
+        string $scheme,
+        string $cookieHeader,
+    ): ?array {
+        foreach ($this->rootHomepageReceiptCandidateUris($fullUri, $scheme) as $candidateUri) {
+            $receipt = $this->runtime?->resolveHomepageFastPathReceipt(
+                $candidateUri,
+                $cookieHeader,
+            ) ?? $this->coordinator->resolveRootHomepageProcessReceipt(
+                $candidateUri,
+                $cookieHeader,
+            );
+            if (\is_array($receipt)) {
+                return $receipt;
+            }
+        }
+        foreach ($this->rootHomepageReceiptCandidateUris($fullUri, $scheme) as $candidateUri) {
+            $receipt = $this->coordinator->resolveRootHomepageStaleReceipt(
+                $candidateUri,
+                $cookieHeader,
+            );
+            if (\is_array($receipt)) {
+                return $receipt;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function rootHomepageReceiptCandidateUris(string $fullUri, string $scheme): array
+    {
+        $scheme = \strtolower(\trim($scheme));
+        $scheme = \in_array($scheme, ['http', 'https'], true) ? $scheme : 'http';
+        $peerScheme = $scheme === 'https' ? 'http' : 'https';
+        $candidates = [
+            $fullUri,
+            $this->alternateRootFullUri($fullUri, $scheme),
+        ];
+        try {
+            $parts = \parse_url($fullUri);
+        } catch (\ValueError) {
+            $parts = null;
+        }
+        if (\is_array($parts)) {
+            $host = \strtolower(\rtrim((string)($parts['host'] ?? ''), '.'));
+            if ($host !== '') {
+                $path = (string)($parts['path'] ?? '/');
+                $path = $path !== '' ? $path : '/';
+                $query = isset($parts['query']) && (string)$parts['query'] !== ''
+                    ? '?' . (string)$parts['query']
+                    : '';
+                $peerUri = $peerScheme . '://' . $host . $path . $query;
+                $candidates[] = $peerUri;
+                $candidates[] = $this->alternateRootFullUri($peerUri, $peerScheme);
+            }
+        }
+
+        $unique = [];
+        foreach ($candidates as $uri) {
+            if ($uri !== '' && !\in_array($uri, $unique, true)) {
+                $unique[] = $uri;
+            }
+        }
+
+        return $unique;
     }
 
     /**

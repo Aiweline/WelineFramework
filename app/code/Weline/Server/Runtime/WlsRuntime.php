@@ -50,7 +50,7 @@ use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\Preload\WorkerPreloadContext;
 use Weline\Framework\Runtime\Preload\WorkerPreloadManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\RequestPipeline;
 use Weline\Framework\Runtime\RequestPipelineInterface;
 use Weline\Framework\Runtime\RequestPipelineStageListenerInterface;
@@ -63,6 +63,7 @@ use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Runtime\StartPageRouteProviderInterface;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Runtime\StorefrontHotCacheBagWarmupProviderInterface;
+use Weline\Framework\Runtime\StorefrontProcessL1HydrateCoordinator;
 use Weline\Framework\Runtime\StorefrontWebsiteContext;
 use Weline\Framework\Runtime\StorefrontWebsiteContextResolverInterface;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
@@ -184,6 +185,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private array $readyGateDynamicFirstRenderProof = [];
 
     private bool $homepageKeepWarmRunning = false;
+
+    /** Layer B Process L1 Hydrate (Shared→process, no SSR). */
+    private bool $processL1HydrateRunning = false;
+
+    private bool $processL1HydrateCompletedOnce = false;
+
+    /** True after at least one bag Provider peeked Shared into Process L1. */
+    private bool $processL1BagsPeekedOnce = false;
+
+    private float $processL1HydrateNextAt = 0.0;
 
     /** Candidate identity only: canonical publish enqueues no HTML/context or RPC. */
     private static array $homepagePublicationProofCandidate = [];
@@ -376,6 +387,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $this->logReadyGateWarmupStep('route_assert_begin', $workerId, $startedAt);
         $this->assertGeneratedRouteFilesReady();
         $this->logReadyGateWarmupStep('route_assert_done', $workerId, $startedAt);
+
+        // Scope-stable storefront namespace vector into process L1 before the first
+        // freezeCurrent / FPC decorate. Fail-open: never block READY on prefetch.
+        $this->logReadyGateWarmupStep('storefront_namespace_prefetch_begin', $workerId, $startedAt);
+        try {
+            \Weline\Framework\Cache\StorefrontNamespaceVectorWarmup::prefetchForReadyGate();
+        } catch (\Throwable) {
+        }
+        $this->logReadyGateWarmupStep('storefront_namespace_prefetch_done', $workerId, $startedAt);
 
         // Homepage process FPC is a best-effort business warmup. Failure (or an
         // uncatchable template compile fatal during in-process render) must not
@@ -1373,6 +1393,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $runStorefrontCriticalWarmup = $this->shouldRunDeferredStorefrontCriticalWarmup();
         $runStorefrontPeerBagHydrate = !$runStorefrontCriticalWarmup
             && $this->shouldRunDeferredStorefrontPeerHotCacheBagHydrate();
+        // Layer B: READY deferred Fiber runs hydrate once (or when reclaim queued pending).
+        // Idle Fiber uses shouldScheduleProcessL1Hydrate for Shared-miss / bag retries.
+        $runProcessL1Hydrate = $this->shouldRunProcessL1HydrateAfterReady()
+            && (
+                !$this->processL1HydrateCompletedOnce
+                || StorefrontProcessL1HydrateCoordinator::hasPendingRequest()
+            );
         if ($this->readyGateWorkerRegistryWarmupCompleted) {
             $runRegistryWarmup = false;
             $runUrlMetadataWarmup = false;
@@ -1386,12 +1413,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             && !$runDynamicFirstRenderWarmup
             && !$runStorefrontCriticalWarmup
             && !$runStorefrontPeerBagHydrate
+            && !$runProcessL1Hydrate
         ) {
             return;
         }
 
         $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
         $this->router ??= ObjectManager::getInstance(Router::class);
+        if ($runProcessL1Hydrate) {
+            // Shared→Process only; never re-opens deferred storefront SSR.
+            $this->runProcessL1HydrateCycle();
+        }
         if ($runRegistryWarmup) {
             $this->preloadWorkerRegistries();
         }
@@ -1426,6 +1458,236 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if ($runDynamicFirstRenderWarmup) {
             $this->runDeferredDynamicFirstRenderWarmup();
         }
+    }
+
+    /**
+     * Layer B after READY: Shared→Process hydrate (homepage FPC + chrome bags).
+     * Independent of needsDeferredStorefrontWarmup (that path stays hard-off / Cron-owned SSR).
+     */
+    private function shouldRunProcessL1HydrateAfterReady(): bool
+    {
+        if (!StorefrontProcessL1HydrateCoordinator::isEnabled()) {
+            return false;
+        }
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Freeze website + Storefront cache key context for Layer B html-disk/Shared pull.
+     * Fail-open: hydrate still tries published receipt / existing Process without context.
+     */
+    private function bindStorefrontContextForProcessL1Hydrate(string $fullUri): void
+    {
+        $fullUri = \trim($fullUri);
+        if ($fullUri === '') {
+            return;
+        }
+        try {
+            // Idle Fiber must not inherit preference cookies from a prior request
+            // or registerRootHomepageProcessReceipt will refuse to pin.
+            unset($_SERVER['HTTP_COOKIE'], $_ENV['HTTP_COOKIE']);
+            WelineEnv::set('server.http_cookie', '', 'process-l1-hydrate');
+            WelineEnv::setServer('HTTP_COOKIE', '', 'process-l1-hydrate');
+
+            $parts = $this->parseWarmupUrl($fullUri);
+            $host = \is_array($parts) ? \trim((string)($parts['host'] ?? '')) : '';
+            $scheme = \is_array($parts) ? \strtolower((string)($parts['scheme'] ?? 'https')) : 'https';
+            if ($host !== '') {
+                $authority = $host;
+                if (isset($parts['port'])) {
+                    $authority .= ':' . (int)$parts['port'];
+                }
+                $websiteUrl = $scheme . '://' . $authority;
+                WelineEnv::setServer('HTTP_HOST', $authority, 'process-l1-hydrate');
+                WelineEnv::setServer('SERVER_NAME', $host, 'process-l1-hydrate');
+                WelineEnv::setServer('REQUEST_SCHEME', $scheme, 'process-l1-hydrate');
+                WelineEnv::setServer('HTTPS', $scheme === 'https' ? 'on' : 'off', 'process-l1-hydrate');
+                WelineEnv::setServer('REQUEST_URI', '/', 'process-l1-hydrate');
+                WelineEnv::setServer('WELINE_WEBSITE_URL', $websiteUrl, 'process-l1-hydrate');
+                RequestContext::setWelineWebsiteUrl($websiteUrl);
+            }
+
+            $resolution = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolveDetailed(StorefrontWebsiteContextResolverInterface::class);
+            if ($resolution->isAvailable()
+                && $resolution->provider instanceof StorefrontWebsiteContextResolverInterface
+            ) {
+                $website = $resolution->provider->resolveWebsiteContext($fullUri);
+                if ($website instanceof StorefrontWebsiteContext) {
+                    RequestContext::setWelineWebsiteId($website->websiteId);
+                    RequestContext::setWelineWebsiteCode($website->code);
+                    RequestContext::setWelineWebsiteUrl($website->url);
+                }
+            }
+
+            RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
+            if (\trim(RequestContext::getWelineUserLang()) === '') {
+                RequestContext::setWelineUserLang('zh_Hans_CN');
+            }
+            if (\trim(RequestContext::getWelineUserCurrency()) === '') {
+                RequestContext::setWelineUserCurrency('USD');
+            }
+
+            // Complete Store/Channel ScopeIdentity — freezeCurrent needs channel identity.
+            $scopeResolution = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolveDetailed(\Weline\Framework\Runtime\StorefrontScopeInstallerInterface::class);
+            if ($scopeResolution->isAvailable()
+                && $scopeResolution->provider instanceof \Weline\Framework\Runtime\StorefrontScopeInstallerInterface
+            ) {
+                $scopeResolution->provider->installNavigationScope($fullUri);
+            }
+
+            RequestContext::remove('framework.cache.storefront_key_context.v2');
+            ObjectManager::getInstance(\Weline\Framework\Cache\StorefrontCacheKeyContextResolver::class)
+                ->freezeCurrent();
+        } catch (\Throwable) {
+            // Fail-open: published receipt / html-disk pointer hydrate may still pin.
+        }
+    }
+
+    public function shouldScheduleProcessL1Hydrate(
+        int $activeRequests,
+        bool $draining,
+        bool $memoryPressure,
+    ): bool {
+        if (!$this->shouldRunProcessL1HydrateAfterReady()
+            || !$this->readyGateWorkerBootstrapWarmupCompleted
+            || $this->processL1HydrateRunning
+            || $activeRequests > 0
+            || $draining
+            || $memoryPressure
+        ) {
+            return false;
+        }
+        if (StorefrontProcessL1HydrateCoordinator::hasPendingRequest()) {
+            return true;
+        }
+        if (!$this->processL1HydrateCompletedOnce) {
+            return true;
+        }
+        // Retry while homepage deferred and/or chrome bags still Shared-miss (wait Layer A).
+        $homepageHit = (bool)($this->readyGateHomepageFpcProof['hit'] ?? false);
+        if ($homepageHit && $this->processL1BagsPeekedOnce) {
+            return false;
+        }
+        $now = \microtime(true);
+
+        return $this->processL1HydrateNextAt > 0.0 && $now >= $this->processL1HydrateNextAt;
+    }
+
+    /**
+     * @return array{
+     *   ok:bool,
+     *   reason:string,
+     *   homepage_ok:bool,
+     *   bags_peeked:int,
+     *   bags:list<string>,
+     *   elapsed_ms:float
+     * }
+     */
+    public function runProcessL1HydrateCycle(): array
+    {
+        if ($this->processL1HydrateRunning) {
+            return [
+                'ok' => false,
+                'reason' => 'already-running',
+                'homepage_ok' => false,
+                'bags_peeked' => 0,
+                'bags' => [],
+                'elapsed_ms' => 0.0,
+            ];
+        }
+
+        $this->processL1HydrateRunning = true;
+        SchedulerSystem::markCurrentFiberBackground();
+        StorefrontProcessL1HydrateCoordinator::takePendingRequest();
+        $startedAt = \microtime(true);
+        $homepageOk = false;
+        $bagsPeeked = 0;
+        $bags = [];
+        $bagErrors = [];
+        $reason = 'not-run';
+
+        try {
+            $host = ($this->homepageCacheFullUri !== ''
+                ? $this->normalizeInternalWarmupHost($this->homepageCacheFullUri)
+                : null)
+                ?? $this->resolveCanonicalHomepageWarmupHost($this->resolveDynamicFirstRenderWarmupHosts());
+            $hydrateFullUri = $this->resolveInternalWarmupScheme() . '://' . $host . '/';
+            $this->bindStorefrontContextForProcessL1Hydrate($hydrateFullUri);
+            // allowPrime=false → Shared/html-disk pull only; never Router/SSR.
+            // On success, runHomepageFpcWarmupTransaction already adopts Process receipt.
+            $transaction = $this->runHomepageFpcWarmupTransaction($host, 1, false);
+            $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
+            $homepageOk = (bool)($validation['ok'] ?? false);
+            $reason = (string)($validation['reason'] ?? 'homepage-validation-missing');
+            if ($homepageOk && (bool)($this->readyGateHomepageFpcProof['hit'] ?? false)) {
+                // Distinguish Layer B adopt from legacy deferred SSR adopt reason.
+                $this->readyGateHomepageFpcProof['reason'] = 'homepage-fpc:process-l1-hydrate:adopted';
+                $this->publishAdoptedHomepageFpcProofToWorkerReadiness($this->readyGateHomepageFpcProof);
+            }
+
+            /** @var StorefrontProcessL1HydrateCoordinator $coordinator */
+            $coordinator = ObjectManager::getInstance(StorefrontProcessL1HydrateCoordinator::class);
+            $bagResult = $coordinator->hydrateBags();
+            $bagsPeeked = (int)($bagResult['peeked'] ?? 0);
+            $bags = \array_values(\is_array($bagResult['bags'] ?? null) ? $bagResult['bags'] : []);
+            $bagErrors = \array_values(\is_array($bagResult['errors'] ?? null) ? $bagResult['errors'] : []);
+            if ($bagsPeeked > 0) {
+                $this->processL1BagsPeekedOnce = true;
+            }
+            if (!$homepageOk && $bagsPeeked === 0) {
+                StorefrontProcessL1HydrateCoordinator::deferRetry(8.0);
+                $this->processL1HydrateNextAt = \microtime(true) + 8.0;
+            } elseif ($homepageOk && $bagsPeeked === 0) {
+                // Homepage adopted; keep idle retry until Layer A fills chrome Shared.
+                $this->processL1HydrateNextAt = \microtime(true) + 30.0;
+            } else {
+                $this->processL1HydrateNextAt = \microtime(true) + 60.0;
+            }
+        } catch (\Throwable $e) {
+            $reason = $e->getMessage();
+            $bagErrors = [];
+            StorefrontProcessL1HydrateCoordinator::deferRetry(10.0);
+            $this->processL1HydrateNextAt = \microtime(true) + 10.0;
+        } finally {
+            $this->processL1HydrateCompletedOnce = true;
+            $this->processL1HydrateRunning = false;
+        }
+
+        $elapsed = \round((\microtime(true) - $startedAt) * 1000, 2);
+        $ok = $homepageOk || $bagsPeeked > 0;
+        $message = '[WlsRuntime] process-l1-hydrate ' . ($ok ? 'done' : 'deferred')
+            . ' worker=' . $this->currentWorkerId()
+            . ' homepage_ok=' . (int)$homepageOk
+            . ' bags_peeked=' . $bagsPeeked
+            . ' bags=' . \implode(',', $bags)
+            . ' bag_errors=' . \implode(';', \array_slice($bagErrors, 0, 4))
+            . ' reason=' . $reason
+            . ' elapsed_ms=' . $elapsed;
+        @\error_log($message);
+        if (\function_exists($ok ? 'w_log_info' : 'w_log_warning')) {
+            $ok ? \w_log_info($message) : \w_log_warning($message);
+        }
+        if (\class_exists(\Weline\Server\Log\WlsLogger::class)) {
+            $ok
+                ? \Weline\Server\Log\WlsLogger::info_($message)
+                : \Weline\Server\Log\WlsLogger::warning_($message);
+        }
+
+        return [
+            'ok' => $ok,
+            'reason' => $reason,
+            'homepage_ok' => $homepageOk,
+            'bags_peeked' => $bagsPeeked,
+            'bags' => $bags,
+            'elapsed_ms' => $elapsed,
+        ];
     }
 
     private function shouldRunDeferredStorefrontCriticalWarmup(): bool
@@ -3364,7 +3626,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $wlsBefore = 0;
         $wlsMsBefore = 0.0;
         try {
-            $before = RequestLifecycleTrace::getAggregateSummary();
+            $before = TraceGate::getAggregateSummary();
             $dbBefore = (int)($before['db_span_count'] ?? 0);
             $dbMsBefore = (float)($before['db_duration_ms'] ?? 0.0);
             $wlsBefore = (int)($before['wls_span_count'] ?? 0);
@@ -3379,7 +3641,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $wlsAfter = $wlsBefore;
             $wlsMsAfter = $wlsMsBefore;
             try {
-                $after = RequestLifecycleTrace::getAggregateSummary();
+                $after = TraceGate::getAggregateSummary();
                 $dbAfter = (int)($after['db_span_count'] ?? 0);
                 $dbMsAfter = (float)($after['db_duration_ms'] ?? 0.0);
                 $wlsAfter = (int)($after['wls_span_count'] ?? 0);
@@ -5200,10 +5462,41 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     $cacheFullUri = $activeReceipt['full_uri'];
                     $pulledFromShared = true;
                 } else {
-                    return [
-                        'meta' => [],
-                        'validation' => ['ok' => false, 'reason' => 'shared-fpc-miss', 'cache' => ''],
-                    ];
+                    // Layer B: Layer A may stock Shared/html-disk (or a prior natural
+                    // HIT may already have localized Process) without Worker
+                    // coordination publication. Never SSR here.
+                    $existing = $coordinator->resolveRootHomepageProcessReceipt($fullUri, '');
+                    if (\is_array($existing)
+                        && isset($existing['cache_key'])
+                        && $this->warmHomepageProcessCacheForReceipt($coordinator, $existing, true)
+                    ) {
+                        $activeReceipt = $existing;
+                        $cacheFullUri = $activeReceipt['full_uri'];
+                        $pulledFromShared = true;
+                    } else {
+                        try {
+                            $warmed = $coordinator->warmProcessCacheForFullUri($fullUri, 'GET', '', true);
+                            $existing = $warmed
+                                ? $coordinator->resolveRootHomepageProcessReceipt($fullUri, '')
+                                : null;
+                            // warmProcessCacheForFullUri already pinned Process + receipt;
+                            // do not require a second internalReceipt warm (can fail-closed
+                            // on pointer/TTL edge cases and drop a successful hydrate).
+                            if (\is_array($existing) && isset($existing['cache_key'])) {
+                                $activeReceipt = $existing;
+                                $cacheFullUri = $activeReceipt['full_uri'];
+                                $pulledFromShared = true;
+                            }
+                        } catch (\Throwable) {
+                            // Context / disk / policy edge — keep miss and retry later.
+                        }
+                    }
+                    if (!$pulledFromShared) {
+                        return [
+                            'meta' => [],
+                            'validation' => ['ok' => false, 'reason' => 'shared-fpc-miss', 'cache' => ''],
+                        ];
+                    }
                 }
             }
         }
@@ -5649,6 +5942,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $formatted = $this->parseFormattedWarmupResult($cached['response']);
         $headers = $formatted['headers'];
         $headers['X-WLS-Performance-FPC-Source'] = (string)($cached['source'] ?? '');
+        if (!$allowPrime) {
+            // Layer B Shared/html-disk hydrate: anonymous Process proof must not
+            // fail on historical Set-Cookie baked into a prior SSR payload.
+            // Live HIT path already suppresses Set-Cookie via SharedFpcSetCookieSuppress.
+            foreach (\array_keys($headers) as $headerName) {
+                if (\strcasecmp((string)$headerName, 'Set-Cookie') === 0) {
+                    unset($headers[$headerName]);
+                }
+            }
+        }
         $probeMeta = [
             'headers' => $headers,
             'status_code' => (int)$formatted['status_code'],
@@ -8104,7 +8407,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
             $resultStr = $app->broadcastTelemetry($resultStr, $request, true);
             $timing['telemetry_ms'] = \round((\microtime(true) - $telemetryStart) * 1000, 2);
-            $timing['dev_tool_ms'] = RequestLifecycleTrace::sumDurationsByName('dev_tool_panel');
+            $timing['dev_tool_ms'] = TraceGate::sumDurationsByName('dev_tool_panel');
             $appApplyUrlProfile = RequestContext::get('app.apply_url.profile');
             if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
                 $timing['app_apply_url'] = $appApplyUrlProfile;
@@ -8131,7 +8434,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $this->applyPerformanceHeaders($timing, $request);
             }
             try {
-                $request->getResponse()->setHeader('X-Weline-Request-Id', RequestLifecycleTrace::ensureRequestId());
+                $request->getResponse()->setHeader('X-Weline-Request-Id', TraceGate::ensureRequestId());
             } catch (\Throwable) {
             }
             $this->applyDynamicFirstRenderHeaders($timing, $request, false);
@@ -8149,7 +8452,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 throw new \LogicException('WLS streamed download requires WlsRequest.');
             }
             $collector = \Weline\Framework\Http\HeaderCollector::getInstance();
-            $collector->setHeader('X-Weline-Request-Id', RequestLifecycleTrace::ensureRequestId());
+            $collector->setHeader('X-Weline-Request-Id', TraceGate::ensureRequestId());
             try {
                 $marker = \Weline\Framework\Http\WlsStreamedResponse::streamDownload(
                     $downloadEx,
@@ -8342,7 +8645,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $hc = null;
             try {
                 $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
-                $hc->setHeader('X-Weline-Request-Id', RequestLifecycleTrace::ensureRequestId());
+                $hc->setHeader('X-Weline-Request-Id', TraceGate::ensureRequestId());
                 $this->snapshotPendingResponseState($hc);
             } catch (\Throwable $e) {
                 RequestResetException::append($finalizationFailures, 'response_state_snapshot', $e);
@@ -8357,15 +8660,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 }
             }
             try {
-                if (RequestLifecycleTrace::isEnabled()) {
-                    $timing['request_id'] = RequestLifecycleTrace::ensureRequestId();
-                    $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
+                if (TraceGate::isArmed()) {
+                    $timing['request_id'] = TraceGate::ensureRequestId();
+                    $traceSpans = TraceGate::getSpansWithDbSummary();
                     $traceTopLimit = $this->getRequestTraceSummaryLimit('request_trace_top_limit', 40);
                     $traceDbTopLimit = $this->getRequestTraceSummaryLimit('request_trace_db_top_limit', 20);
                     $timing['trace_top'] = $this->summarizeTraceSpans($traceSpans, $traceTopLimit);
                     $timing['trace_db_top'] = $this->summarizeTraceSpansByCategory($traceSpans, 'db', $traceDbTopLimit);
                     $timing['trace_category_totals'] = $this->summarizeTraceCategoryTotals($traceSpans);
-                    $timing['trace_summary'] = RequestLifecycleTrace::getAggregateSummary();
+                    $timing['trace_summary'] = TraceGate::getAggregateSummary();
                     unset($traceSpans);
                 }
             } catch (\Throwable $e) {
@@ -8377,7 +8680,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     RequestResetException::append($finalizationFailures, 'memdiag_request_end', $e);
                 }
                 try {
-                    RequestLifecycleTrace::reset();
+                    TraceGate::resetRecorder();
                 } catch (\Throwable $e) {
                     RequestResetException::append($finalizationFailures, 'request_trace_reset', $e);
                 }
@@ -9777,7 +10080,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         try {
-            $timing['request_id'] = (string)($timing['request_id'] ?? RequestLifecycleTrace::ensureRequestId());
+            $timing['request_id'] = (string)($timing['request_id'] ?? TraceGate::ensureRequestId());
             $timing['pid'] = (int)($timing['pid'] ?? (\getmypid() ?: 0));
             $timing['worker_id'] = (string)($timing['worker_id'] ?? ($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: ''));
             $timing['worker_port'] = (string)($timing['worker_port'] ?? ($_SERVER['WLS_WORKER_PORT'] ?? $_ENV['WLS_WORKER_PORT'] ?? \getenv('WLS_WORKER_PORT') ?: ''));
@@ -10385,7 +10688,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $response = $request?->getResponse();
             $router = $request?->getRouter() ?? [];
             $context += [
-                'request_id' => RequestLifecycleTrace::ensureRequestId(),
+                'request_id' => TraceGate::ensureRequestId(),
                 'method' => $request?->getMethod() ?? '',
                 'uri' => $request?->getUri() ?: (\function_exists('w_env_request_uri') ? (string)\w_env_request_uri() : ''),
                 'lang' => (string)State::getLang(),

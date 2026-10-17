@@ -817,7 +817,9 @@ function wlsSharedFiberRequestContextEnter(mixed $conn, int|string|null $connect
         \Weline\Framework\Runtime\RequestResetException::append($failures, 'request_context', $e);
     }
     try {
-        \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
+        // New-request enter: HARD clear. Soft projection is restore-only
+        // ({@see Url::projectWlsFiberParserScratchAfterRestore}).
+        \Weline\Framework\Http\Url::resetParserRequestCaches();
     } catch (\Throwable $e) {
         \Weline\Framework\Runtime\RequestResetException::append($failures, 'url_parser_scratch', $e);
     }
@@ -959,7 +961,8 @@ function wlsDrainPostResponseTasks(
         return;
     }
 
-    $maxTasks = (int)(\Weline\Framework\App\Env::get('wls.post_response_task_max_per_drain', 1) ?: 1);
+    // Default 8: idle cycles should clear a short backlog under budget_ms, not stick at 1/task/cycle.
+    $maxTasks = (int)(\Weline\Framework\App\Env::get('wls.post_response_task_max_per_drain', 8) ?: 8);
     try {
         \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
             (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8),

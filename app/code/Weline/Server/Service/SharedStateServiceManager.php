@@ -816,6 +816,346 @@ class SharedStateServiceManager
         return $report;
     }
 
+    /**
+     * Operator factory-reset for this project's Session/Memory shared state.
+     * Best-effort stop first; always hard-clears this VAR_DIR's runtime JSON,
+     * locks, tokens, and registry so stale lifecycle bindings cannot block
+     * a subsequent server:start -f. Never throws for stale lifecycle.
+     *
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $envConfig
+     * @return array{
+     *   ok:bool,
+     *   roles: array<string, array{
+     *     role:string,
+     *     stop_reason:string,
+     *     process_terminated:bool,
+     *     artifacts_cleared:bool,
+     *     host:string,
+     *     port:int,
+     *     pid:int
+     *   }>,
+     *   registry_cleared:bool
+     * }
+     */
+    public function forceResetProjectSharedState(
+        array $config = [],
+        array $envConfig = [],
+    ): array {
+        if ($envConfig === []) {
+            $envConfig = $this->loadEnvConfig();
+        }
+        $roles = [ControlMessage::ROLE_SESSION_SERVER];
+        if ($this->isMemoryEnabled($config, $envConfig)) {
+            $roles[] = ControlMessage::ROLE_MEMORY_SERVER;
+        }
+
+        $roleReports = [];
+        foreach ($roles as $role) {
+            $roleReports[$role] = $this->forceResetRoleSharedState(
+                $role,
+                $config,
+                $envConfig,
+            );
+        }
+
+        $registryCleared = $this->forceUnlinkProjectSharedRegistryArtifacts();
+        WlsLogger::warning_(
+            '[SharedStateServiceManager] forceResetProjectSharedState completed'
+            . ' registry_cleared=' . ($registryCleared ? 'yes' : 'no')
+            . ' roles=' . \implode(',', \array_keys($roleReports))
+        );
+
+        return [
+            'ok' => true,
+            'roles' => $roleReports,
+            'registry_cleared' => $registryCleared,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $envConfig
+     * @return array{
+     *   role:string,
+     *   stop_reason:string,
+     *   process_terminated:bool,
+     *   artifacts_cleared:bool,
+     *   host:string,
+     *   port:int,
+     *   pid:int
+     * }
+     */
+    private function forceResetRoleSharedState(
+        string $role,
+        array $config,
+        array $envConfig,
+    ): array {
+        $role = $this->normalizeRoleName($role);
+        $raw = $this->readRuntimeFileBestEffort($role);
+        $definition = $this->buildRoleDefinition($role, 'system', $config, $envConfig);
+        $host = \trim((string)($raw['host'] ?? $definition['host'] ?? '127.0.0.1'));
+        $port = (int)($raw['port'] ?? $definition['port'] ?? 0);
+        $pid = (int)($raw['pid'] ?? 0);
+        $tokenFileName = \trim((string)($raw['token_file_name']
+            ?? $definition['token_file_name']
+            ?? ''));
+        if ($tokenFileName === '') {
+            $tokenFileName = SharedStateRuntimeScope::defaultTokenFileNameForRole($role, $port);
+        }
+        $stopReason = 'skipped';
+        $processTerminated = false;
+
+        try {
+            $stopReport = $this->stopWithReport($role, $config, $envConfig);
+            $stopReason = (string)($stopReport['reason'] ?? 'unconfirmed');
+            $processTerminated = (bool)($stopReport['stopped'] ?? false);
+            if ($host === '' && \trim((string)($stopReport['host'] ?? '')) !== '') {
+                $host = \trim((string)$stopReport['host']);
+            }
+            if ($port <= 0 && (int)($stopReport['port'] ?? 0) > 0) {
+                $port = (int)$stopReport['port'];
+            }
+            if ($pid <= 0 && (int)($stopReport['pid'] ?? 0) > 0) {
+                $pid = (int)$stopReport['pid'];
+            }
+        } catch (\Throwable $exception) {
+            $stopReason = 'stop_failed:' . $exception->getMessage();
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] forceReset soft-stop failed for '
+                . $role . ': ' . $exception->getMessage()
+            );
+        }
+
+        $record = [
+            'role' => $role,
+            'host' => $host !== '' ? $host : '127.0.0.1',
+            'port' => $port > 0 ? $port : (int)($definition['port'] ?? 0),
+            'pid' => $pid,
+            'token_file_name' => $tokenFileName,
+            'process_name' => (string)($raw['process_name'] ?? ''),
+            'instance_name' => (string)($raw['instance_name'] ?? ''),
+            'service_instance_name' => (string)($raw['service_instance_name'] ?? ''),
+        ];
+        if (!$processTerminated && (int)$record['port'] > 0) {
+            try {
+                $inspection = $this->inspectRunningSharedService(
+                    [
+                        'role' => $role,
+                        'host' => (string)$record['host'],
+                        'port' => (int)$record['port'],
+                    ],
+                    $tokenFileName,
+                );
+                if ($this->terminateCmdlineBoundUnhealthySidecar($record, $inspection)
+                    || $this->terminateProjectBoundSharedSidecarBestEffort($record)
+                ) {
+                    $processTerminated = true;
+                    if ($stopReason === 'skipped' || \str_starts_with($stopReason, 'stop_failed')) {
+                        $stopReason = 'hard_terminated';
+                    }
+                }
+            } catch (\Throwable $exception) {
+                WlsLogger::warning_(
+                    '[SharedStateServiceManager] forceReset hard-terminate failed for '
+                    . $role . ': ' . $exception->getMessage()
+                );
+            }
+        }
+
+        $artifactsCleared = $this->forceUnlinkRoleSharedArtifacts($role, $tokenFileName);
+
+        return [
+            'role' => $role,
+            'stop_reason' => $stopReason,
+            'process_terminated' => $processTerminated,
+            'artifacts_cleared' => $artifactsCleared,
+            'host' => (string)$record['host'],
+            'port' => (int)$record['port'],
+            'pid' => (int)$record['pid'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readRuntimeFileBestEffort(string $role): array
+    {
+        $role = $this->normalizeRoleName($role);
+        try {
+            $validated = $this->readRuntimeFile($role);
+            if ($validated !== []) {
+                return $validated;
+            }
+        } catch (\Throwable) {
+            // Fall through to raw decode; factory reset must tolerate stale bindings.
+        }
+
+        $path = $this->getRuntimeFilePath($role);
+        if (!\is_file($path) && !\is_link($path)) {
+            return [];
+        }
+        $raw = @\file_get_contents($path);
+        if (!\is_string($raw) || $raw === '') {
+            return [];
+        }
+        try {
+            $data = \json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return \is_array($data) ? $data : [];
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     */
+    private function terminateProjectBoundSharedSidecarBestEffort(array $record): bool
+    {
+        $role = $this->normalizeRoleName((string)($record['role'] ?? ''));
+        $host = \trim((string)($record['host'] ?? '127.0.0.1'));
+        $port = (int)($record['port'] ?? 0);
+        $pid = (int)($record['pid'] ?? 0);
+        if ($role === '' || $host === '' || $port <= 0 || $pid <= 0) {
+            return false;
+        }
+        $commandLine = Processer::getProcessCommandLine($pid, true);
+        if ($commandLine === '') {
+            return !$this->probeTcpPortInUse($host, $port);
+        }
+        // Memory and session share session_server.php; memory uses --role=memory_server.
+        if (!\str_contains($commandLine, 'session_server.php')) {
+            return false;
+        }
+        if (\str_starts_with(\strtolower($role), 'memory')
+            && !\str_contains($commandLine, 'memory_server')
+            && !\str_contains($commandLine, '--role=memory_server')
+        ) {
+            return false;
+        }
+        $projectMarker = '';
+        if (\defined('BP') && \is_string(BP) && BP !== '') {
+            $projectMarker = \rtrim(\str_replace('\\', '/', BP), '/');
+        }
+        if ($projectMarker !== '' && !\str_contains(\str_replace('\\', '/', $commandLine), $projectMarker)) {
+            return false;
+        }
+        if (!\str_contains($commandLine, (string)$port)
+            && !\str_contains($commandLine, ' ' . $port . ' ')
+        ) {
+            // Port may appear only as argv; require either port or shared-service name.
+            $token = \basename(\trim((string)($record['token_file_name'] ?? '')));
+            if ($token === '' || !\str_contains($commandLine, $token)) {
+                return false;
+            }
+        }
+        if (!$this->signalProcess($pid, \defined('SIGTERM') ? \SIGTERM : 15)) {
+            return false;
+        }
+        if ($this->waitForSharedServicePortRelease($host, $port, 3.0)) {
+            return true;
+        }
+        $this->signalProcess($pid, \defined('SIGKILL') ? \SIGKILL : 9);
+
+        return $this->waitForSharedServicePortRelease($host, $port, 2.0);
+    }
+
+    private function forceUnlinkRoleSharedArtifacts(string $role, string $tokenFileName): bool
+    {
+        $role = $this->normalizeRoleName($role);
+        $paths = [
+            $this->getRuntimeFilePath($role),
+            $this->getRuntimeFilePath($role) . '.lock',
+            $this->getRoleLifecycleLockPath($role),
+        ];
+        $tokenFileName = \basename(\str_replace('\\', '/', \trim($tokenFileName)));
+        if ($tokenFileName !== '' && $tokenFileName !== '.' && $tokenFileName !== '..') {
+            $paths[] = SharedStateRuntimeScope::tokenFilePath($tokenFileName);
+        }
+        $cleared = true;
+        foreach ($paths as $path) {
+            if (!$this->forceUnlinkProjectPath($path)) {
+                if (\is_file($path) || \is_link($path)) {
+                    $cleared = false;
+                }
+            }
+        }
+        try {
+            $this->createRegistry()->removeRecord($role);
+        } catch (\Throwable) {
+            // Registry may be corrupt; whole-file clear happens next.
+        }
+
+        return $cleared;
+    }
+
+    private function forceUnlinkProjectSharedRegistryArtifacts(): bool
+    {
+        $registry = $this->createRegistry();
+        $registryFile = $registry->getRegistryFile();
+        $ok = $this->forceUnlinkProjectPath($registryFile);
+        $ok = $this->forceUnlinkProjectPath($registryFile . '.lock') && $ok;
+
+        return $ok || (!\is_file($registryFile) && !\is_link($registryFile));
+    }
+
+    private function forceUnlinkProjectPath(string $path): bool
+    {
+        $path = \trim($path);
+        if ($path === '') {
+            return true;
+        }
+        if (!\is_file($path) && !\is_link($path)) {
+            return true;
+        }
+        if (!$this->isPathInsideProjectSharedStateRoots($path)) {
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] refusing to unlink path outside project shared roots: '
+                . $path
+            );
+            return false;
+        }
+        if (@\unlink($path)) {
+            return true;
+        }
+
+        return !\is_file($path) && !\is_link($path);
+    }
+
+    private function isPathInsideProjectSharedStateRoots(string $path): bool
+    {
+        $resolved = \realpath($path);
+        if (!\is_string($resolved) || $resolved === '') {
+            // Broken symlink / already gone: allow unlink by nominal prefixes.
+            $normalized = \str_replace('\\', '/', $path);
+            $varDir = \str_replace('\\', '/', \rtrim((string)Env::VAR_DIR, '\\/')) . '/';
+            $tokenDir = \str_replace('\\', '/', \rtrim(SharedStateRuntimeScope::tokenDirectory(), '\\/')) . '/';
+            return \str_starts_with($normalized, $varDir)
+                || \str_starts_with($normalized, $tokenDir);
+        }
+        $resolved = \str_replace('\\', '/', $resolved);
+        $roots = [];
+        $varReal = \realpath((string)Env::VAR_DIR);
+        if (\is_string($varReal) && $varReal !== '') {
+            $roots[] = \str_replace('\\', '/', $varReal);
+        }
+        $tokenReal = \realpath(SharedStateRuntimeScope::tokenDirectory());
+        if (\is_string($tokenReal) && $tokenReal !== '') {
+            $roots[] = \str_replace('\\', '/', $tokenReal);
+        } else {
+            $roots[] = \str_replace('\\', '/', \rtrim(SharedStateRuntimeScope::tokenDirectory(), '\\/'));
+        }
+        foreach ($roots as $root) {
+            $root = \rtrim($root, '/');
+            if ($root !== '' && ($resolved === $root || \str_starts_with($resolved, $root . '/'))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function stopUnlocked(
         string $role,
         array $config,

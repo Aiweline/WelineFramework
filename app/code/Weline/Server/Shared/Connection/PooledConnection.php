@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Shared\Connection;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Session\Server\SessionProtocol;
@@ -650,8 +652,7 @@ class PooledConnection implements PooledConnectionInterface, DeadlinePooledConne
             ['host' => $this->host, 'port' => (string)$this->port, 'result' => $result]
         );
         if (($result === 'success' && $durationMs < 10.0)
-            || !\class_exists(\Weline\Framework\Runtime\RequestLifecycleTrace::class, false)
-            || !\Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled()
+            || !\Weline\Framework\Runtime\TraceGate::isArmed()
         ) {
             return;
         }
@@ -669,12 +670,12 @@ class PooledConnection implements PooledConnectionInterface, DeadlinePooledConne
             'failure_stage' => (string)($diagnostics['failure_stage'] ?? ''),
             'last_attempt_ms' => (float)($diagnostics['last_attempt_ms'] ?? 0.0),
         ];
-        \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+        \Weline\Framework\Runtime\TraceGate::recordSpan(
             'wls.connection.auth', $durationMs, 'rpc', null, $meta
         );
         if ($result !== 'success') {
             // This summary is the last failure, not a count or cumulative duration.
-            \Weline\Framework\Runtime\RequestLifecycleTrace::recordPhase(
+            \Weline\Framework\Runtime\TraceGate::recordPhase(
                 'wls.connection.auth.last_failure',
                 $durationMs,
                 $meta + ['measurement' => 'last_failure']
@@ -703,8 +704,7 @@ class PooledConnection implements PooledConnectionInterface, DeadlinePooledConne
         }
 
         if (($result === 'success' && $durationMs < 10.0)
-            || !\class_exists(\Weline\Framework\Runtime\RequestLifecycleTrace::class, false)
-            || !\Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled()
+            || !\Weline\Framework\Runtime\TraceGate::isArmed()
         ) {
             return;
         }
@@ -718,12 +718,12 @@ class PooledConnection implements PooledConnectionInterface, DeadlinePooledConne
             'connect_timeout_sec' => $this->connectTimeout,
             'result' => $result,
         ];
-        \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+        \Weline\Framework\Runtime\TraceGate::recordSpan(
             'wls.connection.' . $phase, $durationMs, 'rpc', null, $meta
         );
         if ($result !== 'success') {
             // A fixed summary name keeps failures bounded across all I/O phases.
-            \Weline\Framework\Runtime\RequestLifecycleTrace::recordPhase(
+            \Weline\Framework\Runtime\TraceGate::recordPhase(
                 'wls.connection.io.last_failure',
                 $durationMs,
                 $meta + ['measurement' => 'last_failure']

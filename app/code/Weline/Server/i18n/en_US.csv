@@ -250,7 +250,6 @@ store,store
 "WLS 插件","WLS plug-in"
 "WLS 插件商城","WLS plug-in mall"
 "WLS 安全","WLS security"
-"FPC 打穿章","FPC 打穿章"
 "WLS 攻击日志","WLS attack log"
 "WLS 安全规则","WLS security rules"
 "WLS 项目安全策略","WLS project security policy"
@@ -308,12 +307,11 @@ puzzle,puzzle
 shield,shield
 "查看 FPC 打穿章","查看 FPC 打穿章"
 key,key
-"查看店面 FPC 诊断打穿章","查看店面 FPC 诊断打穿章"
+"已迁入缓存服务「全页缓存」；旧 URL 重定向","已迁入缓存服务「全页缓存」；旧 URL 重定向"
 "轮换 FPC 打穿章","轮换 FPC 打穿章"
-"轮换店面 FPC 诊断打穿章并刷新 Nginx","轮换店面 FPC 诊断打穿章并刷新 Nginx"
+"已迁入全页缓存页；旧 POST 重定向","已迁入全页缓存页；旧 POST 重定向"
 "签发 FPC 打穿章 Cookie","签发 FPC 打穿章 Cookie"
 cookie,cookie
-"为当前浏览器签发 FPC 诊断打穿章 Cookie","为当前浏览器签发 FPC 诊断打穿章 Cookie"
 "查看 WLS 攻击日志","View WLS attack logs"
 search,search
 "查看 WLS 安全规则","View WLS security rules"
@@ -713,6 +711,7 @@ LiteSSL,LiteSSL
 暗色,"dark color"
 亮色,"bright color"
 概览,Overview
+"全页缓存 (FPC)","全页缓存 (FPC)"
 规则,rule
 项目策略,"project strategy"
 探针,Probe
@@ -778,26 +777,15 @@ LiteSSL,LiteSSL
 无面板入口,"No panel entrance"
 未选择插件页面。,"No plugin page selected."
 "请从侧边栏选择插件能力；安装 WLS 模块后可刷新面板插件。","Please select plug-in capabilities from the sidebar; panel plug-ins can be refreshed after installing the WLS module."
+"FPC 打穿章","FPC 打穿章"
 安全概览,"Security overview"
 防护,protection
 高级规则,"Advanced rules"
 安全数据警告,"Security data warning"
-店面诊断打穿章,店面诊断打穿章
-"公开参数名（_wb_nc / nocache / wls_tpl_perf 等）保持不变；无 Cookie 或查询章时边缘与 WLS 均不认风暴打穿。","公开参数名（_wb_nc / nocache / wls_tpl_perf 等）保持不变；无 Cookie 或查询章时边缘与 WLS 均不认风暴打穿。"
-打穿章错误,打穿章错误
-打穿章状态,打穿章状态
-密钥（遮罩）,密钥（遮罩）
-"Cookie 名","Cookie 名"
-查询参数名,查询参数名
-查询后缀,查询后缀
-运维操作,运维操作
-"轮换会重写 Nginx pierce map 并 reload；签发 Cookie 仅作用于当前浏览器。","轮换会重写 Nginx pierce map 并 reload；签发 Cookie 仅作用于当前浏览器。"
-轮换打穿章,轮换打穿章
-"Cookie TTL（秒）","Cookie TTL（秒）"
-"签发本机 Cookie","签发本机 Cookie"
-用法示例,用法示例
-店面诊断用法,店面诊断用法
-"仅管理员持有后缀；勿把完整 URL 贴到公开工单。","仅管理员持有后缀；勿把完整 URL 贴到公开工单。"
+全页缓存,全页缓存
+已迁至缓存服务,已迁至缓存服务
+"FPC 开关与打穿章运维统一在「系统服务 → 缓存服务 → 全页缓存 (FPC)」。若仍看到本页，请使用下方入口。","FPC 开关与打穿章运维统一在「系统服务 → 缓存服务 → 全页缓存 (FPC)」。若仍看到本页，请使用下方入口。"
+"打开全页缓存 (FPC)","打开全页缓存 (FPC)"
 扫描特征警告,"Scan feature warnings"
 "7 天事件","7 days event"
 "7 天拦截","7 days interception"
@@ -3094,6 +3082,25 @@ Previous：%{1},Previous：%{1}
 无法证明受管代次时拒绝发送任何终止信号,"Refuse to send any termination signal when the managed generation cannot be proven"
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","Retired: console:server:start no longer starts the PHP built-in web server."
 "已退役：PHP 内置 Web Server 启动入口","Retired: PHP built-in Web Server startup entry"
+"查看店面 FPC 诊断打穿章","查看店面 FPC 诊断打穿章"
+"轮换店面 FPC 诊断打穿章并刷新 Nginx","轮换店面 FPC 诊断打穿章并刷新 Nginx"
+"为当前浏览器签发 FPC 诊断打穿章 Cookie","为当前浏览器签发 FPC 诊断打穿章 Cookie"
+店面诊断打穿章,店面诊断打穿章
+"公开参数名（_wb_nc / nocache / wls_tpl_perf 等）保持不变；无 Cookie 或查询章时边缘与 WLS 均不认风暴打穿。","公开参数名（_wb_nc / nocache / wls_tpl_perf 等）保持不变；无 Cookie 或查询章时边缘与 WLS 均不认风暴打穿。"
+打穿章错误,打穿章错误
+打穿章状态,打穿章状态
+密钥（遮罩）,密钥（遮罩）
+"Cookie 名","Cookie 名"
+查询参数名,查询参数名
+查询后缀,查询后缀
+运维操作,运维操作
+"轮换会重写 Nginx pierce map 并 reload；签发 Cookie 仅作用于当前浏览器。","轮换会重写 Nginx pierce map 并 reload；签发 Cookie 仅作用于当前浏览器。"
+轮换打穿章,轮换打穿章
+"Cookie TTL（秒）","Cookie TTL（秒）"
+"签发本机 Cookie","签发本机 Cookie"
+用法示例,用法示例
+店面诊断用法,店面诊断用法
+"仅管理员持有后缀；勿把完整 URL 贴到公开工单。","仅管理员持有后缀；勿把完整 URL 贴到公开工单。"
 安全规则已提交，但后置通知仍待重试。,"The security rule was submitted, but the post notification is still pending retry."
 安全规则已保存。,"Security rules saved."
 "Security rules saved. WLS workers will reload the committed generation.","Security rules saved. WLS workers will reload the committed generation."

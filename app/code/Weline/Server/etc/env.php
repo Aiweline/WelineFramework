@@ -79,6 +79,9 @@ return [
             // 首页 Process-FPC READY 门禁默认 fail-open：预热失败属正常，不得拖垮 Worker READY / WLS 启动。
             // 设为 0/false 才启用严格 in-process 首页证明（可能因模板编译致命错误杀死进程）。
             'ready_gate_homepage_fail_open' => true,
+            // Layer B：READY 后 / soft reclaim 后从 Shared 灌入本 Worker Process L1（禁 SSR）。
+            // 关则回退「首个真实用户付袋填充税」。不改 fail-open 默认。
+            'process_l1_hydrate_enabled' => true,
         ],
         // 主机容量档：按 MemTotal/cgroup 钳制 Fiber / Nginx / L7（与 worker_budget 分工：只管个数）。
         // force=tiny|small|medium|large；enabled=false 关闭。Start 注入 WLS_HOST_LIMIT_MB。

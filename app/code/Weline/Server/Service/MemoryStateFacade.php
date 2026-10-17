@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Cache\Contract\SharedBufferStateInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateHealthInterface;
 use Weline\Framework\Cache\Contract\SharedCacheBatchStateInterface;
@@ -351,7 +351,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheBatchS
 
     private function traceOperation(string $name, array $meta, callable $operation): mixed
     {
-        $start = \class_exists(RequestLifecycleTrace::class, false) && RequestLifecycleTrace::isEnabled()
+        $start = \class_exists(TraceGate::class, false) && TraceGate::isArmed()
             ? self::monotonicSeconds()
             : 0.0;
 
@@ -359,7 +359,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheBatchS
             return $operation();
         } finally {
             if ($start > 0.0) {
-                RequestLifecycleTrace::recordSpan(
+                TraceGate::recordSpan(
                     $name,
                     (self::monotonicSeconds() - $start) * 1000,
                     'wls',

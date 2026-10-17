@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Shared\Connection;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Scheduler\FiberScheduler;
 use Weline\Server\Shared\Contract\ConnectionPoolInterface;
@@ -670,8 +672,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         }
 
         if (($result === 'success' && $durationMs < 10.0)
-            || !\class_exists(\Weline\Framework\Runtime\RequestLifecycleTrace::class, false)
-            || !\Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled()
+            || !\Weline\Framework\Runtime\TraceGate::isArmed()
         ) {
             return;
         }
@@ -695,12 +696,12 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             'last_connect_failure_reason' => $this->lastConnectFailureReason,
             'consecutive_connect_failures' => $this->consecutiveConnectFailures,
         ];
-        \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+        \Weline\Framework\Runtime\TraceGate::recordSpan(
             'wls.pool.acquire', $durationMs, 'rpc', null, $meta
         );
         if ($result !== 'success') {
             // Keep the last failure after the detail cap without inflating its duration.
-            \Weline\Framework\Runtime\RequestLifecycleTrace::recordPhase(
+            \Weline\Framework\Runtime\TraceGate::recordPhase(
                 'wls.pool.acquire.last_failure',
                 $durationMs,
                 $meta + ['measurement' => 'last_failure']

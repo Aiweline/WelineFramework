@@ -1946,7 +1946,8 @@ function wlsEventRequestContextEnter(int $connectionId): void
 {
     \Weline\Framework\Runtime\StateManager::reset();
     \Weline\Framework\Runtime\RequestContext::cleanup();
-    \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
+    // New-request enter: HARD clear (Event path has no later WlsRuntime hard reset).
+    \Weline\Framework\Http\Url::resetParserRequestCaches();
     \Weline\Framework\Http\Sse\SseContext::reset();
     $context = \Weline\Framework\Context::current();
     $context->set('meta.type', 'request');
