@@ -80,11 +80,22 @@ class Config extends BackendController
         );
         $poolDomains = [];
         try {
+            // websites.getDomainPoolList → 域名行列表（0..n），不是 {success,items}。
             $poolRes = w_query('websites', 'getDomainPoolList', ['limit' => 200]);
-            if (is_array($poolRes) && !empty($poolRes['success']) && is_array($poolRes['items'] ?? null)) {
-                $poolDomains = $poolRes['items'];
-            } elseif (is_array($poolRes['items'] ?? null)) {
-                $poolDomains = $poolRes['items'];
+            if (is_array($poolRes)) {
+                if (is_array($poolRes['items'] ?? null)) {
+                    $poolDomains = $poolRes['items'];
+                } else {
+                    foreach ($poolRes as $row) {
+                        if (!is_array($row)) {
+                            continue;
+                        }
+                        $name = (string)($row['domain'] ?? $row['hostname'] ?? $row['name'] ?? '');
+                        if ($name !== '') {
+                            $poolDomains[] = $row;
+                        }
+                    }
+                }
             }
         } catch (\Throwable) {
         }

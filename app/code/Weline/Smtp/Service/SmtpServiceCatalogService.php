@@ -35,7 +35,7 @@ final class SmtpServiceCatalogService
     }
 
     /**
-     * @return array{success: bool, message: string, smtp_service_id: int}
+     * @return array{success: bool, message: string, smtp_service_id: int, email?: string, password_once?: string}
      */
     public function createSelfService(
         string $name,
@@ -59,6 +59,11 @@ final class SmtpServiceCatalogService
             ];
         }
         $originIp = trim($expectedIp) !== '' ? trim($expectedIp) : (string)($dns['resolved_ip'] ?? '');
+        // 已在域名池（用户从池选或历史入池）：允许登记服务；ensure/出证失败不挡保存。
+        // 未入池的自填域名：仍必须 ensure 成功（需 DNS 商凭据）。
+        $existingPoolId = $this->resolveExistingPoolId($parsed['root'], $parsed['smtp_hostname']);
+        $pool = null;
+        $poolWarn = '';
         try {
             $pool = w_query('websites', 'ensurePublicDnsHostnamesInPool', [
                 'root_domain' => $parsed['root'],
@@ -68,14 +73,24 @@ final class SmtpServiceCatalogService
                 'source' => 'smtp_service_self',
             ]);
         } catch (\Throwable $e) {
-            return ['success' => false, 'message' => (string)__('入池失败：%{1}', [$e->getMessage()]), 'smtp_service_id' => 0];
+            if ($existingPoolId <= 0) {
+                return ['success' => false, 'message' => (string)__('入池失败：%{1}', [$e->getMessage()]), 'smtp_service_id' => 0];
+            }
+            $poolWarn = (string)__('入池/出证暂未能同步：%{1}', [$e->getMessage()]);
         }
-        if (!is_array($pool) || empty($pool['success'])) {
+        if (is_array($pool) && empty($pool['success']) && $existingPoolId <= 0) {
             return [
                 'success' => false,
                 'message' => (string)($pool['message'] ?? __('入池失败')),
                 'smtp_service_id' => 0,
             ];
+        }
+        if (is_array($pool) && empty($pool['success']) && $existingPoolId > 0) {
+            $poolWarn = (string)($pool['message'] ?? __('入池/出证暂未能同步'));
+        }
+        $poolDomainId = (int)($pool['domain_id'] ?? 0);
+        if ($poolDomainId <= 0) {
+            $poolDomainId = $existingPoolId;
         }
         $now = date('Y-m-d H:i:s');
         /** @var SmtpService $svc */
@@ -89,18 +104,39 @@ final class SmtpServiceCatalogService
             ->setData(SmtpService::schema_fields_PORT, 587)
             ->setData(SmtpService::schema_fields_TLS, 'starttls')
             ->setData(SmtpService::schema_fields_RELAY_SERVICE, $relayService ? 1 : 0)
-            ->setData(SmtpService::schema_fields_POOL_DOMAIN_ID, (int)($pool['domain_id'] ?? 0))
+            ->setData(SmtpService::schema_fields_POOL_DOMAIN_ID, $poolDomainId)
             ->setData(SmtpService::schema_fields_CREATED_AT, $now)
             ->setData(SmtpService::schema_fields_UPDATED_AT, $now)
             ->save();
         $id = (int)$svc->getId();
+        if ($id <= 0) {
+            return ['success' => false, 'message' => (string)__('保存失败'), 'smtp_service_id' => 0];
+        }
+        $msg = $poolWarn !== ''
+            ? (string)__('本机 Smtp 服务已启用（域名已在池中）。%{1}', [$poolWarn])
+            : (string)__('本机 Smtp 服务已启用并入池出证');
+        // 默认创建 submit 账号 smtp@{根域}，密码仅本次返回。
+        $acct = $this->createAccountOnService($id, 'smtp', SmtpAccount::ROLE_SUBMIT);
+        $passwordOnce = '';
+        $email = '';
+        if (!empty($acct['success'])) {
+            $passwordOnce = (string)($acct['password_once'] ?? '');
+            $email = (string)($acct['email'] ?? '');
+            if ($passwordOnce !== '') {
+                $msg .= ' ' . (string)__('已默认创建发信账号 %{1}，密码（仅一次）：%{2}', [$email, $passwordOnce]);
+            } else {
+                $msg .= ' ' . (string)__('已默认创建发信账号 %{1}', [$email !== '' ? $email : 'smtp@' . $parsed['root']]);
+            }
+        } elseif (!empty($acct['message'])) {
+            $msg .= ' ' . (string)__('默认账号未创建：%{1}', [(string)$acct['message']]);
+        }
 
         return [
-            'success' => $id > 0,
-            'message' => $id > 0
-                ? (string)__('本机 Smtp 服务已启用并入池出证')
-                : (string)__('保存失败'),
+            'success' => true,
+            'message' => $msg,
             'smtp_service_id' => $id,
+            'email' => $email,
+            'password_once' => $passwordOnce,
         ];
     }
 
@@ -271,6 +307,52 @@ final class SmtpServiceCatalogService
         }
 
         return $out;
+    }
+
+    /**
+     * 已在域名池则返回可用 pool_id（优先精确匹配 smtp 主机，其次根域）。
+     */
+    private function resolveExistingPoolId(string $root, string $smtpHostname): int
+    {
+        $root = strtolower(trim($root));
+        $smtpHostname = strtolower(trim($smtpHostname));
+        if ($root === '') {
+            return 0;
+        }
+        try {
+            $list = w_query('websites', 'getDomainPoolList', [
+                'root_domain' => $root,
+                'limit' => 200,
+            ]);
+        } catch (\Throwable) {
+            return 0;
+        }
+        if (!is_array($list)) {
+            return 0;
+        }
+        $rows = isset($list['items']) && is_array($list['items']) ? $list['items'] : $list;
+        if (!is_array($rows)) {
+            return 0;
+        }
+        $rootId = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $domain = strtolower(trim((string)($row['domain'] ?? $row['domain_name'] ?? '')));
+            $pid = (int)($row['pool_id'] ?? $row['domain_id'] ?? $row['id'] ?? 0);
+            if ($pid <= 0 || $domain === '') {
+                continue;
+            }
+            if ($smtpHostname !== '' && $domain === $smtpHostname) {
+                return $pid;
+            }
+            if ($domain === $root && $rootId <= 0) {
+                $rootId = $pid;
+            }
+        }
+
+        return $rootId;
     }
 
     /**

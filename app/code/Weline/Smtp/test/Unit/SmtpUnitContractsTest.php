@@ -1476,6 +1476,11 @@ private function assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes():
     self::assertStringContainsString('function createSelfService', $src);
     self::assertStringContainsString('function createExternalService', $src);
     self::assertStringContainsString('ensurePublicDnsHostnamesInPool', $src);
+    self::assertStringContainsString('resolveExistingPoolId', $src);
+    self::assertStringContainsString('getDomainPoolList', $src);
+    self::assertStringContainsString('域名已在池中', $src);
+    self::assertStringContainsString("createAccountOnService(\$id, 'smtp'", $src);
+    self::assertStringContainsString('已默认创建发信账号', $src);
     self::assertStringContainsString('MODE_EXTERNAL', $src);
 }
 

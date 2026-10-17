@@ -185,13 +185,8 @@ class Index extends BackendController
                     $smtpAccountsByService[$sid] = $catalog->listAccountsForService($sid);
                 }
             }
-            try {
-                $poolRes = w_query('websites', 'getDomainPoolList', ['limit' => 200]);
-                if (is_array($poolRes) && is_array($poolRes['items'] ?? null)) {
-                    $smtpPoolDomains = $poolRes['items'];
-                }
-            } catch (\Throwable) {
-            }
+            // getDomainPoolList 返回域名行列表（非 {items:...} 包装）；与 queryWebsiteDomainPools 同形。
+            $smtpPoolDomains = $this->queryWebsiteDomainPools(200);
         }
         $this->assign('smtp_services', $smtpServices);
         $this->assign('smtp_accounts_by_service', $smtpAccountsByService);
@@ -442,10 +437,11 @@ class Index extends BackendController
         /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
         $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
         $result = $catalog->createSelfService($name, $domain, $expectedIp, $relay);
+        $msg = (string)($result['message'] ?? __('失败'));
 
         return $this->respondFormResult(
             !empty($result['success']) ? 200 : 400,
-            (string)($result['message'] ?? __('失败'))
+            $msg
         );
     }
 

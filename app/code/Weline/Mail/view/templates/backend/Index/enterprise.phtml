@@ -73,7 +73,7 @@ $navItems = [
 ];
 $smtpServices = $smtp_services ?? [];
 $smtpAccountsByService = $smtp_accounts_by_service ?? [];
-$smtpPoolDomains = $smtp_pool_domains ?? [];
+$smtpPoolDomains = is_array($smtp_pool_domains ?? null) ? $smtp_pool_domains : [];
 $dnsLiveChecks = $dns_live_checks ?? [];
 $detectedOriginIp = trim((string)($detected_origin_ip ?? ''));
 $cloudflareTokenReady = (bool)($cloudflare_token_ready ?? false);
@@ -1022,33 +1022,46 @@ if ($oauthCfError === 'invalid_scope') {
                                 </label>
                                 <label class="w-field">
                                     <span class="w-field__label"><?= __('域名来源') ?></span>
-                                    <select class="w-select" name="domain_mode" id="mail-smtp-domain-mode">
+                                    <select class="w-select" name="domain_mode" id="mail-smtp-domain-mode" data-testid="mail-smtp-domain-mode">
                                         <option value="type"><?= __('自填域名') ?></option>
                                         <option value="pool"><?= __('从域名池选择') ?></option>
                                     </select>
                                 </label>
-                                <label class="w-field">
+                                <label class="w-field" id="mail-smtp-typed-field" data-testid="mail-smtp-typed-field">
                                     <span class="w-field__label"><?= __('自填根域或 smtp.主机') ?></span>
                                     <input class="w-input" type="text" name="typed_domain" placeholder="example.com">
                                 </label>
-                                <?php if ($smtpPoolDomains !== []): ?>
-                                    <label class="w-field">
-                                        <span class="w-field__label"><?= __('域名池') ?></span>
-                                        <select class="w-select" name="pool_domain">
-                                            <option value=""><?= __('选择…') ?></option>
-                                            <?php foreach ($smtpPoolDomains as $poolRow):
-                                                $pd = is_array($poolRow)
-                                                    ? (string)($poolRow['domain'] ?? $poolRow['domain_name'] ?? $poolRow['name'] ?? '')
-                                                    : '';
-                                                if ($pd === '') {
-                                                    continue;
-                                                }
-                                                ?>
-                                                <option value="<?= $escape($pd) ?>"><?= $escape($pd) ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </label>
-                                <?php endif; ?>
+                                <label class="w-field" id="mail-smtp-pool-field" data-testid="mail-smtp-pool-field" hidden>
+                                    <span class="w-field__label"><?= __('域名池') ?></span>
+                                    <select class="w-select" name="pool_domain" data-testid="mail-smtp-pool-domain">
+                                        <option value=""><?= $smtpPoolDomains === [] ? __('（域名池暂无可用域名）') : __('选择…') ?></option>
+                                        <?php foreach ($smtpPoolDomains as $poolRow):
+                                            $pd = is_array($poolRow)
+                                                ? (string)($poolRow['domain'] ?? $poolRow['domain_name'] ?? $poolRow['hostname'] ?? $poolRow['name'] ?? '')
+                                                : '';
+                                            if ($pd === '') {
+                                                continue;
+                                            }
+                                            ?>
+                                            <option value="<?= $escape($pd) ?>"><?= $escape($pd) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </label>
+                                <script>
+                                (function () {
+                                    var mode = document.getElementById('mail-smtp-domain-mode');
+                                    var typed = document.getElementById('mail-smtp-typed-field');
+                                    var pool = document.getElementById('mail-smtp-pool-field');
+                                    if (!mode || !typed || !pool) return;
+                                    function sync() {
+                                        var usePool = mode.value === 'pool';
+                                        typed.hidden = usePool;
+                                        pool.hidden = !usePool;
+                                    }
+                                    mode.addEventListener('change', sync);
+                                    sync();
+                                })();
+                                </script>
                                 <label class="w-field">
                                     <span class="w-field__label"><?= __('预期解析 IP（可选）') ?></span>
                                     <input class="w-input" type="text" name="expected_ip" placeholder="1.2.3.4">

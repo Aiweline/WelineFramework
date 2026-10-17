@@ -59,7 +59,9 @@ final class SmtpServiceEnableService
             $originIp = (string)($dns['resolved_ip'] ?? '');
         }
 
+        $existingPoolId = $this->resolveExistingPoolId($root, $smtpHost);
         $pool = null;
+        $poolWarn = '';
         try {
             $pool = w_query('websites', 'ensurePublicDnsHostnamesInPool', [
                 'root_domain' => $root,
@@ -69,14 +71,17 @@ final class SmtpServiceEnableService
                 'source' => 'smtp_enable',
             ]);
         } catch (\Throwable $e) {
-            return $this->fail(
-                (string)__('入域名池失败：%{1}', [$e->getMessage()]),
-                false,
-                $root,
-                $smtpHost
-            );
+            if ($existingPoolId <= 0) {
+                return $this->fail(
+                    (string)__('入域名池失败：%{1}', [$e->getMessage()]),
+                    false,
+                    $root,
+                    $smtpHost
+                );
+            }
+            $poolWarn = (string)__('入池/出证暂未能同步：%{1}', [$e->getMessage()]);
         }
-        if (!is_array($pool) || empty($pool['success'])) {
+        if (is_array($pool) && empty($pool['success']) && $existingPoolId <= 0) {
             return $this->fail(
                 (string)($pool['message'] ?? __('入域名池失败')),
                 false,
@@ -84,22 +89,33 @@ final class SmtpServiceEnableService
                 $smtpHost
             );
         }
+        if (is_array($pool) && empty($pool['success']) && $existingPoolId > 0) {
+            $poolWarn = (string)($pool['message'] ?? __('入池/出证暂未能同步'));
+        }
+        $poolDomainId = (int)($pool['domain_id'] ?? 0);
+        if ($poolDomainId <= 0) {
+            $poolDomainId = $existingPoolId;
+        }
 
         $this->data()->setServiceState([
             'enabled' => '1',
             'domain_name' => $root,
             'smtp_hostname' => $smtpHost,
             'relay_service' => $relayService ? '1' : '0',
-            'pool_domain_id' => (string)(int)($pool['domain_id'] ?? 0),
+            'pool_domain_id' => (string)$poolDomainId,
         ], $scope);
+
+        $msg = $poolWarn !== ''
+            ? (string)__('Smtp 已启用（域名已在池中）。%{1}', [$poolWarn])
+            : (string)__('Smtp 已启用：DNS 已通并已入域名池申请证书');
 
         return [
             'success' => true,
-            'message' => (string)__('Smtp 已启用：DNS 已通并已入域名池申请证书'),
+            'message' => $msg,
             'enabled' => true,
             'domain_name' => $root,
             'smtp_hostname' => $smtpHost,
-            'pool' => $pool,
+            'pool' => is_array($pool) ? $pool : ['domain_id' => $poolDomainId, 'success' => true],
         ];
     }
 
@@ -204,6 +220,52 @@ final class SmtpServiceEnableService
             'message' => (string)__('DNS 已解析'),
             'resolved_ip' => $ips[0],
         ];
+    }
+
+    /**
+     * 已在域名池则返回可用 pool_id（优先精确匹配 smtp 主机，其次根域）。
+     */
+    private function resolveExistingPoolId(string $root, string $smtpHostname): int
+    {
+        $root = strtolower(trim($root));
+        $smtpHostname = strtolower(trim($smtpHostname));
+        if ($root === '') {
+            return 0;
+        }
+        try {
+            $list = w_query('websites', 'getDomainPoolList', [
+                'root_domain' => $root,
+                'limit' => 200,
+            ]);
+        } catch (\Throwable) {
+            return 0;
+        }
+        if (!is_array($list)) {
+            return 0;
+        }
+        $rows = isset($list['items']) && is_array($list['items']) ? $list['items'] : $list;
+        if (!is_array($rows)) {
+            return 0;
+        }
+        $rootId = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $domain = strtolower(trim((string)($row['domain'] ?? $row['domain_name'] ?? '')));
+            $pid = (int)($row['pool_id'] ?? $row['domain_id'] ?? $row['id'] ?? 0);
+            if ($pid <= 0 || $domain === '') {
+                continue;
+            }
+            if ($smtpHostname !== '' && $domain === $smtpHostname) {
+                return $pid;
+            }
+            if ($domain === $root && $rootId <= 0) {
+                $rootId = $pid;
+            }
+        }
+
+        return $rootId;
     }
 
     /**
