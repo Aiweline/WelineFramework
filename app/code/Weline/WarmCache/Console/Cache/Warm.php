@@ -48,7 +48,7 @@ class Warm implements CommandInterface
                 exit(1);
             }
         }
-        $frontend_routers = (array)(require Env::path_FRONTEND_PC_ROUTER_FILE);
+        $frontend_routers = (array)(\Weline\Framework\Compilation\CompiledPhpRegistry::load(Env::path_FRONTEND_PC_ROUTER_FILE) ?? []);
         $this->printing->warning(__('缓存预热开始...'));
         foreach ($frontend_routers as $frontend_router => $router_data) {
             $frontend_router = explode('::', $frontend_router);

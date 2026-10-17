@@ -416,7 +416,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             if ($routeFile === '' || !is_file($routeFile)) {
                 continue;
             }
-            $loaded = require $routeFile;
+            $loaded = \Weline\Framework\Compilation\CompiledPhpRegistry::load($routeFile);
             if (is_array($loaded)) {
                 $routes += $loaded;
             }

@@ -40,16 +40,14 @@
 "AI 生成博客 Slug","AI-generated blog slug"
 "使用翻译 AI 生成博客 slug","Generate blog slug with translation AI"
 删除博客文章,"Delete Blog Post"
-博客,Blog
 作者,Author
 更新于,"Updated on"
 分钟阅读,"min read"
 相关文章,"Related Posts"
 关键词,Keywords
-面包屑,Breadcrumb
-文章,Article
 暂无文章,"No posts yet"
 返回博客,"Back to Blog"
+博客,Blog
 "共 %{1} 条","%{1} item(s) total"
 文章列表,"Article list"
 未命名文章,"Untitled Post"
@@ -166,6 +164,8 @@ Slug,Slug
 技术分享,"Tech Sharing"
 产品动态,"Product Updates"
 公司新闻,"Company News"
+面包屑,Breadcrumb
+文章,Article
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 收起悬浮,"Collapse float"
 展开悬浮,"Expand float"

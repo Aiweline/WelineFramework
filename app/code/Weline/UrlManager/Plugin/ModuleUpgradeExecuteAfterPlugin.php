@@ -56,7 +56,9 @@ class ModuleUpgradeExecuteAfterPlugin
             @ini_set('memory_limit', self::ROUTE_IMPORT_MEMORY_LIMIT);
         }
 
-        $urls = include $filePath;
+        // Setup may have just rewritten routers — forget stale bag (CLI) then load via gate.
+        \Weline\Framework\Compilation\CompiledPhpRegistry::forgetForTests($filePath);
+        $urls = \Weline\Framework\Compilation\CompiledPhpRegistry::load($filePath);
         if ($previousMemoryLimit !== null) {
             @ini_set('memory_limit', $previousMemoryLimit);
         }

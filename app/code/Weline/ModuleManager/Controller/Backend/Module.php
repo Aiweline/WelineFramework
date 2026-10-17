@@ -11,11 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\ModuleManager\Controller\Backend;
 
-use Weline\Framework\Cache\Console\Cache\Clear;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Module\Console\Module\Upgrade;
-use Weline\Framework\System\File\Io\File;
+use Weline\Framework\Module\Helper\Data as ModuleHelperData;
 
 class Module extends \Weline\Framework\App\Controller\BackendController
 {
@@ -30,15 +28,13 @@ class Module extends \Weline\Framework\App\Controller\BackendController
         $moduleModel->setStatus($status ? 1 : 0);
         try {
             $moduleModel->save();
-            # 保存环境module
+            # 保存环境 module：磁盘 + CompiledPhpRegistry put，禁止再 include
             $env     = Env::getInstance();
             $modules = $env->getModuleList();
             if ($module_data = $modules[$module] ?? []) {
                 $module_data['status'] = (bool)$status;
                 $modules[$module]      = $module_data;
-                $file                  = (new File())->open(Env::path_MODULES_FILE, File::mode_w_add);
-                $file->write('<?php return ' . w_var_export($modules, true) . ';');
-                $file->close();
+                ObjectManager::getInstance(ModuleHelperData::class)->updateModules($modules);
             }
             // 更新注册表
             try {

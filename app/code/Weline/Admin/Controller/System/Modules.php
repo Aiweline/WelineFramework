@@ -26,7 +26,7 @@ class Modules extends BaseController
     public function router()
     {
         try {
-            $routers = include Env::path_FRONTEND_PC_ROUTER_FILE;
+            $routers = \Weline\Framework\Compilation\CompiledPhpRegistry::load(Env::path_FRONTEND_PC_ROUTER_FILE) ?? [];
         } catch (\Exception $exception) {
             $routers = [];
         }

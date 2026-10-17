@@ -430,7 +430,10 @@ final class ModuleRollbackExecutor
         if (\function_exists('opcache_invalidate') && is_file($registryPath)) {
             @opcache_invalidate($registryPath, true);
         }
-        $registry = is_file($registryPath) ? (array)require $registryPath : [];
+        \Weline\Framework\Compilation\CompiledPhpRegistry::forgetForTests($registryPath);
+        $registry = \is_file($registryPath)
+            ? (array)(\Weline\Framework\Compilation\CompiledPhpRegistry::load($registryPath) ?? [])
+            : [];
         foreach ($items as $item) {
             $module = (string)$item['module_name'];
             $target = (string)$item['to_version'];
@@ -511,7 +514,9 @@ final class ModuleRollbackExecutor
     private function assertExecutionPreflight(array $plan): void
     {
         $this->codeSwitchService->assertRuntimeControlReady();
-        $registry = is_file(Env::path_MODULES_FILE) ? (array)require Env::path_MODULES_FILE : [];
+        $registry = \is_file(Env::path_MODULES_FILE)
+            ? (array)(\Weline\Framework\Compilation\CompiledPhpRegistry::load(Env::path_MODULES_FILE) ?? [])
+            : [];
         foreach ((array)($plan['cascade_modules'] ?? []) as $item) {
             $module = (string)($item['module_name'] ?? '');
             $fromVersion = (string)($item['from_version'] ?? '');

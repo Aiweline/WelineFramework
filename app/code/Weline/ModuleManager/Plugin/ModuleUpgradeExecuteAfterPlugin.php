@@ -26,7 +26,7 @@ class ModuleUpgradeExecuteAfterPlugin
     function afterExecute($object, $result)
     {
         # 获取modules
-        $modules = (include Env::path_MODULES_FILE) ?? [];
+        $modules = \Weline\Framework\Compilation\CompiledPhpRegistry::load(Env::path_MODULES_FILE) ?? [];
         # 模型
         /**@var Module $moduleModel */
         $moduleModel = ObjectManager::getInstance(Module::class);

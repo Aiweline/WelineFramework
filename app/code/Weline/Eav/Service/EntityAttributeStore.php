@@ -649,31 +649,23 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface, Scope
                 return !empty($result);
             };
 
-            return (bool)$hotCache->rememberForRequest(
-                'eav.value_table.scope_columns',
-                $key,
-                static function () use ($hotCache, $key, $probe): bool {
-                    try {
-                        $cached = $hotCache->rememberPolicy(
-                            new CachePolicy(
-                                resource: 'eav.value_table.scope_columns',
-                                pool: 'eav',
-                                scope: 'global',
-                                dependencies: ['global/storefront/eav'],
-                                freshTtlSeconds: 3600,
-                                staleTtlSeconds: 86400,
-                            ),
-                            $key,
-                            $probe,
-                        );
-
-                        return (bool)$cached;
-                    } catch (\Throwable) {
-                        // CacheManager / generation unavailable: keep request memo + live probe.
-                        return $probe();
-                    }
-                },
-            );
+            try {
+                return (bool)$hotCache->rememberPolicy(
+                    new CachePolicy(
+                        resource: 'eav.value_table.scope_columns',
+                        pool: 'eav',
+                        scope: 'global',
+                        dependencies: ['global/storefront/eav'],
+                        freshTtlSeconds: 3600,
+                        staleTtlSeconds: 86400,
+                    ),
+                    $key,
+                    $probe,
+                );
+            } catch (\Throwable) {
+                // CacheManager / generation unavailable: live probe only.
+                return $probe();
+            }
         } catch (\Throwable) {
             return false;
         }

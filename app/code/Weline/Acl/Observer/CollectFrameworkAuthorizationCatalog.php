@@ -46,7 +46,7 @@ final class CollectFrameworkAuthorizationCatalog implements ObserverInterface
         ));
 
         $registryPath = BP . 'generated' . DS . 'framework' . DS . 'query_providers.php';
-        $queryRegistry = \is_file($registryPath) ? (require $registryPath) : [];
+        $queryRegistry = \Weline\Framework\Compilation\CompiledPhpRegistry::load($registryPath);
         if (!\is_array($queryRegistry)) {
             $queryRegistry = [];
         }
@@ -165,7 +165,11 @@ final class CollectFrameworkAuthorizationCatalog implements ObserverInterface
         $registryPath = $outputDirectory . DS . 'query_providers.php';
         $hasBindingsKey = false;
         if (\is_file($registryPath)) {
-            $loaded = require $registryPath;
+            // CLI may have just recompiled — forget then load through the process gate.
+            if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+                \Weline\Framework\Compilation\CompiledPhpRegistry::forgetForTests($registryPath);
+            }
+            $loaded = \Weline\Framework\Compilation\CompiledPhpRegistry::load($registryPath);
             $hasBindingsKey = \is_array($loaded) && \array_key_exists('authorization_bindings', $loaded);
         }
 
