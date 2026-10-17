@@ -12,8 +12,43 @@
 
 ## 0. 一句话口令
 
-**裁缺陷（剥框）→ 按目录 target_ar 用真·生图 AI outpaint 把全图装进画幅 → 保中区清晰 → 再排详情。**  
-禁止：裁成窄竖条交差、cover 裁掉头脚冒充补比例、随便垫纯色/反射模糊背景冒充拓图。
+**含人模特图（默认 · 已验正确做法）**：**衣锁死本品**（1688/原实拍作 `reference_image_paths`）→ AI **只换人与背景** → 落盘后 **必须改 `object_key` 新文件名破图缓存**（`method=ai_full_model`）。  
+**无人静物 / 规格净衣 / 信息烤图**：仍走「裁缺陷 → 真 outpaint 装 `target_ar`」或 textify。  
+禁止：改衣换款；只改字节不改 URL（`immutable` 图 HIT 假绿）；漏换 **variant**；扒图换脸洗权；cover/色垫/空放大。
+
+### 0‑A 顾问决策门（严重 · 含人图）
+
+主图/画廊/**规格** /详情**含可辨人脸或全身模特着装**时，须有电商顾问决策（父「产品优化」默认可记本回合用户拍板；单独跑图槽时父/顾问须显式写）：
+
+| 字段 | 默认（本站运营已定） | 说明 |
+|------|----------------------|------|
+| `ai_full_model` | **`approved`** | 含人图一律 AI 换**人+景** |
+| `clothing_lock` | **硬锁本品** | 形制/色/绣/层与原图或 `source_url`（如 1688 offer）一致；**改衣 = FAIL** |
+| `reference_image_paths` | **必须**本品原图（可含人；衣为证据） | prompt 写明 keep garment identical；只许换虚构模特+新场景 |
+| `surfaces` | main+gallery+**variant**+详情含人 | 店面选规格常默认吃 variant |
+| `url_cache_bust` | **必须** | 新媒体 `object_key`（如 `…/ai-lock-{sha16}.webp`）+ 升 `asset_revision` + 重算 `object_identity_hash`；仅 `replaceContent` 同路径不够 |
+| `disclose` | 文案勿写「真人实拍/模特试穿」冒充 | 可标「效果示意」；图货须一致 |
+| `keep` | `info_chart` / 尺码烤图 / 纯静物特写 | 烤图 textify；静物可 outpaint，**不**强行换 AI 模特 |
+
+汇报必写：`advisor：ai_full_model=approved|denied`；`clothing_lock=pass`；`url_bust=新 object_key`；`method=ai_full_model|outpaint|textify`。
+
+### 0‑B 少走弯路（严重 · 已验最短路径 · 禁止考古）
+
+**禁止**：`SHOW TABLES` / 扫全库 EAV / 猜 `attribute_code` / 翻 ObjectManager / 为「找图」读半套 Schema；禁止只清 FPC 以为图也会刷新。
+
+**默认站（长安汉服 website_id=0）直接用下面，勿另探：**
+
+| 要什么 | 怎么拿（停） |
+|--------|----------------|
+| 图清单 | `w_product_ws_0_media`：`product_id` → `role,position,asset_id`（必含 **main/gallery/variant**） |
+| 磁盘路径 | `w_weline_file_asset`：`asset_id` → `object_key`；文件 = `pub/media/{object_key}`；`disk_code` 通常 `local::filesystem::media` |
+| 1688/货源 | 仅当要对衣：`w_product_ws_0_attribute_value` 且 `attribute_code='source_url'`（可选 `name`+`locale='zh_Hans_CN'`）；**不必**扫其它属性 |
+| 店面谁在主舞台 | Browser/CDP：大图 `currentSrc`——**选规格后常是 variant**，不是 main |
+| 生图 | `GenerateImage` + `reference_image_paths`=**备份后的原图**；prompt：衣不变、只换人+景 |
+| 落盘破缓存 | 新文件 `…/ai-lock-{sha256前16}.webp` → UPDATE `object_key` + `object_identity_hash=sha256(disk+"\0"+key)` + `sha256/bytes/w/h` + `asset_revision+=1`（**asset_id 不变**） |
+| 验收页 | `?_wb_nc={unix}&w_fpc_pierce={secret}`；secret=`FpcPierceStamp::ensureSecret()` 或 `generated/framework/fpc_pierce_secret`。**单 `_wb_nc` 不够**。HTML 须含 `ai-lock-` |
+
+口令：**两表定位图 → 原图 reference 生图 → 新文件名 → pierce 验收。别考古。**
 
 ---
 
@@ -21,12 +56,41 @@
 
 | 表面 | Media role | 画幅目标 | 清晰度 | 审美 |
 |------|------------|----------|--------|------|
-| **主图** | `main`+`gallery` | 锁 **目录 target_ar**（见 §2；店面卡常 **1:1**） | 中区 mid-lap 优先 | 低：去缺陷+真拓图+保清 |
-| **规格** | `variant` | **同主图规则**（仅槽位像素可更小） | 同主图 | 同主图 |
-| **详情·实拍** | 正文插图（模特/静物） | 不强制主图 AR；竖图竖排 | 同清晰规则 | 高：跟楼层原型走 |
+| **主图** | `main`+`gallery` | 锁 **目录 target_ar**（见 §2；店面卡常 **1:1**） | 中区 mid-lap 优先 | **含人→§1‑M 全 AI**；无人→去缺陷+真拓图+保清 |
+| **规格** | `variant` | **同主图规则**（仅槽位像素可更小） | 同主图 | **含人必须 §1‑M（店面选规格常默认吃 variant；只换 main/gallery 买家仍见旧模特）**；净衣/色块同 outpaint |
+| **详情·模特** | 正文插图（含人） | 不强制主图 AR；竖图常用 3:4 | 同清晰规则 | **§1‑M 全 AI**；跟楼层原型 |
+| **详情·静物** | 面料/绣线/平铺 | 不强制主图 AR | 同清晰规则 | outpaint/HD；可不换模特 |
 | **详情·信息烤图** | 尺码表/规格参数/产品信息/护理表 JPG；**购前须知长字板**（面料/对花/洗涤/绣花/静电/褶子+退货红字） | **不走像素管线** | N/A | **删图 → 语义 HTML**（根套件 §3.2‑A；须知板用 `buildBuyerNoticePanel`） |
 
-**分流硬闸**：白底表头、行列数字为主的「尺码/规格/信息」图，或灰绿「面料/对花/洗涤…」告知长字板 → `kind=info_chart`（子类可 `buyer_notice_board`），**禁止** Step E outpaint / HD；按根套件 §3.2‑A `textify`。
+**分流硬闸**：白底表头、行列数字为主的「尺码/规格/信息」图，或灰绿「面料/对花/洗涤…」告知长字板 → `kind=info_chart`（子类可 `buyer_notice_board`），**禁止** Step E outpaint / HD / `ai_full_model`；按根套件 §3.2‑A `textify`。
+
+### 1‑M 全 AI 模特换图（`method=ai_full_model` · 严重）
+
+**何时**：图中有可辨人脸、半身/全身着装模特（含画廊、主图、详情模特楼层）。顾问 `ai_full_model=approved`（默认）。
+
+```
+Step M1  读本商品多张原图 + `source_url`（1688 等）：锁死服装——形制、主色/渐变、绣纹位置与密度、层次、面料观感
+Step M2  写生图 prompt 硬锁：KEEP EXACT SAME GARMENT as product reference；ONLY change：虚构新模特脸/身份 + 全新场景/光影；禁点名真人；禁 redesign dress
+Step M3  Cursor GenerateImage：aspect_ratio=目标；**必须** `reference_image_paths`=本品原图；输出 WebP
+Step M4  目检（FAIL 即重做）：与原图/1688 并排比——色相/绣纹/袖型/裙片是否同一款；人与景可变；无水印 UI
+Step M5  备份原文件；写入新像素；**main+gallery+variant+详情含人**全覆盖
+Step M6  【严重 · 图 URL 破缓存】店面 `/pub/media/…` 常带 `Cache-Control: immutable, max-age=31536000`。
+         **禁止**只覆盖同路径还声称买家能看到新图。
+         正确：把文件落到**新 object_key**（推荐 `…/ai-lock-{sha256前16}.webp`）→
+         更新 `w_weline_file_asset`：`object_key`、`object_identity_hash=sha256(disk_code+"\0"+object_key)`、
+         `sha256/bytes/width/height`、`asset_revision+=1`（asset_id 可不变，产品仍绑 asset://UUID）→
+         清 FPC / 带 pierce 打开页 → HTML 须出现新文件名；再 Browser 硬刷验收
+```
+
+| 正向 | 禁止 |
+|------|------|
+| 参考本品原图锁衣 + 只换人/景 | 无参考瞎文生 / **换款衣服**（不成同一 SKU） |
+| 服装与 1688/原实拍交叉核对 | 凭空改色/改绣/改形制；「好看一点」改衣 |
+| 同品多张：人姿态/景可变，**衣锁死同一套** | 每张衣服长成另一套；只换 main 不换 **variant** |
+| **新 object_key** 破 immutable 图缓存 | 同路径覆盖后让用户硬刷却仍 HIT 旧图；只清 FPC 不清图 URL |
+| 详情含人同锁衣 + URL bust | 对 info_chart 做 AI 模特 |
+
+口令：**衣锁死；人景可变；改衣失败；同路径覆盖不够——必须新文件名。**
 
 ---
 
@@ -100,15 +164,18 @@ Step H  replaceContent；复扫至 0 BAD（含窄竖、糊、假垫边）
 | 纯色 / 宣纸灰 / 死白砖 / **黑棚续黑色垫** | 一眼假背景 |
 | OpenCV 反射边 + 模糊融合冒充 outpaint | 拖影糊边，不是生图 |
 | blur-fill 糊圈凑方 | 中间邮票主体 |
-| 无参考图纯文生一张「像」的方图 | 换脸换衣，丢证据 |
+| 无参考图纯文生一张「像」的方图 **且**未走 §1‑M（含人应全换却假装 outpaint） | 换脸换衣/假拓图，丢证据 |
+| 对含人图做「换脸」或原图垫图 img2img 冒充合规 | 著作权仍在原图 |
+
+**例外（严重）**：含人且顾问 `ai_full_model=approved` 时，**必须**走 §1‑M 纯文生全换图，**不要**对本条「禁纯文生」做 outpaint 交差。无人静物图仍禁无依据瞎文生换货。
 
 #### 无生图能力时
 
-如实汇报阻断；**不得**用裁切/色垫交差。可暂保留剥框竖图 + 竖排详情，但主图/规格方卡位未满足不得声称「已优化比例」。
+如实汇报阻断；**不得**用裁切/色垫交差。可暂保留剥框竖图 + 竖排详情，但主图/规格方卡位未满足不得声称「已优化比例」。含人图无生图能力 → **阻断**，不得声称已去侵权模特图。
 
 #### 口令
 
-**方图画幅要装下人，用 AI 拓边；禁止裁人凑方，禁止随便加背景。**
+**含人：全 AI 新生；无人方卡：AI 拓边装人衣静物。禁止裁人凑方，禁止随便加背景，禁止换脸洗图。**
 
 ### Step D/F 清晰度（用户已验痛点：糊）
 
@@ -205,4 +272,9 @@ Step H  replaceContent；复扫至 0 BAD（含窄竖、糊、假垫边）
 ## 7. 详情图
 
 同清晰/禁令；**不强制**主图 AR。  
+**含人模特插图** → §1‑M `ai_full_model`（与画廊同一套服装描述锁定）。  
+**静物/绣特写** → HD/outpaint。  
+**信息烤图** → textify，禁止 AI 模特。  
 排版节奏见根套件 §五（反纯竖叠）。无真横勿糊边凑横。
+
+汇报加写：`含人换图：N 张 method=ai_full_model；静物：…；烤图 textify：…`。

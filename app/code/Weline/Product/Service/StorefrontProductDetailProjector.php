@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Product\Api\ResolvedScopeValue;
 use Weline\Product\Model\Shard\Media;
 use Weline\Framework\Manager\ObjectManager;
@@ -87,7 +89,7 @@ final class StorefrontProductDetailProjector
     public function prefetchForProducts(array $productIds): void
     {
         try {
-            \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            \Weline\Framework\Runtime\TraceGate::measurePhase(
                 'product.catalog.metadata_prefetch',
                 fn() => $this->labels()->prefetchForProducts($productIds),
                 ['products' => count($productIds)],

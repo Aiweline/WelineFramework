@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Product',
-    'version' => '1.1.16',
+    'version' => '1.1.22',
     'requires' => [
         'Weline_Catalog' => '*',
         'Weline_DataTable' => '*',
@@ -46,6 +46,8 @@ return [
             => \Weline\Product\Service\PlpFilterOffersLightCacheWarmer::class,
         'process_cache_resetter.Weline_Product'
             => \Weline\Product\Api\Runtime\ProcessCacheResetter::class,
+        'storefront.page_prefetch.Weline_Product'
+            => \Weline\Product\Api\Runtime\StorefrontPagePrefetchContribution::class,
         \Weline\Product\Api\ProductAdminCommandInterface::class
             => \Weline\Product\Service\ProductAdminCommandService::class,
         \Weline\Product\Api\ProductAdminReadInterface::class
@@ -72,5 +74,6 @@ return [
             => \Weline\Product\Integration\Cart\ProductTypeRequiresShippingResolver::class,
         \Weline\Order\Api\OrderCatalogImageResolverInterface::class
             => \Weline\Product\Integration\Order\OrderCatalogImageResolver::class,
+        'template_cache_policy.Weline_Product' => \Weline\Product\Api\View\TemplateCachePolicyProvider::class,
     ],
 ];

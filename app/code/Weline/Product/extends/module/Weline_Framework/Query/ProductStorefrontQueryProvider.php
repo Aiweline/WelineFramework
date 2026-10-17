@@ -7,7 +7,7 @@ namespace Weline\Product\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Product\Api\ProductQuoteRequestSubmitInterface;
 use Weline\Product\Model\Shard\Media;
@@ -745,7 +745,7 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
         } catch (\Throwable) {
         }
         try {
-            RequestLifecycleTrace::recordPhase('product.storefront.facet_refinement', 0.0, [
+            TraceGate::recordPhase('product.storefront.facet_refinement', 0.0, [
                 'status' => 'error',
                 'error_class' => $error::class,
                 'error' => $error->getMessage(),

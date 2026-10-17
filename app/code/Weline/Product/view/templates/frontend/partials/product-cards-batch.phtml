@@ -1,0 +1,23 @@
+<?php
+/**
+ * One-shot product-card batch shell.
+ *
+ * Resolves the card partial compiled path once (via Renderer), then includes it
+ * per product with $this data — no per-card Template::fetch / fragment MISS.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$products = $this->getData('products');
+$compiledCard = \trim((string)$this->getData('compiled_card_file'));
+if (!\is_array($products) || $products === [] || $compiledCard === '' || !\is_file($compiledCard)) {
+    return;
+}
+
+foreach ($products as $product) {
+    if (!\is_array($product)) {
+        continue;
+    }
+    $this->setData('product', $product);
+    include $compiledCard;
+}

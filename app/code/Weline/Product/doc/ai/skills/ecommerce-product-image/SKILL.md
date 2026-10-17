@@ -1,10 +1,10 @@
 ---
 name: ecommerce-product-image
 description: >-
-  BRANCH under parent 产品优化: main/gallery/variant only. SKIP MCP
-  (content_ops_skills_skip_mcp). Authority: companions/weline-image-pipeline.md.
-  Standalone: 主图优化/规格图优化/修主图. Lock target_ar; TRUE AI outpaint;
-  FORBID cover-crop/rembg/solid pads/empty upscale.
+  BRANCH ① main/gallery/variant. SKIP MCP. Authority: weline-image-pipeline
+  §0-B shortest path + §1-M clothing_lock (ref orig, new person/bg, ai-lock
+  object_key). Standalone: 主图优化/规格图优化. FORBID schema dig / same-path
+  deliver / skip variant.
 ---
 
 # 主图/规格图优化（子技能分支 · ecommerce-product-image）
@@ -29,10 +29,12 @@ description: >-
 
 ## Agent 必做
 
-1. Read `weline-image-pipeline.md` 全文并执行。  
-2. **必须**覆盖 **main + gallery + variant**（规格与主图同一 `target_ar`）。  
-3. 锁 `target_ar`（方卡/方 canvas → **1.0**）；剥框 → 真·生图 AI outpaint；禁 cover 裁窄/色垫/rembg/空放大。  
-4. `replaceContent`；备份；类审 0 BAD。  
-5. 汇报：`target_ar` / outpaint=是 / 空放大=否 / 处理张数。
+1. Read 图管线 **§0‑B（最短路径）+ §0‑A + §1‑M**——**先按 §0‑B 跑，禁止表结构考古**。  
+2. **必须**覆盖 **main + gallery + variant**（方卡同一 `target_ar`，默认 1:1）。  
+3. **分流**：  
+   - **含人** → §1‑M：衣锁死 + 只换人景 + **M6 新 object_key（ai-lock-…）**。  
+   - **无人** → 剥框 + 真 outpaint；同路径仍 HIT 则同样改 key。  
+4. 备份 → 生图 → 新 key → pierce 页 HTML 含 `ai-lock-` → `clothing_lock=pass`。  
+5. 汇报：`advisor` / `clothing_lock=pass` / `url_bust=…` / `含人 N` / `variant=已覆盖`。
 
-**禁止**：只做详情却声称产品优化完成；跳过规格图；父未开本智能体却标父任务完成。
+**禁止**：改衣；漏 variant；同路径假交付；`SHOW TABLES`/扫 EAV；假称真人实拍。

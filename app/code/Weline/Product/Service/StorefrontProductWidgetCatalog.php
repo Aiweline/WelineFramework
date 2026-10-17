@@ -24,6 +24,9 @@ final class StorefrontProductWidgetCatalog
 
     private const HOMEPAGE_SHELF_PLAN_KEY = 'product.homepage.shelf_plan.request';
 
+    /** True once plan bags have been review-hydrated for this request. */
+    private const HOMEPAGE_SHELF_PLAN_REVIEWS_KEY = 'product.homepage.shelf_plan.reviews.v1';
+
     /** Same-request base cards (no reviews) so shelf newArrival(32) feeds widget newArrival(8). */
     private const NEW_ARRIVAL_CARDS_REQUEST_KEY = 'product.new_arrival.cards.request';
 
@@ -41,9 +44,9 @@ final class StorefrontProductWidgetCatalog
     public function homepageFeaturedCards(int $limit = 8, bool $withReviews = true): array
     {
         $limit = max(1, min(24, $limit));
-        $cards = array_slice($this->homepageShelfPlan()['featured'], 0, $limit);
+        $plan = $withReviews ? $this->homepageShelfPlanWithReviews() : $this->homepageShelfPlan();
 
-        return $withReviews ? $this->withReviewAggregates($cards) : $cards;
+        return array_slice($plan['featured'], 0, $limit);
     }
 
     /**
@@ -54,9 +57,9 @@ final class StorefrontProductWidgetCatalog
     public function homepageDealsCards(int $limit = 4, bool $withReviews = true): array
     {
         $limit = max(1, min(24, $limit));
-        $cards = array_slice($this->homepageShelfPlan()['deals'], 0, $limit);
+        $plan = $withReviews ? $this->homepageShelfPlanWithReviews() : $this->homepageShelfPlan();
 
-        return $withReviews ? $this->withReviewAggregates($cards) : $cards;
+        return array_slice($plan['deals'], 0, $limit);
     }
 
     /**
@@ -67,9 +70,128 @@ final class StorefrontProductWidgetCatalog
     public function homepageHotCards(int $limit = 8, bool $withReviews = true): array
     {
         $limit = max(1, min(24, $limit));
-        $cards = array_slice($this->homepageShelfPlan()['hot'], 0, $limit);
+        $plan = $withReviews ? $this->homepageShelfPlanWithReviews() : $this->homepageShelfPlan();
 
-        return $withReviews ? $this->withReviewAggregates($cards) : $cards;
+        return array_slice($plan['hot'], 0, $limit);
+    }
+
+    /**
+     * Flatten featured/deals/hot shelves once for page-level card HTML priming.
+     * Includes review aggregates so fragment keys match shelf widgets (v9 A-axis).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function homepageShelfCardsForFragmentPrime(
+        int $featuredLimit = 8,
+        int $dealsLimit = 4,
+        int $hotLimit = 8,
+    ): array {
+        $plan = $this->homepageShelfPlanWithReviews();
+        $out = [];
+        foreach ([
+            \array_slice($plan['featured'], 0, max(1, min(24, $featuredLimit))),
+            \array_slice($plan['deals'], 0, max(1, min(24, $dealsLimit))),
+            \array_slice($plan['hot'], 0, max(1, min(24, $hotLimit))),
+        ] as $slice) {
+            foreach ($slice as $card) {
+                if (\is_array($card)) {
+                    $out[] = $card;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Page-prefetch bags: shelf (reviews) + new-arrivals (no reviews, widget-aligned).
+     * Kept separate so Contribution can projectHtml with two flag vectors / fragment keys.
+     *
+     * @return array{
+     *     shelf: list<array<string, mixed>>,
+     *     new_arrivals: list<array<string, mixed>>
+     * }
+     */
+    public function homepageFragmentPrimeCardBags(
+        int $featuredLimit = 8,
+        int $dealsLimit = 4,
+        int $hotLimit = 8,
+        int $newArrivalsLimit = 8,
+        int $newArrivalsDays = 30,
+    ): array {
+        return [
+            'shelf' => $this->homepageShelfCardsForFragmentPrime(
+                $featuredLimit,
+                $dealsLimit,
+                $hotLimit,
+            ),
+            // Skip reviews — matches new-arrivals widget cold path (show_rating=false).
+            'new_arrivals' => $this->newArrivalCards(
+                max(1, min(24, $newArrivalsLimit)),
+                max(1, min(365, $newArrivalsDays)),
+                false,
+            ),
+        ];
+    }
+
+    /**
+     * Request-memoized shelf plan with a single Review aggregate round-trip.
+     *
+     * @return array{
+     *     featured: list<array<string, mixed>>,
+     *     deals: list<array<string, mixed>>,
+     *     hot: list<array<string, mixed>>
+     * }
+     */
+    private function homepageShelfPlanWithReviews(): array
+    {
+        if (RequestContext::get(self::HOMEPAGE_SHELF_PLAN_REVIEWS_KEY) === true) {
+            $cached = RequestContext::get(self::HOMEPAGE_SHELF_PLAN_KEY);
+            if (is_array($cached)
+                && isset($cached['featured'], $cached['deals'], $cached['hot'])
+                && is_array($cached['featured'])
+                && is_array($cached['deals'])
+                && is_array($cached['hot'])
+            ) {
+                return $cached;
+            }
+        }
+
+        $plan = $this->homepageShelfPlan();
+        $merged = [];
+        foreach (['featured', 'deals', 'hot'] as $shelf) {
+            foreach ($plan[$shelf] as $card) {
+                if (is_array($card)) {
+                    $merged[] = $card;
+                }
+            }
+        }
+        $hydrated = $this->withReviewAggregates($merged);
+        $byId = [];
+        foreach ($hydrated as $card) {
+            if (!is_array($card)) {
+                continue;
+            }
+            $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
+            if ($productId > 0) {
+                $byId[$productId] = $card;
+            }
+        }
+        foreach (['featured', 'deals', 'hot'] as $shelf) {
+            $rewritten = [];
+            foreach ($plan[$shelf] as $card) {
+                if (!is_array($card)) {
+                    continue;
+                }
+                $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
+                $rewritten[] = $byId[$productId] ?? $card;
+            }
+            $plan[$shelf] = $rewritten;
+        }
+        RequestContext::set(self::HOMEPAGE_SHELF_PLAN_KEY, $plan);
+        RequestContext::set(self::HOMEPAGE_SHELF_PLAN_REVIEWS_KEY, true);
+
+        return $plan;
     }
 
     /**

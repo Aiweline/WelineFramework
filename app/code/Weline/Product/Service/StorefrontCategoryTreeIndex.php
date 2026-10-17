@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Http\Url;
@@ -290,7 +292,7 @@ final class StorefrontCategoryTreeIndex
         // The same category rows are held in both by_id and by_parent. URL
         // generation also dispatches SEO rewrite resolution, so generate one
         // URL per unique path and reuse it across both projections.
-        $categoryUrls = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        $categoryUrls = \Weline\Framework\Runtime\TraceGate::measurePhase(
             'storefront.category_tree.urls',
             function () use ($index): array {
                 $urls = [];

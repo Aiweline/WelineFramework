@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Model\Shard\Product;
 use Weline\Product\Repository\AttributeValueRepository;
 use Weline\Product\Repository\OfferRepository;
@@ -95,30 +96,17 @@ final class ProductSitemapUrlService
     }
 
     /**
-     * Absolute home + /products listing URLs for each member website.
+     * Absolute listing shells (home / products / new-arrivals / best-sellers / category)
+     * for each member website that carries this global product.
      *
      * @return list<string>
      */
     public function getCatalogListingUrlsForGlobalProduct(string $globalUuid): array
     {
-        $locs = [];
-        foreach ($this->listWebsiteIdsForGlobalProduct($globalUuid) as $websiteId) {
-            foreach ($this->websites->all() as $website) {
-                if ($website->id !== $websiteId) {
-                    continue;
-                }
-                $base = rtrim(trim((string)$website->url), '/');
-                if ($base === '' || !in_array(strtolower((string)parse_url($base, PHP_URL_SCHEME)), ['http', 'https'], true)
-                    || !parse_url($base, PHP_URL_HOST)) {
-                    break;
-                }
-                $locs[$base . '/'] = $base . '/';
-                $locs[$base . '/products'] = $base . '/products';
-                break;
-            }
-        }
+        /** @var StorefrontCatalogShellUrlBuilder $shells */
+        $shells = ObjectManager::getInstance(StorefrontCatalogShellUrlBuilder::class);
 
-        return array_values($locs);
+        return $shells->absoluteListingUrlsForGlobalProduct($globalUuid);
     }
 
     /** @param list<array<string,mixed>> $products @return list<array<string,mixed>> */

@@ -155,7 +155,27 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
                     siteId: $websiteId,
                 );
                 \w_changed($change);
-                // FPC/CDN 失效由 Changed Extends Capability 承接；禁止业务旁路整池清
+                // FPC/CDN 失效由 Changed Extends Capability 承接；禁止业务旁路整盘清。
+                // afterCommit：只丢目录 HotCache 袋（notifyCatalogChanged），不走 Invalidator 整盘清。
+                $bagWebsiteIds = $websiteIds;
+                $this->transactions->afterCommit(
+                    $connection,
+                    'product.search_projection.catalog_bags.' . $websiteId . '.' . $eventSeq,
+                    static function () use ($bagWebsiteIds): void {
+                        try {
+                            /** @var StorefrontCatalogCacheCoordinator $catalogCache */
+                            $catalogCache = ObjectManager::getInstance(StorefrontCatalogCacheCoordinator::class);
+                            foreach ($bagWebsiteIds as $bagWebsiteId) {
+                                $catalogCache->notifyCatalogChanged(
+                                    (int)$bagWebsiteId,
+                                    'product_search_projection',
+                                );
+                            }
+                        } catch (\Throwable) {
+                            // Best-effort: namespace bump from w_changed still invalidates catalog bags.
+                        }
+                    },
+                );
 
                 return $result;
             } finally {
@@ -193,12 +213,15 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
         /** @var ProductRepository $products */
         $products = ObjectManager::getInstance(ProductRepository::class);
 
+        /** @var StorefrontCatalogShellUrlBuilder $shells */
+        $shells = ObjectManager::getInstance(StorefrontCatalogShellUrlBuilder::class);
+
         if ($targetType === self::TARGET_STORE_PRODUCT) {
             // 子站站内自己的产品 / Store 覆写：只清本站本店
             return [
                 'urls' => $urls->getUrlsForProduct($websiteId, $targetId, $storeId),
                 'namespaces' => [$this->namespacePath->website($this->website($websiteId)->code, ['catalog'])],
-                'listing' => ['/', '/products'],
+                'listing' => $shells->relativePathsForProduct($websiteId, $targetId),
                 'matrix_ready' => false,
                 'website_ids' => [$websiteId],
             ];
@@ -210,7 +233,7 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
             return [
                 'urls' => $urls->getUrlsForProduct($websiteId, $targetId, null),
                 'namespaces' => [$this->namespacePath->website($this->website($websiteId)->code, ['catalog'])],
-                'listing' => ['/', '/products'],
+                'listing' => $shells->relativePathsForProduct($websiteId, $targetId),
                 'matrix_ready' => false,
                 'website_ids' => [$websiteId],
             ];
@@ -227,7 +250,7 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
             return [
                 'urls' => $urls->getUrlsForProduct($websiteId, $targetId, null),
                 'namespaces' => [$this->namespacePath->website($this->website($websiteId)->code, ['catalog'])],
-                'listing' => ['/', '/products'],
+                'listing' => $shells->relativePathsForProduct($websiteId, $targetId),
                 'matrix_ready' => false,
                 'website_ids' => [$websiteId],
             ];

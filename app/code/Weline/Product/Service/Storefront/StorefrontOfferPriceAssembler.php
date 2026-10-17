@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service\Storefront;
 
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Product\Api\Data\StorefrontOfferPriceView;
 use Weline\Product\Api\Data\StorefrontPriceAdjustment;
 use Weline\Product\Api\Data\StorefrontPriceContext;
@@ -64,7 +64,7 @@ final class StorefrontOfferPriceAssembler implements StorefrontOfferPriceAssembl
                         }
                     }
                 }
-                $adjustments = RequestLifecycleTrace::measurePhase(
+                $adjustments = TraceGate::measurePhase(
                     'product.price.adjustment.' . $providerLabel,
                     fn(): array => $provider->collectAdjustments($context),
                     ['provider' => $providerCode, 'product_id' => $context->productId],

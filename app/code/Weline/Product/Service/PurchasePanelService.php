@@ -156,7 +156,7 @@ final class PurchasePanelService
             RequestContext::set($key, $value);
         }
         try {
-            $html = (string)$template->fetch('Weline_Product::templates/frontend/widgets/product-info.phtml');
+            $html = (string)$template->fetchHtml('Weline_Product::templates/frontend/widgets/product-info.phtml');
             return ObjectManager::getInstance(SlotRendererService::class)->processSlots(
                 $html, $themeId, 'product', 'published', 'frontend',
             );

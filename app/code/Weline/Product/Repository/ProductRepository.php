@@ -79,6 +79,49 @@ final class ProductRepository extends AbstractWebsiteShardRepository
         return $model->getId() ? $model : null;
     }
 
+    /**
+     * Batch map global_product_uuid → product_id for one website shard.
+     * Never falls back to website 0 — callers must pass the storefront website.
+     *
+     * @param list<string> $uuids
+     * @return array<string, int> uuid => product_id
+     */
+    public function mapIdsByGlobalUuids(int $websiteId, array $uuids): array
+    {
+        $this->assertWebsite($websiteId);
+        $normalized = [];
+        foreach ($uuids as $uuid) {
+            $uuid = trim((string)$uuid);
+            if ($uuid !== '') {
+                $normalized[$uuid] = $uuid;
+            }
+        }
+        if ($normalized === []) {
+            return [];
+        }
+
+        $out = [];
+        $iterator = $this->newModel($websiteId)
+            ->clear()
+            ->fields([Product::schema_fields_ID, Product::schema_fields_GLOBAL_PRODUCT_UUID])
+            ->where(Product::schema_fields_GLOBAL_PRODUCT_UUID, \array_values($normalized), 'IN')
+            ->select()
+            ->fetchIterator();
+        foreach ($iterator as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $uuid = trim((string)($row[Product::schema_fields_GLOBAL_PRODUCT_UUID] ?? ''));
+            $productId = max(0, (int)($row[Product::schema_fields_ID] ?? 0));
+            if ($uuid === '' || $productId <= 0 || !isset($normalized[$uuid])) {
+                continue;
+            }
+            $out[$uuid] = $productId;
+        }
+
+        return $out;
+    }
+
     /** @return list<array<string, mixed>> */
     public function listAll(int $websiteId): array
     {

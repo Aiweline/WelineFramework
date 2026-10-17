@@ -59,9 +59,9 @@ description: >-
 3. **必须并行**启动恰好 **2** 个子智能体，prompt 粘贴技能路径：  
    - ① `ecommerce-product-image/SKILL.md` + `weline-image-pipeline.md`  
    - ② 详情实拍：同管线 §7；版式若坏再开 `ecommerce-detail-suite` + `详情优化.md`  
-4. 硬闸：`target_ar`（方卡→1.0）；真 outpaint；禁 cover/色垫/rembg/空放大；替换前备份。  
-5. 逐品目检接缝=0 后：更新台账 **仅** `last_product_id=<本波收口的最小或最后一品 id>`。  
-6. 汇报：本波 IDs（倒序）/ `last_product_id` / outpaint=是 / 接缝=0 / 空放大=否。
+4. 硬闸：含人→§1‑M 衣锁死+只换人景+**M6 新 object_key**；无人→方卡 outpaint；禁改衣/同路径假交付/漏 variant/cover/色垫/空放大。  
+5. 目检：衣=原款；HTML 含 `ai-lock-`（或新 key）；再更新台账 **仅** `last_product_id=`。  
+6. 汇报：本波 IDs / `last_product_id` / `clothing_lock=pass` / `url_bust=…` / `含人 N` / 接缝=0。
 
 ## 与父「产品优化」关系
 

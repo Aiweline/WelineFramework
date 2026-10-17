@@ -16,12 +16,77 @@ use Weline\Framework\Runtime\ScopeIdentity;
  * wls-perf-regression-20260923 A (architect msg-5):
  * - pre_critical: Shared peek-only for heavy catalog bags (禁冷 publishedOffers(1000))
  * - post_critical_heavy: peek-miss 才冷种；袋间 Fiber yield 分片
- * - locale_bag_prime: light summary + homepage featured shelf only（禁 full×locales）
+ * - locale_bag_prime: light summary + homepage shelf/new-arrivals card HTML（禁 full×locales）
+ * - product_card_html: dual flag vectors (shelf full + new-arrivals slim) — 禁单向量全开 flags
  * - other stages: light summary only
  * Fail-open; no Model shortcuts; no fake HIT; no parallel bags.
  */
 final class StorefrontHotCacheBagSeeder
 {
+    /**
+     * Layer B: peek Shared product bags into Process L1 only (禁冷 publishedOffers).
+     *
+     * @return array{
+     *   seeded:int,
+     *   peeked:int,
+     *   bags:list<string>,
+     *   errors:list<string>,
+     *   heavy_mode?:string,
+     *   heavy_deferred?:list<string>
+     * }
+     */
+    public function hydrate(): array
+    {
+        $peeked = 0;
+        $bags = [];
+        $errors = [];
+        $deferred = [];
+
+        try {
+            /** @var StorefrontCatalogViewService $catalog */
+            $catalog = ObjectManager::getInstance(StorefrontCatalogViewService::class);
+        } catch (\Throwable $e) {
+            return [
+                'seeded' => 0,
+                'peeked' => 0,
+                'bags' => [],
+                'errors' => ['catalog_view:' . $e->getMessage()],
+                'heavy_mode' => 'peek_only',
+                'heavy_deferred' => [],
+            ];
+        }
+
+        $proj = $this->hydrateSearchProjectionScope();
+        $peeked += (int)($proj['peeked'] ?? 0);
+        foreach (\is_array($proj['bags'] ?? null) ? $proj['bags'] : [] as $bag) {
+            $bags[] = (string)$bag;
+        }
+        foreach (\is_array($proj['errors'] ?? null) ? $proj['errors'] : [] as $error) {
+            $errors[] = (string)$error;
+        }
+
+        $heavy = $this->primeHeavyCatalogBags($catalog, 'peek_only');
+        $peeked += (int)($heavy['peeked'] ?? 0);
+        foreach (\is_array($heavy['bags'] ?? null) ? $heavy['bags'] : [] as $bag) {
+            $bags[] = (string)$bag;
+        }
+        foreach (\is_array($heavy['errors'] ?? null) ? $heavy['errors'] : [] as $error) {
+            $errors[] = (string)$error;
+        }
+        foreach (\is_array($heavy['deferred'] ?? null) ? $heavy['deferred'] : [] as $bag) {
+            $deferred[] = (string)$bag;
+        }
+
+        return [
+            'seeded' => 0,
+            'peeked' => $peeked,
+            'bags' => \array_values(\array_unique($bags)),
+            'errors' => \array_slice($errors, 0, 8),
+            'heavy_mode' => 'peek_only',
+            'heavy_deferred' => \array_values(\array_unique($deferred)),
+        ];
+    }
+
     /**
      * @return array{
      *   seeded:int,
@@ -89,11 +154,10 @@ final class StorefrontHotCacheBagSeeder
             }
         }
 
-        // locale/currency_bag_prime allowlist: homepage featured shelf (summary/targeted).
+        // locale/currency_bag_prime allowlist: homepage shelf plan + card HTML fragments.
         // Never publishedOffers(1000) here — resolveHeavyMode keeps light_only.
-        // currency_bag_prime fills product_card_html for non-default currencies (vary).
         // peer_hydrate: default-currency Process L1 for shelf plan (owner Shared may miss).
-        // locale/currency_bag_prime: vary-dimension shards.
+        // locale/currency_bag_prime: vary-dimension shards + product_card_html (v9 identity).
         if ($stage === 'locale_bag_prime'
             || $stage === 'currency_bag_prime'
             || $stage === 'peer_hydrate'
@@ -106,6 +170,29 @@ final class StorefrontHotCacheBagSeeder
                 if (\is_array($cards)) {
                     $seeded++;
                     $bags[] = 'product.homepage_shelf_id_plan';
+                }
+                // Dual flag vectors (HARD): shelf full-flags ≠ homepage new-arrivals slim.
+                // Single shelf-options prime wrote unreachable keys for default homepage SSR.
+                $primeBags = $widgetCatalog->homepageFragmentPrimeCardBags(8, 4, 8);
+                $shelfCards = \is_array($primeBags['shelf'] ?? null) ? $primeBags['shelf'] : [];
+                $newArrivalCards = \is_array($primeBags['new_arrivals'] ?? null)
+                    ? $primeBags['new_arrivals']
+                    : [];
+                if ($shelfCards !== []) {
+                    ProductCardRenderer::projectHtmlByProductId(
+                        $shelfCards,
+                        ProductCardRenderer::homepageShelfFragmentRenderOptions()
+                    );
+                    $seeded++;
+                    $bags[] = 'theme.product_card_html.homepage_shelf';
+                }
+                if ($newArrivalCards !== []) {
+                    ProductCardRenderer::projectHtmlByProductId(
+                        $newArrivalCards,
+                        ProductCardRenderer::homepageNewArrivalsFragmentRenderOptions()
+                    );
+                    $seeded++;
+                    $bags[] = 'theme.product_card_html.homepage_new_arrivals';
                 }
             } catch (\Throwable $e) {
                 $errors[] = 'homepage_shelf_id_plan:' . $e->getMessage();
@@ -223,6 +310,53 @@ final class StorefrontHotCacheBagSeeder
             'errors' => $errors,
             'deferred' => $deferred,
         ];
+    }
+
+    /**
+     * @return array{seeded:int,peeked:int,bags:list<string>,errors:list<string>}
+     */
+    private function hydrateSearchProjectionScope(): array
+    {
+        $seeded = 0;
+        $peeked = 0;
+        $bags = [];
+        $errors = [];
+
+        try {
+            $websiteId = $this->resolveWebsiteId();
+            $storeId = 0;
+            $channelId = 0;
+            try {
+                $storeId = \max(0, (int)RequestContext::getWelineStoreId());
+                $channelId = \max(0, (int)RequestContext::getWelineChannelId());
+            } catch (\Throwable) {
+            }
+
+            /** @var ProductSearchProjectionService $projection */
+            $projection = ObjectManager::getInstance(ProductSearchProjectionService::class);
+            $watermark = $projection->currentWatermark($websiteId);
+            $logicalKey = StorefrontCatalogCacheCoordinator::searchProjectionScopeLogicalKey(
+                $websiteId,
+                $storeId,
+                $channelId,
+                $watermark,
+            );
+
+            /** @var StorefrontScopeHotCache $hotCache */
+            $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+            $payload = $hotCache->peekPolicy(
+                StorefrontCatalogCacheCoordinator::searchProjectionScopePolicy(),
+                $logicalKey,
+            );
+            if (\is_array($payload) && $payload !== []) {
+                $peeked++;
+                $bags[] = 'product.search_projection_scope';
+            }
+        } catch (\Throwable $e) {
+            $errors[] = 'search_projection_scope:hydrate:' . $e->getMessage();
+        }
+
+        return compact('seeded', 'peeked', 'bags', 'errors');
     }
 
     /**

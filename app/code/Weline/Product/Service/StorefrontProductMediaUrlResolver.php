@@ -560,6 +560,13 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
             if ($src === '' || str_starts_with($src, 'data:')) {
                 continue;
             }
+            // Poem-aside media must SSR the real product URL (ai-lock / asset resolved).
+            // Budget=0 lazy GIF leaves a grey 1×1 block and fails §5.2-D Browser gate.
+            if (self::isPoemAsideMediaImage($img)
+                || $img->getAttribute('data-weline-detail-eager') === '1'
+            ) {
+                continue;
+            }
             $index++;
             if ($index <= self::DESCRIPTION_SSR_SRC_BUDGET) {
                 continue;
@@ -570,6 +577,23 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
             $img->removeAttribute('srcset');
             $img->removeAttribute('loading');
         }
+    }
+
+    /**
+     * True when img sits in magazine poem-aside media (left/right gate; must paint real pixels).
+     */
+    private static function isPoemAsideMediaImage(\DOMElement $img): bool
+    {
+        $node = $img->parentNode;
+        while ($node instanceof \DOMElement) {
+            $class = ' ' . $node->getAttribute('class') . ' ';
+            if (str_contains($class, ' weline-detail-feature--poem-aside ')) {
+                return true;
+            }
+            $node = $node->parentNode;
+        }
+
+        return false;
     }
 
     /**
@@ -692,6 +716,7 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
                 // Preserve importer/editor width+height before attribute wipe (CLS / SEO).
                 $width = self::positiveIntAttr($child->getAttribute('width'));
                 $height = self::positiveIntAttr($child->getAttribute('height'));
+                $eager = trim($child->getAttribute('data-weline-detail-eager')) === '1';
                 $resolved = '';
                 if (preg_match('#^asset://[a-f0-9-]{36}$#iD', $reference) === 1) {
                     try {
@@ -699,6 +724,9 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
                     } catch (Throwable) {
                         $resolved = '';
                     }
+                } elseif (self::safeDescriptionUrl($reference)) {
+                    // Allow storefront-absolute media (e.g. /pub/media/.../ai-lock-*.webp).
+                    $resolved = $reference;
                 }
                 if (!self::safeDescriptionUrl($resolved)) {
                     $parent->removeChild($child);
@@ -709,6 +737,9 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
                 $child->setAttribute('alt', $alt);
                 $child->setAttribute('loading', 'lazy');
                 $child->setAttribute('decoding', 'async');
+                if ($eager) {
+                    $child->setAttribute('data-weline-detail-eager', '1');
+                }
                 // Default square placeholder ratio matches storefront product-card; CSS height:auto keeps responsive.
                 $child->setAttribute('width', (string)($width ?? 800));
                 $child->setAttribute('height', (string)($height ?? 800));

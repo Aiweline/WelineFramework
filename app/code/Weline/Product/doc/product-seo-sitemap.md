@@ -30,9 +30,10 @@ Product 读取配置值，不从其他网站或后台请求推断地址。localh
   `after.store_id` 与 `scope_kind=store`。Website/Store ID `0` 合法。
 - 后台保存由同一 coordinator 包住 EAV、选品与 Product 行更新，内层同商品
   Repository mutation 复用外层事件，旧 slug 在写属性之前捕获。
-- 事务 `afterCommit`：`StorefrontCatalogCacheCoordinator::notifyCatalogChanged` +
-  `ProductStorefrontCacheInvalidator` 清本地进程 FPC/router/WLS；CDN/SEO 仍由
-  `resource_changed` 接收方处理，禁止控制器手写 CDN purge。
+- 事务 `afterCommit`：仅 `StorefrontCatalogCacheCoordinator::notifyCatalogChanged`
+  丢目录 HotCache 袋。FPC/CDN 由 Changed recipe 定向 `purge_fpc_urls`（自动
+  `warm_fpc_urls`）承接，禁止业务旁路整盘清；SEO 仍由 `resource_changed`
+  接收方处理，禁止控制器手写 CDN purge。
 
 不新增跨模块直连或另一套商品通知。SEO/CDN 各自监听现有事件执行衍生动作。
 

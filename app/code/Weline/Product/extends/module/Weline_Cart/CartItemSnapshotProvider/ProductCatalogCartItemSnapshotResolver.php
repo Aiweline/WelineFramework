@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider;
 
+
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Cart\Api\CartSelectionHash;
 use Weline\Cart\Api\Data\CartItemSnapshot;
 use Weline\Cart\Api\Data\OfferIdentity;
@@ -442,7 +444,7 @@ final class ProductCatalogCartItemSnapshotResolver
         // Pass codes so AttributeValueRepository skips the unfiltered 8-id chunk path
         // (cold locale homepage cards were N× attribute_value scans).
         $cardAttributeCodes = ['name', 'product_type', 'quote_only', 'slug', 'source_slug'];
-        $attributeRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        $attributeRows ??= \Weline\Framework\Runtime\TraceGate::measurePhase(
             'product.catalog.snapshot.attributes',
             fn() => $this->attributes->listExplicitRows(
                 $websiteId,
@@ -511,7 +513,7 @@ final class ProductCatalogCartItemSnapshotResolver
         $priceRowsByOffer = [];
         $basePriceRowsByOffer = [];
         $baseCurrency = $this->baseCurrencyCode();
-        foreach (\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        foreach (\Weline\Framework\Runtime\TraceGate::measurePhase(
             'product.catalog.snapshot.prices',
             fn() => $this->prices->listExplicitRows($websiteId, $offerIds, $storeIds),
         ) as $priceRow) {
@@ -575,7 +577,7 @@ final class ProductCatalogCartItemSnapshotResolver
             ? $this->resolveCatalogImages($productIds, $scope, $mediaRows)
             : [];
 
-        $availabilityByOffer = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        $availabilityByOffer = \Weline\Framework\Runtime\TraceGate::measurePhase(
             'product.catalog.snapshot.availability',
             fn() => $this->availabilities($websiteId, $storeId, $offerIds),
         );
@@ -670,13 +672,13 @@ final class ProductCatalogCartItemSnapshotResolver
             // phase for timing, but emit raw catalog minor (cart add still deals).
             $unitPriceMinor = $fxUnavailable
                 ? 0
-                : \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                : \Weline\Framework\Runtime\TraceGate::measurePhase(
                     'product.catalog.snapshot.deals',
                     fn() => max(0, (int)$price->value),
                 );
             $options = [];
             if ($includeOptions) {
-                $options = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                $options = \Weline\Framework\Runtime\TraceGate::measurePhase(
                     'product.catalog.snapshot.options',
                     fn() => $this->buildOptions($websiteId, $productId, [], $scope, $this->locale()),
                 );
@@ -738,7 +740,7 @@ final class ProductCatalogCartItemSnapshotResolver
         $websiteId = $scope->websiteId;
         $locale = $this->locale();
         $firstMediaByProduct = [];
-        $mediaRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        $mediaRows ??= \Weline\Framework\Runtime\TraceGate::measurePhase(
             'product.catalog.snapshot.media_rows',
             fn() => $this->media->listByProductIds($websiteId, $productIds),
         );
@@ -753,7 +755,7 @@ final class ProductCatalogCartItemSnapshotResolver
             $imageReferences[$productId] = $firstMediaByProduct[$productId] ?? '';
         }
 
-        return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+        return \Weline\Framework\Runtime\TraceGate::measurePhase(
             'product.catalog.snapshot.media_url',
             fn() => $this->resolveImageReferences($imageReferences, $scope, $locale),
         );

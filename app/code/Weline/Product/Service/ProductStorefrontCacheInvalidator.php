@@ -4,104 +4,65 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
-use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Http\Fpc\FpcHtmlDiskStore;
 use Weline\Framework\Router\FullPageCacheCoordinator;
-use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
-use Weline\Framework\Runtime\RuntimeProviderResolver;
-use Weline\Framework\Runtime\WlsRuntimeAdapterInterface;
 
 /**
- * Local storefront/FPC cleanup after product catalog ResourceChange.
- * CDN/SEO remain with Weline_Framework::resource_changed receivers.
+ * Local storefront/FPC cleanup for catalog-adjacent side paths (B2B / scripts).
+ * Primary product saves go through w_changed → purge_fpc_urls (auto warm).
+ * This helper must never rotate the whole FPC disk tree (purgeAll).
  */
 final class ProductStorefrontCacheInvalidator
 {
+    /**
+     * Directed URL purge only. Prefer absolute http(s) locs so disk leaves resolve.
+     *
+     * @param list<string> $urls
+     */
+    public function purgeForUrls(array $urls, string $reason): void
+    {
+        $normalized = [];
+        foreach ($urls as $url) {
+            $url = trim((string)$url);
+            if ($url !== '') {
+                $normalized[$url] = $url;
+            }
+        }
+        $normalized = array_values($normalized);
+        if ($normalized === []) {
+            $normalized = $this->fallbackAbsoluteShells();
+        }
+        if ($normalized === []) {
+            return;
+        }
+
+        try {
+            FullPageCacheCoordinator::purgeUrls($normalized);
+        } catch (\Throwable $e) {
+            $this->logFailure('fpc_purge_urls', $reason, $e);
+        }
+    }
+
+    /**
+     * Legacy entry: purge fixed listing shells across website origins (never whole-tree rotate).
+     */
     public function clearForCatalogChange(string $reason): void
     {
-        $this->clearProcessFpc($reason);
-        $this->clearRouterFpcPools($reason);
-        $this->clearWlsSharedState($reason);
-        $this->broadcastWorkers($reason);
-        $this->purgeRouterFpcPayloadFiles($reason);
+        $this->purgeForUrls($this->fallbackAbsoluteShells(), $reason);
     }
 
-    private function clearProcessFpc(string $reason): void
+    /**
+     * @return list<string>
+     */
+    private function fallbackAbsoluteShells(): array
     {
         try {
-            if (class_exists(FullPageCacheCoordinator::class)) {
-                FullPageCacheCoordinator::clearProcessCache();
-            }
-        } catch (\Throwable $e) {
-            $this->logFailure('fpc_process_cache', $reason, $e);
-        }
-    }
+            /** @var StorefrontCatalogShellUrlBuilder $shells */
+            $shells = ObjectManager::getInstance(StorefrontCatalogShellUrlBuilder::class);
 
-    private function clearRouterFpcPools(string $reason): void
-    {
-        try {
-            $cacheManager = ObjectManager::getInstance(CacheManager::class);
-            foreach (['fpc', 'router'] as $pool) {
-                if (!method_exists($cacheManager, 'hasPool') || !$cacheManager->hasPool($pool)) {
-                    continue;
-                }
-                $cacheManager->pool($pool)->clear();
-            }
-        } catch (\Throwable $e) {
-            $this->logFailure('router_fpc_pools', $reason, $e);
-        }
-    }
-
-    private function clearWlsSharedState(string $reason): void
-    {
-        try {
-            $adapter = $this->runtimeProvider(WlsRuntimeAdapterInterface::class);
-            if (!$adapter instanceof WlsRuntimeAdapterInterface) {
-                return;
-            }
-            $facade = $adapter->createSharedState([
-                'consumer_code' => $reason,
-                'prefer_direct_connect' => true,
-                'pool_size' => 1,
-                'auto_start' => false,
-            ]);
-            $facade->clearCache('router');
-            $facade->clearCache('fpc');
-            $facade->disconnect();
-        } catch (\Throwable $e) {
-            $this->logFailure('wls_shared_memory', $reason, $e);
-        }
-    }
-
-    private function broadcastWorkers(string $reason): void
-    {
-        try {
-            $broadcaster = $this->runtimeProvider(RuntimeControlBroadcasterInterface::class);
-            if ($broadcaster instanceof RuntimeControlBroadcasterInterface) {
-                $broadcaster->cacheClear();
-            }
-        } catch (\Throwable $e) {
-            $this->logFailure('wls_worker_broadcast', $reason, $e);
-        }
-    }
-
-    private function purgeRouterFpcPayloadFiles(string $reason): void
-    {
-        try {
-            FpcHtmlDiskStore::purgeAll();
-            FpcHtmlDiskStore::purgeLegacyHashTrees();
-        } catch (\Throwable $e) {
-            $this->logFailure('fpc_html_disk_purge', $reason, $e);
-        }
-    }
-
-    private function runtimeProvider(string $contract): ?object
-    {
-        try {
-            return ObjectManager::getInstance(RuntimeProviderResolver::class)->resolve($contract);
+            return $shells->absoluteFixedShellsForAllWebsites();
         } catch (\Throwable) {
-            return null;
+            return [];
         }
     }
 

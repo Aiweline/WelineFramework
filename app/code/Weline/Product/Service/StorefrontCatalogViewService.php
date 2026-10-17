@@ -8,7 +8,7 @@ use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Product\Api\Data\StorefrontOfferPriceView;
 use Weline\Product\Api\Data\StorefrontPriceAdjustment;
@@ -113,7 +113,7 @@ final class StorefrontCatalogViewService
         $websiteId = max(0, (int)$scope->websiteId);
         $logicalKey = $this->catalogCache->catalogTargetedOffersLogicalKey($websiteId, $productIds, false)
             . '.media.v1';
-        $images = RequestLifecycleTrace::measurePhase(
+        $images = TraceGate::measurePhase(
             'product.catalog.listing_media',
             fn(): array => $this->hotCache->rememberPolicy(
                 StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
@@ -161,7 +161,7 @@ final class StorefrontCatalogViewService
             return $offers;
         }
 
-        $summaries = RequestLifecycleTrace::measurePhase(
+        $summaries = TraceGate::measurePhase(
             'product.catalog.listing_card_names',
             fn(): array => $this->publishedOffersForProductIds(
                 $productIds,
@@ -287,12 +287,12 @@ final class StorefrontCatalogViewService
         $rows = $this->hotCache->rememberForRequest(
             'product.catalog.summary.request',
             $requestKey,
-            fn(): array => RequestLifecycleTrace::measurePhase(
+            fn(): array => TraceGate::measurePhase(
                 'product.catalog.resolve_summary',
                 fn(): array => $this->hotCache->rememberPolicy(
                     StorefrontCatalogCacheCoordinator::catalogSummaryOffersPolicy(),
                     $logicalKey,
-                    fn(): array => RequestLifecycleTrace::measurePhase(
+                    fn(): array => TraceGate::measurePhase(
                         'product.catalog.build_summary',
                         fn(): array => $this->buildPublishedOfferSummariesFromSkeleton(
                             $websiteId,
@@ -348,7 +348,7 @@ final class StorefrontCatalogViewService
         $surface = $this->hotCache->rememberPolicy(
             StorefrontCatalogCacheCoordinator::catalogSummaryLangSurfacePolicy(),
             $langKey,
-            fn(): array => RequestLifecycleTrace::measurePhase(
+            fn(): array => TraceGate::measurePhase(
                 'product.catalog.build_summary_lang_surface',
                 function () use ($websiteId, $scope, $buildLimit): array {
                     $prepared = $this->rememberSummarySkeletonOffers($websiteId, $buildLimit);
@@ -407,7 +407,7 @@ final class StorefrontCatalogViewService
         $rows = $this->hotCache->rememberPolicy(
             StorefrontCatalogCacheCoordinator::catalogSummarySkeletonPolicy(),
             $logicalKey,
-            fn(): array => RequestLifecycleTrace::measurePhase(
+            fn(): array => TraceGate::measurePhase(
                 'product.catalog.build_summary_skeleton',
                 fn(): array => $this->pagePublishedRepresentativeOffers($websiteId, $buildLimit),
                 ['website_id' => $websiteId, 'limit' => $buildLimit],
@@ -492,12 +492,12 @@ final class StorefrontCatalogViewService
         $rows = $this->hotCache->rememberForRequest(
             'product.catalog.facet_listing_offers.request',
             $requestKey,
-            fn(): array => RequestLifecycleTrace::measurePhase(
+            fn(): array => TraceGate::measurePhase(
                 'product.catalog.resolve_facet_listing',
                 fn(): array => $this->hotCache->rememberPolicy(
                     StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
                     $logicalKey,
-                    fn(): array => RequestLifecycleTrace::measurePhase(
+                    fn(): array => TraceGate::measurePhase(
                         'product.catalog.build_facet_listing',
                         fn(): array => $this->buildPublishedOffers(
                             $websiteId,
@@ -569,12 +569,12 @@ final class StorefrontCatalogViewService
             $rows = $this->hotCache->rememberForRequest(
                 'product.catalog.filtered_offers.request',
                 $requestKey,
-                fn(): array => RequestLifecycleTrace::measurePhase(
+                fn(): array => TraceGate::measurePhase(
                     'product.catalog.resolve_filtered',
                     fn(): array => $this->hotCache->rememberPolicy(
                         StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
                         $logicalKey,
-                        fn(): array => RequestLifecycleTrace::measurePhase(
+                        fn(): array => TraceGate::measurePhase(
                             'product.catalog.build_filtered',
                             fn(): array => $this->buildTargetedPublishedOffers(
                                 $websiteId,
@@ -729,7 +729,7 @@ final class StorefrontCatalogViewService
             fn(): array => $this->hotCache->rememberForRequest(
                 'product.catalog.facet_counts.request',
                 $logicalKey,
-                fn(): array => RequestLifecycleTrace::measurePhase(
+                fn(): array => TraceGate::measurePhase(
                     'product.catalog.facet_counts',
                     $build,
                     ['website_id' => $websiteId, 'products' => count($productIds), 'codes' => count($codes)],
@@ -754,7 +754,7 @@ final class StorefrontCatalogViewService
         if ($includeMedia && !$includeListingDetails && Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
             $requestRows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
             if (is_array($requestRows)) {
-                RequestLifecycleTrace::recordPhase(
+                TraceGate::recordPhase(
                     'product.catalog.summary_reuse',
                     0.0,
                     ['rows' => count($requestRows)],
@@ -796,12 +796,12 @@ final class StorefrontCatalogViewService
         $rows = $this->hotCache->rememberForRequest(
             'product.catalog.offers.request',
             $requestKey,
-            fn(): array => RequestLifecycleTrace::measurePhase(
+            fn(): array => TraceGate::measurePhase(
                 $includeMedia ? 'product.catalog.resolve' : 'product.catalog.resolve_candidates',
                 fn(): array => $this->hotCache->rememberPolicy(
                     StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
                     $logicalKey,
-                    fn(): array => RequestLifecycleTrace::measurePhase(
+                    fn(): array => TraceGate::measurePhase(
                         $includeMedia ? 'product.catalog.build' : 'product.catalog.build_candidates',
                         fn(): array => $this->buildPublishedOffers(
                             $websiteId,
@@ -840,7 +840,7 @@ final class StorefrontCatalogViewService
     ): array {
         $reused = $this->sliceTargetedOffersFromWarmCatalog($websiteId, $filterIds, $includeListingDetails);
         if ($reused !== null) {
-            RequestLifecycleTrace::recordPhase(
+            TraceGate::recordPhase(
                 'product.catalog.targeted_reuse',
                 0.0,
                 [
@@ -1009,7 +1009,7 @@ final class StorefrontCatalogViewService
             strtoupper(trim(RequestContext::getWelineUserCurrency())),
             $locale,
         ]);
-        $rows = RequestLifecycleTrace::measurePhase(
+        $rows = TraceGate::measurePhase(
             'product.catalog.live_request',
             fn(): array => $this->hotCache->rememberForRequest(
                 'product.live_offers',
@@ -1077,13 +1077,13 @@ final class StorefrontCatalogViewService
         ]);
 
         /** @var list<array<string, mixed>> $rows */
-        $rows = RequestLifecycleTrace::measurePhase(
+        $rows = TraceGate::measurePhase(
             'product.catalog.live_availability',
             fn(): array => $this->hotCache->rememberForRequest(
                 'product.live_variant_availability',
                 $requestKey,
                 function () use ($productId, $scope, $websiteId, $storeId, $locale): array {
-                    $products = RequestLifecycleTrace::measurePhase(
+                    $products = TraceGate::measurePhase(
                         'product.catalog.live_availability.products',
                         fn(): array => $this->products->listByIds($websiteId, [$productId]),
                         ['product_id' => $productId],
@@ -1096,7 +1096,7 @@ final class StorefrontCatalogViewService
                         return [];
                     }
 
-                    $offerRows = RequestLifecycleTrace::measurePhase(
+                    $offerRows = TraceGate::measurePhase(
                         'product.catalog.live_availability.offers',
                         fn(): array => array_values(array_filter(
                             $this->offers->listPublishedByProductIds($websiteId, [$productId]),
@@ -1115,7 +1115,7 @@ final class StorefrontCatalogViewService
                         [$productId],
                         $storeIds,
                     );
-                    $snapshots = RequestLifecycleTrace::measurePhase(
+                    $snapshots = TraceGate::measurePhase(
                         'product.catalog.live_availability.snapshot',
                         fn(): array => $this->snapshots->resolveCatalogOffers(
                             $offerRows,
@@ -1277,7 +1277,7 @@ final class StorefrontCatalogViewService
         $products = $filterIds === []
             ? $this->products->listAll($websiteId)
             : $this->products->listByIds($websiteId, $filterIds);
-        RequestLifecycleTrace::recordPhase('product.catalog.products', (hrtime(true) - $phaseStartedAt) / 1e6, ['products' => count($products)]);
+        TraceGate::recordPhase('product.catalog.products', (hrtime(true) - $phaseStartedAt) / 1e6, ['products' => count($products)]);
         $publishedProductIds = [];
 
         foreach ($products as $product) {
@@ -1332,7 +1332,7 @@ final class StorefrontCatalogViewService
             }
         }
 
-        RequestLifecycleTrace::recordPhase('product.catalog.offers', (hrtime(true) - $phaseStartedAt) / 1e6, ['loaded' => count($loadedOffers), 'selected' => count($candidateOffers)]);
+        TraceGate::recordPhase('product.catalog.offers', (hrtime(true) - $phaseStartedAt) / 1e6, ['loaded' => count($loadedOffers), 'selected' => count($candidateOffers)]);
         unset($loadedOffers);
 
         // The snapshot resolver needs product attributes and the first media
@@ -1358,7 +1358,7 @@ final class StorefrontCatalogViewService
                 $storeIds,
                 $attributeCodes,
             );
-            RequestLifecycleTrace::recordPhase(
+            TraceGate::recordPhase(
                 'product.catalog.attributes',
                 (hrtime(true) - $attributeStartedAt) / 1e6,
                 [
@@ -1376,7 +1376,7 @@ final class StorefrontCatalogViewService
                 $websiteId,
                 \array_keys($publishedProductIds),
             );
-            RequestLifecycleTrace::recordPhase(
+            TraceGate::recordPhase(
                 'product.catalog.media_rows',
                 (hrtime(true) - $mediaStartedAt) / 1e6,
                 ['products' => count($publishedProductIds), 'rows' => count($mediaRows)],
@@ -1393,7 +1393,7 @@ final class StorefrontCatalogViewService
             $mediaRows,
             includeMedia: $includeMedia,
         );
-        RequestLifecycleTrace::recordPhase('product.catalog.snapshots', (hrtime(true) - $phaseStartedAt) / 1e6, ['offers' => count($candidateOffers)]);
+        TraceGate::recordPhase('product.catalog.snapshots', (hrtime(true) - $phaseStartedAt) / 1e6, ['offers' => count($candidateOffers)]);
         foreach ($candidateOffers as $index => $offer) {
             $snapshot = $snapshots[$index] ?? null;
             if ($snapshot === null) {
@@ -1487,7 +1487,7 @@ final class StorefrontCatalogViewService
                 $localeFallbacks,
             );
             $fieldProjectionMs = (hrtime(true) - $bulkStartedAt) / 1e6;
-            RequestLifecycleTrace::recordPhase('product.catalog.projection.bulk', $fieldProjectionMs, [
+            TraceGate::recordPhase('product.catalog.projection.bulk', $fieldProjectionMs, [
                 'products' => 1,
                 'offers' => count($rows),
             ]);
@@ -1551,7 +1551,7 @@ final class StorefrontCatalogViewService
             $rows = $projectedRows;
         }
         $mediaProjectionMs += (hrtime(true) - $itemStartedAt) / 1e6;
-        RequestLifecycleTrace::recordPhase('product.catalog.projection', (hrtime(true) - $phaseStartedAt) / 1e6, [
+        TraceGate::recordPhase('product.catalog.projection', (hrtime(true) - $phaseStartedAt) / 1e6, [
             'products' => count($rows), 'listing' => $representativeOnly,
             'fields_ms' => round($fieldProjectionMs, 2), 'media_ms' => round($mediaProjectionMs, 2),
         ]);
@@ -1561,7 +1561,7 @@ final class StorefrontCatalogViewService
             foreach ($rows as $index => $row) {
                 $rows[$index] = $this->applyUnifiedStorefrontPricing(is_array($row) ? $row : []);
             }
-            RequestLifecycleTrace::recordPhase(
+            TraceGate::recordPhase(
                 'product.catalog.deal_pricing',
                 (hrtime(true) - $dealStartedAt) / 1e6,
                 ['products' => count($rows)],

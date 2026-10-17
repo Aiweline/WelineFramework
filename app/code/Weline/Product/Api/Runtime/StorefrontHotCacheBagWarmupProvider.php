@@ -9,7 +9,7 @@ use Weline\Framework\Runtime\StorefrontHotCacheBagWarmupProviderInterface;
 use Weline\Product\Service\StorefrontHotCacheBagSeeder;
 
 /**
- * Product capability for wave8-8c2 deferred storefront.cache.builder bag priming.
+ * Product capability for wave8-8c2 bag priming + Layer B Process L1 hydrate.
  */
 final class StorefrontHotCacheBagWarmupProvider implements StorefrontHotCacheBagWarmupProviderInterface
 {
@@ -23,6 +23,20 @@ final class StorefrontHotCacheBagWarmupProvider implements StorefrontHotCacheBag
                 'peeked' => 0,
                 'bags' => [],
                 'errors' => ['product_bag_warmup:' . $e->getMessage()],
+            ];
+        }
+    }
+
+    public function hydrateCriticalBagsFromShared(): array
+    {
+        try {
+            return ObjectManager::getInstance(StorefrontHotCacheBagSeeder::class)->hydrate();
+        } catch (\Throwable $e) {
+            return [
+                'seeded' => 0,
+                'peeked' => 0,
+                'bags' => [],
+                'errors' => ['product_bag_hydrate:' . $e->getMessage()],
             ];
         }
     }

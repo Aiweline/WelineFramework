@@ -7,7 +7,8 @@ namespace Weline\Product\Service;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TraceGate;
+use Weline\Framework\Runtime\TemplateRenderRouteTrace;
 use Weline\Framework\View\Template;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Product\Helper\StorefrontCampaignEntry;
@@ -37,22 +38,22 @@ final class ProductCardRenderer
      */
     public static function render(array $product, array $options = []): string
     {
-        $normalized = self::normalizeProduct($product);
-        if ((int)($normalized['id'] ?? 0) <= 0) {
+        $flags = self::normalizeOptions($options);
+        // Light pre-filter (full normalize deferred to MISS inside renderCachedBody).
+        $productId = max(0, (int)($product['id'] ?? $product['product_id'] ?? 0));
+        if ($productId <= 0) {
             return '';
         }
         // WO-BUILD-HOME-ZERO：货架密度禁渲零价卡（避免 SSR 出 $0.00；询价品走 PDP）
-        $flags = self::normalizeOptions($options);
         if (($flags['density'] ?? 'standard') === 'shelf'
-            && empty($normalized['currency_unavailable'])
-            && ((float)($normalized['price'] ?? 0) <= 0 || !empty($normalized['quote_only']))
+            && empty($product['currency_unavailable'])
+            && ((float)($product['price'] ?? 0) <= 0 || !empty($product['quote_only']))
         ) {
             return '';
         }
-        $normalized = self::bucketCardIndexForFragmentReuse($normalized);
-        $html = (string)RequestLifecycleTrace::measurePhase(
+        $html = (string)TraceGate::measurePhase(
             'product.card.render',
-            static fn (): string => self::renderCachedBody($normalized, $flags),
+            static fn (): string => self::renderCachedBody($product, $flags),
             [
                 'density' => $flags['density'],
                 'show_price' => $flags['show_price'],
@@ -68,8 +69,8 @@ final class ProductCardRenderer
     }
 
     /**
-     * Listing batch path: map offers → card HTML in one measurePhase (wave9-9p).
-     * Skips per-card Taglib; still SSR each card via StorefrontProductCardFragmentCache.
+     * Listing batch path: map offers → card HTML in one measurePhase.
+     * Skips per-card Taglib and per-card fragment/fetch — one native batch SSR.
      *
      * @param list<mixed> $offers
      * @param array<string, mixed> $options
@@ -77,7 +78,7 @@ final class ProductCardRenderer
     public static function projectFromOffers(array $offers, array $options = []): string
     {
         $flags = self::normalizeOptions($options);
-        $html = (string)RequestLifecycleTrace::measurePhase(
+        $html = (string)TraceGate::measurePhase(
             'product.card.render',
             static function () use ($offers, $flags): string {
                 $products = [];
@@ -96,7 +97,7 @@ final class ProductCardRenderer
                         ++$index;
                         continue;
                     }
-                    $products[] = self::bucketCardIndexForFragmentReuse($product);
+                    $products[] = $product;
                     ++$index;
                 }
 
@@ -105,12 +106,7 @@ final class ProductCardRenderer
                     $products = self::hydrateReviewAggregates($products);
                 }
 
-                $parts = [];
-                foreach ($products as $product) {
-                    $parts[] = self::renderCachedBody($product, $flags);
-                }
-
-                return \implode('', $parts);
+                return self::renderNormalizedProductsHtml($products, $flags);
             },
             [
                 'density' => $flags['density'],
@@ -258,8 +254,8 @@ final class ProductCardRenderer
 
     /**
      * Widget / pre-mapped card batch path: product-card-shaped arrays → HTML in one
-     * measurePhase. Skips per-card Taglib. Caller owns pricing/rating hydration
-     * (e.g. StorefrontProductWidgetCatalog::cardsByIds); this does not re-map offers.
+     * measurePhase. Skips per-card Taglib and per-card fragment/fetch (native batch).
+     * Caller owns pricing/rating hydration (e.g. StorefrontProductWidgetCatalog::cardsByIds).
      *
      * @param list<mixed> $products
      * @param array<string, mixed> $options
@@ -267,7 +263,7 @@ final class ProductCardRenderer
     public static function projectFromProducts(array $products, array $options = []): string
     {
         $flags = self::normalizeOptions($options);
-        $html = (string)RequestLifecycleTrace::measurePhase(
+        $html = (string)TraceGate::measurePhase(
             'product.card.render',
             static function () use ($products, $flags): string {
                 return self::renderNormalizedProductsHtml($products, $flags);
@@ -298,10 +294,10 @@ final class ProductCardRenderer
         $flags = self::normalizeOptions($options);
 
         /** @var array<int, string> $map */
-        $map = RequestLifecycleTrace::measurePhase(
+        $map = TraceGate::measurePhase(
             'product.card.render',
             static function () use ($products, $flags): array {
-                $out = [];
+                $unique = [];
                 $index = 0;
                 foreach ($products as $product) {
                     if (!\is_array($product)) {
@@ -310,26 +306,28 @@ final class ProductCardRenderer
                     if (!\array_key_exists('card_index', $product)) {
                         $product['card_index'] = $index;
                     }
-                    $row = self::normalizeProduct($product);
-                    $productId = (int)($row['id'] ?? 0);
+                    $productId = max(0, (int)($product['product_id'] ?? $product['id'] ?? 0));
                     if ($productId <= 0) {
                         ++$index;
                         continue;
                     }
                     if (($flags['density'] ?? 'standard') === 'shelf'
-                        && empty($row['currency_unavailable'])
-                        && ((float)($row['price'] ?? 0) <= 0 || !empty($row['quote_only']))
+                        && empty($product['currency_unavailable'])
+                        && ((float)($product['price'] ?? 0) <= 0 || !empty($product['quote_only']))
                     ) {
                         ++$index;
                         continue;
                     }
-                    if (!isset($out[$productId])) {
-                        $out[$productId] = self::renderCachedBody(
-                            self::bucketCardIndexForFragmentReuse($row),
-                            $flags,
-                        );
+                    if (!isset($unique[$productId])) {
+                        $unique[$productId] = $product;
                     }
                     ++$index;
+                }
+
+                $concat = self::renderNormalizedProductsHtml(\array_values($unique), $flags);
+                $out = [];
+                foreach ($unique as $productId => $_) {
+                    $out[$productId] = self::extractCardArticleHtml($concat, (int)$productId);
                 }
 
                 return $out;
@@ -349,12 +347,15 @@ final class ProductCardRenderer
     }
 
     /**
+     * Batch native SSR: one Template::fetch of the batch shell, then include the
+     * already-compiled card partial per product (no per-card fetch_html / fragment).
+     *
      * @param list<mixed> $products
      * @param array<string, mixed> $flags
      */
     private static function renderNormalizedProductsHtml(array $products, array $flags): string
     {
-        $parts = [];
+        $normalized = [];
         $index = 0;
         foreach ($products as $product) {
             if (!\is_array($product)) {
@@ -363,57 +364,110 @@ final class ProductCardRenderer
             if (!\array_key_exists('card_index', $product)) {
                 $product['card_index'] = $index;
             }
-            $row = self::normalizeProduct($product);
-            if ((int)($row['id'] ?? 0) <= 0) {
+            $productId = max(0, (int)($product['id'] ?? $product['product_id'] ?? 0));
+            if ($productId <= 0) {
                 ++$index;
                 continue;
             }
             if (($flags['density'] ?? 'standard') === 'shelf'
-                && empty($row['currency_unavailable'])
-                && ((float)($row['price'] ?? 0) <= 0 || !empty($row['quote_only']))
+                && empty($product['currency_unavailable'])
+                && ((float)($product['price'] ?? 0) <= 0 || !empty($product['quote_only']))
             ) {
                 ++$index;
                 continue;
             }
-            $parts[] = self::renderCachedBody(
-                self::bucketCardIndexForFragmentReuse($row),
-                $flags,
-            );
+            $row = self::normalizeProduct($product);
+            // Match former fragment-neutral bag: lazy in markup; stamp eager after batch.
+            unset($row['card_index']);
+            $row['image_loading'] = 'lazy';
+            $normalized[] = $row;
             ++$index;
         }
 
-        return \implode('', $parts);
+        if ($normalized === []) {
+            return '';
+        }
+
+        TemplateRenderRouteTrace::mark(
+            'card_batch',
+            'native:' . \count($normalized),
+            ['density' => (string)($flags['density'] ?? '')]
+        );
+
+        $html = self::buildCardsBatchHtml($normalized, $flags);
+        for ($i = 0; $i < self::INITIAL_VIEWPORT_IMAGE_COUNT; ++$i) {
+            $html = self::stampImageLoadingAttributes($html, $i);
+        }
+
+        return $html;
     }
 
     /**
-     * Collapse card_index into eager/lazy buckets so fragment Policy keys reuse
-     * across list positions (same product+flags; loading attrs stay correct).
+     * One fetch of the batch shell; card markup comes from a single compiled include path.
      *
-     * Eager slots are a **page-level** budget (RequestContext): multiple shelves
-     * that each reset local card_index to 0 must not each claim a full viewport
-     * of high-priority images on first paint.
-     *
-     * @param array<string, mixed> $product
-     * @return array<string, mixed>
+     * @param list<array<string, mixed>> $products Already normalized.
+     * @param array<string, mixed> $flags
      */
-    private static function bucketCardIndexForFragmentReuse(array $product): array
+    private static function buildCardsBatchHtml(array $products, array $flags): string
     {
-        if (!\array_key_exists('card_index', $product)) {
-            return $product;
-        }
-        $index = max(0, (int)$product['card_index']);
-        $wantsEager = $index < self::INITIAL_VIEWPORT_IMAGE_COUNT;
-        if ($wantsEager && self::tryAllocateEagerImageSlot()) {
-            $product['card_index'] = 0;
-        } else {
-            $product['card_index'] = self::INITIAL_VIEWPORT_IMAGE_COUNT;
+        $template = Template::getInstance();
+        $partial = ($flags['density'] ?? 'standard') === 'shelf'
+            ? 'Weline_Product::templates/frontend/partials/product-card-shelf.phtml'
+            : 'Weline_Product::templates/frontend/partials/product-card.phtml';
+
+        try {
+            $compiledCard = $template->getFetchFile($partial);
+        } catch (\Throwable) {
+            // Fallback: sequential body (still no fragment) if compile resolve fails.
+            // Caller stamps eager budget once across the concatenated HTML.
+            $parts = [];
+            foreach ($products as $product) {
+                $parts[] = self::buildCardPartialHtml($product, $flags, true);
+            }
+
+            return \implode('', $parts);
         }
 
-        return $product;
+        return (string)$template->fetchHtml(
+            'Weline_Product::templates/frontend/partials/product-cards-batch.phtml',
+            [
+                'products' => $products,
+                'compiled_card_file' => $compiledCard,
+                'show_price' => $flags['show_price'],
+                'show_rating' => $flags['show_rating'],
+                'show_add_to_cart' => $flags['show_add_to_cart'],
+                'show_wishlist' => $flags['show_wishlist'],
+                'show_compare' => $flags['show_compare'],
+                'show_quickview' => $flags['show_quickview'],
+                'show_labels' => $flags['show_labels'],
+                'show_sku' => $flags['show_sku'],
+                'density' => $flags['density'],
+                'class' => $flags['class'],
+                'wishlist_pixel' => $flags['wishlist_pixel'],
+                'defer_card_css' => true,
+            ]
+        );
+    }
+
+    /**
+     * Split keyed batch HTML back into per-id articles (data-product-id root).
+     */
+    private static function extractCardArticleHtml(string $html, int $productId): string
+    {
+        if ($html === '' || $productId <= 0) {
+            return '';
+        }
+        $pattern = '/<article\b[^>]*\bdata-product-id="' . $productId . '"[^>]*>.*?<\/article>/is';
+        if (\preg_match($pattern, $html, $match) === 1 && isset($match[0]) && \is_string($match[0])) {
+            return $match[0];
+        }
+
+        return '';
     }
 
     /**
      * Consume one page-level eager image slot when budget remains.
+     * Used only by {@see stampImageLoadingAttributes()} (v9: not part of fragment key).
      */
     private static function tryAllocateEagerImageSlot(): bool
     {
@@ -422,7 +476,7 @@ final class ProductCardRenderer
             return false;
         }
         RequestContext::set(self::EAGER_IMAGE_BUDGET_KEY, $used + 1);
-        if ($used === 0) {
+        if ($used === 0 && RequestContext::isInitialized()) {
             RequestContext::onCaptureDiscard(
                 static function (): void {
                     RequestContext::remove(self::EAGER_IMAGE_BUDGET_KEY);
@@ -436,39 +490,68 @@ final class ProductCardRenderer
     }
 
     /**
+     * Shared shelf flags for homepage page-prefetch + worker bag prime.
+     * Must stay aligned with featured/deals/hot widget Taglib defaults.
+     *
+     * @return array<string, mixed>
+     */
+    public static function homepageShelfFragmentRenderOptions(): array
+    {
+        return [
+            'density' => 'shelf',
+            'show_price' => true,
+            'show_rating' => true,
+            'show_add_to_cart' => true,
+            'show_wishlist' => true,
+            'show_compare' => true,
+            'show_quickview' => true,
+            'show_labels' => true,
+            'wishlist_pixel' => true,
+        ];
+    }
+
+    /**
+     * Homepage new-arrivals widget flags for page-prefetch fragment identity.
+     * Matches layout homepage params (no rating/wishlist/compare/quickview/labels).
+     *
+     * @return array<string, mixed>
+     */
+    public static function homepageNewArrivalsFragmentRenderOptions(): array
+    {
+        return [
+            'density' => 'shelf',
+            'show_price' => true,
+            'show_rating' => false,
+            'show_add_to_cart' => true,
+            'show_wishlist' => false,
+            'show_compare' => false,
+            'show_quickview' => false,
+            'show_labels' => false,
+            'wishlist_pixel' => true,
+        ];
+    }
+
+    /**
      * Fragment-cached card body (no CSS wrapper; caller owns emitStylesheetLinkOnce).
      *
-     * @param array<string, mixed> $normalized
+     * v9: always normalize before peek/remember so catalog raw, widget
+     * splitForTaglib, and prime share one fragment identity. Bag HTML stores
+     * lazy images; eager/high is stamped after HIT/MISS from the page budget.
+     *
+     * @param array<string, mixed> $product Card bag (may be pre-normalized).
      * @param array<string, mixed> $flags
      */
-    private static function renderCachedBody(array $normalized, array $flags): string
+    private static function renderCachedBody(array $product, array $flags): string
     {
-        $template = Template::getInstance();
-        $partial = ($flags['density'] ?? 'standard') === 'shelf'
-            ? 'Weline_Product::templates/frontend/partials/product-card-shelf.phtml'
-            : 'Weline_Product::templates/frontend/partials/product-card.phtml';
-        $build = static function () use ($normalized, $flags, $template, $partial): string {
-            // CSS is request-once outside the Policy bag so HIT bodies never
-            // embed/omit a stale <style> relative to emitStylesheetLinkOnce().
-            return (string)$template->fetch(
-                $partial,
-                [
-                    'product' => $normalized,
-                    'show_price' => $flags['show_price'],
-                    'show_rating' => $flags['show_rating'],
-                    'show_add_to_cart' => $flags['show_add_to_cart'],
-                    'show_wishlist' => $flags['show_wishlist'],
-                    'show_compare' => $flags['show_compare'],
-                    'show_quickview' => $flags['show_quickview'],
-                    'show_labels' => $flags['show_labels'],
-                    'show_sku' => $flags['show_sku'],
-                    'density' => $flags['density'],
-                    'class' => $flags['class'],
-                    'wishlist_pixel' => $flags['wishlist_pixel'],
-                    'defer_card_css' => true,
-                ]
-            );
-        };
+        $stampIndex = \array_key_exists('card_index', $product)
+            ? max(0, (int)$product['card_index'])
+            : null;
+
+        // HARD: identity bag is always normalized before any fragment key lookup.
+        $normalized = self::normalizeProduct($product);
+        if ($stampIndex !== null) {
+            $normalized['card_index'] = $stampIndex;
+        }
 
         try {
             if (\class_exists(\Weline\Theme\Service\StorefrontProductCardFragmentCache::class)) {
@@ -477,13 +560,116 @@ final class ProductCardRenderer
                     \Weline\Theme\Service\StorefrontProductCardFragmentCache::class
                 );
 
-                return $cardCache->rememberCardHtml($normalized, $flags, $build);
+                // HIT light path: skip Template when fingerprint already warmed.
+                $peeked = $cardCache->peekCardHtml($normalized, $flags);
+                if ($peeked !== null) {
+                    TemplateRenderRouteTrace::mark(
+                        'card_fragment',
+                        'HIT:' . (int)($normalized['product_id'] ?? $normalized['id'] ?? 0),
+                        ['density' => (string)($flags['density'] ?? '')]
+                    );
+
+                    return self::stampImageLoadingAttributes($peeked, $stampIndex);
+                }
+
+                TemplateRenderRouteTrace::mark(
+                    'card_fragment',
+                    'MISS:' . (int)($normalized['product_id'] ?? $normalized['id'] ?? 0),
+                    ['density' => (string)($flags['density'] ?? '')]
+                );
+                $html = $cardCache->rememberCardHtml(
+                    $normalized,
+                    $flags,
+                    static function () use ($normalized, $flags): string {
+                        return self::buildCardPartialHtml($normalized, $flags, true);
+                    },
+                );
+
+                return self::stampImageLoadingAttributes($html, $stampIndex);
             }
         } catch (\Throwable) {
             // Theme optional / Policy unavailable → plain render.
         }
 
-        return $build();
+        return self::stampImageLoadingAttributes(
+            self::buildCardPartialHtml($normalized, $flags, false),
+            $stampIndex,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $normalized
+     * @param array<string, mixed> $flags
+     * @param bool $fragmentNeutral When true, force lazy loading into the cached body.
+     */
+    private static function buildCardPartialHtml(array $normalized, array $flags, bool $fragmentNeutral): string
+    {
+        $template = Template::getInstance();
+        $partial = ($flags['density'] ?? 'standard') === 'shelf'
+            ? 'Weline_Product::templates/frontend/partials/product-card-shelf.phtml'
+            : 'Weline_Product::templates/frontend/partials/product-card.phtml';
+        $tplProduct = $normalized;
+        if ($fragmentNeutral) {
+            unset($tplProduct['card_index']);
+            $tplProduct['image_loading'] = 'lazy';
+        }
+
+        // CSS is request-once outside the Policy bag so HIT bodies never
+        // embed/omit a stale <style> relative to emitStylesheetLinkOnce().
+        return (string)$template->fetchHtml(
+            $partial,
+            [
+                'product' => $tplProduct,
+                'show_price' => $flags['show_price'],
+                'show_rating' => $flags['show_rating'],
+                'show_add_to_cart' => $flags['show_add_to_cart'],
+                'show_wishlist' => $flags['show_wishlist'],
+                'show_compare' => $flags['show_compare'],
+                'show_quickview' => $flags['show_quickview'],
+                'show_labels' => $flags['show_labels'],
+                'show_sku' => $flags['show_sku'],
+                'density' => $flags['density'],
+                'class' => $flags['class'],
+                'wishlist_pixel' => $flags['wishlist_pixel'],
+                'defer_card_css' => true,
+            ]
+        );
+    }
+
+    /**
+     * Apply page-level eager/lazy image hints onto fragment HTML after cache HIT/MISS.
+     *
+     * @param int|null $cardIndex Local list index (null → always leave lazy bag as-is / no eager).
+     */
+    public static function stampImageLoadingAttributes(string $html, ?int $cardIndex): string
+    {
+        if ($html === '' || !\str_contains($html, 'wpc-image')) {
+            return $html;
+        }
+        $wantsEager = $cardIndex !== null && $cardIndex < self::INITIAL_VIEWPORT_IMAGE_COUNT;
+        if (!$wantsEager || !self::tryAllocateEagerImageSlot()) {
+            return $html;
+        }
+
+        // First product-card image only: loading=lazy → eager + fetchpriority=high.
+        // Dotall-ish via [^>]: multiline shelf <img> tags keep class before loading.
+        $replaced = \preg_replace(
+            '/(<img\b[^>]*\bclass="[^"]*\bwpc-image\b[^"]*"[^>]*\bloading=")lazy(")/is',
+            '$1eager$2 fetchpriority="high"',
+            $html,
+            1,
+        );
+        if (!\is_string($replaced) || $replaced === $html) {
+            // Fallback: loading may appear before class= in some partials.
+            $replaced = \preg_replace(
+                '/(<img\b[^>]*\bloading=")lazy("[^>]*\bclass="[^"]*\bwpc-image\b)/is',
+                '$1eager$2 fetchpriority="high"',
+                $html,
+                1,
+            );
+        }
+
+        return \is_string($replaced) ? $replaced : $html;
     }
 
     /**
@@ -625,6 +811,18 @@ final class ProductCardRenderer
      */
     public static function imageLoadingAttributes(array $product): array
     {
+        if (isset($product['image_loading'])) {
+            $explicit = \strtolower(\trim((string)$product['image_loading']));
+            if ($explicit === 'lazy') {
+                return ['loading' => 'lazy'];
+            }
+            if ($explicit === 'eager') {
+                return [
+                    'loading' => 'eager',
+                    'fetchpriority' => 'high',
+                ];
+            }
+        }
         $index = array_key_exists('card_index', $product)
             ? max(0, (int)$product['card_index'])
             : null;

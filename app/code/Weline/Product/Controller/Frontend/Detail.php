@@ -221,8 +221,9 @@ final class Detail extends FrontendController
             $this->events->dispatch('Weline_Product::product_viewed', $viewedEvent);
         }
 
-        // Product main info is rendered by the product-info widget (default_injections → product-main).
-        $html = (string)$this->fetch('Weline_Product::templates/frontend/catalog/detail-shell.phtml');
+        // product.default layout embeds product-info; Theme skips controller content include.
+        // product.custom / festival may echo meta.content — then detail.phtml (product-info shim) runs.
+        $html = (string)$this->fetch('Weline_Product::templates/frontend/catalog/detail.phtml');
         return $html;
     }
 

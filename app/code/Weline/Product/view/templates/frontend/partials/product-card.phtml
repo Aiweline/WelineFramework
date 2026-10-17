@@ -7,7 +7,8 @@
 
 use Weline\Currency\Helper\CurrencySymbol;
 use Weline\Theme\Helper\ProductCardAddToCartParams;
-use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\ProductCardShopperActionMarkup;
+use Weline\Theme\Helper\ProductLabelMarkup;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Product\Service\ProductCardRenderer;
 
@@ -120,25 +121,21 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
         </a>
 
         <?php if ($showLabels && ($isDemo || $isNew || $isSale || $isHot || $isFreeShipping)): ?>
-            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
+            <?= ProductLabelMarkup::renderBadges([
                 'is_demo' => $isDemo,
                 'is_new' => $isNew,
                 'is_sale' => $isSale,
                 'is_hot' => $isHot,
                 'is_free_shipping' => $isFreeShipping,
                 'sale_text' => $saleBadgeText,
-                'class' => 'wpc-badges',
-            ]) ?>
+            ], 'wpc-badges') ?>
         <?php endif; ?>
 
-        <?= $this->fetch(
-            'Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml',
-            ProductCardShopperActionParams::fetchDictionary($productId, [
-                'show_wishlist' => $showWishlist,
-                'show_compare' => $showCompare,
-                'show_quickview' => $showQuickview,
-            ], $wishlistPixel)
-        ) ?>
+        <?= ProductCardShopperActionMarkup::render($productId, [
+            'show_wishlist' => $showWishlist,
+            'show_compare' => $showCompare,
+            'show_quickview' => $showQuickview,
+        ], $wishlistPixel) ?>
     </div>
 
     <div class="wpc-body">
@@ -198,15 +195,12 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
                 <?php if ($currencyUnavailable): ?>
                     <span class="wpc-detail-link" aria-disabled="true">@lang{当前货币暂不可用}</span>
                 <?php elseif ($sellable && $offerUuid !== '' && !$quoteOnly): ?>
-                    <?= $this->fetch(
-                        'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
-                        ProductCardAddToCartParams::fetchDictionary($product, [
-                            'wrapper_class' => 'wpc-cart-wrap',
-                            'button_class' => 'wpc-cart-btn',
-                            // CTA 视觉嵌入商品卡：只走 product-card.css，不再双注入 purchase-actions。
-                            'css_owned_by_card' => true,
-                        ])
-                    ) ?>
+                    <?= ProductCardAddToCartParams::renderSlot($this, $product, [
+                        'wrapper_class' => 'wpc-cart-wrap',
+                        'button_class' => 'wpc-cart-btn',
+                        // CTA 视觉嵌入商品卡：只走 product-card.css，不再双注入 purchase-actions。
+                        'css_owned_by_card' => true,
+                    ]) ?>
                 <?php else: ?>
                     <a class="wpc-detail-link" <?= $hrefAttr ?>>@lang{查看详情}</a>
                 <?php endif; ?>
