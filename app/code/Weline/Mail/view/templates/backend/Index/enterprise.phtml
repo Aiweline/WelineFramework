@@ -1002,128 +1002,124 @@ if ($oauthCfError === 'invalid_scope') {
         </section>
 
     <?php elseif ($view === 'smtp'): ?>
-        <section class="w-card" data-testid="mail-smtp-catalog">
-            <div class="w-card__header">
-                <h2 class="w-card__title" style="--w-m:0;"><?= __('Smtp 服务') ?></h2>
+        <section class="w-card" data-testid="mail-smtp-service-list">
+            <div class="w-card__header w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                <div>
+                    <h2 class="w-card__title" style="--w-m:0;"><?= __('Smtp 服务') ?></h2>
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                        <?= __('管理本站发信通道。本机启用会自动建默认账号 smtp@根域；外部填入是登记 QQ/企业邮等第三方 SMTP 凭据供本站代发，不是收件人名单。') ?>
+                    </p>
+                </div>
+                <button class="w-button" data-tone="primary" data-size="sm" type="button" id="mail-smtp-new-toggle" data-testid="mail-smtp-new-toggle" aria-expanded="false" aria-controls="mail-smtp-create-panel">
+                    <?= __('新建') ?>
+                </button>
             </div>
             <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-3);">
-                <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
-                    <?= __('可建多个 Smtp 服务。本机启用：DNS→入池→出证，再建提交/中继账户。外部填入：只登记第三方主机凭据，不入本机域名池。邮局域名启停与此无关。') ?>
-                </p>
-                <div class="mail-enterprise__domains" style="grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));">
-                    <article class="w-card" data-testid="mail-smtp-create-self">
-                        <div class="w-card__header"><h3 class="w-card__title" style="--w-m:0;"><?= __('本机启用') ?></h3></div>
-                        <div class="w-card__body">
-                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-self'}">
-                                <input type="hidden" name="return_view" value="smtp">
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('显示名称') ?></span>
-                                    <input class="w-input" type="text" name="name" placeholder="<?= $escape(__('本机 Smtp')) ?>">
-                                </label>
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('域名来源') ?></span>
-                                    <select class="w-select" name="domain_mode" id="mail-smtp-domain-mode" data-testid="mail-smtp-domain-mode">
-                                        <option value="type"><?= __('自填域名') ?></option>
-                                        <option value="pool"><?= __('从域名池选择') ?></option>
-                                    </select>
-                                </label>
-                                <label class="w-field" id="mail-smtp-typed-field" data-testid="mail-smtp-typed-field">
-                                    <span class="w-field__label"><?= __('自填根域或 smtp.主机') ?></span>
-                                    <input class="w-input" type="text" name="typed_domain" placeholder="example.com">
-                                </label>
-                                <label class="w-field" id="mail-smtp-pool-field" data-testid="mail-smtp-pool-field" hidden>
-                                    <span class="w-field__label"><?= __('域名池') ?></span>
-                                    <select class="w-select" name="pool_domain" data-testid="mail-smtp-pool-domain">
-                                        <option value=""><?= $smtpPoolDomains === [] ? __('（域名池暂无可用域名）') : __('选择…') ?></option>
-                                        <?php foreach ($smtpPoolDomains as $poolRow):
-                                            $pd = is_array($poolRow)
-                                                ? (string)($poolRow['domain'] ?? $poolRow['domain_name'] ?? $poolRow['hostname'] ?? $poolRow['name'] ?? '')
-                                                : '';
-                                            if ($pd === '') {
-                                                continue;
-                                            }
-                                            ?>
-                                            <option value="<?= $escape($pd) ?>"><?= $escape($pd) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </label>
-                                <script>
-                                (function () {
-                                    var mode = document.getElementById('mail-smtp-domain-mode');
-                                    var typed = document.getElementById('mail-smtp-typed-field');
-                                    var pool = document.getElementById('mail-smtp-pool-field');
-                                    if (!mode || !typed || !pool) return;
-                                    function sync() {
-                                        var usePool = mode.value === 'pool';
-                                        typed.hidden = usePool;
-                                        pool.hidden = !usePool;
-                                    }
-                                    mode.addEventListener('change', sync);
-                                    sync();
-                                })();
-                                </script>
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('预期解析 IP（可选）') ?></span>
-                                    <input class="w-input" type="text" name="expected_ip" placeholder="1.2.3.4">
-                                </label>
-                                <label class="w-text" data-size="sm" style="display:block; --w-mb:var(--weline-space-2);">
-                                    <input type="checkbox" name="relay_service" value="1">
-                                    <?= __('开启中继服务（可建 relay 角色账户）') ?>
-                                </label>
-                                <button class="w-button" data-tone="primary" type="submit"><?= __('启用并入池出证') ?></button>
-                            </w:form>
-                        </div>
-                    </article>
-                    <article class="w-card" data-testid="mail-smtp-create-external">
-                        <div class="w-card__header"><h3 class="w-card__title" style="--w-m:0;"><?= __('外部填入') ?></h3></div>
-                        <div class="w-card__body">
-                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-external'}">
-                                <input type="hidden" name="return_view" value="smtp">
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('显示名称') ?></span>
-                                    <input class="w-input" type="text" name="name" placeholder="<?= $escape(__('QQ / 企业微信 SMTP')) ?>">
-                                </label>
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('SMTP 主机') ?></span>
-                                    <input class="w-input" type="text" name="smtp_hostname" required placeholder="smtp.example.com">
-                                </label>
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('端口') ?></span>
-                                    <input class="w-input" type="number" name="port" value="587" min="1" max="65535">
-                                </label>
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('用户名') ?></span>
-                                    <input class="w-input" type="text" name="username">
-                                </label>
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('密码') ?></span>
-                                    <input class="w-input" type="password" name="password" autocomplete="new-password">
-                                </label>
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('TLS') ?></span>
-                                    <select class="w-select" name="tls_mode">
-                                        <option value="starttls">STARTTLS</option>
-                                        <option value="smtps">SMTPS</option>
-                                        <option value="none"><?= __('无') ?></option>
-                                    </select>
-                                </label>
-                                <button class="w-button" data-tone="primary" type="submit"><?= __('登记外部 Smtp') ?></button>
-                            </w:form>
-                        </div>
-                    </article>
-                </div>
-            </div>
-        </section>
+                <label class="w-field" data-testid="mail-smtp-search-field">
+                    <span class="w-field__label"><?= __('搜索服务') ?></span>
+                    <input class="w-input" type="search" id="mail-smtp-service-search" data-testid="mail-smtp-service-search" placeholder="<?= $escape(__('名称 / 主机 / 域名')) ?>" autocomplete="off">
+                </label>
 
-        <section class="w-card" data-testid="mail-smtp-service-list">
-            <div class="w-card__body">
+                <div id="mail-smtp-create-panel" data-testid="mail-smtp-catalog" hidden>
+                    <div class="mail-enterprise__domains" style="grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));">
+                        <article class="w-card" data-testid="mail-smtp-create-self">
+                            <div class="w-card__header"><h3 class="w-card__title" style="--w-m:0;"><?= __('本机启用') ?></h3></div>
+                            <div class="w-card__body">
+                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-self'}">
+                                    <input type="hidden" name="return_view" value="smtp">
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('显示名称') ?></span>
+                                        <input class="w-input" type="text" name="name" placeholder="<?= $escape(__('本机 Smtp')) ?>">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('域名来源') ?></span>
+                                        <select class="w-select" name="domain_mode" id="mail-smtp-domain-mode" data-testid="mail-smtp-domain-mode">
+                                            <option value="type"><?= __('自填域名') ?></option>
+                                            <option value="pool"><?= __('从域名池选择') ?></option>
+                                        </select>
+                                    </label>
+                                    <label class="w-field" id="mail-smtp-typed-field" data-testid="mail-smtp-typed-field">
+                                        <span class="w-field__label"><?= __('自填根域或 smtp.主机') ?></span>
+                                        <input class="w-input" type="text" name="typed_domain" placeholder="example.com">
+                                    </label>
+                                    <label class="w-field" id="mail-smtp-pool-field" data-testid="mail-smtp-pool-field" hidden>
+                                        <span class="w-field__label"><?= __('域名池') ?></span>
+                                        <select class="w-select" name="pool_domain" data-testid="mail-smtp-pool-domain">
+                                            <option value=""><?= $smtpPoolDomains === [] ? __('（域名池暂无可用域名）') : __('选择…') ?></option>
+                                            <?php foreach ($smtpPoolDomains as $poolRow):
+                                                $pd = is_array($poolRow)
+                                                    ? (string)($poolRow['domain'] ?? $poolRow['domain_name'] ?? $poolRow['hostname'] ?? $poolRow['name'] ?? '')
+                                                    : '';
+                                                if ($pd === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <option value="<?= $escape($pd) ?>"><?= $escape($pd) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('预期解析 IP（可选）') ?></span>
+                                        <input class="w-input" type="text" name="expected_ip" placeholder="1.2.3.4">
+                                    </label>
+                                    <label class="w-text" data-size="sm" style="display:block; --w-mb:var(--weline-space-2);">
+                                        <input type="checkbox" name="relay_service" value="1">
+                                        <?= __('开启中继服务（可建 relay 角色账户）') ?>
+                                    </label>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0; --w-mb:var(--weline-space-2);">
+                                        <?= __('启用成功后会默认创建发信账号 smtp@根域（角色：提交）。') ?>
+                                    </p>
+                                    <button class="w-button" data-tone="primary" type="submit"><?= __('启用并入池出证') ?></button>
+                                </w:form>
+                            </div>
+                        </article>
+                        <article class="w-card" data-testid="mail-smtp-create-external">
+                            <div class="w-card__header"><h3 class="w-card__title" style="--w-m:0;"><?= __('外部填入') ?></h3></div>
+                            <div class="w-card__body">
+                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-external'}">
+                                    <input type="hidden" name="return_view" value="smtp">
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('显示名称') ?></span>
+                                        <input class="w-input" type="text" name="name" placeholder="<?= $escape(__('QQ / 企业微信 SMTP')) ?>">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('SMTP 主机') ?></span>
+                                        <input class="w-input" type="text" name="smtp_hostname" required placeholder="smtp.example.com">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('端口') ?></span>
+                                        <input class="w-input" type="number" name="port" value="587" min="1" max="65535">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('用户名') ?></span>
+                                        <input class="w-input" type="text" name="username">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('密码') ?></span>
+                                        <input class="w-input" type="password" name="password" autocomplete="new-password">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('TLS') ?></span>
+                                        <select class="w-select" name="tls_mode">
+                                            <option value="starttls">STARTTLS</option>
+                                            <option value="smtps">SMTPS</option>
+                                            <option value="none"><?= __('无') ?></option>
+                                        </select>
+                                    </label>
+                                    <button class="w-button" data-tone="primary" type="submit"><?= __('登记外部 Smtp') ?></button>
+                                </w:form>
+                            </div>
+                        </article>
+                    </div>
+                </div>
+
                 <?php if ($smtpServices === []): ?>
-                    <div class="w-empty" style="--w-min-block-size:8rem;">
+                    <div class="w-empty" style="--w-min-block-size:8rem;" data-testid="mail-smtp-empty">
                         <w:icon name="mail" size="sm"></w:icon>
-                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('暂无 Smtp 服务。请上方本机启用或外部填入。') ?></p>
+                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('暂无 Smtp 服务。点右上角「新建」本机启用或外部填入。') ?></p>
                     </div>
                 <?php else: ?>
-                    <div class="w-stack" style="--w-gap:var(--weline-space-4);">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-4);" id="mail-smtp-service-cards" data-testid="mail-smtp-service-cards">
                         <?php foreach ($smtpServices as $svc):
                             if (!$svc instanceof SmtpService) {
                                 continue;
@@ -1132,8 +1128,16 @@ if ($oauthCfError === 'invalid_scope') {
                             $mode = (string)$svc->getData(SmtpService::schema_fields_MODE);
                             $status = (string)$svc->getData(SmtpService::schema_fields_STATUS);
                             $svcAccounts = $smtpAccountsByService[$sid] ?? [];
+                            $searchBlob = strtolower(trim(implode(' ', [
+                                (string)$svc->getData(SmtpService::schema_fields_NAME),
+                                (string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME),
+                                (string)$svc->getData(SmtpService::schema_fields_DOMAIN_NAME),
+                                (string)$svc->getData(SmtpService::schema_fields_USERNAME),
+                                $mode,
+                                $status,
+                            ])));
                             ?>
-                            <article class="w-card" data-testid="mail-smtp-service-<?= $sid ?>">
+                            <article class="w-card" data-testid="mail-smtp-service-<?= $sid ?>" data-smtp-search="<?= $escape($searchBlob) ?>">
                                 <div class="w-card__header w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);">
                                     <div>
                                         <h3 class="w-card__title" style="--w-m:0;"><?= $escape($svc->getData(SmtpService::schema_fields_NAME)) ?></h3>
@@ -1160,36 +1164,13 @@ if ($oauthCfError === 'invalid_scope') {
                                 <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-3);">
                                     <?php if ($mode === SmtpService::MODE_EXTERNAL): ?>
                                         <p class="w-text" data-size="sm" style="--w-m:0;">
-                                            <?= __('拷贝主机/用户名到「用户与账号 → 外投 smarthost」即可给邮箱外投使用。外部服务不建本机账户。') ?>
+                                            <?= __('拷贝主机/用户名到「用户与账号 → 外投 smarthost」或 Smtp 传输配置即可给本站发信。外部服务不建本机账户。') ?>
                                         </p>
                                         <p class="w-text" data-size="sm" style="--w-m:0;">
                                             <?= __('用户名') ?>：<code><?= $escape((string)$svc->getData(SmtpService::schema_fields_USERNAME)) ?></code>
                                             · TLS：<?= $escape((string)$svc->getData(SmtpService::schema_fields_TLS)) ?>
                                         </p>
                                     <?php else: ?>
-                                        <details open>
-                                            <summary class="w-text" data-size="sm"><?= __('新建本机账户') ?></summary>
-                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-account'}">
-                                                <input type="hidden" name="return_view" value="smtp">
-                                                <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
-                                                <div class="mail-enterprise__form-grid">
-                                                    <label class="w-field">
-                                                        <span class="w-field__label"><?= __('账号前缀') ?></span>
-                                                        <input class="w-input" type="text" name="local_part" pattern="[a-z0-9._-]+" required>
-                                                    </label>
-                                                    <label class="w-field">
-                                                        <span class="w-field__label"><?= __('角色') ?></span>
-                                                        <select class="w-select" name="account_role">
-                                                            <option value="<?= SmtpAccount::ROLE_SUBMIT ?>"><?= __('提交 submit') ?></option>
-                                                            <?php if ((int)$svc->getData(SmtpService::schema_fields_RELAY_SERVICE) === 1): ?>
-                                                                <option value="<?= SmtpAccount::ROLE_RELAY ?>"><?= __('中继 relay') ?></option>
-                                                            <?php endif; ?>
-                                                        </select>
-                                                    </label>
-                                                </div>
-                                                <button class="w-button" data-tone="primary" data-size="sm" type="submit" style="--w-mt:var(--weline-space-2);"><?= __('创建账户') ?></button>
-                                            </w:form>
-                                        </details>
                                         <?php if ($svcAccounts === []): ?>
                                             <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><?= __('尚无账户。') ?></p>
                                         <?php else: ?>
@@ -1218,13 +1199,87 @@ if ($oauthCfError === 'invalid_scope') {
                                                 </table>
                                             </div>
                                         <?php endif; ?>
+                                        <details>
+                                            <summary class="w-text" data-size="sm"><?= __('再加本机账户') ?></summary>
+                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-account'}">
+                                                <input type="hidden" name="return_view" value="smtp">
+                                                <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
+                                                <div class="mail-enterprise__form-grid">
+                                                    <label class="w-field">
+                                                        <span class="w-field__label"><?= __('账号前缀') ?></span>
+                                                        <input class="w-input" type="text" name="local_part" pattern="[a-z0-9._-]+" required placeholder="noreply">
+                                                    </label>
+                                                    <label class="w-field">
+                                                        <span class="w-field__label"><?= __('角色') ?></span>
+                                                        <select class="w-select" name="account_role">
+                                                            <option value="<?= SmtpAccount::ROLE_SUBMIT ?>"><?= __('提交 submit') ?></option>
+                                                            <?php if ((int)$svc->getData(SmtpService::schema_fields_RELAY_SERVICE) === 1): ?>
+                                                                <option value="<?= SmtpAccount::ROLE_RELAY ?>"><?= __('中继 relay') ?></option>
+                                                            <?php endif; ?>
+                                                        </select>
+                                                    </label>
+                                                </div>
+                                                <button class="w-button" data-tone="primary" data-size="sm" type="submit" style="--w-mt:var(--weline-space-2);"><?= __('创建账户') ?></button>
+                                            </w:form>
+                                        </details>
                                     <?php endif; ?>
                                 </div>
                             </article>
                         <?php endforeach; ?>
+                        <p class="w-text" data-tone="muted" data-size="sm" id="mail-smtp-search-empty" data-testid="mail-smtp-search-empty" hidden style="--w-m:0;">
+                            <?= __('没有匹配的 Smtp 服务。') ?>
+                        </p>
                     </div>
                 <?php endif; ?>
             </div>
+            <script>
+            (function () {
+                var toggle = document.getElementById('mail-smtp-new-toggle');
+                var panel = document.getElementById('mail-smtp-create-panel');
+                if (toggle && panel) {
+                    toggle.addEventListener('click', function () {
+                        var open = panel.hasAttribute('hidden');
+                        if (open) {
+                            panel.removeAttribute('hidden');
+                            toggle.setAttribute('aria-expanded', 'true');
+                            toggle.textContent = <?= json_encode((string)__('收起新建'), JSON_UNESCAPED_UNICODE) ?>;
+                        } else {
+                            panel.setAttribute('hidden', '');
+                            toggle.setAttribute('aria-expanded', 'false');
+                            toggle.textContent = <?= json_encode((string)__('新建'), JSON_UNESCAPED_UNICODE) ?>;
+                        }
+                    });
+                }
+                var mode = document.getElementById('mail-smtp-domain-mode');
+                var typed = document.getElementById('mail-smtp-typed-field');
+                var pool = document.getElementById('mail-smtp-pool-field');
+                if (mode && typed && pool) {
+                    function syncDomain() {
+                        var usePool = mode.value === 'pool';
+                        typed.hidden = usePool;
+                        pool.hidden = !usePool;
+                    }
+                    mode.addEventListener('change', syncDomain);
+                    syncDomain();
+                }
+                var search = document.getElementById('mail-smtp-service-search');
+                var cards = document.querySelectorAll('[data-smtp-search]');
+                var empty = document.getElementById('mail-smtp-search-empty');
+                if (search && cards.length) {
+                    search.addEventListener('input', function () {
+                        var q = (search.value || '').toLowerCase().trim();
+                        var shown = 0;
+                        cards.forEach(function (card) {
+                            var blob = card.getAttribute('data-smtp-search') || '';
+                            var ok = q === '' || blob.indexOf(q) !== -1;
+                            card.hidden = !ok;
+                            if (ok) shown++;
+                        });
+                        if (empty) empty.hidden = shown > 0;
+                    });
+                }
+            })();
+            </script>
         </section>
 
     <?php else: ?>

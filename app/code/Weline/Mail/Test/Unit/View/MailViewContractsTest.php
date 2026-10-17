@@ -113,6 +113,10 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString('mail-smtp-domain-mode', $enterprise);
     self::assertStringContainsString('mail-smtp-pool-field', $enterprise);
     self::assertStringContainsString('mail-smtp-typed-field', $enterprise);
+    self::assertStringContainsString('mail-smtp-new-toggle', $enterprise);
+    self::assertStringContainsString('mail-smtp-service-search', $enterprise);
+    self::assertStringContainsString('mail-smtp-create-panel', $enterprise);
+    self::assertStringContainsString('默认创建发信账号 smtp@根域', $enterprise);
     self::assertStringContainsString('不必手开 Stalwart ACME', $enterprise);
     self::assertStringContainsString('云安全组 / 防火墙：先放行这些端口（必需）', $enterprise);
     self::assertStringContainsString('25/tcp', $enterprise);
