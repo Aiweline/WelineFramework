@@ -274,6 +274,16 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         self::assertTrue($mustBypass->invoke($fastPath, [], '/?editor_mode=1'));
         self::assertFalse($mustBypass->invoke($fastPath, ['cache-control' => 'no-cache'], '/'));
         self::assertTrue($mustBypass->invoke($fastPath, ['cache-control' => 'no-store'], '/'));
+        // β: Extra query_keys allowlist on /products (from compiled snapshot) →
+        // bypass Worker html-disk fast path. utm_ alone must NOT force bypass.
+        self::assertTrue(
+            $mustBypass->invoke($fastPath, [], '/products?price=100-299'),
+            'Allowlisted price query must bypass Worker path-only html-disk fast path',
+        );
+        self::assertFalse(
+            $mustBypass->invoke($fastPath, [], '/products?utm_source=x'),
+            'Non-allowlisted utm must keep path-only disk eligibility via fast path',
+        );
     }
 
     public function testLocalizedHomepageUsesOnlyItsExactUnifiedProcessReceipt(): void

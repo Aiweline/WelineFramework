@@ -6,9 +6,12 @@ namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Context;
+use Weline\Framework\Controller\Extra\ExtraPolicyResolver;
+use Weline\Framework\Controller\Extra\FpcPolicySnapshot;
 use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
 use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Router\FullPageCacheCoordinator;
@@ -144,6 +147,9 @@ final class WorkerFullPageCacheFastPath
                 }
                 // Receipt miss: still allow URL-tree generated/html (same tree Nginx try_files).
                 if ($cached === null) {
+                    // Prime URI identity so Extra query_keys allowlist can retain
+                    // variants and skip path-only html-disk (β pairing).
+                    $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
                     RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
                     $cached = $this->coordinator->getFormattedCachedResponseForFullUri(
                         $fullUri,
@@ -175,6 +181,9 @@ final class WorkerFullPageCacheFastPath
                 } else {
                     // Localized homepage receipt miss (incl. Cookie present) and
                     // other storefront URLs: same cold-disk / Shared fallthrough.
+                    // Must prime URI: without it canonicalize drops allowlisted
+                    // query → wrong path-only html-disk HIT (UC-edge-parity).
+                    $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
                     RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
                     $cached = $this->coordinator->getFormattedCachedResponseForFullUri(
                         $fullUri,
@@ -238,6 +247,9 @@ final class WorkerFullPageCacheFastPath
                 'REQUEST_METHOD' => $decision->method,
                 'REQUEST_SCHEME' => $scheme,
                 'REQUEST_URI' => $requestUri,
+                'QUERY_STRING' => (string)(\parse_url($requestUri, \PHP_URL_QUERY) ?: ''),
+                'WELINE_ORIGIN_REQUEST_URI' => $requestUri,
+                'ORIGIN_REQUEST_URI' => $requestUri,
                 'HTTP_X_REQUESTED_WITH' => (string)($decision->headers['x-requested-with'] ?? ''),
             ],
         ]);
@@ -291,6 +303,13 @@ final class WorkerFullPageCacheFastPath
             \parse_str(\substr($requestUri, $qPos + 1), $query);
         }
 
+        // β: Extra query_keys allowlist present on this path → skip Worker
+        // html-disk fast path (path-only leaf). Rules come from FPC policy
+        // snapshot via ExtraPolicyResolver — never hardcode business keys.
+        if ($query !== [] && $this->requestCarriesFpcQueryAllowlist($requestUri, $query)) {
+            return true;
+        }
+
         $normalizedHeaders = [];
         foreach ($headers as $name => $value) {
             $normalizedHeaders[\strtolower((string)$name)] = (string)$value;
@@ -303,6 +322,27 @@ final class WorkerFullPageCacheFastPath
             $normalizedHeaders,
             null,
         ));
+    }
+
+    /**
+     * @param array<string, mixed> $query
+     */
+    private function requestCarriesFpcQueryAllowlist(string $requestUri, array $query): bool
+    {
+        try {
+            $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: '/');
+            $path = FpcPolicySnapshot::normalizePath($path);
+            /** @var ExtraPolicyResolver $resolver */
+            $resolver = ObjectManager::getInstance(ExtraPolicyResolver::class);
+
+            return $resolver->requestCarriesAllowlistedQueryForPath(
+                $path,
+                ScopeIdentity::website(0, 'default'),
+                $query,
+            );
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /** @param array<string, mixed> $targetParts */

@@ -1340,6 +1340,18 @@ final class FullPageCacheCoordinatorTest extends TestCase
                 $coordinator,
                 'https://example.test/products',
             ));
+
+            // Worker-style mismatch: Env raw URI is homepage, call passes /products?price=
+            // Allowlist must follow the URI argument (β edge-parity / no path-only disk HIT).
+            $this->setCurrentFpcUri('https://example.test/', '/');
+            FullPageCacheCoordinator::clearRequestMemos();
+            RequestContext::set($allowlistMemo, ['sig' => '/products', 'map' => ['price' => true]]);
+            $workerCan = $canonical->invoke(
+                $coordinator,
+                'https://example.test/products?price=100-299&utm_source=x',
+            );
+            self::assertSame('https://example.test/products?price=100-299', $workerCan);
+            self::assertTrue($hasQueryVariant->invoke($coordinator, $workerCan));
         } finally {
             FullPageCacheCoordinator::clearRequestMemos();
         }
