@@ -12,5 +12,8 @@
               icon="settings" order="10"/>
         <menu source="Weline_CacheManager::cache_policy" name="cache_policy" title="缓存策略" action="*/system/cache-policy"
               icon="settings" order="20"/>
+        <menu source="Weline_CacheManager::full_page_cache" name="full_page_cache" title="全页缓存 (FPC)"
+              action="admin/system/full-page-cache"
+              icon="settings" order="30"/>
     </menu>
 </menus>

@@ -1,0 +1,159 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$status = \is_array($status ?? null) ? $status : [];
+$pierce = \is_array($status['pierce'] ?? null) ? $status['pierce'] : [];
+$edge = \is_array($status['edge'] ?? null) ? $status['edge'] : [];
+$notice = \trim((string)($notice ?? ''));
+$fpcOn = !empty($status['fpc_enabled']);
+$autoOn = !empty($status['auto_pierce_enabled']);
+$autoExplicit = !empty($status['auto_pierce_explicit']);
+$suffix = \trim((string)($pierce['query_suffix'] ?? ''));
+$masked = \trim((string)($pierce['secret_masked'] ?? ''));
+$edgeOk = !empty($edge['available']);
+
+$noticeMap = [
+    'saved' => (string)__('设置已保存'),
+    'save_failed' => (string)__('保存失败，请检查 env.php 写权限'),
+    'pierce_rotated' => (string)__('打穿章已轮换，Nginx map 已刷新（若可用）'),
+    'pierce_rotate_failed' => (string)__('打穿章轮换未完全成功'),
+    'pierce_cookie_issued' => (string)__('已为本浏览器签发打穿章 Cookie'),
+    'pierce_cookie_failed' => (string)__('签发 Cookie 失败'),
+];
+$noticeText = $noticeMap[$notice] ?? '';
+?>
+
+<style>
+    .fpc-page { display: flex; flex-direction: column; gap: 18px; }
+    .fpc-hero { background: linear-gradient(135deg, #0f172a, #1e3a5f); color: #fff; border-radius: 18px; padding: 24px; box-shadow: 0 18px 45px rgba(15, 23, 42, .18); }
+    .fpc-hero h2 { color: #fff; margin: 0 0 8px; font-size: 26px; font-weight: 800; }
+    .fpc-hero p { margin: 0; max-width: 880px; color: rgba(255, 255, 255, .82); line-height: 1.7; }
+    .fpc-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px; box-shadow: 0 10px 32px rgba(15, 23, 42, .06); }
+    .fpc-card h3 { margin: 0 0 6px; font-size: 18px; font-weight: 750; color: #111827; }
+    .fpc-card > p { margin: 0 0 16px; color: #64748b; line-height: 1.6; }
+    .fpc-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid #f1f5f9; }
+    .fpc-row:first-of-type { border-top: 0; padding-top: 0; }
+    .fpc-row h4 { margin: 0 0 4px; font-size: 15px; color: #0f172a; }
+    .fpc-row p { margin: 0; color: #64748b; font-size: 13px; line-height: 1.5; max-width: 520px; }
+    .fpc-switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: #0f172a; white-space: nowrap; }
+    .fpc-switch input { width: 18px; height: 18px; }
+    .fpc-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; }
+    .fpc-metric { background: #f8fafc; border: 1px solid #edf2f7; border-radius: 12px; padding: 12px; }
+    .fpc-metric span { display: block; color: #64748b; font-size: 12px; margin-bottom: 6px; }
+    .fpc-metric strong { word-break: break-all; font-size: 13px; color: #0f172a; }
+    .fpc-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; }
+    .fpc-actions button, .fpc-btn { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 750; cursor: pointer; }
+    .fpc-btn-primary { background: #0f766e; color: #fff; }
+    .fpc-btn-secondary { background: #e2e8f0; color: #0f172a; }
+    .fpc-notice { border-radius: 12px; padding: 12px 14px; background: #ecfdf5; color: #065f46; font-weight: 650; }
+    .fpc-notice.is-error { background: #fef2f2; color: #991b1b; }
+    .fpc-hint { font-size: 12px; color: #94a3b8; margin-top: 8px; }
+</style>
+
+<div class="fpc-page">
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <h4 style="--w-mb-sm:0;"><?= __('全页缓存 (FPC)') ?></h4>
+        <div class="w-cluster">
+            <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                <li class="w-breadcrumb__item"><a href="@backend-url{'admin/system/cache'}"><?= __('缓存管理') ?></a></li>
+                <li class="w-breadcrumb__item" data-state="active"><?= __('全页缓存 (FPC)') ?></li>
+            </ol>
+        </div>
+    </div>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <?php if ($noticeText !== ''): ?>
+        <div class="fpc-notice<?= \str_contains($notice, 'fail') ? ' is-error' : '' ?>"><?= \htmlspecialchars($noticeText) ?></div>
+    <?php endif; ?>
+
+    <section class="fpc-hero">
+        <h2><?= __('全页缓存与开发穿透') ?></h2>
+        <p><?= __('统一管理 FPC 主开关与本机开发穿透签章。「链接自带签章」默认关闭，以保留全页缓存命中；仅在本机验收需要时手动开启。开启后框架生成的店面/后台链接会自动附带 w_fpc_pierce。') ?></p>
+    </section>
+
+    <section class="fpc-card">
+        <h3><?= __('开关') ?></h3>
+        <p><?= __('FPC 开关写入 cache.status.frontend_cache 与 router_cache（与缓存管理列表同源，非第三套门闩）。') ?></p>
+        <form method="post" action="@backend-url{'admin/system/full-page-cache/save'}">
+            <div class="fpc-row">
+                <div>
+                    <h4><?= __('FPC 全页缓存') ?></h4>
+                    <p><?= __('默认开启。关闭后店面不写/不读共享全页缓存。') ?></p>
+                </div>
+                <label class="fpc-switch">
+                    <input type="hidden" name="fpc_enabled" value="0">
+                    <input type="checkbox" name="fpc_enabled" value="1" <?= $fpcOn ? 'checked' : '' ?>>
+                    <span><?= $fpcOn ? __('已开启') : __('已关闭') ?></span>
+                </label>
+            </div>
+            <div class="fpc-row">
+                <div>
+                    <h4><?= __('开发穿透 · 链接自带签章') ?></h4>
+                    <p>
+                        <?= __('默认关闭。开启后 Url::getUrl / getBackendUrl 生成的链接自动附带安装级打穿章，并加载店面 JS 给 a/form/data-href 等同域导航补章（覆盖 localizeHref 等未走 Url 的标签）；开启期间全页缓存会被打穿，测完请关闭以恢复性能。') ?>
+                        <?php if (!$autoExplicit): ?>
+                            <br><?= __('当前未显式配置：默认关闭。') ?>
+                        <?php endif; ?>
+                    </p>
+                </div>
+                <label class="fpc-switch">
+                    <input type="hidden" name="auto_pierce_enabled" value="0">
+                    <input type="checkbox" name="auto_pierce_enabled" value="1" <?= $autoOn ? 'checked' : '' ?>>
+                    <span><?= $autoOn ? __('已开启') : __('已关闭') ?></span>
+                </label>
+            </div>
+            <div class="fpc-actions">
+                <button type="submit" class="fpc-btn fpc-btn-primary"><?= __('保存') ?></button>
+            </div>
+        </form>
+    </section>
+
+    <section class="fpc-card">
+        <h3><?= __('打穿章') ?></h3>
+        <p><?= __('原 WLS Panel「FPC 打穿章」已迁入本页。轮换会重写 Nginx pierce map（Server 模块可用时）。') ?></p>
+        <div class="fpc-metrics" aria-label="<?= __('打穿章状态') ?>">
+            <article class="fpc-metric">
+                <span><?= __('密钥（遮罩）') ?></span>
+                <strong><?= \htmlspecialchars($masked !== '' ? $masked : '-') ?></strong>
+            </article>
+            <article class="fpc-metric">
+                <span><?= __('Cookie 名') ?></span>
+                <strong><?= \htmlspecialchars((string)($pierce['cookie_name'] ?? 'w_weline_fpc_pierce')) ?></strong>
+            </article>
+            <article class="fpc-metric">
+                <span><?= __('查询参数') ?></span>
+                <strong><?= \htmlspecialchars((string)($pierce['query_name'] ?? 'w_fpc_pierce')) ?></strong>
+            </article>
+            <article class="fpc-metric">
+                <span><?= __('查询后缀') ?></span>
+                <strong><?= \htmlspecialchars($suffix !== '' ? $suffix : '-') ?></strong>
+            </article>
+        </div>
+        <p class="fpc-hint">
+            <?= $edgeOk
+                ? __('边缘发布：Server 打穿章服务可用（含 Nginx map）。')
+                : __('边缘发布：Server 模块不可用时仅轮换本地密钥文件。') ?>
+        </p>
+        <div class="fpc-actions">
+            <form method="post" action="@backend-url{'admin/system/full-page-cache/rotate-pierce'}" style="display:inline;">
+                <button type="submit" class="fpc-btn fpc-btn-primary"><?= __('轮换打穿章') ?></button>
+            </form>
+            <form method="post" action="@backend-url{'admin/system/full-page-cache/issue-pierce-cookie'}"
+                  style="display:inline-flex;gap:8px;align-items:center;">
+                <label for="fpc-pierce-ttl" class="fpc-hint" style="margin:0;"><?= __('Cookie TTL（秒）') ?></label>
+                <input id="fpc-pierce-ttl" type="number" name="ttl_sec" min="300" max="604800" value="28800"
+                       style="width:7rem;padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:8px;">
+                <button type="submit" class="fpc-btn fpc-btn-secondary"><?= __('签发本机 Cookie') ?></button>
+            </form>
+        </div>
+        <?php if ($suffix !== ''): ?>
+            <p class="fpc-hint" style="margin-top:14px;">
+                <?= __('手动诊断示例') ?>：
+                <code>?_wb_nc=1&amp;<?= \htmlspecialchars($suffix) ?></code>
+            </p>
+        <?php endif; ?>
+    </section>
+</div>
