@@ -104,7 +104,7 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
   await dismissStorefrontNoise(page).catch(() => {});
   await page.waitForSelector(
     '[data-testid="product-add-to-cart"], [data-testid="product-buy-now"], [data-action="add"][data-product-id], [data-action="buy-now"][data-product-id]',
-    { timeout: 60000 }
+    { timeout: 60000, state: 'attached' },
   );
 
   const added = await evaluateWithThemeReload(page, async (cartMode) => {

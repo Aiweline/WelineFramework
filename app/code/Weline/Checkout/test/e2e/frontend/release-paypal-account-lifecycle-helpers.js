@@ -670,7 +670,7 @@ async function addToCartFromPdp(page, gotoFrontend, pdpPath) {
   // Align with multi-scope addToCartMode: wait for CTA before evaluate (hydration race).
   await page.waitForSelector(
     '[data-testid="product-add-to-cart"][data-product-id], [data-testid="product-buy-now"][data-product-id], [data-action="add"][data-product-id], [data-action="buy-now"][data-product-id]',
-    { timeout: 60000 },
+    { timeout: 60000, state: 'attached' },
   );
   const addFn = async () => {
     let api = window.Weline.Api;
@@ -1091,6 +1091,13 @@ async function submitPaypalCheckout(page, email) {
   // FORCE_PAYMENT_METHOD=fake_card (and similar offline methods) pay in-process:
   // success + order_uuid with empty redirect_url is durable evidence, not a fail.
   const forcedMethod = String(wanted || process.env.FORCE_PAYMENT_METHOD || '').toLowerCase();
+  const urlKeys = extractShellKeysFromUrl(page.url());
+  if (!shellKeys.order_uuid && urlKeys.order_uuid) {
+    shellKeys.order_uuid = urlKeys.order_uuid;
+  }
+  if (!shellKeys.transaction_no && urlKeys.transaction_no) {
+    shellKeys.transaction_no = urlKeys.transaction_no;
+  }
   if (shellKeys.order_uuid && /^(fake_card|offline|free|cod)$/.test(forcedMethod)) {
     return {
       success: true,

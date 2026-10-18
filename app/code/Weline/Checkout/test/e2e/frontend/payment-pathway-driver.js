@@ -82,10 +82,24 @@ function isLandedSuccessUrl(url) {
  */
 function extractShellKeysFromUrl(url) {
   try {
-    const u = new URL(String(url || ''), 'https://example.invalid');
+    const raw = String(url || '');
+    const u = new URL(raw, 'https://example.invalid');
+    let transactionNo = String(u.searchParams.get('transaction_no') || '').trim();
+    let orderUuid = String(u.searchParams.get('order_uuid') || '').trim();
+    // Checkout recovery lands as /checkout#payment-recovery?order_uuid=… (keys in hash).
+    if ((!transactionNo || !orderUuid) && u.hash) {
+      const hash = u.hash.replace(/^#/, '');
+      const qIndex = hash.indexOf('?');
+      const query = qIndex >= 0 ? hash.slice(qIndex + 1) : (hash.includes('=') ? hash : '');
+      if (query) {
+        const hp = new URLSearchParams(query);
+        if (!transactionNo) transactionNo = String(hp.get('transaction_no') || '').trim();
+        if (!orderUuid) orderUuid = String(hp.get('order_uuid') || '').trim();
+      }
+    }
     return {
-      transaction_no: String(u.searchParams.get('transaction_no') || '').trim(),
-      order_uuid: String(u.searchParams.get('order_uuid') || '').trim(),
+      transaction_no: transactionNo,
+      order_uuid: orderUuid,
     };
   } catch (_) {
     return { transaction_no: '', order_uuid: '' };
