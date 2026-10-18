@@ -224,18 +224,11 @@ function e2e_b2b_ensure_product_stock(int $websiteId, int $storeId): array
             $oversell = (int)$src->getData(InventoryStock::schema_fields_OVERSELL_ALLOWANCE);
             $preorder = (int)$src->getData(InventoryStock::schema_fields_PREORDER_ALLOWANCE);
         }
-        $dst = (clone $stockModel)->clear()
-            ->where(InventoryStock::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(InventoryStock::schema_fields_STORE_ID, $storeId)
-            ->where(InventoryStock::schema_fields_OFFER_ID, $offerId)
-            ->find()
-            ->fetch();
-        if ($dst && $dst->getId() && (int)$dst->getData(InventoryStock::schema_fields_ON_HAND_MINOR) >= 1000) {
-            continue;
-        }
+        // Always re-seed: reserved/allocated qty can leave on_hand high but available=0 (库存不足).
         try {
+            $onHand = max(100000, $onHand);
             $inventory->ensureStock($websiteId, $storeId, $offerId, $strategy, 0, $oversell, $preorder);
-            $key = 'e2e_b2b_stock_' . $storeId . '_' . $offerId;
+            $key = 'e2e_b2b_stock_' . $storeId . '_' . $offerId . '_' . time();
             $inventory->setOnHand(
                 $websiteId,
                 $storeId,
