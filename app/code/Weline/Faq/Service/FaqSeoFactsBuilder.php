@@ -21,11 +21,12 @@ final class FaqSeoFactsBuilder
         return [
             'page_type' => 'faq',
             'title' => WidgetI18n::label('帮助中心 | 订单物流退换与支付指南'),
-            'description' => WidgetI18n::label('查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决汉服购物常见疑问，支持中英文浏览。'),
+            'description' => WidgetI18n::label('查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决购物常见疑问，支持中英文浏览。'),
             'canonical_url' => $canonical,
             'robots' => 'index,follow',
             // Share card for FAQ hub; HeadRenderer emits og:image / twitter:image when set.
-            'image' => '/pub/media/websites/default/default/brand/changan-logo-20260903.png',
+            // 分享图由站品牌媒体配置提供；模块禁止钉死站专属 logo 文件名。
+            'image' => '',
             'image_alt' => WidgetI18n::label('帮助中心分享预览图'),
             'faqs' => $this->hub->seoFaqs(),
             'breadcrumbs' => [

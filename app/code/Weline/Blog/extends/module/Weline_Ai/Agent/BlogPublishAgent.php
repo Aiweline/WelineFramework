@@ -89,20 +89,26 @@ class BlogPublishAgent implements AgentInterface
             return AgentResult::failure($e->getMessage(), $this->getCode());
         }
 
-        $postId = (int)($saved['post_id'] ?? $saved[Post::schema_fields_ID] ?? 0);
+        $postId = (int)($saved[Post::schema_fields_ID] ?? $saved['post_id'] ?? 0);
+        if ($postId <= 0) {
+            return AgentResult::failure(
+                (string)__('博客草稿保存成功但未返回 post_id'),
+                $this->getCode(),
+            );
+        }
         $opsResult = [
             'post_id' => $postId,
-            'slug' => $slug,
-            'title' => $topic,
-            'excerpt' => $excerpt,
-            'content' => $content,
-            'locale' => 'zh_Hans_CN',
+            'slug' => (string)($saved[Post::schema_fields_SLUG] ?? $slug),
+            'title' => (string)($saved[Post::schema_fields_TITLE] ?? $topic),
+            'excerpt' => (string)($saved[Post::schema_fields_EXCERPT] ?? $excerpt),
+            'content' => (string)($saved[Post::schema_fields_CONTENT] ?? $content),
+            'locale' => (string)($saved[Post::schema_fields_LOCALE] ?? 'zh_Hans_CN'),
             'status' => Post::STATUS_DRAFT,
         ];
 
         return new AgentResult(
             content: (string)__('博客草稿已创建') . ' #' . $postId,
-            success: $postId > 0,
+            success: true,
             agentCode: $this->getCode(),
             messages: [['ops_result' => $opsResult]],
         );

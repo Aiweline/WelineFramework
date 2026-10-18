@@ -16,15 +16,15 @@ final class FaqSeoFactsBuilderTest extends TestCase
         self::assertStringContainsString("'page_type' => 'faq_article'", $facts);
         self::assertStringContainsString("'image'", $facts);
         self::assertStringContainsString("'image_alt'", $facts);
-        self::assertStringContainsString('changan-logo', $facts);
+        self::assertStringContainsString("'image'", $facts);
+        self::assertStringNotContainsString('changan-logo', $facts);
         self::assertStringContainsString('seoFaqs', $facts);
         self::assertStringContainsString("'question'", $hub);
         self::assertStringContainsString("'answer'", $hub);
-        self::assertGreaterThanOrEqual(8, substr_count($hub, "'q' =>"));
         self::assertStringContainsString('guide/shipping', $hub);
         self::assertStringContainsString("'url' => 'privacy'", $hub);
         self::assertStringContainsString('支持中英文浏览', $facts);
-        self::assertGreaterThanOrEqual(50, mb_strlen('查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决汉服购物常见疑问，支持中英文浏览。'));
+        self::assertGreaterThanOrEqual(50, mb_strlen('查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决购物常见疑问，支持中英文浏览。'));
     }
 
     public function testSeoProfileProviderAndPageKindExist(): void

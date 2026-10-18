@@ -4,6 +4,7 @@
 "根据 Ops 会话上下文创建博客草稿，禁止直接公开发布。","根据 Ops 会话上下文创建博客草稿，禁止直接公开发布。"
 运营博客草稿,运营博客草稿
 由运营调度智能体生成的草稿，待审批后发布。,由运营调度智能体生成的草稿，待审批后发布。
+"博客草稿保存成功但未返回 post_id","博客草稿保存成功但未返回 post_id"
 博客草稿已创建,博客草稿已创建
 "博客文章 sitemap URL 提供器（多语 hreflang）","博客文章 sitemap URL 提供器（多语 hreflang）"
 标题（选填）,"Title (optional)"
@@ -40,6 +41,13 @@
 "AI 生成博客 Slug","AI-generated blog slug"
 "使用翻译 AI 生成博客 slug","Generate blog slug with translation AI"
 删除博客文章,"Delete Blog Post"
+展开/收起,"Expand / collapse"
+"订阅 RSS","Subscribe to RSS"
+博客,Blog
+"共 %{1} 条","%{1} item(s) total"
+文章列表,"Article list"
+未命名文章,"Untitled Post"
+博客文章封面,"Blog post cover"
 作者,Author
 更新于,"Updated on"
 分钟阅读,"min read"
@@ -47,17 +55,10 @@
 关键词,Keywords
 暂无文章,"No posts yet"
 返回博客,"Back to Blog"
-博客,Blog
-"共 %{1} 条","%{1} item(s) total"
-文章列表,"Article list"
-未命名文章,"Untitled Post"
-博客文章封面,"Blog post cover"
 页面,Page
 博客页面,"Blog Page"
 未命名页面,"Untitled Page"
 全部文章,"All Posts"
-展开/收起,"Expand / collapse"
-"订阅 RSS","Subscribe to RSS"
 正在加载评论...,"Loading reviews..."
 评论列表,"Review list"
 评论分页,"Comment pagination"
@@ -144,7 +145,7 @@ Slug,Slug
 "例如 hello-world","e.g. hello-world"
 "一句话概括文章要点，用于列表与 SEO","One-line summary for listings and SEO"
 封面预览,"Cover preview"
-如：汉服研究员,"e.g. Hanfu researcher"
+如：行业研究员,"e.g. industry researcher"
 "https 档案链接，逗号分隔","https profile links, comma-separated"
 逗号分隔,"Comma separated"
 "Theme 可视化编辑","Theme visual editor"
@@ -160,6 +161,7 @@ Slug,Slug
 "博客 slug 与 CMS blog 页面冲突：%{1}","Blog slug conflicts with a CMS blog page: %{1}"
 "博客 slug 不能为空。","Blog slug cannot be empty."
 博客文章不存在。,"Blog post not found."
+"博客保存后缺少 post_id。","博客保存后缺少 post_id。"
 未命名分类,"Unnamed Category"
 技术分享,"Tech Sharing"
 产品动态,"Product Updates"

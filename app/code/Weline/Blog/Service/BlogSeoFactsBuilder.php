@@ -225,10 +225,10 @@ final class BlogSeoFactsBuilder
             'sameAs' => [
                 'https://www.instagram.com/changan.hanfu',
             ],
-            'jobTitle' => 'Hanfu editorial research',
+            'jobTitle' => 'Industry editorial research',
             'bio' => $isChinese
-                ? '本店编辑部：形制、面料与文化语境研究。'
-                : 'Editorial desk: silhouette, fabric, and cultural context research.',
+                ? '本店编辑部：款式、面料与行业语境研究。'
+                : 'Editorial desk: style, fabric, and industry context research.',
         ];
     }
 

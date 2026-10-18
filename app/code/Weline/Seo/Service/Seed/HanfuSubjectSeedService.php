@@ -12,8 +12,9 @@ use Weline\Websites\Service\WebsiteBrandIdentitySeedService;
 /**
  * 安装预置：默认站 SEO 主体（幂等）。
  *
- * 绑定真实默认网站 website_id=0；标题/描述与 Website 基础信息种子
- * {@see WebsiteBrandIdentitySeedService} 一致。URL 从 WebsiteDomain 解析。
+ * 绑定真实默认网站 website_id=0。官方模块默认中性关键词；
+ * 汉服站专属标题/描述/关键词见 design/Weline/hanfu/data/seo-subject-seed.v1.php
+ * （仅 hanfu 主题激活时加载）。URL 从 WebsiteDomain 解析。
  * 仅当 module/scope 仍为种子标记时回写画像字段。
  */
 final class HanfuSubjectSeedService
@@ -26,24 +27,21 @@ final class HanfuSubjectSeedService
     /** 历史假种子 entity_id，升级时删除（仅种子所有） */
     public const LEGACY_DEMO_ENTITY_ID = 900001;
 
-    /** 与 WebsiteBrandIdentitySeedService / Website.name 种子一致（写入 SEO 表，非运行时硬编码） */
+    /** @deprecated 使用 {@see self::resolveSeedTitle()}；保留常量供旧测试/调用方兼容读中性默认 */
     public const SEED_TITLE = WebsiteBrandIdentitySeedService::SEED_NAME;
-    /** 与 WebsiteBrandIdentitySeedService / Website.description 种子一致 */
+    /** @deprecated 使用 {@see self::resolveSeedDescription()} */
     public const SEED_DESCRIPTION = WebsiteBrandIdentitySeedService::SEED_DESCRIPTION;
     public const SEED_LOCALE = 'zh-CN';
 
     /**
-     * 实站首页可见类目/品牌词（非占位）。
+     * 官方模块中性关键词（非站专属）。
      *
      * @var list<array{keyword:string,priority:int}>
      */
     public const SEED_KEYWORDS = [
-        ['keyword' => '长安汉服', 'priority' => 100],
-        ['keyword' => '汉服', 'priority' => 95],
-        ['keyword' => '明制汉服', 'priority' => 90],
-        ['keyword' => '宋制汉服', 'priority' => 85],
-        ['keyword' => '唐制汉服', 'priority' => 85],
-        ['keyword' => '马面裙', 'priority' => 80],
+        ['keyword' => '在线商店', 'priority' => 100],
+        ['keyword' => '新品', 'priority' => 90],
+        ['keyword' => '热销', 'priority' => 80],
     ];
 
     public function __construct(private readonly ObjectManager $objectManager)
@@ -79,23 +77,26 @@ final class HanfuSubjectSeedService
         $updated = false;
         $skipped = false;
 
+        $seedTitle = self::resolveSeedTitle();
+        $seedDescription = self::resolveSeedDescription();
+
         if (!$subject->getId()) {
             $subject->clearData()
                 ->setSubjectType(self::SEED_SUBJECT_TYPE)
                 ->setSubjectId(self::SEED_ENTITY_ID)
                 ->setData(SeoSubject::schema_fields_MODULE, self::SEED_MODULE)
                 ->setData(SeoSubject::schema_fields_SCOPE, self::SEED_SCOPE)
-                ->setTitle(self::SEED_TITLE)
+                ->setTitle($seedTitle)
                 ->setUrl($url)
-                ->setDescription(self::SEED_DESCRIPTION)
+                ->setDescription($seedDescription)
                 ->setLocale(self::SEED_LOCALE)
                 ->setStatus(SeoSubject::STATUS_ENABLED)
                 ->save();
             $created = true;
         } elseif ($this->isSeedOwned($subject)) {
-            $subject->setTitle(self::SEED_TITLE)
+            $subject->setTitle($seedTitle)
                 ->setUrl($url)
-                ->setDescription(self::SEED_DESCRIPTION)
+                ->setDescription($seedDescription)
                 ->setLocale(self::SEED_LOCALE)
                 ->setData(SeoSubject::schema_fields_MODULE, self::SEED_MODULE)
                 ->setData(SeoSubject::schema_fields_SCOPE, self::SEED_SCOPE)
@@ -259,7 +260,7 @@ final class HanfuSubjectSeedService
         $updated = 0;
         $allowed = [];
 
-        foreach (self::SEED_KEYWORDS as $row) {
+        foreach (self::resolveSeedKeywords() as $row) {
             $keyword = trim((string)$row['keyword']);
             if ($keyword === '') {
                 continue;
@@ -344,5 +345,72 @@ final class HanfuSubjectSeedService
             'keywords_created' => $created,
             'keywords_updated' => $updated,
         ];
+    }
+
+    public static function resolveSeedTitle(): string
+    {
+        $pack = self::loadDesignSeoSubjectSeed();
+        $title = trim((string)($pack['title'] ?? ''));
+        if ($title !== '' && WebsiteBrandIdentitySeedService::isHanfuThemeActive()) {
+            return $title;
+        }
+
+        return WebsiteBrandIdentitySeedService::resolveSeedName();
+    }
+
+    public static function resolveSeedDescription(): string
+    {
+        $pack = self::loadDesignSeoSubjectSeed();
+        $description = trim((string)($pack['description'] ?? ''));
+        if ($description !== '' && WebsiteBrandIdentitySeedService::isHanfuThemeActive()) {
+            return $description;
+        }
+
+        return WebsiteBrandIdentitySeedService::resolveSeedDescription();
+    }
+
+    /**
+     * @return list<array{keyword:string,priority:int}>
+     */
+    public static function resolveSeedKeywords(): array
+    {
+        $pack = self::loadDesignSeoSubjectSeed();
+        $keywords = $pack['keywords'] ?? null;
+        if (is_array($keywords) && $keywords !== [] && WebsiteBrandIdentitySeedService::isHanfuThemeActive()) {
+            $out = [];
+            foreach ($keywords as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $keyword = trim((string)($row['keyword'] ?? ''));
+                if ($keyword === '') {
+                    continue;
+                }
+                $out[] = [
+                    'keyword' => $keyword,
+                    'priority' => (int)($row['priority'] ?? 0),
+                ];
+            }
+            if ($out !== []) {
+                return $out;
+            }
+        }
+
+        return self::SEED_KEYWORDS;
+    }
+
+    /**
+     * @return array{title?:string, description?:string, keywords?:list<array{keyword:string,priority:int}>}
+     */
+    public static function loadDesignSeoSubjectSeed(): array
+    {
+        $path = (defined('BP') ? BP : '') . 'app/design/Weline/hanfu/data/seo-subject-seed.v1.php';
+        if (!is_file($path)) {
+            return [];
+        }
+        /** @var mixed $pack */
+        $pack = require $path;
+
+        return is_array($pack) ? $pack : [];
     }
 }

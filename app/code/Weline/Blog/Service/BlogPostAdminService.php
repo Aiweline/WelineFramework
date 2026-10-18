@@ -85,11 +85,13 @@ final class BlogPostAdminService
         $this->slugGuard->assertSaveAllowed($websiteId, $slug, $postId);
 
         $model = clone $this->postModel;
+        $previousStatus = '';
         if ($postId > 0) {
             $model->clearData()->reset()->load($postId);
             if ($model->getPostId() <= 0) {
                 throw new \InvalidArgumentException((string)__('博客文章不存在。'));
             }
+            $previousStatus = (string)$model->getData(Post::schema_fields_STATUS);
         }
 
         $now = date('Y-m-d H:i:s');
@@ -123,24 +125,35 @@ final class BlogPostAdminService
         $model->setData(Post::schema_fields_UPDATED_AT, $now);
         $model->save();
 
-        $row = $model->fetchArray();
-        $this->urlNotifier->notifyFromPostRow(is_array($row) ? $row : $model->getData());
+        // save 后单行模型的 fetchArray() 可能返回空 []（仍 is_array），不得当有效行返回，
+        // 否则 blog_publish 等调用方读不到 post_id → 误报失败。
+        $row = $this->rowFromSavedModel($model);
 
-        $savedRow = is_array($row) ? $row : $model->getData();
-        if (is_array($savedRow)) {
-            try {
-                $this->cmsEditor->syncCmsPageFromPost($savedRow);
-            } catch (\Throwable) {
+        try {
+            if ($previousStatus === Post::STATUS_PUBLISHED && $status !== Post::STATUS_PUBLISHED) {
+                $this->urlNotifier->notifyFromPostRow($row, 'delete');
+            } elseif ($status === Post::STATUS_PUBLISHED) {
+                $this->urlNotifier->notifyFromPostRow($row, 'upsert');
             }
+        } catch (\Throwable) {
+        }
+
+        try {
+            $this->cmsEditor->syncCmsPageFromPost($row);
+        } catch (\Throwable) {
+        }
+
+        try {
             $indexEvent = [
-                'post' => $savedRow,
+                'post' => $row,
                 'action' => 'upsert',
             ];
             \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
                 ->dispatch('Weline_Blog::post_search_index_changed', $indexEvent);
+        } catch (\Throwable) {
         }
 
-        return is_array($row) ? $row : $model->getData();
+        return $row;
     }
 
     public function delete(int $postId): void
@@ -150,17 +163,40 @@ final class BlogPostAdminService
         if ($model->getPostId() <= 0) {
             throw new \InvalidArgumentException((string)__('博客文章不存在。'));
         }
-        $row = $model->fetchArray();
+        $row = $this->rowFromSavedModel($model);
         $model->delete();
-        if (is_array($row)) {
-            $this->urlNotifier->notifyFromPostRow($row, 'delete');
-            $indexEvent = [
-                'post' => $row,
-                'action' => 'delete',
-            ];
-            \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
-                ->dispatch('Weline_Blog::post_search_index_changed', $indexEvent);
+        $this->urlNotifier->notifyFromPostRow($row, 'delete');
+        $indexEvent = [
+            'post' => $row,
+            'action' => 'delete',
+        ];
+        \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+            ->dispatch('Weline_Blog::post_search_index_changed', $indexEvent);
+    }
+
+    /**
+     * 从已 save/load 的 Post 模型抽出带 post_id 的关联数组。
+     *
+     * @return array<string,mixed>
+     */
+    private function rowFromSavedModel(Post $model): array
+    {
+        $postId = $model->getPostId();
+        if ($postId <= 0) {
+            throw new \RuntimeException((string)__('博客保存后缺少 post_id。'));
         }
+        $data = $model->getData();
+        if (!is_array($data) || $data === [] || (int)($data[Post::schema_fields_ID] ?? 0) <= 0) {
+            $reloaded = clone $this->postModel;
+            $reloaded->clearData()->reset()->load($postId);
+            $data = $reloaded->getData();
+        }
+        if (!is_array($data)) {
+            $data = [];
+        }
+        $data[Post::schema_fields_ID] = $postId;
+
+        return $data;
     }
 
     /**

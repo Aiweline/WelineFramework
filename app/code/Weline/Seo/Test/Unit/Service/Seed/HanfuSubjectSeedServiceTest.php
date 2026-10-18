@@ -22,17 +22,27 @@ class HanfuSubjectSeedServiceTest extends TestCore
         $this->assertSame(SeoSubject::SUBJECT_TYPE_WEBSITE, HanfuSubjectSeedService::SEED_SUBJECT_TYPE);
         $this->assertSame(0, HanfuSubjectSeedService::SEED_ENTITY_ID);
         $this->assertSame(900001, HanfuSubjectSeedService::LEGACY_DEMO_ENTITY_ID);
-        $this->assertSame('长安汉服', HanfuSubjectSeedService::SEED_TITLE);
-        $this->assertStringContainsString('明制、宋制、唐制汉服与马面裙', HanfuSubjectSeedService::SEED_DESCRIPTION);
+        // 官方模块常量保持中性；汉服站专属在 design pack。
+        $this->assertSame('演示站', HanfuSubjectSeedService::SEED_TITLE);
+        $this->assertStringContainsString('本站精选', HanfuSubjectSeedService::SEED_DESCRIPTION);
+        $this->assertStringNotContainsString('长安汉服', HanfuSubjectSeedService::SEED_TITLE);
+        $this->assertStringNotContainsString('长安汉服', HanfuSubjectSeedService::SEED_DESCRIPTION);
         $this->assertStringNotContainsString('示例', HanfuSubjectSeedService::SEED_TITLE);
         $this->assertStringNotContainsString('示例', HanfuSubjectSeedService::SEED_DESCRIPTION);
         $this->assertStringNotContainsString('example.com', HanfuSubjectSeedService::SEED_DESCRIPTION);
 
         $names = array_column(HanfuSubjectSeedService::SEED_KEYWORDS, 'keyword');
-        $this->assertContains('长安汉服', $names);
-        $this->assertContains('明制汉服', $names);
-        $this->assertContains('马面裙', $names);
+        $this->assertContains('新品', $names);
+        $this->assertNotContains('长安汉服', $names);
         $this->assertNotContains('汉服租赁', $names);
+
+        $design = HanfuSubjectSeedService::loadDesignSeoSubjectSeed();
+        $this->assertSame('长安汉服', $design['title'] ?? null);
+        $this->assertStringContainsString('明制、宋制、唐制汉服与马面裙', (string)($design['description'] ?? ''));
+        $designNames = array_column($design['keywords'] ?? [], 'keyword');
+        $this->assertContains('长安汉服', $designNames);
+        $this->assertContains('明制汉服', $designNames);
+        $this->assertContains('马面裙', $designNames);
     }
 
     public function testInstallAndUpgradeWireSeedService(): void
@@ -60,7 +70,7 @@ class HanfuSubjectSeedServiceTest extends TestCore
         $first = $seeder->seed();
         $this->assertGreaterThan(0, $first['subject_id']);
         $this->assertFalse($first['skipped']);
-        $this->assertSame(HanfuSubjectSeedService::SEED_TITLE, $this->loadSeedSubject()->getTitle());
+        $this->assertSame(HanfuSubjectSeedService::resolveSeedTitle(), $this->loadSeedSubject()->getTitle());
         $this->assertStringNotContainsString('example.com', (string)$this->loadSeedSubject()->getUrl());
         $this->assertStringNotContainsString('示例', (string)$this->loadSeedSubject()->getDescription());
 
@@ -71,9 +81,10 @@ class HanfuSubjectSeedServiceTest extends TestCore
             ->select()
             ->fetchArray();
         $this->assertIsArray($keywords);
-        $this->assertCount(count(HanfuSubjectSeedService::SEED_KEYWORDS), $keywords);
+        $expectedKeywords = HanfuSubjectSeedService::resolveSeedKeywords();
+        $this->assertCount(count($expectedKeywords), $keywords);
         $names = array_map(static fn(array $row): string => (string)($row[SeoKeyword::schema_fields_KEYWORD] ?? ''), $keywords);
-        $this->assertContains('长安汉服', $names);
+        $this->assertContains((string)$expectedKeywords[0]['keyword'], $names);
         $this->assertNotContains('汉服租赁', $names);
 
         $legacy = ObjectManager::getInstance(SeoSubject::class);
@@ -120,7 +131,7 @@ class HanfuSubjectSeedServiceTest extends TestCore
         $subject = $this->loadSeedSubject();
         $this->assertSame($customTitle, $subject->getTitle());
 
-        $subject->setTitle(HanfuSubjectSeedService::SEED_TITLE)
+        $subject->setTitle(HanfuSubjectSeedService::resolveSeedTitle())
             ->setData(SeoSubject::schema_fields_MODULE, HanfuSubjectSeedService::SEED_MODULE)
             ->setData(SeoSubject::schema_fields_SCOPE, HanfuSubjectSeedService::SEED_SCOPE)
             ->save();

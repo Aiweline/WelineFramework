@@ -24,8 +24,11 @@ final class BlogPostUrlNotifier
         if (!interface_exists(UrlChangeNotifierInterface::class)) {
             return;
         }
-        if ((string)($row[Post::schema_fields_STATUS] ?? '') !== Post::STATUS_PUBLISHED && $action !== 'delete') {
-            $action = 'delete';
+        $status = (string)($row[Post::schema_fields_STATUS] ?? '');
+        // 草稿/停用的 upsert 不得改写成 SEO delete：每次 Ops 日更草稿会误触发全站 URL 扫描（可达数十秒）且无 post_id 副作用。
+        // 下架请显式 action=delete；已发布 upsert 才通知。
+        if ($action !== 'delete' && $status !== Post::STATUS_PUBLISHED) {
+            return;
         }
 
         $slug = (string)($row[Post::schema_fields_SLUG] ?? '');

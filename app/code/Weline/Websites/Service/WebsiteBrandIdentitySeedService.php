@@ -11,7 +11,9 @@ use Weline\Websites\Model\Website\LocalDescription;
 use Weline\Websites\Model\WebsiteLanguage;
 
 /**
- * 把演示店品牌身份写入 Website 范围配置（幂等）。
+ * 把默认站品牌身份写入 Website 范围配置（幂等）。
+ *
+ * 官方模块仅含中性默认；汉服站名/简介/多语译包在 design/Weline/hanfu（主题激活时优先）。
  *
  * 运行时展示只读 Website.name / Website.description（及 LocalDescription），
  * 禁止在模板/SEO 运行时硬编码品牌字面量。
@@ -19,10 +21,10 @@ use Weline\Websites\Model\WebsiteLanguage;
  */
 final class WebsiteBrandIdentitySeedService
 {
-    /** 演示默认站中文源站名（只写入 Website 配置，不作运行时回退字面量） */
-    public const SEED_NAME = '长安汉服';
+    /** 官方模块中性默认站名（站专属汉服品牌见 design/Weline/hanfu/data/website-brand-identity.v1.php） */
+    public const SEED_NAME = '演示站';
 
-    public const SEED_DESCRIPTION = '长安汉服是面向全球的大型汉服售卖平台，汇聚明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合。平台同时支持单件零售与批量批发，服务个人买家与全球经销商；并提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的汉服款式。';
+    public const SEED_DESCRIPTION = '本站精选在售商品与配饰，覆盖日常、节日与礼仪等场景；提供款式说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的款式。';
 
     /** 客服服务时间简中源串（店面/邮件/FAQ 共用；译包见 website-brand-local-copy） */
     public const SEED_SERVICE_HOURS = '周一至周五 9:00 - 18:00（法定节假日除外）';
@@ -31,6 +33,7 @@ final class WebsiteBrandIdentitySeedService
     private const PLACEHOLDER_NAMES = [
         '',
         '默认网站',
+        '默认商店',
         'Default Website',
         'Weline',
         'weline',
@@ -46,6 +49,9 @@ final class WebsiteBrandIdentitySeedService
      */
     private const LEGACY_DESCRIPTIONS = [
         '长安汉服水墨中国风独立站，精选明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合；提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的汉服款式。',
+        '长安汉服是面向全球的大型汉服售卖平台，汇聚明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合。平台同时支持单件零售与批量批发，服务个人买家与全球经销商；并提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的汉服款式。',
+        '面向全球的在线商店，提供商品浏览、选购与配送服务；支持多语言店面，并兼顾个人买家与批发客户。',
+        '本站精选商品与配饰，覆盖日常、节日与礼仪等场景；提供款式说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的款式。',
     ];
 
     /**
@@ -54,6 +60,7 @@ final class WebsiteBrandIdentitySeedService
      * @var list<string>
      */
     private const LEGACY_DEMO_NAMES = [
+        // 禁止列入裸「长安汉服」：非 hanfu 主题下会把实站名误改成中性 SEED。
         '长安汉服 · Hanfu Atelier',
         "Chang'an Hanfu · Hanfu Atelier",
         "Chang’an Hanfu · Hanfu Atelier",
@@ -81,9 +88,11 @@ final class WebsiteBrandIdentitySeedService
         $currentDescription = trim((string)$website->getDescription());
         $nameIsPlaceholder = $this->isPlaceholderName($currentName);
         $nameIsLegacyDemo = $this->isLegacyDemoName($currentName);
-        $needsName = ($nameIsPlaceholder || $nameIsLegacyDemo) && $currentName !== self::SEED_NAME;
-        $needsDescription = self::SEED_DESCRIPTION !== ''
-            && $currentDescription !== self::SEED_DESCRIPTION
+        $seedName = self::resolveSeedName();
+        $seedDescription = self::resolveSeedDescription();
+        $needsName = ($nameIsPlaceholder || $nameIsLegacyDemo) && $currentName !== $seedName;
+        $needsDescription = $seedDescription !== ''
+            && $currentDescription !== $seedDescription
             && ($currentDescription === '' || $this->isLegacyDescription($currentDescription));
 
         if (!$needsName && !$needsDescription) {
@@ -91,10 +100,10 @@ final class WebsiteBrandIdentitySeedService
         }
 
         if ($needsName) {
-            $website->setName(self::SEED_NAME);
+            $website->setName($seedName);
         }
         if ($needsDescription) {
-            $website->setDescription(self::SEED_DESCRIPTION);
+            $website->setDescription($seedDescription);
         }
         if (!$website->save()) {
             throw new \RuntimeException('website_brand_identity_seed_save_failed');
@@ -219,25 +228,99 @@ final class WebsiteBrandIdentitySeedService
      *   topics_label: array<string, string>
      * }
      */
+    /**
+     * 汉服主题激活时优先加载 design 译包；否则使用官方模块中性包。
+     *
+     * @return array{
+     *   name: array<string, string>,
+     *   description: array<string, string>,
+     *   service_hours: array<string, string>,
+     *   topics_label: array<string, string>
+     * }
+     */
     public static function loadLocalBrandCopyPack(): array
     {
         $empty = ['name' => [], 'description' => [], 'service_hours' => [], 'topics_label' => []];
-        $path = __DIR__ . '/data/website-brand-local-copy.v1.php';
+        $candidates = [];
+        if (self::isHanfuThemeActive()) {
+            $candidates[] = (defined('BP') ? BP : '') . 'app/design/Weline/hanfu/data/website-brand-local-copy.v1.php';
+        }
+        $candidates[] = __DIR__ . '/data/website-brand-local-copy.v1.php';
+        foreach ($candidates as $path) {
+            if ($path === '' || !is_file($path)) {
+                continue;
+            }
+            /** @var mixed $pack */
+            $pack = require $path;
+            if (!is_array($pack)) {
+                continue;
+            }
+
+            return [
+                'name' => is_array($pack['name'] ?? null) ? $pack['name'] : [],
+                'description' => is_array($pack['description'] ?? null) ? $pack['description'] : [],
+                'service_hours' => is_array($pack['service_hours'] ?? null) ? $pack['service_hours'] : [],
+                'topics_label' => is_array($pack['topics_label'] ?? null) ? $pack['topics_label'] : [],
+            ];
+        }
+
+        return $empty;
+    }
+
+    public static function resolveSeedName(): string
+    {
+        $brand = self::loadDesignBrandIdentity();
+        $name = trim((string)($brand['name'] ?? ''));
+        if ($name !== '' && self::isHanfuThemeActive()) {
+            return $name;
+        }
+
+        return self::SEED_NAME;
+    }
+
+    public static function resolveSeedDescription(): string
+    {
+        $brand = self::loadDesignBrandIdentity();
+        $description = trim((string)($brand['description'] ?? ''));
+        if ($description !== '' && self::isHanfuThemeActive()) {
+            return $description;
+        }
+
+        return self::SEED_DESCRIPTION;
+    }
+
+    /**
+     * @return array{name?:string, description?:string}
+     */
+    public static function loadDesignBrandIdentity(): array
+    {
+        $path = (defined('BP') ? BP : '') . 'app/design/Weline/hanfu/data/website-brand-identity.v1.php';
         if (!is_file($path)) {
-            return $empty;
+            return [];
         }
         /** @var mixed $pack */
         $pack = require $path;
-        if (!is_array($pack)) {
-            return $empty;
-        }
 
-        return [
-            'name' => is_array($pack['name'] ?? null) ? $pack['name'] : [],
-            'description' => is_array($pack['description'] ?? null) ? $pack['description'] : [],
-            'service_hours' => is_array($pack['service_hours'] ?? null) ? $pack['service_hours'] : [],
-            'topics_label' => is_array($pack['topics_label'] ?? null) ? $pack['topics_label'] : [],
-        ];
+        return is_array($pack) ? $pack : [];
+    }
+
+    public static function isHanfuThemeActive(): bool
+    {
+        try {
+            if (!class_exists(\Weline\Theme\Model\WelineTheme::class)) {
+                return false;
+            }
+            /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+            $theme = $themeContext->resolveTheme('frontend', null, false)
+                ?? $themeContext->resolveRegisteredDefaultTheme('frontend');
+            $path = strtolower(str_replace('\\', '/', (string)($theme?->getData('path') ?? '')));
+            $name = strtolower((string)($theme?->getData('name') ?? ''));
+
+            return str_contains($path, 'hanfu') || $name === 'hanfu';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function upsertWebsiteLocal(int $websiteId, string $locale, string $name, string $description): bool

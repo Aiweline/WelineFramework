@@ -118,6 +118,15 @@ final class BlogServiceContractsTest extends TestCase
             'BlogPostAdminDefaultSiteFilter::test_list_presenter_does_not_call_zero_global' => function () {
             $this->assert_BlogPostAdminDefaultSiteFilter_test_list_presenter_does_not_call_zero_global();
         },
+            'BlogPostAdminSaveReturn::test_save_returns_row_via_getPostId_not_empty_fetchArray' => function () {
+            $this->assert_BlogPostAdminSaveReturn_test_save_returns_row_via_getPostId_not_empty_fetchArray();
+        },
+            'BlogPublishAgent::test_requires_positive_post_id_from_save' => function () {
+            $this->assert_BlogPublishAgent_test_requires_positive_post_id_from_save();
+        },
+            'BlogPostUrlNotifier::test_draft_upsert_does_not_rewrite_to_seo_delete' => function () {
+            $this->assert_BlogPostUrlNotifier_test_draft_upsert_does_not_rewrite_to_seo_delete();
+        },
             'BlogSearchCategoryScopeNoCrossBrandLeak::testSearchScopesPreferOwnedOnlyTreeForNonDefaultWebsites' => function () {
             $this->assert_BlogSearchCategoryScopeNoCrossBrandLeak_testSearchScopesPreferOwnedOnlyTreeForNonDefaultWebsites();
         },
@@ -373,6 +382,36 @@ private function assert_BlogPostAdminDefaultSiteFilter_test_list_presenter_does_
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/Service/BlogPostAdminListPresenter.php');
     self::assertStringNotContainsString("websiteId > 0 ? '#' . \$websiteId : '全站'", $src);
     self::assertStringContainsString("'#' . max(0, \$websiteId)", $src);
+}
+
+private function assert_BlogPostAdminSaveReturn_test_save_returns_row_via_getPostId_not_empty_fetchArray(): void
+{
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/Service/BlogPostAdminService.php');
+    self::assertStringContainsString('rowFromSavedModel', $src);
+    self::assertStringContainsString('getPostId()', $src);
+    self::assertStringContainsString('博客保存后缺少 post_id', $src);
+    self::assertStringNotContainsString("return is_array(\$row) ? \$row : \$model->getData();", $src);
+}
+
+private function assert_BlogPublishAgent_test_requires_positive_post_id_from_save(): void
+{
+    $src = (string) file_get_contents(
+        '/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/extends/module/Weline_Ai/Agent/BlogPublishAgent.php'
+    );
+    self::assertStringContainsString('Post::schema_fields_ID', $src);
+    self::assertStringContainsString('博客草稿保存成功但未返回 post_id', $src);
+    self::assertStringContainsString('AgentResult::failure', $src);
+}
+
+private function assert_BlogPostUrlNotifier_test_draft_upsert_does_not_rewrite_to_seo_delete(): void
+{
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/Service/BlogPostUrlNotifier.php');
+    self::assertStringContainsString("\$action !== 'delete' && \$status !== Post::STATUS_PUBLISHED", $src);
+    self::assertStringContainsString('return;', $src);
+    self::assertStringNotContainsString("\$action = 'delete';", $src);
+    $admin = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/Service/BlogPostAdminService.php');
+    self::assertStringContainsString("notifyFromPostRow(\$row, 'delete')", $admin);
+    self::assertStringContainsString("notifyFromPostRow(\$row, 'upsert')", $admin);
 }
 
 private function assert_BlogSearchCategoryScopeNoCrossBrandLeak_testSearchScopesPreferOwnedOnlyTreeForNonDefaultWebsites(): void

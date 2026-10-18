@@ -45,16 +45,16 @@ class PageSeoContextResolverPlanJsonTest extends TestCase
     {
         $product = [
             'product_id' => 83,
-            'name' => '汉服商品',
+            'name' => '在售商品',
             'storefront_offers' => [
-                ['sku' => 'ZZS-HANFU-RED-S', 'specifications' => ['color' => '48', 'size' => '57']],
-                ['sku' => 'ZZS-HANFU-RED-M', 'specifications' => ['color' => '48', 'size' => '58']],
+                ['sku' => 'ZZS-DEMO-RED-S', 'specifications' => ['color' => '48', 'size' => '57']],
+                ['sku' => 'ZZS-DEMO-RED-M', 'specifications' => ['color' => '48', 'size' => '58']],
             ],
         ];
         $template = new PageSeoContextResolverPlanJsonTemplateStub([
             'seo' => [
                 'page_type' => 'product',
-                'title' => '汉服商品',
+                'title' => '在售商品',
                 'product' => $product,
             ],
         ]);
