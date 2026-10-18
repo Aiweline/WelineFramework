@@ -154,6 +154,40 @@ class SocialWebsiteAccountService
     }
 
     /**
+     * Query params for embedding Social admin inside website editor (blank layout + locked site scope).
+     *
+     * @return array{
+     *     scope_type: string,
+     *     scope_id: int,
+     *     child_scope_type: string,
+     *     child_scope_id: int,
+     *     scope_key: string,
+     *     tab: string,
+     *     isIframe: string
+     * }
+     */
+    public function websiteEditorEmbedQuery(int $websiteId, string $tab = 'accounts'): array
+    {
+        $websiteId = \max(0, $websiteId);
+        $childScopeType = SocialWebsiteAccount::CHILD_SCOPE_TYPE_WEBSITE_DEFAULT;
+
+        return [
+            'scope_type' => SocialWebsiteAccount::SCOPE_TYPE_WEBSITE,
+            'scope_id' => $websiteId,
+            'child_scope_type' => $childScopeType,
+            'child_scope_id' => 0,
+            'scope_key' => $this->scopeKey([
+                'scope_type' => SocialWebsiteAccount::SCOPE_TYPE_WEBSITE,
+                'scope_id' => $websiteId,
+                'child_scope_type' => $childScopeType,
+                'child_scope_id' => 0,
+            ]),
+            'tab' => $this->normalizeAdminScopeTab($tab),
+            'isIframe' => 'true',
+        ];
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $scopeCatalog
      *
      * @return array<string, mixed>

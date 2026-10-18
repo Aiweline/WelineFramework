@@ -1,0 +1,177 @@
+<?php
+/**
+ * 网站编辑 disclosure：懒加载 iframe 嵌入锁定站点范围的融媒体管理。
+ *
+ * Expected locals: $sectionId (string), $websiteId (int), $hasWebsiteIdentity (bool),
+ * optional $pendingHint (string), optional $website (array).
+ */
+
+declare(strict_types=1);
+
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Social\Service\SocialWebsiteAccountService;
+
+$sectionId = (string)($sectionId ?? 'website_social');
+$hasWebsiteIdentity = (bool)($hasWebsiteIdentity ?? false);
+$websiteId = (int)($websiteId ?? -1);
+$website = (array)($website ?? []);
+$pendingHint = (string)($pendingHint ?? __('请先保存网站，再管理本站社媒账户与发布。'));
+$websiteLabel = \trim((string)($website['name'] ?? $website['code'] ?? ''));
+if ($websiteLabel === '' && $hasWebsiteIdentity && $websiteId >= 0) {
+    $websiteLabel = 'website:' . $websiteId;
+}
+
+$embedUrl = '';
+$fullAdminUrl = '';
+if ($hasWebsiteIdentity && $websiteId >= 0) {
+    try {
+        /** @var SocialWebsiteAccountService $scopeService */
+        $scopeService = ObjectManager::getInstance(SocialWebsiteAccountService::class);
+        /** @var Url $url */
+        $url = ObjectManager::getInstance(Url::class);
+        $embedQuery = $scopeService->websiteEditorEmbedQuery($websiteId, 'accounts');
+        $embedUrl = $url->getBackendUrl('weline_social/backend/social', $embedQuery);
+        $fullQuery = $embedQuery;
+        unset($fullQuery['isIframe']);
+        $fullAdminUrl = $url->getBackendUrl('weline_social/backend/social', $fullQuery);
+    } catch (\Throwable) {
+        $embedUrl = '';
+        $fullAdminUrl = '';
+    }
+}
+
+$h = static fn(mixed $value): string => \htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+?>
+<div
+    class="w-disclosure"
+    id="<?= $h($sectionId) ?>"
+    data-w-component="disclosure"
+    data-testid="website-social-embed"
+    data-website-id="<?= $hasWebsiteIdentity && $websiteId >= 0 ? (int)$websiteId : -1 ?>"
+    <?php if ($embedUrl !== ''): ?>data-social-embed-src="<?= $h($embedUrl) ?>"<?php endif; ?>
+>
+    <div id="<?= $h($sectionId . '_heading') ?>">
+        <button
+            class="w-disclosure__trigger collapsed"
+            type="button"
+            aria-expanded="false"
+            aria-controls="<?= $h($sectionId . '_body') ?>"
+            data-w-target="#<?= $h($sectionId . '_body') ?>"
+            data-w-action="disclosure.toggle"
+            data-w-disclosure-trigger
+            data-testid="website-social-embed-trigger"
+        >
+            <w:icon name="share" size="sm"></w:icon>
+            <span><lang>融媒体管理</lang></span>
+            <?php if ($websiteLabel !== ''): ?>
+                <span class="w-badge w-text ms-2" data-w-background="muted" data-tone="muted"><?= $h($websiteLabel) ?></span>
+            <?php endif; ?>
+            <w:icon name="chevron-down" size="sm"></w:icon>
+        </button>
+    </div>
+    <div
+        id="<?= $h($sectionId . '_body') ?>"
+        class="w-disclosure__panel"
+        aria-labelledby="<?= $h($sectionId . '_heading') ?>"
+        data-w-disclosure-panel
+        hidden
+    >
+        <div class="w-disclosure__body">
+            <?php if (!$hasWebsiteIdentity || $websiteId < 0): ?>
+                <p class="w-text" data-tone="muted" style="--w-mb:0;"><?= $h($pendingHint) ?></p>
+            <?php elseif ($embedUrl === ''): ?>
+                <p class="w-text" data-tone="warning" style="--w-mb:0;"><lang>暂时无法加载融媒体管理嵌入页，请稍后重试或打开完整融媒体管理。</lang></p>
+            <?php else: ?>
+                <div class="w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-3);">
+                    <p class="w-text" data-tone="muted" style="--w-mb:0;">
+                        <lang>账户添加、范围社媒与一键发布均绑定当前网站范围。</lang>
+                    </p>
+                    <?php if ($fullAdminUrl !== ''): ?>
+                        <a
+                            class="w-button"
+                            href="<?= $h($fullAdminUrl) ?>"
+                            target="_blank"
+                            rel="noopener"
+                            data-tone="primary"
+                            data-variant="outline"
+                            data-size="sm"
+                            data-testid="website-social-open-full"
+                        >
+                            <w:icon name="external-link" size="sm"></w:icon>
+                            <lang>打开完整融媒体管理</lang>
+                        </a>
+                    <?php endif; ?>
+                </div>
+                <div
+                    class="website-social-embed-frame-wrap"
+                    data-testid="website-social-embed-frame-wrap"
+                    data-w-border="border"
+                    data-w-radius="md"
+                    data-w-background="surface"
+                >
+                    <iframe
+                        class="website-social-embed-frame"
+                        title="<?= $h((string)__('本站融媒体管理')) ?>"
+                        data-testid="website-social-embed-frame"
+                        loading="lazy"
+                        referrerpolicy="same-origin"
+                        data-social-embed-frame
+                    ></iframe>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php if ($hasWebsiteIdentity && $websiteId >= 0 && $embedUrl !== ''): ?>
+<script>
+(function () {
+    var root = document.getElementById(<?= \json_encode($sectionId, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+    if (!root || root.dataset.socialEmbedBound === '1') {
+        return;
+    }
+    root.dataset.socialEmbedBound = '1';
+    var src = root.getAttribute('data-social-embed-src') || '';
+    var frame = root.querySelector('[data-social-embed-frame]');
+    if (!src || !frame) {
+        return;
+    }
+    var loaded = false;
+    function loadFrame() {
+        if (loaded) {
+            return;
+        }
+        loaded = true;
+        frame.setAttribute('src', src);
+    }
+    var panel = root.querySelector('[data-w-disclosure-panel]');
+    var trigger = root.querySelector('[data-w-disclosure-trigger]');
+    if (trigger) {
+        trigger.addEventListener('click', function () {
+            window.setTimeout(function () {
+                if (panel && !panel.hasAttribute('hidden')) {
+                    loadFrame();
+                }
+            }, 0);
+        });
+    }
+    if (panel && !panel.hasAttribute('hidden')) {
+        loadFrame();
+    }
+})();
+</script>
+<?php endif; ?>
+<style>
+.website-social-embed-frame-wrap {
+    overflow: hidden;
+    min-block-size: 28rem;
+}
+.website-social-embed-frame {
+    display: block;
+    width: 100%;
+    min-block-size: 36rem;
+    height: min(70vh, 48rem);
+    border: 0;
+    background: var(--weline-theme-surface, var(--backend-theme-surface, #fff));
+}
+</style>

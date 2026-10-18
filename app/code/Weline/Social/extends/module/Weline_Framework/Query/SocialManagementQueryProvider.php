@@ -11,6 +11,7 @@ use Weline\Social\Service\SocialOauthService;
 use Weline\Social\Service\SocialPlatformIconService;
 use Weline\Social\Service\SocialPlatformRegistry;
 use Weline\Social\Service\SocialPublishService;
+use Weline\Social\Service\SocialScopeMailboxService;
 use Weline\Social\Service\SocialWebsiteAccountService;
 
 class SocialManagementQueryProvider implements QueryProviderInterface
@@ -22,7 +23,8 @@ class SocialManagementQueryProvider implements QueryProviderInterface
         private readonly SocialPublishService $publishService,
         private readonly SocialPlatformIconService $iconService,
         private readonly SocialWebsiteAccountService $websiteAccountService,
-        private readonly SocialOauthService $oauthService
+        private readonly SocialOauthService $oauthService,
+        private readonly SocialScopeMailboxService $scopeMailboxService,
     ) {
     }
 
@@ -59,6 +61,9 @@ class SocialManagementQueryProvider implements QueryProviderInterface
             'generateCreative' => $this->creativeService->generateCreative($params),
             'createPublishBatch' => $this->publishService->createPublishBatch($params),
             'getPublishBatchStatus' => $this->publishService->getBatchStatus((int)($params['batch_id'] ?? 0)),
+            'getScopeSocialMailbox' => $this->scopeMailboxService->getScopeSocialMailbox($params),
+            'ensureScopeSocialMailbox' => $this->scopeMailboxService->ensureScopeSocialMailbox($params),
+            'resetScopeSocialMailboxPassword' => $this->scopeMailboxService->resetScopeSocialMailboxPassword($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Weline Social 查询器不支持的操作：%{1}', [$operation])
             ),
@@ -109,6 +114,9 @@ class SocialManagementQueryProvider implements QueryProviderInterface
                 ['name' => 'generateCreative', 'description' => __('生成融媒体创意。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['title' => ['type' => 'string', 'max_length' => 190], 'prompt' => ['type' => 'string', 'max_length' => 4000], 'platforms' => ['type' => 'list', 'max_items' => 100], 'fake_mode' => ['type' => 'bool'], 'use_ai' => ['type' => 'bool'], 'assets' => ['type' => 'list', 'max_items' => 50]]],
                 ['name' => 'createPublishBatch', 'description' => __('创建一键多平台发布批次。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['draft_id' => ['type' => 'int', 'required' => true, 'min' => 1], 'account_ids' => ['type' => 'list', 'max_items' => 100], 'scope_type' => ['type' => 'string', 'max_length' => 32], 'scope_id' => ['type' => 'int', 'min' => 0], 'child_scope_type' => ['type' => 'string', 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'website_id' => ['type' => 'int', 'min' => 0], 'website_ids' => ['type' => 'list', 'max_items' => 500], 'all_sites' => ['type' => 'bool'], 'content_kind' => ['type' => 'string', 'max_length' => 32], 'title' => ['type' => 'string', 'max_length' => 190], 'scheduled_at' => ['type' => 'string', 'max_length' => 32], 'fake_mode' => ['type' => 'bool']]],
                 ['name' => 'getPublishBatchStatus', 'description' => __('获取发布批次状态。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['batch_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
+                ['name' => 'getScopeSocialMailbox', 'description' => __('获取当前网站范围的社媒注册专用邮箱状态。'), 'frontend' => true, 'backend' => true, 'external' => false, 'mode' => 'read', 'params' => ['website_id' => ['type' => 'int', 'min' => 0], 'scope_id' => ['type' => 'int', 'min' => 0], 'scope_key' => ['type' => 'string', 'max_length' => 128]]],
+                ['name' => 'ensureScopeSocialMailbox', 'description' => __('一键开通当前网站范围的社媒注册专用邮箱。'), 'frontend' => true, 'backend' => true, 'external' => false, 'mode' => 'write', 'params' => ['website_id' => ['type' => 'int', 'min' => 0], 'scope_id' => ['type' => 'int', 'min' => 0], 'scope_key' => ['type' => 'string', 'max_length' => 128]]],
+                ['name' => 'resetScopeSocialMailboxPassword', 'description' => __('重置当前网站范围社媒专用邮箱密码并返回一次明文。'), 'frontend' => true, 'backend' => true, 'external' => false, 'mode' => 'write', 'params' => ['website_id' => ['type' => 'int', 'min' => 0], 'scope_id' => ['type' => 'int', 'min' => 0], 'scope_key' => ['type' => 'string', 'max_length' => 128], 'password' => ['type' => 'string', 'max_length' => 128]]],
                 ],
             ),
         ];

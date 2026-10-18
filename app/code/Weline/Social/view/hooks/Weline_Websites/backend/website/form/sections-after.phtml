@@ -1,0 +1,18 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 55
+ *
+ * 网站编辑表单扩展：嵌入本站融媒体/社媒管理（账户、范围社媒、发布等）。
+ */
+
+$website = (array)($this->getData('website') ?? []);
+$hasWebsiteIdentity = \array_key_exists('website_id', $website) || \array_key_exists('id', $website);
+$websiteId = $hasWebsiteIdentity ? (int)($website['website_id'] ?? $website['id']) : -1;
+$hookId = \preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'website'));
+if (!\is_string($hookId) || $hookId === '' || \preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'website_' . (\is_string($hookId) ? $hookId : '');
+}
+$sectionId = $hookId . '_social_media';
+$pendingHint = (string)__('请先保存网站，再管理本站社媒账户与发布。');
+include BP . 'app/code/Weline/Social/view/templates/backend/partials/website-social-embed-section.phtml';

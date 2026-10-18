@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Social',
-    "version" => '1.0.11',
+    "version" => '1.0.12',
     "requires" => [
         'Weline_Admin' => '*',
         'Weline_Ai' => '*',
@@ -14,6 +14,7 @@ return [
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [
+        'Weline_Mail' => '*',
         'Weline_Ops' => '*',
     ],
     "provides" => [],

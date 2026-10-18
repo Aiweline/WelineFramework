@@ -23,6 +23,9 @@
 生成融媒体创意。,"Generate social creative."
 创建一键多平台发布批次。,"Create one-click multi-platform publish batch."
 获取发布批次状态。,"Get publish batch status."
+获取当前网站范围的社媒注册专用邮箱状态。,"Get social registration mailbox status for the current website scope."
+一键开通当前网站范围的社媒注册专用邮箱。,"One-click provision a social registration mailbox for the current website scope."
+重置当前网站范围社媒专用邮箱密码并返回一次明文。,"Reset the social mailbox password for the current website scope and return the plaintext once."
 未知社媒平台：%{1},"Unknown social platform: %{1}"
 社媒运营智能体,社媒运营智能体
 "根据 Ops 会话创建社媒创意草稿；公开外发须 Ops 审批。","根据 Ops 会话创建社媒创意草稿；公开外发须 Ops 审批。"
@@ -152,22 +155,6 @@ share,share
 查看融媒体管理,"View integrated media management"
 grid,grid
 查看融媒体管理页面,"View Fusion Media Management Page"
-暂无社媒账户,"No social media accounts available."
-"Fake 验证通过","Fake verification passed"
-"Fake 验证失败","Fake verification failed"
-"Weline_Social Fake 模式","Weline_Social Fake Mode"
-"该页面只验证 fake 账户与站点默认社媒关系，不创建发布批次。","This page only verifies the fake account and website default social relation, without creating a publish batch."
-"该页面只调用 fake_browser Provider，不访问任何外部社媒平台。","This page only calls the fake_browser Provider and does not access external social platforms."
-账户,Account
-站点,Websites
-站点社媒关系,"Website social relation"
-已打通,Connected
-未打通,"Not connected"
-默认发布账户,"Default publish accounts"
-创意草稿,"Creative Drafts"
-发布批次,"Publish batch"
-目标结果,"Target result"
-社媒账户部件,"Social Account Widget"
 请选择站点,"Please select a site"
 搜索站点名称或编码,"Search site name or encoding"
 配置融媒体平台应用,"Configure social platform apps"
@@ -175,8 +162,12 @@ grid,grid
 "平台 Provider","Platform Providers"
 已连接账户,"Connected Accounts"
 可发布账户,"Publishable Accounts"
+站点,Websites
+发布批次,"Publish batch"
 当前配置范围,"Current configuration scope"
+网站编辑已锁定当前站点范围；账户添加、范围社媒与一键发布均绑定此站。,"Website editor locked this site scope; account add, scope social, and publish bind to this site."
 选择网站范围（仅支持站点）。全页账户添加、范围社媒与一键授权/发布都绑定到这里选中的网站。,"Select a website scope (website only). Account add, scope social, one-click auth, and publish all bind to the selected website."
+网站编辑锁定,"Website editor lock"
 "Scope 优先","Scope First"
 范围类型,"Scope Type"
 请选择范围类型,"Select scope type"
@@ -191,12 +182,15 @@ grid,grid
 正在配置,Configuring
 未选择范围,"No range selected"
 暂无可配置范围，无法按范围配置社媒账户。,"There is currently no configuration range, and social media accounts cannot be configured by range."
+范围已由网站编辑锁定，如需切换站点请返回网站列表另开编辑。,"Scope is locked by website editor. Open another website from the list to switch sites."
 平台库,"Platform Library"
 账户管理,"Account Management"
 范围社媒,"Scope social media"
 "AI 创意","AI Creative"
 一键发布,"One-click Publish"
 发布记录,"Publish Records"
+社媒邮箱,"Social mailbox"
+选择站点范围后显示,"Select a site scope to show"
 "内置平台与扩展平台统一进入 Provider 注册表，图标由平台 code 自动解析为 SVG。","Built-in and extension platforms are unified in the Provider registry. Icons resolve automatically from platform code as SVG."
 搜索平台,"Search platforms"
 搜索平台名称、编码、状态或授权方式,"Search by name, code, status, or auth mode"
@@ -205,6 +199,7 @@ grid,grid
 未找到匹配平台，请调整关键词。,"No matching platforms. Try another keyword."
 账户列表,"Account List"
 新增账户,新增账户
+账户,Account
 展示,Display
 发布,Publish
 检测,Test
@@ -284,6 +279,18 @@ grid,grid
 "请填写草稿 ID。","Enter a draft ID."
 正在生成授权地址...,"Generating authorization URL..."
 "未配置平台应用凭据，请先点「打开系统配置」填写 App/Client。","Platform App/Client is not configured. Click Open system config first."
+正在检查企业邮箱…,"Checking enterprise mail…"
+未开通,"Not provisioned"
+已开通,Ready
+一键开通,Provision
+复制邮箱,"Copy email"
+复制密码,"Copy password"
+重置密码,"Reset password"
+已复制,Copied
+密码（仅显示一次）,"Password (shown once)"
+当前没有可复制的明文密码。将重置并复制新密码，旧密码立即失效，是否继续？,"No plaintext password is available to copy. Reset and copy a new password now? The old password will stop working immediately."
+本站企业邮箱未就绪,"Site enterprise mail not ready"
+企业邮箱模块未启用,"Enterprise mail module disabled"
 官方凭据指南,"Official credentials guide"
 通用步骤,"General steps"
 顶部选好范围类型、站点范围、二级范围。,"Select scope type, website scope, and secondary scope at the top."
@@ -302,6 +309,26 @@ grid,grid
 必填,Required
 可选,Optional
 请选择授权方式,"Select an auth mode"
+确认重置社媒邮箱密码？旧密码将立即失效。,"Reset the social mailbox password? The old password will stop working immediately."
+暂无社媒账户,"No social media accounts available."
+请先保存网站，再管理本站社媒账户与发布。,"Save the website first, then manage this site's social accounts and publishing."
+"Fake 验证通过","Fake verification passed"
+"Fake 验证失败","Fake verification failed"
+"Weline_Social Fake 模式","Weline_Social Fake Mode"
+"该页面只验证 fake 账户与站点默认社媒关系，不创建发布批次。","This page only verifies the fake account and website default social relation, without creating a publish batch."
+"该页面只调用 fake_browser Provider，不访问任何外部社媒平台。","This page only calls the fake_browser Provider and does not access external social platforms."
+站点社媒关系,"Website social relation"
+已打通,Connected
+未打通,"Not connected"
+默认发布账户,"Default publish accounts"
+创意草稿,"Creative Drafts"
+目标结果,"Target result"
+社媒账户部件,"Social Account Widget"
+复制失败,"Copy failed"
+暂时无法加载融媒体管理嵌入页，请稍后重试或打开完整融媒体管理。,"Unable to load the embedded Social admin. Retry later or open full Social Media Management."
+账户添加、范围社媒与一键发布均绑定当前网站范围。,"Account add, scope social, and one-click publish are bound to the current website scope."
+打开完整融媒体管理,"Open full Social Media Management"
+本站融媒体管理,"Site Social Media Management"
 社媒发布队列,"Social publish queue"
 "按 SocialPublishTarget 执行单个平台发布。","Executes one platform publish by SocialPublishTarget."
 "缺少 target_id。","target_id is required."
@@ -338,6 +365,18 @@ grid,grid
 该平台不支持一键授权，请在账户表单中人工配置凭据。,"This platform does not support one-click auth. Enter official credentials in the account form."
 授权地址已生成。,"Authorization URL generated."
 授权状态无效或已过期，请重新发起一键授权。,"Authorization state is invalid or expired. Please start one-click auth again."
+未启用企业邮箱模块，无法开通社媒专用邮箱。,"Enterprise mail module is not enabled; cannot provision a social mailbox."
+请先选择站点范围。,"Select a site scope first."
+本站企业邮箱未在本机可用。,"Enterprise mail for this site is not available locally."
+社媒专用邮箱已存在。,"Social mailbox already exists."
+无法解析本站邮局域名。,"Cannot resolve a mail domain for this site."
+社媒注册专用邮箱,"Social registration mailbox"
+开通社媒专用邮箱失败,开通社媒专用邮箱失败
+社媒专用邮箱已开通。,"Social mailbox provisioned."
+请先开通社媒专用邮箱。,"Provision the social mailbox first."
+"密码至少 8 位。","Password must be at least 8 characters."
+重置密码失败,重置密码失败
+社媒邮箱密码已更新，请立即复制保存。,"Social mailbox password updated. Copy and store it now."
 账户名称不能为空。,"Account name is required."
 "启用社媒账户部件时必须填写公开主页 URL。","Public profile URL is required when enabling the social account widget."
 账户已保存为仅展示模式，未启用发布。,"Account saved as display-only; publishing is not enabled."

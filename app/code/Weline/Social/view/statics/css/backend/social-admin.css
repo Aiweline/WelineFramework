@@ -305,3 +305,99 @@
         grid-template-columns: 1fr;
     }
 }
+
+
+.weline-social-admin__tabs-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3);
+    width: 100%;
+    min-width: 0;
+}
+
+.weline-social-admin__tabs-bar .w-tabs__list {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: calc(100% - 28rem);
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.weline-social-admin__mailbox-strip {
+    flex: 0 1 auto;
+    max-width: min(100%, 28rem);
+    margin-inline-start: auto;
+}
+
+.weline-social-admin__mailbox-strip-inner {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--weline-space-2);
+    min-height: 2.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+
+.weline-social-admin__mailbox-strip [data-mailbox-label] {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.weline-social-admin__mailbox-strip [data-mailbox-label][hidden] {
+    display: none;
+}
+
+.weline-social-admin__mailbox-email {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8125rem;
+    max-width: 16rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.weline-social-admin__mailbox-actions {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--weline-space-1);
+    flex: 0 0 auto;
+}
+
+.weline-social-admin__mailbox-actions .w-button {
+    white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+    .weline-social-admin__tabs-bar {
+        flex-wrap: wrap;
+    }
+    .weline-social-admin__tabs-bar .w-tabs__list {
+        max-width: 100%;
+    }
+    .weline-social-admin__mailbox-strip {
+        max-width: 100%;
+        width: 100%;
+        margin-inline-start: 0;
+    }
+    .weline-social-admin__mailbox-strip-inner {
+        justify-content: flex-start;
+    }
+}
+
+/* Website-editor iframe embed: tighten chrome, keep account/tabs usable */
+.weline-social-admin--embed .w-stat-tiles {
+    display: none;
+}
+
+.weline-social-admin--embed[data-scope-locked='1'] .social-choice[data-disabled='1'] .social-choice-trigger {
+    cursor: not-allowed;
+    opacity: 0.72;
+}

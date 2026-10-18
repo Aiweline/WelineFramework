@@ -31,6 +31,13 @@ class Social extends BaseController
     #[Acl('Weline_Social::social_index', '查看融媒体管理', 'grid', '查看融媒体管理页面')]
     public function index(): string
     {
+        // OffCanvas / 网站编辑 iframe 内嵌时用 blank，避免重复套后台顶栏/侧栏。
+        $socialEmbed = $this->request->isIframe()
+            || (string)$this->request->getParam('isIframe') !== '';
+        if ($socialEmbed) {
+            $this->layoutType = 'default.blank';
+        }
+
         $platforms = $this->iconService->enrichDefinitions($this->registry->listDefinitions());
         $accounts = $this->accountService->listAccounts();
         $websites = $this->websiteAccountService->listWebsites();
@@ -68,6 +75,8 @@ class Social extends BaseController
         $this->assign('fake_smoke_url', '/weline_social/frontend/social/smoke?fake=1&relation=1&no_publish=1');
         $this->assign('platform_credential_guides', $this->credentialGuide->getAllGuides());
         $this->assign('platform_guide_keys', $this->credentialGuide->getGuideKeys());
+        $this->assign('social_embed', $socialEmbed);
+        $this->assign('scope_locked', $socialEmbed);
 
         return (string) $this->fetch();
     }

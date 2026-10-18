@@ -39,6 +39,15 @@ final class SocialViewContractsTest extends TestCase
             'SocialChoiceFloating::testScopeTypeDoesNotShowTechnicalWebsiteCodeChip' => function () {
             $this->assert_SocialChoiceFloating_testScopeTypeDoesNotShowTechnicalWebsiteCodeChip();
         },
+            'SocialScopeMailboxStrip::testTabsBarHostsMailboxStripOnRight' => function () {
+            $this->assert_SocialScopeMailboxStrip_testTabsBarHostsMailboxStripOnRight();
+        },
+            'WebsiteEditorEmbed::testHookInjectsSocialDisclosure' => function () {
+            $this->assert_WebsiteEditorEmbed_testHookInjectsSocialDisclosure();
+        },
+            'WebsiteEditorEmbed::testIndexSupportsEmbedLock' => function () {
+            $this->assert_WebsiteEditorEmbed_testIndexSupportsEmbedLock();
+        },
         ];
     }
 
@@ -68,5 +77,60 @@ private function assert_SocialChoiceFloating_testScopeTypeDoesNotShowTechnicalWe
     self::assertStringContainsString('typeWrap.hidden', $src);
     self::assertStringContainsString('meta: String(item.scope_code', $src);
     self::assertStringNotContainsString("meta: String(group.scope_type || '')", $src);
+}
+
+private function assert_SocialScopeMailboxStrip_testTabsBarHostsMailboxStripOnRight(): void
+{
+    $tpl = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/templates/backend/Social/index.phtml');
+    $css = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/statics/css/backend/social-admin.css');
+    self::assertStringContainsString('weline-social-admin__tabs-bar', $tpl);
+    self::assertStringContainsString('data-testid="social-scope-mailbox"', $tpl);
+    self::assertStringContainsString('getScopeSocialMailbox', $tpl);
+    self::assertStringContainsString('ensureScopeSocialMailbox', $tpl);
+    self::assertStringContainsString('refreshScopeMailboxStrip', $tpl);
+    self::assertStringContainsString('data-mailbox-copy-password', $tpl);
+    self::assertStringContainsString('mailboxCopyPassword', $tpl);
+    self::assertStringContainsString('Weline.UI.dialog.confirm', $tpl);
+    self::assertStringContainsString('uiConfirm(', $tpl);
+    self::assertStringContainsString('uiToast(', $tpl);
+    self::assertStringNotContainsString('window.confirm', $tpl);
+    self::assertStringNotContainsString('window.alert', $tpl);
+    self::assertStringNotContainsString('window.prompt', $tpl);
+    self::assertStringNotContainsString(
+        "if (mailboxState.password_once) {\n       html += '<button type=\"button\" class=\"w-button\" data-tone=\"quiet\" data-size=\"sm\" data-mailbox-copy-password>",
+        $tpl
+    );
+    self::assertStringContainsString('.weline-social-admin__mailbox-strip', $css);
+    self::assertStringContainsString('margin-inline-start: auto', $css);
+    self::assertStringContainsString('border: 0', $css);
+    self::assertStringContainsString('.weline-social-admin__mailbox-actions', $css);
+    self::assertStringContainsString('flex-wrap: nowrap', $css);
+}
+
+private function assert_WebsiteEditorEmbed_testHookInjectsSocialDisclosure(): void
+{
+    $hook = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/hooks/Weline_Websites/backend/website/form/sections-after.phtml');
+    $partial = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/templates/backend/partials/website-social-embed-section.phtml');
+    $service = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/Service/SocialWebsiteAccountService.php');
+    self::assertStringContainsString('website-social-embed-section.phtml', $hook);
+    self::assertStringContainsString('data-testid="website-social-embed"', $partial);
+    self::assertStringContainsString('data-testid="website-social-embed-frame"', $partial);
+    self::assertStringContainsString('websiteEditorEmbedQuery', $partial);
+    self::assertStringContainsString('function websiteEditorEmbedQuery', $service);
+    self::assertStringContainsString("'isIframe' => 'true'", $service);
+}
+
+private function assert_WebsiteEditorEmbed_testIndexSupportsEmbedLock(): void
+{
+    $tpl = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/templates/backend/Social/index.phtml');
+    $controller = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/Controller/Backend/Social.php');
+    $css = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/statics/css/backend/social-admin.css');
+    self::assertStringContainsString("layoutType = 'default.blank'", $controller);
+    self::assertStringContainsString("assign('social_embed'", $controller);
+    self::assertStringContainsString("assign('scope_locked'", $controller);
+    self::assertStringContainsString('weline-social-admin--embed', $tpl);
+    self::assertStringContainsString('data-scope-locked', $tpl);
+    self::assertStringContainsString('网站编辑锁定', $tpl);
+    self::assertStringContainsString('.weline-social-admin--embed .w-stat-tiles', $css);
 }
 }
