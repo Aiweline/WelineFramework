@@ -667,13 +667,20 @@ async function addToCartFromPdp(page, gotoFrontend, pdpPath) {
   await waitForWelineApi(page);
   await reloadIfThemeGenerationStale(page);
   await neutralizeStaleThemeStamp(page);
+  // Align with multi-scope addToCartMode: wait for CTA before evaluate (hydration race).
+  await page.waitForSelector(
+    '[data-testid="product-add-to-cart"][data-product-id], [data-testid="product-buy-now"][data-product-id], [data-action="add"][data-product-id], [data-action="buy-now"][data-product-id]',
+    { timeout: 60000 },
+  );
   const addFn = async () => {
     let api = window.Weline.Api;
     if (!api || typeof api.resource !== 'function') {
       api = await window.Weline.load('api');
     }
-    const buyNow = document.querySelector('[data-action="buy-now"][data-product-id]')
-      || document.querySelector('[data-testid="product-buy-now"]')
+    const buyNow = document.querySelector('[data-testid="product-add-to-cart"][data-product-id]')
+      || document.querySelector('[data-testid="product-buy-now"][data-product-id]')
+      || document.querySelector('[data-action="add"][data-product-id]')
+      || document.querySelector('[data-action="buy-now"][data-product-id]')
       || document.querySelector('[data-action="add-to-cart"][data-product-id]');
     if (!buyNow) {
       return { success: false, message: 'buy_now_missing', url: location.href, title: document.title };

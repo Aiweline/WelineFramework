@@ -175,8 +175,9 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
       legacy_product_id: productId,
       selection,
       guest_token: guestToken,
-      // Live wholesale MOQ on the e2e PDP is 5 (error: 批发起订量为 5 件).
-      qty: cartMode === 'tob' ? 5 : 1,
+      // Live wholesale MOQ on the e2e PDP is ≥5 (error: 批发起订量为 5 件).
+      // Use 10 so packing/partial-fill tiers still clear the gate.
+      qty: cartMode === 'tob' ? 10 : 1,
       selling_mode: cartMode,
       cart_type: cartMode,
     }, { silent: true, requestTimeoutMs: 45000 });

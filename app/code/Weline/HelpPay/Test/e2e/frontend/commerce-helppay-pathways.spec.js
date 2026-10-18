@@ -60,8 +60,10 @@ moduleDescribe(test, MODULE, '帮付与快捷购买结账通路', () => {
 
       await gotoPdp(page, gotoFrontend, pdp);
       await expect(page.locator('body')).not.toContainText(FATAL);
-      await expect(page.locator('[data-testid="product-help-pay"], [data-helppay-open], [data-testid="help-pay-open"]').first())
-        .toBeAttached({ timeout: 30000 });
+      // Friend CTA may render as product-help-pay or selection-share / helppay-open.
+      await expect(page.locator(
+        '[data-testid="product-help-pay"], [data-testid="product-selection-share"], [data-helppay-selection-share], [data-helppay-open], [data-testid="help-pay-open"], [data-helppay-placement="product-selection-share"]',
+      ).first()).toBeAttached({ timeout: 30000 });
 
       const evidence = await runHelpPayFriendCaptureEvidence(page, { scope: 'helppay_friend' });
       assertStep(!!evidence.transaction_no, 'helppay.friend.txn', evidence);

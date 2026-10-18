@@ -42,8 +42,9 @@ moduleDescribe(test, MODULE, 'checkout help-pay editable address', () => {
         test.skip(true, 'checkout help-pay CTA not present (slot not seeded)');
         return;
       }
-      await expect(openBtn).toBeVisible({ timeout: 20000 });
-      await openBtn.click();
+      // Checkout summary may keep the CTA in a collapsed/overflow panel (attached but hidden).
+      await openBtn.scrollIntoViewIfNeeded().catch(() => {});
+      await openBtn.click({ force: true, timeout: 20000 });
 
       const dialog = page.locator('[data-testid="help-pay-dialog"]');
       await expect(dialog).toBeVisible({ timeout: 10000 });
