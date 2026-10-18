@@ -1,4 +1,8 @@
-﻿"Multipass 模块安装完成","Multipass module installation completed"
+﻿官网登录提供方已保存,"Official login provider saved"
+保存失败：%{1},"Save failed: %{1}"
+官网登录提供方已删除,"Official login provider deleted"
+官网登录提供方不存在,"Official login provider does not exist"
+"Multipass 模块安装完成","Multipass module installation completed"
 "安装失败: %{1}","Installation failed: %{1}"
 "缺少 Multipass token","Missing Multipass token"
 缺少站点ID,"Missing site ID"
@@ -53,10 +57,6 @@ grid,grid
 生成Token,"Generate Token"
 为用户生成Multipass登录令牌,"Generate Multipass login token for user"
 官网登录提供方,"Official login provider"
-官网登录提供方已保存,"Official login provider saved"
-保存失败：%{1},"Save failed: %{1}"
-官网登录提供方已删除,"Official login provider deleted"
-官网登录提供方不存在,"Official login provider does not exist"
 login,login
 配置本站通过官网授权登录,"Configure this site to authorize login through the official website"
 保存官网登录提供方,"Save official website login provider"
@@ -215,20 +215,28 @@ Multipass管理,"Multipass management"
 请求失败,"Request failed"
 保存成功,"Saved successfully"
 保存失败,"Save Failed"
-添加官网登录提供方,"Add official login provider"
+已配置提供方,"Configured providers"
+新增提供方,新增提供方
+"暂无官网登录提供方。目标站点需要配置官网生成的 client_id 和 client_secret 后才能发起授权登录。","No official login provider configured. Target sites must configure the official client_id and client_secret before starting authorization login."
 名称,Name
+授权地址,授权地址
+密钥,Secret
+操作,操作
+删除,Delete
+添加官网登录提供方,"Add official login provider"
+关闭,关闭
 例如：Weline官网,"For example: Weline official site"
 官网授权地址,"Official authorization URL"
 官网接口地址,"Official API URL"
 "留空时默认使用官网授权地址 + /api123。","Leave blank to use official authorization URL + /api123."
 "Client Secret","Client Secret"
+编辑时留空将保留已有密钥,编辑时留空将保留已有密钥
 本站回调地址,"This site's callback URL"
 排序,"Sort order"
-已配置提供方,"Configured providers"
-"暂无官网登录提供方。目标站点需要配置官网生成的 client_id 和 client_secret 后才能发起授权登录。","No official login provider configured. Target sites must configure the official client_id and client_secret before starting authorization login."
-密钥,Secret
-留空保持不变,"Leave blank to keep unchanged"
-删除,Delete
+"Multipass API 不可用","Multipass API 不可用"
+编辑官网登录提供方,编辑官网登录提供方
+确认删除该官网登录提供方？,确认删除该官网登录提供方？
+保存中…,保存中…
 站点列表,"Site List"
 添加站点,"Add Site"
 暂无站点配置，请点击右上角「添加站点」按钮创建,"No site configuration. Please click the ""Add Site"" button in the top right corner to create one."
@@ -312,6 +320,7 @@ Token已复制到剪贴板,"Token has been copied to the clipboard"
 中风险,"Medium risk"
 以下授权范围不可用：%{1},"The following authorization scope is unavailable: %{1}"
 "该回调地址已经提交过 Multipass 管理申请","A Multipass management application has already been submitted for this callback URL"
+留空保持不变,"Leave blank to keep unchanged"
 """Multipass 模块安装完成""","""Multipass module installation completed"""
 "mdi mdi-account-key","mdi mdi-account-key"
 "mdi mdi-view-dashboard","mdi mdi-view-dashboard"

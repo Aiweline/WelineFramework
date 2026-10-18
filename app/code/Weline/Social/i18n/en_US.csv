@@ -203,7 +203,19 @@ grid,grid
 "运行 fake 浏览器验证","Run fake browser smoke"
 添加到当前范围,"Add to current scope"
 未找到匹配平台，请调整关键词。,"No matching platforms. Try another keyword."
+账户列表,"Account List"
+新增账户,新增账户
+展示,Display
+发布,Publish
+检测,Test
+操作,Actions
+"暂无账户。可先新增仅展示账户，或运行 fake 浏览器验证创建本地账户。","No accounts yet. Add a display-only account or run fake browser smoke to create a local account."
+已启用,Enabled
+未启用,Disabled
+编辑,Edit
+禁用,Disable
 新增或编辑账户,"Add or Edit Account"
+关闭,关闭
 从平台库添加时，保存后会自动绑定到当前配置范围。,"When added from the platform library, it will be automatically bound to the current configuration scope after saving."
 平台,Platform
 请选择平台,"Select a platform"
@@ -228,16 +240,6 @@ grid,grid
 该平台不支持一键授权，请人工填写官方凭据。,"This platform does not support one-click auth. Enter official credentials manually."
 保存账户,"Save Account"
 清空表单,"Clear Form"
-账户列表,"Account List"
-展示,Display
-发布,Publish
-检测,Test
-操作,Actions
-"暂无账户。可先新增仅展示账户，或运行 fake 浏览器验证创建本地账户。","No accounts yet. Add a display-only account or run fake browser smoke to create a local account."
-已启用,Enabled
-未启用,Disabled
-编辑,Edit
-禁用,Disable
 为当前一级/二级范围配置默认社媒账户，发布时按当前范围自动勾选可发布账户。,"Configure a default social media account for the current first-level/secondary scope. When publishing, automatically select the account that can be published according to the current scope."
 不在这里保存任何凭据,"No credentials are saved here"
 当前范围,"current scope"

@@ -1,9 +1,350 @@
 <?php
-/** * Multipass official login provider management. * * @var \Weline\Framework\View\Template $this */
+/**
+ * Multipass official login provider management.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
 $providers = $this->getData('providers') ?? [];
 $scopeOptions = ['profile.basic', 'profile.email', 'account.bind', 'appstore.account', 'community.account'];
+$h = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$providerRows = [];
+foreach ($providers as $provider) {
+    if (!is_object($provider)) {
+        continue;
+    }
+    $providerRows[] = [
+        'provider_id' => (int)$provider->getId(),
+        'name' => (string)$provider->getName(),
+        'issuer_base_url' => (string)$provider->getIssuerBaseUrl(),
+        'rest_base_url' => (string)$provider->getRestBaseUrl(),
+        'client_id' => (string)$provider->getClientId(),
+        'redirect_uri' => (string)$provider->getRedirectUri(),
+        'scopes' => array_values($provider->getScopes()),
+        'status' => (string)$provider->getStatus(),
+        'sort_order' => (int)$provider->getSortOrder(),
+        'masked_secret' => (string)$provider->getMaskedClientSecret(),
+        'is_active' => (bool)$provider->isActive(),
+    ];
+}
+$providerRowsJson = json_encode($providerRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$scopeOptionsJson = json_encode($scopeOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
-<div class="w-grid"> <div style="--w-span:12;"> <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between"> <h4 style="--w-mb-sm:0;"><?= __('官网登录提供方') ?></h4> <div class="w-cluster"> <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;"> <li class="w-breadcrumb__item"><a href="@url('admin')"><?= __('首页') ?></a></li> <li class="w-breadcrumb__item"><?= __('Multipass管理') ?></li> <li class="w-breadcrumb__item"><?= __('官网登录提供方') ?></li> </ol> </div> </div> </div>
-</div> <div class="w-grid"> <template>Weline_Component::message.phtml</template>
-</div> <div class="w-grid"> <div style="--w-span-lg:5;"> <div class="w-card"> <div class="w-card__header"> <h5 class="w-card__title" style="--w-mb:0;"><?= __('添加官网登录提供方') ?></h5> </div> <div class="w-card__body"> <w:form method="post" action="@backend-url{'multipass/backend/identity-provider/save'}" csrf="off"> <?= $this->getFormKey('multipass_identity_provider_save') ?> <div style="--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('名称') ?> <span class="w-text" data-tone="danger">*</span></label> <input class="w-input" name="name" required placeholder="<?= __('例如：Weline官网') ?>"> </div> <div style="--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('官网授权地址') ?> <span class="w-text" data-tone="danger">*</span></label> <input class="w-input" type="url" name="issuer_base_url" required placeholder="https://www.aiweline.com"> </div> <div style="--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('官网接口地址') ?></label> <input class="w-input" type="url" name="rest_base_url" placeholder="https://www.aiweline.com/api123"> <small class="w-text" data-tone="muted"><?= __('留空时默认使用官网授权地址 + /api123。') ?></small> </div> <div style="--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('Client ID') ?> <span class="w-text" data-tone="danger">*</span></label> <input class="w-input" name="client_id" required> </div> <div style="--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('Client Secret') ?> <span class="w-text" data-tone="danger">*</span></label> <input class="w-input" name="client_secret" required autocomplete="off"> </div> <div style="--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('本站回调地址') ?></label> <input class="w-input" type="url" name="redirect_uri" placeholder="https://site.example.com/multipass/frontend/identity/callback"> </div> <div style="--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('授权范围') ?></label> <div data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);"> <?php foreach ($scopeOptions as $scope): ?> <div class="w-check"> <input type="checkbox" name="scopes[]" value="<?= $scope ?>" id="new_scope_<?= str_replace('.', '_', $scope) ?>" <?= in_array($scope, ['profile.basic', 'profile.email', 'account.bind'], true) ? 'checked' : '' ?>> <label for="new_scope_<?= str_replace('.', '_', $scope) ?>"><?= $scope ?></label> </div> <?php endforeach; ?> </div> </div> <div class="w-grid"> <div style="--w-span-md:6;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('状态') ?></label> <select class="w-select" name="status"> <option value="active"><?= __('启用') ?></option> <option value="disabled"><?= __('禁用') ?></option> </select> </div> <div style="--w-span-md:6;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('排序') ?></label> <input class="w-input" type="number" name="sort_order" value="100"> </div> </div> <button class="w-button" type="submit" data-tone="primary"> <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?> </button> </w:form> </div> </div> </div> <div style="--w-span-lg:7;"> <div class="w-card"> <div class="w-card__header"> <h5 class="w-card__title" style="--w-mb:0;"><?= __('已配置提供方') ?></h5> </div> <div class="w-card__body"> <?php if (empty($providers)): ?> <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"> <w:icon name="login" size="sm"></w:icon> <p style="--w-mt:var(--weline-space-4);--w-mb:0;"><?= __('暂无官网登录提供方。目标站点需要配置官网生成的 client_id 和 client_secret 后才能发起授权登录。') ?></p> </div> <?php else: ?> <?php foreach ($providers as $provider): ?> <div data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);--w-mb:var(--weline-space-4);"> <w:form method="post" action="@backend-url{'multipass/backend/identity-provider/save'}" csrf="off"> <?= $this->getFormKey('multipass_identity_provider_update_' . $provider->getId()) ?> <input type="hidden" name="provider_id" value="<?= (int)$provider->getId() ?>"> <div class="w-cluster" data-justify="between" data-align="start" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);"> <div> <h6 style="--w-mb:var(--weline-space-1);"><?= htmlspecialchars($provider->getName(), ENT_QUOTES, 'UTF-8') ?></h6> <span class="w-badge <?= $provider->isActive() ? 'bg-success' : '' ?>"><?= htmlspecialchars($provider->getStatus(), ENT_QUOTES, 'UTF-8') ?></span> </div> <div class="w-text" data-tone="muted" data-size="sm"><?= __('密钥') ?>: <?= htmlspecialchars($provider->getMaskedClientSecret(), ENT_QUOTES, 'UTF-8') ?></div> </div> <div class="w-grid"> <div style="--w-span-md:6;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('名称') ?></label> <input class="w-input" name="name" value="<?= htmlspecialchars($provider->getName(), ENT_QUOTES, 'UTF-8') ?>" required> </div> <div style="--w-span-md:6;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('Client ID') ?></label> <input class="w-input" name="client_id" value="<?= htmlspecialchars($provider->getClientId(), ENT_QUOTES, 'UTF-8') ?>" required> </div> <div style="--w-span-md:6;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('官网授权地址') ?></label> <input class="w-input" type="url" name="issuer_base_url" value="<?= htmlspecialchars($provider->getIssuerBaseUrl(), ENT_QUOTES, 'UTF-8') ?>" required> </div> <div style="--w-span-md:6;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('官网接口地址') ?></label> <input class="w-input" type="url" name="rest_base_url" value="<?= htmlspecialchars($provider->getRestBaseUrl(), ENT_QUOTES, 'UTF-8') ?>"> </div> <div style="--w-span-md:12;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('本站回调地址') ?></label> <input class="w-input" type="url" name="redirect_uri" value="<?= htmlspecialchars($provider->getRedirectUri(), ENT_QUOTES, 'UTF-8') ?>"> </div> <div style="--w-span-md:6;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('Client Secret') ?></label> <input class="w-input" name="client_secret" value="" placeholder="<?= __('留空保持不变') ?>" autocomplete="off"> </div> <div style="--w-span-md:3;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('状态') ?></label> <select class="w-select" name="status"> <option value="active" <?= $provider->getStatus() === 'active' ? 'selected' : '' ?>><?= __('启用') ?></option> <option value="disabled" <?= $provider->getStatus() === 'disabled' ? 'selected' : '' ?>><?= __('禁用') ?></option> </select> </div> <div style="--w-span-md:3;--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('排序') ?></label> <input class="w-input" type="number" name="sort_order" value="<?= (int)$provider->getSortOrder() ?>"> </div> </div> <div style="--w-mb:var(--weline-space-4);"> <label class="w-field__label"><?= __('授权范围') ?></label> <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-4);"> <?php foreach ($scopeOptions as $scope): ?> <label class="w-check" style="--w-mb:0;"> <input type="checkbox" name="scopes[]" value="<?= $scope ?>" <?= in_array($scope, $provider->getScopes(), true) ? 'checked' : '' ?>> <span><?= $scope ?></span> </label> <?php endforeach; ?> </div> </div> <button class="w-button" type="submit" data-tone="primary" data-size="sm"> <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?> </button> </w:form> <w:form method="post" action="@backend-url{'multipass/backend/identity-provider/delete'}" csrf="off" style="--w-mt:var(--weline-space-2);"> <?= $this->getFormKey('multipass_identity_provider_delete_' . $provider->getId()) ?> <input type="hidden" name="provider_id" value="<?= (int)$provider->getId() ?>"> <button class="w-button" type="submit" data-tone="danger" data-variant="outline" data-size="sm"> <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?> </button> </w:form> </div> <?php endforeach; ?> <?php endif; ?> </div> </div> </div>
+<div class="w-grid">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <h4 style="--w-mb-sm:0;"><?= __('官网登录提供方') ?></h4>
+            <div class="w-cluster">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><a href="@url('admin')"><?= __('首页') ?></a></li>
+                    <li class="w-breadcrumb__item"><?= __('Multipass管理') ?></li>
+                    <li class="w-breadcrumb__item"><?= __('官网登录提供方') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
 </div>
+<div class="w-grid">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<section class="w-card" data-testid="multipass-identity-provider-list">
+    <div class="w-card__header w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);">
+        <h5 class="w-card__title" style="--w-m:0;"><?= __('已配置提供方') ?></h5>
+        <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                id="multipass-idp-create-open" data-testid="multipass-idp-create-open"><?= __('新增提供方') ?></button>
+    </div>
+    <div class="w-card__body">
+        <?php if ($providerRows === []): ?>
+            <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                <w:icon name="login" size="sm"></w:icon>
+                <p style="--w-mt:var(--weline-space-4);--w-mb:0;"><?= __('暂无官网登录提供方。目标站点需要配置官网生成的 client_id 和 client_secret 后才能发起授权登录。') ?></p>
+            </div>
+        <?php else: ?>
+            <div class="w-table-wrap">
+                <table class="w-table" data-w-vertical="middle">
+                    <thead>
+                    <tr>
+                        <th><?= __('名称') ?></th>
+                        <th><?= __('授权地址') ?></th>
+                        <th><?= __('状态') ?></th>
+                        <th><?= __('密钥') ?></th>
+                        <th><?= __('操作') ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($providerRows as $row): ?>
+                        <tr>
+                            <td>
+                                <strong><?= $h($row['name']) ?></strong><br>
+                                <span class="w-text" data-tone="muted" data-size="sm"><?= $h($row['client_id']) ?></span>
+                            </td>
+                            <td class="w-text" data-size="sm"><?= $h($row['issuer_base_url']) ?></td>
+                            <td>
+                                <span class="w-badge<?= !empty($row['is_active']) ? ' bg-success' : '' ?>"><?= $h($row['status']) ?></span>
+                            </td>
+                            <td class="w-text" data-size="sm"><?= $h($row['masked_secret']) ?></td>
+                            <td>
+                                <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                    <button class="w-button" type="button" data-variant="outline" data-size="sm"
+                                            data-testid="multipass-idp-edit-<?= (int)$row['provider_id'] ?>"
+                                            data-multipass-idp-edit="<?= (int)$row['provider_id'] ?>"><?= __('编辑') ?></button>
+                                    <button class="w-button" type="button" data-tone="danger" data-variant="outline" data-size="sm"
+                                            data-testid="multipass-idp-delete-<?= (int)$row['provider_id'] ?>"
+                                            data-multipass-idp-delete="<?= (int)$row['provider_id'] ?>"><?= __('删除') ?></button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<div class="w-dialog" id="multipass-idp-dialog" tabindex="-1" aria-hidden="true"
+     data-w-component="dialog" data-state="closed" hidden
+     data-testid="multipass-idp-dialog">
+    <div class="w-dialog__frame" data-size="md" style="max-block-size:min(90vh, 42rem);">
+        <div class="w-dialog__surface" style="display:flex; flex-direction:column; max-block-size:inherit; min-block-size:0;">
+            <form id="multipass-idp-form" class="w-stack" style="--w-gap:0; flex:1 1 auto; min-block-size:0; display:flex; flex-direction:column;" data-testid="multipass-idp-form">
+                <div class="w-dialog__header" style="flex-shrink:0;">
+                    <h2 class="w-dialog__title" style="--w-m:0;" data-multipass-idp-title><?= __('添加官网登录提供方') ?></h2>
+                    <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); flex:1 1 auto; min-block-size:0; overflow:auto;">
+                    <input type="hidden" name="provider_id" value="0" data-idp-field="provider_id">
+                    <label class="w-field">
+                        <span class="w-field__label"><?= __('名称') ?> <span class="w-text" data-tone="danger">*</span></span>
+                        <input class="w-input" name="name" required placeholder="<?= __('例如：Weline官网') ?>" data-idp-field="name" data-testid="multipass-idp-name">
+                    </label>
+                    <label class="w-field">
+                        <span class="w-field__label"><?= __('官网授权地址') ?> <span class="w-text" data-tone="danger">*</span></span>
+                        <input class="w-input" type="url" name="issuer_base_url" required placeholder="https://www.aiweline.com" data-idp-field="issuer_base_url">
+                    </label>
+                    <label class="w-field">
+                        <span class="w-field__label"><?= __('官网接口地址') ?></span>
+                        <input class="w-input" type="url" name="rest_base_url" placeholder="https://www.aiweline.com/api123" data-idp-field="rest_base_url">
+                        <small class="w-text" data-tone="muted"><?= __('留空时默认使用官网授权地址 + /api123。') ?></small>
+                    </label>
+                    <label class="w-field">
+                        <span class="w-field__label"><?= __('Client ID') ?> <span class="w-text" data-tone="danger">*</span></span>
+                        <input class="w-input" name="client_id" required data-idp-field="client_id">
+                    </label>
+                    <label class="w-field">
+                        <span class="w-field__label"><?= __('Client Secret') ?> <span class="w-text" data-tone="danger" data-idp-secret-required>*</span></span>
+                        <input class="w-input" name="client_secret" autocomplete="off" data-idp-field="client_secret" data-testid="multipass-idp-secret">
+                        <small class="w-text" data-tone="muted" data-idp-secret-hint hidden><?= __('编辑时留空将保留已有密钥') ?></small>
+                    </label>
+                    <label class="w-field">
+                        <span class="w-field__label"><?= __('本站回调地址') ?></span>
+                        <input class="w-input" type="url" name="redirect_uri" placeholder="https://site.example.com/multipass/frontend/identity/callback" data-idp-field="redirect_uri">
+                    </label>
+                    <div>
+                        <span class="w-field__label"><?= __('授权范围') ?></span>
+                        <div data-w-border="border" data-w-radius="md" style="--w-pt:var(--weline-space-3);--w-pe:var(--weline-space-3);--w-pb:var(--weline-space-3);--w-ps:var(--weline-space-3);" data-idp-scopes>
+                            <?php foreach ($scopeOptions as $scope): ?>
+                                <div class="w-check">
+                                    <input type="checkbox" name="scopes[]" value="<?= $h($scope) ?>"
+                                           id="idp_scope_<?= $h(str_replace('.', '_', $scope)) ?>"
+                                           data-idp-scope="<?= $h($scope) ?>"
+                                        <?= in_array($scope, ['profile.basic', 'profile.email', 'account.bind'], true) ? 'checked' : '' ?>>
+                                    <label for="idp_scope_<?= $h(str_replace('.', '_', $scope)) ?>"><?= $h($scope) ?></label>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <div class="w-grid" style="--w-gap:var(--weline-space-3);">
+                        <label class="w-field" style="--w-span-md:6;">
+                            <span class="w-field__label"><?= __('状态') ?></span>
+                            <select class="w-select" name="status" data-idp-field="status">
+                                <option value="active"><?= __('启用') ?></option>
+                                <option value="disabled"><?= __('禁用') ?></option>
+                            </select>
+                        </label>
+                        <label class="w-field" style="--w-span-md:6;">
+                            <span class="w-field__label"><?= __('排序') ?></span>
+                            <input class="w-input" type="number" name="sort_order" value="100" data-idp-field="sort_order">
+                        </label>
+                    </div>
+                    <span class="w-text" data-size="sm" data-tone="muted" data-idp-status style="--w-m:0;"></span>
+                </div>
+                <div class="w-dialog__footer" style="flex-shrink:0;">
+                    <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                    <button class="w-button" data-tone="primary" type="submit" data-testid="multipass-idp-submit"><?= __('保存') ?></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var providers = <?= $providerRowsJson ?>;
+    var defaultScopes = <?= $scopeOptionsJson ?>;
+    var form = document.getElementById('multipass-idp-form');
+    var dialog = document.getElementById('multipass-idp-dialog');
+    if (!form || !dialog) return;
+    var statusEl = form.querySelector('[data-idp-status]');
+    var titleEl = dialog.querySelector('[data-multipass-idp-title]');
+    var secretRequired = form.querySelector('[data-idp-secret-required]');
+    var secretHint = form.querySelector('[data-idp-secret-hint]');
+    var unavailableMsg = <?= json_encode((string)__('Multipass API 不可用'), JSON_UNESCAPED_UNICODE) ?>;
+    var createTitle = <?= json_encode((string)__('添加官网登录提供方'), JSON_UNESCAPED_UNICODE) ?>;
+    var editTitle = <?= json_encode((string)__('编辑官网登录提供方'), JSON_UNESCAPED_UNICODE) ?>;
+    var providerMap = {};
+    (Array.isArray(providers) ? providers : []).forEach(function (row) {
+        providerMap[String(row.provider_id || 0)] = row;
+    });
+
+    function toast(kind, message) {
+        var ui = window.Weline && window.Weline.UI;
+        var api = ui && ui.toast;
+        var text = String(message || '').trim();
+        if (!text) return;
+        if (api && typeof api[kind] === 'function') { api[kind](text); return; }
+        if (api && typeof api.show === 'function') {
+            api.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+        }
+    }
+    function setStatus(tone, text) {
+        if (!statusEl) return;
+        statusEl.setAttribute('data-tone', tone || 'muted');
+        statusEl.textContent = text || '';
+    }
+    function openDialog() {
+        var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+        if (ui && typeof ui.open === 'function') { ui.open(dialog); return; }
+        dialog.hidden = false; dialog.setAttribute('data-state', 'open'); dialog.setAttribute('aria-hidden', 'false');
+    }
+    function closeDialog() {
+        var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+        if (ui && typeof ui.close === 'function') { ui.close(dialog); return; }
+        dialog.hidden = true; dialog.setAttribute('data-state', 'closed'); dialog.setAttribute('aria-hidden', 'true');
+    }
+    function multipassApi() {
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            return Promise.reject(new Error(unavailableMsg));
+        }
+        if (typeof window.Weline.load === 'function') {
+            return window.Weline.load('api').then(function () { return window.Weline.Api.resource('multipass'); });
+        }
+        return Promise.resolve(window.Weline.Api.resource('multipass'));
+    }
+    function field(name) { return form.querySelector('[data-idp-field="' + name + '"]'); }
+    function setScopes(selected) {
+        var set = {};
+        (Array.isArray(selected) ? selected : []).forEach(function (s) { set[String(s)] = true; });
+        form.querySelectorAll('[data-idp-scope]').forEach(function (input) {
+            input.checked = !!set[input.getAttribute('data-idp-scope') || ''];
+        });
+    }
+    function resetForm() {
+        field('provider_id').value = '0';
+        field('name').value = '';
+        field('issuer_base_url').value = '';
+        field('rest_base_url').value = '';
+        field('client_id').value = '';
+        field('client_secret').value = '';
+        field('client_secret').required = true;
+        field('redirect_uri').value = '';
+        field('status').value = 'active';
+        field('sort_order').value = '100';
+        setScopes(['profile.basic', 'profile.email', 'account.bind']);
+        if (titleEl) titleEl.textContent = createTitle;
+        if (secretRequired) secretRequired.hidden = false;
+        if (secretHint) secretHint.hidden = true;
+        setStatus('muted', '');
+    }
+    function fillForm(row) {
+        field('provider_id').value = String(row.provider_id || 0);
+        field('name').value = row.name || '';
+        field('issuer_base_url').value = row.issuer_base_url || '';
+        field('rest_base_url').value = row.rest_base_url || '';
+        field('client_id').value = row.client_id || '';
+        field('client_secret').value = '';
+        field('client_secret').required = false;
+        field('redirect_uri').value = row.redirect_uri || '';
+        field('status').value = row.status || 'active';
+        field('sort_order').value = String(row.sort_order || 100);
+        setScopes(row.scopes || []);
+        if (titleEl) titleEl.textContent = editTitle;
+        if (secretRequired) secretRequired.hidden = true;
+        if (secretHint) secretHint.hidden = false;
+        setStatus('muted', '');
+    }
+
+    var createOpen = document.getElementById('multipass-idp-create-open');
+    if (createOpen) {
+        createOpen.addEventListener('click', function () {
+            resetForm();
+            openDialog();
+        });
+    }
+    document.querySelectorAll('[data-multipass-idp-edit]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var row = providerMap[String(btn.getAttribute('data-multipass-idp-edit') || '')] || null;
+            if (!row) return;
+            fillForm(row);
+            openDialog();
+        });
+    });
+    document.querySelectorAll('[data-multipass-idp-delete]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = parseInt(btn.getAttribute('data-multipass-idp-delete') || '0', 10) || 0;
+            if (!id) return;
+            var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+            var ask = (ui && typeof ui.confirm === 'function')
+                ? ui.confirm(<?= json_encode((string)__('确认删除该官网登录提供方？'), JSON_UNESCAPED_UNICODE) ?>)
+                : Promise.resolve(window.confirm(<?= json_encode((string)__('确认删除该官网登录提供方？'), JSON_UNESCAPED_UNICODE) ?>));
+            Promise.resolve(ask).then(function (ok) {
+                if (!ok) return;
+                return multipassApi().then(function (api) {
+                    return api.deleteIdentityProvider({ provider_id: id });
+                }).then(function (res) {
+                    var success = !!(res && res.success);
+                    var msg = (res && res.message) ? String(res.message) : (success ? 'ok' : 'fail');
+                    toast(success ? 'success' : 'error', msg);
+                    if (success) window.location.reload();
+                });
+            }).catch(function (err) {
+                toast('error', (err && err.message) ? String(err.message) : unavailableMsg);
+            });
+        });
+    });
+
+    form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        var scopes = [];
+        form.querySelectorAll('[data-idp-scope]').forEach(function (input) {
+            if (input.checked) scopes.push(input.getAttribute('data-idp-scope'));
+        });
+        var payload = {
+            provider_id: parseInt((field('provider_id') || {}).value || '0', 10) || 0,
+            name: String((field('name') || {}).value || '').trim(),
+            issuer_base_url: String((field('issuer_base_url') || {}).value || '').trim(),
+            rest_base_url: String((field('rest_base_url') || {}).value || '').trim(),
+            client_id: String((field('client_id') || {}).value || '').trim(),
+            client_secret: String((field('client_secret') || {}).value || ''),
+            redirect_uri: String((field('redirect_uri') || {}).value || '').trim(),
+            scopes: scopes,
+            status: String((field('status') || {}).value || 'active'),
+            sort_order: parseInt((field('sort_order') || {}).value || '100', 10) || 100
+        };
+        setStatus('muted', <?= json_encode((string)__('保存中…'), JSON_UNESCAPED_UNICODE) ?>);
+        multipassApi().then(function (api) {
+            return api.saveIdentityProvider(payload);
+        }).then(function (res) {
+            var ok = !!(res && res.success);
+            var msg = (res && res.message) ? String(res.message) : (ok ? 'ok' : 'fail');
+            setStatus(ok ? 'success' : 'danger', msg);
+            toast(ok ? 'success' : 'error', msg);
+            if (ok) { closeDialog(); window.location.reload(); }
+        }).catch(function (err) {
+            var msg = (err && err.message) ? String(err.message) : unavailableMsg;
+            setStatus('danger', msg);
+            toast('error', msg);
+        });
+    });
+})();
+</script>
