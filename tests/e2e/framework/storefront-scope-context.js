@@ -7,7 +7,8 @@
  * @typedef {{ origin: string, b2b?: boolean }} StorefrontScope
  */
 
-const DEFAULT_STOREFRONT_ORIGIN = 'https://p05113ef3.test.weline.com';
+// Keep Worker listen port: nginx:443/FPM is not the primary local acceptance plane (WLS :9555).
+const DEFAULT_STOREFRONT_ORIGIN = 'https://p05113ef3.test.weline.com:9555';
 
 /** @type {StorefrontScope[]} */
 const _stack = [];
@@ -103,12 +104,12 @@ function resolveStorefrontOrigin() {
   );
   const b2bEnv = String(process.env.WELINE_E2E_B2B_SCOPE || '').trim() === '1';
   if (isUsableOrigin(forced, { allowB2b: b2bEnv })) {
-    return forced.replace(/:9555$/, '');
+    return forced;
   }
 
   const target = normalizeOrigin(process.env.PLAYWRIGHT_TARGET_ORIGIN || '');
   if (isUsableOrigin(target, { allowB2b: false })) {
-    return target.replace(/:9555$/, '');
+    return target;
   }
 
   return DEFAULT_STOREFRONT_ORIGIN;

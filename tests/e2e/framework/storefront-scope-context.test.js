@@ -18,7 +18,7 @@ delete process.env.WELINE_E2E_B2B_SCOPE;
 
 assert.strictEqual(resolveStorefrontOrigin(), DEFAULT_STOREFRONT_ORIGIN, 'default origin');
 
-pushScope({ origin: 'https://p05113ef3.test.weline.com/e2e-b2b-commerce/web', b2b: true });
+pushScope({ origin: 'https://p05113ef3.test.weline.com:9555/e2e-b2b-commerce/web', b2b: true });
 assert.ok(
   /e2e-b2b-commerce/.test(resolveStorefrontOrigin()),
   'B2B push must win',
@@ -28,7 +28,7 @@ popScope();
 assert.strictEqual(resolveStorefrontOrigin(), DEFAULT_STOREFRONT_ORIGIN, 'after pop back to default');
 
 // Pollution guard: env B2B without flag must be ignored
-process.env.WELINE_E2E_STOREFRONT_ORIGIN = 'https://p05113ef3.test.weline.com/e2e-b2b-commerce/web';
+process.env.WELINE_E2E_STOREFRONT_ORIGIN = 'https://p05113ef3.test.weline.com:9555/e2e-b2b-commerce/web';
 assert.strictEqual(
   resolveStorefrontOrigin(),
   DEFAULT_STOREFRONT_ORIGIN,

@@ -28,7 +28,7 @@ const E2E_B2B_STORE_CODE = 'e2e_b2b_commerce';
 const E2E_B2B_CHANNEL_CODE = 'web';
 const E2E_B2B_STORE_NAME = 'E2E B2B 测试店';
 const E2E_B2B_CHANNEL_NAME = 'E2E B2B Web';
-const E2E_B2B_BASE_HOST = 'https://p05113ef3.test.weline.com';
+const E2E_B2B_BASE_HOST = 'https://p05113ef3.test.weline.com:9555';
 const E2E_B2B_SYS_DEFAULT_WH = 32;
 
 /**
