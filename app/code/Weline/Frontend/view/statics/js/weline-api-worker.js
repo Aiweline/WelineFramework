@@ -1062,8 +1062,166 @@
         return code === 'auth_error' || code === 'backend_attestation_invalid';
     }
 
+    /**
+     * Unsigned GET …/query-bin/~fpc/{rel}/~q/{sha1} — same identity as HTML Extra FPC.
+     * MISS → fall through to signed POST. Never use Accept on storefront HTML URLs.
+     */
+    async function tryFetchQueryBinFpcLeaf(endpoint, payload) {
+        const leafUrl = await buildQueryBinFpcLeafUrl(endpoint, payload);
+        if (!leafUrl) {
+            return null;
+        }
+        try {
+            const response = await fetch(leafUrl, {
+                method: 'GET',
+                credentials: 'same-origin',
+                redirect: 'manual',
+                cache: 'default',
+                headers: {
+                    Accept: CONTENT_TYPE,
+                    'Accept-Encoding': 'br',
+                },
+            });
+            if (!response || !response.ok) {
+                return null;
+            }
+            const ct = String(response.headers.get('content-type') || '');
+            if (ct.indexOf('weline-query-bin') === -1 && ct.indexOf('text/html') !== -1) {
+                return null;
+            }
+            assertBinaryFetchResponse(response);
+            const responseBytes = new Uint8Array(await response.arrayBuffer());
+            const headers = collectHeaders(response.headers);
+            let body = null;
+            if (responseBytes.length > 0) {
+                try {
+                    body = decodePacket(responseBytes);
+                } catch (_err) {
+                    return null;
+                }
+            }
+            if (!body || body.ok !== true) {
+                return null;
+            }
+            return {
+                responseOk: true,
+                status: response.status,
+                statusText: response.statusText || '',
+                headers: headers,
+                body: body,
+            };
+        } catch (_error) {
+            return null;
+        }
+    }
+
+    async function buildQueryBinFpcLeafUrl(endpoint, payload) {
+        if (!payload || payload.type !== 'call') {
+            return null;
+        }
+        const provider = String(payload.provider || '');
+        const operation = String(payload.operation || '');
+        const params = payload.params && typeof payload.params === 'object' ? payload.params : {};
+        let rel = '';
+        /** @type {Record<string, string>} */
+        const bag = {};
+        if (operation === 'filteredListingPage' && provider.indexOf('product') !== -1) {
+            let listingPath = String(params.listing_path || 'products').replace(/\\/g, '/');
+            listingPath = listingPath.replace(/^\/+|\/+$/g, '');
+            if (!listingPath) {
+                listingPath = 'products';
+            }
+            rel = listingPath;
+            ['price', 'sort', 'page'].forEach((key) => {
+                let v = params[key];
+                if (Array.isArray(v)) {
+                    v = v[0];
+                }
+                if (v === undefined || v === null) {
+                    return;
+                }
+                const s = String(v).trim();
+                if (!s || (key === 'page' && s === '1')) {
+                    return;
+                }
+                bag[key] = s;
+            });
+            const filters = params.filters && typeof params.filters === 'object' ? params.filters : {};
+            Object.keys(filters).forEach((code) => {
+                let c = String(code || '').toLowerCase().replace(/[^a-z0-9_\-]/g, '');
+                if (!c) {
+                    return;
+                }
+                if (c.indexOf('af_') !== 0) {
+                    c = 'af_' + c;
+                }
+                let v = filters[code];
+                if (Array.isArray(v)) {
+                    v = v[0];
+                }
+                if (v === undefined || v === null) {
+                    return;
+                }
+                const s = String(v).trim();
+                if (!s) {
+                    return;
+                }
+                bag[c] = s;
+            });
+        } else if (operation === 'search' && provider.indexOf('search') !== -1) {
+            rel = 'search';
+            ['blog_category_id', 'category_id', 'page', 'page_size', 'q', 'type'].forEach((key) => {
+                let v = params[key];
+                if (Array.isArray(v)) {
+                    v = v[0];
+                }
+                if (v === undefined || v === null) {
+                    return;
+                }
+                const s = String(v).trim();
+                if (!s) {
+                    return;
+                }
+                bag[key] = s;
+            });
+        } else {
+            return null;
+        }
+        const keys = Object.keys(bag).sort();
+        if (!keys.length) {
+            return null;
+        }
+        const canonical = keys.map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(bag[k])).join('&');
+        const sha = await sha1Hex(canonical);
+        let base = String(endpoint || SIGNED_PATH);
+        try {
+            const origin = String(self.location && self.location.origin ? self.location.origin : 'https://local.invalid');
+            const u = new URL(base, origin);
+            base = u.pathname;
+        } catch (_e) {
+            base = base.split('?')[0];
+        }
+        base = base.replace(/\/+$/g, '');
+        if (base.indexOf('/framework/query-bin') === -1) {
+            return null;
+        }
+        return base + '/~fpc/' + rel + '/~q/' + sha;
+    }
+
+    async function sha1Hex(message) {
+        if (!hasSubtleCrypto()) {
+            return '';
+        }
+        const digest = await crypto.subtle.digest('SHA-1', encoder.encode(String(message || '')));
+        return bytesToHex(new Uint8Array(digest));
+    }
+
     async function postSigned(config, payload, capability, lane) {
         return enqueueSignedRequest(async () => {
+            const fpcHit = await tryFetchQueryBinFpcLeaf(config.endpoint, payload);
+            if (fpcHit) {
+                return fpcHit;
+            }
             await ensureSession(config);
             // Snapshot for this request: dual lanes may refresh/clear URL slots concurrently.
             const sessionSnapshot = peekSession(config);

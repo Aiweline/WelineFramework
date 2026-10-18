@@ -443,6 +443,12 @@ private function assert_WelineApiErrorPresentation_testApiWaitsForScopeBootstrap
     self::assertStringContainsString('allowRepunch && isScopeStampRecoverableError(error)', $script);
     self::assertStringContainsString('warmup({ forceHandshake: true })', $script);
     self::assertStringContainsString('shouldDeferScopeStampErrorUi', $script);
+    // Intermediate stamp 401 must not paint DevConsole BinQuery ERR while recover retries.
+    self::assertStringContainsString('recovering: deferStampUi', $script);
+    self::assertStringContainsString('recovering,', $script);
+    $devConsole = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Frontend' . '/view/statics/js/weline-dev-console.js');
+    self::assertStringContainsString("meta.recovering === true", $devConsole);
+    self::assertStringContainsString('re-signing scope', $devConsole);
     self::assertStringContainsString('Success does not require bootstrap_id', $script);
     self::assertStringNotContainsString('SCOPE_BOOTSTRAP_OPAQUE', $script);
     self::assertStringNotContainsString('readScopeBootstrapId', $script);
@@ -815,6 +821,12 @@ private function assert_WelineDomMutationBus_testVueStyleMaxFlushDepthAndTakeRec
     self::assertStringContainsString('flush_storm', $js);
     self::assertStringContainsString('weline:dom:mutation-loop', $js);
     self::assertStringContainsString('参考 Vue maxUpdateDepth', $js);
+    self::assertStringContainsString('never observeThenDeliver', $js);
+    self::assertStringContainsString('__welineBusOwned', $js);
+    self::assertStringContainsString('__welineDomGateAdopted', $js);
+    self::assertStringContainsString('installDocumentObserveGate', $js);
+    self::assertStringContainsString('__WelineDomObserveGateInstalled', $js);
+    self::assertStringContainsString('__WelineNativeMutationObserver', $js);
 }
 
 private function assert_WelineDomMutationBus_testCriticalSurfacesPreferWelineDomObserve(): void
@@ -824,12 +836,18 @@ private function assert_WelineDomMutationBus_testCriticalSurfacesPreferWelineDom
     $preview = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Theme/view/ui/js/pages/theme-preview.js');
     $editorMode = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Theme/view/statics/js/editor-mode.js');
     $apiDom = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Frontend/view/statics/js/weline-api-dom.js');
+    $floatLayer = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Theme/view/statics/js/storefront-float-layer.js');
+    $i18nShell = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/I18n/view/statics/js/inline-edit-shell-20261014d.js');
     self::assertStringContainsString('Weline.dom.observe', $ui);
     self::assertStringContainsString('Weline.dom.observe', $captcha);
     self::assertStringContainsString('Weline.dom.observe', $preview);
     self::assertStringContainsString('Weline.dom.observe', $editorMode);
     self::assertStringContainsString('Weline.dom.observe', $apiDom);
     self::assertStringContainsString('weline-api-dom:late-discovery', $apiDom);
+    self::assertStringContainsString('Weline.dom.observe', $floatLayer);
+    self::assertStringContainsString('storefront-float-layer', $floatLayer);
+    self::assertStringContainsString('Weline.dom.observe', $i18nShell);
+    self::assertStringContainsString('i18n-inline-edit-shell', $i18nShell);
 }
 
 /**
@@ -841,7 +859,7 @@ private function assert_WelineDomMutationBus_testCriticalSurfacesPreferWelineDom
 private function firstPartyPathsUnderGate_WelineDomMutationBus(): array
 {
     $root = '/Users/weline/Project/Official/框架/app/code/Weline';
-    return [$root . '/Theme/view/ui/js/weline-ui.js', $root . '/Theme/view/ui/js/pages/theme-preview.js', $root . '/Theme/view/statics/js/editor-mode.js', $root . '/Captcha/view/statics/js/captcha-lazy.js', $root . '/Frontend/view/statics/js/weline-api-dom.js', $root . '/Cart/view/statics/js/widgets/mini-cart-icon.js', $root . '/Product/view/statics/js/widgets/product-sticky-purchase.js', $root . '/Theme/view/statics/js/widgets/site-blocks.js', $root . '/Theme/view/statics/js/widgets/mini-cart-icon.js', $root . '/Visitor/view/statics/js/pixel.js', $root . '/Framework/View/Form/FormRenderer.php'];
+    return [$root . '/Theme/view/ui/js/weline-ui.js', $root . '/Theme/view/ui/js/pages/theme-preview.js', $root . '/Theme/view/statics/js/editor-mode.js', $root . '/Captcha/view/statics/js/captcha-lazy.js', $root . '/Frontend/view/statics/js/weline-api-dom.js', $root . '/Cart/view/statics/js/widgets/mini-cart-icon.js', $root . '/Product/view/statics/js/widgets/product-sticky-purchase.js', $root . '/Theme/view/statics/js/widgets/site-blocks.js', $root . '/Theme/view/statics/js/widgets/mini-cart-icon.js', $root . '/Theme/view/statics/js/storefront-float-layer.js', $root . '/Visitor/view/statics/js/pixel.js', $root . '/I18n/view/statics/js/inline-edit-shell.js', $root . '/I18n/view/statics/js/inline-edit-shell-20261014d.js', $root . '/Framework/View/Form/FormRenderer.php'];
 }
 
 /**

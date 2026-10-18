@@ -77,6 +77,11 @@ private function assert_ModulesConfigPathBake_testCompilerDocumentsNoDevAbsolute
     $source = (string) file_get_contents($path);
     self::assertStringContainsString('paths 必须保留 Module:: 逻辑名', $source);
     self::assertStringContainsString('禁止按本机 DEV 烤死绝对 URL', $source);
+    self::assertStringContainsString("['globalVar', 'description', 'load', 'async', 'type']", $source, 'Compiler knownKeys must preserve type=module for ESM shells');
     self::assertStringNotContainsString('HotCache', $source, 'Compiler must not introduce modules HotCache bag');
+
+    $loader = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Frontend' . '/view/statics/js/weline.js');
+    self::assertStringContainsString("script.type = 'module'", $loader, 'ModuleLoader must honor modulesConfig type:module');
+    self::assertStringContainsString('moduleConfig.type || moduleConfig.scriptType', $loader);
 }
 }

@@ -364,7 +364,8 @@ class Compiler implements \Weline\Framework\Event\ObserverInterface
         }
         
         // 只匹配已知的配置项（业务 load 策略归各模块 weline.modules.js）
-        $knownKeys = ['globalVar', 'description', 'load', 'async'];
+        // type=module：ESM 壳（如 weline-ui.js 的 import.meta / export）经 ModuleLoader 插入时必须带 script.type
+        $knownKeys = ['globalVar', 'description', 'load', 'async', 'type'];
         $otherConfigPattern = '/(' . implode('|', $knownKeys) . '):\s*([^,\n}]+)/';
         if (preg_match_all($otherConfigPattern, $configWithoutPaths, $otherMatches, PREG_SET_ORDER)) {
             foreach ($otherMatches as $match) {

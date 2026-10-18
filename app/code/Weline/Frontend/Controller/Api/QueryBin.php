@@ -111,6 +111,7 @@ class QueryBin extends FrontendRestController
             $markPhase('decode_packet');
             $requestSummary = $this->summarizeRequestPayload($payload);
             RequestContext::set('query_bin.summary', $requestSummary);
+            RequestContext::set('query_bin.request_payload', $payload);
             $markPhase('summarize_payload', $requestSummary);
 
             if (($payload['type'] ?? '') === 'handshake') {
@@ -129,6 +130,8 @@ class QueryBin extends FrontendRestController
                     $committedSession,
                     $headers['session'],
                 );
+                $this->assertSearchFilterOriginGate($payload);
+                $markPhase('search_filter_origin_gate');
                 $result = $this->gateway->execute(
                     $payload,
                     $headers['capability'],
@@ -1121,6 +1124,35 @@ class QueryBin extends FrontendRestController
             RequestContext::set('query_bin.timing', $timing);
         }
 
+        if (
+            $statusCode === 200
+            && ($payload['ok'] ?? false) === true
+            && $summary['provider'] !== ''
+            && $summary['operation'] !== ''
+            && self::binQueryBusinessSucceeded($payload['data'] ?? null)
+        ) {
+            try {
+                $reqPayload = RequestContext::get('query_bin.request_payload');
+                $params = \is_array($reqPayload['params'] ?? null) ? $reqPayload['params'] : [];
+                $scheme = \strtolower((string)$this->request->getServer('REQUEST_SCHEME'));
+                if ($scheme !== 'http' && $scheme !== 'https') {
+                    $scheme = 'https';
+                }
+                $host = (string)$this->request->getServer('HTTP_HOST');
+                if ($host !== '') {
+                    \Weline\Framework\Http\Fpc\QueryBinFpcDiskPublisher::tryPublish(
+                        $summary['provider'],
+                        $summary['operation'],
+                        $params,
+                        $encodedPayload,
+                        $scheme . '://' . $host,
+                    );
+                }
+            } catch (\Throwable) {
+                // Disk publish must not fail the live QueryBin response.
+            }
+        }
+
         $response = Response::fromContent(
             $encodedPayload,
             $statusCode,
@@ -1289,6 +1321,58 @@ class QueryBin extends FrontendRestController
             $seen[$name] = true;
             $response->setCookie($name, '', \time() - 3600, '/', '', true, true, 'Lax');
         }
+    }
+
+    /**
+     * Origin search/filter budget before hub execute (edge HIT never reaches here).
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function assertSearchFilterOriginGate(array $payload): void
+    {
+        if (($payload['type'] ?? '') !== 'call') {
+            return;
+        }
+        if (!\class_exists(\Weline\Server\Security\SearchFilterOriginGate::class)) {
+            return;
+        }
+        $provider = (string)($payload['provider'] ?? '');
+        $operation = (string)($payload['operation'] ?? '');
+        if (!\Weline\Server\Security\SearchFilterOriginGate::isCountedBinQuery($provider, $operation)) {
+            return;
+        }
+        $ip = '';
+        if (\method_exists($this->request, 'getClientIp')) {
+            $ip = (string)$this->request->getClientIp();
+        }
+        if ($ip === '') {
+            $ip = (string)$this->request->getServer('REMOTE_ADDR');
+        }
+        $verdict = \Weline\Server\Security\SearchFilterOriginGate::checkClientIp($ip);
+        if ($verdict['allowed']) {
+            return;
+        }
+        throw new FrontendQueryException(
+            'search_filter_origin_rate',
+            'Search/filter origin rate exceeded.',
+            429,
+        );
+    }
+
+    /**
+     * Business failure (e.g. Search data.success=false) must not warm index.bq.br.
+     * Listing success has no success key — treat as ok when key absent.
+     */
+    private static function binQueryBusinessSucceeded(mixed $data): bool
+    {
+        if (!\is_array($data)) {
+            return true;
+        }
+        if (!\array_key_exists('success', $data)) {
+            return true;
+        }
+
+        return $data['success'] === true;
     }
 
     /**

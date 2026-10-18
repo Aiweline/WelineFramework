@@ -113,7 +113,6 @@
         }
         window.__WelineDevMutationObserverGuardInstalled = true;
 
-        const NativeMO = window.MutationObserver;
         /** 同一观察者：同步重入深度 */
         const MAX_SYNC_DEPTH = 1;
         /** 同一观察者：短窗内投递次数（含微任务连发） */
@@ -130,6 +129,16 @@
             }
         }
 
+        function subscriberNamesFor(observer) {
+            try {
+                const key = observer && observer.__welineChannelKey;
+                if (key && typeof window.__WelineListDomMutationSubscribers === 'function') {
+                    return window.__WelineListDomMutationSubscribers(key) || [];
+                }
+            } catch (_e) { /* ignore */ }
+            return [];
+        }
+
         function reportAndStop(state, reason, observer) {
             if (state.tripped) {
                 return;
@@ -142,6 +151,9 @@
                 reason: reason,
                 deliveries: state.deliveries,
                 syncDepth: state.depth,
+                label: (observer && observer.__welineMoLabel) || state.label || '',
+                channelKey: (observer && observer.__welineChannelKey) || '',
+                subscribers: subscriberNamesFor(observer),
                 observeStack: state.observeStack || '',
                 createStack: state.createStack || '',
             };
@@ -149,7 +161,7 @@
                 console.error(
                     '[Weline:DEV] MutationObserver 反馈环已截断（开发环境防护）。'
                     + ' 回调内改 childList/subtree 又触发同一观察者会导致页面卡死。'
-                    + ' 请在回调里加重入守卫，或只发现新节点、禁止每次全量重绘。',
+                    + ' document 根须走 Weline.dom.observe（Document Observe Gate 强制入线）。',
                     detail
                 );
             } catch (_c) { /* ignore */ }
@@ -161,61 +173,80 @@
             } catch (_w) { /* ignore */ }
         }
 
-        function WrappedMutationObserver(callback) {
-            if (typeof callback !== 'function') {
-                return new NativeMO(callback);
+        function wrapNativeForStorm(NativeMO) {
+            function StormNativeMutationObserver(callback) {
+                if (typeof callback !== 'function') {
+                    return new NativeMO(callback);
+                }
+                const state = {
+                    depth: 0,
+                    deliveries: 0,
+                    windowStart: 0,
+                    tripped: false,
+                    createStack: captureStack(3),
+                    observeStack: '',
+                    label: '',
+                };
+                const wrapped = function (records, observer) {
+                    if (state.tripped) {
+                        return;
+                    }
+                    const now = Date.now();
+                    if (!state.windowStart || (now - state.windowStart) > WINDOW_MS) {
+                        state.windowStart = now;
+                        state.deliveries = 0;
+                    }
+                    state.deliveries += 1;
+                    state.depth += 1;
+                    if (state.depth > MAX_SYNC_DEPTH) {
+                        reportAndStop(state, 'sync_reentry', observer);
+                        state.depth -= 1;
+                        return;
+                    }
+                    if (state.deliveries > MAX_DELIVERIES_PER_WINDOW) {
+                        reportAndStop(state, 'delivery_storm', observer);
+                        state.depth -= 1;
+                        return;
+                    }
+                    try {
+                        return callback.call(this, records, observer);
+                    } finally {
+                        state.depth -= 1;
+                    }
+                };
+                const observer = new NativeMO(wrapped);
+                const nativeObserve = observer.observe.bind(observer);
+                observer.observe = function (target, options) {
+                    if (!state.observeStack) {
+                        state.observeStack = captureStack(2);
+                    }
+                    if (!state.label && observer.__welineMoLabel) {
+                        state.label = observer.__welineMoLabel;
+                    }
+                    return nativeObserve(target, options);
+                };
+                return observer;
             }
-            const state = {
-                depth: 0,
-                deliveries: 0,
-                windowStart: 0,
-                tripped: false,
-                createStack: captureStack(3),
-                observeStack: '',
-            };
-            const wrapped = function (records, observer) {
-                if (state.tripped) {
-                    return;
-                }
-                const now = Date.now();
-                if (!state.windowStart || (now - state.windowStart) > WINDOW_MS) {
-                    state.windowStart = now;
-                    state.deliveries = 0;
-                }
-                state.deliveries += 1;
-                state.depth += 1;
-                if (state.depth > MAX_SYNC_DEPTH) {
-                    reportAndStop(state, 'sync_reentry', observer);
-                    state.depth -= 1;
-                    return;
-                }
-                if (state.deliveries > MAX_DELIVERIES_PER_WINDOW) {
-                    reportAndStop(state, 'delivery_storm', observer);
-                    state.depth -= 1;
-                    return;
-                }
-                try {
-                    return callback.call(this, records, observer);
-                } finally {
-                    state.depth -= 1;
-                }
-            };
-            const observer = new NativeMO(wrapped);
-            const nativeObserve = observer.observe.bind(observer);
-            observer.observe = function (target, options) {
-                if (!state.observeStack) {
-                    state.observeStack = captureStack(2);
-                }
-                return nativeObserve(target, options);
-            };
-            return observer;
+            StormNativeMutationObserver.prototype = NativeMO.prototype;
+            try {
+                Object.defineProperty(StormNativeMutationObserver, 'name', { value: 'MutationObserver' });
+            } catch (_n) { /* ignore */ }
+            return StormNativeMutationObserver;
         }
 
-        WrappedMutationObserver.prototype = NativeMO.prototype;
-        try {
-            Object.defineProperty(WrappedMutationObserver, 'name', { value: 'MutationObserver' });
-        } catch (_n) { /* ignore */ }
-        window.MutationObserver = WrappedMutationObserver;
+        // Document Observe Gate 已包装 window.MutationObserver：只包底层 Native，禁止拆掉 Gate。
+        if (window.__WelineDomObserveGateInstalled) {
+            const realNative = window.__WelineNativeMutationObserver
+                || (window.MutationObserver && window.MutationObserver.__welineNative)
+                || null;
+            if (typeof realNative === 'function') {
+                window.__WelineNativeMutationObserver = wrapNativeForStorm(realNative);
+            }
+            return;
+        }
+
+        const NativeMO = window.MutationObserver;
+        window.MutationObserver = wrapNativeForStorm(NativeMO);
     }
 
     installDevMutationObserverGuard();
@@ -489,7 +520,12 @@
                         const script = document.createElement('script');
                         script.src = this.getScriptUrl(scriptPath);
                         script.async = true;
-                        // 同源不强制 CORS；跨域再设 anonymous
+                        // ESM 登记（type:"module"）必须带 script.type，否则 import.meta / export 会 SyntaxError
+                        const scriptType = moduleConfig && (moduleConfig.type || moduleConfig.scriptType);
+                        if (scriptType === 'module') {
+                            script.type = 'module';
+                        }
+                        // 同源不强制 CORS；跨域再设 anonymous（module 脚本跨域同样需要）
                         try {
                             const resolved = new URL(script.src, window.location.href);
                             if (resolved.origin !== window.location.origin) {

@@ -31,7 +31,8 @@
             paths: ["Weline_Theme::ui/weline-ui.js"],
             globalVar: null,
             load: "eager",
-            description: "Weline UI 2 runtime (classic script; was type=module in head)"
+            type: "module",
+            description: "Weline UI 2 runtime (ES module: import.meta + lazy import(); loader must set type=module)"
         },
         themeCssReady: {
             origin_paths: ["app/code/Weline/Theme/view/statics/ui/weline-css-ready.js"],

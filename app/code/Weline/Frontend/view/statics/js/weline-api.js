@@ -3172,8 +3172,11 @@
                         data: wrapper,
                         maintenance: !!data.maintenance,
                     };
+                    // Defer toast/reload: send() may recover stamp + retry the same call.
+                    const deferStampUi = this.shouldDeferScopeStampErrorUi(error, pending.payload);
                     this.finishDevTrace(data.id, {
                         ok: false,
+                        recovering: deferStampUi,
                         status: error.status,
                         statusText: data.statusText || '',
                         error: { code: error.code, message: bizMessage },
@@ -3187,8 +3190,7 @@
                         workerMessage: data,
                         skipConsole: true,
                     });
-                    // Defer toast/reload: send() may recover stamp + retry the same call.
-                    if (!this.shouldDeferScopeStampErrorUi(error, pending.payload)) {
+                    if (!deferStampUi) {
                         this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions, pending.payload);
                     }
                     pending.reject(error);
@@ -3231,8 +3233,12 @@
                 maintenance: !!data.maintenance,
             };
             const requestOptions = pending.payload && pending.payload.options;
+            // Defer toast/reload: send() may recover stamp + retry the same call.
+            // DevConsole must not paint BinQuery ERR for this expected intermediate 401.
+            const deferStampUi = this.shouldDeferScopeStampErrorUi(error, pending.payload);
             this.finishDevTrace(data.id, {
                 ok: false,
+                recovering: deferStampUi,
                 status: error.status,
                 statusText: data.statusText || '',
                 error: serverError,
@@ -3246,8 +3252,7 @@
                 workerMessage: data,
                 skipConsole: true,
             });
-            // Defer toast/reload: send() may recover stamp + retry the same call.
-            if (!this.shouldDeferScopeStampErrorUi(error, pending.payload)) {
+            if (!deferStampUi) {
                 this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions, pending.payload);
             }
             pending.reject(error);
@@ -3484,6 +3489,7 @@
             const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
             const summary = summarizeApiPayload(requestPayload);
             const ok = !!(responseMeta && responseMeta.ok === true);
+            const recovering = !ok && !!(responseMeta && responseMeta.recovering);
             const status = responseMeta && responseMeta.status ? responseMeta.status : '';
             const requestLog = cloneDevLogValue(sanitizePayloadForWorker(requestPayload));
             const responseLog = cloneDevLogValue(responseMeta || {});
@@ -3495,6 +3501,7 @@
             withDevConsole((devConsole) => {
                 devConsole.binQuery({
                     ok,
+                    recovering,
                     summary,
                     status,
                     durationMs,

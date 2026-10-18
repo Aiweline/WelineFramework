@@ -94,6 +94,8 @@
     function binQuery(meta) {
         meta = meta && typeof meta === 'object' ? meta : {};
         var ok = meta.ok === true;
+        // Recoverable scope-stamp miss: send() will re-punch + retry — not a final ERR.
+        var recovering = !ok && meta.recovering === true;
         var summary = String(meta.summary || 'request');
         var status = meta.status != null && meta.status !== '' ? String(meta.status) : '';
         var wallMs = meta.durationMs != null ? Math.max(0, Number(meta.durationMs) || 0) : null;
@@ -102,7 +104,7 @@
         var isLocal = localCache === 'hit' || localCache === 'l1' || localCache === 'inflight';
         var ms = '';
         if (wallMs != null && workMs != null && isLocal && wallMs > workMs + 5) {
-            // Wall clock includes main-thread queue; cache work was much cheaper.
+            // Wall clock includes main-thread void; cache work was much cheaper.
             ms = wallMs + 'ms wall · ' + workMs + 'ms cache';
         } else if (wallMs != null) {
             ms = wallMs + 'ms';
@@ -113,9 +115,24 @@
             localCache: localCache || undefined,
             workerElapsedMs: workMs != null ? workMs : undefined,
             wallElapsedMs: wallMs != null ? wallMs : undefined,
+            recovering: recovering || undefined,
             request: cloneValue(meta.request || {}),
             response: cloneValue(meta.response || {}),
         };
+
+        if (recovering) {
+            printLine(
+                'warn',
+                'BinQuery',
+                STYLE.warnBadge,
+                summary + ' · re-signing scope',
+                STYLE.title,
+                metaText,
+                payload,
+                localCacheBadge(localCache)
+            );
+            return;
+        }
 
         printLine(
             ok ? 'log' : 'error',
