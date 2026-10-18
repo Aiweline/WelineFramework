@@ -216,6 +216,7 @@ function e2e_b2b_ensure_product_stock(int $websiteId, int $storeId): array
     }
     $seeded = 0;
     $offerCount = 0;
+    $offerIds = [];
     foreach ($regs as $row) {
         if (!is_array($row)) {
             continue;
@@ -224,6 +225,27 @@ function e2e_b2b_ensure_product_stock(int $websiteId, int $storeId): array
         if ($offerId <= 0) {
             continue;
         }
+        $offerIds[$offerId] = true;
+    }
+    // Wholesale / leftover carts often reference unrelated catalog SKUs (e.g. 金羽*).
+    // Mirror a bounded set of default-store stock rows onto the B2B store so cart.validate
+    // does not fail closed on incidental lines.
+    $defaultRows = (clone $stockModel)->clear()
+        ->where(InventoryStock::schema_fields_WEBSITE_ID, $websiteId)
+        ->where(InventoryStock::schema_fields_STORE_ID, 0)
+        ->limit(400)
+        ->select()
+        ->fetchArray() ?: [];
+    foreach ($defaultRows as $srcRow) {
+        if (!is_array($srcRow)) {
+            continue;
+        }
+        $oid = (int)($srcRow[InventoryStock::schema_fields_OFFER_ID] ?? 0);
+        if ($oid > 0) {
+            $offerIds[$oid] = true;
+        }
+    }
+    foreach (array_keys($offerIds) as $offerId) {
         $offerCount++;
         $src = (clone $stockModel)->clear()
             ->where(InventoryStock::schema_fields_WEBSITE_ID, $websiteId)

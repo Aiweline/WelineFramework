@@ -170,6 +170,17 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
         try { sessionStorage.setItem('weline.cart.guest_token', guestToken); } catch (e2) {}
       }
     }
+    // Wholesale / reused login carts may already hold unrelated OOS lines (e.g. 金羽*).
+    // Clear best-effort before tob add so validate does not fail on leftovers.
+    if (cartMode === 'tob') {
+      try {
+        if (typeof cartApi.clear === 'function') {
+          await cartApi.clear({ guest_token: guestToken, cart_type: 'tob', selling_mode: 'tob' }, { silent: true });
+        } else if (typeof cartApi.empty === 'function') {
+          await cartApi.empty({ guest_token: guestToken, cart_type: 'tob', selling_mode: 'tob' }, { silent: true });
+        }
+      } catch (eClear) { /* best-effort */ }
+    }
     const addResult = await cartApi.add({
       provider_code: buyNow.dataset.providerCode || 'product',
       global_offer_uuid: offerUuid,
