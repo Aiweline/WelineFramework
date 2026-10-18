@@ -82,6 +82,24 @@ class SocialAccountService
 
         $accountId = (int)($params['account_id'] ?? 0);
         $account = $accountId > 0 ? $this->getAccount($accountId) : null;
+        if ($accountId > 0 && (!$account || !$account->getId())) {
+            throw new \InvalidArgumentException((string)__('账户不存在或已删除。'));
+        }
+        if ($account && $account->getId()) {
+            // 编辑已有账户：平台是身份主键，禁止改绑到其它 Provider。
+            $existingPlatform = \strtolower(\trim((string)($account->getData(SocialPlatformAccount::schema_fields_PLATFORM_CODE) ?? '')));
+            if ($existingPlatform !== '' && $platformCode !== '' && $platformCode !== $existingPlatform) {
+                throw new \InvalidArgumentException((string)__('编辑已有账户时不可更改平台。'));
+            }
+            if ($existingPlatform !== '') {
+                $platformCode = $existingPlatform;
+                $provider = $this->registry->getProvider($platformCode);
+                if ($provider === null) {
+                    throw new \InvalidArgumentException((string)__('未知社媒平台：%{1}', [$platformCode]));
+                }
+                $definition = $provider->getDefinition();
+            }
+        }
         $account ??= $this->findAccount($platformCode, $accountName) ?? $this->newAccount();
         if (!$account->getId()) {
             $account->setData(SocialPlatformAccount::schema_fields_CREATED_AT, $now);

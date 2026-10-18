@@ -48,25 +48,30 @@ final class SocialViewContractsTest extends TestCase
             'WebsiteEditorEmbed::testIndexSupportsEmbedLock' => function () {
             $this->assert_WebsiteEditorEmbed_testIndexSupportsEmbedLock();
         },
+            'SocialAccountEdit::testLocksPlatformIdentity' => function () {
+            $this->assert_SocialAccountEditLocksPlatformIdentity();
+        },
         ];
     }
 
 private function assert_SocialChoiceFloating_testAdminChoiceUsesThemeFloatingAttach(): void
 {
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/templates/backend/Social/index.phtml');
-    self::assertStringContainsString('data-w-float-surface', $src);
-    self::assertStringContainsString('UI.floating', $src);
-    self::assertStringContainsString('floating.attach', $src);
-    self::assertStringContainsString("placement: 'bottom-start'", $src);
-    self::assertStringContainsString('panel.contains(target)', $src);
+    // 平台/范围/授权下拉：主题 SearchSelect（自带 floating portal），禁止再自研 social-choice 面板。
+    self::assertStringContainsString('theme:search-select', $src);
+    self::assertStringContainsString('WelineThemeSearchSelect', $src);
+    self::assertStringContainsString('data-social-ss-host', $src);
+    self::assertStringContainsString('mountInto', $src);
+    self::assertStringNotContainsString('class="social-choice"', $src);
+    self::assertStringNotContainsString('social-choice-panel', $src);
 }
 
 private function assert_SocialChoiceFloating_testAdminChoiceCssSupportsFloatingPositionedPortal(): void
 {
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/statics/css/backend/social-admin.css');
-    self::assertStringContainsString('[data-w-floating-positioned]', $src);
-    self::assertStringContainsString('--w-floating-top', $src);
+    // SearchSelect 浮层样式由 Theme Taglib 注入；本页仅需 scope 卡片不裁切。
     self::assertStringContainsString('overflow: visible', $src);
+    self::assertStringContainsString('.scope-selector-grid', $src);
 }
 
 private function assert_SocialChoiceFloating_testScopeTypeDoesNotShowTechnicalWebsiteCodeChip(): void
@@ -77,6 +82,21 @@ private function assert_SocialChoiceFloating_testScopeTypeDoesNotShowTechnicalWe
     self::assertStringContainsString('typeWrap.hidden', $src);
     self::assertStringContainsString('meta: String(item.scope_code', $src);
     self::assertStringNotContainsString("meta: String(group.scope_type || '')", $src);
+}
+
+private function assert_SocialAccountEditLocksPlatformIdentity(): void
+{
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/templates/backend/Social/index.phtml');
+    $service = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/Service/SocialAccountService.php');
+    self::assertStringContainsString('function setAccountIdentityLocked', $src);
+    self::assertStringContainsString('setAccountIdentityLocked(true)', $src);
+    self::assertStringContainsString('setAccountIdentityLocked(false)', $src);
+    self::assertStringContainsString('data-social-identity-lock-hint', $src);
+    self::assertStringContainsString('data-account-edit', $src);
+    self::assertStringContainsString("var ssRoot = root.querySelector('[data-w-search-select=\"1\"]')", $src);
+    self::assertStringContainsString('ss.setDisabled(ssRoot, disabled)', $src);
+    self::assertStringContainsString('编辑已有账户时不可更改平台。', $service);
+    self::assertStringContainsString('编辑已有账户时不可更改平台。', $src);
 }
 
 private function assert_SocialScopeMailboxStrip_testTabsBarHostsMailboxStripOnRight(): void
