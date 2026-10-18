@@ -567,6 +567,9 @@ final class HttpContractsTest extends TestCase
                 $this->tearDown_UrlPathMountOutbound();
             }
         },
+            'UrlDocumentRootRelative::testToDocumentRootRelativeStripsOrigin' => function () {
+                $this->assert_UrlDocumentRootRelative_testToDocumentRootRelativeStripsOrigin();
+            },
             'UrlPathMountOutbound::testRootSitePeelIsNoOp' => function () {
             $this->setUp_UrlPathMountOutbound();
             try {
@@ -970,18 +973,32 @@ private function assert_FpcHtmlDiskStore_testPublishReadAndPurgeUrls(): void
     self::assertTrue(FpcHtmlDiskStore::publish($url, $html, ''));
     $path = FpcHtmlDiskStore::htmlPath($url);
     self::assertIsString($path);
-    self::assertFileExists($path);
-    self::assertSame($html, (string) \file_get_contents($path));
     $live = FpcHtmlDiskStore::logicalLiveBodyPath($url, false);
     self::assertIsString($live);
     self::assertStringContainsString(\DIRECTORY_SEPARATOR . 'html' . \DIRECTORY_SEPARATOR . 'live' . \DIRECTORY_SEPARATOR, $live);
     self::assertStringNotContainsString(\DIRECTORY_SEPARATOR . 'generations' . \DIRECTORY_SEPARATOR, $live);
     $hit = FpcHtmlDiskStore::read($url, '');
     self::assertIsArray($hit);
-    self::assertSame($html, $hit['body']);
-    self::assertNull($hit['encoding']);
-    FpcHtmlDiskStore::purgeUrls([$url]);
-    self::assertFileDoesNotExist($path);
+    if (ContentEncodingNegotiator::brotliAvailable()) {
+        $brPath = $path . '.br';
+        self::assertFileExists($brPath);
+        self::assertFileDoesNotExist($path);
+        self::assertSame('br', $hit['encoding']);
+        $decoded = ContentEncodingNegotiator::decode(
+            (string)$hit['body'],
+            ContentEncodingNegotiator::ENCODING_BROTLI,
+        );
+        self::assertSame($html, $decoded);
+        FpcHtmlDiskStore::purgeUrls([$url]);
+        self::assertFileDoesNotExist($brPath);
+    } else {
+        self::assertFileExists($path);
+        self::assertSame($html, (string) \file_get_contents($path));
+        self::assertSame($html, $hit['body']);
+        self::assertNull($hit['encoding']);
+        FpcHtmlDiskStore::purgeUrls([$url]);
+        self::assertFileDoesNotExist($path);
+    }
     self::assertNull(FpcHtmlDiskStore::read($url, ''));
 }
 
@@ -995,10 +1012,11 @@ private function assert_FpcHtmlDiskStore_testBrotliPublishIsBrOnlyAndReadableWit
     $br = \brotli_compress($html, \Weline\Framework\Http\ContentEncodingNegotiator::BROTLI_QUALITY);
     self::assertIsString($br);
     self::assertNotSame('', $br);
-    // Seed a legacy plaintext leaf that br publish must unlink.
-    self::assertTrue(FpcHtmlDiskStore::publish($url, $html, ''));
+    // Seed a legacy plaintext leaf (bypass auto-br publish) that explicit br publish must unlink.
     $htmlPath = FpcHtmlDiskStore::htmlPath($url);
     self::assertIsString($htmlPath);
+    self::assertTrue(@\mkdir(\dirname($htmlPath), 0775, true) || \is_dir(\dirname($htmlPath)));
+    self::assertNotFalse(\file_put_contents($htmlPath, $html));
     self::assertFileExists($htmlPath);
     self::assertTrue(FpcHtmlDiskStore::publish($url, $html, $br));
     $brPath = $htmlPath . '.br';
@@ -1033,17 +1051,17 @@ private function assert_FpcHtmlDiskStore_testAllowlistedQueryUsesQVariantLeaf():
     self::assertNotSame($pathOnly, $variantPath);
     self::assertStringContainsString('/' . FpcHtmlDiskStore::QUERY_VARIANT_SEGMENT . '/', $variantPath);
     self::assertStringContainsString(\sha1('price=0-99'), $variantPath);
-    self::assertFileExists($pathOnly);
-    self::assertFileExists($variantPath);
-    self::assertSame($pathOnlyHtml, (string)\file_get_contents($pathOnly));
-    self::assertSame($variantHtml, (string)\file_get_contents($variantPath));
+    $this->assertFpcHtmlDiskLeafExists($pathOnly);
+    $this->assertFpcHtmlDiskLeafExists($variantPath);
+    self::assertSame($pathOnlyHtml, $this->readFpcHtmlDiskLeafPlain($pathOnly));
+    self::assertSame($variantHtml, $this->readFpcHtmlDiskLeafPlain($variantPath));
     $hit = FpcHtmlDiskStore::read($withQuery, '');
     self::assertIsArray($hit);
-    self::assertSame($variantHtml, $hit['body']);
+    $this->assertFpcHtmlDiskHitPlainEquals($variantHtml, $hit);
     // Path-only purge cascades ~q children.
     FpcHtmlDiskStore::purgeUrls([$canonical]);
-    self::assertFileDoesNotExist($pathOnly);
-    self::assertFileDoesNotExist($variantPath);
+    $this->assertFpcHtmlDiskLeafMissing($pathOnly);
+    $this->assertFpcHtmlDiskLeafMissing($variantPath);
 }
 
 private function assert_FpcHtmlDiskStore_testSoftPurgeAllKeepsPreviousAndRollbackRestores(): void
@@ -1061,7 +1079,7 @@ private function assert_FpcHtmlDiskStore_testSoftPurgeAllKeepsPreviousAndRollbac
     self::assertTrue(FpcHtmlDiskStore::rollbackToPrevious());
     $hit = FpcHtmlDiskStore::read($url, '');
     self::assertIsArray($hit);
-    self::assertSame($html, $hit['body']);
+    $this->assertFpcHtmlDiskHitPlainEquals($html, $hit);
 }
 
 private function assert_FpcHtmlDiskStore_testStagingSeedWarmWritesDoNotFlipLiveUntilPromote(): void
@@ -1078,11 +1096,11 @@ private function assert_FpcHtmlDiskStore_testStagingSeedWarmWritesDoNotFlipLiveU
     // Readers still follow live until promote.
     $hit = FpcHtmlDiskStore::read($url, '');
     self::assertIsArray($hit);
-    self::assertSame($old, $hit['body']);
+    $this->assertFpcHtmlDiskHitPlainEquals($old, $hit);
     self::assertTrue(FpcHtmlDiskStore::promoteStagingGeneration());
     $hit2 = FpcHtmlDiskStore::read($url, '');
     self::assertIsArray($hit2);
-    self::assertSame($neu, $hit2['body']);
+    $this->assertFpcHtmlDiskHitPlainEquals($neu, $hit2);
     self::assertSame($liveBefore, FpcHtmlDiskStore::previousGenerationId());
 }
 
@@ -1096,7 +1114,7 @@ private function assert_FpcHtmlDiskStore_testAbandonStagingKeepsLive(): void
     FpcHtmlDiskStore::abandonStagingGeneration();
     $hit = FpcHtmlDiskStore::read($url, '');
     self::assertIsArray($hit);
-    self::assertSame($old, $hit['body']);
+    $this->assertFpcHtmlDiskHitPlainEquals($old, $hit);
 }
 
 private function assert_FpcHtmlDiskStore_testCoordinatorExternalizeNoLongerRemembersHashPayloadIndex(): void
@@ -1141,13 +1159,59 @@ private function assert_FpcHtmlDiskStorePurgeSlugs_testPurgeSlugsRemovesBareAndL
     self::assertIsString($barePath);
     self::assertIsString($localePath);
     self::assertIsString($otherPath);
-    self::assertFileExists($barePath);
-    self::assertFileExists($localePath);
-    self::assertFileExists($otherPath);
+    $this->assertFpcHtmlDiskLeafExists($barePath);
+    $this->assertFpcHtmlDiskLeafExists($localePath);
+    $this->assertFpcHtmlDiskLeafExists($otherPath);
     FpcHtmlDiskStore::purgeSlugs([$this->fixtureHost_FpcHtmlDiskStorePurgeSlugs], ['policy/privacy']);
-    self::assertFileDoesNotExist($barePath);
-    self::assertFileDoesNotExist($localePath);
-    self::assertFileExists($otherPath);
+    $this->assertFpcHtmlDiskLeafMissing($barePath);
+    $this->assertFpcHtmlDiskLeafMissing($localePath);
+    $this->assertFpcHtmlDiskLeafExists($otherPath);
+}
+
+/**
+ * @param array{body:string,encoding:?string,path:string} $hit
+ */
+private function assertFpcHtmlDiskHitPlainEquals(string $expectedHtml, array $hit): void
+{
+    if (($hit['encoding'] ?? null) === 'br') {
+        $decoded = ContentEncodingNegotiator::decode(
+            (string)$hit['body'],
+            ContentEncodingNegotiator::ENCODING_BROTLI,
+        );
+        self::assertSame($expectedHtml, $decoded);
+
+        return;
+    }
+    self::assertSame($expectedHtml, $hit['body']);
+}
+
+private function assertFpcHtmlDiskLeafExists(string $htmlPath): void
+{
+    self::assertTrue(
+        \is_file($htmlPath . '.br') || \is_file($htmlPath),
+        'expected html or .br leaf at ' . $htmlPath,
+    );
+}
+
+private function assertFpcHtmlDiskLeafMissing(string $htmlPath): void
+{
+    self::assertFileDoesNotExist($htmlPath);
+    self::assertFileDoesNotExist($htmlPath . '.br');
+}
+
+private function readFpcHtmlDiskLeafPlain(string $htmlPath): string
+{
+    $brPath = $htmlPath . '.br';
+    if (\is_file($brPath)) {
+        $decoded = ContentEncodingNegotiator::decode(
+            (string)\file_get_contents($brPath),
+            ContentEncodingNegotiator::ENCODING_BROTLI,
+        );
+
+        return \is_string($decoded) ? $decoded : '';
+    }
+
+    return (string)\file_get_contents($htmlPath);
 }
 
 private function assert_FpcHtmlDiskStorePurgeSlugs_testAdapterInterfaceDeclaresPurgeSlugs(): void
@@ -1763,6 +1827,7 @@ private function assert_ResponseObservabilityLean_testWorkerIdentityHeadersCallP
     $worker = \file_get_contents(BP . 'app/code/Weline/Server/bin/worker.php');
     self::assertIsString($worker);
     self::assertStringContainsString('ResponseObservabilityPolicy::identityHeadersEnabled()', $worker);
+    self::assertStringContainsString("setHeader('X-Wls-Origin-Mode'", $worker);
 }
 
 private function assert_ResponseObservabilityLean_testRedirectCookieDiagHeaderIsGated(): void
@@ -1806,6 +1871,7 @@ private function assert_ResponseObservabilityLean_testPolicyDocumentsPublicAllow
     self::assertStringContainsString('x-weline-fpc', $policy);
     self::assertStringContainsString('x-wls-fpc-status', $policy);
     self::assertStringContainsString('processTimingHeadersEnabled', $policy);
+    self::assertStringContainsString('X-Wls-Origin-Mode', $policy);
 }
 
 private function assert_SecurityHeaderDefaults_testSafeCspDefaultIsNonEmptyAndAdminCompatible(): void
@@ -2164,6 +2230,16 @@ private function assert_UrlPathMountOutbound_testPeelMountPrefixFromRelativePath
     self::assertSame('/', Url::peelWebsiteMountPathFromRelativePath('/aisite_accept_ok'));
     // 段边界：不误剥 /aisite_accept_ok_extra
     self::assertSame('/aisite_accept_ok_extra/about', Url::peelWebsiteMountPathFromRelativePath('/aisite_accept_ok_extra/about'));
+}
+
+private function assert_UrlDocumentRootRelative_testToDocumentRootRelativeStripsOrigin(): void
+{
+    self::assertSame('/', Url::toDocumentRootRelative('https://p84697b73.test.weline.com/'));
+    self::assertSame('/faq', Url::toDocumentRootRelative('https://www.changanhanfu.com/faq'));
+    self::assertSame('/a?b=1#c', Url::toDocumentRootRelative('https://host.example/a?b=1#c'));
+    self::assertSame('/mount/x', Url::toDocumentRootRelative('//cdn.example/mount/x'));
+    self::assertSame('/already', Url::toDocumentRootRelative('/already'));
+    self::assertSame('/', Url::toDocumentRootRelative(''));
 }
 
 private function assert_UrlPathMountOutbound_testRootSitePeelIsNoOp(): void

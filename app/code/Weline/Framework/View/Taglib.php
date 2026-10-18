@@ -15,6 +15,7 @@ use Weline\Framework\App\Debug;
 use Weline\Framework\Compilation\CompiledExtensionRegistry;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Taglib\CompileTimeStaticMirror;
@@ -52,7 +53,7 @@ class Taglib
      * Bumped when compiled Taglib output shape changes (e.g. form body capture).
      * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
      */
-    public const COMPILER_GENERATION = '20261013-deploy-public-urls-v7';
+    public const COMPILER_GENERATION = '20261018-url-literal-root-relative-v8';
 
     // PHP 标签常量，避免在回调函数中重复定义
     private const PHP_OPEN_TAG = '<' . '?';
@@ -612,7 +613,8 @@ class Taglib
             return null;
         }
 
-        return $url;
+        // Bake document-root-relative paths only — never lock compile-time Host into com_*.
+        return Url::toDocumentRootRelative($url);
     }
 
     private function extractLiteralUrlPath(string $pathExpr): ?string

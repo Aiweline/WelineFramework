@@ -507,6 +507,16 @@ class Response implements ResponseInterface, RequestLocalInterface
         // Title×locale probe is independent of telemetry prep — FPC HIT marks
         // telemetryPrepared early and must still emit observability headers.
         $this->applyTitleLocaleProbeIfNeeded();
+
+        // Maintenance static HTML is byte-authority (WLS ServiceUnavailablePage +
+        // FPM Interceptor). Skip storefront heal / pierce / CSP meta / panel bootstrap.
+        $maintenanceHdr = $this->getHeader('X-Weline-Maintenance');
+        if ($maintenanceHdr === '1' || $maintenanceHdr === 1) {
+            $this->telemetryPrepared = true;
+
+            return;
+        }
+
         // Product-card CSS heal is independent of FPC publish: ?nocache / private
         // responses skip publishResponse and would otherwise ship cards without
         // data-weline-product-card-css (UA buttons + primary-link titles).
@@ -689,6 +699,14 @@ class Response implements ResponseInterface, RequestLocalInterface
     private function ensureDocumentCspMetaApplied(): void
     {
         if ($this->body === '' || $this->getHeader('Content-Encoding') !== null) {
+            return;
+        }
+
+        // Published maintenance HTML (pub/errors/maintenance) is byte-authority for
+        // WLS ServiceUnavailablePage and FPM MaintenanceInterceptor — do not inject
+        // CSP meta or FPM/WLS bodies diverge.
+        $maintenanceHdr = $this->getHeader('X-Weline-Maintenance');
+        if ($maintenanceHdr === '1' || $maintenanceHdr === 1) {
             return;
         }
 

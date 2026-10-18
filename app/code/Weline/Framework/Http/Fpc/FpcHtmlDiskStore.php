@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Http\Fpc;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Http\ContentEncodingNegotiator;
 
 /**
  * Generation-pointer FPC cold disk.
@@ -16,9 +17,10 @@ use Weline\Framework\App\Env;
  *   …/{path}/~q/{sha1(canonical_query)}/index.html[.br]  — Extra query_keys HTML
  *   …/{path}/~q/{sha1}/index.bq.br                         — same-identity BinQuery wire
  *
- * When brotli bytes are supplied, `.br` is the on-disk authority (Nginx edge
- * serves `index.html.br` / `index.bq.br`); plaintext `index.html` is not written.
- * Legacy plain leaves remain readable until the next br publish or purge.
+ * When brotli bytes are supplied (or plaintext is published and brotli_compress
+ * is available), `.br` is the on-disk authority (Nginx edge serves
+ * `index.html.br` / `index.bq.br`); plaintext `index.html` is not written.
+ * Without the brotli extension, plaintext leaves remain the authority.
  *
  * Path-only leaf = host+path (query empty). Allowlisted canonical query URIs
  * (Coordinator-normalized) get a sibling `~q/{sha1}` directory — never overwrite the
@@ -321,6 +323,16 @@ final class FpcHtmlDiskStore
         }
         $brPath = $htmlPath . '.br';
         // Brotli authority: write only .br and drop plaintext so edge/disk stay single-leaf.
+        // Nginx try_files only serves index.html.br — auto-compress plaintext when possible.
+        if ($brotli === '' && $html !== '' && ContentEncodingNegotiator::brotliAvailable()) {
+            $compressed = ContentEncodingNegotiator::encode(
+                $html,
+                ContentEncodingNegotiator::ENCODING_BROTLI,
+            );
+            if (\is_string($compressed) && $compressed !== '') {
+                $brotli = $compressed;
+            }
+        }
         if ($brotli !== '') {
             if (!self::writeAtomic($brPath, $brotli)) {
                 return false;

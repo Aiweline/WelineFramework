@@ -248,9 +248,9 @@ final class ViewContractsTest extends TestCase
             'UrlLiteralBake::testLiteralPathBakesWithoutGetUrlStub' => function () {
             $this->assert_UrlLiteralBake_testLiteralPathBakesWithoutGetUrlStub();
         },
-            'UrlLiteralBake::testDocumentRootPathBakesSiteAddressOrigin' => function () {
-            $this->assert_UrlLiteralBake_testDocumentRootPathBakesSiteAddressOrigin();
-        },
+            'UrlLiteralBake::testDocumentRootPathBakesRootRelative' => function () {
+            $this->assert_UrlLiteralBake_testDocumentRootPathBakesRootRelative();
+            },
             'UrlLiteralBake::testDynamicPathKeepsNullSoStubRemains' => function () {
             $this->assert_UrlLiteralBake_testDynamicPathKeepsNullSoStubRemains();
         },
@@ -380,7 +380,7 @@ private function assert_ForbidHardcodedModuleStaticUrl_testTraitTemplateModuleSt
 private function assert_FormFiberCapture_testFormTaglibCallbackUsesFiberOutputBufferNotNativeOb(): void
 {
     $source = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Taglib.php');
-    self::assertSame('20261013-deploy-public-urls-v7', Taglib::COMPILER_GENERATION);
+    self::assertSame('20261018-url-literal-root-relative-v8', Taglib::COMPILER_GENERATION);
     self::assertStringContainsString('FiberOutputBuffer::beginCapture()', $source);
     self::assertStringContainsString('FiberOutputBuffer::endCapture()', $source);
     self::assertStringContainsString('Taglib__form_body', $source);
@@ -1074,10 +1074,11 @@ private function assert_TraitTemplateTagSourceAreaRoute_testFetchTagSourceDisabl
 
 private function assert_UrlLiteralBake_testCompilerGenerationBumpsForUrlLiteralBake(): void
 {
-    self::assertSame('20261013-deploy-public-urls-v7', Taglib::COMPILER_GENERATION);
+    self::assertSame('20261018-url-literal-root-relative-v8', Taglib::COMPILER_GENERATION);
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Taglib.php');
     self::assertStringContainsString('function tryBakeUrlFamily', $source);
     self::assertStringContainsString('adjustBakedStaticInlineReplacement', $source);
+    self::assertStringContainsString('toDocumentRootRelative', $source);
 }
 
 private function assert_UrlLiteralBake_testLiteralPathBakesWithoutGetUrlStub(): void
@@ -1090,11 +1091,17 @@ private function assert_UrlLiteralBake_testLiteralPathBakesWithoutGetUrlStub(): 
     self::assertSame('/~site/grocery/product/list', $bakedXml);
 }
 
-private function assert_UrlLiteralBake_testDocumentRootPathBakesSiteAddressOrigin(): void
+private function assert_UrlLiteralBake_testDocumentRootPathBakesRootRelative(): void
 {
     $template = $this->createMock(Template::class);
     $template->method('getUrl')->willReturn('https://pf14955e2.test.weline.com/');
-    self::assertSame('https://pf14955e2.test.weline.com/', $this->tryBake_UrlLiteralBake($template, 'getUrl', '@url{}', ["@url{'/'}", "'/'", ''], []));
+    self::assertSame('/', $this->tryBake_UrlLiteralBake($template, 'getUrl', '@url{}', ["@url{'/'}", "'/'", ''], []));
+    $templateMount = $this->createMock(Template::class);
+    $templateMount->method('getUrl')->willReturn('https://p84697b73.test.weline.com/~site/grocery/product/list');
+    self::assertSame(
+        '/~site/grocery/product/list',
+        $this->tryBake_UrlLiteralBake($templateMount, 'getUrl', '@url{}', ["@url{'product/list'}", "'product/list'", ''], [])
+    );
 }
 
 private function assert_UrlLiteralBake_testDynamicPathKeepsNullSoStubRemains(): void

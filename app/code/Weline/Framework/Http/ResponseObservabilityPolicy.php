@@ -11,6 +11,9 @@ use Weline\Framework\App\Env;
  *
  * 生产对外建议只保留：业务安全头、Set-Cookie（会话契约，非观测头）、
  * x-weline-request-id、x-weline-fpc / x-wls-fpc-status。
+ *
+ * 开发环境 identity 闸门另含：X-Wls-Nginx-Config、X-Wls-Origin-Mode（fpm|wls）、
+ * Worker-Id/Port/PID 等；线上默认不放出。
  */
 final class ResponseObservabilityPolicy
 {

@@ -2916,6 +2916,49 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     }
 
     /**
+     * Document-root-relative form for com URL bake / &lt;base href&gt;.
+     *
+     * Keeps path + query + fragment; strips scheme/host/port so compiled templates
+     * and document base follow the live request Host (FPC-safe, deploy-safe).
+     *
+     * Examples: https://a.test/x?y=1 → /x?y=1 ; /mount/a → /mount/a ; //h/p → /p
+     */
+    public static function toDocumentRootRelative(string $url): string
+    {
+        $url = \trim($url);
+        if ($url === '') {
+            return '/';
+        }
+
+        // Already root-relative (not protocol-relative //host/…).
+        if ($url[0] === '/' && ($url[1] ?? '') !== '/') {
+            return $url;
+        }
+
+        if (\str_starts_with($url, '//')) {
+            $parsed = \parse_url('https:' . $url);
+        } elseif (\preg_match('#^https?:#i', $url) === 1) {
+            $parsed = \parse_url($url);
+        } else {
+            // Path-relative / opaque tokens — leave unchanged.
+            return $url;
+        }
+
+        if (!\is_array($parsed)) {
+            return $url;
+        }
+
+        $path = (string)($parsed['path'] ?? '');
+        if ($path === '') {
+            $path = '/';
+        }
+        $query = isset($parsed['query']) && $parsed['query'] !== '' ? ('?' . $parsed['query']) : '';
+        $fragment = isset($parsed['fragment']) && $parsed['fragment'] !== '' ? ('#' . $parsed['fragment']) : '';
+
+        return $path . $query . $fragment;
+    }
+
+    /**
      * 出站相对 path：剥掉当前站点挂载前缀，避免 getBaseHost()（已含 mount）再拼一次。
      * 例：website_url=…/aisite_accept_ok 且 path=/aisite_accept_ok/about → /about
      */

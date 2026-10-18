@@ -130,13 +130,20 @@ final class FpcOfflineBakeImporter
                 if (!FpcHtmlDiskStore::publish($pageUrl, $raw, '')) {
                     return ['ok' => false, 'reason' => 'html_disk_publish_failed:' . $indexKey];
                 }
+                // publish() auto-compresses to .br when brotli is available.
+                $brPath = FpcHtmlDiskStore::logicalLiveBodyPath($pageUrl, true);
                 $htmlPath = FpcHtmlDiskStore::logicalLiveBodyPath($pageUrl, false);
-                if ($htmlPath === null || !\is_file($htmlPath)) {
+                if ($brPath !== null && \is_file($brPath)) {
+                    $bodyPath = $brPath;
+                    $bodyBytes = (int)\filesize($brPath);
+                    $bodyEncoding = 'br';
+                } elseif ($htmlPath !== null && \is_file($htmlPath)) {
+                    $bodyPath = $htmlPath;
+                    $bodyBytes = \strlen($raw);
+                    $bodyEncoding = 'identity';
+                } else {
                     return ['ok' => false, 'reason' => 'html_disk_missing_after_publish:' . $indexKey];
                 }
-                $bodyPath = $htmlPath;
-                $bodyBytes = \strlen($raw);
-                $bodyEncoding = 'identity';
             }
             $imported++;
 

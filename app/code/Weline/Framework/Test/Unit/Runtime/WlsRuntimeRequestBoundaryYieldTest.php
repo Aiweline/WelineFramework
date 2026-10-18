@@ -66,13 +66,13 @@ final class WlsRuntimeRequestBoundaryYieldTest extends TestCase
         );
     }
 
-    public function testTemplateCooperativeYieldDefaultsEnabled(): void
+    public function testTemplateCooperativeYieldDefaultsOptIn(): void
     {
         $method = new ReflectionMethod(Template::class, 'cooperativeTemplateYield');
         $file = $method->getFileName();
 
         self::assertIsString($file);
-        self::assertTrue((bool)\Weline\Framework\App\Env::get('wls.performance.template_cooperative_yield_enabled', false));
+        self::assertFalse((bool)\Weline\Framework\App\Env::get('wls.performance.template_cooperative_yield_enabled', true));
 
         $lines = \file($file);
         self::assertIsArray($lines);
@@ -86,7 +86,7 @@ final class WlsRuntimeRequestBoundaryYieldTest extends TestCase
         self::assertStringContainsString(
             'wls.performance.template_cooperative_yield_enabled',
             $source,
-            'Template-level cooperative yield must be enabled by the framework default and remain explicitly configurable.'
+            'Template-level cooperative yield is opt-in via env and must remain explicitly configurable.'
         );
     }
 

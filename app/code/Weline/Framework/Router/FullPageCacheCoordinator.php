@@ -3014,9 +3014,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return false;
         }
 
-        if (!Runtime::isPersistent() && !PROD) {
-            return false;
-        }
+        // FPM (non-persistent) in DEV must still FPC: default-allow storefront +
+        // @Extra / hard-exclude paths. Do not gate on isPersistent∧PROD — that
+        // silently disabled blog/products under Nginx→php-fpm while homepage
+        // only HITed pre-baked html-disk from a prior WLS publish.
 
         if (!Env::get('cache.status.router_cache', 1) || !Env::get('cache.status.frontend_cache', 1)) {
             return false;

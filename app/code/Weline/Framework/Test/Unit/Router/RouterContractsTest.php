@@ -42,6 +42,9 @@ final class RouterContractsTest extends TestCase
             'FpcDefaultAllowPolicy::testSensitiveSurfacesDeclareEnabledFalse' => function () {
             $this->assert_FpcDefaultAllowPolicy_testSensitiveSurfacesDeclareEnabledFalse();
         },
+            'FpcDefaultAllowPolicy::testFrontendCacheAllowedDoesNotRequirePersistentOrProd' => function () {
+            $this->assert_FpcDefaultAllowPolicy_testFrontendCacheAllowedDoesNotRequirePersistentOrProd();
+        },
             'FullPageCacheDiagTrack::testIgnorableQueryParamsDoNotSwallowDiagBypassKeys' => function () {
             $this->assert_FullPageCacheDiagTrack_testIgnorableQueryParamsDoNotSwallowDiagBypassKeys();
         },
@@ -134,6 +137,20 @@ private function assert_FpcDefaultAllowPolicy_testCoordinatorFallsBackToOneYearW
     $src = (string) \file_get_contents(self::repoRoot_FpcDefaultAllowPolicy() . '/app/code/Weline/Framework/Router/FullPageCacheCoordinator.php');
     self::assertMatchesRegularExpression("/\\?\\?\\s*\\[\\s*'enabled'\\s*=>\\s*true\\s*,\\s*'ttl'\\s*=>\\s*31536000\\b/", $src);
     self::assertStringNotContainsString("'ttl' => 3600, 'policy_fingerprint' => 'not-applicable'", $src);
+}
+
+private function assert_FpcDefaultAllowPolicy_testFrontendCacheAllowedDoesNotRequirePersistentOrProd(): void
+{
+    $path = self::repoRoot_FpcDefaultAllowPolicy() . '/app/code/Weline/Framework/Router/FullPageCacheCoordinator.php';
+    $src = (string) \file_get_contents($path);
+    $start = \strpos($src, 'private function isFrontendResponseCacheAllowed(string $method): bool');
+    self::assertNotFalse($start, 'isFrontendResponseCacheAllowed missing');
+    $next = \strpos($src, "\n    private function ", $start + 1);
+    self::assertNotFalse($next, 'next private method after isFrontendResponseCacheAllowed missing');
+    $body = \substr($src, $start, $next - $start);
+    // FPM/DEV must still share storefront FPC (blog @Extra etc.); only FpcMode + Extra + hard-exclude gate.
+    self::assertStringNotContainsString('isPersistent()', $body);
+    self::assertStringNotContainsString('!PROD', $body);
 }
 
 private function assert_FpcDefaultAllowPolicy_testSearchHardExcludeRemovedAndShortTtlExtraPresent(): void

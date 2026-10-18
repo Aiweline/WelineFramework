@@ -347,13 +347,13 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertSame($newPayload, $pool->get($freshKey));
     }
 
-    public function testCooperativeFpcYieldDefaultsEnabledForPersistentRequests(): void
+    public function testCooperativeFpcYieldDefaultsOptInForPersistentRequests(): void
     {
         $method = new \ReflectionMethod(FullPageCacheCoordinator::class, 'cooperativeBuildYield');
         $file = $method->getFileName();
 
         self::assertIsString($file);
-        self::assertTrue((bool)\Weline\Framework\App\Env::get('wls.performance.fpc_cooperative_yield_enabled', false));
+        self::assertFalse((bool)\Weline\Framework\App\Env::get('wls.performance.fpc_cooperative_yield_enabled', true));
 
         $lines = \file($file);
         self::assertIsArray($lines);

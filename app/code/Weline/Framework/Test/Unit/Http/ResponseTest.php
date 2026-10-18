@@ -89,6 +89,19 @@ final class ResponseTest extends TestCase
         self::assertSame($json, $response->getBody());
     }
 
+    public function testMaintenanceHtmlBodySkipsDocumentCspMetaForWlsParity(): void
+    {
+        $html = '<!DOCTYPE html><html><head><title>网站维护</title></head><body>m</body></html>';
+        $response = Response::fromContent($html, 503, 'text/html; charset=utf-8');
+        $response->setHeader('X-Weline-Maintenance', '1');
+
+        $response->toHttpString(false);
+
+        self::assertSame($html, $response->getBody());
+        self::assertStringNotContainsString('data-weline-csp="1"', $response->getBody());
+        self::assertStringNotContainsString('data-weline-panel-bootstrap', $response->getBody());
+    }
+
     public function testResponseTerminateExceptionCanCarryFrameworkResponse(): void
     {
         $response = Response::json(['ok' => true], 202);
