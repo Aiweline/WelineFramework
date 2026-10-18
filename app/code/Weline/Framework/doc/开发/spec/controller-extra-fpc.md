@@ -19,8 +19,10 @@ clarify_status: ready-for-plan
 1e. WHEN `query_keys` 为显式逗号列表 THEN 仅这些参数名（小写）参与缓存身份；键名排序后拼入 canonical URI；书写顺序不同但同名同值 SHALL 得同一身份。  
 1f. WHEN 请求携带未在 `query_keys` 中的参数（如 `utm_*`）THEN SHALL NOT 改变 FPC 身份。  
 1g. WHEN `query_keys` 含 `*`、非法名、穿章/诊断键（`_wb_nc` / `w_fpc_pierce` / `wls_tpl_*` / `nocache`）或超过 `MAX_QUERY_KEYS` THEN 归一 SHALL fail-closed 为空列表（path-only）。  
-1h. WHEN 路径策略含非空 `query_keys` 且请求携带任一白名单参 THEN 边缘 html-disk SHALL bypass，且源站 Coordinator SHALL NOT 用 path-only 冷盘 serve/hydrate/publish 该变体（禁 `~q/{sha1}` 盘变体）；冷盘叶子仍 path-only，变体权威在 Shared/Process。  
+1h. WHEN 路径策略含非空 `query_keys` 且请求携带任一白名单参 THEN 边缘 Nginx SHALL 按与源站同一 canonicalize 算法计算 `sha1` 并 try_files `…/{path}/~q/{sha1}/index.html[.br]`（SHALL NOT 无脑 bypass path-only try_files）；源站 Coordinator/Store SHALL 将已 canonicalize 的 query 写入该变体叶，SHALL NOT 覆盖 path-only 叶；同目录 MAY 另存 `index.bq.br`（BinQuery）；Shared/Process 仍可 HIT/回填。  
 1i. WHEN 业务页为白名单参分键 THEN SSR 体 SHALL 按这些参投影（禁止键分桶、体仍中性壳）。  
+1j. WHEN 请求仅含非 `query_keys` 噪声参（如 `utm_*`）THEN 边缘与源站 SHALL 仍按 path-only（或既有白名单变体）FPC 身份 HIT，SHALL NOT 因噪声参打穿 origin。  
+1k. WHEN 请求携带合法安装级 `w_fpc_pierce` THEN SHALL bypass FPC（活源）；伪造穿章 / 仅 `nocache`/`_wb_nc` 无合法穿章 SHALL NOT 当作有效穿透。  
 2. WHEN 业务在同事务调用 `w_changed` 且 ChangedType 已注册 THEN 系统 SHALL Enricher→Recipe→Capability，并仍 dispatch 给 Seo 等。  
 3. WHEN Enricher 后仍缺 purge_fpc_urls 所需 urls THEN 系统 SHALL fail-fast。  
 4. IF 请求为预览/draft 配方 THEN SHALL NOT purge_fpc_all。  
@@ -44,6 +46,18 @@ clarify_status: ready-for-plan
 3. 仅 `?utm=1` → path-only 键（与无 query 相同）。  
 4. `query_keys=*` 或 `query_keys=_wb_nc,price` → 归一为空，path-only。
 
+## UC-04 非白名单扫描仍 FPC
+
+1. 已暖 `/products?price=P` 变体叶。  
+2. `/products?price=P&utm_source=x&fbclid=y` → 同一 sha、仍 html-disk/边缘 HIT。  
+3. `/products?utm_source=x` → path-only HIT（与裸 `/products` 同身份）。
+
+## UC-05 穿章才穿透
+
+1. 无穿章筛搜/噪声 URL → 可 HIT 盘/边缘。  
+2. `w_fpc_pierce=wrong` / 仅 `nocache=1` → 不得当有效穿章。  
+3. `FpcPierceStamp::buildQuerySuffix()` → BYPASS 活源；穿章键不进身份。
+
 ## 非目标
 
-Seo 迁 Capability；业务 Provider 调 FPC；兼容双跑；任意 query / 前缀通配进共享键；html-disk `~q/{sha1}` 变体叶。
+Seo 迁 Capability；业务 Provider 调 FPC；兼容双跑；任意 query / 前缀通配进共享键；店面 URL Accept 协商取 BinQuery 叶。

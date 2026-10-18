@@ -466,6 +466,8 @@ private function assert_UpgradeMaintenanceClose_testCleanupRequiresWlsSyncBefore
     $src = (string) file_get_contents($path);
     self::assertStringContainsString('private function syncWlsMaintenanceMode(bool $enabled): bool', $src);
     self::assertStringContainsString('$wlsOk = $this->syncWlsMaintenanceMode(false)', $src);
+    self::assertStringContainsString('$shouldClearMaintenance = $maintenanceEnabled', $src);
+    self::assertStringContainsString("getConfig('system.maintenance', false)", $src);
     self::assertStringContainsString('框架维护标志已关闭，但 WLS Worker 门禁未完全同步', $src);
     self::assertStringNotContainsString('$this->notifyWlsReload()', $src);
 }

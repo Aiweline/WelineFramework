@@ -2062,7 +2062,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 这种情况下，标识符文件会保留到下次运行，以便检测到需要再次收集
         
         // 3. 关闭维护模式（须先写 env 再同步 WLS；成功判定含 Worker 门禁 ACK）
-        if ($maintenanceEnabled) {
+        // 升级命令收尾恒退出「升级 503」：即使本轮未置位 $maintenanceEnabled，
+        // 也清掉历史粘性 system.maintenance=true（失败升级/竞态残留）。
+        $shouldClearMaintenance = $maintenanceEnabled
+            || (bool)Env::getInstance()->getConfig('system.maintenance', false);
+        if ($shouldClearMaintenance) {
             try {
                 $envOk = Env::getInstance()->setConfig('system.maintenance', false);
                 $wlsOk = $this->syncWlsMaintenanceMode(false);

@@ -5,6 +5,59 @@
     // 启动桩会先装一个占位 observe（把早期调用排队）；只有**真实**实现才允许提前返回，
     // 否则桩在场时本文件会误判「已安装」而跳过，真实观察总线就永远不生效。
     if (typeof Weline.dom?.observe === 'function' && !Weline.dom.observe.__welineBootStub) return;
+
+    const NativeMutationObserver = window.MutationObserver;
+    if (typeof NativeMutationObserver !== 'function') {
+        return;
+    }
+    /** DEV 护栏可替换此引用以包一层风暴计数，而不拆掉 Gate 构造器。 */
+    if (!window.__WelineNativeMutationObserver) {
+        window.__WelineNativeMutationObserver = NativeMutationObserver;
+    }
+
+    function resolveNativeMutationObserver() {
+        return window.__WelineNativeMutationObserver || NativeMutationObserver;
+    }
+
+    function documentWideTargetToken(target) {
+        if (!target) {
+            return null;
+        }
+        if (target === document) {
+            return 'document';
+        }
+        if (target === document.documentElement) {
+            return 'html';
+        }
+        if (target === document.body) {
+            return 'body';
+        }
+        return null;
+    }
+
+    function fingerprintObserveOptions(options) {
+        const o = options && typeof options === 'object' ? options : {};
+        const keys = Object.keys(o).sort();
+        return keys.map(function (key) {
+            const value = o[key];
+            if (Array.isArray(value)) {
+                return key + '=' + value.slice().map(String).sort().join(',');
+            }
+            return key + '=' + String(value);
+        }).join('|');
+    }
+
+    function tagPhysicalObserver(observer, label) {
+        if (!observer) {
+            return observer;
+        }
+        try {
+            observer.__welineBusOwned = true;
+            observer.__welineMoLabel = String(label || 'Weline.dom');
+        } catch (_e) { /* ignore */ }
+        return observer;
+    }
+
     function observeMutationsCoalesced(spec) {
         const options = (spec && spec.options) || { childList: true, subtree: true };
         const idleTimeoutMs = (function () {
@@ -158,11 +211,14 @@
             } finally {
                 flushDepth -= 1;
                 if (!disposed && paused === 0) {
-                    observeNow();
+                    // Still disconnected here: may deliver leftover, but never observeThenDeliver
+                    // (observeNow + sync deliverRecords caused DEV sync_reentry).
                     const leftover = takePendingRecords();
                     if (leftover.length) {
                         deliverRecords(leftover);
                         scheduleFlushTrailing();
+                    } else {
+                        observeNow();
                     }
                 }
             }
@@ -192,15 +248,16 @@
         }
 
         let observer = null;
-        if (typeof MutationObserver === 'function') {
-            observer = new MutationObserver(function (records) {
+        const NativeMO = resolveNativeMutationObserver();
+        if (typeof NativeMO === 'function') {
+            observer = tagPhysicalObserver(new NativeMO(function (records) {
                 if (disposed || paused > 0) {
                     return;
                 }
                 disconnectQuiet();
                 deliverRecords(records);
                 scheduleFlushTrailing();
-            });
+            }), loopLabel);
         }
 
         const api = {
@@ -259,38 +316,22 @@
     }
 
     /**
-     * 架构级 DOM Mutation 观察总线（同 target+options 仅一个物理 MutationObserver）。
-     * 业务/UI 必须经 Weline.dom.observe 订阅；禁止对 document/body/html 再 new MutationObserver。
+     * 架构级 DOM Mutation 观察总线（同 target+options+idleMs 仅一个物理 MutationObserver）。
+     * 业务/UI 必须经 Weline.dom.observe 订阅；Document Observe Gate 强制裸 document 观察入线。
      * 扇出 onRecords/onFlush；订阅级 pause 不拆掉共享观察者（写 DOM 时跳过本订阅回调即可）。
      */
     const domMutationChannels = new Map();
 
-    function fingerprintObserveOptions(options) {
-        const o = options && typeof options === 'object' ? options : {};
-        const keys = Object.keys(o).sort();
-        return keys.map(function (key) {
-            const value = o[key];
-            if (Array.isArray(value)) {
-                return key + '=' + value.slice().map(String).sort().join(',');
-            }
-            return key + '=' + String(value);
-        }).join('|');
-    }
-
-    function documentWideTargetToken(target) {
-        if (!target) {
-            return null;
+    function listChannelSubscriberNames(channelKey) {
+        const channel = domMutationChannels.get(channelKey);
+        if (!channel) {
+            return [];
         }
-        if (target === document) {
-            return 'document';
-        }
-        if (target === document.documentElement) {
-            return 'html';
-        }
-        if (target === document.body) {
-            return 'body';
-        }
-        return null;
+        const names = [];
+        channel.subscribers.forEach(function (sub) {
+            names.push(sub.name);
+        });
+        return names;
     }
 
     /**
@@ -302,6 +343,7 @@
      *   idleTimeoutMs?: number,
      *   share?: boolean,
      *   autoStart?: boolean,
+     *   label?: string,
      * }} spec
      */
     function observeDomMutations(spec) {
@@ -351,10 +393,16 @@
                     });
                 },
             });
+            if (handle && handle.observer) {
+                try {
+                    handle.observer.__welineChannelKey = channelKey;
+                } catch (_t) { /* ignore */ }
+            }
             channel = {
                 handle: handle,
                 subscribers: subscribers,
                 nextId: 1,
+                channelKey: channelKey,
             };
             domMutationChannels.set(channelKey, channel);
         }
@@ -410,6 +458,166 @@
         };
     }
 
+    /**
+     * Document Observe Gate：包构造函数捕获 callback；observe(document|html|body) 强制入共享总线。
+     */
+    function installDocumentObserveGate() {
+        if (window.__WelineDomObserveGateInstalled) {
+            return;
+        }
+        if (typeof NativeMutationObserver !== 'function') {
+            return;
+        }
+        window.__WelineDomObserveGateInstalled = true;
+
+        const adopted = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+        function shortLabelFromStack() {
+            try {
+                const err = new Error('[Weline] gate adopt');
+                const lines = String(err.stack || '').split('\n');
+                for (let i = 0; i < lines.length; i += 1) {
+                    const line = String(lines[i] || '').trim();
+                    if (!line || line.indexOf('dom-observer') !== -1 || line.indexOf('gate adopt') !== -1) {
+                        continue;
+                    }
+                    return line.slice(0, 160);
+                }
+            } catch (_e) { /* ignore */ }
+            return 'gate-adopted';
+        }
+
+        function clearAdoption(instance) {
+            const state = adopted ? adopted.get(instance) : instance.__welineGateState;
+            if (!state) {
+                return;
+            }
+            if (state.sub && typeof state.sub.disconnect === 'function') {
+                try {
+                    state.sub.disconnect();
+                } catch (_d) { /* ignore */ }
+            }
+            state.sub = null;
+            instance.__welineDomGateAdopted = false;
+        }
+
+        function adoptIntoBus(instance, target, options) {
+            clearAdoption(instance);
+            const callback = instance.__welineMoCallback;
+            const label = String(instance.__welineMoLabel || shortLabelFromStack());
+            const sub = observeDomMutations({
+                target: target,
+                options: options || { childList: true, subtree: true },
+                idleTimeoutMs: 100,
+                label: label,
+                onRecords: function (records) {
+                    if (typeof callback !== 'function') {
+                        return;
+                    }
+                    try {
+                        callback.call(instance, records, instance);
+                    } catch (_e) { /* ignore */ }
+                },
+                onFlush: function () { /* records already delivered via onRecords */ },
+            });
+            const state = { sub: sub };
+            if (adopted) {
+                adopted.set(instance, state);
+            } else {
+                instance.__welineGateState = state;
+            }
+            instance.__welineDomGateAdopted = true;
+            instance.__welineMoLabel = label;
+            try {
+                if (window.DEV || (window.Weline && window.Weline.runtimeConfig && window.Weline.runtimeConfig.debug)) {
+                    console.info('[Weline] Document Observe Gate adopted raw MutationObserver → bus', {
+                        label: label,
+                        channelKey: sub && sub.__channelKey,
+                    });
+                }
+            } catch (_i) { /* ignore */ }
+            return sub;
+        }
+
+        function ensureNative(instance) {
+            if (instance.__native) {
+                return instance.__native;
+            }
+            const NativeMO = resolveNativeMutationObserver();
+            const cb = typeof instance.__welineMoCallback === 'function'
+                ? instance.__welineMoCallback.bind(instance)
+                : function () { /* noop */ };
+            const native = new NativeMO(cb);
+            if (instance.__welineBusOwned) {
+                tagPhysicalObserver(native, instance.__welineMoLabel || 'Weline.dom');
+            }
+            instance.__native = native;
+            return native;
+        }
+
+        function GateMutationObserver(callback) {
+            if (!(this instanceof GateMutationObserver)) {
+                return new GateMutationObserver(callback);
+            }
+            this.__welineMoCallback = typeof callback === 'function' ? callback : null;
+            this.__welineBusOwned = false;
+            this.__welineDomGateAdopted = false;
+            this.__welineMoAllowRawDocument = false;
+            this.__welineMoLabel = '';
+            this.__native = null;
+        }
+
+        GateMutationObserver.prototype.observe = function (target, options) {
+            if (this.__welineMoAllowRawDocument || this.__welineBusOwned) {
+                clearAdoption(this);
+                const native = ensureNative(this);
+                return native.observe(target, options || {});
+            }
+            if (documentWideTargetToken(target)) {
+                adoptIntoBus(this, target, options || {});
+                return;
+            }
+            clearAdoption(this);
+            const native = ensureNative(this);
+            return native.observe(target, options || {});
+        };
+
+        GateMutationObserver.prototype.disconnect = function () {
+            clearAdoption(this);
+            if (this.__native) {
+                try {
+                    this.__native.disconnect();
+                } catch (_e) { /* ignore */ }
+            }
+        };
+
+        GateMutationObserver.prototype.takeRecords = function () {
+            if (this.__native && typeof this.__native.takeRecords === 'function') {
+                try {
+                    return this.__native.takeRecords() || [];
+                } catch (_e) {
+                    return [];
+                }
+            }
+            return [];
+        };
+
+        try {
+            Object.defineProperty(GateMutationObserver, 'name', { value: 'MutationObserver' });
+        } catch (_n) { /* ignore */ }
+
+        GateMutationObserver.__welineDocumentObserveGate = true;
+        GateMutationObserver.__welineNative = NativeMutationObserver;
+        window.MutationObserver = GateMutationObserver;
+        window.__WelineListDomMutationSubscribers = listChannelSubscriberNames;
+    }
+
+    installDocumentObserveGate();
+
     Weline.observeMutationsCoalesced = observeMutationsCoalesced;
-    Weline.dom = Object.assign({}, Weline.dom || {}, { observe: observeDomMutations, observeMutations: observeDomMutations });
+    Weline.dom = Object.assign({}, Weline.dom || {}, {
+        observe: observeDomMutations,
+        observeMutations: observeDomMutations,
+    });
+    Weline.dom.__welineDocumentObserveGate = true;
 })(window, document);

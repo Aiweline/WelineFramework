@@ -108,7 +108,9 @@ class RotatingFileHandler implements HandlerInterface
 
         switch ($this->strategy) {
             case 'daily':
+                // daily 负责跨日归档；max_size>0 时仍须按大小轮转（env 默认 50MB，不可被 daily 互斥掉）
                 $this->rotateDailyIfNeeded($channel);
+                $this->rotateBySizeIfNeeded($channel);
                 break;
             case 'size':
                 $this->rotateBySizeIfNeeded($channel);
@@ -144,6 +146,10 @@ class RotatingFileHandler implements HandlerInterface
      */
     private function rotateBySizeIfNeeded(string $channel): void
     {
+        if ($this->maxSize <= 0) {
+            return;
+        }
+
         $filePath = $this->getFilePath($channel);
         
         if (!file_exists($filePath)) {

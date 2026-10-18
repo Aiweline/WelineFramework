@@ -13,15 +13,19 @@ use Weline\Framework\App\Env;
  *   generated/html/live → generations/{gen}/
  *   generated/html/previous → generations/{prev}/   (rollback)
  *   generated/html/generations/{gen}/{host}/{path}/index.html[.br]
+ *   …/{path}/~q/{sha1(canonical_query)}/index.html[.br]  — Extra query_keys HTML
+ *   …/{path}/~q/{sha1}/index.bq.br                         — same-identity BinQuery wire
  *
  * When brotli bytes are supplied, `.br` is the on-disk authority (Nginx edge
- * serves `index.html.br`); plaintext `index.html` is not written. Legacy plain
- * leaves remain readable until the next br publish or purge.
+ * serves `index.html.br` / `index.bq.br`); plaintext `index.html` is not written.
+ * Legacy plain leaves remain readable until the next br publish or purge.
  *
- * FPC cold disk is path-only: query strings never create a separate leaf
- * (aligned with Nginx try_files on `$uri/index.html.br`). Whole-tree invalidate
- * rotates to a new empty generation (keeps previous); it must NOT rm the live
- * tree in place. URL purge only unlinks leaves inside the current live generation.
+ * Path-only leaf = host+path (query empty). Allowlisted canonical query URIs
+ * (Coordinator-normalized) get a sibling `~q/{sha1}` directory — never overwrite the
+ * path-only leaf. Edge njs + try_files may serve HTML/BQ leaves by sha; publishBq
+ * must recompute identity server-side (never trust client sha). Whole-tree
+ * invalidate rotates to a new empty generation; URL purge unlinks leaves in the
+ * write target (including index.bq.br).
  */
 final class FpcHtmlDiskStore
 {
@@ -29,6 +33,12 @@ final class FpcHtmlDiskStore
     public const PREVIOUS_NAME = 'previous';
     public const GENERATIONS_DIR = 'generations';
     public const STAGING_ID_FILE = '.staging-gen';
+
+    /** Directory segment under a path leaf for Extra query_keys variants. */
+    public const QUERY_VARIANT_SEGMENT = '~q';
+
+    /** BinQuery wire leaf basename (brotli authority: index.bq.br). */
+    public const BQ_BASENAME = 'index.bq';
 
     /** Keep live + previous; GC older generation dirs after rotate. */
     public const RETAIN_GENERATIONS = 2;
@@ -96,7 +106,14 @@ final class FpcHtmlDiskStore
                 }
             }
             $path = self::normalizePath((string)($parts['path'] ?? '/'));
-            // Query is intentionally ignored: one leaf per host+path.
+            // Empty query → path-only leaf. Non-empty query (caller must pass
+            // Coordinator-canonical allowlisted query) → …/~q/{sha1}/ leaf.
+            $query = (string)($parts['query'] ?? '');
+            if ($query !== '') {
+                $path = ($path === '/' ? '' : $path)
+                    . '/' . self::QUERY_VARIANT_SEGMENT
+                    . '/' . \sha1($query);
+            }
         } else {
             return null;
         }
@@ -137,6 +154,133 @@ final class FpcHtmlDiskStore
         }
 
         return $html . '.br';
+    }
+
+    /**
+     * Plaintext BinQuery wire path (rarely written; prefer .br via publishBq).
+     */
+    public static function bqPath(string $urlOrPath): ?string
+    {
+        $dir = self::pageDirectory($urlOrPath);
+        if ($dir === null) {
+            return null;
+        }
+
+        return $dir . \DIRECTORY_SEPARATOR . self::BQ_BASENAME;
+    }
+
+    public static function bqBrotliPath(string $urlOrPath): ?string
+    {
+        $bq = self::bqPath($urlOrPath);
+        if ($bq === null) {
+            return null;
+        }
+
+        return $bq . '.br';
+    }
+
+    /**
+     * Publish BinQuery wire for the same identity as HTML ~q leaf.
+     * $canonicalStorefrontUri MUST already carry Coordinator-canonical query
+     * (server-recomputed). Does not accept a client-supplied sha segment.
+     */
+    public static function publishBq(string $canonicalStorefrontUri, string $wirePlain = '', string $brotli = ''): bool
+    {
+        $bqPath = self::bqPath($canonicalStorefrontUri);
+        if ($bqPath === null) {
+            return false;
+        }
+        if ($wirePlain === '' && $brotli === '') {
+            return false;
+        }
+        $dir = \dirname($bqPath);
+        if (!self::ensureDirectory($dir)) {
+            return false;
+        }
+        $brPath = $bqPath . '.br';
+        if ($brotli !== '') {
+            if (!self::writeAtomic($brPath, $brotli)) {
+                return false;
+            }
+            @\unlink($bqPath);
+
+            return true;
+        }
+        if (!self::writeAtomic($bqPath, $wirePlain)) {
+            return false;
+        }
+        @\unlink($brPath);
+
+        return true;
+    }
+
+    /**
+     * @return array{body:string,encoding:?string,path:string}|null
+     */
+    public static function readBq(string $fullUri, string $acceptEncoding = ''): ?array
+    {
+        unset($acceptEncoding);
+        $resolved = self::resolveHostPath($fullUri);
+        if ($resolved === null) {
+            return null;
+        }
+        $rel = self::relativePageDir($resolved['host'], $resolved['path']);
+        if ($rel === null) {
+            return null;
+        }
+
+        return self::readBqRelative($resolved['host'], $rel);
+    }
+
+    /**
+     * Read BinQuery leaf by host + page-relative path already including ~q/{sha}.
+     * Used by query-bin/~fpc short path (WLS miss fallback; Nginx uses try_files).
+     *
+     * @return array{body:string,encoding:?string,path:string}|null
+     */
+    public static function readBqByStorefrontRel(string $host, string $storefrontRel, string $sha): ?array
+    {
+        $host = \strtolower(\trim($host));
+        $storefrontRel = \trim($storefrontRel, '/');
+        $sha = \strtolower(\trim($sha));
+        if ($host === '' || $storefrontRel === '' || \preg_match('/^[a-f0-9]{40}$/D', $sha) !== 1) {
+            return null;
+        }
+        if (\str_contains($storefrontRel, '..')) {
+            return null;
+        }
+        $pageRel = $storefrontRel . '/' . self::QUERY_VARIANT_SEGMENT . '/' . $sha;
+        $rel = self::relativePageDir($host, '/' . $pageRel);
+        if ($rel === null) {
+            return null;
+        }
+
+        return self::readBqRelative($host, $rel);
+    }
+
+    /**
+     * @return array{body:string,encoding:?string,path:string}|null
+     */
+    private static function readBqRelative(string $host, string $rel): ?array
+    {
+        unset($host);
+        $bqPath = self::liveRoot() . \DIRECTORY_SEPARATOR . $rel . \DIRECTORY_SEPARATOR . self::BQ_BASENAME;
+        $brPath = $bqPath . '.br';
+        if (\is_file($brPath)) {
+            $raw = @\file_get_contents($brPath);
+            if (\is_string($raw) && $raw !== '') {
+                return ['body' => $raw, 'encoding' => 'br', 'path' => $brPath];
+            }
+        }
+        if (!\is_file($bqPath)) {
+            return null;
+        }
+        $raw = @\file_get_contents($bqPath);
+        if (!\is_string($raw) || $raw === '') {
+            return null;
+        }
+
+        return ['body' => $raw, 'encoding' => null, 'path' => $bqPath];
     }
 
     /**
@@ -231,6 +375,7 @@ final class FpcHtmlDiskStore
 
     /**
      * URL-level soft invalidate: drop leaves in the write target (staging or live).
+     * Path-only URLs also cascade-delete sibling `~q/*` variant leaves.
      *
      * @param list<string> $urls
      */
@@ -238,12 +383,76 @@ final class FpcHtmlDiskStore
     {
         $stop = self::writeBaseRoot();
         foreach ($urls as $url) {
-            $dir = self::pageDirectory((string)$url);
-            if ($dir === null || !\is_dir($dir)) {
+            $url = (string)$url;
+            $dir = self::pageDirectory($url);
+            if ($dir === null) {
                 continue;
             }
-            self::unlinkPageFiles($dir);
-            self::removeEmptyParents($dir, $stop);
+            $cascadeVariants = !self::urlHasNonEmptyQuery($url);
+            if (\is_dir($dir)) {
+                self::unlinkPageFiles($dir);
+                if ($cascadeVariants) {
+                    self::purgeQueryVariantChildren($dir);
+                }
+                self::removeEmptyParents($dir, $stop);
+            }
+        }
+    }
+
+    /**
+     * Whether the URL carries a non-empty query string (variant leaf identity).
+     */
+    public static function urlHasNonEmptyQuery(string $urlOrPath): bool
+    {
+        $raw = \trim($urlOrPath);
+        if ($raw === '' || \preg_match('#^https?://#i', $raw) !== 1) {
+            return false;
+        }
+        $parts = \parse_url($raw);
+        if (!\is_array($parts)) {
+            return false;
+        }
+
+        return (string)($parts['query'] ?? '') !== '';
+    }
+
+    /**
+     * Remove all `~q/{sha1}` variant leaves under a path-only page directory.
+     */
+    private static function purgeQueryVariantChildren(string $pageDir): void
+    {
+        $qRoot = $pageDir . \DIRECTORY_SEPARATOR . self::QUERY_VARIANT_SEGMENT;
+        if (!\is_dir($qRoot) || !self::isUnderRoot($qRoot)) {
+            return;
+        }
+        $items = @\scandir($qRoot);
+        if (!\is_array($items)) {
+            return;
+        }
+        foreach ($items as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            // sha1 hex only
+            if (\preg_match('/^[a-f0-9]{40}$/D', $name) !== 1) {
+                continue;
+            }
+            $variantDir = $qRoot . \DIRECTORY_SEPARATOR . $name;
+            if (!\is_dir($variantDir) || \is_link($variantDir)) {
+                continue;
+            }
+            self::unlinkPageFiles($variantDir);
+            @\rmdir($variantDir);
+        }
+        $left = @\scandir($qRoot);
+        if (\is_array($left)) {
+            $children = \array_values(\array_filter(
+                $left,
+                static fn(string $n): bool => $n !== '.' && $n !== '..',
+            ));
+            if ($children === []) {
+                @\rmdir($qRoot);
+            }
         }
     }
 
@@ -845,7 +1054,7 @@ final class FpcHtmlDiskStore
 
     private static function unlinkPageFiles(string $dir): void
     {
-        foreach (['index.html', 'index.html.br'] as $name) {
+        foreach (['index.html', 'index.html.br', self::BQ_BASENAME, self::BQ_BASENAME . '.br'] as $name) {
             $file = $dir . \DIRECTORY_SEPARATOR . $name;
             if (\is_file($file)) {
                 @\unlink($file);

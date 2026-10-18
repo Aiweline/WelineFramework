@@ -1339,13 +1339,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return null;
         }
 
-        // html-disk is path-only. Canonical URI still carrying query ⇒ Extra
-        // query_keys (or pierce storm) variant — must miss disk and use Shared.
-        if ($this->canonicalCacheKeyUriHasQueryVariant($fullUri)) {
-            return null;
-        }
+        // Prefer URL-tree generated/html (path-only or ~q/{sha1} variant leaf),
+        // then legacy path-index. Store maps canonical query → ~q leaf so variants
+        // never overwrite the path-only Nginx try_files leaf.
 
-        // Prefer URL-tree generated/html (edge/Nginx authority), then legacy path-index.
+
         $htmlDisk = FpcHtmlDiskStore::read(
             $fullUri,
             $acceptEncoding !== '' ? $acceptEncoding : $this->clientAcceptEncodingHeader(),
@@ -1801,10 +1799,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if ($fullUri === '' || !KeyBuilder::isValidFullPageCacheKey($fullUri)) {
             return null;
         }
-        // Do not hydrate Process L1 from path-only disk for query-variant keys.
-        if ($this->canonicalCacheKeyUriHasQueryVariant($fullUri)) {
-            return null;
-        }
+        // Query variants read …/~q/{sha1}/ (same Store mapping as publish/serve).
         $htmlDisk = FpcHtmlDiskStore::read($fullUri, 'identity');
         if (!\is_array($htmlDisk)) {
             $htmlDisk = FpcHtmlDiskStore::read($fullUri, 'gzip, deflate, br');
@@ -5246,11 +5241,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             if ($fullUriForPathIndex === '' || ($plain === '' && $brotli === '')) {
                 return null;
             }
-            // Query-variant Shared bodies stay inline/Shared-only — never overwrite
-            // the path-only html-disk leaf used by Nginx try_files.
-            if ($this->canonicalCacheKeyUriHasQueryVariant($fullUriForPathIndex)) {
-                return null;
-            }
+            // Canonical query URI → Store ~q/{sha1} leaf (path-only leaf untouched).
             if (!FpcHtmlDiskStore::publish($fullUriForPathIndex, $plain, $brotli)) {
                 return null;
             }
@@ -6623,24 +6614,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      */
     private function filterGetParamsForCacheKey(array $params, string $pathContextUri = ''): array
     {
-        // Default path-only: drop visitor query except (1) pierce-gated storm keys and
-        // (2) path-scoped Extra query_keys allowlist. Sorted for stable Shared identity.
-        // First occurrence wins; values are scalar-canonical (urldecode) so encoding
-        // variants of the same allowlisted name=value share one key.
-        $kept = [];
-        foreach ($params as $key => $value) {
-            $normalized = \strtolower(\trim((string)$key));
-            if ($normalized === '' || !$this->isCacheKeyRetainedQueryParam($normalized, $pathContextUri)) {
-                continue;
-            }
-            if (\array_key_exists($normalized, $kept)) {
-                continue;
-            }
-            $kept[$normalized] = self::canonicalCacheKeyQueryValue($value);
-        }
-        \ksort($kept, \SORT_STRING);
-
-        return $kept;
+        return \Weline\Framework\Http\Fpc\FpcAllowlistedQueryIdentity::filterGetParams(
+            $params,
+            $this->currentPathCacheKeyQueryAllowlist($pathContextUri),
+            \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest(),
+        );
     }
 
     /**
@@ -6663,53 +6641,24 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     private function filterQueryStringForCacheKey(string $query, string $pathContextUri = ''): string
     {
-        $segments = \preg_split('/[&;]/', $query, -1, \PREG_SPLIT_NO_EMPTY);
-        if ($segments === false || $segments === []) {
-            return '';
-        }
-
-        $keptByKey = [];
-        foreach ($segments as $segment) {
-            $parts = \explode('=', $segment, 2);
-            $rawKey = $parts[0] ?? '';
-            $decodedKey = \strtolower(\trim((string)\urldecode((string)$rawKey)));
-            if ($decodedKey === '' || !$this->isCacheKeyRetainedQueryParam($decodedKey, $pathContextUri)) {
-                continue;
-            }
-            // First occurrence wins; rebuild with canonical value so order/encoding
-            // of allowlisted params does not fork Shared identity.
-            if (!isset($keptByKey[$decodedKey])) {
-                $rawValue = $parts[1] ?? '';
-                $canonicalValue = self::canonicalCacheKeyQueryValue(
-                    \urldecode((string)$rawValue),
-                );
-                $keptByKey[$decodedKey] = \rawurlencode($decodedKey) . '=' . \rawurlencode($canonicalValue);
-            }
-        }
-        \ksort($keptByKey, \SORT_STRING);
-
-        return \implode('&', \array_values($keptByKey));
+        return \Weline\Framework\Http\Fpc\FpcAllowlistedQueryIdentity::filterQueryString(
+            $query,
+            $this->currentPathCacheKeyQueryAllowlist($pathContextUri),
+            \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest(),
+        );
     }
 
     /**
-     * Scalar string for allowlisted query identity (arrays → first scalar).
+     * @deprecated use FpcAllowlistedQueryIdentity::canonicalValue
      */
     private static function canonicalCacheKeyQueryValue(mixed $value): string
     {
-        if (\is_array($value)) {
-            $first = \reset($value);
-            $value = $first;
-        }
-        if (!\is_scalar($value) && $value !== null) {
-            return '';
-        }
-
-        return \trim((string)$value);
+        return \Weline\Framework\Http\Fpc\FpcAllowlistedQueryIdentity::canonicalValue($value);
     }
 
     /**
      * After canonicalize: non-empty query means Extra query_keys and/or pierce
-     * storm identity. html-disk remains path-only — skip serve/hydrate/publish.
+     * storm identity (Store maps these to ~q/{sha1} html-disk leaves).
      */
     private function canonicalCacheKeyUriHasQueryVariant(string $canonicalFullUri): bool
     {
@@ -6728,23 +6677,18 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      */
     private function isCacheKeyRetainedQueryParam(string $key, string $pathContextUri = ''): bool
     {
-        $key = \strtolower(\trim($key));
-        if ($key === '') {
-            return false;
-        }
-        if ($key === '_wb_nc' || $key === 'wls_tpl_perf' || $key === 'wls_tpl_route') {
-            // Storm identity only when the install pierce stamp is present.
-            return \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest();
-        }
-
-        return $this->isPathAllowlistedCacheKeyQueryParam($key, $pathContextUri);
+        return \Weline\Framework\Http\Fpc\FpcAllowlistedQueryIdentity::isRetainedKey(
+            $key,
+            $this->currentPathCacheKeyQueryAllowlist($pathContextUri),
+            \Weline\Framework\Http\Fpc\FpcPierceStamp::isValidCurrentRequest(),
+        );
     }
 
     private function isPathAllowlistedCacheKeyQueryParam(string $key, string $pathContextUri = ''): bool
     {
         $allow = $this->currentPathCacheKeyQueryAllowlist($pathContextUri);
 
-        return $allow[$key] ?? false;
+        return $allow[\strtolower(\trim($key))] ?? false;
     }
 
     /**

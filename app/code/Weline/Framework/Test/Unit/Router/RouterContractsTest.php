@@ -196,7 +196,10 @@ private function assert_FullPageCacheDiagTrack_testQueryAllowlistRetainHooksPres
     self::assertStringContainsString('currentPathCacheKeyQueryAllowlist', $coord);
     self::assertStringContainsString('queryKeysFromPolicy', $coord);
     self::assertStringContainsString('canonicalCacheKeyUriHasQueryVariant', $coord);
-    self::assertStringContainsString('canonicalCacheKeyUriHasQueryVariant($fullUri)', $coord);
+    $diskStore = (string) file_get_contents($framework . '/Http/Fpc/FpcHtmlDiskStore.php');
+    self::assertStringContainsString('QUERY_VARIANT_SEGMENT', $diskStore);
+    self::assertStringContainsString("'~q'", $diskStore);
+    self::assertStringContainsString('purgeQueryVariantChildren', $diskStore);
     $extra = (string) file_get_contents($framework . '/Extends/module/Weline_Framework/Extra/Type/FpcExtraType.php');
     self::assertStringContainsString('query_keys', $extra);
     self::assertStringContainsString('MAX_QUERY_KEYS', $extra);

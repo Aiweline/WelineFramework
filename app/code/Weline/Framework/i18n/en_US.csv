@@ -2296,6 +2296,15 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 周,Week
 月,Month
 季度,Quarter
+应用日志目录清理,应用日志目录清理
+"按 log.rotate.max_size 对 var/log/**/*.log 与 var/cron.log 做 copytruncate，并保留 max_files 个归档；清理 cron/history 过期快照。","按 log.rotate.max_size 对 var/log/**/*.log 与 var/cron.log 做 copytruncate，并保留 max_files 个归档；清理 cron/history 过期快照。"
+"执行频率：每 30 分钟。覆盖 php_error 等绕过框架 Logger 的文件。","执行频率：每 30 分钟。覆盖 php_error 等绕过框架 Logger 的文件。"
+应用日志目录清理完成。,应用日志目录清理完成。
+"扫描: %{1}","扫描: %{1}"
+"轮转: %{1}","轮转: %{1}"
+"归档清理: %{1}","归档清理: %{1}"
+"history清理: %{1}","history清理: %{1}"
+"错误: %{1}","错误: %{1}"
 进程管理器清理任务,"Process manager cleanup task"
 "清理已不存活进程的索引与 PID 文件，以及 %{1} 天前的生命周期日志。","Clean index and PID files of dead processes and lifecycle logs older than %{1} days."
 执行频率：每日一次。,"Runs once daily."

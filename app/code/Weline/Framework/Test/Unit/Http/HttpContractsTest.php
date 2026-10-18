@@ -205,10 +205,10 @@ final class HttpContractsTest extends TestCase
                 $this->tearDown_FpcHtmlDiskStore();
             }
         },
-            'FpcHtmlDiskStore::testAnyQueryIsPathKeyedOnly' => function () {
+            'FpcHtmlDiskStore::testAllowlistedQueryUsesQVariantLeaf' => function () {
             $this->setUp_FpcHtmlDiskStore();
             try {
-                $this->assert_FpcHtmlDiskStore_testAnyQueryIsPathKeyedOnly();
+                $this->assert_FpcHtmlDiskStore_testAllowlistedQueryUsesQVariantLeaf();
             } finally {
                 $this->tearDown_FpcHtmlDiskStore();
             }
@@ -818,6 +818,8 @@ private function assert_FpcBypassAndStore_testEvaluatorBypassesEditorQueryAndLiv
     self::assertFalse(FpcBypassEvaluator::shouldBypass(['query' => ['_wb_nc' => '1']], $rules));
     self::assertTrue(FpcBypassEvaluator::shouldBypass(['query' => ['_wb_nc' => '1'], 'pierce_stamp_valid' => true], $rules));
     self::assertTrue(FpcBypassEvaluator::shouldBypass(['query' => ['nocache' => '1'], 'env' => ['fpc_pierce_stamp' => '1']], $rules));
+    // UC-FPC-Pierce / Extra UC-05: valid pierce alone bypasses (FactsBuilder sets env).
+    self::assertTrue(FpcBypassEvaluator::shouldBypass(['env' => ['fpc_pierce_stamp' => '1']], $rules));
     // Legacy preview cookie alone must NOT bypass — identity is /~preview/{token}/ or query/header.
     self::assertFalse(FpcBypassEvaluator::shouldBypass(['cookie_header' => 'a=1; weline_preview_token_w0=abc; b=2'], $rules));
     self::assertTrue(FpcBypassEvaluator::shouldBypass(['headers' => ['x-wls-fpc-bypass' => '1']], $rules));
@@ -1016,19 +1018,32 @@ private function assert_FpcHtmlDiskStore_testBrotliPublishIsBrOnlyAndReadableWit
     self::assertNull(FpcHtmlDiskStore::read($url, ''));
 }
 
-private function assert_FpcHtmlDiskStore_testAnyQueryIsPathKeyedOnly(): void
+private function assert_FpcHtmlDiskStore_testAllowlistedQueryUsesQVariantLeaf(): void
 {
     $canonical = 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/path';
-    $withQuery = $canonical . '?size=s&style_type=hong-se-jiu&_wb_nc=1';
-    $html = "<html><body>path</body></html>\n";
-    self::assertTrue(FpcHtmlDiskStore::publish($withQuery, $html, ''));
-    $path = FpcHtmlDiskStore::htmlPath($withQuery);
-    self::assertIsString($path);
-    self::assertSame(FpcHtmlDiskStore::htmlPath($canonical), $path);
-    self::assertStringNotContainsString('~q', $path);
-    self::assertFileExists($path);
+    $withQuery = $canonical . '?price=0-99';
+    $pathOnlyHtml = "<html><body>path-only</body></html>\n";
+    $variantHtml = "<html><body>price-variant</body></html>\n";
+    self::assertTrue(FpcHtmlDiskStore::publish($canonical, $pathOnlyHtml, ''));
+    self::assertTrue(FpcHtmlDiskStore::publish($withQuery, $variantHtml, ''));
+    $pathOnly = FpcHtmlDiskStore::htmlPath($canonical);
+    $variantPath = FpcHtmlDiskStore::htmlPath($withQuery);
+    self::assertIsString($pathOnly);
+    self::assertIsString($variantPath);
+    self::assertNotSame($pathOnly, $variantPath);
+    self::assertStringContainsString('/' . FpcHtmlDiskStore::QUERY_VARIANT_SEGMENT . '/', $variantPath);
+    self::assertStringContainsString(\sha1('price=0-99'), $variantPath);
+    self::assertFileExists($pathOnly);
+    self::assertFileExists($variantPath);
+    self::assertSame($pathOnlyHtml, (string)\file_get_contents($pathOnly));
+    self::assertSame($variantHtml, (string)\file_get_contents($variantPath));
+    $hit = FpcHtmlDiskStore::read($withQuery, '');
+    self::assertIsArray($hit);
+    self::assertSame($variantHtml, $hit['body']);
+    // Path-only purge cascades ~q children.
     FpcHtmlDiskStore::purgeUrls([$canonical]);
-    self::assertFileDoesNotExist($path);
+    self::assertFileDoesNotExist($pathOnly);
+    self::assertFileDoesNotExist($variantPath);
 }
 
 private function assert_FpcHtmlDiskStore_testSoftPurgeAllKeepsPreviousAndRollbackRestores(): void
@@ -1344,6 +1359,7 @@ private function assert_FpcStaticDiskStore_testPublishFromAppCodeMirrorAndSkipPu
 {
     $storeSrc = (string) \file_get_contents(BP . 'app/code/Weline/Framework/Http/Fpc/FpcStaticDiskStore.php');
     self::assertStringContainsString('StaticAssetBrotliSidecar::publish($target)', $storeSrc);
+    self::assertStringContainsString("hash_file('sha256'", $storeSrc, 'publishFromFile must content-hash compare live leaf vs source');
     self::assertGreaterThanOrEqual(3, \substr_count($storeSrc, 'StaticAssetBrotliSidecar::publish($target)'), 'publishFromFile early-out + copy path + republish hash-match must all refresh .br');
     $uri = '/Weline/Geo/view/statics/frontend/js/geo-fixture.js';
     self::assertTrue(FpcStaticDiskStore::shouldMirrorResolvedFile($this->sourceFile_FpcStaticDiskStore));

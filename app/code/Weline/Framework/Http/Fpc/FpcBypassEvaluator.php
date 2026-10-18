@@ -118,6 +118,14 @@ final class FpcBypassEvaluator
                 'effect' => 'bypass_serve_and_publish',
             ],
             [
+                // UC-FPC-Pierce / Extra UC-05: valid install pierce alone → BYPASS.
+                'id' => 'framework.fpc_pierce_stamp',
+                'match' => [
+                    'env_flags' => ['fpc_pierce_stamp'],
+                ],
+                'effect' => 'bypass_serve_and_publish',
+            ],
+            [
                 'id' => 'theme.editor_preview_query',
                 'match' => [
                     // Presence alone must not bypass; require_pierce_stamp gated in shouldBypass().

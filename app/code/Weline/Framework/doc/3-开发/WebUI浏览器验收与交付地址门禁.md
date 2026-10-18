@@ -73,7 +73,7 @@
 
 | 宿主示例 | 推荐动作（按序） |
 |----------|------------------|
-| Cursor ide-browser | `Network.enable` → `Network.setCacheDisabled({cacheDisabled:true})` → `browser_navigate`；**验收导航 URL 必须带安装级 `w_fpc_pierce=<secret>`**（`FpcPierceStamp::buildQuerySuffix()` / `generated/framework/fpc_pierce_secret`；用 `?`/`&`，禁止叠第二个 `?`）——无穿章则 `_wb_nc`/诊断 query 不能打穿 FPC；**本回合改过静态资源时，还必须再带 `_wb_nc=<unix_ms>`**，并抽检已加载脚本/样式正文含本回合标记（`fetch(...,{cache:'no-store'})` 或 curl `Cache-Control: no-cache`）；若 `setCacheDisabled` 被拒：注明降级并用 pierce+`_wb_nc=` 再 navigate（或关标签再开）；**禁止** `browser_cdp` `Page.reload`（会重载整个 Cursor 窗口、杀死全部智能体） |
+| Cursor ide-browser | `Network.enable` → `Network.setCacheDisabled({cacheDisabled:true})` → `browser_navigate`；**验收导航 URL 必须带安装级 `w_fpc_pierce=<secret>`**（`FpcPierceStamp::buildQuerySuffix()` / `generated/framework/fpc_pierce_secret`；用 `?`/`&`，禁止叠第二个 `?`）——无穿章则 `_wb_nc`/诊断 query 不能打穿 **HTML** FPC；**本回合改过静态资源时，还必须再带 `_wb_nc=<unix_ms>`**（Nginx 对静态 location 亦将 `_wb_nc`/`_weline_dev` 打回 `@wls_static_origin` remirror，避免 `generated/static/live` 旧叶），并抽检已加载脚本/样式正文含本回合标记（`fetch(...,{cache:'no-store'})` 或 curl `Cache-Control: no-cache`）；若 `setCacheDisabled` 被拒：注明降级并用 pierce+`_wb_nc=` 再 navigate（或关标签再开）；**禁止** `browser_cdp` `Page.reload`（会重载整个 Cursor 窗口、杀死全部智能体） |
 | Playwright / Puppeteer / 其它 CDP | 等价 CDP `Network.setCacheDisabled`，或会话级禁用缓存后再导航；验收 URL 同样须穿章；本回合改静态时再 cache-bust query + 正文抽检（Playwright 页内 `page.reload` 可用——不是 Cursor `browser_cdp`） |
 | 无 CDP 能力 | 对验收 URL **必须**带穿章 + 缓存破坏 query；仍须在日志注明限制 |
 

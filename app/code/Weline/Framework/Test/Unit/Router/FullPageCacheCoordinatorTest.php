@@ -1326,7 +1326,8 @@ final class FullPageCacheCoordinatorTest extends TestCase
                 ),
             );
 
-            // UC-query-variant-skips-path-only-html-disk
+            // UC-query-variant-~q-html-disk: canonical query ⇒ variant identity
+            // (Store maps to ~q/{sha1}; path-only leaf must stay distinct).
             $hasQueryVariant = new \ReflectionMethod(
                 FullPageCacheCoordinator::class,
                 'canonicalCacheKeyUriHasQueryVariant',
@@ -1340,6 +1341,19 @@ final class FullPageCacheCoordinatorTest extends TestCase
                 $coordinator,
                 'https://example.test/products',
             ));
+            $variantDisk = \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::htmlPath(
+                'https://example.test/products?price=100-299',
+            );
+            $pathOnlyDisk = \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::htmlPath(
+                'https://example.test/products',
+            );
+            self::assertIsString($variantDisk);
+            self::assertIsString($pathOnlyDisk);
+            self::assertNotSame($pathOnlyDisk, $variantDisk);
+            self::assertStringContainsString(
+                '/' . \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::QUERY_VARIANT_SEGMENT . '/',
+                $variantDisk,
+            );
 
             // Worker-style mismatch: Env raw URI is homepage, call passes /products?price=
             // Allowlist must follow the URI argument (β edge-parity / no path-only disk HIT).

@@ -813,6 +813,10 @@ class Core
             return $this->routeExternalBinQueryApi();
         }
 
+        if (!$is_api_admin && $this->isFrontendQueryBinFpcLeafUrl($url)) {
+            return $this->serveFrontendQueryBinFpcLeaf($url);
+        }
+
         if (!$is_api_admin && $this->isFrontendQueryBinApiUrl($url)) {
             return $this->routeFrontendQueryBinApi();
         }
@@ -865,13 +869,54 @@ class Core
 
     private function isFrontendQueryBinApiUrl(string $url): bool
     {
-        $normalized = \strtolower(\trim($url, '/'));
-        $restFrontendPrefix = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/'));
-        $prefixedQueryBin = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/framework/query-bin' : '';
+        return \Weline\Framework\Http\Fpc\QueryBinFpcPath::isPlainQueryBinPath($url);
+    }
 
-        return $normalized === 'framework/query-bin'
-            || $normalized === 'api/framework/query-bin'
-            || ($prefixedQueryBin !== '' && $normalized === $prefixedQueryBin);
+    private function isFrontendQueryBinFpcLeafUrl(string $url): bool
+    {
+        return \Weline\Framework\Http\Fpc\QueryBinFpcPath::isFpcLeafPath($url);
+    }
+
+    /**
+     * Cold-disk short path for …/query-bin/~fpc/{rel}/~q/{sha} — no postIndex/handshake.
+     */
+    private function serveFrontendQueryBinFpcLeaf(string $url)
+    {
+        $parsed = \Weline\Framework\Http\Fpc\QueryBinFpcPath::parseFpcLeaf($url);
+        $response = $this->request->getResponse();
+        if ($parsed === null) {
+            $response->noRouter();
+
+            return false;
+        }
+        $host = \strtolower((string)$this->request->getServer('HTTP_HOST'));
+        if ($host === '') {
+            $host = \strtolower((string)$this->request->getServer('SERVER_NAME'));
+        }
+        $hit = \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::readBqByStorefrontRel(
+            $host,
+            $parsed['storefront_rel'],
+            $parsed['sha'],
+        );
+        if ($hit === null) {
+            $response->setHttpResponseCode(404);
+            $response->setHeader('Content-Type', 'application/x-weline-query-bin');
+            $response->setHeader('X-Weline-Fpc-Source', 'bq-disk-miss');
+            $response->setBody('')->send();
+
+            return true;
+        }
+        $response->setHttpResponseCode(200);
+        $response->setHeader('Content-Type', 'application/x-weline-query-bin');
+        $response->setHeader('X-Weline-FPC', 'HIT');
+        $response->setHeader('X-Weline-Fpc-Source', 'bq-disk');
+        $response->setHeader('Cache-Control', 'public, max-age=60');
+        if (($hit['encoding'] ?? null) === 'br') {
+            $response->setHeader('Content-Encoding', 'br');
+        }
+        $response->setBody((string)$hit['body'])->send();
+
+        return true;
     }
 
     private function isFrontendStreamApiUrl(string $url): bool

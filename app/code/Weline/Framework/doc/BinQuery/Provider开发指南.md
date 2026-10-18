@@ -4,6 +4,17 @@ BinQuery 不要求开发者放弃旧 descriptor 数组。推荐新开发使用 A
 
 **后续业务接口默认只写 QueryProvider**（REST / query-bin / `/bin/query` 为入口壳）。权限是入口门 + descriptor 声明，不是「写了 Provider 就安全」。
 
+## 界面页 vs 资料更新（硬 · `ui_page_controllers_mutations_via_async_binquery`）
+
+| 允许 | 禁止 |
+|------|------|
+| HTTP Controller **只开界面页**（HTML / 布局壳：index / edit / view） | 为管理信息开多个 CRUD Controller（Index/Edit/Save/Delete…） |
+| 资料增删改走异步 BinQuery：`Weline.Api.* → worker/query-bin → 本模块 QueryProvider` | 把 save / delete / export / 批量改做成 Controller 动作或表单直打 Controller |
+
+薄例外与 API 规范一致：multipart/stream、OAuth/换票、webhook、Framework BinQuery 网关壳。权威：MCP `ui_page_controllers_mutations_via_async_binquery`；[规则/30 §9.1](../../../Ai/doc/规则/30-后端与数据.md)。
+
+**管理面产品完整度（硬 · `admin_manage_ui_requires_humanized_full_ops`）**：为可管理资源提供 QueryProvider 写读时，管理 UI 须配套增删改查 +（多行时）批量等；禁止只暴露 create 就收工。见 [规则/30 §9.2](../../../Ai/doc/规则/30-后端与数据.md)。
+
 ## 权限默认拒绝（硬）
 
 | 暴露意图 | 必须显式声明 | 禁止 |
