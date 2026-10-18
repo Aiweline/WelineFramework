@@ -22,6 +22,9 @@ try {
     if (!defined('BP')) {
         define('BP', dirname(__DIR__) . DIRECTORY_SEPARATOR);
     }
+    // Early DB gate lock paths need global VAR_DIR before app/bootstrap.php.
+    require_once BP . 'app/code/Weline/Framework/App/DirectoryList.php';
+    \Weline\Framework\App\DirectoryList::defineBootstrapConstants(BP);
     require_once BP . 'app/code/Weline/Framework/Setup/Lock/SetupDatabaseAccessLock.php';
     require_once BP . 'app/code/Weline/Framework/Setup/Lock/SetupUpgradeIntent.php';
     require_once BP . 'app/code/Weline/Framework/Phrase/DatabaseFreeTranslator.php';

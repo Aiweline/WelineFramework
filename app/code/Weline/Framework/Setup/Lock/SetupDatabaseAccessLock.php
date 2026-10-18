@@ -247,7 +247,7 @@ final class SetupDatabaseAccessLock
 
     public static function path(): string
     {
-        return VAR_DIR . 'process' . DIRECTORY_SEPARATOR . self::LOCK_FILENAME;
+        return \VAR_DIR . 'process' . DIRECTORY_SEPARATOR . self::LOCK_FILENAME;
     }
 
     private static function handoffPath(string $token): string
