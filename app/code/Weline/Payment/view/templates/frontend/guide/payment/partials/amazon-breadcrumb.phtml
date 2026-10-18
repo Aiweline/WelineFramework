@@ -10,10 +10,11 @@ $articleTitle = match ($pageType) {
     'agreement' => (string) ($entry['agreement_title'] ?? ''),
     default => (string) ($entry['guide_title'] ?? ''),
 };
+// PHP 上下文须用 __()：@lang 会编译成 echo 片段，破坏 match 语法。
 $navLabel = match ($pageType) {
-    'policy' => '@lang(支付政策导航)',
-    'agreement' => '@lang(用户协议导航)',
-    default => '@lang(支付指南导航)',
+    'policy' => (string) __('支付政策导航'),
+    'agreement' => (string) __('用户协议导航'),
+    default => (string) __('支付指南导航'),
 };
 $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 ?>
