@@ -528,9 +528,30 @@ class ChatService
      */
     public function countUnreadForAgent(int $agentId): int
     {
+        $total = 0;
+        foreach ($this->unreadCountsBySessionForAgent($agentId) as $count) {
+            $total += max(0, (int)$count);
+        }
+
+        return $total;
+    }
+
+    /**
+     * Unread sessions for menu deep links (active agent sessions only).
+     *
+     * @return list<array{session_id: int, unread_count: int, list_title: string}>
+     */
+    public function listUnreadSessionsForAgent(int $agentId, int $limit = 20): array
+    {
         $agentId = max(0, $agentId);
+        $limit = max(1, min(50, $limit));
         if ($agentId <= 0) {
-            return 0;
+            return [];
+        }
+
+        $counts = $this->unreadCountsBySessionForAgent($agentId);
+        if ($counts === []) {
+            return [];
         }
 
         /** @var ChatSession $session */
@@ -541,7 +562,74 @@ class ChatService
             ->select()
             ->fetchArray();
         if (!is_array($sessionRows) || $sessionRows === []) {
-            return 0;
+            return [];
+        }
+
+        $rows = [];
+        foreach ($sessionRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sessionId = (int)($row[ChatSession::schema_fields_ID] ?? $row['session_id'] ?? 0);
+            $unread = (int)($counts[$sessionId] ?? 0);
+            if ($sessionId <= 0 || $unread <= 0) {
+                continue;
+            }
+            $row['session_id'] = $sessionId;
+            $row['unread_count'] = $unread;
+            $row = $this->attachConsoleSessionIdentity($row);
+            $rows[] = [
+                'session_id' => $sessionId,
+                'unread_count' => $unread,
+                'list_title' => (string)($row['list_title'] ?? ('#' . $sessionId)),
+                'last_message_at' => (string)($row[ChatSession::schema_fields_UPDATED_AT] ?? $row['updated_at'] ?? ''),
+                'waiting_since_at' => null,
+            ];
+        }
+        if ($rows === []) {
+            return [];
+        }
+
+        $rows = $this->sortConsoleSessionsByPriority($rows);
+        $out = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $out[] = [
+                'session_id' => (int)($row['session_id'] ?? 0),
+                'unread_count' => max(0, (int)($row['unread_count'] ?? 0)),
+                'list_title' => (string)($row['list_title'] ?? ''),
+            ];
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Per-session unread counts for an agent's active sessions.
+     *
+     * @return array<int, int> session_id => unread message count
+     */
+    private function unreadCountsBySessionForAgent(int $agentId): array
+    {
+        $agentId = max(0, $agentId);
+        if ($agentId <= 0) {
+            return [];
+        }
+
+        /** @var ChatSession $session */
+        $session = ObjectManager::getInstance(ChatSession::class);
+        $sessionRows = $session->reset()
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_ACTIVE)
+            ->select()
+            ->fetchArray();
+        if (!is_array($sessionRows) || $sessionRows === []) {
+            return [];
         }
 
         $floors = [];
@@ -564,7 +652,7 @@ class ChatService
             $floors[$sessionId] = $readFloor;
         }
         if ($sessionIds === []) {
-            return 0;
+            return [];
         }
 
         /** @var ChatMessage $message */
@@ -575,10 +663,10 @@ class ChatService
             ->select()
             ->fetchArray();
         if (!is_array($messageRows) || $messageRows === []) {
-            return 0;
+            return [];
         }
 
-        $total = 0;
+        $counts = [];
         foreach ($messageRows as $row) {
             if (!is_array($row)) {
                 continue;
@@ -589,11 +677,11 @@ class ChatService
             }
             $createdAt = (string)($row[ChatMessage::schema_fields_created_at] ?? $row['created_at'] ?? '');
             if ($createdAt !== '' && strcmp($createdAt, $floors[$sessionId]) > 0) {
-                ++$total;
+                $counts[$sessionId] = (int)($counts[$sessionId] ?? 0) + 1;
             }
         }
 
-        return $total;
+        return $counts;
     }
 
     public function getMessages(int $sessionId, int $limit = 50, int $offset = 0): array

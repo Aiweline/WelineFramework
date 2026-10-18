@@ -921,6 +921,9 @@ File: Main Js File
             let themeModeConfigUrl;
             if (typeof window.site !== 'undefined' && typeof window.site.buildUrl === 'function') {
                 themeModeConfigUrl = window.site.buildUrl('system/ThemeConfig/Set');
+            } else if (window.site && window.site.url_host) {
+                // url_host already includes admin area; backend_url may double-prefix on stale builds.
+                themeModeConfigUrl = String(window.site.url_host).replace(/\/+$/, '') + '/system/theme-config/set';
             } else if (typeof window.backend_url === 'function') {
                 themeModeConfigUrl = window.backend_url('system/theme-config/set');
             } else {
@@ -936,11 +939,17 @@ File: Main Js File
                 if (window.site && window.site.csrf_token) {
                     headers['X-CSRF-TOKEN'] = String(window.site.csrf_token);
                 }
-                const response = await window.fetch(themeModeConfigUrl, {
+                // Native fetch: patched window.fetch → Weline.Api MAX_IN_FLIGHT=1
+                // rejects overlapping POST theme-config/set (rapid 色系/主题切换).
+                const fetchImpl = typeof window.WelineNativeFetch === 'function'
+                    ? window.WelineNativeFetch
+                    : window.fetch;
+                const response = await fetchImpl(themeModeConfigUrl, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(layout),
-                    credentials: 'same-origin'
+                    credentials: 'same-origin',
+                    __welineNativeFetch: true
                 });
                 const result = await response.json().catch(function () { return {}; });
                 if (!response.ok || result.code >= 400 || result.success === false) {

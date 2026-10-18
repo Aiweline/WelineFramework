@@ -102,8 +102,12 @@ private function assert_BackendMenuSignalProvider_testProviderEmitsConsoleSource
     self::assertFileExists($path);
     $src = (string) file_get_contents($path);
     self::assertStringContainsString('BackendMenuSignalProviderInterface', $src);
+    self::assertStringContainsString('BackendMenuSignalItemsProviderInterface', $src);
     self::assertStringContainsString("MENU_SOURCE_ID = 'Weline_CustomerService::console'", $src);
     self::assertStringContainsString('countUnreadForAgent', $src);
+    self::assertStringContainsString('listUnreadSessionsForAgent', $src);
+    self::assertStringContainsString('getBackendUrl', $src);
+    self::assertStringContainsString('session_id', $src);
     self::assertStringContainsString('schema_fields_IS_ACTIVE', $src);
     self::assertStringNotContainsString('::session', $src);
     self::assertStringNotContainsString('STATUS_WAITING', $src);
@@ -113,7 +117,9 @@ private function assert_BackendMenuSignalProvider_testChatServiceCountUnreadForA
 {
     $src = (string) file_get_contents(BP . 'app/code/Weline/CustomerService/Service/ChatService.php');
     self::assertStringContainsString('function countUnreadForAgent', $src);
-    $start = strpos($src, 'function countUnreadForAgent');
+    self::assertStringContainsString('function listUnreadSessionsForAgent', $src);
+    self::assertStringContainsString('function unreadCountsBySessionForAgent', $src);
+    $start = strpos($src, 'function unreadCountsBySessionForAgent');
     self::assertNotFalse($start);
     $body = substr($src, (int) $start, 2200);
     self::assertStringContainsString('STATUS_ACTIVE', $body);
@@ -126,6 +132,12 @@ private function assert_BackendMenuSignalProvider_testChatServiceCountUnreadForA
     self::assertStringNotContainsString('ON DUPLICATE', $body);
     self::assertStringNotContainsString('DATE_FORMAT', $body);
     self::assertStringNotContainsString('COALESCE(', $body);
+
+    $js = (string) file_get_contents(BP . 'app/code/Weline/CustomerService/view/statics/js/backend-console.js');
+    self::assertStringContainsString("params.get('session_id')", $js);
+    self::assertStringContainsString('URLSearchParams', $js);
+    $ctrl = (string) file_get_contents(BP . 'app/code/Weline/CustomerService/Controller/Backend/Console.php');
+    self::assertStringContainsString("getParam('session_id'", $ctrl);
 }
 
 private function assert_BindCaptchaGuard_testBindCaptchaGuardDeclaresStableIntentAndFormId(): void

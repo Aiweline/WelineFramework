@@ -4,18 +4,25 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Service;
 
+use Weline\Admin\Api\BackendMenuSignalItemsProviderInterface;
+
 /**
- * Aggregates per-menu unread counts for JS badge painting (never SSR).
+ * Aggregates per-menu unread counts (+ optional deep-link items) for JS badge painting (never SSR).
  */
 final class BackendMenuSignalAggregator
 {
+    public const MAX_ITEMS_PER_CODE = 20;
+
     public function __construct(
         private readonly BackendMenuSignalProviderRegistry $registry,
     ) {
     }
 
     /**
-     * @return array{total:int, by_code: array<string, int>}
+     * @return array{
+     *     total: int,
+     *     by_code: array<string, array{count: int, items: list<array{id: string, title: string, href: string, count: int}>, primary_href: string}>
+     * }
      */
     public function aggregate(int $backendUserId): array
     {
@@ -42,7 +49,29 @@ final class BackendMenuSignalAggregator
             if ($count <= 0) {
                 continue;
             }
-            $byCode[$code] = $count;
+
+            $items = [];
+            if ($provider instanceof BackendMenuSignalItemsProviderInterface) {
+                try {
+                    $items = $this->normalizeItems($provider->items($backendUserId));
+                } catch (\Throwable $e) {
+                    if (function_exists('w_log_error')) {
+                        w_log_error('Backend menu signal items failed: ' . $code . ' ' . $e->getMessage());
+                    }
+                    $items = [];
+                }
+            }
+
+            $primaryHref = '';
+            if ($items !== []) {
+                $primaryHref = (string)($items[0]['href'] ?? '');
+            }
+
+            $byCode[$code] = [
+                'count' => $count,
+                'items' => $items,
+                'primary_href' => $primaryHref,
+            ];
             $total += $count;
         }
 
@@ -50,5 +79,43 @@ final class BackendMenuSignalAggregator
             'total' => $total,
             'by_code' => $byCode,
         ];
+    }
+
+    /**
+     * @param mixed $raw
+     * @return list<array{id: string, title: string, href: string, count: int}>
+     */
+    private function normalizeItems(mixed $raw): array
+    {
+        if (!is_array($raw) || $raw === []) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $href = trim((string)($row['href'] ?? ''));
+            if ($href === '') {
+                continue;
+            }
+            $id = trim((string)($row['id'] ?? ''));
+            $title = trim((string)($row['title'] ?? ''));
+            if ($title === '') {
+                $title = $id !== '' ? $id : $href;
+            }
+            $out[] = [
+                'id' => $id !== '' ? $id : $href,
+                'title' => $title,
+                'href' => $href,
+                'count' => max(0, (int)($row['count'] ?? 1)),
+            ];
+            if (count($out) >= self::MAX_ITEMS_PER_CODE) {
+                break;
+            }
+        }
+
+        return $out;
     }
 }

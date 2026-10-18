@@ -4,8 +4,10 @@
  *
  * Depends on MenuRender empty hooks: [data-backend-menu-signal]
  * (+ optional [data-backend-menu-signal-badge] / .w-backend-nav__signal-badge).
- * Clickable badges open a Weline UI w-menu panel listing contributing leaf menus
- * with deep-link hrefs from the rendered sidebar DOM (never invent URLs).
+ * Clickable badges open a Weline UI w-menu panel listing Provider deep-link items
+ * (message/session hrefs) or contributing leaf menus. Leaf menu <a href> is
+ * rewritten to primary_href when count>0 and restored from data-backend-menu-href-base
+ * when cleared. Admin JS never invents business URLs.
  */
 (function (global) {
     'use strict';
@@ -75,6 +77,53 @@
         return count > 99 ? '99+' : String(count);
     }
 
+    /**
+     * Normalize by_code[code]: legacy int OR {count, items[], primary_href}.
+     */
+    function normalizeCodeEntry(raw) {
+        if (typeof raw === 'number') {
+            return {
+                count: Math.max(0, Number(raw) || 0),
+                items: [],
+                primary_href: '',
+            };
+        }
+        if (raw && typeof raw === 'object') {
+            var items = [];
+            if (Array.isArray(raw.items)) {
+                for (var i = 0; i < raw.items.length; i += 1) {
+                    var row = raw.items[i];
+                    if (!row || typeof row !== 'object') {
+                        continue;
+                    }
+                    var href = String(row.href || '').trim();
+                    if (href === '') {
+                        continue;
+                    }
+                    items.push({
+                        id: String(row.id || href).trim(),
+                        title: String(row.title || row.id || href).trim(),
+                        href: href,
+                        count: Math.max(0, Number(row.count) || 1),
+                    });
+                }
+            }
+            return {
+                count: Math.max(0, Number(raw.count) || 0),
+                items: items,
+                primary_href: String(raw.primary_href || (items[0] && items[0].href) || '').trim(),
+            };
+        }
+        return { count: 0, items: [], primary_href: '' };
+    }
+
+    function entryCount(byCode, code) {
+        if (!hasOwnCount(byCode, code)) {
+            return 0;
+        }
+        return normalizeCodeEntry(byCode[code]).count;
+    }
+
     function hasOwnCount(byCode, code) {
         return !!(byCode && code !== '' && Object.prototype.hasOwnProperty.call(byCode, code));
     }
@@ -115,7 +164,7 @@
             if (childCode === '') {
                 continue;
             }
-            sum += Math.max(0, Number(byCode[childCode]) || 0);
+            sum += entryCount(byCode, childCode);
         }
         return sum;
     }
@@ -123,12 +172,12 @@
     function resolveCountForNode(host, byCode) {
         var code = String(host.getAttribute('data-backend-menu-signal') || '').trim();
         if (hasOwnCount(byCode, code)) {
-            return Math.max(0, Number(byCode[code]) || 0);
+            return entryCount(byCode, code);
         }
         if (!isSignalLeaf(host)) {
             return sumDescendantLeafCounts(host, byCode);
         }
-        return code !== '' ? Math.max(0, Number(byCode[code]) || 0) : 0;
+        return code !== '' ? entryCount(byCode, code) : 0;
     }
 
     function resolveBadgeHost(signalNode) {
@@ -177,16 +226,56 @@
         return String(host.textContent || '').replace(/\s+/g, ' ').trim();
     }
 
-    function leafHref(signalNode) {
-        if (signalNode.matches('a[href]')) {
-            return String(signalNode.getAttribute('href') || '').trim();
+    function leafAnchor(signalNode) {
+        if (signalNode && signalNode.matches && signalNode.matches('a.w-backend-nav__item[href]')) {
+            return signalNode;
         }
         var root = signalSearchRoot(signalNode);
-        var link = root.querySelector('a.w-backend-nav__item[href]');
-        if (link) {
-            return String(link.getAttribute('href') || '').trim();
+        if (!root || typeof root.querySelector !== 'function') {
+            return null;
         }
-        return '';
+        return root.querySelector('a.w-backend-nav__item[href]');
+    }
+
+    function leafHref(signalNode) {
+        var link = leafAnchor(signalNode);
+        if (!link) {
+            return '';
+        }
+        var base = String(link.getAttribute('data-backend-menu-href-base') || '').trim();
+        if (base !== '') {
+            return base;
+        }
+        return String(link.getAttribute('href') || '').trim();
+    }
+
+    /**
+     * Rewrite leaf menu href to Provider primary_href while count>0; restore base when cleared.
+     */
+    function applyLeafHrefOverride(signalNode, byCode) {
+        if (!isSignalLeaf(signalNode)) {
+            return;
+        }
+        var link = leafAnchor(signalNode);
+        if (!link) {
+            return;
+        }
+        if (!link.hasAttribute('data-backend-menu-href-base')) {
+            link.setAttribute(
+                'data-backend-menu-href-base',
+                String(link.getAttribute('href') || '').trim()
+            );
+        }
+        var base = String(link.getAttribute('data-backend-menu-href-base') || '').trim();
+        var code = String(signalNode.getAttribute('data-backend-menu-signal') || '').trim();
+        var entry = normalizeCodeEntry(hasOwnCount(byCode, code) ? byCode[code] : null);
+        if (entry.count > 0 && entry.primary_href !== '') {
+            link.setAttribute('href', entry.primary_href);
+            return;
+        }
+        if (base !== '') {
+            link.setAttribute('href', base);
+        }
     }
 
     function collectContributingLeaves(signalNode, byCode) {
@@ -212,20 +301,56 @@
             if (code === '' || seen[code]) {
                 continue;
             }
-            var count = Math.max(0, Number(byCode[code]) || 0);
-            if (count <= 0) {
+            var entry = normalizeCodeEntry(hasOwnCount(byCode, code) ? byCode[code] : null);
+            if (entry.count <= 0) {
                 continue;
             }
             seen[code] = true;
             leaves.push({
                 code: code,
                 title: leafTitle(node) || code,
-                count: count,
-                href: leafHref(node),
+                count: entry.count,
+                href: entry.primary_href || leafHref(node),
+                items: entry.items,
                 node: node,
             });
         }
         return leaves;
+    }
+
+    /**
+     * Panel rows: prefer Provider message/session items; else leaf menu entries.
+     */
+    function collectPanelEntries(signalNode, byCode) {
+        var leaves = collectContributingLeaves(signalNode, byCode);
+        var rows = [];
+        for (var i = 0; i < leaves.length; i += 1) {
+            var leaf = leaves[i];
+            var items = leaf.items || [];
+            if (items.length > 0) {
+                for (var j = 0; j < items.length; j += 1) {
+                    var item = items[j];
+                    rows.push({
+                        code: leaf.code,
+                        id: item.id,
+                        title: item.title || leaf.title,
+                        count: item.count || 1,
+                        href: item.href,
+                        node: leaf.node,
+                    });
+                }
+            } else {
+                rows.push({
+                    code: leaf.code,
+                    id: leaf.code,
+                    title: leaf.title,
+                    count: leaf.count,
+                    href: leaf.href,
+                    node: leaf.node,
+                });
+            }
+        }
+        return rows;
     }
 
     function signalMenuRoot() {
@@ -245,20 +370,20 @@
         return value !== '' ? value : fallback;
     }
 
-    function rememberLeaves(badge, leaves) {
+    function rememberPanelEntries(badge, entries) {
         if (lastLeavesByBadge) {
-            lastLeavesByBadge.set(badge, leaves);
+            lastLeavesByBadge.set(badge, entries);
         }
     }
 
-    function recalledLeaves(badge) {
+    function recalledPanelEntries(badge) {
         if (lastLeavesByBadge && lastLeavesByBadge.has(badge)) {
             return lastLeavesByBadge.get(badge) || [];
         }
         return [];
     }
 
-    function applyBadge(badge, count, leaves) {
+    function applyBadge(badge, count, entries) {
         var label = formatCount(count);
         badge.textContent = label;
         badge.hidden = label === '';
@@ -269,10 +394,10 @@
             badge.removeAttribute('tabindex');
             badge.removeAttribute('title');
             badge.removeAttribute('aria-label');
-            rememberLeaves(badge, []);
+            rememberPanelEntries(badge, []);
             return;
         }
-        var leafNames = (leaves || []).map(function (leaf) {
+        var leafNames = (entries || []).map(function (leaf) {
             return leaf.title;
         }).filter(Boolean);
         var namesText = leafNames.length > 0 ? leafNames.join('、') : '';
@@ -285,7 +410,7 @@
         badge.setAttribute('title', aria);
         badge.setAttribute('aria-label', aria);
         badge.setAttribute('aria-haspopup', 'menu');
-        rememberLeaves(badge, leaves || []);
+        rememberPanelEntries(badge, entries || []);
     }
 
     function expandSidebarOverlay() {
@@ -350,7 +475,20 @@
         }
         var currentPath = normalizePath(global.location.href);
         var targetPath = normalizePath(href);
-        if (currentPath === targetPath) {
+        // Same path but different query (deep link) must still navigate.
+        var currentFull = '';
+        var targetFull = '';
+        try {
+            currentFull = new global.URL(global.location.href).pathname
+                + new global.URL(global.location.href).search
+                + new global.URL(global.location.href).hash;
+            var parsed = new global.URL(href, global.location.href);
+            targetFull = parsed.pathname + parsed.search + parsed.hash;
+        } catch (_error) {
+            currentFull = currentPath;
+            targetFull = targetPath;
+        }
+        if (currentFull === targetFull || (currentPath === targetPath && targetFull.indexOf('?') === -1 && targetFull.indexOf('#') === -1)) {
             if (leaf.node && typeof leaf.node.scrollIntoView === 'function') {
                 leaf.node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
             }
@@ -359,7 +497,7 @@
         global.location.assign(href);
     }
 
-    function fillSignalPanel(leaves) {
+    function fillSignalPanel(entries) {
         var panel = signalMenuPanel();
         if (!panel) {
             return null;
@@ -372,12 +510,15 @@
         header.textContent = i18nFromMenu('data-i18n-signal-panel', '菜单待办');
         panel.appendChild(header);
 
-        for (var i = 0; i < leaves.length; i += 1) {
-            var leaf = leaves[i];
+        for (var i = 0; i < entries.length; i += 1) {
+            var leaf = entries[i];
             var item = global.document.createElement(leaf.href ? 'a' : 'button');
             item.className = 'w-menu__item w-backend-nav__signal-panel-item';
             item.setAttribute('role', 'menuitem');
-            item.setAttribute('data-backend-menu-signal-target', leaf.code);
+            item.setAttribute('data-backend-menu-signal-target', leaf.code || '');
+            if (leaf.id) {
+                item.setAttribute('data-backend-menu-signal-item', String(leaf.id));
+            }
             item.setAttribute('data-backend-menu-signal-count', String(leaf.count));
             if (leaf.href) {
                 item.setAttribute('href', leaf.href);
@@ -431,26 +572,26 @@
         return trigger;
     }
 
-    function openSignalPanel(badge, leaves) {
-        if (!leaves || leaves.length === 0) {
+    function openSignalPanel(badge, entries) {
+        if (!entries || entries.length === 0) {
             return false;
         }
         var root = signalMenuRoot();
         var ui = global.Weline && global.Weline.UI;
         if (!root || !ui || typeof ui.ensureMounted !== 'function') {
-            // Fallback: navigate to the single leaf when UI menu is unavailable.
-            if (leaves.length === 1) {
-                navigateToLeaf(leaves[0]);
+            // Fallback: navigate to the single entry when UI menu is unavailable.
+            if (entries.length === 1) {
+                navigateToLeaf(entries[0]);
                 return true;
             }
             return false;
         }
-        fillSignalPanel(leaves);
+        fillSignalPanel(entries);
         var trigger = anchorSignalTriggerToBadge(badge);
         var menuApi = ui.ensureMounted(root, 'menu');
         if (!menuApi || typeof menuApi.open !== 'function') {
-            if (leaves.length === 1) {
-                navigateToLeaf(leaves[0]);
+            if (entries.length === 1) {
+                navigateToLeaf(entries[0]);
                 return true;
             }
             return false;
@@ -485,14 +626,14 @@
             event.preventDefault();
             event.stopPropagation();
         }
-        var leaves = recalledLeaves(badge);
-        if (!leaves.length) {
+        var entries = recalledPanelEntries(badge);
+        if (!entries.length) {
             var signalNode = signalNodeForBadge(badge);
             if (signalNode) {
-                leaves = collectContributingLeaves(signalNode, lastByCode);
+                entries = collectPanelEntries(signalNode, lastByCode);
             }
         }
-        openSignalPanel(badge, leaves);
+        openSignalPanel(badge, entries);
     }
 
     function bindBadgeInteractions() {
@@ -532,8 +673,9 @@
             var node = nodes[i];
             var count = resolveCountForNode(node, byCode);
             var badge = ensureBadge(node);
-            var leaves = count > 0 ? collectContributingLeaves(node, byCode) : [];
-            applyBadge(badge, count, leaves);
+            var entries = count > 0 ? collectPanelEntries(node, byCode) : [];
+            applyBadge(badge, count, entries);
+            applyLeafHrefOverride(node, byCode);
         }
         return payload;
     }
@@ -610,6 +752,9 @@
         startPolling: startPolling,
         stopPolling: stopPolling,
         collectContributingLeaves: collectContributingLeaves,
+        collectPanelEntries: collectPanelEntries,
+        normalizeCodeEntry: normalizeCodeEntry,
+        applyLeafHrefOverride: applyLeafHrefOverride,
         openSignalPanel: openSignalPanel,
         navigateToLeaf: navigateToLeaf,
     };

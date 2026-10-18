@@ -96,11 +96,14 @@ class Console extends BackendController
             // 获取统计数据（默认今日）
             $statistics = $this->statisticsService->getAgentStatistics($agent->getId(), 'today');
 
+            $requestSessionId = max(0, (int)$this->request->getParam('session_id', 0));
+            $fallbackSessionId = (int)($sessions[0]['session_id'] ?? $sessions[0]['id'] ?? 0);
             $this->assign('agent', $agent->getData());
             $this->assign('sessions', $sessions);
             $this->assign('transferredSessions', $transferredSessions);
             $this->assign('waitingSessions', $waitingSessions);
-            $this->assign('defaultSessionId', (int)($sessions[0]['session_id'] ?? $sessions[0]['id'] ?? 0));
+            // Deep link ?session_id= wins over SSR priority default.
+            $this->assign('defaultSessionId', $requestSessionId > 0 ? $requestSessionId : $fallbackSessionId);
             $this->assign('statistics', $statistics);
             $this->assign('page_title', __('客服工作台'));
             

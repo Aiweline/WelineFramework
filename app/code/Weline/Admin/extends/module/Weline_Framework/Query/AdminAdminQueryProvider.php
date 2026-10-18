@@ -48,7 +48,7 @@ class AdminAdminQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'menuSignals',
-                    'description' => 'Backend sidebar menu unread signal counts (JS paint only; never SSR).',
+                    'description' => 'Backend sidebar menu unread signals: counts + optional deep-link items (JS paint only; never SSR).',
                     // Exposed to frontend worker so backend pages can call via Weline.Api.resource('admin')
                     // (same pattern as adminRequest). Auth remains backend.
                     'frontend' => true,
@@ -63,7 +63,10 @@ class AdminAdminQueryProvider implements QueryProviderInterface
     }
 
     /**
-     * @return array{total:int, by_code: object|array<string, int>}
+     * @return array{
+     *     total: int,
+     *     by_code: object|array<string, array{count: int, items: list<array<string, mixed>>, primary_href: string}|int>
+     * }
      */
     private function menuSignals(): array
     {
@@ -84,6 +87,7 @@ class AdminAdminQueryProvider implements QueryProviderInterface
 
         return [
             'total' => (int)($signals['total'] ?? 0),
+            // Keep object shape for empty JSON {}; values are {count,items,primary_href}.
             'by_code' => (object)($signals['by_code'] ?? []),
         ];
     }

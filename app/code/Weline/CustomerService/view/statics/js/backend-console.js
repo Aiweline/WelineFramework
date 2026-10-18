@@ -121,6 +121,17 @@ const CustomerServiceConsole = (function() {
         config = Object.assign(config, options);
         state.baseDocumentTitle = document.title || state.baseDocumentTitle;
 
+        // Menu-signal deep link: ?session_id= overrides SSR defaultSessionId.
+        try {
+            var params = new URLSearchParams(window.location.search || '');
+            var fromUrl = normalizePositiveInt(params.get('session_id'));
+            if (fromUrl > 0) {
+                config.defaultSessionId = fromUrl;
+            }
+        } catch (_e) {
+            // Older browsers without URLSearchParams: keep SSR default.
+        }
+
         // 侧栏互斥须最先绑定：避免后续轮询/心跳异常时跳过
         initSessionGroupAccordion();
         seedSessionTitlesFromDom();
@@ -135,7 +146,7 @@ const CustomerServiceConsole = (function() {
         sendHeartbeat();
         startHeartbeat();
 
-        // 默认选中最近/优先会话（SSR 首位或配置指定）
+        // 默认选中最近/优先会话（SSR 首位、URL 深链或配置指定）
         autoSelectPreferredSession(true);
         refreshSessions().then(function () {
             autoSelectPreferredSession(false);

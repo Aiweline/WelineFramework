@@ -85,14 +85,28 @@ private function assert_BackendMenuSignalDeepLink_testSidebarHostsSignalPanelAnd
     self::assertStringContainsString('查看对应菜单：%s', $sidebar);
 
     self::assertStringContainsString('collectContributingLeaves', $js);
+    self::assertStringContainsString('collectPanelEntries', $js);
+    self::assertStringContainsString('normalizeCodeEntry', $js);
+    self::assertStringContainsString('applyLeafHrefOverride', $js);
+    self::assertStringContainsString('data-backend-menu-href-base', $js);
+    self::assertStringContainsString('primary_href', $js);
     self::assertStringContainsString('openSignalPanel', $js);
     self::assertStringContainsString('navigateToLeaf', $js);
     self::assertStringContainsString('anchorSignalTriggerToBadge', $js);
     self::assertStringContainsString('is-clickable', $js);
     self::assertStringContainsString('expandOverlay', $js);
     self::assertStringContainsString('data-backend-menu-signal-target', $js);
+    self::assertStringContainsString('data-backend-menu-signal-item', $js);
     self::assertStringNotContainsString('Weline_CustomerService::console', $js);
     self::assertStringNotContainsString('full_page_cache', $js);
+    self::assertStringNotContainsString('customerservice/backend/console', $js);
+
+    $itemsApi = (string) file_get_contents($moduleRoot . '/Api/BackendMenuSignalItemsProviderInterface.php');
+    self::assertStringContainsString('function items(int $backendUserId)', $itemsApi);
+    $aggregator = (string) file_get_contents($moduleRoot . '/Service/BackendMenuSignalAggregator.php');
+    self::assertStringContainsString('BackendMenuSignalItemsProviderInterface', $aggregator);
+    self::assertStringContainsString('primary_href', $aggregator);
+    self::assertStringContainsString('MAX_ITEMS_PER_CODE', $aggregator);
 
     self::assertStringContainsString('.w-backend-nav__signal-badge.is-clickable:not([hidden])', $css);
     self::assertStringContainsString('pointer-events: auto', $css);
